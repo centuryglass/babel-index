@@ -1,46 +1,39 @@
 import { STORY } from './story.js';
+import { MEASURED, SHELF_COUNT, BOOKS_PER_SHELF } from './measured.js';
 
 /**
  * Layout of one tile.
  *
  * A tile is ONE SHELVED WALL of a gallery, seen in shallow one-point
- * perspective - not a whole room. Faithful 3D reconstructions of the Library
- * already exist and this is not one; the tile is a repeating unit that happens
- * to be built to Borges' numbers.
+ * perspective - not a whole room. Four tiles are the shelved sides of one
+ * gallery.
  *
- *   one tile = one shelved side = 5 shelves x 32 books = 160 books
- *   four tiles = the shelved sides of one gallery = 640 books
+ *   one tile = 5 shelves x 32 books = 160 books
+ *   4 tiles  = one gallery          = 640 books
  *
- * TILING
- * ------
- * Tiling needs no special machinery. Every variant is inpainted from the same
- * base render with a mask that stays clear of the edges, so the frame - the
- * side returns, the ceiling strip, the floor - is common to every room by
- * construction. Adjacent tiles meet on identical pixels because they are
- * literally the same pixels.
+ * TWO CLASSES OF NUMBER LIVE HERE, and the difference matters:
  *
- * These proportions are measured off the Blender base render and are
- * PROVISIONAL: they are a stand-in until the base render (or the .blend) is in
- * the repo, at which point the shelf and slot rectangles should be derived from
- * it rather than eyeballed. Nothing but the centre room needs them to be exact
- * - see docs/implementation-plan.md.
+ *   MEASURED - the opening, the case uprights, all five shelf boards, all 160
+ *   book rectangles and the lamp come from measured.js, traced off the Blender
+ *   render in Inkscape and imported by import-shelf-svg.mjs. These are exact.
+ *
+ *   PROVISIONAL - the side returns, the ceiling strip and the cornice were not
+ *   traced, so they are still eyeballed fractions. They only affect the
+ *   placeholder's looks, never hit-testing, so they can stay approximate until
+ *   there is a reason for them not to be.
+ *
+ * TILING needs no machinery: every variant is inpainted from the same base with
+ * an edge-clear mask, so the frame is shared by construction.
  */
 
-/** Layout fractions of the tile edge. Provisional; see above. */
-const F = {
-  sideReturn: 0.085, // dark wall returning toward the viewer, left and right
-  ceiling: 0.055, // ceiling strip above the cornice
-  corniceBottom: 0.205, // underside of the entablature; top of the case
-  caseLeft: 0.16,
-  caseRight: 0.84,
-  floorLine: 0.88, // where the case meets the floor
-  frame: 0.018, // case frame thickness
-  board: 1 / 9, // shelf board thickness, as a fraction of shelf height
-  lampY: 0.161,
-  lampR: 0.048,
+/** Not traced; affects the placeholder's appearance only. */
+const PROVISIONAL = {
+  sideReturn: 0.085,
+  ceiling: 0.055,
+  lampGlow: 4.2, // glow radius, as a multiple of the measured globe radius
 };
 
-const round = (n) => Math.round(n * 1000) / 1000;
+const round = (n) => Math.round(n * 1e4) / 1e4;
 
 /**
  * @param {{width?: number, height?: number}} opts
@@ -49,61 +42,61 @@ const round = (n) => Math.round(n * 1000) / 1000;
 export function layout({ width = 1024, height = width } = {}) {
   const W = width;
   const H = height;
-  const px = (f, axis = W) => round(f * axis);
+  // Rects are normalised to the tile edge, so both axes scale by the same
+  // factor; the tile is square.
+  const r = ([x, y, w, h]) => ({ x: round(x * W), y: round(y * H), w: round(w * W), h: round(h * H) });
 
-  const sideReturn = px(F.sideReturn);
-  const ceilingH = px(F.ceiling, H);
-  const caseTop = px(F.corniceBottom, H);
-  const floorLine = px(F.floorLine, H);
-  const caseL = px(F.caseLeft);
-  const caseR = px(F.caseRight);
-  const frame = px(F.frame);
-
-  // The bookcase opening: inside the frame.
-  const opening = {
-    x: round(caseL + frame),
-    y: round(caseTop + frame),
-    w: round(caseR - caseL - 2 * frame),
-    h: round(floorLine - caseTop - frame),
+  const opening = r(MEASURED.opening);
+  const uprights = MEASURED.uprights.map(r);
+  const lamp = {
+    cx: round(MEASURED.lamp.cx * W),
+    cy: round(MEASURED.lamp.cy * H),
+    r: round(MEASURED.lamp.r * W),
+    glow: round(MEASURED.lamp.r * W * PROVISIONAL.lampGlow),
   };
 
-  const shelfH = opening.h / STORY.shelvesPerSide;
-  const boardH = round(shelfH * F.board);
-  const slotW = opening.w / STORY.booksPerShelf;
+  const shelves = MEASURED.shelves.map((s, index) => {
+    const board = r(s.board);
+    const books = s.books.map((b, i) => ({ index: i, ...r(b) }));
+    return {
+      index,
+      board,
+      books,
+      /** The clear space a book stands in, for hit-testing a whole slot. */
+      rect: {
+        x: opening.x,
+        y: books.length ? Math.min(...books.map((b) => b.y)) : board.y,
+        w: opening.w,
+        h: books.length ? round(board.y - Math.min(...books.map((b) => b.y))) : 0,
+      },
+    };
+  });
 
-  const shelves = [];
-  for (let s = 0; s < STORY.shelvesPerSide; s++) {
-    const top = round(opening.y + s * shelfH);
-    const clearH = round(shelfH - boardH);
-    const slots = [];
-    for (let b = 0; b < STORY.booksPerShelf; b++) {
-      slots.push({
-        index: b,
-        x: round(opening.x + b * slotW),
-        y: top,
-        w: round(slotW),
-        h: clearH,
-      });
-    }
-    shelves.push({
-      index: s,
-      x: opening.x,
-      y: top,
-      w: opening.w,
-      h: round(shelfH),
-      clearH,
-      board: { x: opening.x, y: round(top + clearH), w: opening.w, h: boardH },
-      slots,
-    });
-  }
+  const caseFrame = uprights.length
+    ? {
+        x: uprights[0].x,
+        y: uprights[0].y,
+        w: round(uprights[uprights.length - 1].x + uprights[uprights.length - 1].w - uprights[0].x),
+        h: uprights[0].h,
+      }
+    : opening;
+
+  const sideReturn = round(W * PROVISIONAL.sideReturn);
+  const ceilingH = round(H * PROVISIONAL.ceiling);
+  const floorLine = round(caseFrame.y + caseFrame.h);
 
   return {
     width: W,
     height: H,
-    /**
-     * The two side walls, as trapezoids receding toward the vanishing point.
-     * The outer edge is the tile edge; the inner edge is farther away.
-     */
+    measured: true,
+    opening,
+    uprights,
+    caseFrame,
+    shelves,
+    lamp,
+    floorLine,
+    sideReturn,
+    // Provisional frame elements.
     sideReturns: [
       {
         side: 'left',
@@ -117,17 +110,27 @@ export function layout({ width = 1024, height = width } = {}) {
       },
     ],
     ceiling: { x: 0, y: 0, w: W, h: ceilingH },
-    cornice: { x: sideReturn, y: ceilingH, w: round(W - 2 * sideReturn), h: round(caseTop - ceilingH) },
+    cornice: {
+      x: sideReturn,
+      y: ceilingH,
+      w: round(W - 2 * sideReturn),
+      h: round(caseFrame.y - ceilingH),
+    },
     floor: { x: 0, y: floorLine, w: W, h: round(H - floorLine) },
-    caseFrame: { x: caseL, y: caseTop, w: round(caseR - caseL), h: round(floorLine - caseTop) },
-    opening,
-    shelves,
-    /** "two, transversally placed, in each hexagon" - one per shelved wall here. */
-    lamp: { cx: round(W / 2), cy: px(F.lampY, H), r: px(F.lampR, H) },
-    caseTop,
-    floorLine,
-    sideReturn,
   };
 }
 
-export { F as LAYOUT_FRACTIONS };
+/**
+ * The measured tile disagrees with the story only where the story is silent.
+ * Fail loudly if a re-trace ever breaks a number the story does state.
+ */
+export function checkAgainstStory() {
+  const problems = [];
+  if (SHELF_COUNT !== STORY.shelvesPerSide)
+    problems.push(`traced ${SHELF_COUNT} shelves, story says ${STORY.shelvesPerSide}`);
+  if (BOOKS_PER_SHELF !== STORY.booksPerShelf)
+    problems.push(`traced ${BOOKS_PER_SHELF} books per shelf, story says ${STORY.booksPerShelf}`);
+  return problems;
+}
+
+export { PROVISIONAL as PROVISIONAL_FRACTIONS };
