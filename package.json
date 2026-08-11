@@ -1,0 +1,19 @@
+{
+  "name": "babel-index",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An AI art experiment based around the Library of Babel.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate:base": "node tools/base-image/generate.mjs",
+    "verify:seams": "node tools/base-image/verify-seams.mjs",
+    "test": "npm run verify:seams"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}
