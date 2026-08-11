@@ -39,31 +39,19 @@ export function renderTile({ size = 1024, seed = 1941, style = 'schematic' } = {
   body.push(rect(L.caseFrame, paint(style, 'pier')));
   body.push(rect(L.opening, paint(style, 'caseBack')));
 
+  // Book rectangles are measured, not generated: these are the actual spine
+  // positions from the Blender render. Only the spine colour is randomised.
   for (const shelf of L.shelves) {
-    for (const slot of shelf.slots) {
-      const h = slot.h * rnd.range(0.76, 0.97);
-      const inset = slot.w * rnd.range(0.06, 0.18);
-      const b = {
-        x: round(slot.x + inset / 2),
-        y: round(slot.y + slot.h - h),
-        w: round(slot.w - inset),
-        h: round(h),
-      };
-      const attrs = paint(style, 'book', {
-        fill: SPINE_TONES[rnd.int(0, SPINE_TONES.length - 1)],
-        strokeWidth: 0.5,
-      });
+    for (const book of shelf.books)
       body.push(
-        rnd.chance(0.02)
-          ? rect(b, {
-              ...attrs,
-              transform: `rotate(${round(rnd.range(-9, 9))} ${round(b.x + b.w / 2)} ${round(b.y + b.h)})`,
-            })
-          : rect(b, attrs)
+        rect(book, paint(style, 'book', {
+          fill: SPINE_TONES[rnd.int(0, SPINE_TONES.length - 1)],
+          strokeWidth: 0.5,
+        }))
       );
-    }
     body.push(rect(shelf.board, paint(style, 'board')));
   }
+  for (const upright of L.uprights) body.push(rect(upright, paint(style, 'pier')));
 
   // Side walls last: they overlap the case at the tile edges, as in the render.
   for (const r of L.sideReturns) body.push(trapezoid(r, paint(style, 'stoneDark')));
@@ -75,7 +63,7 @@ export function renderTile({ size = 1024, seed = 1941, style = 'schematic' } = {
         el('stop', { offset: '100%', 'stop-color': '#ffe9b8', 'stop-opacity': 0 }),
       ].join(''))
     );
-    body.push(el('circle', { cx: L.lamp.cx, cy: L.lamp.cy, r: L.lamp.r * 6, fill: 'url(#lampGlow)' }));
+    body.push(el('circle', { cx: L.lamp.cx, cy: L.lamp.cy, r: L.lamp.glow, fill: 'url(#lampGlow)' }));
   }
   body.push(el('circle', { cx: L.lamp.cx, cy: L.lamp.cy, r: L.lamp.r, ...paint(style, 'lampGlobe') }));
 
@@ -118,16 +106,16 @@ export function renderOverlay({ size = 1024, baseImageHref = null } = {}) {
 
   for (const shelf of L.shelves) {
     children.push(rect(shelf.board, line('#06d6a0', 1)));
-    // Every 4th slot, so 32 per shelf stays legible at a glance.
-    for (const slot of shelf.slots)
-      children.push(rect(slot, { fill: 'none', stroke: '#ffffff', 'stroke-width': slot.index % 4 === 0 ? 0.8 : 0.3, 'stroke-opacity': 0.55 }));
+    for (const book of shelf.books)
+      children.push(rect(book, { fill: 'none', stroke: '#ffffff', 'stroke-width': 0.6, 'stroke-opacity': 0.7 }));
   }
+  for (const upright of L.uprights) children.push(rect(upright, line('#06d6a0', 1)));
 
   const legend = [
     ['#ff6b6b', 'side return (frame - never inpainted)'],
     ['#06d6a0', 'case frame / shelf boards'],
     ['#118ab2', 'opening'],
-    ['#ffffff', `${STORY.booksPerShelf} book slots per shelf`],
+    ['#ffffff', `${STORY.booksPerShelf} measured book spines per shelf`],
   ];
   legend.forEach(([c, label], i) => {
     const y = L.height - 84 + i * 20;
@@ -160,7 +148,7 @@ export function geometryManifest({ size = 1024, seed = 1941 } = {}) {
     generatedBy: 'tools/base-image/generate.mjs',
     seed,
     projection: 'single-shelved-wall, shallow one-point perspective',
-    provisional: 'Proportions measured by eye off the Blender base render. Re-derive from the .blend before binding UI to them.',
+    measured: 'Opening, uprights, shelf boards, all 160 book rects and the lamp are traced from the Blender render (see tools/base-image/lib/measured.js). Side returns, ceiling and cornice are still eyeballed and affect appearance only.',
     tile: {
       unit: 'one shelved wall of a gallery',
       shelves: STORY.shelvesPerSide,
@@ -178,21 +166,22 @@ export function geometryManifest({ size = 1024, seed = 1941 } = {}) {
       caseFrame: nr(L.caseFrame),
       opening: nr(L.opening),
       lamp: [n(L.lamp.cx), n(L.lamp.cy), n(L.lamp.r)],
+      uprights: L.uprights.map(nr),
       floorLine: n(L.floorLine),
     },
     shelves: L.shelves.map((s) => ({
       index: s.index,
-      rect: nr(s),
+      rect: nr(s.rect),
       board: nr(s.board),
-      slots: s.slots.map(nr),
+      books: s.books.map(nr),
     })),
     /** Anchors for the interactive centre room (concept.md steps 5-6). */
     uiAnchors: {
-      searchField: nr({ x: L.opening.x, y: L.shelves[2].y, w: L.opening.w, h: L.shelves[2].clearH }),
+      searchField: nr(L.shelves[2].rect),
       submitButton: [n(L.lamp.cx), n(L.lamp.cy), n(L.lamp.r)],
-      historySpines: { shelf: 1, slots: 'all' },
-      scoreSortSpines: { shelf: 3, slots: 'all' },
-      shuffleSpine: { shelf: 4, slot: 31 },
+      historySpines: { shelf: 1, books: 'all' },
+      scoreSortSpines: { shelf: 3, books: 'all' },
+      shuffleSpine: { shelf: 4, book: 31 },
     },
   };
 }

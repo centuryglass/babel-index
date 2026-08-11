@@ -37,36 +37,45 @@ nothing more.
 
 | | |
 | --- | --- |
-| Blender base render | the source of truth for the tile *(not yet in the repo)* |
-| 512-image test corpus | generated, `512-test.tar.gz` *(not yet in the repo)* |
-| `tools/base-image/` | tile geometry, placeholder renderer, geometry overlay |
-| `packages/map/` | map ordering: slot placement, ranking, pan resistance |
+| `packages/server/` + `packages/web/` | **the offline demo** — `npm run demo` |
+| `packages/map/` | slot placement, ranking, pan resistance |
+| `tools/base-image/` | tile geometry, SVG importer, placeholder, overlay |
+| `assets/blender/babel_shelf.blend` | the base render source |
+| `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
 | `docs/borges-parameters.md` | the story's numbers, with sources |
 
-```sh
-npm install
-npm run generate:tile     # placeholder + tile-geometry.json
-npm test                  # map ordering
-```
-
-### The geometry overlay
-
-The proportions in `tools/base-image/lib/geometry.js` were measured **by eye off
-the Blender render** and are provisional. The overlay is how they get corrected:
+### The demo
 
 ```sh
-npm run generate:tile -- --base path/to/base-render.png
+npm install && npm run demo        # http://localhost:5173
+npm run demo -- --images <dir>     # against a full corpus
 ```
 
-It draws the frame, case, shelf boards and all 32 book slots per shelf over the
-real image so misalignment is visible. Run against a corpus image it already
-shows the frame and cornice landing correctly and the lamp radius needing a
-bump — which has been applied.
+A directory of images is the entire data layer. Corpus size and generic ratio
+are sliders, not settings. Search is stubbed (a deterministic pseudo-ranking) so
+the reorder mechanic works without a model, and the UI says so.
 
-**This is the main open dependency.** To finalise the numbers I need the base
-render in the repo, and ideally the `.blend`, so slot rectangles can be derived
-from the model rather than eyeballed. Only the centre room truly needs them
-exact — see [§5](#5-what-the-geometry-is-actually-for).
+Exercised end to end in a real browser against 511 rooms: 1664 visible cells at
+zoom 29 drew with nothing stalled, the boundary radius tracked the sliders
+(28.6 → 16.3 at 60% non-generic → 4.2 at 40 rooms), and panning past the
+boundary was damped rather than blocked.
+
+### Tile geometry is measured, not eyeballed
+
+The opening, the case uprights, all five shelf boards, **all 160 book
+rectangles** and the lamp are traced off the Blender render in Inkscape and
+imported by `tools/base-image/import-shelf-svg.mjs` into `lib/measured.js`.
+Tracing takes five minutes and avoids parsing the `.blend`, which would be a lot
+of machinery for the same numbers.
+
+The importer validates rather than trusts: it applies the Inkscape layer
+transform, refuses any transform it does not understand, classifies rects by
+colour, and fails if the trace stops agreeing with the story. The current trace
+imports as 5 bays × 32 books, 160/160 spines placed, 0 unclassified, and the
+overlay confirms every rectangle lands on a real book.
+
+Still eyeballed, and affecting the placeholder's appearance only: the side
+returns, the ceiling strip and the cornice.
 
 ---
 
@@ -194,7 +203,8 @@ variants with four shelves, six shelves, vertical dividers, and books stacked on
 the floor. So:
 
 - The **centre room** needs exact geometry. It carries the search box and the
-  hidden controls, and its art is ours.
+  hidden controls, and its art is ours. It sits at map cell (0, 0), which
+  `packages/map` reserves and never assigns a corpus room.
 - **Every other room** needs only its bounding box. Clicking one means "focus
   this room", not "click this book".
 
@@ -222,16 +232,28 @@ Recorded from review, with what changed:
 6. **Corpus size and generic ratio are runtime-tweakable.** Implemented and
    tested in `packages/map`.
 7. **Generate-on-demand is a stretch goal**, selectively enabled.
+8. **Geometry comes from an Inkscape trace, not the `.blend`.** Five minutes of
+   human effort beats a parser; the `.blend` is in the repo as the source of
+   truth but nothing reads it.
+9. **Offline first.** A directory of images is the whole data layer. Hosting is
+   deferred until there is something worth hosting.
 
 ## 7. Still open
 
-1. **The base render, and ideally the `.blend`**, so tile geometry stops being
-   eyeballed. Blocking phase 5 only.
-2. **Should the corpus live in this repo?** 512 images is 26 MB; a full corpus
-   won't fit comfortably in git. Probably an external bucket plus a manifest —
-   worth deciding before the pipeline starts writing.
+1. **The Blender base render as an image file.** The `.blend` is in the repo but
+   a render is not, so the demo currently uses corpus image `000.jpg` as the
+   generic room. That is the asset the map leans on hardest — it is ~80% of
+   every screen.
+2. **Corpus hosting.** Settled in principle: a sample stays in the repo
+   (`assets/corpus-sample/`, 25 rooms, 1.4 MB), the rest lives elsewhere. The
+   server takes `--images <dir>` today; swapping in a bucket later means
+   changing `scan.mjs` and nothing else.
 3. **Do vertical neighbours mean anything?** With tiles as walls rather than
    rooms, up/down no longer implies a floor above. The grid may be purely
    abstract now, which is simpler and probably fine.
 4. **One lamp per tile is four per gallery**, where the story says two. Nobody
    will notice; noting it so it's a choice rather than a slip.
+5. **The dark side returns read as heavy columns when tiled.** Two abutting
+   tiles put their frames side by side, so the grid reads as separated boxes
+   rather than one continuous wall. Faithful to the render; whether it is wanted
+   is an art call. Visible in the demo at any zoom.
