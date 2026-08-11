@@ -77,6 +77,35 @@ overlay confirms every rectangle lands on a real book.
 Still eyeballed, and affecting the placeholder's appearance only: the side
 returns, the ceiling strip and the cornice.
 
+#### Changing the geometry
+
+The proportions are expected to move — the current shelf feels cramped. The
+trace is the interface, so a change is a three-step loop and touches no code:
+
+```sh
+# 1. adjust the render in Blender, re-trace in Inkscape
+# 2. re-import
+node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
+# 3. check it against a real image
+npm run generate:tile -- --base <new-render.png>
+npm test
+```
+
+`lib/measured.js` is generated — never hand-edit it; the header says so. Two
+guardrails make a bad re-trace loud rather than silent:
+
+- The **importer** refuses transforms it does not understand, reports
+  unclassified rects, and fails if the bays hold uneven book counts or if any
+  spine falls outside every bay.
+- The **tests** re-assert the story's numbers (5 × 32 = 160), that books stay
+  inside the opening, that each shelf has a single baseline, and that books rest
+  on their board rather than through it.
+
+So if the geometry changes and something no longer adds up, `npm test` says so
+before the map does. What the tests deliberately do *not* pin is anything that
+is a legitimate art choice — shelf spacing, book width, how much of the board
+shows. Those are free to move.
+
 ---
 
 ## 3. Phases
@@ -127,8 +156,56 @@ renderer to sit on top.
 - **Pan resistance** falls off cubically past the outermost occupied slot, so
   the edge is felt rather than hit.
 
-Rendering: a virtualized canvas drawing only visible tiles — 4–12 at a time at
-1024px. Ship 256/512/1024 mips. Do not mount thousands of DOM nodes.
+Rendering: a virtualized canvas drawing only visible tiles. Do not mount
+thousands of DOM nodes.
+
+#### Resolution pyramid — the next thing to build
+
+The demo loads full-resolution images at every zoom, and that is the ceiling it
+will hit first. Zoomed out it draws ~1660 visible cells; at 1024², decoded RGBA
+is 4 MB per image, so a viewport that holds the whole content region wants
+several gigabytes of decoded bitmap. It survives at 511 rooms only because the
+cache is capped at 240 entries and the browser discards aggressively — at a
+truly absurd corpus it will thrash, then fail.
+
+The fix is a pyramid, generated once in the pipeline:
+
+| Level | Size | ~bytes decoded | Used when |
+| --- | --- | --- | --- |
+| 0 | 1024 | 4 MB | zoom > 512 px/tile — reading one room |
+| 1 | 512 | 1 MB | zoom 192–512 |
+| 2 | 256 | 256 KB | zoom 64–192 |
+| 3 | 128 | 64 KB | zoom 24–64 |
+| 4 | 64 | 16 KB | zoom < 24 — the far-out field |
+
+Picking the level from `zoom` (device-pixel-adjusted, one level of hysteresis so
+a slow zoom doesn't oscillate across a boundary) keeps decoded bytes per screen
+roughly constant no matter how far out the camera goes — which is the property
+that makes corpus size stop mattering for rendering cost.
+
+Consequences to design for now rather than retrofit:
+
+- **The cache key becomes `(id, level)`**, not `url`. `packages/web/src/tiles.js`
+  already isolates this; it is the only file that needs to know.
+- **Draw the coarse level while a finer one loads.** Holding the already-cached
+  coarser tile avoids the blank-cell flash on every zoom step.
+- **Offline mode needs a layout convention** — `rooms/<level>/<file>` is enough,
+  with `scan.mjs` discovering which levels exist and falling back to whatever it
+  finds. That keeps "point it at a directory" true.
+- **Generating the pyramid is a pipeline job**, not a server job. A `--mips` flag
+  on the ingest tool that writes the smaller levels once.
+- Bandwidth follows the same curve: the far-out view costs ~16 KB per room
+  instead of ~50 KB, which matters more than the decode ceiling once this is
+  hosted.
+
+#### Camera movement
+
+"Centre" teleports today, which loses the reader's sense of where they were.
+Camera moves should animate: ease position and zoom together over ~450 ms,
+interruptible the moment a drag starts, so a mid-flight grab takes over instead
+of fighting. The same helper serves "fly to the best match" after a search,
+which is the case where the movement is carrying meaning — it shows the top
+result's location relative to where you were standing.
 
 ### Phase 4 — search *(concept step 5)*
 
@@ -158,6 +235,56 @@ small canvas overlay per spine.
 
 Selectively enabled for short periods, so it needs a kill switch and a queue but
 not autoscaling. Keep it behind a flag.
+
+---
+
+## 3a. Testing
+
+17 tests exist (`npm test`): map ordering, and the measured geometry. That
+covers the two places where a silent wrong answer would be expensive — the map
+layout, whose bugs look like "the library feels off", and the trace, whose bugs
+put hit regions on the wrong books. The gaps are everything else.
+
+What to add, roughly in order of how much grief it saves:
+
+**`scan.mjs` — pure functions over fixtures.** The header parsers are exactly
+the kind of code that is silently wrong: a truncated JPEG, a WebP in each of its
+three flavours (VP8/VP8L/VP8X), a PNG. Plus the directory rules — base picked by
+`--base`, by a file called `base.*`, by falling back to the first file; the base
+excluded from the ranked corpus; ids stable across restarts, since the map's
+slot assignment is keyed on them; an empty directory failing usefully. Small
+committed fixtures, a handful of assertions.
+
+**The server API.** `/api/manifest` shape, `/api/search` determinism (same query
+returns the same order, different queries do not), empty query clearing the
+order, `/images` refusing to escape the images directory. No browser needed.
+
+**The camera, as pure functions.** `screenToWorld`/`worldToScreen` round-trip;
+zoom-at-cursor keeping the point under the pointer fixed — that one has an exact
+invariant and is easy to break. Worth extracting from `useMapCamera.js` so it is
+testable without a DOM, which is the main reason to do it.
+
+**Tile cache eviction.** That it respects the budget, that it never evicts an
+in-flight load, and — once the pyramid lands — that it keys on `(id, level)` and
+retains a coarse level while a finer one loads.
+
+**End-to-end, in a browser.** The drive script used to validate this build
+should become a committed Playwright test rather than living in a scratch
+directory: load, pan, zoom, move both sliders and assert the boundary radius
+responds, run a search, assert no console errors. It is the only layer that
+catches "the canvas renders nothing" — which no unit test will.
+
+Two things worth doing regardless of coverage:
+
+- **A test for the render loop's cost**, not just its correctness: assert that a
+  zoomed-out frame requests no more than N images. That is the regression that
+  the resolution pyramid exists to prevent, and it will silently come back.
+- **Fixtures over the real corpus.** Tests should not depend on
+  `assets/corpus-sample/` staying exactly 25 images; generate throwaway images
+  in a temp directory instead.
+
+Not worth testing: the placeholder renderer's appearance, and anything that
+pins an art choice rather than an invariant.
 
 ---
 
@@ -257,3 +384,19 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
+6. **Shelf proportions feel cramped** and are expected to change. The loop for
+   that is in [§2](#changing-the-geometry) and touches no code.
+
+---
+
+## 8. Next session
+
+In dependency order, shortest path to a demo that survives a real corpus:
+
+1. **Resolution pyramid** — pipeline flag to write the levels, `scan.mjs` to
+   discover them, `tiles.js` to key on `(id, level)`. The rendering ceiling.
+2. **Animated camera moves**, and extract the camera maths so it can be tested.
+3. **Test coverage per [§3a](#3a-testing)**, starting with `scan.mjs` fixtures
+   and the Playwright smoke test.
+4. **Re-trace the geometry** once the shelf proportions are settled.
+5. **A real base render** as the generic room, replacing `000.jpg`.
