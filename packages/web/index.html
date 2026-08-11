@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>The Indexing of Babel</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #e8e0d2;
+        --dim: #9a8f7d;
+        --panel: rgba(18, 15, 12, 0.88);
+        --edge: rgba(180, 160, 120, 0.22);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0908; }
+      body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+      #root, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+      canvas { display: block; cursor: grab; touch-action: none; }
+      canvas.dragging { cursor: grabbing; }
+
+      .panel {
+        position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
+        background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
+        backdrop-filter: blur(8px);
+      }
+      .panel h1 { margin: 0 0 2px; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+      .panel .sub { margin: 0 0 14px; color: var(--dim); font-size: 11px; }
+      .row { margin-bottom: 12px; }
+      .row label { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+      .row label b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+      input[type="range"] { width: 100%; accent-color: #c8a95f; }
+      input[type="search"] {
+        width: 100%; padding: 7px 9px; background: rgba(0,0,0,0.4); color: var(--ink);
+        border: 1px solid var(--edge); border-radius: 5px; font: inherit;
+      }
+      input[type="search"]:focus { outline: none; border-color: #c8a95f; }
+      .buttons { display: flex; gap: 7px; }
+      button {
+        flex: 1; padding: 6px 8px; background: rgba(200,169,95,0.12); color: var(--ink);
+        border: 1px solid var(--edge); border-radius: 5px; font: inherit; cursor: pointer;
+      }
+      button:hover { background: rgba(200,169,95,0.24); }
+      .note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--edge); color: var(--dim); font-size: 11px; }
+      .hud {
+        position: absolute; bottom: 14px; left: 16px; color: var(--dim); font-size: 11px;
+        font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/bundle.js"></script>
+  </body>
+</html>
