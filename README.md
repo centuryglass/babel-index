@@ -73,5 +73,9 @@ which draws every measured rectangle over it.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # map ordering
+npm test    # map ordering + measured geometry
 ```
+
+Coverage is deliberately narrow for now — the map layout and the trace, being
+the two places a silent wrong answer is expensive. See
+[the testing section](docs/implementation-plan.md#3a-testing) for what's missing.
