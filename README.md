@@ -6,29 +6,42 @@ See [`concept.md`](concept.md) for what this is meant to become, and
 [`docs/implementation-plan.md`](docs/implementation-plan.md) for how it gets
 there.
 
-## Current state
+## What a tile is
 
-A programmatically generated **placeholder base room**, built to the parameters
-Borges actually specifies (640 books over 20 shelves, two lamps, the hallway
-with its mirror, closets and spiral stairway, the central air shaft), and the
-machine-checked seam contract that lets any room tile against any other.
+One tile is **one shelved wall** in shallow perspective — not a whole room.
+Built to Borges' numbers: 5 shelves × 32 books = 160 books per tile, four tiles
+to a gallery's 640.
+
+![what a tile is](docs/figures/hexagon-plan.svg)
+
+Tiling needs no special machinery: every variant is inpainted from the same base
+render with an edge-clear mask, so the frame is common to all of them by
+construction.
+
+## Current state
 
 ```sh
 npm install
-npm run generate:base      # writes assets/base-room/
-npm run verify:seams       # asserts the tiling is seamless
+npm run generate:tile      # placeholder tile + tile-geometry.json
+npm test                   # map ordering
 ```
 
 | | |
 | --- | --- |
-| `assets/base-room/base-room.png` | the placeholder |
-| `assets/base-room/tiled-3x3.png` | nine copies, to inspect the joins |
-| `assets/base-room/seam-mask.png` | the region variant rooms must not repaint |
-| `assets/base-room/room-geometry.json` | every rectangle, for the web app |
+| `packages/map/ordering.js` | slot placement, ranking, pan resistance — corpus size and generic ratio are runtime parameters |
+| `tools/base-image/` | tile geometry, placeholder renderer, geometry overlay |
+| `assets/base-tile/tile-geometry.json` | shelf and book-slot rectangles, UI anchors |
+| `docs/borges-parameters.md` | every number, with the passage it comes from |
 
-Options: `npm run generate:base -- --size 2048 --seed 1941 --out assets/base-room`
+### Checking the geometry against the real render
 
-The placeholder is a diagram, not art — it exists so the display application and
-the generation pipeline can be built and validated before any diffusion model is
-involved. See [`docs/borges-parameters.md`](docs/borges-parameters.md) for the
-source passages behind every number in it.
+The proportions in `tools/base-image/lib/geometry.js` were measured by eye off
+the Blender render and are provisional. To correct them:
+
+```sh
+npm run generate:tile -- --base path/to/base-render.png
+```
+
+This draws the frame, case, shelf boards and all 32 book slots per shelf over
+the real image, so misalignment is visible. Only the centre room — the one
+carrying the search box and hidden controls — needs these to be exact.
