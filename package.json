@@ -8,9 +8,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "generate:base": "node tools/base-image/generate.mjs",
-    "verify:seams": "node tools/base-image/verify-seams.mjs",
-    "test": "npm run verify:seams"
+    "generate:tile": "node tools/base-image/generate.mjs",
+    "generate:figures": "node tools/base-image/hexagon-plan.mjs",
+    "test": "node --test packages/**/*.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

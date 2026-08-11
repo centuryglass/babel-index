@@ -75,18 +75,22 @@ The story is a description, not a plan, and it leaves gaps that a renderer
 cannot leave open. Each gap below is a project decision, not a fact about the
 Library:
 
-1. **Are the two free sides adjacent or opposite?** Not stated. We place them
-   opposite, which makes the tile symmetric and puts the hallway where it can be
-   cut in half across the tile boundary.
-2. **Is the shelved-side count 20 or 30?** Irby's "twenty shelves, five long
+1. **Is the shelved-side count 20 or 30?** Irby's "twenty shelves, five long
    shelves per side" over four shelved sides is self-consistent. Hurley's "each
    wall of each hexagon is furnished with five bookshelves" reads as 30 if
    "each wall" means all six. We take 20, the number the story states directly.
-3. **What is on the second free side?** The story places the hallway on one and
-   describes air shafts between galleries; we put the shaft on the other.
-4. **How are galleries stacked?** The spiral stairway "sinks abysmally and soars
-   upwards", so galleries stack vertically. We map that onto the tile grid's
-   vertical axis: the room above a room is the gallery on the floor above.
-5. **Nothing in the story says a gallery is a rectangle.** The unrolled
-   elevation is a projection we imposed to make galleries tileable. See
-   [implementation-plan.md](implementation-plan.md#open-questions).
+   A tile is one of those four sides: 5 shelves × 32 books = 160.
+2. **A tile is a wall, not a room.** The story describes galleries; the map is a
+   grid of single shelved walls. That is a presentation choice made because a
+   wall tiles and a hexagonal room does not — not a claim about the
+   architecture. The hallway, the closets, the mirror, the spiral stairway and
+   the air shaft are all therefore absent from the tile.
+3. **Two lamps per gallery becomes one per tile**, so four per gallery. The
+   story says two, transversally placed. Deliberate: a wall needs its own light
+   source to read as lit.
+4. **The grid's vertical axis means nothing in particular.** With tiles as walls
+   rather than rooms, "the tile above" is not the gallery on the floor above.
+   The grid is an abstract arrangement surface.
+
+See [implementation-plan.md](implementation-plan.md#6-decisions-made) for how
+these were settled.

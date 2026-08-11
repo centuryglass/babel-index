@@ -1,288 +1,237 @@
 # The Indexing of Babel — implementation plan
 
-A sketch of how to get from [`concept.md`](../concept.md) to a working thing,
-with the decisions that have to be made early called out as decisions.
+A sketch of how to get from [`concept.md`](../concept.md) to a working thing.
+Revised after the first round of review; the decisions that were open are now
+recorded in [§6](#6-decisions-made).
 
 ---
 
-## 1. The load-bearing idea
+## 1. What a tile is
 
-The whole project rests on one constraint that is easy to state and easy to
-violate: **any room must abut any other room, in all four directions, with no
-visible join.** Everything else — the variant corpus, the curation pass, the
-pan-and-zoom map, the CLIP re-ordering — is ordinary work. Seamlessness across
-thousands of independently generated images is not, and it gets harder, not
-easier, the later it is addressed. A corpus of five thousand beautiful rooms
-that don't quite line up is unsalvageable.
+**One tile is one shelved wall**, seen in shallow one-point perspective — not a
+whole room. Faithful 3D reconstructions of the Library already exist and this
+isn't one. The tile is a repeating unit that happens to be built to Borges'
+numbers:
 
-So the first thing built is not the base image. It is the *contract* the base
-image and all its variants have to satisfy.
-
-### The contract
-
-The tile carries a border band that every room reproduces exactly. Inside that
-band, a room may be anything. The band is authored as a **straddle**: the
-hallway is drawn once at its full width in its own coordinate space, then
-painted onto the tile in two halves with the halves swapped — the band's right
-half goes on the tile's left edge, its left half on the tile's right edge. When
-two tiles meet, those halves reassemble into the single corridor that was
-originally drawn. Continuity is then automatic for *any* content the band
-happens to contain, rather than being something an artist has to hit by eye.
-
-The floor/ceiling slab works the same way on the vertical axis. The four
-corners, where the two bands would contradict each other, are a flat constant
-fill.
-
-This is the part worth being fussy about, and it is machine-checked:
+![what a tile is](figures/hexagon-plan.svg)
 
 ```
-$ npm run verify:seams
-  ok  hallway band reassembles across a vertical join (149248 px)
-  ok  slab band reassembles across a horizontal join (149248 px)
-  ok  corners are constant fill
-all seam invariants hold
+one tile   = one shelved side = 5 shelves x 32 books = 160 books
+four tiles = the shelved sides of one gallery        = 640 books
 ```
 
-The verifier rasterizes the tile and asserts that its edge strips are
-pixel-identical to the independently rendered band. It should stay in CI, and it
-should be extended to run over generated variants, where it becomes the gate
-that decides whether a Stable Diffusion output is admissible at all.
+Tiling needs no special machinery. Every variant is inpainted from the same base
+render with a mask that stays clear of the edges, so the frame — the dark side
+returns, the ceiling strip, the floor — is common to every room by construction.
+Adjacent tiles meet on identical pixels because they are literally the same
+pixels. There is nothing to enforce and nothing to verify.
+
+That the frame really is invariant is worth stating as a measurement rather than
+an assumption. Across the 512-image test corpus, per-image deviation from the
+mean 24px border is **0.56/255 median, 1.18 at p99** — the JPEG noise floor, and
+nothing more.
 
 ---
 
 ## 2. What exists now
 
-A **placeholder** base room, generated programmatically, carrying the numbers
-from the story exactly: 4 shelved sides × 5 shelves × 32 books = 640 books, two
-lamps transversally placed, the central air shaft with its low railing, and the
-hallway with its mirror, its two closets and its spiral stairway.
-
-![the hexagon, unrolled](figures/hexagon-plan.svg)
-
-```
-npm install
-npm run generate:base -- --size 1024 --seed 1941
-npm run verify:seams
-```
-
-Output in `assets/base-room/`:
-
-| File | What it is for |
+| | |
 | --- | --- |
-| `base-room.png` / `.svg` | The placeholder itself |
-| `base-room-lineart.png` | ControlNet structure conditioning (canny/lineart/scribble) |
-| `base-room-depth.png` | ControlNet depth conditioning |
-| `seam-mask.png` | White = must not change. The inpainting "keep" mask |
-| `band-hallway.png`, `band-slab.png` | The two straddle bands, as authored |
-| `tiled-3x3.png` | Nine copies, for looking at the joins |
-| `room-geometry.json` | Every rectangle, normalised 0–1, for the web app |
+| Blender base render | the source of truth for the tile *(not yet in the repo)* |
+| 512-image test corpus | generated, `512-test.tar.gz` *(not yet in the repo)* |
+| `tools/base-image/` | tile geometry, placeholder renderer, geometry overlay |
+| `packages/map/` | map ordering: slot placement, ranking, pan resistance |
+| `docs/borges-parameters.md` | the story's numbers, with sources |
 
-`room-geometry.json` is the interesting one. It carries all 640 book slots
-addressable as bay/shelf/index, plus named UI anchors. That is what step 6 of
-the concept needs: putting a previous search term on a book spine means writing
-to `bays[1].shelves[2].slots[n]`, and making it clickable means hit-testing the
-same rectangle. The image and the interaction layer stay in sync because they
-are generated from one source.
+```sh
+npm install
+npm run generate:tile     # placeholder + tile-geometry.json
+npm test                  # map ordering
+```
 
-**The placeholder is a diagram, not art.** It is a flat unrolled elevation, and
-it looks like one. Its job is to let phases 3–6 be built and the seam contract
-be proven before a single diffusion model is loaded.
+### The geometry overlay
+
+The proportions in `tools/base-image/lib/geometry.js` were measured **by eye off
+the Blender render** and are provisional. The overlay is how they get corrected:
+
+```sh
+npm run generate:tile -- --base path/to/base-render.png
+```
+
+It draws the frame, case, shelf boards and all 32 book slots per shelf over the
+real image so misalignment is visible. Run against a corpus image it already
+shows the frame and cornice landing correctly and the lamp radius needing a
+bump — which has been applied.
+
+**This is the main open dependency.** To finalise the numbers I need the base
+render in the repo, and ideally the `.blend`, so slot rectangles can be derived
+from the model rather than eyeballed. Only the centre room truly needs them
+exact — see [§5](#5-what-the-geometry-is-actually-for).
 
 ---
 
 ## 3. Phases
 
-### Phase 0 — the real base image *(concept step 1)*
+### Phase 1 — variant generation *(concept step 2)* — **you have this working**
 
-Replace the placeholder with the photorealistic room, conforming to the same
-seam geometry. The practical route:
+Out of scope for this repo. Two observations from the test corpus that are worth
+carrying into the full run:
 
-1. Model the gallery in Blender (an afternoon's work — it is six flat walls,
-   shelving, two spheres and a stair) and render it with the same projection the
-   placeholder uses.
-2. Render the seam bands as separate passes so they can be composited in
-   straddle form, guaranteeing the contract rather than hoping for it.
-3. Run `verify:seams` against the result.
-
-Blender is the recommendation over "generate the base with SD and hope": the
-base room is the one image in the project that has to be geometrically exact,
-and it is the one image that gets used tens of thousands of times.
-
-### Phase 0.5 — a synthetic corpus *(no equivalent in concept.md, and that is the point)*
-
-Before generating anything real, extend the generator with palette and
-proportion variation and emit ~500 procedurally distinct rooms. They will be
-ugly. They will also be enough to build and profile the entire display
-application, and to find the map bugs while the fix is still cheap. Throw them
-away afterwards.
-
-### Phase 1 — variant generation *(concept step 2)*
-
-Out of scope for this repo per `concept.md`, but the interface is in scope:
-
-- **Conditioning**: `base-room-lineart.png` and `base-room-depth.png` into
-  ControlNet; `seam-mask.png` as the inpaint keep-mask so the bands survive.
-- **Inpainting over img2img.** Masked inpainting with the seam locked is the
-  only approach that makes the contract structural. img2img at any meaningful
-  denoise strength will drift the borders.
-- **Admission gate**: every output runs through `verify:seams` with a small
-  per-pixel tolerance (JPEG/VAE round-tripping will not be bit-exact — a
-  tolerance of ~2/255 is realistic). Anything that fails is regenerated, not
-  hand-fixed.
-- **Provenance**: each room writes a sidecar record — prompt, seed, model hash,
-  ControlNet weights, timestamp. Ten thousand rooms with no provenance is an
-  unnavigable pile.
+- **~2% of images blow through the frame.** In `151`, `153`, `060`, `418`,
+  `444`, `482` and a few others, bright content or floor clutter reaches the
+  edge — peak border deviations of 130–245/255 against a 0.56 noise floor, so
+  the discriminator is unambiguous. These will read as a repeating bright blot
+  at every tile junction. Consistent with the mask being loose; not worth
+  tightening if the next mask is cleaner, but worth *scoring* — see below.
+- **Provenance sidecars.** Prompt, seed, model hash, ControlNet weights. Ten
+  thousand rooms without them is an unnavigable pile.
 
 ### Phase 2 — curation *(concept step 3)*
 
-A local-only review tool, not part of the public app: keyboard-driven, one room
-at a time, `1–5` to score, free-text tags, `x` to reject. Writes to the same
-SQLite database the pipeline writes to. Budget roughly 2–3 seconds per room;
-five thousand rooms is a few evenings, which is the real reason to be ruthless
-about corpus size.
+Local-only, keyboard-driven: `1`–`5` to score, free-text tags, `x` to reject.
+Writes to SQLite.
 
-Add perceptual-hash dedup before review — diffusion corpora contain more
-near-duplicates than expected, and reviewing them twice is wasted time.
+Add two automatic sort keys so review time goes where it matters:
+
+- **Border drift** (mean + peak deviation from the corpus mean frame). Not a
+  gate — a sort key, so the handful of frame-breakers surface first instead of
+  being found by accident on the map.
+- **Perceptual-hash clusters**, so near-duplicates are reviewed once.
 
 ### Phase 3 — the display map *(concept step 4)*
 
-The heart of the app.
+`packages/map/ordering.js` implements the layout; it is tested and ready for a
+renderer to sit on top.
 
-- **Rendering**: a virtualized canvas drawing only visible tiles. At 1024px
-  rooms and a 1920×1080 viewport, that is 4–12 tiles at any moment. Plain
-  Canvas2D is sufficient; WebGL/Pixi is available if zoom-out reveals it isn't.
-  Do *not* mount thousands of DOM nodes.
-- **Levels of detail**: ship each room at 256 / 512 / 1024. Zoomed out, the
-  256px mips are what load, and they are ~15 KB each.
-- **Ordering**: a pure function `(rank, seed) → grid cell`. Reserve a scattered
-  ~20% of cells as *content slots* (chosen by a seeded hash of the coordinate,
-  so it is stable and needs no storage); every other cell is the base room.
-  Sort content slots by distance from the origin and fill them in rank order.
-  Re-ordering after a search is then a re-index, not a data reload.
-- **Edge resistance**: rubber-band damping on pan velocity beyond a radius
-  derived from the content-slot count, so the user is discouraged rather than
-  walled. Hard clamping would break the illusion the resistance exists to
-  protect.
+- **Corpus size and generic ratio are runtime parameters**, not build-time ones.
+  Both are arguments to `createLayout()`, changing either re-derives the layout
+  in O(slots) with no data reload. Wire them to sliders and tune by feel.
+- Growing the corpus **keeps existing slots in place** and appends further out,
+  so tuning doesn't reshuffle the map underneath you. That's asserted in the
+  tests, because it's the property that makes a slider usable.
+- **Slot placement** is a seeded hash of the coordinate — stable, stored
+  nowhere, extends infinitely.
+- **The origin is reserved** for the centre room. Ranked rooms start in the ring
+  around it.
+- **Re-ranking swaps one array.** Slot positions never move, so a search reads
+  as the library rearranging itself rather than as a page reload.
+- **Pan resistance** falls off cubically past the outermost occupied slot, so
+  the edge is felt rather than hit.
+
+Rendering: a virtualized canvas drawing only visible tiles — 4–12 at a time at
+1024px. Ship 256/512/1024 mips. Do not mount thousands of DOM nodes.
 
 ### Phase 4 — search *(concept step 5)*
 
-The concept treats the CLIP backend as an open cost question. It mostly isn't
-one, because the expensive half can be precomputed:
+The CLIP backend is mostly not a cost question, because the expensive half
+precomputes:
 
-- **Image embeddings are computed offline**, once, during phase 1, and shipped
-  as a binary blob. Five thousand rooms × 512 dims × int8 = **2.5 MB**,
-  quantized from float32 with negligible ranking loss.
-- **Ranking runs in the browser**: one dot product per room against the query
-  vector. Five thousand of them is well under a frame.
-- **Only the text tower needs to run at request time**, on a text string.
-  That's a tiny stateless endpoint (or `transformers.js` in-browser if the model
-  download is acceptable).
+- **Image embeddings computed offline**, shipped as one blob. 5,000 rooms × 512
+  dims × int8 = **2.5 MB**.
+- **Ranking runs in the browser** — `rankByEmbedding()` in `packages/map`. A few
+  million multiply-adds, well under a frame.
+- **Only the text tower runs at request time.** A tiny stateless endpoint, or
+  `transformers.js` in-browser if the model download is acceptable.
 
-So there is no CLIP *service* to pay for in steady state — just an occasional
-text-encode call. That materially changes the hosting question in phase 6.
+No CLIP service to pay for in steady state.
 
 ### Phase 5 — the controls in the centre room *(concept step 6)*
 
-All of these bind to anchors already present in `room-geometry.json`:
-`searchField`, `submitButton`, `generateButton`, `shuffleLamp`,
-`historySpines`, `scoreSortSpines`. Implement as transparent hit regions
+Bind to the anchors in `tile-geometry.json`: `searchField`, `submitButton`,
+`historySpines`, `scoreSortSpines`, `shuffleSpine`. Transparent hit regions
 positioned by the same transform that draws the centre tile, with the visible
-affordance painted into the room art.
+affordance painted into the art.
 
-Search-term spines need text composited onto the spine rectangles at runtime —
-a small canvas overlay per spine, rotated to the spine's angle.
+Search-term spines need text composited onto spine rectangles at runtime — a
+small canvas overlay per spine.
 
-The "generate a new room from this term" button is the one with a real cost
-attached and the only part of the app that can be abused; it needs a rate limit
-and a queue before it is exposed publicly, and it should probably stay behind a
-flag until the rest is stable.
+### Phase 6 — generate-on-demand *(stretch)*
+
+Selectively enabled for short periods, so it needs a kill switch and a queue but
+not autoscaling. Keep it behind a flag.
 
 ---
 
 ## 4. Architecture
 
-Following `concept.md`'s stated preference for Node + Express + React.
-
 ```
 babel-index/
-  tools/base-image/        # generator + seam verifier            [exists]
-  assets/base-room/        # generated placeholder assets         [exists]
-  docs/                    # this, and the story parameters       [exists]
+  tools/base-image/        # tile geometry, placeholder, overlay      [exists]
+  packages/map/            # slot placement, ranking, resistance      [exists]
+  assets/base-tile/        # generated geometry + placeholder         [exists]
+  docs/                                                              [exists]
   packages/
-    geometry/              # room-geometry.json consumer, shared by app + tools
-    pipeline/              # ingest, dedup, embed, admission gate
+    pipeline/              # ingest, dedup, embed, border-drift score
     curate/                # local-only review tool
-    server/                # Express: manifest, text-embed proxy, generate queue
+    server/                # Express: manifest, text-embed, generate queue
     web/                   # React: map, search, centre-room controls
 ```
 
-**Data**: SQLite through the pipeline and curation phases — single file, no
-service, trivially backed up, and it holds a corpus of this size without
-complaint. It only needs to become Postgres if the generate-on-demand feature
-goes public with real traffic. The web app never talks to it; it consumes a
+**Data**: SQLite through the pipeline and curation phases — one file, no
+service, trivially backed up. The web app never talks to it; it consumes a
 static `manifest.json` plus `embeddings.bin`.
 
 ```
 room: id, path, w, h, seed, prompt, model, controlnet, created_at,
       phash, score (0-5), tags[], status (pending|kept|rejected),
-      embedding (blob), seam_check (pass|fail|tolerance)
+      embedding (blob), border_drift (mean, peak)
 ```
 
-**Hosting**: the app is a static bundle plus one small endpoint. The dominant
-cost is image egress, not compute, which argues for **Cloudflare R2 + Pages**
-over GCS — R2 charges no egress, and this is a project whose entire cost profile
-is "serve a lot of images to whoever wanders in." GCP + Terraform remain the
-right answer if the generate-on-demand queue grows into real infrastructure;
-they are the wrong answer for a static image map. Worth revisiting once corpus
-size is known.
+**Hosting**: a static bundle plus one small endpoint. The dominant cost is image
+egress, which argues for **Cloudflare R2 + Pages** over GCS — R2 charges no
+egress, and this project's cost profile is "serve a lot of images to whoever
+wanders in." GCP + Terraform stay the right answer if generate-on-demand grows
+into real infrastructure; they're the wrong answer for a static image map.
 
 ---
 
-## 5. Sequencing
+## 5. What the geometry is actually for
 
-The dependency that matters is that phases 3–6 need *a* corpus but not the
-*real* corpus. Build against the synthetic one, and phase 1's expensive GPU time
-overlaps with app development instead of blocking it.
+Worth being explicit, because it bounds how exact `tile-geometry.json` needs to
+be: **per-slot hit-testing is only meaningful on a room whose art we control.**
+Inpainting doesn't preserve shelf counts or book positions — the test corpus has
+variants with four shelves, six shelves, vertical dividers, and books stacked on
+the floor. So:
 
-| Order | Phase | Blocked by |
-| --- | --- | --- |
-| 1 | Seam contract + placeholder | — *(done)* |
-| 2 | Synthetic corpus (0.5) | placeholder |
-| 3 | Display map (3) | synthetic corpus |
-| 4 | Real base image (0) | seam contract |
-| 5 | Variant pipeline (1) | real base image |
-| 6 | Curation (2) | variant pipeline |
-| 7 | Search (4) | display map + any corpus |
-| 8 | Centre-room controls (5) | search |
+- The **centre room** needs exact geometry. It carries the search box and the
+  hidden controls, and its art is ours.
+- **Every other room** needs only its bounding box. Clicking one means "focus
+  this room", not "click this book".
+
+That's consistent with the concept, which puts the controls in one specific
+room. It also means the provisional proportions are only blocking phase 5.
 
 ---
 
-## 6. Open questions
+## 6. Decisions made
 
-These are decisions, not unknowns — they need an answer more than they need
-research, and the first one is worth answering before anything else is built on
-top of it.
+Recorded from review, with what changed:
 
-1. **Is the unrolled elevation the right projection?** It is what the
-   placeholder implements: the hexagon cut open and laid flat, which makes
-   tiling tractable but reads as a diagram rather than a place. The alternative
-   is a one-point perspective interior — far more evocative, far more
-   photorealistic, and much harder to tile, because a perspective view's edges
-   are not a simple repeating band. A middle option is a shallow perspective
-   with flattened side walls. **This choice propagates into every other phase**,
-   and changing it after the corpus exists means regenerating the corpus.
-2. **Square grid or hex grid?** Galleries are hexagonal; the map is currently
-   square. A hex grid would be more faithful and would let each gallery have six
-   real neighbours, at the cost of a more complicated tile shape and pan model.
-3. **How much of each image is locked?** Currently 8.6% per edge. Thicker is
-   safer for tiling and leaves less room for a variant to be interesting;
-   thinner is the reverse.
-4. **Corpus size, and the duplicate ratio.** The concept suggests 80% generic.
-   That ratio and the total room count together determine the size of the
-   traversable region, the curation effort, and the bandwidth bill.
-5. **Does the vertical axis mean "floor above", or just more galleries?** The
-   placeholder assumes floors, which is why the slab band is a floor/ceiling
-   assembly. Treating vertical neighbours as ordinary galleries would simplify
-   the slab into a wall.
-6. **Does the generate-on-demand button ship publicly?** It is the only
-   unbounded cost in the project.
+1. **Tile = one shelved wall, shallow perspective.** The unrolled-hexagon
+   elevation is gone, along with the straddle-band and corner machinery it
+   needed. Faithful 3D Library reconstructions already exist; this isn't that.
+2. **The Blender render is the source of truth.** Built; needs to land in the
+   repo.
+3. **Seam accuracy is not enforced.** Inpainting from a shared base with an
+   edge-clear mask makes it structural. `verify-seams` and the seam-mask assets
+   are deleted. Border drift survives only as a curation sort key.
+4. **No canonical inpainting mask in the repo.** Masks are a pipeline concern
+   and will change between runs; encoding one would freeze a false constraint.
+5. **Synthetic corpus: done** — 512 images, SD inference is cheap enough that
+   the placeholder-driven bootstrap was unnecessary.
+6. **Corpus size and generic ratio are runtime-tweakable.** Implemented and
+   tested in `packages/map`.
+7. **Generate-on-demand is a stretch goal**, selectively enabled.
+
+## 7. Still open
+
+1. **The base render, and ideally the `.blend`**, so tile geometry stops being
+   eyeballed. Blocking phase 5 only.
+2. **Should the corpus live in this repo?** 512 images is 26 MB; a full corpus
+   won't fit comfortably in git. Probably an external bucket plus a manifest —
+   worth deciding before the pipeline starts writing.
+3. **Do vertical neighbours mean anything?** With tiles as walls rather than
+   rooms, up/down no longer implies a floor above. The grid may be purely
+   abstract now, which is simpler and probably fine.
+4. **One lamp per tile is four per gallery**, where the story says two. Nobody
+   will notice; noting it so it's a choice rather than a slip.
