@@ -1,0 +1,53 @@
+name: e2e
+
+# Manual only. Spinning a browser up on every pull request is more machinery
+# than this earns; the smoke test is here for when the map itself is what
+# changed - the render loop, the camera, the tile cache, the panel - and for
+# before anything that matters ships.
+#
+#   gh workflow run e2e.yml
+#   ...or the "Run workflow" button on the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      node:
+        description: Node version to run against
+        type: choice
+        default: '22'
+        options: ['20', '22', '24']
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: browser smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node }}
+          cache: npm
+
+      - run: npm ci
+
+      # Only Chromium, and only here - the fast suite never needs a browser.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
+
+      # The test screenshots the final state whether it passed or failed, which
+      # is the quickest way to read "the canvas rendered nothing" from a run
+      # that happened on a machine you are not sitting at.
+      - name: Upload the last frame
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-${{ inputs.node }}
+          path: packages/web/e2e/artifacts/
+          if-no-files-found: warn

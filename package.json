@@ -11,6 +11,7 @@
     "generate:tile": "node tools/base-image/generate.mjs",
     "generate:figures": "node tools/base-image/hexagon-plan.mjs",
     "test": "node --test",
+    "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
     "demo": "node packages/server/index.mjs"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1"
   }
 }
