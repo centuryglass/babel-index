@@ -269,14 +269,48 @@ Three notes on how, since they are the parts that were not obvious:
   before it reaches the wire, so the request that expresses the attack has to be
   written to a socket by hand.
 
-What is still missing:
+### The browser smoke test
 
-**End-to-end, in a browser.** The drive script used to validate this build
-should become a committed Playwright test rather than living in a scratch
-directory: load, pan, zoom, move both sliders and assert the boundary radius
-responds, run a search, assert no console errors. It is the only layer that
-catches "the canvas renders nothing" — which no unit test will, and which
-`bundle.test.mjs` only narrows to "it at least compiled".
+`packages/web/e2e/smoke.e2e.mjs` — the drive script, committed. It spawns the
+real demo server against the sample corpus and drives Chromium through load,
+pan, zoom, both sliders, a search, and a check that nothing reached the console.
+It is the only layer that catches **"the canvas renders nothing"**, which no unit
+test will and which `bundle.test.mjs` only narrows to "it at least compiled".
+
+```sh
+npx playwright install chromium   # once
+npm run test:e2e                  # ~3s
+```
+
+Deliberately outside `npm test` and outside the pull-request job — a browser is
+more machinery than every push earns on a project this size. It runs from
+[`e2e.yml`](../.github/workflows/e2e.yml), which is manual dispatch only and
+uploads the final frame as an artifact. The filename sits outside the patterns
+`node --test` discovers, so it cannot creep back into the fast suite by
+accident; `playwright` is a devDependency, and the PR job sets
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` so `npm ci` never fetches a browser it will
+not open.
+
+Three things it does that are worth keeping if it gets rewritten:
+
+- **Blankness is measured, not eyeballed.** It reads the canvas back and counts
+  distinct colours on a sampled grid. A working map returns hundreds; with
+  `drawImage` removed it returns 5. Photographs are the signal — a canvas that
+  is only flat fills is exactly the failure being hunted.
+- **The search assertion holds the camera still.** A search both flies home
+  *and* reorders the rooms, so comparing pixels across the flight passes on the
+  camera move alone — a version whose ranking is discarded entirely still looked
+  fine. It now parks at the centre, records the view, wanders off, searches, and
+  compares at a provably identical camera.
+- **The sliders are driven by `Home`/`End` on a focused range input**, which is
+  real user input, rather than by reaching into React's value setter.
+
+Each of those was checked by breaking the app on purpose and confirming the
+test failed: no `drawImage`, a discarded search order, an ignored
+`contentRatio`, and a stray `console.error`. A green e2e test that cannot fail
+is worse than none, because it is believed.
+
+### Still missing
 
 **Tile cache keying, once the pyramid lands.** That it keys on `(id, level)`
 rather than url, and retains a coarse level while a finer one loads. The budget
@@ -298,6 +332,10 @@ on `main` itself, across Node 20 (the `engines` floor), 22 and 24. The matrix
 fans out into one check per version and a single `ci` job gates on all of them,
 so branch protection requires one check name and the matrix can change without
 touching repository settings.
+
+`.github/workflows/e2e.yml` runs the browser smoke test, on manual dispatch
+only, against a Node version picked at dispatch time. It is not a merge gate;
+it is what you run when the map itself changed.
 
 ---
 
@@ -411,7 +449,8 @@ In dependency order, shortest path to a demo that survives a real corpus:
 2. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam.
-3. **The Playwright smoke test** — the last item in [§3a](#3a-testing) that no
-   unit test can reach, and the one that catches a canvas rendering nothing.
+3. **Test coverage per [§3a](#3a-testing)** — what remains is the render loop's
+   cost, which wants the loop extracted from `main.jsx` first, and the tile
+   cache's `(id, level)` keying, which waits on the pyramid.
 4. **Re-trace the geometry** once the shelf proportions are settled.
 5. **A real base render** as the generic room, replacing `000.jpg`.

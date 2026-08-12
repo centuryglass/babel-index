@@ -36,7 +36,12 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
+      # Playwright is a devDependency for the manual e2e workflow only. This
+      # job never opens a browser, so it must not spend a minute downloading
+      # one on every run.
       - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
       - name: npm test
         run: npm test
