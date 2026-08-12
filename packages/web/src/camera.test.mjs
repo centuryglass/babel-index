@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CELL_ASPECT,
   MAX_ZOOM,
   MIN_ZOOM,
   cameraAtCell,
   clampZoom,
   glideStep,
   panByPixels,
+  pxPerCell,
   screenToWorld,
   worldToScreen,
   zoomAt,
@@ -15,41 +17,95 @@ import {
 const rect = { width: 1280, height: 720 };
 const cam = { x: 3.25, y: -7.5, zoom: 220 };
 
-test('screen and world coordinates round-trip', () => {
-  for (const [px, py] of [[0, 0], [640, 360], [1279, 719], [-40, 900]]) {
-    const w = screenToWorld(px, py, cam, rect);
-    const s = worldToScreen(w.x, w.y, cam, rect);
-    assert.ok(Math.abs(s.x - px) < 1e-9, `x: ${s.x} != ${px}`);
-    assert.ok(Math.abs(s.y - py) < 1e-9, `y: ${s.y} != ${py}`);
+/**
+ * The same camera at cell shapes the corpus is not in. A cell is the world's
+ * base unit and nothing may assume its width equals its height, so every
+ * invariant below is checked at all of these rather than only the square one.
+ */
+const SHAPES = [
+  { name: 'square', aspect: 1 },
+  { name: '16:9', aspect: 720 / 1280 },
+  { name: '3:4 tall', aspect: 1024 / 768 },
+  { name: 'the configured tile', aspect: CELL_ASPECT },
+];
+const shaped = (aspect) => ({ ...cam, aspect });
+
+test('screen and world coordinates round-trip, at every cell shape', () => {
+  for (const { name, aspect } of SHAPES) {
+    const c = shaped(aspect);
+    for (const [px, py] of [[0, 0], [640, 360], [1279, 719], [-40, 900]]) {
+      const w = screenToWorld(px, py, c, rect);
+      const s = worldToScreen(w.x, w.y, c, rect);
+      assert.ok(Math.abs(s.x - px) < 1e-9, `${name} x: ${s.x} != ${px}`);
+      assert.ok(Math.abs(s.y - py) < 1e-9, `${name} y: ${s.y} != ${py}`);
+    }
   }
 });
 
 test('the camera centre lands at the middle of the viewport', () => {
-  const s = worldToScreen(cam.x, cam.y, cam, rect);
-  assert.deepEqual(s, { x: rect.width / 2, y: rect.height / 2 });
+  for (const { name, aspect } of SHAPES) {
+    const s = worldToScreen(cam.x, cam.y, shaped(aspect), rect);
+    assert.deepEqual(s, { x: rect.width / 2, y: rect.height / 2 }, name);
+  }
 });
 
-test('one world unit is one zoom of pixels', () => {
-  const a = worldToScreen(0, 0, cam, rect);
-  const b = worldToScreen(1, 1, cam, rect);
-  assert.equal(b.x - a.x, cam.zoom);
-  assert.equal(b.y - a.y, cam.zoom);
+test('one cell is one zoom wide, and the aspect tall', () => {
+  // zoom is pixels per cell WIDTH; the height follows from the tile's shape.
+  // Asserting both axes against zoom would bake the square assumption back in.
+  for (const { name, aspect } of SHAPES) {
+    const c = shaped(aspect);
+    const a = worldToScreen(0, 0, c, rect);
+    const b = worldToScreen(1, 1, c, rect);
+    assert.ok(Math.abs(b.x - a.x - cam.zoom) < 1e-9, `${name} width`);
+    assert.ok(Math.abs(b.y - a.y - cam.zoom * aspect) < 1e-9, `${name} height`);
+  }
+});
+
+test('a non-square cell is actually drawn non-square', () => {
+  // The whole point of the change: a 16:9 cell must not come out square. If
+  // pxPerCell ever ignores the aspect again, this is what says so.
+  const wide = pxPerCell(shaped(720 / 1280));
+  assert.ok(wide.y < wide.x, `16:9 cell came out ${wide.x}x${wide.y}`);
+  assert.equal(wide.y, cam.zoom * (720 / 1280));
+
+  const tall = pxPerCell(shaped(1024 / 768));
+  assert.ok(tall.y > tall.x, `3:4 cell came out ${tall.x}x${tall.y}`);
+});
+
+test('a camera with no aspect falls back to the configured tile', () => {
+  assert.deepEqual(pxPerCell(cam), { x: cam.zoom, y: cam.zoom * CELL_ASPECT });
 });
 
 test('zoom keeps the world point under the cursor fixed', () => {
   // The exact invariant that makes scroll-to-zoom feel right, and the easiest
-  // one to break: whatever is under the pointer must not move as you zoom.
-  for (const [px, py] of [[0, 0], [100, 640], [640, 360], [1280, 720]]) {
-    for (const deltaY of [-400, -120, -1, 1, 120, 400]) {
-      const before = screenToWorld(px, py, cam, rect);
-      const next = zoomAt(cam, px, py, deltaY, rect);
-      const after = screenToWorld(px, py, next, rect);
-      assert.ok(
-        Math.abs(after.x - before.x) < 1e-9 && Math.abs(after.y - before.y) < 1e-9,
-        `(${px},${py}) delta ${deltaY}: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`
-      );
+  // one to break: whatever is under the pointer must not move as you zoom. It
+  // has to hold on the short axis of a non-square cell too, which is where a
+  // half-applied aspect would show up.
+  for (const { name, aspect } of SHAPES) {
+    const c = shaped(aspect);
+    for (const [px, py] of [[0, 0], [100, 640], [640, 360], [1280, 720]]) {
+      for (const deltaY of [-400, -120, -1, 1, 120, 400]) {
+        const before = screenToWorld(px, py, c, rect);
+        const next = zoomAt(c, px, py, deltaY, rect);
+        const after = screenToWorld(px, py, next, rect);
+        assert.ok(
+          Math.abs(after.x - before.x) < 1e-9 && Math.abs(after.y - before.y) < 1e-9,
+          `${name} (${px},${py}) delta ${deltaY}: ` +
+            `${JSON.stringify(before)} -> ${JSON.stringify(after)}`
+        );
+      }
     }
   }
+});
+
+test('the cell shape survives every camera operation', () => {
+  // Each of these builds a new camera object. One that drops `aspect` would
+  // silently snap the world back to square mid-gesture.
+  const c = shaped(720 / 1280);
+  assert.equal(zoomAt(c, 640, 360, -120, rect).aspect, c.aspect, 'zoomAt');
+  assert.equal(panByPixels(c, 40, 40, 1).aspect, c.aspect, 'panByPixels');
+  assert.equal(glideStep({ ...c, x: 90, y: 90 }, 0).aspect, c.aspect, 'glideStep');
+  assert.equal(cameraAtCell(c, 3, 4, 300).aspect, c.aspect, 'cameraAtCell');
 });
 
 test('the fixed point holds when the zoom clamps', () => {
@@ -84,11 +140,16 @@ test('zooming in then back out by the same delta returns to the start', () => {
 
 test('dragging moves the world with the pointer, one for one, when unresisted', () => {
   // damp = 1 means "inside the content region": the map should track the
-  // finger exactly, so 220 pixels at zoom 220 is one tile.
-  const next = panByPixels(cam, 220, -440, 1);
-  assert.ok(Math.abs(next.x - (cam.x - 1)) < 1e-9);
-  assert.ok(Math.abs(next.y - (cam.y + 2)) < 1e-9);
-  assert.equal(next.zoom, cam.zoom);
+  // finger exactly. 220 pixels at zoom 220 is one cell across; down the short
+  // axis of a wide cell the same pixels are MORE cells, which is what tracking
+  // the finger means when the cell is not square.
+  for (const { name, aspect } of SHAPES) {
+    const c = shaped(aspect);
+    const next = panByPixels(c, 220, -440, 1);
+    assert.ok(Math.abs(next.x - (c.x - 1)) < 1e-9, `${name} x`);
+    assert.ok(Math.abs(next.y - (c.y + 440 / (220 * aspect))) < 1e-9, `${name} y`);
+    assert.equal(next.zoom, c.zoom);
+  }
 });
 
 test('resistance damps the drag without ever stopping it', () => {

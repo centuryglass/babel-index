@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { layout, checkAgainstStory } from './lib/geometry.js';
 import { MEASURED, SHELF_COUNT, BOOKS_PER_SHELF } from './lib/measured.js';
 import { STORY } from './lib/story.js';
+import { BASE_TILE } from '../../packages/web/src/pyramid.js';
 
 test('the trace still agrees with the story', () => {
   assert.deepEqual(checkAgainstStory(), []);
@@ -79,4 +80,82 @@ test('layout exposes 160 addressable books', () => {
     L.shelves.map((s) => s.books.map((b) => b.index)).flat().slice(0, 3),
     [0, 1, 2]
   );
+});
+
+// --- tile shape ------------------------------------------------------------
+
+test('the lamp is a circle at every tile shape', () => {
+  // Deliberate, and the one thing not stretched with the tile: a single scalar
+  // radius, never an rx/ry pair. A globe that became an ellipse because the
+  // wall got wider would read as a mistake rather than as a wider wall.
+  for (const [width, height] of [[1024, 1024], [1280, 720], [768, 1024], [900, 675]]) {
+    const { lamp } = layout({ width, height });
+    assert.equal(typeof lamp.r, 'number', `${width}x${height}: radius must stay scalar`);
+    assert.ok(lamp.r > 0);
+    assert.equal(lamp.rx, undefined, 'an rx/ry pair would mean an ellipse');
+    assert.equal(lamp.ry, undefined);
+  }
+
+  // Sized off the width alone, so stretching the tile vertically moves the lamp
+  // without resizing it. Scaling by height too is what would make it an oval.
+  const short = layout({ width: 1024, height: 512 });
+  const tall = layout({ width: 1024, height: 2048 });
+  assert.equal(short.lamp.r, tall.lamp.r, 'height must not touch the radius');
+  assert.notEqual(short.lamp.cy, tall.lamp.cy, 'but it must still move with the wall');
+});
+
+test('the glow is concentric with the globe and scales with it', () => {
+  const square = layout({ width: 1024, height: 1024 }).lamp;
+  const baseline = square.glow / square.r;
+
+  for (const [width, height] of [[1280, 720], [640, 360], [768, 1024]]) {
+    const { lamp } = layout({ width, height });
+    // Concentric: the renderer draws both at (cx, cy), so a glow that drifted
+    // would halo off to one side.
+    assert.ok(lamp.glow > lamp.r, `${width}x${height}: the glow must be the larger circle`);
+    // And a fixed multiple of the globe, so it is a circle for the same reason
+    // the globe is. Rounding is at 1e-4, so compare with a tolerance.
+    assert.ok(
+      Math.abs(lamp.glow / lamp.r - baseline) < 1e-4,
+      `${width}x${height}: glow ratio ${lamp.glow / lamp.r} drifted from ${baseline}`
+    );
+  }
+});
+
+test('rects stretch with the tile, on each axis independently', () => {
+  // The other half of the lamp rule: everything that is not the lamp DOES
+  // follow the tile's shape, because it was traced as part of the wall.
+  const square = layout({ width: 1000, height: 1000 });
+  const wide = layout({ width: 1000, height: 500 });
+  assert.equal(wide.opening.w, square.opening.w, 'width is unchanged');
+  assert.ok(
+    Math.abs(wide.opening.h - square.opening.h / 2) < 0.02,
+    `expected the opening to halve in height, got ${wide.opening.h} from ${square.opening.h}`
+  );
+});
+
+test('the trace and the tile agree on aspect', () => {
+  // Two independent statements of one fact: the SVG's viewBox and BASE_TILE.
+  // measured.js normalises x against the traced width and y against the traced
+  // height, so if they disagree every measured rect is silently stretched onto
+  // art it no longer matches - the books stop landing on the books.
+  //
+  // The workflow this guards: change the tile's aspect, re-trace in Inkscape,
+  // re-run the importer. Do one and forget the other and this is what says so.
+  const traced = MEASURED.tile.aspect;
+  const tile = BASE_TILE.h / BASE_TILE.w;
+  assert.ok(
+    Math.abs(traced - tile) < 0.01,
+    `the trace is ${MEASURED.tile.w}x${MEASURED.tile.h} (aspect ${traced}) but BASE_TILE is ` +
+      `${BASE_TILE.w}x${BASE_TILE.h} (aspect ${tile}). Re-trace shelf_geometry.svg at the ` +
+      `new shape and re-run import-shelf-svg.mjs, or put BASE_TILE back.`
+  );
+});
+
+test('the trace records the shape it was made at', () => {
+  // Without this the normalisation is lossy in the one way that matters, and
+  // the check above has nothing to compare against.
+  assert.ok(MEASURED.tile, 'measured.js must carry its traced dimensions');
+  assert.ok(MEASURED.tile.w > 0 && MEASURED.tile.h > 0);
+  assert.ok(Math.abs(MEASURED.tile.aspect - MEASURED.tile.h / MEASURED.tile.w) < 1e-4);
 });
