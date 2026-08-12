@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { pxPerCell } from './camera.js';
 import { createTileCache } from './tiles.js';
 import { useMapCamera } from './useMapCamera.js';
 
@@ -79,22 +80,28 @@ function Library({ manifest }) {
       ctx.fillRect(0, 0, w, h);
 
       const { x: cx, y: cy, zoom } = cam.current;
-      const halfW = w / 2 / zoom;
-      const halfH = h / 2 / zoom;
+      // Pixels per cell on each axis. The cell is the world's base unit and is
+      // not assumed square, so every size below comes from here rather than
+      // from `zoom` twice.
+      const cellPx = pxPerCell(cam.current);
+      const halfW = w / 2 / cellPx.x;
+      const halfH = h / 2 / cellPx.y;
       const x0 = Math.floor(cx - halfW);
       const x1 = Math.ceil(cx + halfW);
       const y0 = Math.floor(cy - halfH);
       const y1 = Math.ceil(cy + halfH);
 
-      const toScreen = (wx, wy) => [(wx - cx) * zoom + w / 2, (wy - cy) * zoom + h / 2];
+      const toScreen = (wx, wy) => [(wx - cx) * cellPx.x + w / 2, (wy - cy) * cellPx.y + h / 2];
+
+      // +1 kills hairline gaps from rounding, on each axis independently.
+      const cw = cellPx.x + 1;
+      const ch = cellPx.y + 1;
 
       let drawn = 0;
       let missing = 0;
       for (let gy = y0; gy <= y1; gy++) {
         for (let gx = x0; gx <= x1; gx++) {
           const [sx, sy] = toScreen(gx, gy);
-          const size = zoom + 1; // +1 kills hairline gaps from rounding
-
           const cell = layout.roomAt(gx, gy, order);
           const url = cell.centre
             ? manifest.generic.url
@@ -104,18 +111,18 @@ function Library({ manifest }) {
 
           const img = url ? cache.get(url) : null;
           if (img) {
-            ctx.drawImage(img, sx, sy, size, size);
+            ctx.drawImage(img, sx, sy, cw, ch);
             drawn++;
           } else {
             ctx.fillStyle = '#15120f';
-            ctx.fillRect(sx, sy, size, size);
+            ctx.fillRect(sx, sy, cw, ch);
             missing++;
           }
 
           if (cell.centre) {
             ctx.strokeStyle = 'rgba(200,169,95,0.9)';
             ctx.lineWidth = 2;
-            ctx.strokeRect(sx + 1, sy + 1, zoom - 2, zoom - 2);
+            ctx.strokeRect(sx + 1, sy + 1, cellPx.x - 2, cellPx.y - 2);
             if (zoom > 90) {
               ctx.fillStyle = 'rgba(200,169,95,0.95)';
               ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';

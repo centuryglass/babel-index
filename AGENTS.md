@@ -22,6 +22,7 @@ npm run demo                       # http://localhost:5173, against assets/corpu
 npm run demo -- --images <dir> [--base base.jpg] [--port 5173]
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
+npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
 npm run generate:tile -- --base <image>   # draw the measured geometry over a real image
 npm run generate:figures                  # regenerate docs/figures/
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
@@ -39,6 +40,7 @@ is read per request.
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
 | `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `tiles.js` the image cache, `pyramid.js` the resolution policy |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
+| `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art |
 | `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
@@ -97,6 +99,14 @@ is read per request.
   level choice is derived — don't compute one from a literal, and don't assume
   square. The tests run the policy at four aspects and will tell you what a new
   shape breaks (a rung outside the camera's clamp, a budget below one screen).
+- **The world's base unit is the cell, and a cell is not square.** World
+  coordinates are in cells; `zoom` is pixels per cell *width* and `pxPerCell()`
+  in `camera.js` is the only place the height is derived from it. Never write
+  `zoom` for both axes — that is the bug this replaced. Cameras carry an optional
+  `aspect`, so anything constructing one must spread the old camera rather than
+  rebuilding `{x, y, zoom}` from scratch, or the shape is lost mid-gesture.
+  `packages/map` is deliberately shape-blind: placement and the boundary radius
+  are in cells and must stay that way.
 - **The centre room is cell (0, 0)** and is reserved — `packages/map` never
   assigns a corpus room there. Only that room needs exact per-book geometry;
   every other room needs only a bounding box, because inpainting doesn't preserve
