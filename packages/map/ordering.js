@@ -17,6 +17,29 @@
  *   - Re-ranking after a search swaps one array. Slot positions never move,
  *     which is what makes the re-order read as the library rearranging itself
  *     rather than as a page reload.
+ *
+ * ### Distance is measured as it looks, not as it indexes
+ *
+ * This file is otherwise shape-blind - it deals in cells and has no idea what a
+ * cell looks like - with one deliberate exception: `aspect`, the cell's height
+ * as a multiple of its width. Every distance here is `hypot(x, y * aspect)`,
+ * which is the offset in units of cell WIDTHS, i.e. proportional to what ends
+ * up on screen.
+ *
+ * The reason is that a circle in cell space is an ellipse on screen as soon as
+ * the cell stops being square, and the boundary is a navigation affordance: the
+ * distance you may travel before the map resists should not depend on which way
+ * you set off. Measuring in raw cells would be simpler, but it would make the
+ * library taller-or-wider than it is round, and the edge would arrive sooner on
+ * one axis than the other.
+ *
+ * Placement uses the same metric, and has to. A circular boundary drawn around
+ * an elliptical spread of rooms would be a circle with nothing in the top and
+ * bottom of it - free panning over empty generic space, which is worse than the
+ * ellipse. One metric, both jobs.
+ *
+ * `aspect` defaults to 1, so a caller that has no opinion gets exactly the
+ * square-cell behaviour, and nothing else in this file needs to know why.
  */
 
 /** 32-bit spatial hash -> [0, 1). Stable across platforms. */
@@ -40,6 +63,12 @@ export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
   !isCentre(x, y) && cellHash(x, y, seed) < contentRatio;
 
 /**
+ * Distance from the origin in units of cell WIDTHS - the metric everything in
+ * this file sorts and clamps by. With a square cell it is plain `hypot`.
+ */
+export const cellDistance = (x, y, aspect = 1) => Math.hypot(x, y * aspect);
+
+/**
  * Build the map layout.
  *
  * @param {object} opts
@@ -47,15 +76,20 @@ export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
  * @param {number} [opts.contentRatio] fraction of cells that may hold one
  *                                     (0.2 => the concept's "80% generic")
  * @param {number} [opts.seed]        scatter seed for slot placement
+ * @param {number} [opts.aspect]      cell height / cell width; 1 for a square
+ *                                    cell. Makes the library round on screen
+ *                                    rather than round in the index.
  * @returns {MapLayout}
  */
-export function createLayout({ roomCount, contentRatio = 0.2, seed = 0 } = {}) {
+export function createLayout({ roomCount, contentRatio = 0.2, seed = 0, aspect = 1 } = {}) {
   if (!Number.isInteger(roomCount) || roomCount < 0)
     throw new RangeError('roomCount must be a non-negative integer');
   if (!(contentRatio > 0 && contentRatio <= 1))
     throw new RangeError('contentRatio must be in (0, 1]');
+  if (!(aspect > 0 && Number.isFinite(aspect)))
+    throw new RangeError('aspect must be a positive, finite ratio');
 
-  const slots = collectSlots(roomCount, contentRatio, seed);
+  const slots = collectSlots(roomCount, contentRatio, seed, aspect);
 
   // Reverse index: cell -> rank position. Bounded by roomCount, so small.
   const rankAt = new Map();
@@ -71,6 +105,7 @@ export function createLayout({ roomCount, contentRatio = 0.2, seed = 0 } = {}) {
     contentRatio,
     seed,
     roomCount,
+    aspect,
 
     /** Rank position of a cell, or -1 if it holds a generic room. */
     rankOf(x, y) {
@@ -99,10 +134,15 @@ export function createLayout({ roomCount, contentRatio = 0.2, seed = 0 } = {}) {
     /**
      * Pan resistance. 1 inside the content region, falling smoothly toward 0
      * outside it, so the edge is felt rather than hit.
-     * @param {number} softness how many cells the falloff spans
+     *
+     * Both the distance and `softness` are in cell widths, so the edge arrives
+     * at the same apparent distance whichever way you drag - that uniformity is
+     * the whole reason this file knows the aspect at all.
+     *
+     * @param {number} softness how far the falloff spans, in cell widths
      */
     resistanceAt(x, y, softness = 12) {
-      const d = Math.hypot(x, y);
+      const d = cellDistance(x, y, aspect);
       if (d <= boundaryRadius) return 1;
       const t = Math.min(1, (d - boundaryRadius) / softness);
       return (1 - t) ** 3;
@@ -114,27 +154,38 @@ export function createLayout({ roomCount, contentRatio = 0.2, seed = 0 } = {}) {
  * Gather the `count` content slots nearest the origin, ordered by distance.
  * Grows the search radius until enough are found, so it stays correct at any
  * contentRatio without a magic constant.
+ *
+ * `radius` is in cell widths, so the region swept is a screen-circle: it
+ * reaches `radius` cells across but `radius / aspect` cells up and down. A
+ * short cell means more rows to cover the same apparent distance, which is
+ * also why the density estimate below carries the aspect.
  */
-function collectSlots(count, contentRatio, seed) {
+function collectSlots(count, contentRatio, seed, aspect = 1) {
   if (count === 0) return [];
-  // Expected slot density is contentRatio per cell, so a disc of area
-  // count/contentRatio should hold roughly `count` of them. Start a little
-  // wide, then grow if the hash happened to be sparse here.
-  let radius = Math.ceil(Math.sqrt(count / (contentRatio * Math.PI)) * 1.35) + 4;
+  // A screen-circle of radius r spans r x r/aspect cells, so it contains
+  // pi * r^2 / aspect of them, and at density contentRatio that holds
+  // contentRatio * pi * r^2 / aspect slots. Invert for r, start a little wide,
+  // then grow if the hash happened to be sparse here.
+  let radius = Math.ceil(Math.sqrt((count * aspect) / (contentRatio * Math.PI)) * 1.35) + 4;
 
   for (let attempt = 0; attempt < 24; attempt++) {
     const found = [];
-    for (let y = -radius; y <= radius; y++) {
-      for (let x = -radius; x <= radius; x++) {
-        const d = Math.hypot(x, y);
+    const xMax = Math.ceil(radius);
+    const yMax = Math.ceil(radius / aspect);
+    for (let y = -yMax; y <= yMax; y++) {
+      for (let x = -xMax; x <= xMax; x++) {
+        const d = cellDistance(x, y, aspect);
         if (d > radius) continue;
         if (isContentSlot(x, y, { seed, contentRatio })) found.push({ x, y, d });
       }
     }
     if (found.length >= count) {
       // Sort by distance; break ties by angle so the ordering is deterministic
-      // and fills rings evenly rather than favouring one axis.
-      found.sort((a, b) => a.d - b.d || Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x));
+      // and fills rings evenly rather than favouring one axis. The angle is the
+      // on-screen one, for the same reason the distance is.
+      found.sort(
+        (a, b) => a.d - b.d || Math.atan2(a.y * aspect, a.x) - Math.atan2(b.y * aspect, b.x)
+      );
       return found.slice(0, count);
     }
     radius = Math.ceil(radius * 1.4);

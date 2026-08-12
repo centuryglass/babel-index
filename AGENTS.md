@@ -105,8 +105,16 @@ is read per request.
   `zoom` for both axes — that is the bug this replaced. Cameras carry an optional
   `aspect`, so anything constructing one must spread the old camera rather than
   rebuilding `{x, y, zoom}` from scratch, or the shape is lost mid-gesture.
-  `packages/map` is deliberately shape-blind: placement and the boundary radius
-  are in cells and must stay that way.
+- **`packages/map` measures distance as it looks, not as it indexes.** It is
+  shape-blind except for one injected `aspect`, and every distance in it is
+  `cellDistance()` — `hypot(x, y * aspect)`, i.e. cell *widths*. That makes the
+  library round on screen and the edge the same distance away whichever way you
+  drag. Placement uses the same metric and has to: a circular boundary around an
+  elliptical spread of rooms is a circle with nothing in the top and bottom of
+  it. If you add a distance anywhere in that file, it goes through
+  `cellDistance` — a raw `Math.hypot(x, y)` is the bug. `aspect` defaults to 1,
+  so the module still needs no imports and a square cell behaves exactly as
+  before.
 - **The centre room is cell (0, 0)** and is reserved — `packages/map` never
   assigns a corpus room there. Only that room needs exact per-book geometry;
   every other room needs only a bounding box, because inpainting doesn't preserve

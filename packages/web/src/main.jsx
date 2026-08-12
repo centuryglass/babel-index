@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
-import { pxPerCell } from './camera.js';
+import { CELL_ASPECT, pxPerCell } from './camera.js';
 import { createTileCache } from './tiles.js';
 import { useMapCamera } from './useMapCamera.js';
 
@@ -35,8 +35,18 @@ function Library({ manifest }) {
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
+  //
+  // The cell aspect goes in so the library is round on screen rather than round
+  // in the index - the edge should be the same distance away whichever way you
+  // drag, and with a non-square cell those are not the same thing.
   const layout = useMemo(
-    () => createLayout({ roomCount: Math.min(roomCount, total), contentRatio, seed }),
+    () =>
+      createLayout({
+        roomCount: Math.min(roomCount, total),
+        contentRatio,
+        seed,
+        aspect: CELL_ASPECT,
+      }),
     [roomCount, contentRatio, seed, total]
   );
 
