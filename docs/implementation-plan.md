@@ -162,38 +162,138 @@ thousands of DOM nodes.
 #### Resolution pyramid — the next thing to build
 
 The demo loads full-resolution images at every zoom, and that is the ceiling it
-will hit first. Zoomed out it draws ~1660 visible cells; at 1024², decoded RGBA
-is 4 MB per image, so a viewport that holds the whole content region wants
-several gigabytes of decoded bitmap. It survives at 511 rooms only because the
-cache is capped at 240 entries and the browser discards aggressively — at a
-truly absurd corpus it will thrash, then fail.
+will hit first. Fully zoomed out on a 2560×1440 device-pixel viewport the map
+draws ~5700 cells; at 1024², decoded RGBA is 4 MB per image, so that screen
+wants ~23 GB of decoded bitmap. It survives at 511 rooms only because the cache
+is capped at 240 entries and the browser discards aggressively — which is to say
+it survives by thrashing, and at a larger corpus it stops surviving.
 
-The fix is a pyramid, generated once in the pipeline:
+The fix is a pyramid, generated once in the pipeline. Picking the level from
+zoom keeps decoded bytes per screen roughly constant however far out the camera
+goes, which is the property that makes corpus size stop mattering for rendering
+cost.
 
-| Level | Size | ~bytes decoded | Used when |
-| --- | --- | --- | --- |
-| 0 | 1024 | 4 MB | zoom > 512 px/tile — reading one room |
-| 1 | 512 | 1 MB | zoom 192–512 |
-| 2 | 256 | 256 KB | zoom 64–192 |
-| 3 | 128 | 64 KB | zoom 24–64 |
-| 4 | 64 | 16 KB | zoom < 24 — the far-out field |
+##### The three rules, in priority order
 
-Picking the level from `zoom` (device-pixel-adjusted, one level of hysteresis so
-a slow zoom doesn't oscillate across a boundary) keeps decoded bytes per screen
-roughly constant no matter how far out the camera goes — which is the property
-that makes corpus size stop mattering for rendering cost.
+Everything below follows from these, and they are listed in the order they win
+when they conflict:
 
-Consequences to design for now rather than retrofit:
+1. **A cell never fails to display.** Not "rarely" — the design has no state in
+   which a cell that has any image at all draws a hole.
+2. **Cells load slightly before they are needed**, so panning and zooming arrive
+   at tiles that are already there.
+3. **Hold rather than refetch.** RAM is cheaper than a round trip, and the map
+   is a thing you wander back and forth across.
 
-- **The cache key becomes `(id, level)`**, not `url`. `packages/web/src/tiles.js`
-  already isolates this; it is the only file that needs to know.
-- **Draw the coarse level while a finer one loads.** Holding the already-cached
-  coarser tile avoids the blank-cell flash on every zoom step.
-- **Offline mode needs a layout convention** — `rooms/<level>/<file>` is enough,
-  with `scan.mjs` discovering which levels exist and falling back to whatever it
-  finds. That keeps "point it at a directory" true.
-- **Generating the pyramid is a pipeline job**, not a server job. A `--mips` flag
-  on the ingest tool that writes the smaller levels once.
+##### Where the numbers live
+
+**[`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js) is the single
+tuning surface.** Level sizes, per-level cache budgets, the hysteresis band and
+the prefetch ring are all constants at the top of that file, each with the
+arithmetic that justifies it written next to it. No pyramid number belongs
+anywhere else: `tiles.js` reads `LEVELS` and `budgetOf()`, the render loop reads
+`pickLevel()` and `PREFETCH`. Tune there, run `npm test`, and the assertions in
+`pyramid.test.mjs` will say if a value has been moved somewhere that breaks one
+of the three rules.
+
+| Level | Size | Decoded/tile | Budget | Budget bytes | Worst-case visible |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 1024 | 4 MB | 240 | 960 MB | 24 |
+| 1 | 512 | 1 MB | 400 | 400 MB | 77 |
+| 2 | 256 | 256 KB | 900 | 225 MB | 273 |
+| 3 | 128 | 64 KB | 1600 | 100 MB | 943 |
+| 4 | 64 | 16 KB | 7000 | 112 MB | 5700 |
+
+≈1.8 GB if every level fills, which is a ceiling and not a reservation —
+entries appear only as cells are visited. `CACHE_SCALE` dials the whole table at
+once for a machine that can spare less; the ratios between levels are the part
+worth keeping.
+
+Two things that table encodes. First, **level 0 is budgeted at ten times its
+worst-case screen** (240 against 24) — that headroom is rule 3 buying revisits,
+not screens: tour ten rooms up close, come back to the first, no refetch.
+Second, **the coarse levels get the bigger budgets**, which is rule 3 in service
+of rule 1: the coarse field is what every finer level falls back on, so it must
+not be what gets evicted to make room for a zoom-in.
+
+##### Level selection
+
+Demand is `zoom × devicePixelRatio` — **device** pixels, because that is what a
+tile actually covers. Picking on CSS pixels ships half-resolution art to every
+retina display. The chosen level is the smallest tile not smaller than the
+demand, so a tile is never upscaled while a big enough one is available.
+
+Two corrections to the earlier draft of this table, both caught by writing the
+selection down as testable code:
+
+- It keyed on raw `zoom`, not device pixels — the retina bug above.
+- Its bottom level was used at "zoom < 24", but
+  [`camera.js`](../packages/web/src/camera.js) clamps `MIN_ZOOM = 26`, so that
+  level could never be selected at all. A level nothing can reach is dead weight
+  in the pipeline and a lie in the table, so `pyramid.test.mjs` now asserts that
+  every level is reachable by some zoom within the camera's own clamp. That test
+  couples the ladder to `MIN_ZOOM`/`MAX_ZOOM`: change the clamp and it will tell
+  you the ladder needs a rung added or dropped.
+
+Switching carries a **15% hysteresis band** (`HYSTERESIS`). Without it, holding a
+zoom near a boundary flickers between two levels and every flicker is a full
+screen of fetches. A jump of several levels still lands on the true level rather
+than creeping one rung per frame.
+
+##### Rule 1: never blank
+
+Three layers, in order:
+
+- **`bestAvailable()` falls back through the room's other levels** — coarser
+  first (cheap, usually already resident from the zoomed-out view, upscales to
+  something soft but correct), then finer (memory already spent, so drawing it
+  beats drawing nothing). A cell draws a hole only if *no* level of that room is
+  resident.
+- **The generic room's coarsest level is preloaded and pinned**, never evictable.
+  16 KB buys a last-resort fill for any cell whose own room has nothing yet, so
+  the floor is a real image rather than the flat `#15120f` the renderer paints
+  today.
+- **A 404 is remembered, not retried** (`tiles.js` does this already) and
+  permanently demotes that cell to the next level that works.
+
+Because the fallback is what makes this true, per-level LRU is load-bearing
+rather than a nicety. **A single global LRU would break rule 1**: zooming in
+would flood the cache with level 0 and evict the entire coarse field, so zooming
+back out would flash blank across the whole screen — exactly the failure the
+pyramid exists to prevent. Budgets are therefore per level, and levels never
+evict each other.
+
+##### Rule 2: load ahead
+
+- **A ring of `PREFETCH.margin` cells outside the viewport** is loaded at the
+  current level, queued strictly behind everything visible.
+- **The next level out is warmed for visible cells** (`warmLevels()`). The
+  asymmetry is deliberate: zooming *in* needs few tiles and the coarse one on
+  screen upscales acceptably while they arrive, whereas zooming *out* needs ~4×
+  as many tiles at once and has nothing to show until they land.
+- **`PREFETCH.concurrency` caps in-flight prefetches** below the browser's ~6
+  connections per host. A prefetch that queues ahead of a visible tile has made
+  rule 1 worse in order to serve rule 2, which is backwards.
+
+##### What this changes elsewhere
+
+- **The cache key becomes `(id, level)`**, not `url`.
+  `packages/web/src/tiles.js` already isolates this; it is the only file that
+  needs to know. Its budget becomes per-level, and `get()` returns which level it
+  actually gives back, so the renderer can tell a substitute from a hit.
+- **Offline mode needs a layout convention** — `<dir>/<size>/<file>`, e.g.
+  `<dir>/64/000.jpg`, with bare files at the top level read as level 0. `scan.mjs`
+  discovers which levels exist and falls back to whatever it finds, so a flat
+  directory keeps working unchanged and "point it at a directory" stays true.
+- **Generating the pyramid is a pipeline job**, not a server job: a `--mips` flag
+  on the ingest tool that writes the smaller levels once. **Open question — it
+  needs a resizer, and there isn't one in the dependency list.** `@resvg/resvg-js`
+  rasterises SVG and won't downscale a JPEG. This does not survive "can this be
+  twenty lines instead?", so it is a real dependency decision: `sharp` (fast,
+  native, heavy) versus shelling out to ImageMagick (no dependency, assumes it is
+  installed) versus decoding through a canvas polyfill. Worth deciding before the
+  ingest tool is written; it blocks nothing on the web side, since `scan.mjs`
+  falling back to level 0 means the client works against a flat directory today.
 - Bandwidth follows the same curve: the far-out view costs ~16 KB per room
   instead of ~50 KB, which matters more than the decode ceiling once this is
   hosted.
@@ -240,7 +340,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-73 tests (`npm test`), in under a second, with no browser and no network.
+91 tests (`npm test`), in under a second, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -250,6 +350,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
 | `packages/web/src/tiles.test.mjs` | cache budget and eviction |
+| `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
 | `packages/web/bundle.test.mjs` | the client compiles |
 | `tools/base-image/geometry.test.mjs` | the trace still agrees with the story |
 
@@ -268,6 +369,14 @@ Three notes on how, since they are the parts that were not obvious:
 - **The traversal test bypasses `fetch`.** `fetch` normalises `..` out of a URL
   before it reaches the wire, so the request that expresses the attack has to be
   written to a socket by hand.
+- **The pyramid's tests assert the policy, not the constants.** They check that
+  every level is reachable within the camera's clamp, that no budget is below
+  one worst-case screen plus its prefetch ring, that coarse levels are budgeted
+  above fine ones, and that a fallback exists whenever any level is resident.
+  So the numbers stay tunable — moving a budget is fine, moving it somewhere
+  that breaks a rule is what fails. Each was checked by breaking it on purpose:
+  starving a budget, zeroing the hysteresis, reversing the coarse-before-fine
+  preference, and adding a level below `MIN_ZOOM` all fail the suite.
 
 ### The browser smoke test
 
@@ -313,8 +422,10 @@ is worse than none, because it is believed.
 ### Still missing
 
 **Tile cache keying, once the pyramid lands.** That it keys on `(id, level)`
-rather than url, and retains a coarse level while a finer one loads. The budget
-and the never-evict-an-in-flight-load rule are covered already.
+rather than url, that per-level budgets are enforced independently, and that a
+zoom-in cannot evict the coarse field. The selection policy is tested in
+`pyramid.test.mjs`; what is untested is `tiles.js` obeying it. The budget and the
+never-evict-an-in-flight-load rule are covered already.
 
 **A test for the render loop's cost**, not just its correctness: assert that a
 zoomed-out frame requests no more than N images. That is the regression the
@@ -444,8 +555,18 @@ Recorded from review, with what changed:
 
 In dependency order, shortest path to a demo that survives a real corpus:
 
-1. **Resolution pyramid** — pipeline flag to write the levels, `scan.mjs` to
-   discover them, `tiles.js` to key on `(id, level)`. The rendering ceiling.
+1. **Resolution pyramid.** The policy is designed, written and tested in
+   [`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js); what remains
+   is wiring it to the three consumers, in this order — none of them blocks on
+   the pipeline, because a flat directory reads as level 0:
+   1. `tiles.js` — key on `(id, level)`, per-level LRU, `bestAvailable()` on
+      every miss, the pinned generic fallback.
+   2. The render loop — `pickLevel()` per frame, the prefetch ring and the
+      warm-coarser pass, both queued behind visible tiles. Wants the loop
+      extracted out of `main.jsx`'s effect first, which the render-cost test
+      below needs anyway.
+   3. `scan.mjs` — discover `<dir>/<size>/<file>`, fall back to flat.
+   4. Ingest `--mips`, once the resizer question in §3 is decided.
 2. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam.

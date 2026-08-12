@@ -73,12 +73,13 @@ which draws every measured rectangle over it.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 73 tests, no browser and no network
+npm test    # 91 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
 Covered: the map layout, the measured geometry, the directory scan and its
-header parsers, the server API, the camera maths, and the tile cache. Image
+header parsers, the server API, the camera maths, the tile cache and the
+resolution-pyramid policy. Image
 fixtures are synthesised per test, so nothing depends on `assets/corpus-sample/`
 staying exactly what it is.
 
