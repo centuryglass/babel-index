@@ -5,8 +5,11 @@
  * view and dropped once the cache is over budget and they are no longer the
  * ones being drawn. Nothing here is clever; it just has to avoid holding every
  * room in memory at once, since a full corpus will not fit.
+ *
+ * `createImage` exists so the eviction policy can be tested without a DOM; the
+ * browser never passes it.
  */
-export function createTileCache({ budget = 220, onLoad } = {}) {
+export function createTileCache({ budget = 220, onLoad, createImage = () => new Image() } = {}) {
   const cache = new Map(); // url -> { img, state, lastUsed }
   let clock = 0;
 
@@ -17,7 +20,7 @@ export function createTileCache({ budget = 220, onLoad } = {}) {
       return entry.state === 'ready' ? entry.img : null;
     }
 
-    const img = new Image();
+    const img = createImage();
     entry = { img, state: 'loading', lastUsed: ++clock };
     cache.set(url, entry);
 
