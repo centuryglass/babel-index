@@ -10,7 +10,7 @@
   "scripts": {
     "generate:tile": "node tools/base-image/generate.mjs",
     "generate:figures": "node tools/base-image/hexagon-plan.mjs",
-    "test": "node --test packages/map/ordering.test.mjs tools/base-image/geometry.test.mjs",
+    "test": "node --test",
     "demo": "node packages/server/index.mjs"
   },
   "dependencies": {

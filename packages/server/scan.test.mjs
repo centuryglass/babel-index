@@ -1,0 +1,233 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { imageSize, scanDirectory } from './scan.mjs';
+import * as fixture from './image-fixtures.mjs';
+
+/**
+ * A throwaway corpus in a temp directory.
+ * @param {Record<string, Buffer|string>} files
+ */
+async function corpus(files, run) {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-scan-'));
+  try {
+    for (const [name, body] of Object.entries(files)) await writeFile(join(dir, name), body);
+    return await run(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+const sized = (buf, name = 'x.bin') => corpus({ [name]: buf }, (dir) => imageSize(join(dir, name)));
+
+// --- header parsing ---------------------------------------------------------
+
+test('reads PNG dimensions from IHDR', async () => {
+  assert.deepEqual(await sized(fixture.png(1024, 768)), { w: 1024, h: 768 });
+  assert.deepEqual(await sized(fixture.png(1, 1)), { w: 1, h: 1 });
+});
+
+test('reads JPEG dimensions by walking to the frame header', async () => {
+  assert.deepEqual(await sized(fixture.jpeg(1024, 1024)), { w: 1024, h: 1024 });
+  // A wide image: proves width and height are not transposed, which a square
+  // test corpus would never catch.
+  assert.deepEqual(await sized(fixture.jpeg(1920, 1080)), { w: 1920, h: 1080 });
+  // Progressive JPEGs use SOF2, and are most of what a diffusion pipeline emits.
+  assert.deepEqual(await sized(fixture.jpeg(640, 480, { marker: 0xc2 })), { w: 640, h: 480 });
+});
+
+test('JPEG walking skips the markers that share the SOF range', async () => {
+  // 0xc4 (DHT), 0xc8 (JPG) and 0xcc (DAC) sit inside 0xc0..0xcf but are not
+  // frame headers. Reading one as a frame yields plausible-looking garbage.
+  const buf = fixture.jpeg(1200, 900, { before: [0xe0, 0xc4, 0xcc, 0xc8, 0xe1] });
+  assert.deepEqual(await sized(buf), { w: 1200, h: 900 });
+});
+
+test('reads all three WebP flavours', async () => {
+  assert.deepEqual(await sized(fixture.webpVp8(1024, 1024)), { w: 1024, h: 1024 });
+  assert.deepEqual(await sized(fixture.webpVp8l(800, 600)), { w: 800, h: 600 });
+  assert.deepEqual(await sized(fixture.webpVp8x(4096, 2160)), { w: 4096, h: 2160 });
+});
+
+test('unreadable headers give null rather than throwing or guessing', async () => {
+  // Size is an optimisation - the client falls back to the natural size once
+  // the image loads - so being wrong is worse than admitting ignorance.
+  assert.equal(await sized(fixture.truncatedJpeg()), null);
+  assert.equal(await sized(fixture.notAnImage()), null);
+  assert.equal(await sized(Buffer.alloc(0)), null);
+  assert.equal(await sized(Buffer.from([0xff, 0xd8])), null);
+  // RIFF, but not a WebP.
+  assert.equal(await sized(Buffer.concat([Buffer.from('RIFF....WAVEfmt '), Buffer.alloc(64)])), null);
+});
+
+test('a corrupt header does not hang the scan', async () => {
+  // A segment length of zero would walk backwards forever if the parser
+  // trusted it.
+  const evil = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x00]), Buffer.alloc(64, 0xff)]);
+  assert.equal(await sized(evil), null);
+});
+
+// --- directory rules --------------------------------------------------------
+
+const three = () => ({
+  '001.jpg': fixture.jpeg(512, 512),
+  '002.png': fixture.png(256, 256),
+  '003.webp': fixture.webpVp8(128, 128),
+});
+
+test('scans a directory into a manifest', async () => {
+  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.equal(m.mode, 'offline');
+    assert.equal(m.directory, dir);
+    assert.equal(m.count, 3);
+    assert.equal(m.rooms.length, m.count);
+    assert.deepEqual(
+      m.rooms.map((r) => r.file),
+      ['001.jpg', '002.png', '003.webp']
+    );
+    assert.deepEqual(m.rooms.map((r) => r.id), [0, 1, 2]);
+    for (const room of m.rooms) {
+      assert.equal(room.url, `/images/${room.file}`);
+      assert.ok(room.bytes > 0);
+    }
+    assert.deepEqual(m.rooms[0], {
+      id: 0, file: '001.jpg', url: '/images/001.jpg', bytes: m.rooms[0].bytes, w: 512, h: 512,
+    });
+  });
+});
+
+test('the generic room is base.* by default, and is not also a corpus room', async () => {
+  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.equal(m.generic.file, 'base.png');
+    assert.deepEqual(m.generic, { file: 'base.png', url: '/images/base.png', w: 1024, h: 1024 });
+    // Being both the wallpaper and a search result would put the same picture
+    // everywhere and in the ranking too.
+    assert.ok(!m.rooms.some((r) => r.file === 'base.png'));
+  });
+});
+
+test('--base picks the generic room, by filename or by stem', async () => {
+  for (const base of ['002.png', '002']) {
+    await corpus(three(), async (dir) => {
+      const m = await scanDirectory(dir, { base });
+      assert.equal(m.generic.file, '002.png', `--base ${base}`);
+      assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '003.webp']);
+      assert.deepEqual(m.rooms.map((r) => r.id), [0, 1], 'ids stay contiguous');
+    });
+  }
+});
+
+test('--base beats a file called base.*', async () => {
+  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
+    const m = await scanDirectory(dir, { base: '003.webp' });
+    assert.equal(m.generic.file, '003.webp');
+    assert.ok(m.rooms.some((r) => r.file === 'base.png'), 'the demoted base is a room like any other');
+  });
+});
+
+test('with no base at all, the first file stands in', async () => {
+  await corpus(three(), async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.equal(m.generic.file, '001.jpg');
+    assert.equal(m.count, 2);
+  });
+});
+
+test('a --base that matches nothing falls back rather than failing', async () => {
+  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
+    const m = await scanDirectory(dir, { base: 'nope.jpg' });
+    assert.equal(m.generic.file, 'base.png');
+  });
+});
+
+test('ids are stable across scans, because the map keys slots on them', async () => {
+  await corpus(three(), async (dir) => {
+    const a = await scanDirectory(dir);
+    const b = await scanDirectory(dir);
+    assert.deepEqual(a.rooms, b.rooms);
+
+    // Adding a room must not renumber the ones already placed... unless it
+    // sorts ahead of them, which is why ingest should append, not interleave.
+    await writeFile(join(dir, '004.jpg'), fixture.jpeg(64, 64));
+    const c = await scanDirectory(dir);
+    assert.deepEqual(c.rooms.slice(0, a.rooms.length), a.rooms);
+    assert.equal(c.count, a.count + 1);
+  });
+});
+
+test('non-image files are ignored, whatever their case', async () => {
+  await corpus(
+    {
+      '001.JPG': fixture.jpeg(512, 512),
+      '002.JPEG': fixture.jpeg(512, 512),
+      'notes.txt': 'not a room',
+      'manifest.json': '{}',
+      '.DS_Store': 'junk',
+    },
+    async (dir) => {
+      const m = await scanDirectory(dir);
+      assert.deepEqual(m.rooms.map((r) => r.file), ['002.JPEG']);
+      assert.equal(m.generic.file, '001.JPG');
+    }
+  );
+});
+
+test('subdirectories are not walked into', async () => {
+  await corpus(three(), async (dir) => {
+    await mkdir(join(dir, 'thumbs'));
+    await writeFile(join(dir, 'thumbs', '900.jpg'), fixture.jpeg(64, 64));
+    const m = await scanDirectory(dir);
+    assert.equal(m.count, 2);
+    assert.ok(!m.rooms.some((r) => r.file.includes('900')));
+  });
+});
+
+test('filenames that need escaping survive the round trip into a url', async () => {
+  await corpus(
+    { 'base.png': fixture.png(8, 8), 'a room #1.jpg': fixture.jpeg(32, 32), 'x&y=2.png': fixture.png(16, 16) },
+    async (dir) => {
+      const m = await scanDirectory(dir);
+      const byFile = Object.fromEntries(m.rooms.map((r) => [r.file, r.url]));
+      assert.equal(byFile['a room #1.jpg'], '/images/a%20room%20%231.jpg');
+      assert.equal(byFile['x&y=2.png'], '/images/x%26y%3D2.png');
+      for (const [file, url] of Object.entries(byFile))
+        assert.equal(decodeURIComponent(url.slice('/images/'.length)), file);
+    }
+  );
+});
+
+test('a room whose header cannot be read still appears, without a size', async () => {
+  await corpus({ 'base.png': fixture.png(8, 8), '001.jpg': fixture.truncatedJpeg() }, async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.equal(m.count, 1);
+    assert.equal(m.rooms[0].file, '001.jpg');
+    assert.ok(!('w' in m.rooms[0]), 'no size is better than a wrong one');
+    assert.ok(m.rooms[0].bytes > 0);
+  });
+});
+
+test('an empty directory fails with a message naming it', async () => {
+  await corpus({}, async (dir) => {
+    await assert.rejects(scanDirectory(dir), (err) => err.message.includes(dir));
+  });
+  await corpus({ 'readme.txt': 'no images here' }, async (dir) => {
+    await assert.rejects(scanDirectory(dir), /no images found/);
+  });
+});
+
+test('a missing directory fails rather than returning an empty corpus', async () => {
+  await assert.rejects(scanDirectory(join(tmpdir(), 'babel-does-not-exist-9e3779b1')));
+});
+
+test('a directory with one image serves it as the generic and has no rooms', async () => {
+  await corpus({ 'only.png': fixture.png(64, 64) }, async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.equal(m.generic.file, 'only.png');
+    assert.deepEqual(m.rooms, []);
+    assert.equal(m.count, 0);
+  });
+});

@@ -73,9 +73,17 @@ which draws every measured rectangle over it.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # map ordering + measured geometry
+npm test    # 73 tests, no browser and no network
 ```
 
-Coverage is deliberately narrow for now — the map layout and the trace, being
-the two places a silent wrong answer is expensive. See
-[the testing section](docs/implementation-plan.md#3a-testing) for what's missing.
+`node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
+Covered: the map layout, the measured geometry, the directory scan and its
+header parsers, the server API, the camera maths, and the tile cache. Image
+fixtures are synthesised per test, so nothing depends on `assets/corpus-sample/`
+staying exactly what it is.
+
+The one layer still untested is the canvas itself — see
+[the testing section](docs/implementation-plan.md#3a-testing). Every push and
+every pull request to `main` runs the suite on Node 20, 22 and 24
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); `ci` is the single
+check to require for merging.
