@@ -188,26 +188,56 @@ when they conflict:
 ##### Where the numbers live
 
 **[`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js) is the single
-tuning surface.** Level sizes, per-level cache budgets, the hysteresis band and
-the prefetch ring are all constants at the top of that file, each with the
-arithmetic that justifies it written next to it. No pyramid number belongs
-anywhere else: `tiles.js` reads `LEVELS` and `budgetOf()`, the render loop reads
-`pickLevel()` and `PREFETCH`. Tune there, run `npm test`, and the assertions in
-`pyramid.test.mjs` will say if a value has been moved somewhere that breaks one
-of the three rules.
+tuning surface.** The tile's dimensions, the ladder, per-level cache budgets, the
+hysteresis band and the prefetch ring are all constants at the top of that file,
+each with the arithmetic that justifies it written next to it. No pyramid number
+belongs anywhere else: `tiles.js` reads the ladder and `budgetOf()`, the render
+loop reads `pickLevel()` and `PREFETCH`. Tune there, run `npm test`, and the
+assertions in `pyramid.test.mjs` will say if a value has been moved somewhere
+that breaks one of the three rules.
 
-| Level | Size | Decoded/tile | Budget | Budget bytes | Worst-case visible |
-| --- | --- | --- | --- | --- | --- |
-| 0 | 1024 | 4 MB | 240 | 960 MB | 24 |
-| 1 | 512 | 1 MB | 400 | 400 MB | 77 |
-| 2 | 256 | 256 KB | 900 | 225 MB | 273 |
-| 3 | 128 | 64 KB | 1600 | 100 MB | 943 |
-| 4 | 64 | 16 KB | 7000 | 112 MB | 5700 |
+**The tile size is not settled, so nothing derives from it by hand.**
+`BASE_TILE = {w, h}` is the only statement of size or shape; the ladder is
+expressed as *divisors* of it, and every pixel count, byte cost and level choice
+is computed. Changing the tile is editing one object.
 
-≈1.8 GB if every level fills, which is a ceiling and not a reservation —
-entries appear only as cells are visited. `CACHE_SCALE` dials the whole table at
-once for a machine that can spare less; the ratios between levels are the part
-worth keeping.
+| Level | Divisor | Size¹ | Decoded/tile¹ | Budget | Budget bytes¹ | Worst-case visible¹ |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | ÷1 | 1024 | 4 MB | 240 | 960 MB | 24 |
+| 1 | ÷2 | 512 | 1 MB | 400 | 400 MB | 77 |
+| 2 | ÷4 | 256 | 256 KB | 900 | 225 MB | 273 |
+| 3 | ÷8 | 128 | 64 KB | 1600 | 100 MB | 943 |
+| 4 | ÷16 | 64 | 16 KB | 7000 | 112 MB | 5700 |
+
+¹ At the current `BASE_TILE` of 1024×1024. These columns are illustrative — they
+move with the tile, and the tests recompute them rather than trusting the table.
+≈1.8 GB if every level fills, which is a ceiling and not a reservation: entries
+appear only as cells are visited. `CACHE_SCALE` dials the whole table at once for
+a machine that can spare less; the ratios between levels are the part worth
+keeping.
+
+##### Changing the tile
+
+Edit `BASE_TILE`. The suite then re-derives the consequences and reports the two
+that need a human decision:
+
+- **Reachability.** A much larger or much taller tile can push a rung outside the
+  camera's zoom clamp, and a level nothing can select is dead weight in the
+  pipeline. The test couples the ladder to `MIN_ZOOM`/`MAX_ZOOM` and names the
+  rung to add or drop. (At 4096² level 0 is already unreachable — `MAX_ZOOM ×
+  dpr 2` does not reach half of it.)
+- **Budgets.** A shorter tile fits more rows on the same screen, so the
+  worst-case screen grows and a budget sized for squares may no longer hold one.
+  Switching to 1280×720 fails the check with the number it needs: the coarsest
+  level's 7000 against 10616. That is the intended behaviour — the budgets are a
+  judgement call about memory, so the test computes the floor and leaves the
+  choice.
+
+Non-square is handled in selection, not merely tolerated. Demand normalises both
+axes onto the width ladder and takes the larger, so a cell whose shape differs
+from the tile's — a wide tile stretched into a square cell — is resolved on
+whichever axis needed more, never under-resolved on the stretched one. The tests
+run the whole policy at 16:9, 3:4, a small square and a non-power-of-two tile.
 
 Two things that table encodes. First, **level 0 is budgeted at ten times its
 worst-case screen** (240 against 24) — that headroom is rule 3 buying revisits,
@@ -281,6 +311,15 @@ evict each other.
   `packages/web/src/tiles.js` already isolates this; it is the only file that
   needs to know. Its budget becomes per-level, and `get()` returns which level it
   actually gives back, so the renderer can tell a substitute from a hit.
+- **A non-square tile needs three things outside the pyramid**, none of them
+  blocking it. `camera.js` calls the world cell a unit square, so world units
+  would have to carry the cell's aspect (or the grid stays square and the tile is
+  letterboxed into it — a legitimate choice, and the one selection already
+  handles). The render loop draws `zoom + 1` on both axes and would need the
+  cell's height. And `geometry.js` scales x by width and y by height already, so
+  it survives — except the lamp, whose radius is scaled by width on both axes and
+  would need to become an ellipse or stay circular deliberately. Worth deciding
+  the grid question first, since the other two follow from it.
 - **Offline mode needs a layout convention** — `<dir>/<size>/<file>`, e.g.
   `<dir>/64/000.jpg`, with bare files at the top level read as level 0. `scan.mjs`
   discovers which levels exist and falls back to whatever it finds, so a flat
@@ -340,7 +379,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-91 tests (`npm test`), in under a second, with no browser and no network.
+99 tests (`npm test`), in under a second, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -377,6 +416,12 @@ Three notes on how, since they are the parts that were not obvious:
   that breaks a rule is what fails. Each was checked by breaking it on purpose:
   starving a budget, zeroing the hysteresis, reversing the coarse-before-fine
   preference, and adding a level below `MIN_ZOOM` all fail the suite.
+- **And they run at four tile shapes**, not just the current one, so nothing can
+  quietly re-pin itself to 1024 squares — re-hard-coding the size inside
+  `sizeOf()` fails three of them. The one that mattered most was almost useless:
+  the check that a stretched cell resolves on its hungrier axis was written with
+  `<=`, which passes when the height is ignored entirely. It asserts `<` now,
+  and fails against an implementation that drops the axis.
 
 ### The browser smoke test
 
