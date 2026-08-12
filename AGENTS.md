@@ -37,7 +37,7 @@ is read per request.
 | | |
 | --- | --- |
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
-| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `tiles.js` the image cache |
+| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `tiles.js` the image cache, `pyramid.js` the resolution policy |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art |
@@ -84,6 +84,13 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **Every pyramid number lives in `packages/web/src/pyramid.js`** — level sizes,
+  per-level cache budgets, the hysteresis band, the prefetch ring. Don't
+  reintroduce one as a literal in `tiles.js` or the render loop; those read the
+  policy, they don't restate it. The three rules it exists to serve, in the order
+  they win: a cell never fails to display, cells load slightly before they are
+  needed, hold rather than refetch. Per-level LRU is load-bearing for the first —
+  one global LRU lets a zoom-in evict the coarse field the fallback depends on.
 - **The centre room is cell (0, 0)** and is reserved — `packages/map` never
   assigns a corpus room there. Only that room needs exact per-book geometry;
   every other room needs only a bounding box, because inpainting doesn't preserve
