@@ -1,3 +1,6 @@
 node_modules/
 *.log
 .DS_Store
+
+# Screenshots the browser smoke test leaves behind.
+packages/web/e2e/artifacts/

@@ -240,51 +240,102 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-17 tests exist (`npm test`): map ordering, and the measured geometry. That
-covers the two places where a silent wrong answer would be expensive — the map
-layout, whose bugs look like "the library feels off", and the trace, whose bugs
-put hit regions on the wrong books. The gaps are everything else.
+73 tests (`npm test`), in under a second, with no browser and no network.
+`node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
-What to add, roughly in order of how much grief it saves:
+| | |
+| --- | --- |
+| `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance |
+| `packages/server/scan.test.mjs` | header parsers, directory rules |
+| `packages/server/app.test.mjs` | the four endpoints, against a live socket |
+| `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
+| `packages/web/src/tiles.test.mjs` | cache budget and eviction |
+| `packages/web/bundle.test.mjs` | the client compiles |
+| `tools/base-image/geometry.test.mjs` | the trace still agrees with the story |
 
-**`scan.mjs` — pure functions over fixtures.** The header parsers are exactly
-the kind of code that is silently wrong: a truncated JPEG, a WebP in each of its
-three flavours (VP8/VP8L/VP8X), a PNG. Plus the directory rules — base picked by
-`--base`, by a file called `base.*`, by falling back to the first file; the base
-excluded from the ranked corpus; ids stable across restarts, since the map's
-slot assignment is keyed on them; an empty directory failing usefully. Small
-committed fixtures, a handful of assertions.
+Three notes on how, since they are the parts that were not obvious:
 
-**The server API.** `/api/manifest` shape, `/api/search` determinism (same query
-returns the same order, different queries do not), empty query clearing the
-order, `/images` refusing to escape the images directory. No browser needed.
+- **Fixtures are synthesised, not committed.** `image-fixtures.mjs` builds PNG,
+  JPEG and all three WebP headers byte by byte, so the dimensions under test are
+  visible in the test, and nothing depends on `assets/corpus-sample/` staying
+  exactly 25 images. The nasty cases are there — a truncated JPEG, a segment
+  length of zero, and the `0xc4`/`0xc8`/`0xcc` markers that share the SOF range
+  and would otherwise be read as a frame header.
+- **The camera maths moved to `packages/web/src/camera.js`.** `useMapCamera.js`
+  keeps the pointer plumbing; everything expressible as an equation is now a
+  pure function, which is the only way to assert the invariant that matters —
+  zoom keeps the world point under the cursor fixed, including at the clamp.
+- **The traversal test bypasses `fetch`.** `fetch` normalises `..` out of a URL
+  before it reaches the wire, so the request that expresses the attack has to be
+  written to a socket by hand.
 
-**The camera, as pure functions.** `screenToWorld`/`worldToScreen` round-trip;
-zoom-at-cursor keeping the point under the pointer fixed — that one has an exact
-invariant and is easy to break. Worth extracting from `useMapCamera.js` so it is
-testable without a DOM, which is the main reason to do it.
+### The browser smoke test
 
-**Tile cache eviction.** That it respects the budget, that it never evicts an
-in-flight load, and — once the pyramid lands — that it keys on `(id, level)` and
-retains a coarse level while a finer one loads.
+`packages/web/e2e/smoke.e2e.mjs` — the drive script, committed. It spawns the
+real demo server against the sample corpus and drives Chromium through load,
+pan, zoom, both sliders, a search, and a check that nothing reached the console.
+It is the only layer that catches **"the canvas renders nothing"**, which no unit
+test will and which `bundle.test.mjs` only narrows to "it at least compiled".
 
-**End-to-end, in a browser.** The drive script used to validate this build
-should become a committed Playwright test rather than living in a scratch
-directory: load, pan, zoom, move both sliders and assert the boundary radius
-responds, run a search, assert no console errors. It is the only layer that
-catches "the canvas renders nothing" — which no unit test will.
+```sh
+npx playwright install chromium   # once
+npm run test:e2e                  # ~3s
+```
 
-Two things worth doing regardless of coverage:
+Deliberately outside `npm test` and outside the pull-request job — a browser is
+more machinery than every push earns on a project this size. It runs from
+[`e2e.yml`](../.github/workflows/e2e.yml), which is manual dispatch only and
+uploads the final frame as an artifact. The filename sits outside the patterns
+`node --test` discovers, so it cannot creep back into the fast suite by
+accident; `playwright` is a devDependency, and the PR job sets
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` so `npm ci` never fetches a browser it will
+not open.
 
-- **A test for the render loop's cost**, not just its correctness: assert that a
-  zoomed-out frame requests no more than N images. That is the regression that
-  the resolution pyramid exists to prevent, and it will silently come back.
-- **Fixtures over the real corpus.** Tests should not depend on
-  `assets/corpus-sample/` staying exactly 25 images; generate throwaway images
-  in a temp directory instead.
+Three things it does that are worth keeping if it gets rewritten:
+
+- **Blankness is measured, not eyeballed.** It reads the canvas back and counts
+  distinct colours on a sampled grid. A working map returns hundreds; with
+  `drawImage` removed it returns 5. Photographs are the signal — a canvas that
+  is only flat fills is exactly the failure being hunted.
+- **The search assertion holds the camera still.** A search both flies home
+  *and* reorders the rooms, so comparing pixels across the flight passes on the
+  camera move alone — a version whose ranking is discarded entirely still looked
+  fine. It now parks at the centre, records the view, wanders off, searches, and
+  compares at a provably identical camera.
+- **The sliders are driven by `Home`/`End` on a focused range input**, which is
+  real user input, rather than by reaching into React's value setter.
+
+Each of those was checked by breaking the app on purpose and confirming the
+test failed: no `drawImage`, a discarded search order, an ignored
+`contentRatio`, and a stray `console.error`. A green e2e test that cannot fail
+is worse than none, because it is believed.
+
+### Still missing
+
+**Tile cache keying, once the pyramid lands.** That it keys on `(id, level)`
+rather than url, and retains a coarse level while a finer one loads. The budget
+and the never-evict-an-in-flight-load rule are covered already.
+
+**A test for the render loop's cost**, not just its correctness: assert that a
+zoomed-out frame requests no more than N images. That is the regression the
+resolution pyramid exists to prevent, and it will silently come back. It needs
+the render loop pulled out of `main.jsx`'s effect first — the same extraction
+the camera just had, for the same reason.
 
 Not worth testing: the placeholder renderer's appearance, and anything that
 pins an art choice rather than an invariant.
+
+### CI
+
+`.github/workflows/ci.yml` runs `npm test` on every pull request to `main` and
+on `main` itself, across Node 20 (the `engines` floor), 22 and 24. The matrix
+fans out into one check per version and a single `ci` job gates on all of them,
+so branch protection requires one check name and the matrix can change without
+touching repository settings.
+
+`.github/workflows/e2e.yml` runs the browser smoke test, on manual dispatch
+only, against a Node version picked at dispatch time. It is not a merge gate;
+it is what you run when the map itself changed.
 
 ---
 
@@ -395,8 +446,11 @@ In dependency order, shortest path to a demo that survives a real corpus:
 
 1. **Resolution pyramid** — pipeline flag to write the levels, `scan.mjs` to
    discover them, `tiles.js` to key on `(id, level)`. The rendering ceiling.
-2. **Animated camera moves**, and extract the camera maths so it can be tested.
-3. **Test coverage per [§3a](#3a-testing)**, starting with `scan.mjs` fixtures
-   and the Playwright smoke test.
+2. **Animated camera moves.** The maths is extracted and tested now, so this is
+   an easing function over `camera.js` plus an interruptible rAF loop in the
+   hook; `flyTo` is the seam.
+3. **Test coverage per [§3a](#3a-testing)** — what remains is the render loop's
+   cost, which wants the loop extracted from `main.jsx` first, and the tile
+   cache's `(id, level)` keying, which waits on the pyramid.
 4. **Re-trace the geometry** once the shelf proportions are settled.
 5. **A real base render** as the generic room, replacing `000.jpg`.
