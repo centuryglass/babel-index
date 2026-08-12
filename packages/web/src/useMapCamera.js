@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { cameraAtCell, glideStep, panByPixels, zoomAt } from './camera.js';
 
 /**
  * Pan/zoom camera over an unbounded tile grid.
  *
- * World units are tiles: the cell at integer (x, y) occupies the unit square
- * from (x, y) to (x+1, y+1), and the centre room sits at (0, 0).
+ * This hook owns the pointer plumbing only; the maths lives in `camera.js` as
+ * pure functions, where it can be tested without a DOM.
  *
  * The camera is held in a ref rather than in state. It changes on every pointer
  * move and every animation frame, and React does not need to re-render for any
@@ -13,9 +14,6 @@ import { useCallback, useEffect, useRef } from 'react';
 export function useMapCamera({ canvasRef, resistanceAt, onChange }) {
   const cam = useRef({ x: 0.5, y: 0.5, zoom: 220 });
   const drag = useRef(null);
-  const velocity = useRef({ x: 0, y: 0 });
-
-  const clampZoom = (z) => Math.min(900, Math.max(26, z));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -25,22 +23,17 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange }) {
       canvas.setPointerCapture(e.pointerId);
       canvas.classList.add('dragging');
       drag.current = { x: e.clientX, y: e.clientY, moved: false };
-      velocity.current = { x: 0, y: 0 };
     };
 
     const onPointerMove = (e) => {
       if (!drag.current) return;
-      const dx = (e.clientX - drag.current.x) / cam.current.zoom;
-      const dy = (e.clientY - drag.current.y) / cam.current.zoom;
+      const dx = e.clientX - drag.current.x;
+      const dy = e.clientY - drag.current.y;
       drag.current = { x: e.clientX, y: e.clientY, moved: true };
 
-      // Resistance is sampled where the camera is trying to go, so pushing
-      // outward gets progressively heavier instead of stopping at a wall.
-      const damp = resistanceAt(cam.current.x, cam.current.y);
-      const scale = 0.12 + 0.88 * damp;
-      cam.current.x -= dx * scale;
-      cam.current.y -= dy * scale;
-      velocity.current = { x: -dx * scale, y: -dy * scale };
+      // Resistance is sampled where the camera is now, so pushing outward gets
+      // progressively heavier instead of stopping at a wall.
+      cam.current = panByPixels(cam.current, dx, dy, resistanceAt(cam.current.x, cam.current.y));
       onChange?.();
     };
 
@@ -53,15 +46,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange }) {
     const onWheel = (e) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
-
-      // Keep the world point under the cursor fixed across the zoom.
-      const before = screenToWorld(px, py, cam.current, rect);
-      cam.current.zoom = clampZoom(cam.current.zoom * Math.exp(-e.deltaY * 0.0014));
-      const after = screenToWorld(px, py, cam.current, rect);
-      cam.current.x += before.x - after.x;
-      cam.current.y += before.y - after.y;
+      cam.current = zoomAt(cam.current, e.clientX - rect.left, e.clientY - rect.top, e.deltaY, rect);
       onChange?.();
     };
 
@@ -85,12 +70,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange }) {
     let raf;
     const tick = () => {
       if (!drag.current) {
-        const damp = resistanceAt(cam.current.x, cam.current.y);
-        if (damp < 0.999) {
-          const d = Math.hypot(cam.current.x, cam.current.y) || 1;
-          const pull = (1 - damp) * 0.06;
-          cam.current.x -= (cam.current.x / d) * pull * d * 0.08;
-          cam.current.y -= (cam.current.y / d) * pull * d * 0.08;
+        const next = glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
+        if (next !== cam.current) {
+          cam.current = next;
           onChange?.();
         }
       }
@@ -102,20 +84,11 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange }) {
 
   const flyTo = useCallback(
     (x, y, zoom) => {
-      cam.current.x = x + 0.5;
-      cam.current.y = y + 0.5;
-      if (zoom) cam.current.zoom = clampZoom(zoom);
+      cam.current = cameraAtCell(cam.current, x, y, zoom);
       onChange?.();
     },
     [onChange]
   );
 
   return { cam, flyTo };
-}
-
-function screenToWorld(px, py, cam, rect) {
-  return {
-    x: cam.x + (px - rect.width / 2) / cam.zoom,
-    y: cam.y + (py - rect.height / 2) / cam.zoom,
-  };
 }

@@ -1,0 +1,56 @@
+name: ci
+
+# Runs on every pull request to main, and on main itself so a green branch is
+# always attributable to a commit rather than to a merge nobody re-checked.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push supersedes the run in flight for the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor declared in package.json engines, the current LTS, and the
+        # release after it - the tile geometry and the map layout are exact
+        # arithmetic, so a version that disagrees is worth hearing about.
+        node: ['20', '22', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: npm test
+        run: npm test
+
+  # A single check to require for merging, so branch protection does not need
+  # updating every time the matrix changes.
+  ci:
+    name: ci
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        if: needs.test.result != 'success'
+        run: |
+          echo "test matrix result: ${{ needs.test.result }}"
+          exit 1
