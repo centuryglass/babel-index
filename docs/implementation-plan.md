@@ -156,6 +156,8 @@ renderer to sit on top.
   as the library rearranging itself rather than as a page reload.
 - **Pan resistance** falls off cubically past the outermost occupied slot, so
   the edge is felt rather than hit.
+- **Distances are measured in cell widths**, not raw cells, so the region is
+  round on screen at any cell shape — [§5a](#5a-why-the-map-knows-the-cell-shape).
 
 Rendering: a virtualized canvas drawing only visible tiles. Do not mount
 thousands of DOM nodes.
@@ -320,13 +322,14 @@ evict each other.
   all, which is the payoff — slot placement, ranking and the boundary radius are
   all in cells and do not care what a cell looks like.
 
-  Two consequences worth knowing. The boundary radius stays circular *in cell
-  space*, so with a non-square cell the content region reads as an ellipse on
-  screen; that is a legitimate art call either way, but it is currently made by
-  default rather than deliberately. And `geometry.js` already scales x by width
-  and y by height, so it survives — except the lamp, whose radius is scaled by
-  width on both axes and would have to become an ellipse or stay circular on
-  purpose.
+  One consequence handled, one still open. **The library is round on screen, not
+  round in the index**: `createLayout()` takes the cell aspect and measures every
+  distance in cell *widths*, so the edge is the same distance away whichever way
+  you drag. That costs `packages/map` one injected parameter and buys uniform
+  navigation bounds — see [§5a](#5a-why-the-map-knows-the-cell-shape). Still
+  open: `geometry.js` scales x by width and y by height already, so it survives,
+  except the lamp, whose radius is scaled by width on both axes and would have to
+  become an ellipse or stay circular on purpose.
 - **Offline mode needs a layout convention** — `<dir>/<size>/<file>`, e.g.
   `<dir>/64/000.jpg`, with bare files at the top level read as level 0. `scan.mjs`
   discovers which levels exist and falls back to whatever it finds, so a flat
@@ -380,12 +383,12 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-115 tests (`npm test`), in under a second, with no browser and no network.
+121 tests (`npm test`), in under a second, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
 | --- | --- |
-| `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance |
+| `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance, roundness at any cell shape |
 | `packages/server/scan.test.mjs` | header parsers, directory rules |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
@@ -602,6 +605,45 @@ room. It also means the provisional proportions are only blocking phase 5.
 
 ---
 
+## 5a. Why the map knows the cell shape
+
+`packages/map` is otherwise shape-blind — it deals in cells and has no idea what
+one looks like. It takes exactly one parameter that breaks that, `aspect`, and
+the reason is worth writing down because the simpler alternative looks fine
+right up until the tile stops being square.
+
+Every distance in that module is `cellDistance(x, y, aspect)` —
+`hypot(x, y * aspect)` — which is the offset in units of cell **widths**, i.e.
+proportional to what lands on screen. With a square cell it is plain `hypot` and
+nothing changes.
+
+**Why not just measure in cells.** The boundary is a navigation affordance: it
+decides how far you may travel before the map resists. Measured in raw cells it
+is a circle in the index, which is an ellipse on screen as soon as the cell is
+not square — so the edge arrives sooner going down than going across, for no
+reason the reader can see. Uniform bounds are worth one injected parameter.
+
+**Why placement uses the same metric.** It has to. If only the boundary were
+screen-circular and placement stayed cell-circular, the rooms would spread into
+an ellipse inside a circular bound, and the difference would be free panning
+over empty generic space at the top and bottom. A circle with nothing in it is
+worse than an honest ellipse. One metric, both jobs.
+
+Measured on a 16:9 cell at 400 rooms: the occupied region is 16 cells wide and
+29 cells tall — and 16.0 by 16.3 in cell widths, i.e. round to within 2%. The
+tests assert both halves, because they fail differently: dropping the aspect from
+the metric entirely leaves the region 22×12.4 on screen, and keeping it in the
+resistance but not in placement leaves it 22×12.4 as well while the boundary
+stays circular, which is the specific bad state described above.
+
+The cost is real and worth naming: `aspect` defaults to 1, so the module still
+imports nothing and a caller with no opinion gets the old behaviour, but a
+*changed* aspect reshuffles slot assignment. That is fine — changing the tile
+changes the map — and the property that matters, that growing the corpus keeps
+existing slots at a fixed aspect, is asserted at every shape.
+
+---
+
 ## 6. Decisions made
 
 Recorded from review, with what changed:
@@ -632,8 +674,13 @@ Recorded from review, with what changed:
 11. **The cell is the world's base unit, and is not assumed square.** World
     coordinates are in cells; the tile's aspect is applied only when mapping to
     the screen, and `BASE_TILE` is the one place the shape is stated. `zoom` is
-    pixels per cell width. This cost `packages/map` nothing — placement and the
-    boundary radius are in cells and do not care about the shape.
+    pixels per cell width.
+12. **The library is round on screen, not round in the index.** Navigation bounds
+    should be uniform — the edge the same distance away whichever way you set off
+    — which a circle in cell space is not once the cell stops being square. So
+    `packages/map` takes the aspect and measures in cell widths. It is the one
+    place that module is not shape-blind, and it is a deliberate trade:
+    [§5a](#5a-why-the-map-knows-the-cell-shape).
 
 ## 7. Still open
 
@@ -656,10 +703,6 @@ Recorded from review, with what changed:
    is an art call. Visible in the demo at any zoom.
 6. **Shelf proportions feel cramped** and are expected to change. The loop for
    that is in [§2](#changing-the-geometry) and touches no code.
-7. **Is the content region meant to look circular?** The boundary radius is
-   circular in cell space, so a non-square cell renders it as an ellipse. Both
-   are defensible, but right now it is whichever falls out of the maths rather
-   than a choice. Only becomes visible if the tile stops being square.
 
 ---
 

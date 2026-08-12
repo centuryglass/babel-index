@@ -82,7 +82,9 @@ to edit to tune any of it.
 
 The tile does not have to be 1024², or square. `BASE_TILE` is the only place its
 size and shape are stated; everything else derives from it, and the tests will
-tell you what a new shape breaks.
+tell you what a new shape breaks. The library stays **round on screen** at any
+cell shape rather than round in the index, so the edge is the same distance away
+whichever way you drag.
 
 | | |
 | --- | --- |
@@ -95,7 +97,7 @@ tell you what a new shape breaks.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 115 tests, no browser and no network
+npm test    # 121 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
@@ -103,8 +105,8 @@ Covered: the map layout, the measured geometry, the directory scan and its
 header parsers, the server API, the camera maths, the tile cache, the
 resolution-pyramid policy and the pyramid generator. Image fixtures are
 synthesised per test, so nothing depends on `assets/corpus-sample/` staying
-exactly what it is, and the camera and the pyramid are both exercised at several
-tile shapes so neither assumes a square.
+exactly what it is. The camera, the pyramid and the map layout are each
+exercised at several tile shapes, so none of them assumes a square.
 
 Every push and every pull request to `main` runs the suite on Node 20, 22 and 24
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); `ci` is the single
