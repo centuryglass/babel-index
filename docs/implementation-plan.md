@@ -39,6 +39,7 @@ nothing more.
 | --- | --- |
 | `packages/server/` + `packages/web/` | **the offline demo** — `npm run demo` |
 | `packages/map/` | slot placement, ranking, pan resistance |
+| `packages/pipeline/` | the pyramid generator — `npm run generate:mips` |
 | `tools/base-image/` | tile geometry, SVG importer, placeholder, overlay |
 | `assets/blender/babel_shelf.blend` | the base render source |
 | `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
@@ -311,28 +312,28 @@ evict each other.
   `packages/web/src/tiles.js` already isolates this; it is the only file that
   needs to know. Its budget becomes per-level, and `get()` returns which level it
   actually gives back, so the renderer can tell a substitute from a hit.
-- **A non-square tile needs three things outside the pyramid**, none of them
-  blocking it. `camera.js` calls the world cell a unit square, so world units
-  would have to carry the cell's aspect (or the grid stays square and the tile is
-  letterboxed into it — a legitimate choice, and the one selection already
-  handles). The render loop draws `zoom + 1` on both axes and would need the
-  cell's height. And `geometry.js` scales x by width and y by height already, so
-  it survives — except the lamp, whose radius is scaled by width on both axes and
-  would need to become an ellipse or stay circular deliberately. Worth deciding
-  the grid question first, since the other two follow from it.
+- **The world's base unit is the cell, and a cell is not assumed square** —
+  settled, and implemented. `camera.js` now keeps world coordinates in cells and
+  applies the tile's aspect only when mapping to the screen: `zoom` is pixels per
+  cell *width*, `pxPerCell()` is the single place the height follows from it, and
+  every camera operation preserves the shape. `packages/map` needed no change at
+  all, which is the payoff — slot placement, ranking and the boundary radius are
+  all in cells and do not care what a cell looks like.
+
+  Two consequences worth knowing. The boundary radius stays circular *in cell
+  space*, so with a non-square cell the content region reads as an ellipse on
+  screen; that is a legitimate art call either way, but it is currently made by
+  default rather than deliberately. And `geometry.js` already scales x by width
+  and y by height, so it survives — except the lamp, whose radius is scaled by
+  width on both axes and would have to become an ellipse or stay circular on
+  purpose.
 - **Offline mode needs a layout convention** — `<dir>/<size>/<file>`, e.g.
   `<dir>/64/000.jpg`, with bare files at the top level read as level 0. `scan.mjs`
   discovers which levels exist and falls back to whatever it finds, so a flat
   directory keeps working unchanged and "point it at a directory" stays true.
-- **Generating the pyramid is a pipeline job**, not a server job: a `--mips` flag
-  on the ingest tool that writes the smaller levels once. **Open question — it
-  needs a resizer, and there isn't one in the dependency list.** `@resvg/resvg-js`
-  rasterises SVG and won't downscale a JPEG. This does not survive "can this be
-  twenty lines instead?", so it is a real dependency decision: `sharp` (fast,
-  native, heavy) versus shelling out to ImageMagick (no dependency, assumes it is
-  installed) versus decoding through a canvas polyfill. Worth deciding before the
-  ingest tool is written; it blocks nothing on the web side, since `scan.mjs`
-  falling back to level 0 means the client works against a flat directory today.
+- **Generating the pyramid is a pipeline job**, not a server job — built, as
+  [`packages/pipeline/`](../packages/pipeline/). See
+  [§3b](#3b-the-pyramid-generator).
 - Bandwidth follows the same curve: the far-out view costs ~16 KB per room
   instead of ~50 KB, which matters more than the decode ceiling once this is
   hosted.
@@ -379,7 +380,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-99 tests (`npm test`), in under a second, with no browser and no network.
+115 tests (`npm test`), in under a second, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -390,6 +391,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
 | `packages/web/src/tiles.test.mjs` | cache budget and eviction |
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
+| `packages/pipeline/mips.test.mjs` | the level plan, real resizes, aspect agreement |
 | `packages/web/bundle.test.mjs` | the client compiles |
 | `tools/base-image/geometry.test.mjs` | the trace still agrees with the story |
 
@@ -495,6 +497,59 @@ it is what you run when the map itself changed.
 
 ---
 
+## 3b. The pyramid generator
+
+`packages/pipeline/` turns a corpus directory into the levels the client asks
+for. It is a one-shot offline job, deliberately not something the server does on
+request — resizing 10,000 rooms is a pipeline concern, and a server that resizes
+on demand has put a CPU-bound job on the request path.
+
+```sh
+npm run generate:mips -- --images assets/corpus-sample
+npm run generate:mips -- --images <dir> --out <dir> [--quality 82]
+```
+
+**The ladder is imported from `pyramid.js`, not restated.** What the pipeline
+writes and what the client asks for cannot drift, because there is one ladder
+with two consumers. Sizes come from each source image's real dimensions rather
+than from `BASE_TILE`, so the tool works on whatever the render actually is, and
+both axes are divided together — a non-square source keeps its aspect at every
+level.
+
+**`sharp`, decided.** It is ~1 MB of JavaScript over prebuilt libvips binaries
+(~28 MB installed, devDependency only, never shipped to the browser), and it is
+several times faster than shelling out to ImageMagick without assuming anything
+is installed on the machine. Resizing does not survive "can this be twenty lines
+instead?", so it is the one place a real dependency was the right answer.
+`lanczos3` is the kernel: these are photographs being minified, and a box filter
+would alias the book spines into moiré.
+
+**Level 0 stays flat.** Run in place and the smaller levels appear as
+`<dir>/<width>/` subdirectories while the source files stay exactly where they
+are — no duplicated bytes, and a corpus that has never been through the pipeline
+still reads as a valid level 0. Pass `--out` and every level is written including
+0, copied rather than re-encoded so the source art is never requantised. On the
+25-room sample: 104 files, 1.4 MB → 3.2 MB.
+
+Directories are named for the **width**, because width is the axis the client's
+ladder is expressed in and the aspect is fixed, so the width names the level
+unambiguously.
+
+Two things it refuses to do quietly:
+
+- **A corpus that cannot agree on an aspect ratio is an error**, listed room by
+  room, before anything is resized. The map draws one cell shape; a room with
+  another is either stretched or letterboxed, and that is not a decision to make
+  silently on someone's behalf. A pixel of encoder rounding is tolerated.
+- **A source too small for the whole ladder yields fewer levels, never duplicate
+  ones.** Two divisors that round to the same width would write the same
+  directory twice, the second pass overwriting the first at the wrong size.
+
+Re-running is safe: the scan ignores the `<width>/` directories it writes, so a
+second run resizes the originals rather than compounding on its own output.
+
+---
+
 ## 4. Architecture
 
 ```
@@ -504,7 +559,7 @@ babel-index/
   assets/base-tile/        # generated geometry + placeholder         [exists]
   docs/                                                              [exists]
   packages/
-    pipeline/              # ingest, dedup, embed, border-drift score
+    pipeline/              # mips [exists]; dedup, embed, border-drift score
     curate/                # local-only review tool
     server/                # Express: manifest, text-embed, generate queue
     web/                   # React: map, search, centre-room controls
@@ -571,6 +626,14 @@ Recorded from review, with what changed:
    truth but nothing reads it.
 9. **Offline first.** A directory of images is the whole data layer. Hosting is
    deferred until there is something worth hosting.
+10. **`sharp` for resizing.** Small wrapper over prebuilt libvips, faster than
+    ImageMagick and assumes nothing is installed on the machine. A devDependency,
+    so it never reaches the browser. See [§3b](#3b-the-pyramid-generator).
+11. **The cell is the world's base unit, and is not assumed square.** World
+    coordinates are in cells; the tile's aspect is applied only when mapping to
+    the screen, and `BASE_TILE` is the one place the shape is stated. `zoom` is
+    pixels per cell width. This cost `packages/map` nothing — placement and the
+    boundary radius are in cells and do not care about the shape.
 
 ## 7. Still open
 
@@ -593,6 +656,10 @@ Recorded from review, with what changed:
    is an art call. Visible in the demo at any zoom.
 6. **Shelf proportions feel cramped** and are expected to change. The loop for
    that is in [§2](#changing-the-geometry) and touches no code.
+7. **Is the content region meant to look circular?** The boundary radius is
+   circular in cell space, so a non-square cell renders it as an ellipse. Both
+   are defensible, but right now it is whichever falls out of the maths rather
+   than a choice. Only becomes visible if the tile stops being square.
 
 ---
 
@@ -600,18 +667,19 @@ Recorded from review, with what changed:
 
 In dependency order, shortest path to a demo that survives a real corpus:
 
-1. **Resolution pyramid.** The policy is designed, written and tested in
-   [`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js); what remains
-   is wiring it to the three consumers, in this order — none of them blocks on
-   the pipeline, because a flat directory reads as level 0:
-   1. `tiles.js` — key on `(id, level)`, per-level LRU, `bestAvailable()` on
+1. **Resolution pyramid.** The policy is written and tested in
+   [`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js) and the levels
+   can be generated ([§3b](#3b-the-pyramid-generator)). What remains is the three
+   consumers, in this order:
+   1. `scan.mjs` — discover `<dir>/<width>/<file>`, fall back to flat, and put
+      the available levels in the manifest. The generator writes this layout
+      already, so it is only the reading half that is missing.
+   2. `tiles.js` — key on `(id, level)`, per-level LRU, `bestAvailable()` on
       every miss, the pinned generic fallback.
-   2. The render loop — `pickLevel()` per frame, the prefetch ring and the
+   3. The render loop — `pickLevel()` per frame, the prefetch ring and the
       warm-coarser pass, both queued behind visible tiles. Wants the loop
       extracted out of `main.jsx`'s effect first, which the render-cost test
       below needs anyway.
-   3. `scan.mjs` — discover `<dir>/<size>/<file>`, fall back to flat.
-   4. Ingest `--mips`, once the resizer question in §3 is decided.
 2. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam.

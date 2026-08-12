@@ -63,25 +63,48 @@ npm run generate:tile -- --base assets/corpus-sample/000.jpg
 
 which draws every measured rectangle over it.
 
+## The resolution pyramid
+
+Zoomed out the map draws thousands of cells, so it does not draw them at full
+resolution. Smaller levels are generated once, offline:
+
+```sh
+npm run generate:mips -- --images <dir>          # in place
+npm run generate:mips -- --images <dir> --out <dir>
+```
+
+That writes `<dir>/<width>/<file>` for every level below the source, leaving the
+originals where they are as level 0 — so running it on a corpus adds the smaller
+levels and changes nothing that was already there. The ladder, the cache budgets
+and the level-picking policy all live in
+[`packages/web/src/pyramid.js`](packages/web/src/pyramid.js), which is the file
+to edit to tune any of it.
+
+The tile does not have to be 1024², or square. `BASE_TILE` is the only place its
+size and shape are stated; everything else derives from it, and the tests will
+tell you what a new shape breaks.
+
 | | |
 | --- | --- |
 | `packages/server/` | offline demo server: scans a directory, serves a manifest |
 | `packages/web/` | canvas map — pan, zoom, live layout controls |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance |
+| `packages/pipeline/` | the resolution-pyramid generator |
 | `tools/base-image/` | tile geometry, importer, placeholder, overlay |
 | `assets/blender/` | the base render source |
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 99 tests, no browser and no network
+npm test    # 115 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
 Covered: the map layout, the measured geometry, the directory scan and its
-header parsers, the server API, the camera maths, the tile cache and the
-resolution-pyramid policy. Image fixtures are synthesised per test, so nothing
-depends on `assets/corpus-sample/` staying exactly what it is, and the pyramid's
-rules are checked at four tile shapes so none of them assumes a square.
+header parsers, the server API, the camera maths, the tile cache, the
+resolution-pyramid policy and the pyramid generator. Image fixtures are
+synthesised per test, so nothing depends on `assets/corpus-sample/` staying
+exactly what it is, and the camera and the pyramid are both exercised at several
+tile shapes so neither assumes a square.
 
 Every push and every pull request to `main` runs the suite on Node 20, 22 and 24
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); `ci` is the single
