@@ -14,7 +14,7 @@ import express from 'express';
  * @param {object} opts
  * @param {object} opts.manifest       the initial scan (see scan.mjs)
  * @param {string} opts.imagesDir      directory the corpus is served from
- * @param {() => Promise<object>} [opts.rescan] re-read the directory
+ * @param {() => Promise<object>} opts.rescan re-read the directory
  * @param {string} [opts.bundleJs]     the built client
  * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
  *                                     editing the page needs no restart
@@ -25,7 +25,6 @@ export function createApp({ manifest, imagesDir, rescan, bundleJs = '', readInde
   app.get('/api/manifest', (_req, res) => res.json(manifest));
 
   app.post('/api/rescan', async (_req, res, next) => {
-    if (!rescan) return res.status(501).json({ error: 'rescan not available' });
     try {
       manifest = await rescan();
       res.json({ count: manifest.count });

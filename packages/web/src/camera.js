@@ -82,19 +82,20 @@ export function panByPixels(cam, dxPx, dyPx, damp) {
   };
 }
 
+/** Resistance this close to 1 counts as inside the region. */
+const GLIDE_EPSILON = 0.999;
+
 /**
  * One frame of the glide back toward the content region, for when the camera
  * is released outside it. The pull is proportional to position, so it eases in
- * rather than snapping, and it is a no-op inside the region where damp is 1.
+ * rather than snapping. Inside the region the camera is returned unchanged, by
+ * identity, so the caller can skip a redraw.
  */
 export function glideStep(cam, damp) {
   if (damp >= GLIDE_EPSILON) return cam;
   const pull = (1 - damp) * 0.06 * 0.08;
   return { x: cam.x * (1 - pull), y: cam.y * (1 - pull), zoom: cam.zoom };
 }
-
-/** Resistance this close to 1 is inside the region for practical purposes. */
-const GLIDE_EPSILON = 0.999;
 
 /** Centre the camera on a cell - cells are addressed by corner, so aim at the middle. */
 export function cameraAtCell(cam, x, y, zoom) {
