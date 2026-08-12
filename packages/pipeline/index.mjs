@@ -15,9 +15,8 @@
  * work, which is why it is a pipeline job run once rather than anything the
  * demo server does on request.
  */
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/pyramid.js';
 import { mipPlan, writeMips, sourceImages, checkAspects } from './mips.mjs';

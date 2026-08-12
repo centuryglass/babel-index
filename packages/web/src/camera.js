@@ -9,8 +9,10 @@
  * the aspect, so one number still drives the whole scale.
  *
  * Keeping world coordinates in cells rather than pixels is what lets the tile
- * change shape without touching `packages/map` - slot placement, ranking and
- * the boundary radius are all in cells and do not care what a cell looks like.
+ * change shape without rewriting `packages/map`: slot placement and ranking are
+ * in cells and do not care what a cell looks like. That module takes the aspect
+ * for one purpose only - measuring distance the way it looks, so the boundary
+ * is round on screen rather than round in the index.
  *
  * None of this touches the DOM. `useMapCamera.js` owns the pointer events and
  * the ref that holds the live camera; everything that can be stated as an
@@ -48,19 +50,19 @@ export const clampZoom = (z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
 /** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
 export function screenToWorld(px, py, cam, rect) {
-  const px_ = pxPerCell(cam);
+  const perCell = pxPerCell(cam);
   return {
-    x: cam.x + (px - rect.width / 2) / px_.x,
-    y: cam.y + (py - rect.height / 2) / px_.y,
+    x: cam.x + (px - rect.width / 2) / perCell.x,
+    y: cam.y + (py - rect.height / 2) / perCell.y,
   };
 }
 
 /** World cell coordinate -> viewport pixel. The exact inverse of screenToWorld. */
 export function worldToScreen(wx, wy, cam, rect) {
-  const px_ = pxPerCell(cam);
+  const perCell = pxPerCell(cam);
   return {
-    x: (wx - cam.x) * px_.x + rect.width / 2,
-    y: (wy - cam.y) * px_.y + rect.height / 2,
+    x: (wx - cam.x) * perCell.x + rect.width / 2,
+    y: (wy - cam.y) * perCell.y + rect.height / 2,
   };
 }
 
@@ -104,11 +106,11 @@ export function zoomAt(cam, px, py, deltaY, rect) {
  */
 export function panByPixels(cam, dxPx, dyPx, damp) {
   const scale = 0.12 + 0.88 * damp;
-  const px = pxPerCell(cam);
+  const perCell = pxPerCell(cam);
   return {
     ...cam,
-    x: cam.x - (dxPx / px.x) * scale,
-    y: cam.y - (dyPx / px.y) * scale,
+    x: cam.x - (dxPx / perCell.x) * scale,
+    y: cam.y - (dyPx / perCell.y) * scale,
   };
 }
 
