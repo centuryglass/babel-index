@@ -4,8 +4,8 @@
  * THIS FILE IS THE TUNING SURFACE. Every number that decides what gets fetched,
  * what gets held and what gets thrown away is a constant at the top of this
  * file, with the arithmetic that justifies it written next to it. Nothing else
- * in the codebase should contain a pyramid number - `tiles.js` reads LEVELS and
- * the budgets, the render loop reads pickLevel() and PREFETCH. Tune here.
+ * in the codebase should contain a pyramid number - `tiles.js` reads the ladder
+ * and the budgets, the render loop reads pickLevel() and PREFETCH. Tune here.
  *
  * The problem being solved: the map draws full-resolution images at every zoom,
  * so a zoomed-out screen of ~5700 cells wants ~23 GB of decoded bitmap. Picking
@@ -24,18 +24,49 @@
  *      level has its own, so zooming in cannot evict the coarse field that rule
  *      1 falls back on.
  *
+ * Nothing here assumes a tile size or a tile shape. BASE_TILE is the only place
+ * either is stated; the ladder is expressed as divisors of it, and every pixel
+ * count, byte count and level choice is derived. See "Changing the tile" below.
+ *
  * No DOM, no imports: this is arithmetic and policy, tested as such.
  */
 
 /**
- * The ladder, finest first. `size` is the pixel edge of the stored square tile;
- * level 0 is the source art (1024, what the corpus already is).
+ * The source tile the pipeline writes at level 0 - the base render's pixel
+ * dimensions, and the ONLY statement of tile size or aspect in the codebase's
+ * runtime path.
+ *
+ * ### Changing the tile
+ *
+ * Edit this one object. Sizes, decoded-byte costs, level selection and the
+ * ladder's reachability all derive from it, and `npm test` re-checks the
+ * derived facts against the new shape:
+ *
+ *   - that every level is still reachable within the camera's zoom clamp (a
+ *     much taller tile needs a rung added or dropped),
+ *   - that every budget still holds a worst-case screen at the new aspect,
+ *     since a wide tile puts more cells on a screen than a square one.
+ *
+ * Non-square is supported here and selection handles it, but the map around it
+ * is not there yet: `camera.js` calls the world cell a unit square and the
+ * render loop draws `zoom + 1` on both axes. Those want the cell's aspect
+ * threaded through before a non-square tile will actually look right on the
+ * map - the pyramid will not be what blocks it.
+ */
+export const BASE_TILE = { w: 1024, h: 1024 };
+
+/**
+ * The ladder, finest first.
+ *
+ * `divisor` is what BASE_TILE is divided by, so the ladder is a statement about
+ * ratios and survives any change to the tile. Level 0 is the source art.
  *
  * `budget` is the maximum number of decoded images held at that level. It is a
  * ceiling, not a reservation - entries appear only as cells are visited.
  *
- * `bytes` below is size x size x 4 (decoded RGBA, what the browser actually
- * holds; the encoded JPEG is ~20x smaller and is not the constraint).
+ * At the current BASE_TILE of 1024x1024 that works out as (bytes/tile being
+ * w x h x 4, decoded RGBA - what the browser actually holds; the encoded JPEG
+ * is ~20x smaller and is not the constraint):
  *
  *   level  size  bytes/tile  budget  budget bytes  worst-case visible*
  *       0  1024        4 MB     240        960 MB                  24
@@ -48,31 +79,30 @@
  * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
  * zoom in that level's band which shows the most of them. Every budget is
  * comfortably above its own worst case, which is the point: a cache that
- * cannot hold one screen thrashes within a single frame.
+ * cannot hold one screen thrashes within a single frame. That column moves
+ * with BASE_TILE's aspect, which is why the test recomputes it rather than
+ * trusting this comment - treat the table as illustrative, the test as true.
  *
  * Note how far above its worst case level 0 is - 240 against 24. That is rule
  * 3 buying revisits, not screens: you can tour ten rooms up close and come
- * back to the first without a refetch. Lower CACHE_SCALE if 1.8 GB is more
+ * back to the first without a refetch. Lower CACHE_SCALE if the total is more
  * than the machine can spare; the ratios between levels are the part worth
  * keeping.
  */
 export const LEVELS = [
-  { level: 0, size: 1024, budget: 240 },
-  { level: 1, size: 512, budget: 400 },
-  { level: 2, size: 256, budget: 900 },
-  { level: 3, size: 128, budget: 1600 },
-  { level: 4, size: 64, budget: 7000 },
+  { level: 0, divisor: 1, budget: 240 },
+  { level: 1, divisor: 2, budget: 400 },
+  { level: 2, divisor: 4, budget: 900 },
+  { level: 3, divisor: 8, budget: 1600 },
+  { level: 4, divisor: 16, budget: 7000 },
 ];
 
 /**
- * One dial over every budget, for machines that cannot spare 1.8 GB (or can
- * spare more). 0.5 halves every level; the ratios between levels are what
- * matters and they survive scaling.
+ * One dial over every budget, for machines that cannot spare the total above
+ * (or can spare more). 0.5 halves every level; the ratios between levels are
+ * what matters and they survive scaling.
  */
 export const CACHE_SCALE = 1;
-
-/** The coarsest level - the one rule 1 falls back on, and the one preloaded. */
-export const FALLBACK_LEVEL = LEVELS[LEVELS.length - 1].level;
 
 /**
  * How far past the exact boundary a zoom must go before the level switches.
@@ -106,93 +136,186 @@ export const PREFETCH = {
   warmCoarser: true,
 };
 
-/** Level 0's tiles are the source art; `size` is what the pipeline writes. */
-export const sizeOf = (level) => LEVELS.find((l) => l.level === level)?.size ?? null;
-
-/** The budget for a level, after CACHE_SCALE. Always at least 1. */
-export const budgetOf = (level) => {
-  const entry = LEVELS.find((l) => l.level === level);
-  return entry ? Math.max(1, Math.round(entry.budget * CACHE_SCALE)) : 0;
-};
-
 /**
- * The level that would be chosen with no regard for what is already on screen:
- * the smallest tile that is not smaller than the demand, so a tile is never
- * upscaled while a big enough one exists.
+ * Build a pyramid over a tile shape and a ladder.
  *
- * Demand is in DEVICE pixels - `zoom * devicePixelRatio` - because that is what
- * the tile actually covers. Picking on CSS pixels ships half-resolution art to
- * every retina display.
+ * A factory rather than bare functions so the whole policy can be exercised at
+ * a different tile size or aspect without editing the constants above - which
+ * is how the tests prove none of this is pinned to 1024 squares, and how an
+ * experiment can try a shape before it is adopted.
  *
- * @param {number} devicePxPerTile
- * @returns {number} a level in LEVELS
+ * @param {object} [opts]
+ * @param {{w: number, h: number}} [opts.base]  the level-0 tile
+ * @param {{level: number, divisor: number, budget: number}[]} [opts.levels]
+ * @param {number} [opts.cacheScale]
+ * @param {number} [opts.hysteresis]
  */
-export function idealLevel(devicePxPerTile) {
-  for (let i = LEVELS.length - 1; i > 0; i--)
-    if (devicePxPerTile <= LEVELS[i].size) return LEVELS[i].level;
-  return LEVELS[0].level;
+export function createPyramid({
+  base = BASE_TILE,
+  levels = LEVELS,
+  cacheScale = CACHE_SCALE,
+  hysteresis = HYSTERESIS,
+} = {}) {
+  const byLevel = new Map(levels.map((l) => [l.level, l]));
+  const coarsest = levels[levels.length - 1];
+  const finest = levels[0];
+
+  /** The stored pixel dimensions of a level. Rounded, so a divisor need not divide evenly. */
+  const sizeOf = (level) => {
+    const entry = byLevel.get(level);
+    if (!entry) return null;
+    return {
+      w: Math.max(1, Math.round(base.w / entry.divisor)),
+      h: Math.max(1, Math.round(base.h / entry.divisor)),
+    };
+  };
+
+  /** Decoded RGBA bytes one tile of this level costs. */
+  const bytesOf = (level) => {
+    const size = sizeOf(level);
+    return size ? size.w * size.h * 4 : 0;
+  };
+
+  /** The budget for a level, after cacheScale. Always at least 1. */
+  const budgetOf = (level) => {
+    const entry = byLevel.get(level);
+    return entry ? Math.max(1, Math.round(entry.budget * cacheScale)) : 0;
+  };
+
+  /** What a full level costs, and what a full pyramid costs. Derived, never written down. */
+  const budgetBytes = (level) => budgetOf(level) * bytesOf(level);
+  const totalBudgetBytes = () => levels.reduce((sum, l) => sum + budgetBytes(l.level), 0);
+
+  /**
+   * Demand, normalised to level-0 width-equivalent device pixels.
+   *
+   * Selection needs one number, but a drawn cell has two dimensions and they
+   * need not share the tile's aspect (a square cell holding a wide tile, say).
+   * Scaling the height demand by the tile's aspect puts both axes on the width
+   * ladder, and taking the larger means a tile is never chosen that
+   * under-resolves the axis that needed more.
+   *
+   * @param {number|{w: number, h: number}} drawn device pixels the cell covers
+   */
+  const demandWidth = (drawn) =>
+    typeof drawn === 'number' ? drawn : Math.max(drawn.w, drawn.h * (base.w / base.h));
+
+  /**
+   * The level that would be chosen with no regard for what is already on
+   * screen: the smallest tile that is not smaller than the demand, so a tile is
+   * never upscaled while a big enough one exists.
+   *
+   * Demand is in DEVICE pixels - `zoom * devicePixelRatio` - because that is
+   * what the tile actually covers. Picking on CSS pixels ships half-resolution
+   * art to every retina display.
+   *
+   * @param {number|{w: number, h: number}} drawn
+   * @returns {number} a level present in `levels`
+   */
+  const idealLevel = (drawn) => {
+    const need = demandWidth(drawn);
+    for (let i = levels.length - 1; i > 0; i--)
+      if (need <= sizeOf(levels[i].level).w) return levels[i].level;
+    return finest.level;
+  };
+
+  /**
+   * The level to draw, given what is being drawn now.
+   *
+   * Identical to idealLevel() on the first call and whenever the zoom has moved
+   * decisively; near a boundary it holds the current level until the demand is
+   * `hysteresis` clear of it. A big jump still lands on the true ideal rather
+   * than creeping one level per frame.
+   *
+   * @param {number|{w: number, h: number}} drawn
+   * @param {number|null} current the level being drawn, or null on first paint
+   */
+  const pickLevel = (drawn, current = null) => {
+    const ideal = idealLevel(drawn);
+    if (current == null || current === ideal) return ideal;
+
+    // Lower level number = finer. Moving finer must clear the boundary upward,
+    // moving coarser must clear it downward; testing the biased demand
+    // expresses both without a special case.
+    const need = demandWidth(drawn);
+    const biased = ideal < current ? need / (1 + hysteresis) : need * (1 + hysteresis);
+    return idealLevel(biased) === current ? current : ideal;
+  };
+
+  /**
+   * Rule 1: the best level actually available for a room, given the one wanted.
+   *
+   * Coarser first, because a coarse tile is cheap, is usually already resident
+   * from the zoomed-out view, and upscales to something soft but correct. Finer
+   * only after that - it is memory already spent, so drawing it beats drawing
+   * nothing, but it is the expensive way to be right.
+   *
+   * @param {(level: number) => boolean} isReady
+   * @param {number} want
+   * @returns {number|null} null only when the room has no level at all
+   */
+  const bestAvailable = (isReady, want) => {
+    if (isReady(want)) return want;
+    for (const { level } of levels) if (level > want && isReady(level)) return level;
+    for (let i = levels.length - 1; i >= 0; i--) {
+      const { level } = levels[i];
+      if (level < want && isReady(level)) return level;
+    }
+    return null;
+  };
+
+  /**
+   * Rule 2: the levels to warm for cells visible right now, in priority order
+   * after the visible level itself. Empty when there is nothing coarser.
+   */
+  const warmLevels = (level) => {
+    if (!PREFETCH.warmCoarser) return [];
+    const coarser = levels.find((l) => l.level === level + 1);
+    return coarser ? [coarser.level] : [];
+  };
+
+  return {
+    base,
+    levels,
+    /** The coarsest level - what rule 1 falls back on, and what is preloaded. */
+    fallbackLevel: coarsest.level,
+    finestLevel: finest.level,
+    sizeOf,
+    bytesOf,
+    budgetOf,
+    budgetBytes,
+    totalBudgetBytes,
+    demandWidth,
+    idealLevel,
+    pickLevel,
+    bestAvailable,
+    warmLevels,
+  };
 }
 
-/**
- * The level to draw, given what is being drawn now.
- *
- * Identical to idealLevel() on the first call and whenever the zoom has moved
- * decisively; near a boundary it holds the current level until the demand is
- * HYSTERESIS clear of it. A big jump still lands on the true ideal rather than
- * creeping one level per frame.
- *
- * @param {number} devicePxPerTile  zoom x devicePixelRatio
- * @param {number|null} current     the level being drawn, or null on first paint
- */
-export function pickLevel(devicePxPerTile, current = null) {
-  const ideal = idealLevel(devicePxPerTile);
-  if (current == null || current === ideal) return ideal;
+/** The pyramid the app runs on, built from the constants above. */
+export const PYRAMID = createPyramid();
 
-  // Lower level number = finer. Moving finer must clear the boundary upward,
-  // moving coarser must clear it downward; testing the biased demand expresses
-  // both without a special case.
-  const biased =
-    ideal < current ? devicePxPerTile / (1 + HYSTERESIS) : devicePxPerTile * (1 + HYSTERESIS);
-  return idealLevel(biased) === current ? current : ideal;
-}
-
-/**
- * Rule 1: the best level actually available for a room, given the one wanted.
- *
- * Coarser first, because a coarse tile is cheap, is usually already resident
- * from the zoomed-out view, and upscales to something soft but correct. Finer
- * only after that - it is memory already spent, so drawing it beats drawing
- * nothing, but it is the expensive way to be right.
- *
- * @param {(level: number) => boolean} isReady
- * @param {number} want
- * @returns {number|null} null only when the room has no level at all
- */
-export function bestAvailable(isReady, want) {
-  if (isReady(want)) return want;
-  for (const { level } of LEVELS) if (level > want && isReady(level)) return level;
-  for (let i = LEVELS.length - 1; i >= 0; i--) {
-    const { level } = LEVELS[i];
-    if (level < want && isReady(level)) return level;
-  }
-  return null;
-}
-
-/**
- * Rule 2: the levels to warm for cells that are visible right now, in priority
- * order after the visible level itself. Empty when there is nothing coarser.
- */
-export function warmLevels(level) {
-  if (!PREFETCH.warmCoarser) return [];
-  const coarser = LEVELS.find((l) => l.level === level + 1);
-  return coarser ? [coarser.level] : [];
-}
+export const {
+  fallbackLevel: FALLBACK_LEVEL,
+  sizeOf,
+  bytesOf,
+  budgetOf,
+  budgetBytes,
+  totalBudgetBytes,
+  demandWidth,
+  idealLevel,
+  pickLevel,
+  bestAvailable,
+  warmLevels,
+} = PYRAMID;
 
 /**
  * Rule 2: the cell rectangle to load, viewport plus margin.
  *
  * The renderer draws `bounds` and loads `prefetchBounds(bounds)`, with
- * everything outside `bounds` queued behind everything inside it.
+ * everything outside `bounds` queued behind everything inside it. Cells, not
+ * pixels, so this is independent of the tile's size and shape.
  *
  * @param {{x0: number, y0: number, x1: number, y1: number}} bounds inclusive
  */

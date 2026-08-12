@@ -84,13 +84,19 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
-- **Every pyramid number lives in `packages/web/src/pyramid.js`** — level sizes,
-  per-level cache budgets, the hysteresis band, the prefetch ring. Don't
-  reintroduce one as a literal in `tiles.js` or the render loop; those read the
-  policy, they don't restate it. The three rules it exists to serve, in the order
-  they win: a cell never fails to display, cells load slightly before they are
-  needed, hold rather than refetch. Per-level LRU is load-bearing for the first —
-  one global LRU lets a zoom-in evict the coarse field the fallback depends on.
+- **Every pyramid number lives in `packages/web/src/pyramid.js`** — the tile's
+  dimensions, the ladder, per-level cache budgets, the hysteresis band, the
+  prefetch ring. Don't reintroduce one as a literal in `tiles.js` or the render
+  loop; those read the policy, they don't restate it. The three rules it exists
+  to serve, in the order they win: a cell never fails to display, cells load
+  slightly before they are needed, hold rather than refetch. Per-level LRU is
+  load-bearing for the first — one global LRU lets a zoom-in evict the coarse
+  field the fallback depends on.
+- **The tile size and shape are not settled.** `BASE_TILE` is the only place
+  either is stated and the ladder is divisors of it, so every size, byte cost and
+  level choice is derived — don't compute one from a literal, and don't assume
+  square. The tests run the policy at four aspects and will tell you what a new
+  shape breaks (a rung outside the camera's clamp, a budget below one screen).
 - **The centre room is cell (0, 0)** and is reserved — `packages/map` never
   assigns a corpus room there. Only that room needs exact per-book geometry;
   every other room needs only a bounding box, because inpainting doesn't preserve
