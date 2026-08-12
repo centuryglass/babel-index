@@ -42,12 +42,22 @@ const round = (n) => Math.round(n * 1e4) / 1e4;
 export function layout({ width = 1024, height = width } = {}) {
   const W = width;
   const H = height;
-  // Rects are normalised to the tile edge, so both axes scale by the same
-  // factor; the tile is square.
+  // Rects carry no aspect of their own - the importer normalised x against the
+  // traced width and y against the traced height separately - so each axis
+  // scales by its own edge and a tile of any shape comes out right.
   const r = ([x, y, w, h]) => ({ x: round(x * W), y: round(y * H), w: round(w * W), h: round(h * H) });
 
   const opening = r(MEASURED.opening);
   const uprights = MEASURED.uprights.map(r);
+
+  // THE LAMP IS A CIRCLE AND STAYS ONE. It is the one thing here deliberately
+  // not stretched with the tile: a single scalar radius scaled by WIDTH on both
+  // axes, never an rx/ry pair. A globe that turned into an ellipse because the
+  // wall got wider would read as a mistake rather than as a wider wall.
+  //
+  // The importer normalises its radius against width alone, so this round-trips
+  // the traced circle exactly as long as the trace and the tile agree on aspect
+  // - which they must, and which geometry.test.mjs asserts.
   const lamp = {
     cx: round(MEASURED.lamp.cx * W),
     cy: round(MEASURED.lamp.cy * H),

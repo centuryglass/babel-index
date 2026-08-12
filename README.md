@@ -55,7 +55,9 @@ node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 
 That writes `tools/base-image/lib/measured.js`, and the importer fails loudly if
 the trace stops agreeing with the story — wrong shelf count, uneven book counts,
-spines outside every bay. To check the result against a real image:
+spines outside every bay. If the tile's aspect changes, the trace changes with
+it: the SVG's `viewBox` and `BASE_TILE` are two statements of one fact, and the
+tests fail if they drift apart. To check the result against a real image:
 
 ```sh
 npm run generate:tile -- --base assets/corpus-sample/000.jpg
@@ -97,7 +99,7 @@ whichever way you drag.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 121 tests, no browser and no network
+npm test    # 126 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
