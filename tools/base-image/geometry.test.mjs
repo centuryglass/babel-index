@@ -105,6 +105,9 @@ test('the lamp is a circle at every tile shape', () => {
 });
 
 test('the glow is concentric with the globe and scales with it', () => {
+  const square = layout({ width: 1024, height: 1024 }).lamp;
+  const baseline = square.glow / square.r;
+
   for (const [width, height] of [[1280, 720], [640, 360], [768, 1024]]) {
     const { lamp } = layout({ width, height });
     // Concentric: the renderer draws both at (cx, cy), so a glow that drifted
@@ -113,8 +116,8 @@ test('the glow is concentric with the globe and scales with it', () => {
     // And a fixed multiple of the globe, so it is a circle for the same reason
     // the globe is. Rounding is at 1e-4, so compare with a tolerance.
     assert.ok(
-      Math.abs(lamp.glow / lamp.r - layout({ width: 1024, height: 1024 }).lamp.glow / layout({ width: 1024, height: 1024 }).lamp.r) < 1e-4,
-      `${width}x${height}: glow ratio ${lamp.glow / lamp.r} drifted`
+      Math.abs(lamp.glow / lamp.r - baseline) < 1e-4,
+      `${width}x${height}: glow ratio ${lamp.glow / lamp.r} drifted from ${baseline}`
     );
   }
 });

@@ -81,8 +81,7 @@ export function mipPlan({ w, h }, levels = LEVELS) {
  * @returns {Promise<{plan: object[], written: number, skipped: number}>}
  */
 export async function writeMips({ file, outDir, inPlace = false, quality = 82, levels = LEVELS }) {
-  const image = sharp(file);
-  const meta = await image.metadata();
+  const meta = await sharp(file).metadata();
   const plan = mipPlan({ w: meta.width, h: meta.height }, levels);
   const name = basename(file);
 
