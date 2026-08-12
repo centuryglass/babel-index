@@ -107,6 +107,30 @@ before the map does. What the tests deliberately do *not* pin is anything that
 is a legitimate art choice — shelf spacing, book width, how much of the board
 shows. Those are free to move.
 
+#### Changing the tile's aspect
+
+Changing the tile's *shape* is the same loop plus one more thing to keep in
+step. `BASE_TILE` in `packages/web/src/pyramid.js` and the `viewBox` of
+`shelf_geometry.svg` are two statements of one fact, and `measured.js` normalises
+x against the traced width and y against the traced height *separately* — which
+is what lets the geometry work at any shape, and also what makes a mismatch
+silent. If the trace is square and the tile is 16:9, every measured rect is
+stretched onto art it no longer matches: the books stop landing on the books,
+and nothing says so, because each rect is individually still inside the tile.
+
+So the trace now records the shape it was made at (`MEASURED.tile`), and
+`geometry.test.mjs` asserts it against `BASE_TILE`. Change one, forget the other,
+and the suite fails with both numbers and the fix in the message. Re-render,
+re-trace, re-import, then update `BASE_TILE`.
+
+**The lamp is the exception, and stays circular deliberately.** Everything else
+in the tile is part of the wall and stretches with it; the lamp is a globe, and a
+globe that turned into an ellipse because the wall got wider would read as a
+mistake rather than as a wider wall. It is one scalar radius scaled by *width* on
+both axes, never an `rx`/`ry` pair — which round-trips the traced circle exactly,
+given the trace and the tile agree. Both halves are asserted, so neither the
+circle nor the stretching can quietly become the other.
+
 ---
 
 ## 3. Phases
@@ -322,14 +346,13 @@ evict each other.
   all, which is the payoff — slot placement, ranking and the boundary radius are
   all in cells and do not care what a cell looks like.
 
-  One consequence handled, one still open. **The library is round on screen, not
-  round in the index**: `createLayout()` takes the cell aspect and measures every
-  distance in cell *widths*, so the edge is the same distance away whichever way
-  you drag. That costs `packages/map` one injected parameter and buys uniform
-  navigation bounds — see [§5a](#5a-why-the-map-knows-the-cell-shape). Still
-  open: `geometry.js` scales x by width and y by height already, so it survives,
-  except the lamp, whose radius is scaled by width on both axes and would have to
-  become an ellipse or stay circular on purpose.
+  Two consequences, both handled. **The library is round on screen, not round in
+  the index**: `createLayout()` takes the cell aspect and measures every distance
+  in cell *widths*, so the edge is the same distance away whichever way you drag
+  — see [§5a](#5a-why-the-map-knows-the-cell-shape). And **the lamp is a circle
+  and stays one**, the single thing in `geometry.js` deliberately not stretched
+  with the tile; everything else is part of the wall and does follow its shape.
+  See [§2](#changing-the-tiles-aspect).
 - **Offline mode needs a layout convention** — `<dir>/<size>/<file>`, e.g.
   `<dir>/64/000.jpg`, with bare files at the top level read as level 0. `scan.mjs`
   discovers which levels exist and falls back to whatever it finds, so a flat
@@ -383,7 +406,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-121 tests (`npm test`), in under a second, with no browser and no network.
+126 tests (`npm test`), in under a second, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -396,7 +419,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
 | `packages/pipeline/mips.test.mjs` | the level plan, real resizes, aspect agreement |
 | `packages/web/bundle.test.mjs` | the client compiles |
-| `tools/base-image/geometry.test.mjs` | the trace still agrees with the story |
+| `tools/base-image/geometry.test.mjs` | the trace agrees with the story, and with the tile's aspect |
 
 Three notes on how, since they are the parts that were not obvious:
 

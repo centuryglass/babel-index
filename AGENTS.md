@@ -75,6 +75,18 @@ is read per request.
   `npm run generate:tile` and `npm test`. The importer fails loudly if the trace
   stops agreeing with the story (wrong shelf count, uneven book counts, spines
   outside every bay).
+- **Changing the tile's aspect is two edits, not one.** `BASE_TILE` and the
+  `viewBox` of `shelf_geometry.svg` are two statements of the same fact, and
+  measured coords are normalised against the traced width and height separately —
+  so if they disagree, every rect is stretched onto art it no longer matches and
+  the books stop landing on the books. The trace now records its own aspect and
+  `geometry.test.mjs` asserts the two agree, so doing one and forgetting the
+  other fails the suite with both numbers in the message. Re-trace, re-import,
+  then update `BASE_TILE`.
+- **The lamp is a circle and stays one.** It is the single thing in
+  `geometry.js` deliberately not stretched with the tile: one scalar radius
+  scaled by *width* on both axes, never an `rx`/`ry` pair. Everything else is
+  part of the wall and does follow the tile's shape. Both halves are asserted.
 - **Don't pin art choices in tests.** Shelf spacing, book width and how much of a
   board shows are free to move. What the tests assert is the story's invariants
   (5 × 32 = 160, books inside the opening, books resting on their board) — keep
