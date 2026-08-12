@@ -100,6 +100,86 @@ test('rejects nonsense parameters', () => {
   assert.throws(() => createLayout({ roomCount: -1 }), RangeError);
   assert.throws(() => createLayout({ roomCount: 10, contentRatio: 0 }), RangeError);
   assert.throws(() => createLayout({ roomCount: 10, contentRatio: 1.5 }), RangeError);
+  assert.throws(() => createLayout({ roomCount: 10, aspect: 0 }), RangeError);
+  assert.throws(() => createLayout({ roomCount: 10, aspect: -1 }), RangeError);
+  assert.throws(() => createLayout({ roomCount: 10, aspect: Infinity }), RangeError);
+});
+
+// --- non-square cells ------------------------------------------------------
+
+/** Cell shapes the layout has to stay round at. */
+const ASPECTS = [
+  { name: 'square', aspect: 1 },
+  { name: '16:9', aspect: 720 / 1280 },
+  { name: '3:4 tall', aspect: 1024 / 768 },
+];
+
+test('the edge is the same distance away whichever way you set off', () => {
+  // The whole reason this module knows the aspect. Equal *apparent* distances
+  // must resist equally, so navigation bounds are uniform rather than reaching
+  // the edge sooner on the short axis.
+  for (const { name, aspect } of ASPECTS) {
+    const L = createLayout({ roomCount: 300, contentRatio: 0.2, seed: 5, aspect });
+    const past = L.boundaryRadius + 6;
+
+    const east = L.resistanceAt(past, 0);
+    const south = L.resistanceAt(0, past / aspect); // the same apparent distance
+    assert.ok(Math.abs(east - south) < 1e-12, `${name}: ${east} vs ${south}`);
+    assert.ok(east < 1 && east > 0, `${name}: expected soft falloff, got ${east}`);
+  }
+});
+
+test('a non-square cell resists differently per axis, in raw cell terms', () => {
+  // The other side of the same coin, and the assertion that fails if the aspect
+  // stops being applied: the same *cell* offset is a different apparent
+  // distance on each axis, so it must not resist the same.
+  const L = createLayout({ roomCount: 300, contentRatio: 0.2, seed: 5, aspect: 720 / 1280 });
+  const past = L.boundaryRadius + 6;
+  assert.notEqual(L.resistanceAt(past, 0), L.resistanceAt(0, past));
+});
+
+test('the rooms fill a circle on screen, not an ellipse', () => {
+  // A circular boundary around an elliptical spread would be a circle with
+  // nothing in the top and bottom of it, so placement uses the metric too.
+  for (const { name, aspect } of ASPECTS) {
+    const L = createLayout({ roomCount: 400, contentRatio: 0.25, seed: 3, aspect });
+    const halfW = Math.max(...L.slots.map((s) => Math.abs(s.x)));
+    const halfH = Math.max(...L.slots.map((s) => Math.abs(s.y * aspect)));
+    assert.ok(
+      Math.abs(halfW / halfH - 1) < 0.12,
+      `${name}: ${halfW.toFixed(1)} wide by ${halfH.toFixed(1)} tall on screen`
+    );
+  }
+});
+
+test('round on screen means not round in the index', () => {
+  // The measurement that shows the metric is doing something: a 16:9 cell
+  // spreads the same rooms across far more rows than columns.
+  const aspect = 720 / 1280;
+  const L = createLayout({ roomCount: 400, contentRatio: 0.25, seed: 3, aspect });
+  const cellsW = Math.max(...L.slots.map((s) => Math.abs(s.x)));
+  const cellsH = Math.max(...L.slots.map((s) => Math.abs(s.y)));
+  assert.ok(cellsH > cellsW * 1.5, `expected a taller spread in cells, got ${cellsW}x${cellsH}`);
+});
+
+test('a square cell is exactly the old behaviour', () => {
+  // aspect defaults to 1, and 1 must change nothing - otherwise every existing
+  // assertion in this file is quietly testing something else.
+  const implicit = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 11 });
+  const explicit = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 11, aspect: 1 });
+  assert.deepEqual(explicit.slots, implicit.slots);
+  assert.equal(explicit.boundaryRadius, implicit.boundaryRadius);
+});
+
+test('growing the corpus still keeps existing slots, at any cell shape', () => {
+  // The property that makes the sliders usable, re-checked per shape: the
+  // aspect is fixed for a given tile, so the ordering must stay stable under it.
+  for (const { name, aspect } of ASPECTS) {
+    const small = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 9, aspect });
+    const large = createLayout({ roomCount: 400, contentRatio: 0.2, seed: 9, aspect });
+    assert.deepEqual(large.slots.slice(0, 100), small.slots, name);
+    assert.ok(large.boundaryRadius > small.boundaryRadius, name);
+  }
 });
 
 test('embedding ranking sorts by cosine similarity', () => {

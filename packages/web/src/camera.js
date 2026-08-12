@@ -1,10 +1,18 @@
 /**
  * Camera maths for the map, as pure functions.
  *
- * World units are tiles: the cell at integer (x, y) occupies the unit square
- * from (x, y) to (x+1, y+1), and the centre room sits at (0, 0). A camera is
- * `{x, y, zoom}` where x/y are the world point at the centre of the viewport
- * and zoom is pixels per tile.
+ * World units are CELLS, and a cell is not assumed to be square. The cell at
+ * integer (x, y) spans (x, y) to (x+1, y+1) in cell space, and the centre room
+ * sits at (0, 0); how many pixels that is on each axis depends on the tile's
+ * shape. A camera is `{x, y, zoom}` where x/y are the world point at the centre
+ * of the viewport and `zoom` is pixels per cell WIDTH. Cell height follows from
+ * the aspect, so one number still drives the whole scale.
+ *
+ * Keeping world coordinates in cells rather than pixels is what lets the tile
+ * change shape without rewriting `packages/map`: slot placement and ranking are
+ * in cells and do not care what a cell looks like. That module takes the aspect
+ * for one purpose only - measuring distance the way it looks, so the boundary
+ * is round on screen rather than round in the index.
  *
  * None of this touches the DOM. `useMapCamera.js` owns the pointer events and
  * the ref that holds the live camera; everything that can be stated as an
@@ -12,26 +20,49 @@
  * screen/world round-trip, and zoom keeping the point under the cursor fixed -
  * are exact invariants worth asserting.
  */
+import { BASE_TILE } from './pyramid.js';
 
-/** Zoom is clamped so a tile is never smaller than a thumbnail or larger than the screen. */
+/**
+ * Cell height as a multiple of cell width. 1 while the tile is square.
+ *
+ * Derived from the tile rather than declared, so changing `BASE_TILE` changes
+ * the shape of the world along with the shape of the art. A camera may carry
+ * its own `aspect` to override it, which is how the tests exercise shapes the
+ * corpus is not currently in.
+ */
+export const CELL_ASPECT = BASE_TILE.h / BASE_TILE.w;
+
+/** Pixels per cell on each axis, for a camera. The one place the aspect is applied. */
+export function pxPerCell(cam) {
+  const aspect = cam.aspect ?? CELL_ASPECT;
+  return { x: cam.zoom, y: cam.zoom * aspect };
+}
+
+/**
+ * Zoom is clamped so a cell is never smaller than a thumbnail or larger than
+ * the screen. In pixels per cell WIDTH - a short tile is free to be shorter
+ * than this, which is what "the cell is the unit" means.
+ */
 export const MIN_ZOOM = 26;
 export const MAX_ZOOM = 900;
 
 export const clampZoom = (z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
-/** Viewport pixel -> world tile coordinate. `rect` is the canvas bounding box. */
+/** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
 export function screenToWorld(px, py, cam, rect) {
+  const perCell = pxPerCell(cam);
   return {
-    x: cam.x + (px - rect.width / 2) / cam.zoom,
-    y: cam.y + (py - rect.height / 2) / cam.zoom,
+    x: cam.x + (px - rect.width / 2) / perCell.x,
+    y: cam.y + (py - rect.height / 2) / perCell.y,
   };
 }
 
-/** World tile coordinate -> viewport pixel. The exact inverse of screenToWorld. */
+/** World cell coordinate -> viewport pixel. The exact inverse of screenToWorld. */
 export function worldToScreen(wx, wy, cam, rect) {
+  const perCell = pxPerCell(cam);
   return {
-    x: (wx - cam.x) * cam.zoom + rect.width / 2,
-    y: (wy - cam.y) * cam.zoom + rect.height / 2,
+    x: (wx - cam.x) * perCell.x + rect.width / 2,
+    y: (wy - cam.y) * perCell.y + rect.height / 2,
   };
 }
 
@@ -55,9 +86,9 @@ export function zoomAt(cam, px, py, deltaY, rect) {
   const zoomed = { ...cam, zoom: clampZoom(cam.zoom * Math.exp(-deltaY * 0.0014)) };
   const after = screenToWorld(px, py, zoomed, rect);
   return {
+    ...zoomed,
     x: zoomed.x + before.x - after.x,
     y: zoomed.y + before.y - after.y,
-    zoom: zoomed.zoom,
   };
 }
 
@@ -75,10 +106,11 @@ export function zoomAt(cam, px, py, deltaY, rect) {
  */
 export function panByPixels(cam, dxPx, dyPx, damp) {
   const scale = 0.12 + 0.88 * damp;
+  const perCell = pxPerCell(cam);
   return {
-    x: cam.x - (dxPx / cam.zoom) * scale,
-    y: cam.y - (dyPx / cam.zoom) * scale,
-    zoom: cam.zoom,
+    ...cam,
+    x: cam.x - (dxPx / perCell.x) * scale,
+    y: cam.y - (dyPx / perCell.y) * scale,
   };
 }
 
@@ -94,10 +126,10 @@ const GLIDE_EPSILON = 0.999;
 export function glideStep(cam, damp) {
   if (damp >= GLIDE_EPSILON) return cam;
   const pull = (1 - damp) * 0.06 * 0.08;
-  return { x: cam.x * (1 - pull), y: cam.y * (1 - pull), zoom: cam.zoom };
+  return { ...cam, x: cam.x * (1 - pull), y: cam.y * (1 - pull) };
 }
 
 /** Centre the camera on a cell - cells are addressed by corner, so aim at the middle. */
 export function cameraAtCell(cam, x, y, zoom) {
-  return { x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom) : cam.zoom };
+  return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom) : cam.zoom };
 }
