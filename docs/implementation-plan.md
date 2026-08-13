@@ -187,7 +187,7 @@ renderer to sit on top.
 Rendering: a virtualized canvas drawing only visible tiles. Do not mount
 thousands of DOM nodes.
 
-#### Resolution pyramid — the next thing to build
+#### Resolution pyramid — built
 
 The demo loads full-resolution images at every zoom, and that is the ceiling it
 will hit first. Fully zoomed out on a 2560×1440 device-pixel viewport the map
@@ -374,12 +374,29 @@ evict each other.
   connections per host. A prefetch that queues ahead of a visible tile has made
   rule 1 worse in order to serve rule 2, which is backwards.
 
-##### What this changes elsewhere
+##### How it is wired, end to end — **done**
 
-- **The cache key becomes `(id, level)`**, not `url`.
-  `packages/web/src/tiles.js` already isolates this; it is the only file that
-  needs to know. Its budget becomes per-level, and `get()` returns which level it
-  actually gives back, so the renderer can tell a substitute from a hit.
+- **`scan.mjs` discovers the levels.** It works out what the ladder would
+  produce at the corpus's own source size, then keeps the rungs whose `<width>/`
+  directory is really there, and puts them in the manifest. Level 0 is always
+  present — it is the flat files — so a directory that has never been near the
+  pipeline is still a valid corpus with one level. Deliberately not checked:
+  whether *every room* has *every* level. A room missing one 404s, and a 404 is
+  already remembered and demoted, so per-file probing would be thousands of
+  stat calls to learn what the fallback handles anyway.
+- **The cache keys on `(id, level)`**, not `url`, with a Map per level and each
+  level's own budget from `pyramid.js`. `get(id, want)` starts the nearest
+  *servable* level loading and answers with the best thing resident, reporting
+  which level that was — so the renderer can tell a substitute from a hit.
+  "Nearest servable" is what makes a flat corpus work: with only level 0 on
+  disk, a request for level 4 resolves to 0 rather than waiting forever for a
+  file that does not exist.
+- **The render loop moved out of `main.jsx` into `render.js`**, which is what
+  made the byte-cost test possible. It takes a 2d context and the state of the
+  world, and owns no React and no DOM lookups. `main.jsx` now sizes the canvas,
+  calls `draw()`, and writes the HUD.
+- **The generic room is pinned and preloaded at its coarsest level** — 12 KB
+  that guarantees every cell has something to draw.
 - **The world's base unit is the cell, and a cell is not assumed square** —
   settled, and implemented. `camera.js` now keeps world coordinates in cells and
   applies the tile's aspect only when mapping to the screen: `zoom` is pixels per
@@ -448,7 +465,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-135 tests (`npm test`), in a couple of seconds, with no browser and no network.
+165 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -457,7 +474,8 @@ not autoscaling. Keep it behind a flag.
 | `packages/server/scan.test.mjs` | header parsers, directory rules |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
-| `packages/web/src/tiles.test.mjs` | cache budget, frame-aware eviction, pinning |
+| `packages/web/src/tiles.test.mjs` | per-level budgets, fallback across levels, frame-aware eviction, pinning, prefetch caps |
+| `packages/web/src/render.test.mjs` | level selection on a real layout, never-blank, the ring and the warm pass, a zoomed-out frame's byte cost |
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
 | `packages/pipeline/mips.test.mjs` | the level plan, real resizes, aspect agreement |
 | `packages/web/bundle.test.mjs` | the client compiles |
@@ -537,17 +555,14 @@ is worse than none, because it is believed.
 
 ### Still missing
 
-**Tile cache keying, once the pyramid lands.** That it keys on `(id, level)`
-rather than url, that per-level budgets are enforced independently, and that a
-zoom-in cannot evict the coarse field. The selection policy is tested in
-`pyramid.test.mjs`; what is untested is `tiles.js` obeying it. The budget, the
-never-evict-an-in-flight-load rule and frame-aware eviction are covered already.
+**A prefetch-ordering test with real timing.** `render.test.mjs` asserts that
+every visible cell is requested before any prefetch is issued, which is the
+property that matters, but it does so within one synchronous frame. What is not
+covered is a prefetch still in flight when the next frame needs the connection.
 
-**A test for the render loop's cost**, not just its correctness: assert that a
-zoomed-out frame requests no more than N images. That is the regression the
-resolution pyramid exists to prevent, and it will silently come back. It needs
-the render loop pulled out of `main.jsx`'s effect first — the same extraction
-the camera just had, for the same reason.
+**Eviction under a long high-zoom session.** Level 0's budget of 240 is what
+buys revisits rather than screens, and nothing yet wanders far enough at high
+zoom to exercise it against a real corpus.
 
 Not worth testing: the placeholder renderer's appearance, and anything that
 pins an art choice rather than an invariant.
@@ -787,26 +802,17 @@ Recorded from review, with what changed:
 
 In dependency order, shortest path to a demo that survives a real corpus:
 
-1. **Resolution pyramid.** The policy is written and tested in
-   [`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js) and the levels
-   can be generated ([§3b](#3b-the-pyramid-generator)). What remains is the three
-   consumers, in this order:
-   1. `scan.mjs` — discover `<dir>/<width>/<file>`, fall back to flat, and put
-      the available levels in the manifest. The generator writes this layout
-      already, so it is only the reading half that is missing.
-   2. `tiles.js` — key on `(id, level)`, per-level LRU, `bestAvailable()` on
-      every miss, the pinned generic fallback.
-   3. The render loop — `pickLevel()` per frame, the prefetch ring and the
-      warm-coarser pass, both queued behind visible tiles. Wants the loop
-      extracted out of `main.jsx`'s effect first, which the render-cost test
-      below needs anyway.
-2. **Animated camera moves.** The maths is extracted and tested now, so this is
+1. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam.
-3. **Test coverage per [§3a](#3a-testing)** — what remains is the render loop's
-   cost, which wants the loop extracted from `main.jsx` first, and the tile
-   cache's `(id, level)` keying, which waits on the pyramid.
-4. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
+2. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
    The asset is in the repo and is the right shape; what is missing is a way for
    the demo to reach a base image that lives outside `--images <dir>`, since
    `scan.mjs` only looks for `base.*` inside the corpus directory.
+3. **Give the pinned generic its own budget.** It is pinned at every level it is
+   asked for, which is correct and currently free — it is one room. If anything
+   else ever gets pinned, pinning needs to stop being unbounded.
+4. **Re-check the budgets against a real corpus at level 0.** The ladder's
+   worst-case table is computed for each level's own zoom band; what is not yet
+   measured is a long session wandering at high zoom, where level 0's budget of
+   240 is doing the "hold rather than refetch" work on its own.

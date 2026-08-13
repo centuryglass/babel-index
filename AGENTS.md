@@ -38,12 +38,12 @@ is read per request.
 | | |
 | --- | --- |
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
-| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `tiles.js` the image cache, `pyramid.js` the resolution policy |
+| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
-| `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing |
+| `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
-| `assets/corpus-sample/` | 26 rooms + a generic, so the demo needs no setup |
+| `assets/corpus-sample/` | 26 rooms + a generic, with all five pyramid levels, so the demo needs no setup |
 | `assets/base.cell.png` | the preferred base tile, inpainted and tiling; `mask.png` is its inpainting mask. Nothing reads either yet |
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
@@ -107,6 +107,17 @@ is read per request.
   slightly before they are needed, hold rather than refetch. Per-level LRU is
   load-bearing for the first — one global LRU lets a zoom-in evict the coarse
   field the fallback depends on.
+- **The pyramid is wired in; three files hold the seams.** `scan.mjs` discovers
+  which `<dir>/<width>/` levels exist and puts them in the manifest, `rooms.js`
+  turns `(id, level)` into a url and returns null for a level the corpus lacks,
+  and `tiles.js` resolves a wanted level to the nearest *servable* one. That
+  last part is what keeps a flat directory of images working: with only level 0
+  on disk, every request resolves to it instead of waiting for a file that will
+  never exist. Don't "fix" a null from `urlFor` into a fetch.
+- **The render loop lives in `render.js`, not `main.jsx`.** It takes a 2d
+  context and the world's state and owns no React — that is what lets
+  `render.test.mjs` assert a zoomed-out frame's byte cost without a browser.
+  Keep DOM lookups out of it.
 - **Tile eviction is frame-aware, and must stay that way.** The renderer walks
   cells row by row, so mid-frame the tiles it has already drawn are the *least*
   recently used entries in the cache. A plain LRU therefore evicts the top of
