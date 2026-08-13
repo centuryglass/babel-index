@@ -601,11 +601,26 @@ room: id, path, w, h, seed, prompt, model, controlnet, created_at,
       embedding (blob), border_drift (mean, peak)
 ```
 
-**Hosting**: a static bundle plus one small endpoint. The dominant cost is image
-egress, which argues for **Cloudflare R2 + Pages** over GCS — R2 charges no
-egress, and this project's cost profile is "serve a lot of images to whoever
-wanders in." GCP + Terraform stay the right answer if generate-on-demand grows
-into real infrastructure; they're the wrong answer for a static image map.
+**Hosting**: a static bundle plus one small endpoint. **Cloudflare R2 + Pages**
+over GCS — R2 charges no egress, and this project's cost profile is "serve a lot
+of images to whoever wanders in." GCP + Terraform stay the right answer if
+generate-on-demand grows into real infrastructure; they're the wrong answer for
+a static image map.
+
+The cost model is worked out in [`hosting-costs.md`](hosting-costs.md) and
+reproducible with `node tools/cost-model/report.mjs`. The headline, because it
+changes what to worry about: R2 bills **per GET, not per byte**, so egress is
+free and the *pyramid* is the thing on the meter — five files per room instead
+of one. It turns out to cost ~1.6× the operations of serving level 0 alone (not
+5×, since a room is fetched once per level you actually view it from), which
+buys ~15,000 free visits a month against ~24,600, and $20/month against $11 at
+100,000 visits. Neither is a reason to change anything: **build the pyramid for
+the bytes** — a zoomed-out tour is 8 MB with it and 295 MB without.
+
+Two deployment details are load-bearing for those numbers and both are free:
+serve the corpus from a **custom domain** (an `r2.dev` URL cannot be CDN-cached
+at all) with **immutable, long-max-age** headers, so a repeat fetch never
+reaches the bucket.
 
 ---
 
@@ -714,7 +729,13 @@ Recorded from review, with what changed:
 2. **Corpus hosting.** Settled in principle: a sample stays in the repo
    (`assets/corpus-sample/`, 25 rooms, 1.4 MB), the rest lives elsewhere. The
    server takes `--images <dir>` today; swapping in a bucket later means
-   changing `scan.mjs` and nothing else.
+   changing `scan.mjs` and nothing else. Costed in
+   [`hosting-costs.md`](hosting-costs.md) — the answer is that it is free at any
+   plausible traffic, and the only genuinely open part is whether a Cloudflare
+   cache hit avoids an R2 operation. The docs say it does; community reports say
+   it sometimes does not. **Measure it on the real account before relying on
+   it** — every figure in that doc assumes it does not, which is the safe
+   direction to be wrong in.
 3. **Do vertical neighbours mean anything?** With tiles as walls rather than
    rooms, up/down no longer implies a floor above. The grid may be purely
    abstract now, which is simpler and probably fine.
@@ -752,5 +773,23 @@ In dependency order, shortest path to a demo that survives a real corpus:
 3. **Test coverage per [§3a](#3a-testing)** — what remains is the render loop's
    cost, which wants the loop extracted from `main.jsx` first, and the tile
    cache's `(id, level)` keying, which waits on the pyramid.
-4. **Re-trace the geometry** once the shelf proportions are settled.
+4. **Re-trace the geometry** once the shelf proportions are settled — and note
+   that **moving the corpus to 1024×768** is the same job, not a separate one:
+   `BASE_TILE` and the `viewBox` of `shelf_geometry.svg` are two statements of
+   one fact, so the tile cannot change shape without a re-trace and re-import.
+   `geometry.test.mjs` fails loudly with both numbers if only one moves. See
+   [§2](#changing-the-tiles-aspect).
 5. **A real base render** as the generic room, replacing `000.jpg`.
+
+Deferred, deliberately, with the reasoning in
+[`hosting-costs.md`](hosting-costs.md):
+
+6. **Level-4 sheets, keyed by room ID.** ~8 sheets covering the whole corpus at
+   64×48, 6.1 MB in total, written by the pipeline alongside the mips. It halves
+   mixed operation counts and makes the zoomed-out view a fixed 8 requests
+   whatever the corpus grows to — but the reason to build it is that it makes a
+   search re-rank cost **zero** requests at that zoom, so the library visibly
+   rearranges itself instead of reloading. Keying by room ID rather than by map
+   position is what makes this survive a mutable arrangement: the ID is stable,
+   the position is not. Not worth building until there is traffic or the re-rank
+   feel demands it.

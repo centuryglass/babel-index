@@ -25,6 +25,7 @@ npm run test:e2e                   # browser smoke test; needs `npx playwright i
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
 npm run generate:tile -- --base <image>   # draw the measured geometry over a real image
 npm run generate:figures                  # regenerate docs/figures/
+node tools/cost-model/report.mjs          # hosting cost model; see docs/hosting-costs.md
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
 
@@ -42,6 +43,7 @@ is read per request.
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
+| `tools/cost-model/` | what hosting costs: replays camera paths, counts requests |
 | `assets/base-tile/` | generated geometry + placeholder art |
 | `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
 | `assets/blender/` | the base render source; nothing reads it |
