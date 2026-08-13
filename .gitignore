@@ -1,6 +1,10 @@
 node_modules/
 *.log
 .DS_Store
+<<<<<<< Updated upstream
 
 # Screenshots the browser smoke test leaves behind.
 packages/web/e2e/artifacts/
+=======
+assets/blender/textures
+>>>>>>> Stashed changes
