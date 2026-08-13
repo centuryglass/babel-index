@@ -60,14 +60,13 @@ it: the SVG's `viewBox` and `BASE_TILE` are two statements of one fact, and the
 tests fail if they drift apart. To check the result against a real image:
 
 ```sh
-npm run generate:tile -- --base assets/corpus-sample/000.jpg
+npm run generate:tile -- --base assets/blender/base_render.png
 ```
 
-which draws every measured rectangle over it. One caveat while it lasts: that
-tool still lays out square, so the overlay and everything else in
-`assets/base-tile/` is a 1024×1024 stretch of the 4:3 trace. Nothing the demo
-runs on reads those files — `measured.js` is the geometry — but don't read them
-as the tile's true proportions.
+which draws every measured rectangle over it, and writes the result to
+`assets/base-tile/`. The committed `geometry-overlay.png` is that command's
+output against the render the trace was taken from, so it is the picture to look
+at to see whether the geometry still lands on the art.
 
 ## The resolution pyramid
 
@@ -103,7 +102,7 @@ same distance away whichever way you drag.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 126 tests, no browser and no network
+npm test    # 129 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.

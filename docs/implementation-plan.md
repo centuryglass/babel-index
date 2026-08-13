@@ -409,7 +409,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-126 tests (`npm test`), in under a second, with no browser and no network.
+129 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -422,7 +422,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
 | `packages/pipeline/mips.test.mjs` | the level plan, real resizes, aspect agreement |
 | `packages/web/bundle.test.mjs` | the client compiles |
-| `tools/base-image/geometry.test.mjs` | the trace agrees with the story, and with the tile's aspect |
+| `tools/base-image/geometry.test.mjs` | the trace agrees with the story and with the tile's aspect; the layout and the manifest keep that aspect rather than squaring it |
 
 Three notes on how, since they are the parts that were not obvious:
 
@@ -735,15 +735,12 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
-6. **`generate.mjs` still renders square, so `assets/base-tile/` is stale.** The
-   trace and `BASE_TILE` agree on 4:3 and the suite asserts it, but the
-   placeholder tool takes a single `--size` and calls `layout({width: size,
-   height: size})`. So the committed placeholder, lineart, depth and overlay
-   PNGs are 1024×1024 with every measured rect stretched 4:3 → 1:1, and
-   `tile-geometry.json` records `pixel: {width: 1024, height: 1024}`. Nothing
-   the app runs on reads those files — they are documentation of the geometry,
-   and right now they document it wrongly. The fix is a `--height` (or deriving
-   both from `BASE_TILE`) and a regeneration.
+6. **The side returns, ceiling and cornice are still eyeballed**, and the
+   overlay now says so plainly: against the real render the red side-return
+   trapezoids converge on the tile's corners while the render's side walls are
+   near-vertical bands. It affects the placeholder's looks and nothing else — no
+   hit-testing depends on them — but they are the obvious next thing to trace if
+   the placeholder is ever meant to pass for the render.
 
 ---
 
@@ -774,5 +771,3 @@ In dependency order, shortest path to a demo that survives a real corpus:
    The asset is in the repo and is the right shape; what is missing is a way for
    the demo to reach a base image that lives outside `--images <dir>`, since
    `scan.mjs` only looks for `base.*` inside the corpus directory.
-5. **Regenerate `assets/base-tile/` at 4:3.** `generate.mjs` still renders the
-   placeholder and the overlay square — see [§7](#7-still-open).
