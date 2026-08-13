@@ -42,7 +42,7 @@ nothing more.
 | `packages/pipeline/` | the pyramid generator — `npm run generate:mips` |
 | `tools/base-image/` | tile geometry, SVG importer, placeholder, overlay |
 | `assets/blender/babel_shelf.blend` | the base render source |
-| `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
+| `assets/corpus-sample/` | 26 rooms + a generic, with all five pyramid levels, so the demo needs no setup |
 | `docs/borges-parameters.md` | the story's numbers, with sources |
 
 ### The demo
@@ -80,8 +80,9 @@ returns, the ceiling strip and the cornice.
 
 #### Changing the geometry
 
-The proportions are expected to move — the current shelf feels cramped. The
-trace is the interface, so a change is a three-step loop and touches no code:
+The proportions have moved once already — the tile went 1024² → 1024×768 to
+uncramp the shelf — and may move again. The trace is the interface, so a change
+is a three-step loop and touches no code:
 
 ```sh
 # 1. adjust the render in Blender, re-trace in Inkscape
@@ -186,12 +187,12 @@ renderer to sit on top.
 Rendering: a virtualized canvas drawing only visible tiles. Do not mount
 thousands of DOM nodes.
 
-#### Resolution pyramid — the next thing to build
+#### Resolution pyramid — built
 
 The demo loads full-resolution images at every zoom, and that is the ceiling it
 will hit first. Fully zoomed out on a 2560×1440 device-pixel viewport the map
-draws ~5700 cells; at 1024², decoded RGBA is 4 MB per image, so that screen
-wants ~23 GB of decoded bitmap. It survives at 511 rooms only because the cache
+draws ~7500 cells; at 1024×768, decoded RGBA is 3 MB per image, so that screen
+wants ~22 GB of decoded bitmap. It survives at 511 rooms only because the cache
 is capped at 240 entries and the browser discards aggressively — which is to say
 it survives by thrashing, and at a larger corpus it stops surviving.
 
@@ -199,6 +200,45 @@ The fix is a pyramid, generated once in the pipeline. Picking the level from
 zoom keeps decoded bytes per screen roughly constant however far out the camera
 goes, which is the property that makes corpus size stop mattering for rendering
 cost.
+
+##### What the thrashing actually looked like, and the half of it now fixed
+
+Found by panning at full zoom-out against a large corpus: rooms that were
+already on screen blinked out and came back as new tiles loaded. Measured by
+replaying the render loop headlessly against the real layout and the real cache
+— at `MIN_ZOOM` on a 1600×900 viewport a screen holds ~3100 cells wanting **~800
+distinct room images against a budget of 240**, and a brisk pan was evicting and
+refetching **~90 tiles per frame that had never left the viewport**.
+
+Two separate faults, and only one of them is the budget:
+
+- **The cache is smaller than a screen.** Unfixable without the pyramid: 800
+  full-resolution rooms is 2.4 GB decoded. This is the ceiling described above,
+  and it is what the ladder exists to lower.
+- **Eviction picked the wrong victims.** The renderer walks cells row by row, so
+  within a frame the tiles it has *already drawn* are the least recently used
+  entries in the cache. A miss half way down the screen evicted the rows above
+  it. That is a plain bug, independent of the budget, and it is what turned "the
+  cache is too small" into "tiles flicker".
+
+`tiles.js` now stamps each entry with the frame it was drawn in and refuses to
+evict anything touched by the current frame or the one before it — the previous
+frame included because a pan moves the viewport by a cell or two, so last
+frame's working set is very nearly this frame's. Refetches went to **zero**, and
+peak cache size barely moved (815 → 804 entries), because the old code was
+already blowing through its budget by skipping in-flight entries; it was just
+doing so while also thrashing. When a screen genuinely does not fit, the cache
+now holds it and `overBudget()` reports the overage in the HUD rather than
+pretending.
+
+Rule 1's third layer landed with it: a cell whose room has not arrived draws the
+**pinned generic room** instead of the flat `#15120f`, so a miss is a wall
+rather than a hole. At the zooms where this happens a cell is ~26px wide and the
+substitution is invisible; the hole was not.
+
+None of this makes the pyramid unnecessary. It makes the map usable at
+zoom-out today, and it removes a bug that would still have been there afterwards
+— per-level budgets would not have saved a frame from evicting its own rows.
 
 ##### The three rules, in priority order
 
@@ -230,15 +270,15 @@ is computed. Changing the tile is editing one object.
 
 | Level | Divisor | Size¹ | Decoded/tile¹ | Budget | Budget bytes¹ | Worst-case visible¹ |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ÷1 | 1024 | 4 MB | 240 | 960 MB | 24 |
-| 1 | ÷2 | 512 | 1 MB | 400 | 400 MB | 77 |
-| 2 | ÷4 | 256 | 256 KB | 900 | 225 MB | 273 |
-| 3 | ÷8 | 128 | 64 KB | 1600 | 100 MB | 943 |
-| 4 | ÷16 | 64 | 16 KB | 7000 | 112 MB | 5700 |
+| 0 | ÷1 | 1024×768 | 3 MB | 240 | 720 MB | 30 |
+| 1 | ÷2 | 512×384 | 768 KB | 400 | 300 MB | 99 |
+| 2 | ÷4 | 256×192 | 192 KB | 900 | 169 MB | 336 |
+| 3 | ÷8 | 128×96 | 48 KB | 1600 | 75 MB | 1271 |
+| 4 | ÷16 | 64×48 | 12 KB | 8200 | 96 MB | 7500 |
 
-¹ At the current `BASE_TILE` of 1024×1024. These columns are illustrative — they
+¹ At the current `BASE_TILE` of 1024×768. These columns are illustrative — they
 move with the tile, and the tests recompute them rather than trusting the table.
-≈1.8 GB if every level fills, which is a ceiling and not a reservation: entries
+≈1.3 GB if every level fills, which is a ceiling and not a reservation: entries
 appear only as cells are visited. `CACHE_SCALE` dials the whole table at once for
 a machine that can spare less; the ratios between levels are the part worth
 keeping.
@@ -254,11 +294,13 @@ that need a human decision:
   rung to add or drop. (At 4096² level 0 is already unreachable — `MAX_ZOOM ×
   dpr 2` does not reach half of it.)
 - **Budgets.** A shorter tile fits more rows on the same screen, so the
-  worst-case screen grows and a budget sized for squares may no longer hold one.
-  Switching to 1280×720 fails the check with the number it needs: the coarsest
-  level's 7000 against 10616. That is the intended behaviour — the budgets are a
-  judgement call about memory, so the test computes the floor and leaves the
-  choice.
+  worst-case screen grows and a budget sized for the old shape may no longer
+  hold one. This is not hypothetical: going from 1024² to 1024×768 took the
+  coarsest level's worst case from 5700 cells to 7500, which is why its budget
+  is 8200 rather than the 7000 it was. Pushing further to 1280×720 fails the
+  check with the number it needs — 8200 against 10616. That is the intended
+  behaviour: the budgets are a judgement call about memory, so the test computes
+  the floor and leaves the choice.
 
 Non-square is handled in selection, not merely tolerated. Demand normalises both
 axes onto the width ladder and takes the larger, so a cell whose shape differs
@@ -266,9 +308,9 @@ from the tile's — a wide tile stretched into a square cell — is resolved on
 whichever axis needed more, never under-resolved on the stretched one. The tests
 run the whole policy at 16:9, 3:4, a small square and a non-power-of-two tile.
 
-Two things that table encodes. First, **level 0 is budgeted at ten times its
-worst-case screen** (240 against 24) — that headroom is rule 3 buying revisits,
-not screens: tour ten rooms up close, come back to the first, no refetch.
+Two things that table encodes. First, **level 0 is budgeted at eight times its
+worst-case screen** (240 against 30) — that headroom is rule 3 buying revisits,
+not screens: tour eight rooms up close, come back to the first, no refetch.
 Second, **the coarse levels get the bigger budgets**, which is rule 3 in service
 of rule 1: the coarse field is what every finer level falls back on, so it must
 not be what gets evicted to make room for a zoom-in.
@@ -307,9 +349,9 @@ Three layers, in order:
   beats drawing nothing). A cell draws a hole only if *no* level of that room is
   resident.
 - **The generic room's coarsest level is preloaded and pinned**, never evictable.
-  16 KB buys a last-resort fill for any cell whose own room has nothing yet, so
-  the floor is a real image rather than the flat `#15120f` the renderer paints
-  today.
+  12 KB decoded (1.2 KB over the wire) buys a last-resort fill for any cell
+  whose own room has nothing yet, so the floor is a real wall rather than a flat
+  `#15120f` hole.
 - **A 404 is remembered, not retried** (`tiles.js` does this already) and
   permanently demotes that cell to the next level that works.
 
@@ -332,12 +374,29 @@ evict each other.
   connections per host. A prefetch that queues ahead of a visible tile has made
   rule 1 worse in order to serve rule 2, which is backwards.
 
-##### What this changes elsewhere
+##### How it is wired, end to end — **done**
 
-- **The cache key becomes `(id, level)`**, not `url`.
-  `packages/web/src/tiles.js` already isolates this; it is the only file that
-  needs to know. Its budget becomes per-level, and `get()` returns which level it
-  actually gives back, so the renderer can tell a substitute from a hit.
+- **`scan.mjs` discovers the levels.** It works out what the ladder would
+  produce at the corpus's own source size, then keeps the rungs whose `<width>/`
+  directory is really there, and puts them in the manifest. Level 0 is always
+  present — it is the flat files — so a directory that has never been near the
+  pipeline is still a valid corpus with one level. Deliberately not checked:
+  whether *every room* has *every* level. A room missing one 404s, and a 404 is
+  already remembered and demoted, so per-file probing would be thousands of
+  stat calls to learn what the fallback handles anyway.
+- **The cache keys on `(id, level)`**, not `url`, with a Map per level and each
+  level's own budget from `pyramid.js`. `get(id, want)` starts the nearest
+  *servable* level loading and answers with the best thing resident, reporting
+  which level that was — so the renderer can tell a substitute from a hit.
+  "Nearest servable" is what makes a flat corpus work: with only level 0 on
+  disk, a request for level 4 resolves to 0 rather than waiting forever for a
+  file that does not exist.
+- **The render loop moved out of `main.jsx` into `render.js`**, which is what
+  made the byte-cost test possible. It takes a 2d context and the state of the
+  world, and owns no React and no DOM lookups. `main.jsx` now sizes the canvas,
+  calls `draw()`, and writes the HUD.
+- **The generic room is pinned and preloaded at its coarsest level** — 12 KB
+  that guarantees every cell has something to draw.
 - **The world's base unit is the cell, and a cell is not assumed square** —
   settled, and implemented. `camera.js` now keeps world coordinates in cells and
   applies the tile's aspect only when mapping to the screen: `zoom` is pixels per
@@ -360,9 +419,10 @@ evict each other.
 - **Generating the pyramid is a pipeline job**, not a server job — built, as
   [`packages/pipeline/`](../packages/pipeline/). See
   [§3b](#3b-the-pyramid-generator).
-- Bandwidth follows the same curve: the far-out view costs ~16 KB per room
-  instead of ~50 KB, which matters more than the decode ceiling once this is
-  hosted.
+- Bandwidth follows the same curve, and harder than the decode ceiling does.
+  Measured on the sample corpus: a level-4 tile is **1.2 KB** encoded against
+  **74 KB** at level 0, so a far-out screen costs about a sixtieth of what it
+  used to. That is the number that matters once this is hosted.
 
 #### Camera movement
 
@@ -406,7 +466,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-126 tests (`npm test`), in under a second, with no browser and no network.
+165 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -415,11 +475,12 @@ not autoscaling. Keep it behind a flag.
 | `packages/server/scan.test.mjs` | header parsers, directory rules |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
-| `packages/web/src/tiles.test.mjs` | cache budget and eviction |
+| `packages/web/src/tiles.test.mjs` | per-level budgets, fallback across levels, frame-aware eviction, pinning, prefetch caps |
+| `packages/web/src/render.test.mjs` | level selection on a real layout, never-blank, the ring and the warm pass, a zoomed-out frame's byte cost |
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
 | `packages/pipeline/mips.test.mjs` | the level plan, real resizes, aspect agreement |
 | `packages/web/bundle.test.mjs` | the client compiles |
-| `tools/base-image/geometry.test.mjs` | the trace agrees with the story, and with the tile's aspect |
+| `tools/base-image/geometry.test.mjs` | the trace agrees with the story and with the tile's aspect; the layout and the manifest keep that aspect rather than squaring it |
 
 Three notes on how, since they are the parts that were not obvious:
 
@@ -444,12 +505,13 @@ Three notes on how, since they are the parts that were not obvious:
   that breaks a rule is what fails. Each was checked by breaking it on purpose:
   starving a budget, zeroing the hysteresis, reversing the coarse-before-fine
   preference, and adding a level below `MIN_ZOOM` all fail the suite.
-- **And they run at four tile shapes**, not just the current one, so nothing can
-  quietly re-pin itself to 1024 squares — re-hard-coding the size inside
-  `sizeOf()` fails three of them. The one that mattered most was almost useless:
-  the check that a stretched cell resolves on its hungrier axis was written with
-  `<=`, which passes when the height is ignored entirely. It asserts `<` now,
-  and fails against an implementation that drops the axis.
+- **And they run at five tile shapes**, not just the current one, so nothing can
+  quietly re-pin itself to one size or one aspect — re-hard-coding the current
+  1024×768 inside `sizeOf()` fails three of the checks. The one that mattered
+  most was almost useless: the check that a stretched cell resolves on its
+  hungrier axis was written with `<=`, which passes when the height is ignored
+  entirely. It asserts `<` now, and fails against an implementation that drops
+  the axis.
 
 ### The browser smoke test
 
@@ -494,17 +556,14 @@ is worse than none, because it is believed.
 
 ### Still missing
 
-**Tile cache keying, once the pyramid lands.** That it keys on `(id, level)`
-rather than url, that per-level budgets are enforced independently, and that a
-zoom-in cannot evict the coarse field. The selection policy is tested in
-`pyramid.test.mjs`; what is untested is `tiles.js` obeying it. The budget and the
-never-evict-an-in-flight-load rule are covered already.
+**A prefetch-ordering test with real timing.** `render.test.mjs` asserts that
+every visible cell is requested before any prefetch is issued, which is the
+property that matters, but it does so within one synchronous frame. What is not
+covered is a prefetch still in flight when the next frame needs the connection.
 
-**A test for the render loop's cost**, not just its correctness: assert that a
-zoomed-out frame requests no more than N images. That is the regression the
-resolution pyramid exists to prevent, and it will silently come back. It needs
-the render loop pulled out of `main.jsx`'s effect first — the same extraction
-the camera just had, for the same reason.
+**Eviction under a long high-zoom session.** Level 0's budget of 240 is what
+buys revisits rather than screens, and nothing yet wanders far enough at high
+zoom to exercise it against a real corpus.
 
 Not worth testing: the placeholder renderer's appearance, and anything that
 pins an art choice rather than an invariant.
@@ -555,7 +614,7 @@ would alias the book spines into moiré.
 are — no duplicated bytes, and a corpus that has never been through the pipeline
 still reads as a valid level 0. Pass `--out` and every level is written including
 0, copied rather than re-encoded so the source art is never requantised. On the
-25-room sample: 104 files, 1.4 MB → 3.2 MB.
+26-room sample: 108 files, 2.0 MB → 3.4 MB.
 
 Directories are named for the **width**, because width is the axis the client's
 ladder is expressed in and the aspect is fixed, so the width names the level
@@ -704,15 +763,22 @@ Recorded from review, with what changed:
     `packages/map` takes the aspect and measures in cell widths. It is the one
     place that module is not shape-blind, and it is a deliberate trade:
     [§5a](#5a-why-the-map-knows-the-cell-shape).
+13. **The tile is 1024×768.** The square shelf felt cramped, which was the last
+    entry in §7; 4:3 gives the books room without changing what a tile *is*. The
+    render, the trace and `BASE_TILE` moved together, and the only knock-on in
+    code was the coarsest cache budget — a shorter tile fits more rows, so the
+    worst-case screen went 5700 → 7500 cells and the budget 7000 → 8200. Whether
+    4:3 is final is an art call; nothing downstream assumes it.
 
 ## 7. Still open
 
-1. **The Blender base render as an image file.** The `.blend` is in the repo but
-   a render is not, so the demo currently uses corpus image `000.jpg` as the
-   generic room. That is the asset the map leans on hardest — it is ~80% of
-   every screen.
+1. **Wiring the base render up as the generic room.** The renders are in the
+   repo now — `assets/blender/base_render.png` and the inpainted, tiling
+   `assets/base.cell.png`, both 1024×768 — but nothing references either, so the
+   demo still falls back to corpus image `000.jpg`. That is the asset the map
+   leans on hardest — it is ~80% of every screen.
 2. **Corpus hosting.** Settled in principle: a sample stays in the repo
-   (`assets/corpus-sample/`, 25 rooms, 1.4 MB), the rest lives elsewhere. The
+   (`assets/corpus-sample/`, 26 rooms, 2.0 MB), the rest lives elsewhere. The
    server takes `--images <dir>` today; swapping in a bucket later means
    changing `scan.mjs` and nothing else.
 3. **Do vertical neighbours mean anything?** With tiles as walls rather than
@@ -724,8 +790,12 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
-6. **Shelf proportions feel cramped** and are expected to change. The loop for
-   that is in [§2](#changing-the-geometry) and touches no code.
+6. **The side returns, ceiling and cornice are still eyeballed**, and the
+   overlay now says so plainly: against the real render the red side-return
+   trapezoids converge on the tile's corners while the render's side walls are
+   near-vertical bands. It affects the placeholder's looks and nothing else — no
+   hit-testing depends on them — but they are the obvious next thing to trace if
+   the placeholder is ever meant to pass for the render.
 
 ---
 
@@ -733,24 +803,17 @@ Recorded from review, with what changed:
 
 In dependency order, shortest path to a demo that survives a real corpus:
 
-1. **Resolution pyramid.** The policy is written and tested in
-   [`packages/web/src/pyramid.js`](../packages/web/src/pyramid.js) and the levels
-   can be generated ([§3b](#3b-the-pyramid-generator)). What remains is the three
-   consumers, in this order:
-   1. `scan.mjs` — discover `<dir>/<width>/<file>`, fall back to flat, and put
-      the available levels in the manifest. The generator writes this layout
-      already, so it is only the reading half that is missing.
-   2. `tiles.js` — key on `(id, level)`, per-level LRU, `bestAvailable()` on
-      every miss, the pinned generic fallback.
-   3. The render loop — `pickLevel()` per frame, the prefetch ring and the
-      warm-coarser pass, both queued behind visible tiles. Wants the loop
-      extracted out of `main.jsx`'s effect first, which the render-cost test
-      below needs anyway.
-2. **Animated camera moves.** The maths is extracted and tested now, so this is
+1. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam.
-3. **Test coverage per [§3a](#3a-testing)** — what remains is the render loop's
-   cost, which wants the loop extracted from `main.jsx` first, and the tile
-   cache's `(id, level)` keying, which waits on the pyramid.
-4. **Re-trace the geometry** once the shelf proportions are settled.
-5. **A real base render** as the generic room, replacing `000.jpg`.
+2. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
+   The asset is in the repo and is the right shape; what is missing is a way for
+   the demo to reach a base image that lives outside `--images <dir>`, since
+   `scan.mjs` only looks for `base.*` inside the corpus directory.
+3. **Give the pinned generic its own budget.** It is pinned at every level it is
+   asked for, which is correct and currently free — it is one room. If anything
+   else ever gets pinned, pinning needs to stop being unbounded.
+4. **Re-check the budgets against a real corpus at level 0.** The ladder's
+   worst-case table is computed for each level's own zoom band; what is not yet
+   measured is a long session wandering at high zoom, where level 0's budget of
+   240 is doing the "hold rather than refetch" work on its own.

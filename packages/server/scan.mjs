@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
+import { mipPlan } from '../pipeline/layout.mjs';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
@@ -50,6 +51,45 @@ export async function imageSize(path) {
 }
 
 /**
+ * Which of the pyramid's levels have actually been generated for this corpus.
+ *
+ * The generator writes `<dir>/<width>/<file>` for every level below the source
+ * and leaves level 0 flat, so discovery is: work out what the ladder *would*
+ * produce at this source size, then keep the rungs whose directory is really
+ * there. Level 0 is always present - it is the flat files themselves - which is
+ * what keeps "point it at a directory of images" true for a corpus that has
+ * never been near the pipeline.
+ *
+ * Deliberately not checked: whether every room has every level. A room missing
+ * one 404s, and the client already remembers a 404 and falls back to another
+ * level, so per-file probing would be thousands of stat calls to learn
+ * something the fallback handles anyway.
+ *
+ * @param {string} dir
+ * @param {{w: number, h: number}|null} source  level-0 dimensions
+ * @returns {Promise<{level: number, w: number, h: number, dir: string|null}[]>}
+ */
+export async function discoverLevels(dir, source) {
+  // Without a source size there is no ladder to look for, only the flat files.
+  if (!source?.w || !source?.h) return [{ level: 0, w: source?.w ?? null, h: source?.h ?? null, dir: null }];
+
+  const plan = mipPlan(source);
+  const found = [];
+  for (const step of plan) {
+    if (step.level === 0) {
+      found.push({ ...step, dir: null });
+      continue;
+    }
+    const path = join(dir, step.dir);
+    const holds = await readdir(path)
+      .then((names) => names.some((n) => IMAGE_EXT.has(extname(n).toLowerCase())))
+      .catch(() => false);
+    if (holds) found.push(step);
+  }
+  return found;
+}
+
+/**
  * Scan a directory into a corpus manifest.
  *
  * Offline mode is just this: point at a folder of images. No database, no
@@ -86,6 +126,12 @@ export async function scanDirectory(dir, { base } = {}) {
 
   const baseSize = await imageSize(join(dir, baseFile)).catch(() => null);
 
+  // The ladder is measured off the corpus, not the generic room: the generic is
+  // one file and may be anything, while the rooms are what the map is mostly
+  // made of. Fall back to the generic only when no room reported a size.
+  const source = rooms.find((r) => r.w && r.h) ?? baseSize;
+  const levels = await discoverLevels(dir, source);
+
   return {
     mode: 'offline',
     directory: dir,
@@ -96,5 +142,10 @@ export async function scanDirectory(dir, { base } = {}) {
     },
     rooms,
     count: rooms.length,
+    /**
+     * The pyramid as it exists on disk, finest first. Clients build a level's
+     * url as `/images/<dir>/<file>`, or `/images/<file>` where `dir` is null.
+     */
+    levels,
   };
 }

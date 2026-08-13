@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layout, checkAgainstStory } from './lib/geometry.js';
+import { layout, checkAgainstStory, TILE_ASPECT } from './lib/geometry.js';
+import { geometryManifest } from './lib/render.js';
 import { MEASURED, SHELF_COUNT, BOOKS_PER_SHELF } from './lib/measured.js';
 import { STORY } from './lib/story.js';
 import { BASE_TILE } from '../../packages/web/src/pyramid.js';
@@ -150,6 +151,52 @@ test('the trace and the tile agree on aspect', () => {
       `${BASE_TILE.w}x${BASE_TILE.h} (aspect ${tile}). Re-trace shelf_geometry.svg at the ` +
       `new shape and re-run import-shelf-svg.mjs, or put BASE_TILE back.`
   );
+});
+
+test('a width with no height gives the traced shape, not a square', () => {
+  // The bug this pins: `height = width` as a default. It is silent, because
+  // every rect is individually still inside the tile - the books just stop
+  // landing on the books. Everything in assets/base-tile/ was generated that
+  // way and came out 1024x1024 from a 4:3 trace.
+  const L = layout({ width: 1024 });
+  assert.equal(L.height, Math.round(1024 * TILE_ASPECT));
+  assert.notEqual(L.height, L.width, 'the trace is 4:3; a square layout is the old bug');
+  assert.ok(Math.abs(TILE_ASPECT - BASE_TILE.h / BASE_TILE.w) < 0.01, "and it is BASE_TILE's shape");
+});
+
+test('the manifest round-trips the trace, normalised per axis', () => {
+  // The manifest is the trace re-expressed, so normalising it must invert the
+  // scaling layout() applied: x against width, y against height. Dividing both
+  // by one number survives a square tile and corrupts every other one, so this
+  // is asserted at a shape where the two divisors differ.
+  const { features, shelves } = geometryManifest({ width: 1024, height: 768 });
+  const close = (got, want, what) =>
+    assert.ok(Math.abs(got - want) < 1e-4, `${what}: ${got} should round-trip to ${want}`);
+
+  features.opening.forEach((v, i) => close(v, MEASURED.opening[i], `opening[${i}]`));
+  MEASURED.uprights.forEach((u, i) =>
+    u.forEach((v, j) => close(features.uprights[i][j], v, `upright ${i}[${j}]`))
+  );
+
+  // The lamp is the exception in the same direction it always is: cx and r are
+  // fractions of WIDTH, cy of height, because the globe is a circle.
+  close(features.lamp[0], MEASURED.lamp.cx, 'lamp cx');
+  close(features.lamp[1], MEASURED.lamp.cy, 'lamp cy');
+  close(features.lamp[2], MEASURED.lamp.r, 'lamp r');
+
+  const book = shelves[0].books[0];
+  MEASURED.shelves[0].books[0].forEach((v, i) => close(book[i], v, `first book[${i}]`));
+});
+
+test('the manifest records the shape it was rendered at', () => {
+  const m = geometryManifest({ width: 1024, height: 768 });
+  assert.deepEqual(m.pixel, { width: 1024, height: 768 });
+  // Read by a human deciding whether these numbers apply to their tile, so a
+  // manifest that misreports its own shape is worse than no manifest.
+  assert.deepEqual(geometryManifest({ width: 512 }).pixel, {
+    width: 512,
+    height: Math.round(512 * TILE_ASPECT),
+  });
 });
 
 test('the trace records the shape it was made at', () => {
