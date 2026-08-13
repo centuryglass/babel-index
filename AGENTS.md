@@ -107,6 +107,16 @@ is read per request.
   slightly before they are needed, hold rather than refetch. Per-level LRU is
   load-bearing for the first — one global LRU lets a zoom-in evict the coarse
   field the fallback depends on.
+- **Tile eviction is frame-aware, and must stay that way.** The renderer walks
+  cells row by row, so mid-frame the tiles it has already drawn are the *least*
+  recently used entries in the cache. A plain LRU therefore evicts the top of
+  the screen to make room for the bottom of the same screen, and the pan blanks
+  and refetches tiles that never left the viewport. `tiles.js` stamps entries
+  with `beginFrame()`'s counter and will not evict anything from the current or
+  previous frame; the render loop must call `beginFrame()` once per frame for
+  that to mean anything. When one screen exceeds the budget the cache holds it
+  and reports `overBudget()` — growing is the lesser evil, and the pyramid is
+  what actually brings it back down.
 - **The tile size and shape are not settled.** It is **1024×768** today, and was
   1024² until recently — so treat any "1024²" you find in prose as a bug, not as
   a fact. `BASE_TILE` is the only place either is stated and the ladder is

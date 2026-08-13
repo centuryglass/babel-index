@@ -254,13 +254,17 @@ describe('the library, in a browser', { concurrency: false }, () => {
 /** Parse the HUD, which is the app's own account of what it just drew. */
 async function hud(page) {
   const text = await page.locator('#hud').textContent();
+  // `over` is only printed when a screen needs more than the cache budget, so
+  // it is optional here - but it is parsed rather than skipped, because it is
+  // the number that says the zoomed-out view is over its memory budget.
   const m = text.match(
-    /^(\d+) cells · (\d+) drawn · (\d+) loading · (\d+) cached · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)$/
+    /^(\d+) cells · (\d+) drawn · (\d+) on the generic · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)$/
   );
   assert.ok(m, `could not read the hud: ${JSON.stringify(text)}`);
-  const [, cells, drawn, loading, cached, zoom, x, y, edge] = m;
+  const [, cells, drawn, onGeneric, cached, over, zoom, x, y, edge] = m;
   return {
-    cells: +cells, drawn: +drawn, loading: +loading, cached: +cached,
+    cells: +cells, drawn: +drawn, onGeneric: +onGeneric, cached: +cached,
+    over: over === undefined ? 0 : +over,
     zoom: +zoom, x: +x, y: +y, edge: +edge,
   };
 }
