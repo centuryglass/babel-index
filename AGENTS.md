@@ -42,7 +42,7 @@ is read per request.
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
-| `assets/base-tile/` | generated geometry + placeholder art (still square — see below) |
+| `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
 | `assets/corpus-sample/` | 26 rooms + a generic, so the demo needs no setup |
 | `assets/base.cell.png` | the preferred base tile, inpainted and tiling; `mask.png` is its inpainting mask. Nothing reads either yet |
 | `assets/blender/` | the base render source; nothing reads it |
@@ -116,12 +116,14 @@ is read per request.
   camera's clamp, a budget below one screen). Going 4:3 broke exactly that
   second one: a shorter tile fits more rows, so the coarsest budget had to go
   from 7000 to 8200.
-- **`tools/base-image/generate.mjs` still renders square.** It takes one
-  `--size` and calls `layout({width: size, height: size})`, so everything in
-  `assets/base-tile/` is a 1024×1024 stretch of a 4:3 trace and
-  `tile-geometry.json` claims a square tile. Nothing the app runs on reads those
-  files, but don't cite them as the geometry, and don't regenerate them expecting
-  4:3 until the tool takes a height.
+- **`layout()` defaults its height to the traced aspect, never to a square.**
+  That default used to be `height = width`, which is how everything in
+  `assets/base-tile/` came out 1024² from a 4:3 trace: each rect is still inside
+  the tile, so nothing complains — the books just stop landing on the books.
+  Same rule in the manifest: `geometryManifest()` normalises x against width and
+  y against height, and one divisor for both axes is the same bug wearing a
+  different hat. Both are asserted, and both assertions were checked by
+  reintroducing the bug.
 - **The world's base unit is the cell, and a cell is not square.** World
   coordinates are in cells; `zoom` is pixels per cell *width* and `pxPerCell()`
   in `camera.js` is the only place the height is derived from it. Never write

@@ -36,10 +36,25 @@ const PROVISIONAL = {
 const round = (n) => Math.round(n * 1e4) / 1e4;
 
 /**
+ * The tile's shape, from the trace itself.
+ *
+ * `height` defaults to this rather than to `width`. It used to default to a
+ * square, which is silent and wrong the moment the tile is not one: every
+ * measured rect gets stretched onto art it no longer matches, and each rect is
+ * individually still inside the tile, so nothing complains. Defaulting to the
+ * traced aspect means a caller that gives only a width gets the shape the
+ * numbers were measured at, which is the only shape they mean anything at.
+ *
+ * The trace and `BASE_TILE` are two statements of one fact and geometry.test.mjs
+ * asserts they agree, so this is the tile's aspect however you reach it.
+ */
+export const TILE_ASPECT = MEASURED.tile.aspect;
+
+/**
  * @param {{width?: number, height?: number}} opts
  * @returns {object} every rectangle the renderer and the web app need
  */
-export function layout({ width = 1024, height = width } = {}) {
+export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) } = {}) {
   const W = width;
   const H = height;
   // Rects carry no aspect of their own - the importer normalised x against the
