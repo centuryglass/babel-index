@@ -1,8 +1,4 @@
 /**
- * TODO: All this plentiful Claude-documentation still asserts a 1024^2 tile
- *       size. Update the numbers for the new 1024x768 resolution, and the
- *       corresponding cache/budget adjustments.
- *
  * The resolution pyramid: which size of each room to draw, and how much to keep.
  *
  * THIS FILE IS THE TUNING SURFACE. Every number that decides what gets fetched,
@@ -12,7 +8,7 @@
  * and the budgets, the render loop reads pickLevel() and PREFETCH. Tune here.
  *
  * The problem being solved: the map draws full-resolution images at every zoom,
- * so a zoomed-out screen of ~5700 cells wants ~23 GB of decoded bitmap. Picking
+ * so a zoomed-out screen of ~7500 cells wants ~22 GB of decoded bitmap. Picking
  * the level from zoom keeps decoded bytes per screen roughly constant however
  * far out the camera goes, which is what makes corpus size stop mattering for
  * rendering cost.
@@ -49,13 +45,17 @@
  *   - that every level is still reachable within the camera's zoom clamp (a
  *     much taller tile needs a rung added or dropped),
  *   - that every budget still holds a worst-case screen at the new aspect,
- *     since a wide tile puts more cells on a screen than a square one.
+ *     since a shorter tile fits more rows and so puts more cells on a screen.
  *
- * Non-square is supported here and selection handles it, but the map around it
- * is not there yet: `camera.js` calls the world cell a unit square and the
- * render loop draws `zoom + 1` on both axes. Those want the cell's aspect
- * threaded through before a non-square tile will actually look right on the
- * map - the pyramid will not be what blocks it.
+ * Non-square is not merely tolerated, it is what the tile currently is: 4:3.
+ * The aspect is threaded through the whole map from here - `camera.js` derives
+ * CELL_ASPECT from this object and applies it in `pxPerCell()`, and
+ * `packages/map` takes it to measure distance in cell widths. Change the shape
+ * and the world changes shape with it, which is the point.
+ *
+ * The trace that produced `tools/base-image/lib/measured.js` records the shape
+ * it was made at, and `geometry.test.mjs` asserts it against this object - so
+ * this and the `viewBox` of `shelf_geometry.svg` cannot drift apart silently.
  */
 export const BASE_TILE = { w: 1024, h: 768 };
 
@@ -68,17 +68,17 @@ export const BASE_TILE = { w: 1024, h: 768 };
  * `budget` is the maximum number of decoded images held at that level. It is a
  * ceiling, not a reservation - entries appear only as cells are visited.
  *
- * At the current BASE_TILE of 1024x1024 that works out as (bytes/tile being
+ * At the current BASE_TILE of 1024x768 that works out as (bytes/tile being
  * w x h x 4, decoded RGBA - what the browser actually holds; the encoded JPEG
  * is ~20x smaller and is not the constraint):
  *
- *   level  size  bytes/tile  budget  budget bytes  worst-case visible*
- *       0  1024        4 MB     240        960 MB                  24
- *       1   512        1 MB     400        400 MB                  77
- *       2   256      256 KB     900        225 MB                 273
- *       3   128       64 KB    1600        100 MB                 943
- *       4    64       16 KB    7000        112 MB                5700
- *                                        ~1.8 GB total
+ *   level      size  bytes/tile  budget  budget bytes  worst-case visible*
+ *       0  1024x768        3 MB     240        720 MB                  30
+ *       1   512x384      768 KB     400        300 MB                  99
+ *       2   256x192      192 KB     900        169 MB                 336
+ *       3    128x96       48 KB    1600         75 MB                1271
+ *       4     64x48       12 KB    8200         96 MB                7500
+ *                                            ~1.3 GB total
  *
  * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
  * zoom in that level's band which shows the most of them. Every budget is
@@ -86,9 +86,11 @@ export const BASE_TILE = { w: 1024, h: 768 };
  * cannot hold one screen thrashes within a single frame. That column moves
  * with BASE_TILE's aspect, which is why the test recomputes it rather than
  * trusting this comment - treat the table as illustrative, the test as true.
+ * Going 4:3 is what last moved it: a shorter tile fits more rows on the same
+ * screen, so the coarsest level's worst case rose past its old 7000 budget.
  *
- * Note how far above its worst case level 0 is - 240 against 24. That is rule
- * 3 buying revisits, not screens: you can tour ten rooms up close and come
+ * Note how far above its worst case level 0 is - 240 against 30. That is rule
+ * 3 buying revisits, not screens: you can tour eight rooms up close and come
  * back to the first without a refetch. Lower CACHE_SCALE if the total is more
  * than the machine can spare; the ratios between levels are the part worth
  * keeping.
@@ -145,8 +147,8 @@ export const PREFETCH = {
  *
  * A factory rather than bare functions so the whole policy can be exercised at
  * a different tile size or aspect without editing the constants above - which
- * is how the tests prove none of this is pinned to 1024 squares, and how an
- * experiment can try a shape before it is adopted.
+ * is how the tests prove none of this is pinned to one size or one aspect, and
+ * how an experiment can try a shape before it is adopted.
  *
  * @param {object} [opts]
  * @param {{w: number, h: number}} [opts.base]  the level-0 tile

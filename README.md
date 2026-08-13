@@ -13,7 +13,7 @@ npm install
 npm run demo
 ```
 
-Then open <http://localhost:5173>. It runs against the 25-room sample in
+Then open <http://localhost:5173>. It runs against the 26-room sample in
 `assets/corpus-sample/` with no further setup. Point it at a bigger corpus with:
 
 ```sh
@@ -63,7 +63,11 @@ tests fail if they drift apart. To check the result against a real image:
 npm run generate:tile -- --base assets/corpus-sample/000.jpg
 ```
 
-which draws every measured rectangle over it.
+which draws every measured rectangle over it. One caveat while it lasts: that
+tool still lays out square, so the overlay and everything else in
+`assets/base-tile/` is a 1024×1024 stretch of the 4:3 trace. Nothing the demo
+runs on reads those files — `measured.js` is the geometry — but don't read them
+as the tile's true proportions.
 
 ## The resolution pyramid
 
@@ -82,11 +86,11 @@ and the level-picking policy all live in
 [`packages/web/src/pyramid.js`](packages/web/src/pyramid.js), which is the file
 to edit to tune any of it.
 
-The tile does not have to be 1024², or square. `BASE_TILE` is the only place its
-size and shape are stated; everything else derives from it, and the tests will
-tell you what a new shape breaks. The library stays **round on screen** at any
-cell shape rather than round in the index, so the edge is the same distance away
-whichever way you drag.
+The tile is 1024×768 today, and neither the size nor the shape is fixed.
+`BASE_TILE` is the only place either is stated; everything else derives from it,
+and the tests will tell you what a new shape breaks. The library stays **round
+on screen** at any cell shape rather than round in the index, so the edge is the
+same distance away whichever way you drag.
 
 | | |
 | --- | --- |
