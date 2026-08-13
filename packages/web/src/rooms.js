@@ -32,8 +32,3 @@ export function createUrlFor(manifest) {
     return `/images/${dir ? `${dir}/` : ''}${encodeURIComponent(file)}`;
   };
 }
-
-/** The levels the corpus really has, coarsest first - what to preload. */
-export function levelsOf(manifest) {
-  return (manifest.levels ?? [{ level: 0, w: null, h: null, dir: null }]).map((l) => l.level);
-}

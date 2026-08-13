@@ -42,7 +42,7 @@ nothing more.
 | `packages/pipeline/` | the pyramid generator — `npm run generate:mips` |
 | `tools/base-image/` | tile geometry, SVG importer, placeholder, overlay |
 | `assets/blender/babel_shelf.blend` | the base render source |
-| `assets/corpus-sample/` | 26 rooms + a generic, so the demo needs no setup |
+| `assets/corpus-sample/` | 26 rooms + a generic, with all five pyramid levels, so the demo needs no setup |
 | `docs/borges-parameters.md` | the story's numbers, with sources |
 
 ### The demo
@@ -349,9 +349,9 @@ Three layers, in order:
   beats drawing nothing). A cell draws a hole only if *no* level of that room is
   resident.
 - **The generic room's coarsest level is preloaded and pinned**, never evictable.
-  16 KB buys a last-resort fill for any cell whose own room has nothing yet, so
-  the floor is a real image rather than the flat `#15120f` the renderer paints
-  today.
+  12 KB decoded (1.2 KB over the wire) buys a last-resort fill for any cell
+  whose own room has nothing yet, so the floor is a real wall rather than a flat
+  `#15120f` hole.
 - **A 404 is remembered, not retried** (`tiles.js` does this already) and
   permanently demotes that cell to the next level that works.
 
@@ -419,9 +419,10 @@ evict each other.
 - **Generating the pyramid is a pipeline job**, not a server job — built, as
   [`packages/pipeline/`](../packages/pipeline/). See
   [§3b](#3b-the-pyramid-generator).
-- Bandwidth follows the same curve: the far-out view costs ~16 KB per room
-  instead of ~50 KB, which matters more than the decode ceiling once this is
-  hosted.
+- Bandwidth follows the same curve, and harder than the decode ceiling does.
+  Measured on the sample corpus: a level-4 tile is **1.2 KB** encoded against
+  **74 KB** at level 0, so a far-out screen costs about a sixtieth of what it
+  used to. That is the number that matters once this is hosted.
 
 #### Camera movement
 

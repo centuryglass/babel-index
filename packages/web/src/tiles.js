@@ -230,11 +230,9 @@ export function createTileCache({
     get,
     prefetch,
     pin,
-    isReady,
     size,
     sizeOf: (level) => bucket(level)?.size ?? 0,
-    /** How far past its budget a level's visible working set is forcing it. */
-    overBudgetAt: (level) => Math.max(0, (bucket(level)?.size ?? 0) - pyramid.budgetOf(level)),
+    /** How far past their budgets the visible working set is forcing the levels. */
     overBudget: () =>
       pyramid.levels.reduce(
         (n, l) => n + Math.max(0, (bucket(l.level)?.size ?? 0) - pyramid.budgetOf(l.level)),
