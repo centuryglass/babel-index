@@ -23,7 +23,7 @@
  * hysteresis band is what stops a zoom held near a boundary from flickering
  * between two levels, and it can only apply if it knows what is on screen now.
  */
-import { PYRAMID, PREFETCH, prefetchBounds } from './pyramid.js';
+import { PYRAMID, prefetchBounds } from './pyramid.js';
 import { pxPerCell } from './camera.js';
 import { GENERIC } from './tiles.js';
 
@@ -123,7 +123,7 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
     return { cells, drawn, substituted, blank, level, bounds, zoom };
   }
 
-  return { draw, currentLevel: () => level };
+  return { draw };
 }
 
 /** The centre-room marker and the rank labels. Cosmetic, and zoom-gated. */
@@ -143,5 +143,3 @@ function drawChrome(ctx, cell, sx, sy, cellPx, zoom) {
     ctx.fillText(`#${cell.rank}`, sx + 8, sy + 18);
   }
 }
-
-export { PREFETCH };

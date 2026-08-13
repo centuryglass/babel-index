@@ -35,7 +35,7 @@ import { mipPlan } from './layout.mjs';
 
 // Re-exported because this is where callers have always looked for it. It lives
 // in layout.mjs so scan.mjs can read the layout without importing sharp.
-export { mipPlan, levelPath } from './layout.mjs';
+export { mipPlan } from './layout.mjs';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 

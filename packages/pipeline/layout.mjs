@@ -50,17 +50,3 @@ export function mipPlan({ w, h }, levels = LEVELS) {
   }
   return plan;
 }
-
-/**
- * The path a level's copy of a file sits at, relative to the corpus directory.
- *
- * Level 0 is flat, so it is the bare filename. Everything else is under the
- * directory named for its width. One function, so the writer and the reader
- * cannot disagree about where a tile is.
- *
- * @param {{level: number, dir: string}} step  an entry from mipPlan()
- * @param {string} file  the source filename
- */
-export function levelPath(step, file) {
-  return step.level === 0 ? file : `${step.dir}/${file}`;
-}

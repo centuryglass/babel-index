@@ -271,7 +271,7 @@ test('overBudget reports the pressure rather than hiding it', () => {
   cache.beginFrame();
   for (let id = 0; id < 10; id++) cache.get(id, 0);
   images.settleAll();
-  assert.equal(cache.overBudgetAt(0), cache.sizeOf(0) - 4);
+  assert.equal(cache.overBudget(), cache.sizeOf(0) - 4);
   assert.ok(cache.overBudget() > 0);
 });
 
