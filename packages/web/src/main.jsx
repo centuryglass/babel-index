@@ -78,6 +78,10 @@ function Library({ manifest }) {
 
     const render = () => {
       pending = false;
+      // Everything drawn from here on is protected from eviction until two
+      // frames have passed. Without this a miss part way down the screen
+      // evicts the rows above it, which are still visible - see tiles.js.
+      cache.beginFrame();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -103,6 +107,10 @@ function Library({ manifest }) {
 
       const toScreen = (wx, wy) => [(wx - cx) * cellPx.x + w / 2, (wy - cy) * cellPx.y + h / 2];
 
+      // Pinned rather than merely cached: every other cell falls back to it, so
+      // it is the one image that must never be evicted to make room.
+      const generic = cache.pin(manifest.generic.url);
+
       // +1 kills hairline gaps from rounding, on each axis independently.
       const cw = cellPx.x + 1;
       const ch = cellPx.y + 1;
@@ -119,10 +127,16 @@ function Library({ manifest }) {
               ? manifest.generic.url
               : manifest.rooms[cell.id]?.url;
 
-          const img = url ? cache.get(url) : null;
+          // Rule 1: a cell never fails to display. A room that has not arrived
+          // yet borrows the generic room, which is pinned and always resident,
+          // so the floor is a real wall rather than a hole. At the zooms where
+          // this happens most a cell is ~26px wide and the substitution is not
+          // visible; what was visible was the hole.
+          const img = (url ? cache.get(url) : null) ?? generic;
           if (img) {
             ctx.drawImage(img, sx, sy, cw, ch);
             drawn++;
+            if (url && img === generic && !cell.centre && !cell.generic) missing++;
           } else {
             ctx.fillStyle = '#15120f';
             ctx.fillRect(sx, sy, cw, ch);
@@ -149,9 +163,10 @@ function Library({ manifest }) {
       const hud = document.getElementById('hud');
       if (hud) {
         const cells = (x1 - x0 + 1) * (y1 - y0 + 1);
+        const over = cache.overBudget();
         hud.textContent =
-          `${cells} cells · ${drawn} drawn · ${missing} loading · ` +
-          `${cache.size()} cached · zoom ${Math.round(zoom)} · ` +
+          `${cells} cells · ${drawn} drawn · ${missing} on the generic · ` +
+          `${cache.size()} cached${over ? ` (+${over} over budget)` : ''} · zoom ${Math.round(zoom)} · ` +
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
           `edge at r=${layout.boundaryRadius.toFixed(1)}`;
       }

@@ -108,6 +108,115 @@ test('the cache drains back to budget once loads settle', () => {
   assert.ok(cache.size() <= 4, `expected a drain back to budget, got ${cache.size()}`);
 });
 
+// --- frame-aware eviction --------------------------------------------------
+
+test('a miss part way through a frame does not evict what the frame already drew', () => {
+  // The bug this pins, seen at MIN_ZOOM with a big corpus: one screen wants
+  // more distinct rooms than the budget holds, the renderer walks cells row by
+  // row, so the tiles it has already drawn are the least recently used things
+  // in the cache. A miss half way down evicts the top of the same screen, and
+  // the next frame refetches tiles that never left the viewport.
+  const images = fakeImages();
+  const cache = createTileCache({ budget: 10, createImage: images.createImage });
+  const onScreen = Array.from({ length: 20 }, (_, i) => `/old/${i}.jpg`);
+
+  cache.beginFrame();
+  for (const u of onScreen) cache.get(u);
+  images.settleAll();
+
+  // A pan: the same 20 are still visible, and 20 new ones scroll in behind
+  // them. Every new url is a miss, and a miss is what triggers eviction.
+  cache.beginFrame();
+  for (const u of onScreen) cache.get(u);
+  for (let i = 0; i < 20; i++) cache.get(`/new/${i}.jpg`);
+  images.settleAll();
+
+  cache.beginFrame();
+  const requests = images.made.length;
+  for (const u of onScreen) assert.notEqual(cache.get(u), null, `${u} blanked while still on screen`);
+  assert.equal(images.made.length, requests, 'a still-visible tile was evicted and refetched');
+});
+
+test('the previous frame is protected too, since it is nearly the current one', () => {
+  // Eviction runs at the top of a frame, before the renderer has touched
+  // anything, so protecting only the frame in progress would protect nothing.
+  const images = fakeImages();
+  const cache = createTileCache({ budget: 2, createImage: images.createImage });
+
+  cache.beginFrame();
+  for (let i = 0; i < 8; i++) cache.get(`/images/${i}.jpg`);
+  images.settleAll();
+
+  cache.beginFrame(); // evicts, with the whole screen one frame old
+  for (let i = 0; i < 8; i++)
+    assert.notEqual(cache.get(`/images/${i}.jpg`), null, `tile ${i} was dropped between frames`);
+});
+
+test('tiles that fall off screen are collected once two frames have passed', () => {
+  // The other half: protection must expire, or panning across a big corpus
+  // would grow the cache without bound.
+  const images = fakeImages();
+  const cache = createTileCache({ budget: 4, createImage: images.createImage });
+
+  cache.beginFrame();
+  for (let i = 0; i < 12; i++) cache.get(`/gone/${i}.jpg`);
+  images.settleAll();
+  assert.ok(cache.size() > 4, 'in-flight loads are allowed past the budget');
+
+  // Two frames drawing something else entirely: the first still protects
+  // /gone/ as the previous frame, the second lets it go.
+  for (const pass of [0, 1]) {
+    cache.beginFrame();
+    cache.get(`/here/${pass}.jpg`);
+    images.settleAll();
+  }
+  cache.beginFrame();
+  assert.ok(cache.size() <= 4, `expected a drain back to budget, got ${cache.size()}`);
+});
+
+test('without beginFrame it is the plain LRU it always was', () => {
+  // The cache is usable outside a render loop, and nothing is protected there:
+  // "the current frame" has no meaning if no one opens one.
+  const images = fakeImages();
+  const cache = createTileCache({ budget: 4, createImage: images.createImage });
+  for (let i = 0; i < 12; i++) cache.get(`/images/${i}.jpg`);
+  images.settleAll();
+  for (let i = 12; i < 16; i++) cache.get(`/images/${i}.jpg`);
+  assert.ok(cache.size() <= 4, `expected plain LRU behaviour, got ${cache.size()}`);
+});
+
+test('a pinned url survives any amount of pressure', () => {
+  // The generic room is what every other cell falls back to, so evicting it to
+  // make room for one more cell would break the fallback for all of them.
+  const images = fakeImages();
+  const cache = createTileCache({ budget: 2, createImage: images.createImage });
+
+  cache.pin('/images/base.png');
+  images.settleAll();
+  for (let i = 0; i < 50; i++) cache.get(`/images/${i}.jpg`);
+  images.settleAll();
+  for (let i = 50; i < 60; i++) cache.get(`/images/${i}.jpg`);
+
+  assert.notEqual(cache.get('/images/base.png'), null, 'the pinned generic was evicted');
+  assert.equal(
+    images.urls().filter((u) => u === '/images/base.png').length,
+    1,
+    'the generic must be fetched once and kept'
+  );
+});
+
+test('overBudget reports the pressure rather than hiding it', () => {
+  // When one screen exceeds the budget the cache holds it anyway - blanking
+  // would be worse - so the overage is worth surfacing instead of pretending.
+  const images = fakeImages();
+  const cache = createTileCache({ budget: 4, createImage: images.createImage });
+  cache.beginFrame();
+  for (let i = 0; i < 10; i++) cache.get(`/images/${i}.jpg`);
+  images.settleAll();
+  assert.equal(cache.overBudget(), cache.size() - 4);
+  assert.ok(cache.overBudget() > 0);
+});
+
 test('clear drops everything', () => {
   const images = fakeImages();
   const cache = createTileCache({ createImage: images.createImage });

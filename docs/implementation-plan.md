@@ -201,6 +201,45 @@ zoom keeps decoded bytes per screen roughly constant however far out the camera
 goes, which is the property that makes corpus size stop mattering for rendering
 cost.
 
+##### What the thrashing actually looked like, and the half of it now fixed
+
+Found by panning at full zoom-out against a large corpus: rooms that were
+already on screen blinked out and came back as new tiles loaded. Measured by
+replaying the render loop headlessly against the real layout and the real cache
+— at `MIN_ZOOM` on a 1600×900 viewport a screen holds ~3100 cells wanting **~800
+distinct room images against a budget of 240**, and a brisk pan was evicting and
+refetching **~90 tiles per frame that had never left the viewport**.
+
+Two separate faults, and only one of them is the budget:
+
+- **The cache is smaller than a screen.** Unfixable without the pyramid: 800
+  full-resolution rooms is 2.4 GB decoded. This is the ceiling described above,
+  and it is what the ladder exists to lower.
+- **Eviction picked the wrong victims.** The renderer walks cells row by row, so
+  within a frame the tiles it has *already drawn* are the least recently used
+  entries in the cache. A miss half way down the screen evicted the rows above
+  it. That is a plain bug, independent of the budget, and it is what turned "the
+  cache is too small" into "tiles flicker".
+
+`tiles.js` now stamps each entry with the frame it was drawn in and refuses to
+evict anything touched by the current frame or the one before it — the previous
+frame included because a pan moves the viewport by a cell or two, so last
+frame's working set is very nearly this frame's. Refetches went to **zero**, and
+peak cache size barely moved (815 → 804 entries), because the old code was
+already blowing through its budget by skipping in-flight entries; it was just
+doing so while also thrashing. When a screen genuinely does not fit, the cache
+now holds it and `overBudget()` reports the overage in the HUD rather than
+pretending.
+
+Rule 1's third layer landed with it: a cell whose room has not arrived draws the
+**pinned generic room** instead of the flat `#15120f`, so a miss is a wall
+rather than a hole. At the zooms where this happens a cell is ~26px wide and the
+substitution is invisible; the hole was not.
+
+None of this makes the pyramid unnecessary. It makes the map usable at
+zoom-out today, and it removes a bug that would still have been there afterwards
+— per-level budgets would not have saved a frame from evicting its own rows.
+
 ##### The three rules, in priority order
 
 Everything below follows from these, and they are listed in the order they win
@@ -409,7 +448,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-129 tests (`npm test`), in a couple of seconds, with no browser and no network.
+135 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -418,7 +457,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/server/scan.test.mjs` | header parsers, directory rules |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
-| `packages/web/src/tiles.test.mjs` | cache budget and eviction |
+| `packages/web/src/tiles.test.mjs` | cache budget, frame-aware eviction, pinning |
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
 | `packages/pipeline/mips.test.mjs` | the level plan, real resizes, aspect agreement |
 | `packages/web/bundle.test.mjs` | the client compiles |
@@ -501,8 +540,8 @@ is worse than none, because it is believed.
 **Tile cache keying, once the pyramid lands.** That it keys on `(id, level)`
 rather than url, that per-level budgets are enforced independently, and that a
 zoom-in cannot evict the coarse field. The selection policy is tested in
-`pyramid.test.mjs`; what is untested is `tiles.js` obeying it. The budget and the
-never-evict-an-in-flight-load rule are covered already.
+`pyramid.test.mjs`; what is untested is `tiles.js` obeying it. The budget, the
+never-evict-an-in-flight-load rule and frame-aware eviction are covered already.
 
 **A test for the render loop's cost**, not just its correctness: assert that a
 zoomed-out frame requests no more than N images. That is the regression the
