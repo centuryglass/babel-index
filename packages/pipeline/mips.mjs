@@ -31,38 +31,13 @@ import { mkdir, copyFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/pyramid.js';
+import { mipPlan } from './layout.mjs';
+
+// Re-exported because this is where callers have always looked for it. It lives
+// in layout.mjs so scan.mjs can read the layout without importing sharp.
+export { mipPlan } from './layout.mjs';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
-
-/**
- * What levels a source image of these dimensions should produce.
- *
- * Sizes come from the source rather than from BASE_TILE so the tool works on
- * whatever the render actually is, and the aspect is preserved exactly - each
- * level is the source divided by the ladder's divisor, both axes together.
- *
- * A source too small to support the whole ladder yields fewer levels rather
- * than duplicate ones: two divisors that round to the same width would write
- * the same directory twice, which is a silent corruption of the ladder.
- *
- * @param {{w: number, h: number}} source
- * @param {{level: number, divisor: number}[]} [levels]
- * @returns {{level: number, w: number, h: number, dir: string}[]} finest first
- */
-export function mipPlan({ w, h }, levels = LEVELS) {
-  const plan = [];
-  const seen = new Set();
-  for (const { level, divisor } of levels) {
-    const size = {
-      w: Math.max(1, Math.round(w / divisor)),
-      h: Math.max(1, Math.round(h / divisor)),
-    };
-    if (seen.has(size.w)) continue; // source too small to tell these levels apart
-    seen.add(size.w);
-    plan.push({ level, ...size, dir: String(size.w) });
-  }
-  return plan;
-}
 
 /**
  * Resize one image into every level below 0.

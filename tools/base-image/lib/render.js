@@ -20,13 +20,17 @@ const trapezoid = (r, attrs) =>
 /**
  * Render one tile: a single shelved wall in shallow perspective.
  *
+ * Width and height are separate because the tile is not square. Omit the height
+ * and `layout()` supplies the traced aspect - never a square.
+ *
  * @param {object} opts
- * @param {number} [opts.size]
+ * @param {number} [opts.width]
+ * @param {number} [opts.height] defaults to the traced aspect
  * @param {number} [opts.seed] varies book spines only
  * @param {'schematic'|'lineart'|'depth'} [opts.style]
  */
-export function renderTile({ size = 1024, seed = 1941, style = 'schematic' } = {}) {
-  const L = layout({ width: size, height: size });
+export function renderTile({ width = 1024, height, seed = 1941, style = 'schematic' } = {}) {
+  const L = layout({ width, height });
   const rnd = prng(seed);
   const defs = [];
   const body = [rect({ x: 0, y: 0, w: L.width, h: L.height }, { fill: background(style) })];
@@ -78,10 +82,10 @@ export function renderTile({ size = 1024, seed = 1941, style = 'schematic' } = {
  * this is how they get corrected. Pass `--base <file>` to generate.mjs to bake
  * the render in behind the overlay.
  *
- * @param {{size?: number, baseImageHref?: string}} opts
+ * @param {{width?: number, height?: number, baseImageHref?: string}} opts
  */
-export function renderOverlay({ size = 1024, baseImageHref = null } = {}) {
-  const L = layout({ width: size, height: size });
+export function renderOverlay({ width = 1024, height, baseImageHref = null } = {}) {
+  const L = layout({ width, height });
   const children = [];
 
   if (baseImageHref)
@@ -138,10 +142,18 @@ export function renderOverlay({ size = 1024, baseImageHref = null } = {}) {
  * shelf counts and book positions - inpainting does not preserve them - so
  * per-slot hit-testing is only meaningful on a room whose art we control.
  */
-export function geometryManifest({ size = 1024, seed = 1941 } = {}) {
-  const L = layout({ width: size, height: size });
-  const n = (v) => Math.round((v / size) * 100000) / 100000;
-  const nr = (r) => [n(r.x), n(r.y), n(r.w), n(r.h)];
+export function geometryManifest({ width = 1024, height, seed = 1941 } = {}) {
+  const L = layout({ width, height });
+
+  // Normalised per axis: x and widths against the tile's width, y and heights
+  // against its height. That is exactly how measured.js stores them, so the
+  // manifest round-trips the trace at any shape. One divisor for both axes was
+  // the old bug, and it hid because the layout was forced square - give it a
+  // real 4:3 tile and every y and height comes out at 0.75x its true fraction.
+  const round5 = (v) => Math.round(v * 100000) / 100000;
+  const nx = (v) => round5(v / L.width);
+  const ny = (v) => round5(v / L.height);
+  const nr = (r) => [nx(r.x), ny(r.y), nx(r.w), ny(r.h)];
 
   return {
     $schema: 'babel-index/tile-geometry@2',
@@ -159,15 +171,17 @@ export function geometryManifest({ size = 1024, seed = 1941 } = {}) {
     pixel: { width: L.width, height: L.height },
     story: STORY,
     features: {
-      sideReturn: n(L.sideReturn),
+      sideReturn: nx(L.sideReturn),
       ceiling: nr(L.ceiling),
       cornice: nr(L.cornice),
       floor: nr(L.floor),
       caseFrame: nr(L.caseFrame),
       opening: nr(L.opening),
-      lamp: [n(L.lamp.cx), n(L.lamp.cy), n(L.lamp.r)],
+      // The radius is against WIDTH on both axes, because the lamp is a circle
+      // and stays one - the same rule geometry.js applies when scaling it up.
+      lamp: [nx(L.lamp.cx), ny(L.lamp.cy), nx(L.lamp.r)],
       uprights: L.uprights.map(nr),
-      floorLine: n(L.floorLine),
+      floorLine: ny(L.floorLine),
     },
     shelves: L.shelves.map((s) => ({
       index: s.index,
@@ -178,7 +192,7 @@ export function geometryManifest({ size = 1024, seed = 1941 } = {}) {
     /** Anchors for the interactive centre room (concept.md steps 5-6). */
     uiAnchors: {
       searchField: nr(L.shelves[2].rect),
-      submitButton: [n(L.lamp.cx), n(L.lamp.cy), n(L.lamp.r)],
+      submitButton: [nx(L.lamp.cx), ny(L.lamp.cy), nx(L.lamp.r)],
       historySpines: { shelf: 1, books: 'all' },
       scoreSortSpines: { shelf: 3, books: 'all' },
       shuffleSpine: { shelf: 4, book: 31 },

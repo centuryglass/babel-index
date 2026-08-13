@@ -23,7 +23,7 @@
 import { BASE_TILE } from './pyramid.js';
 
 /**
- * Cell height as a multiple of cell width. 1 while the tile is square.
+ * Cell height as a multiple of cell width. 0.75 at the current 4:3 tile.
  *
  * Derived from the tile rather than declared, so changing `BASE_TILE` changes
  * the shape of the world along with the shape of the art. A camera may carry

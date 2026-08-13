@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
-import { CELL_ASPECT, pxPerCell } from './camera.js';
-import { createTileCache } from './tiles.js';
+import { CELL_ASPECT } from './camera.js';
+import { createTileCache, GENERIC } from './tiles.js';
+import { createUrlFor } from './rooms.js';
+import { createRenderer } from './render.js';
+import { FALLBACK_LEVEL, sizeOf as pyramidSizeOf } from './pyramid.js';
 import { useMapCamera } from './useMapCamera.js';
 
 function App() {
@@ -62,10 +65,22 @@ function Library({ manifest }) {
     draw.current();
   }, []);
 
-  const cache = useMemo(
-    () => createTileCache({ budget: 240, onLoad: () => requestDraw() }),
-    [requestDraw]
-  );
+  // The cache asks `urlFor` where a level of a room lives; the manifest is the
+  // only thing that knows, because it is the scan that discovered which levels
+  // the corpus actually has.
+  const cache = useMemo(() => {
+    const tiles = createTileCache({
+      urlFor: createUrlFor(manifest),
+      onLoad: () => requestDraw(),
+    });
+    // Pinned and preloaded at its coarsest: 12 KB that guarantees every cell
+    // has something to draw, however little of its own room has arrived.
+    tiles.pin(GENERIC);
+    tiles.request(GENERIC, FALLBACK_LEVEL);
+    return tiles;
+  }, [manifest, requestDraw]);
+
+  const renderer = useMemo(() => createRenderer({ cache }), [cache]);
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
   const { cam, flyTo } = useMapCamera({ canvasRef, resistanceAt, onChange: requestDraw });
@@ -86,72 +101,21 @@ function Library({ manifest }) {
         canvas.height = h * dpr;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = '#0a0908';
-      ctx.fillRect(0, 0, w, h);
 
-      const { x: cx, y: cy, zoom } = cam.current;
-      // Pixels per cell on each axis. The cell is the world's base unit and is
-      // not assumed square, so every size below comes from here rather than
-      // from `zoom` twice.
-      const cellPx = pxPerCell(cam.current);
-      const halfW = w / 2 / cellPx.x;
-      const halfH = h / 2 / cellPx.y;
-      const x0 = Math.floor(cx - halfW);
-      const x1 = Math.ceil(cx + halfW);
-      const y0 = Math.floor(cy - halfH);
-      const y1 = Math.ceil(cy + halfH);
-
-      const toScreen = (wx, wy) => [(wx - cx) * cellPx.x + w / 2, (wy - cy) * cellPx.y + h / 2];
-
-      // +1 kills hairline gaps from rounding, on each axis independently.
-      const cw = cellPx.x + 1;
-      const ch = cellPx.y + 1;
-
-      let drawn = 0;
-      let missing = 0;
-      for (let gy = y0; gy <= y1; gy++) {
-        for (let gx = x0; gx <= x1; gx++) {
-          const [sx, sy] = toScreen(gx, gy);
-          const cell = layout.roomAt(gx, gy, order);
-          const url = cell.centre
-            ? manifest.generic.url
-            : cell.generic
-              ? manifest.generic.url
-              : manifest.rooms[cell.id]?.url;
-
-          const img = url ? cache.get(url) : null;
-          if (img) {
-            ctx.drawImage(img, sx, sy, cw, ch);
-            drawn++;
-          } else {
-            ctx.fillStyle = '#15120f';
-            ctx.fillRect(sx, sy, cw, ch);
-            missing++;
-          }
-
-          if (cell.centre) {
-            ctx.strokeStyle = 'rgba(200,169,95,0.9)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(sx + 1, sy + 1, cellPx.x - 2, cellPx.y - 2);
-            if (zoom > 90) {
-              ctx.fillStyle = 'rgba(200,169,95,0.95)';
-              ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';
-              ctx.fillText('the centre', sx + 10, sy + 22);
-            }
-          } else if (!cell.generic && zoom > 120) {
-            ctx.fillStyle = 'rgba(232,224,210,0.55)';
-            ctx.font = '11px ui-monospace, monospace';
-            ctx.fillText(`#${cell.rank}`, sx + 8, sy + 18);
-          }
-        }
-      }
+      const stats = renderer.draw({
+        ctx, width: w, height: h, dpr, cam: cam.current, layout, order,
+      });
 
       const hud = document.getElementById('hud');
       if (hud) {
-        const cells = (x1 - x0 + 1) * (y1 - y0 + 1);
+        const size = pyramidSizeOf(stats.level);
+        const over = cache.overBudget();
         hud.textContent =
-          `${cells} cells · ${drawn} drawn · ${missing} loading · ` +
-          `${cache.size()} cached · zoom ${Math.round(zoom)} · ` +
+          `${stats.cells} cells · ${stats.drawn} drawn · ` +
+          `level ${stats.level} (${size.w}px) · ${stats.substituted} substituted · ` +
+          `${stats.blank} blank · ` +
+          `${cache.size()} cached${over ? ` (+${over} over budget)` : ''} · ` +
+          `zoom ${Math.round(stats.zoom)} · ` +
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
           `edge at r=${layout.boundaryRadius.toFixed(1)}`;
       }
@@ -167,7 +131,7 @@ function Library({ manifest }) {
     const onResize = () => draw.current();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [layout, order, manifest, cache, cam]);
+  }, [layout, order, renderer, cache, cam]);
 
   useEffect(() => requestDraw(), [layout, order, requestDraw]);
 

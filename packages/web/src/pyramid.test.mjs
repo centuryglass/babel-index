@@ -28,7 +28,7 @@ const VIEWPORT = { w: 2560, h: 1440 };
  * the rules below may depend on 1024, on a power of two, or on being square.
  */
 const SHAPES = [
-  { name: 'the current square tile', base: BASE_TILE },
+  { name: 'the current 4:3 tile', base: BASE_TILE },
   { name: 'a 16:9 wall', base: { w: 1280, h: 720 } },
   { name: 'a tall 3:4 tile', base: { w: 768, h: 1024 } },
   { name: 'a small square tile', base: { w: 512, h: 512 } },

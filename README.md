@@ -13,7 +13,7 @@ npm install
 npm run demo
 ```
 
-Then open <http://localhost:5173>. It runs against the 25-room sample in
+Then open <http://localhost:5173>. It runs against the 26-room sample in
 `assets/corpus-sample/` with no further setup. Point it at a bigger corpus with:
 
 ```sh
@@ -60,10 +60,13 @@ it: the SVG's `viewBox` and `BASE_TILE` are two statements of one fact, and the
 tests fail if they drift apart. To check the result against a real image:
 
 ```sh
-npm run generate:tile -- --base assets/corpus-sample/000.jpg
+npm run generate:tile -- --base assets/blender/base_render.png
 ```
 
-which draws every measured rectangle over it.
+which draws every measured rectangle over it, and writes the result to
+`assets/base-tile/`. The committed `geometry-overlay.png` is that command's
+output against the render the trace was taken from, so it is the picture to look
+at to see whether the geometry still lands on the art.
 
 ## The resolution pyramid
 
@@ -82,11 +85,24 @@ and the level-picking policy all live in
 [`packages/web/src/pyramid.js`](packages/web/src/pyramid.js), which is the file
 to edit to tune any of it.
 
-The tile does not have to be 1024², or square. `BASE_TILE` is the only place its
-size and shape are stated; everything else derives from it, and the tests will
-tell you what a new shape breaks. The library stays **round on screen** at any
-cell shape rather than round in the index, so the edge is the same distance away
-whichever way you drag.
+The map uses them: the server reports which levels a corpus actually has, the
+cache keys on `(room, level)` with a budget per level, and each frame picks the
+smallest tile that is not smaller than the cell it covers. Zoomed right out that
+is a 64×48 thumbnail, so a screen of thousands of rooms costs tens of megabytes
+instead of tens of gigabytes. A cell never draws nothing: whatever level of that
+room is resident stands in until the right one arrives, and the generic room is
+pinned as the floor beneath that. **A flat directory still works** — a corpus
+with no `<width>/` directories simply has one level, and everything resolves to
+it.
+
+`assets/corpus-sample/` ships with all five levels generated, so the demo shows
+this without setup.
+
+The tile is 1024×768 today, and neither the size nor the shape is fixed.
+`BASE_TILE` is the only place either is stated; everything else derives from it,
+and the tests will tell you what a new shape breaks. The library stays **round
+on screen** at any cell shape rather than round in the index, so the edge is the
+same distance away whichever way you drag.
 
 | | |
 | --- | --- |
@@ -99,13 +115,14 @@ whichever way you drag.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 126 tests, no browser and no network
+npm test    # 165 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
 Covered: the map layout, the measured geometry, the directory scan and its
-header parsers, the server API, the camera maths, the tile cache, the
-resolution-pyramid policy and the pyramid generator. Image fixtures are
+level discovery, the server API, the camera maths, the tile cache, the render
+loop (including what a zoomed-out frame costs in bytes), the resolution-pyramid
+policy and the pyramid generator. Image fixtures are
 synthesised per test, so nothing depends on `assets/corpus-sample/` staying
 exactly what it is. The camera, the pyramid and the map layout are each
 exercised at several tile shapes, so none of them assumes a square.

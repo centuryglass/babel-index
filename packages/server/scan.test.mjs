@@ -2,18 +2,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { imageSize, scanDirectory } from './scan.mjs';
+import { join, dirname } from 'node:path';
+import { imageSize, scanDirectory, discoverLevels } from './scan.mjs';
 import * as fixture from './image-fixtures.mjs';
 
 /**
- * A throwaway corpus in a temp directory.
+ * A throwaway corpus in a temp directory. Names may contain a `/`, which is how
+ * a test builds the pyramid's `<width>/` level directories.
  * @param {Record<string, Buffer|string>} files
  */
 async function corpus(files, run) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-scan-'));
   try {
-    for (const [name, body] of Object.entries(files)) await writeFile(join(dir, name), body);
+    for (const [name, body] of Object.entries(files)) {
+      const path = join(dir, name);
+      if (name.includes('/')) await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, body);
+    }
     return await run(dir);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -230,4 +235,96 @@ test('a directory with one image serves it as the generic and has no rooms', asy
     assert.deepEqual(m.rooms, []);
     assert.equal(m.count, 0);
   });
+});
+
+// --- the resolution pyramid on disk -----------------------------------------
+
+/** A corpus of 1024x768 rooms, plus whatever level directories are asked for. */
+const pyramid = (extra = {}) => ({
+  'base.jpg': fixture.jpeg(1024, 768),
+  '001.jpg': fixture.jpeg(1024, 768),
+  '002.jpg': fixture.jpeg(1024, 768),
+  ...extra,
+});
+
+test('a flat corpus is a valid level 0 and reports nothing else', async () => {
+  // "Point it at a directory of images" has to keep working for a corpus that
+  // has never been through the pipeline.
+  await corpus(pyramid(), async (dir) => {
+    const { levels } = await scanDirectory(dir);
+    assert.deepEqual(levels, [{ level: 0, w: 1024, h: 768, dir: null }]);
+  });
+});
+
+test('generated levels are discovered, with their sizes', async () => {
+  await corpus(
+    pyramid({
+      '512/001.jpg': fixture.jpeg(512, 384),
+      '256/001.jpg': fixture.jpeg(256, 192),
+      '128/001.jpg': fixture.jpeg(128, 96),
+      '64/001.jpg': fixture.jpeg(64, 48),
+    }),
+    async (dir) => {
+      const { levels } = await scanDirectory(dir);
+      assert.deepEqual(
+        levels.map((l) => [l.level, l.w, l.h, l.dir]),
+        [
+          [0, 1024, 768, null],
+          [1, 512, 384, '512'],
+          [2, 256, 192, '256'],
+          [3, 128, 96, '128'],
+          [4, 64, 48, '64'],
+        ]
+      );
+    }
+  );
+});
+
+test('a half-generated pyramid reports only the rungs that exist', async () => {
+  // Interrupt the generator and this is what is on disk. Claiming a level that
+  // is not there would make every cell at that zoom a 404.
+  await corpus(pyramid({ '512/001.jpg': fixture.jpeg(512, 384), '128/001.jpg': fixture.jpeg(128, 96) }), async (dir) => {
+    const { levels } = await scanDirectory(dir);
+    assert.deepEqual(levels.map((l) => l.level), [0, 1, 3]);
+  });
+});
+
+test('an empty level directory is not a level', async () => {
+  await corpus(pyramid({ '512/notes.txt': 'nothing to serve here' }), async (dir) => {
+    const { levels } = await scanDirectory(dir);
+    assert.deepEqual(levels.map((l) => l.level), [0], 'a directory with no images is not a rung');
+  });
+});
+
+test('a directory that is not on the ladder is ignored', async () => {
+  await corpus(pyramid({ '300/001.jpg': fixture.jpeg(300, 225) }), async (dir) => {
+    const { levels } = await scanDirectory(dir);
+    assert.deepEqual(levels.map((l) => l.level), [0], '300 is not a width the ladder produces');
+  });
+});
+
+test('level directories are not mistaken for rooms', async () => {
+  await corpus(pyramid({ '512/001.jpg': fixture.jpeg(512, 384) }), async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '002.jpg']);
+    assert.equal(m.count, 2, 'the pyramid must not inflate the corpus');
+  });
+});
+
+test('the ladder is measured off the rooms, not off the generic', async () => {
+  // The generic is one file and may be any shape; the rooms are what the map is
+  // made of, so they are what the level widths have to match.
+  await corpus(
+    { 'base.jpg': fixture.jpeg(640, 480), '001.jpg': fixture.jpeg(1024, 768), '512/001.jpg': fixture.jpeg(512, 384) },
+    async (dir) => {
+      const { levels } = await scanDirectory(dir);
+      assert.deepEqual(levels.map((l) => [l.level, l.w]), [[0, 1024], [1, 512]]);
+    }
+  );
+});
+
+test('an unreadable source size degrades to level 0 rather than guessing', async () => {
+  assert.deepEqual(await discoverLevels('/nonexistent', null), [
+    { level: 0, w: null, h: null, dir: null },
+  ]);
 });
