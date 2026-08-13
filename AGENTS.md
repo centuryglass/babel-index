@@ -42,8 +42,9 @@ is read per request.
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
-| `assets/base-tile/` | generated geometry + placeholder art |
-| `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
+| `assets/base-tile/` | generated geometry + placeholder art (still square — see below) |
+| `assets/corpus-sample/` | 26 rooms + a generic, so the demo needs no setup |
+| `assets/base.cell.png` | the preferred base tile, inpainted and tiling; `mask.png` is its inpainting mask. Nothing reads either yet |
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
 
@@ -106,11 +107,21 @@ is read per request.
   slightly before they are needed, hold rather than refetch. Per-level LRU is
   load-bearing for the first — one global LRU lets a zoom-in evict the coarse
   field the fallback depends on.
-- **The tile size and shape are not settled.** `BASE_TILE` is the only place
-  either is stated and the ladder is divisors of it, so every size, byte cost and
-  level choice is derived — don't compute one from a literal, and don't assume
-  square. The tests run the policy at four aspects and will tell you what a new
-  shape breaks (a rung outside the camera's clamp, a budget below one screen).
+- **The tile size and shape are not settled.** It is **1024×768** today, and was
+  1024² until recently — so treat any "1024²" you find in prose as a bug, not as
+  a fact. `BASE_TILE` is the only place either is stated and the ladder is
+  divisors of it, so every size, byte cost and level choice is derived — don't
+  compute one from a literal, and don't assume square. The tests run the policy
+  at four aspects and will tell you what a new shape breaks (a rung outside the
+  camera's clamp, a budget below one screen). Going 4:3 broke exactly that
+  second one: a shorter tile fits more rows, so the coarsest budget had to go
+  from 7000 to 8200.
+- **`tools/base-image/generate.mjs` still renders square.** It takes one
+  `--size` and calls `layout({width: size, height: size})`, so everything in
+  `assets/base-tile/` is a 1024×1024 stretch of a 4:3 trace and
+  `tile-geometry.json` claims a square tile. Nothing the app runs on reads those
+  files, but don't cite them as the geometry, and don't regenerate them expecting
+  4:3 until the tool takes a height.
 - **The world's base unit is the cell, and a cell is not square.** World
   coordinates are in cells; `zoom` is pixels per cell *width* and `pxPerCell()`
   in `camera.js` is the only place the height is derived from it. Never write

@@ -11,6 +11,12 @@
  * corrected against it. That is the main reason this tool still exists now that
  * a real base render and corpus are in hand.
  *
+ * KNOWN STALE: --size is one number and everything here lays out at size x size,
+ * so the output is square while the tile is 1024x768. Every rect is therefore
+ * stretched 4:3 -> 1:1 against the trace it came from, and tile-geometry.json
+ * records a square tile. Nothing in packages/ reads these files, but they are
+ * wrong until this takes a height. See docs/implementation-plan.md section 7.
+ *
  * SVG output has no dependencies. PNG output additionally needs
  * @resvg/resvg-js; without it the SVGs are still written.
  */

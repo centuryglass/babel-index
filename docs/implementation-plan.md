@@ -42,7 +42,7 @@ nothing more.
 | `packages/pipeline/` | the pyramid generator — `npm run generate:mips` |
 | `tools/base-image/` | tile geometry, SVG importer, placeholder, overlay |
 | `assets/blender/babel_shelf.blend` | the base render source |
-| `assets/corpus-sample/` | 25 rooms + a generic, so the demo needs no setup |
+| `assets/corpus-sample/` | 26 rooms + a generic, so the demo needs no setup |
 | `docs/borges-parameters.md` | the story's numbers, with sources |
 
 ### The demo
@@ -80,8 +80,9 @@ returns, the ceiling strip and the cornice.
 
 #### Changing the geometry
 
-The proportions are expected to move — the current shelf feels cramped. The
-trace is the interface, so a change is a three-step loop and touches no code:
+The proportions have moved once already — the tile went 1024² → 1024×768 to
+uncramp the shelf — and may move again. The trace is the interface, so a change
+is a three-step loop and touches no code:
 
 ```sh
 # 1. adjust the render in Blender, re-trace in Inkscape
@@ -190,8 +191,8 @@ thousands of DOM nodes.
 
 The demo loads full-resolution images at every zoom, and that is the ceiling it
 will hit first. Fully zoomed out on a 2560×1440 device-pixel viewport the map
-draws ~5700 cells; at 1024², decoded RGBA is 4 MB per image, so that screen
-wants ~23 GB of decoded bitmap. It survives at 511 rooms only because the cache
+draws ~7500 cells; at 1024×768, decoded RGBA is 3 MB per image, so that screen
+wants ~22 GB of decoded bitmap. It survives at 511 rooms only because the cache
 is capped at 240 entries and the browser discards aggressively — which is to say
 it survives by thrashing, and at a larger corpus it stops surviving.
 
@@ -230,15 +231,15 @@ is computed. Changing the tile is editing one object.
 
 | Level | Divisor | Size¹ | Decoded/tile¹ | Budget | Budget bytes¹ | Worst-case visible¹ |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ÷1 | 1024 | 4 MB | 240 | 960 MB | 24 |
-| 1 | ÷2 | 512 | 1 MB | 400 | 400 MB | 77 |
-| 2 | ÷4 | 256 | 256 KB | 900 | 225 MB | 273 |
-| 3 | ÷8 | 128 | 64 KB | 1600 | 100 MB | 943 |
-| 4 | ÷16 | 64 | 16 KB | 7000 | 112 MB | 5700 |
+| 0 | ÷1 | 1024×768 | 3 MB | 240 | 720 MB | 30 |
+| 1 | ÷2 | 512×384 | 768 KB | 400 | 300 MB | 99 |
+| 2 | ÷4 | 256×192 | 192 KB | 900 | 169 MB | 336 |
+| 3 | ÷8 | 128×96 | 48 KB | 1600 | 75 MB | 1271 |
+| 4 | ÷16 | 64×48 | 12 KB | 8200 | 96 MB | 7500 |
 
-¹ At the current `BASE_TILE` of 1024×1024. These columns are illustrative — they
+¹ At the current `BASE_TILE` of 1024×768. These columns are illustrative — they
 move with the tile, and the tests recompute them rather than trusting the table.
-≈1.8 GB if every level fills, which is a ceiling and not a reservation: entries
+≈1.3 GB if every level fills, which is a ceiling and not a reservation: entries
 appear only as cells are visited. `CACHE_SCALE` dials the whole table at once for
 a machine that can spare less; the ratios between levels are the part worth
 keeping.
@@ -254,11 +255,13 @@ that need a human decision:
   rung to add or drop. (At 4096² level 0 is already unreachable — `MAX_ZOOM ×
   dpr 2` does not reach half of it.)
 - **Budgets.** A shorter tile fits more rows on the same screen, so the
-  worst-case screen grows and a budget sized for squares may no longer hold one.
-  Switching to 1280×720 fails the check with the number it needs: the coarsest
-  level's 7000 against 10616. That is the intended behaviour — the budgets are a
-  judgement call about memory, so the test computes the floor and leaves the
-  choice.
+  worst-case screen grows and a budget sized for the old shape may no longer
+  hold one. This is not hypothetical: going from 1024² to 1024×768 took the
+  coarsest level's worst case from 5700 cells to 7500, which is why its budget
+  is 8200 rather than the 7000 it was. Pushing further to 1280×720 fails the
+  check with the number it needs — 8200 against 10616. That is the intended
+  behaviour: the budgets are a judgement call about memory, so the test computes
+  the floor and leaves the choice.
 
 Non-square is handled in selection, not merely tolerated. Demand normalises both
 axes onto the width ladder and takes the larger, so a cell whose shape differs
@@ -266,9 +269,9 @@ from the tile's — a wide tile stretched into a square cell — is resolved on
 whichever axis needed more, never under-resolved on the stretched one. The tests
 run the whole policy at 16:9, 3:4, a small square and a non-power-of-two tile.
 
-Two things that table encodes. First, **level 0 is budgeted at ten times its
-worst-case screen** (240 against 24) — that headroom is rule 3 buying revisits,
-not screens: tour ten rooms up close, come back to the first, no refetch.
+Two things that table encodes. First, **level 0 is budgeted at eight times its
+worst-case screen** (240 against 30) — that headroom is rule 3 buying revisits,
+not screens: tour eight rooms up close, come back to the first, no refetch.
 Second, **the coarse levels get the bigger budgets**, which is rule 3 in service
 of rule 1: the coarse field is what every finer level falls back on, so it must
 not be what gets evicted to make room for a zoom-in.
@@ -444,12 +447,13 @@ Three notes on how, since they are the parts that were not obvious:
   that breaks a rule is what fails. Each was checked by breaking it on purpose:
   starving a budget, zeroing the hysteresis, reversing the coarse-before-fine
   preference, and adding a level below `MIN_ZOOM` all fail the suite.
-- **And they run at four tile shapes**, not just the current one, so nothing can
-  quietly re-pin itself to 1024 squares — re-hard-coding the size inside
-  `sizeOf()` fails three of them. The one that mattered most was almost useless:
-  the check that a stretched cell resolves on its hungrier axis was written with
-  `<=`, which passes when the height is ignored entirely. It asserts `<` now,
-  and fails against an implementation that drops the axis.
+- **And they run at five tile shapes**, not just the current one, so nothing can
+  quietly re-pin itself to one size or one aspect — re-hard-coding the current
+  1024×768 inside `sizeOf()` fails three of the checks. The one that mattered
+  most was almost useless: the check that a stretched cell resolves on its
+  hungrier axis was written with `<=`, which passes when the height is ignored
+  entirely. It asserts `<` now, and fails against an implementation that drops
+  the axis.
 
 ### The browser smoke test
 
@@ -555,7 +559,7 @@ would alias the book spines into moiré.
 are — no duplicated bytes, and a corpus that has never been through the pipeline
 still reads as a valid level 0. Pass `--out` and every level is written including
 0, copied rather than re-encoded so the source art is never requantised. On the
-25-room sample: 104 files, 1.4 MB → 3.2 MB.
+26-room sample: 108 files, 2.0 MB → 3.4 MB.
 
 Directories are named for the **width**, because width is the axis the client's
 ladder is expressed in and the aspect is fixed, so the width names the level
@@ -704,15 +708,22 @@ Recorded from review, with what changed:
     `packages/map` takes the aspect and measures in cell widths. It is the one
     place that module is not shape-blind, and it is a deliberate trade:
     [§5a](#5a-why-the-map-knows-the-cell-shape).
+13. **The tile is 1024×768.** The square shelf felt cramped, which was the last
+    entry in §7; 4:3 gives the books room without changing what a tile *is*. The
+    render, the trace and `BASE_TILE` moved together, and the only knock-on in
+    code was the coarsest cache budget — a shorter tile fits more rows, so the
+    worst-case screen went 5700 → 7500 cells and the budget 7000 → 8200. Whether
+    4:3 is final is an art call; nothing downstream assumes it.
 
 ## 7. Still open
 
-1. **The Blender base render as an image file.** The `.blend` is in the repo but
-   a render is not, so the demo currently uses corpus image `000.jpg` as the
-   generic room. That is the asset the map leans on hardest — it is ~80% of
-   every screen.
+1. **Wiring the base render up as the generic room.** The renders are in the
+   repo now — `assets/blender/base_render.png` and the inpainted, tiling
+   `assets/base.cell.png`, both 1024×768 — but nothing references either, so the
+   demo still falls back to corpus image `000.jpg`. That is the asset the map
+   leans on hardest — it is ~80% of every screen.
 2. **Corpus hosting.** Settled in principle: a sample stays in the repo
-   (`assets/corpus-sample/`, 25 rooms, 1.4 MB), the rest lives elsewhere. The
+   (`assets/corpus-sample/`, 26 rooms, 2.0 MB), the rest lives elsewhere. The
    server takes `--images <dir>` today; swapping in a bucket later means
    changing `scan.mjs` and nothing else.
 3. **Do vertical neighbours mean anything?** With tiles as walls rather than
@@ -724,8 +735,15 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
-6. **Shelf proportions feel cramped** and are expected to change. The loop for
-   that is in [§2](#changing-the-geometry) and touches no code.
+6. **`generate.mjs` still renders square, so `assets/base-tile/` is stale.** The
+   trace and `BASE_TILE` agree on 4:3 and the suite asserts it, but the
+   placeholder tool takes a single `--size` and calls `layout({width: size,
+   height: size})`. So the committed placeholder, lineart, depth and overlay
+   PNGs are 1024×1024 with every measured rect stretched 4:3 → 1:1, and
+   `tile-geometry.json` records `pixel: {width: 1024, height: 1024}`. Nothing
+   the app runs on reads those files — they are documentation of the geometry,
+   and right now they document it wrongly. The fix is a `--height` (or deriving
+   both from `BASE_TILE`) and a regeneration.
 
 ---
 
@@ -752,5 +770,9 @@ In dependency order, shortest path to a demo that survives a real corpus:
 3. **Test coverage per [§3a](#3a-testing)** — what remains is the render loop's
    cost, which wants the loop extracted from `main.jsx` first, and the tile
    cache's `(id, level)` keying, which waits on the pyramid.
-4. **Re-trace the geometry** once the shelf proportions are settled.
-5. **A real base render** as the generic room, replacing `000.jpg`.
+4. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
+   The asset is in the repo and is the right shape; what is missing is a way for
+   the demo to reach a base image that lives outside `--images <dir>`, since
+   `scan.mjs` only looks for `base.*` inside the corpus directory.
+5. **Regenerate `assets/base-tile/` at 4:3.** `generate.mjs` still renders the
+   placeholder and the overlay square — see [§7](#7-still-open).
