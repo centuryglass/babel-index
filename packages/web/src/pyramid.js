@@ -1,4 +1,8 @@
 /**
+ * TODO: All this plentiful Claude-documentation still asserts a 1024^2 tile
+ *       size. Update the numbers for the new 1024x768 resolution, and the
+ *       corresponding cache/budget adjustments.
+ *
  * The resolution pyramid: which size of each room to draw, and how much to keep.
  *
  * THIS FILE IS THE TUNING SURFACE. Every number that decides what gets fetched,
@@ -53,7 +57,7 @@
  * threaded through before a non-square tile will actually look right on the
  * map - the pyramid will not be what blocks it.
  */
-export const BASE_TILE = { w: 1024, h: 1024 };
+export const BASE_TILE = { w: 1024, h: 768 };
 
 /**
  * The ladder, finest first.
@@ -94,7 +98,7 @@ export const LEVELS = [
   { level: 1, divisor: 2, budget: 400 },
   { level: 2, divisor: 4, budget: 900 },
   { level: 3, divisor: 8, budget: 1600 },
-  { level: 4, divisor: 16, budget: 7000 },
+  { level: 4, divisor: 16, budget: 8200 },
 ];
 
 /**
