@@ -130,6 +130,30 @@ test('every url in the manifest actually serves', async () => {
   });
 });
 
+test('the metadata sidecar is advertised and actually serves', async () => {
+  const sidecar = { '001.jpg': { keywords: ['brutalism'], story: 'A room of unread indices.' } };
+  await serving(
+    async ({ get }) => {
+      const m = await (await get('/api/manifest')).json();
+      assert.equal(m.metadata.matched, 1);
+
+      // Advertising a url the static mount does not serve would leave the
+      // client fetching a 404 forever and every room undescribed.
+      const res = await get(m.metadata.url);
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), sidecar);
+    },
+    {
+      files: {
+        'base.png': fixture.png(64, 64),
+        '001.jpg': fixture.jpeg(64, 64),
+        '002.jpg': fixture.jpeg(64, 64),
+        'metadata.json': JSON.stringify(sidecar),
+      },
+    }
+  );
+});
+
 test('/api/rescan picks up new rooms', async () => {
   await serving(async ({ get, dir, base }) => {
     await writeFile(join(dir, '004.jpg'), fixture.jpeg(64, 64));

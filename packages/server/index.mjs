@@ -47,6 +47,15 @@ console.log(`scanning ${imagesDir} ...`);
 const manifest = await scanDirectory(imagesDir, { base: argv.base });
 console.log(`  ${manifest.count} rooms, generic room: ${manifest.generic.file}`);
 
+if (manifest.metadata) {
+  const { matched, entries } = manifest.metadata;
+  console.log(`  ${matched} rooms with keywords or story (${entries} entries in the sidecar)`);
+  // Metadata that matches nothing is indistinguishable from no metadata once the
+  // map is running, so it is the one case worth saying out loud.
+  if (matched === 0)
+    console.warn('  none of them matched a room - are the sidecar keys the image filenames?');
+}
+
 console.log('bundling client ...');
 const bundle = await build({
   entryPoints: [join(webDir, 'src/main.jsx')],

@@ -53,7 +53,7 @@ npm run demo -- --images <dir>     # against a full corpus
 ```
 
 A directory of images is the entire data layer — plus, once
-[§3c](#3c-room-metadata--keywords-and-stories) lands, two text sidecars beside
+[§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) lands, two text sidecars beside
 it. Corpus size and generic ratio are sliders, not settings. Search runs real
 CLIP against a corpus that has been embedded, and falls back to a deterministic
 pseudo-ranking labelled as such when it has not.
@@ -534,7 +534,7 @@ Four seams, and one of them is a prerequisite rather than a change:
 CLIP alone is wired end to end and ranks the whole corpus. Keywords and story
 text join it as two further signals over the same single sort —
 [§3d](#3d-hybrid-search--three-signals-one-sort) is the scoring model, and
-[§3c](#3c-room-metadata--keywords-and-stories) is where the text comes from.
+[§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) is where the text comes from.
 What follows is the CLIP half, which is done.
 
 The CLIP backend is mostly not a cost question, because the expensive half
@@ -590,15 +590,16 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-191 tests (`npm test`), in a couple of seconds, with no browser and no network.
+207 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
 | --- | --- |
 | `packages/config/config.test.mjs` | defaults, the narrow-only zoom rule, every validator reporting rather than throwing |
 | `packages/config/load.test.mjs` | a missing overlay, a partial one, a malformed one |
+| `packages/map/metadata.test.mjs` | entry normalisation, the filename join, coverage vs. a drifted sidecar |
 | `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance, roundness at any cell shape |
-| `packages/server/scan.test.mjs` | header parsers, directory rules |
+| `packages/server/scan.test.mjs` | header parsers, directory rules, the metadata sidecar |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants, and that a configured zoom range survives every operation |
 | `packages/web/src/tiles.test.mjs` | per-level budgets, fallback across levels, frame-aware eviction, pinning, prefetch caps |
@@ -761,7 +762,7 @@ second run resizes the originals rather than compounding on its own output.
 
 ---
 
-## 3c. Room metadata — keywords and stories
+## 3c. Room metadata — keywords and stories — **the data path is built**
 
 Every room but the centre carries two pieces of authored text, both generated
 upstream alongside the image:
@@ -807,18 +808,57 @@ generic alternates want anyway.
 lets the overlay label a chip and leaves room for weighting an artist match
 differently from a material one later. Nothing should require it.
 
-### How it reaches the client
+### How it reaches the client — built
 
 Same shape as the embedding blob, for the same reason. `scan.mjs` reads the
-sidecar and surfaces `metadata: { url, count }` into the manifest; the client
-fetches it once, in parallel with `embeddings.bin`, and ranks locally. It does
-**not** go inline in `/api/manifest`: at 5,000 rooms × (three keywords + ~300
-characters of story) the sidecar is ~1.7 MB, comparable to the 2.5 MB blob, and
-the manifest is fetched before anything can render.
+sidecar and surfaces `metadata: { url, matched, entries }` into the manifest; the
+static mount serves the file itself, and the client fetches it once in parallel
+with `embeddings.bin`. It does **not** go inline in `/api/manifest`: at 5,000
+rooms × (three keywords + ~300 characters of story) the sidecar is ~1.7 MB,
+comparable to the 2.5 MB blob, and the manifest is fetched before anything can
+render.
 
 That keeps the property phase 4 established — the server runs the text tower and
 nothing else, ranking is the browser's, and a re-rank or a history restore costs
 no round trip.
+
+**The join has one implementation and two consumers.**
+`packages/map/metadata.js` normalises an entry and joins a sidecar onto the
+corpus by filename; `scan.mjs` calls it to count coverage and the browser calls
+it to build the array search and the overlay will read. Two implementations of
+the same join is exactly how a room ends up described by its neighbour's
+keywords.
+
+**`matched` and `entries` are both reported, and the pair is the point.** A
+sidecar whose keys have drifted — describing files this corpus no longer has —
+produces zero matches, which from the map is indistinguishable from having no
+sidecar at all. `matched: 0` against `entries: 2` is the only way to tell, so the
+demo server says so at startup:
+
+```
+26 rooms with keywords or story (26 entries in the sidecar)
+0 rooms with keywords or story (2 entries in the sidecar)
+  none of them matched a room - are the sidecar keys the image filenames?
+```
+
+**Normalisation is liberal on purpose.** Keywords may be plain strings or
+`{text, type}` objects and both normalise to the same record, because losing a
+keyword over a missing category would be the wrong trade. The count is *not*
+enforced — "exactly three" is a fact about how the corpus is generated, not a
+constraint the map needs — and an entry with neither keywords nor story
+normalises to null rather than to an empty record, so "has metadata" stays a real
+question.
+
+Not yet built, and deliberately: nothing *reads* the keywords yet beyond a room
+count in the demo panel. Ranking is [§3d](#3d-hybrid-search--three-signals-one-sort)
+and reading them is [§5b](#5b-the-metadata-overlay).
+
+**No sidecar ships with `assets/corpus-sample/`.** Writing one would mean
+inventing keywords and stories for 26 images to demonstrate a feature, and a
+fabricated corpus is a bad thing to have lying around looking authoritative.
+Point `--images` at a corpus that has one; the tests cover the path with
+synthesised fixtures, per the convention that fixtures are built rather than
+committed.
 
 ---
 
@@ -923,7 +963,7 @@ value would quietly become the real tuning surface, and editing the documented
 defaults would stop having any effect — two statements of one fact, with the
 undocumented one winning. The overlay is partial and optional; `DEFAULTS` stays
 the single statement of every default. `map` and `search` are read by the demo's
-sliders now and by [§3c](#3c-room-metadata--keywords-and-stories) and
+sliders now and by [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) and
 [§3d](#3d-hybrid-search--three-signals-one-sort) when they land.
 
 It reaches the client on the manifest rather than through an endpoint of its own.
@@ -1195,7 +1235,7 @@ Recorded from review, with what changed:
     See [§3 phase 2](#phase-2--curation-concept-step-3--dropped).
 15. **Every room carries three stylistic keywords and a short story**, generated
     upstream with the image. Both are search signals and both are readable.
-    [§3c](#3c-room-metadata--keywords-and-stories).
+    [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built).
 16. **Search blends three signals into one sort, rather than tiering them.**
     Keyword above story above CLIP, weights in config, every term normalised to
     [0, 1] — including CLIP, whose raw cosines cluster too tightly on this corpus
@@ -1204,7 +1244,7 @@ Recorded from review, with what changed:
 17. **Metadata is keyed on filename, embeddings on row order**, and the
     difference is deliberate: a positional blob has to be rejected wholesale when
     it goes stale, a filename-keyed map degrades per room and tolerates a miss.
-    [§3c](#3c-room-metadata--keywords-and-stories).
+    [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built).
 18. **One config surface for what is tuned by feel; the pyramid stays out of it.**
     Built. Zoom range, default zoom, search weights, slot seeds and the demo's
     default generic ratio live in `packages/config`; the ladder, `BASE_TILE`, the
@@ -1285,10 +1325,11 @@ In dependency order, shortest path to a demo that survives a real corpus:
    optional partial overlay, and the resolved block rides on the manifest. The
    zoom range narrows only, which is what let the ladder's reachability rule stay
    a test-time fact. `map` and `search` are populated and waiting for 2 and 3.
-2. **Room metadata end to end** ([§3c](#3c-room-metadata--keywords-and-stories)) —
-   `scan.mjs` joins `metadata.json` on filename and surfaces it into the
-   manifest, the client fetches it beside the blob. No UI yet; this is the data
-   path, and it is what the next two both need.
+2. ~~**Room metadata end to end**~~ — **done**,
+   [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built).
+   `packages/map/metadata.js` owns the join, `scan.mjs` reports coverage into the
+   manifest, the client fetches beside the blob and joins by filename. The demo
+   panel counts described rooms; nothing reads the keywords yet, which is 3 and 4.
 3. **Hybrid ranking** ([§3d](#3d-hybrid-search--three-signals-one-sort)) —
    `packages/map/scoring.js` plus the blend, weights from config. Includes the
    three-state honesty in the UI: full, text-only, stub.
