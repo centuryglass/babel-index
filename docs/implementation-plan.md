@@ -52,9 +52,11 @@ npm install && npm run demo        # http://localhost:5173
 npm run demo -- --images <dir>     # against a full corpus
 ```
 
-A directory of images is the entire data layer. Corpus size and generic ratio
-are sliders, not settings. Search is stubbed (a deterministic pseudo-ranking) so
-the reorder mechanic works without a model, and the UI says so.
+A directory of images is the entire data layer — plus, once
+[§3c](#3c-room-metadata--keywords-and-stories) lands, two text sidecars beside
+it. Corpus size and generic ratio are sliders, not settings. Search runs real
+CLIP against a corpus that has been embedded, and falls back to a deterministic
+pseudo-ranking labelled as such when it has not.
 
 Exercised end to end in a real browser against 511 rooms: 1664 visible cells at
 zoom 29 drew with nothing stalled, the boundary radius tracked the sliders
@@ -150,17 +152,29 @@ carrying into the full run:
 - **Provenance sidecars.** Prompt, seed, model hash, ControlNet weights. Ten
   thousand rooms without them is an unnavigable pile.
 
-### Phase 2 — curation *(concept step 3)*
+### Phase 2 — curation *(concept step 3)* — **dropped**
 
-Local-only, keyboard-driven: `1`–`5` to score, free-text tags, `x` to reject.
-Writes to SQLite.
+The review tool is gone: no `1`–`5` scores, no free-text tags, no `x`-to-reject,
+no SQLite. Curation happens at generation time — boring variants are discarded
+before they ever reach a corpus directory — and the three retrieval signals of
+[§4a](#4a-hybrid-search--three-signals-one-sort) make a second, manual
+vocabulary redundant ([§3d](#3d-hybrid-search--three-signals-one-sort)). A
+hand-typed tag was going to be a worse keyword than the keyword the generator
+already knows, and a 1–5 score was going to be a worse relevance signal than a
+text query against it.
 
-Add two automatic sort keys so review time goes where it matters:
+What survives, and it is not curation: **border drift** (mean + peak deviation
+from the corpus mean frame), demoted from a review sort key to a *pipeline
+report*. It stays because it measures a structural defect rather than taste —
+~2% of the test corpus reaches the frame and will read as a repeating bright
+blot at every tile junction ([§3 phase 1](#phase-1--variant-generation-concept-step-2--you-have-this-working)),
+and the seam argument in [§1](#1-what-a-tile-is) is what it verifies. Perceptual
+hashing goes with the rest of the review tool.
 
-- **Border drift** (mean + peak deviation from the corpus mean frame). Not a
-  gate — a sort key, so the handful of frame-breakers surface first instead of
-  being found by accident on the map.
-- **Perceptual-hash clusters**, so near-duplicates are reviewed once.
+Consequences recorded where they land: the `curate/` package leaves
+[§4](#4-architecture), `score`/`tags`/`status` leave the room schema, and
+`scoreSortSpines` — a centre-room control with nothing left to sort by — is
+freed for reuse ([§5b](#5b-the-metadata-overlay)).
 
 ### Phase 3 — the display map *(concept step 4)*
 
@@ -433,7 +447,95 @@ of fighting. The same helper serves "fly to the best match" after a search,
 which is the case where the movement is carrying meaning — it shows the top
 result's location relative to where you were standing.
 
-### Phase 4 — search *(concept step 5)* — **landed**
+#### The reorder animation
+
+A search swaps one array and every slot stays put ([§6.6](#6-decisions-made)),
+so what changes across the map is *content*, not position: a few thousand
+visible cells each become a different room at the same coordinate. That rules
+out the intuitive animation before anything else is considered. **Rooms must not
+be seen to slide into their new slots** — sliding is a statement that a room
+moved, the whole design says the shelf stayed and its contents changed, and
+honouring it would mean recomputing placement on search, which is exactly what
+`ordering.js` exists not to do.
+
+So the transition is a cross-fade, and the only real question is its
+*choreography*. The recommendation:
+
+- **Stagger the fade by distance from the origin**, so the change propagates
+  outward as a ring from the centre room. Delay is `cellDistance(x, y, aspect) ×
+  spread`, using the same metric as everything else in `packages/map` so the wave
+  is round on screen for the same reason the boundary is
+  ([§5a](#5a-why-the-map-knows-the-cell-shape)). It reads as the library
+  rearranging itself starting where the reader is standing, which is the
+  sentence the mechanic has been trying to say since concept step 5.
+- **Sequence it after the fly home, not against it.** Search already calls
+  `flyTo(0, 0)`; running a camera flight and a content wave simultaneously makes
+  two animations compete for the same attention and neither lands. Land first,
+  then let the wave leave from under you. That makes animated camera moves a
+  prerequisite rather than a parallel task, which is why they stay first in
+  [§8](#8-next-session).
+- **Drive it from `render.js`.** It already owns the frame and no React; the
+  transition is `(orderPrev, orderNext, t0)` on the draw state and a per-cell
+  alpha, and it stays assertable without a browser the way the byte-cost test is.
+
+Two things to get right, both cache-shaped:
+
+- **A cell mid-fade wants both rooms resident**, so the working set doubles
+  across the fade band. The band is a ring, not the screen, so the overshoot is
+  bounded by how wide the stagger makes it — `spread` is therefore a memory
+  parameter as much as an aesthetic one, and wants measuring against
+  `overBudget()` rather than picking by eye.
+- **At full zoom-out the animation may not be worth its cost.** A cell is ~26px
+  there and a screen is ~7500 of them against a level-4 budget of 8200, so a wave
+  that doubles the band would push an already-tight level over while rendering as
+  a shimmer nobody can resolve. Shortening or skipping the transition below some
+  zoom is the likely answer; it is a measurement, not a decision to make here.
+
+Rejected alternatives, briefly: a per-cell **spine flip** about the vertical axis
+is a card trick rather than a library, and costs a transform plus two draws per
+cell at a thousand-plus cells; a plain **dissolve** is cheaper than the stagger
+by nothing meaningful and says less.
+
+#### Alternate generic rooms
+
+The generic room is ~80% of every screen, so it is the single asset the map leans
+on hardest, and one of it is visibly one of it. A handful of alternates —
+selected per cell by a seeded hash, with the seed in config — breaks the
+wallpaper up without touching the corpus.
+
+It costs nothing on the seam front, and for a structural reason worth stating:
+every alternate is inpainted from the same base with the same edge-clear mask, so
+alternates tile with each other and with every corpus room by exactly the
+argument in [§1](#1-what-a-tile-is). There is nothing extra to verify.
+
+Four seams, and one of them is a prerequisite rather than a change:
+
+- **`ordering.js` picks the variant.** A `genericVariantAt(x, y)` alongside
+  `isContentSlot`, on the same `cellHash` machinery — stable, stored nowhere,
+  infinite — but salted with its own seed so the choice of wallpaper does not
+  correlate with which cells are content slots. The centre room is still cell
+  (0, 0) and is not a variant.
+- **`scan.mjs` discovers a set, not a file.** Today the generic is one `base.*`;
+  it becomes every `base*.{jpg,png,webp}` in the directory, sorted, with the
+  existing single-file behaviour falling out as the one-element case. `--base`
+  keeps naming the first.
+- **`rooms.js` and `tiles.js` stop treating `GENERIC` as one id.** The cache keys
+  on `(id, level)` already, so alternates are ordinary ids that happen to be
+  excluded from the ranked corpus.
+- **Pinning has to stop being unbounded first.** Every alternate must be pinned
+  at the fallback level, because the pinned generic is what makes "a cell never
+  fails to display" true rather than likely. Pinning is currently free because it
+  is one room and unbudgeted; N rooms unbudgeted is a hole in rule 1's floor.
+  [§8](#8-next-session) already carried "give the pinned generic its own budget"
+  as a tidy-up — this is what promotes it to a dependency.
+
+### Phase 4 — search *(concept step 5)* — **CLIP landed; two more signals to come**
+
+CLIP alone is wired end to end and ranks the whole corpus. Keywords and story
+text join it as two further signals over the same single sort —
+[§3d](#3d-hybrid-search--three-signals-one-sort) is the scoring model, and
+[§3c](#3c-room-metadata--keywords-and-stories) is where the text comes from.
+What follows is the CLIP half, which is done.
 
 The CLIP backend is mostly not a cost question, because the expensive half
 precomputes:
@@ -657,6 +759,189 @@ second run resizes the originals rather than compounding on its own output.
 
 ---
 
+## 3c. Room metadata — keywords and stories
+
+Every room but the centre carries two pieces of authored text, both generated
+upstream alongside the image:
+
+- **Exactly three stylistic keywords** — material, movement, technique, artist
+  and so on — the concepts that steered that variant's generation.
+- **A short enigmatic fictional setting**, one paragraph, from a fixed prompt.
+
+Both are retrieval signals ([§3d](#3d-hybrid-search--three-signals-one-sort)) and
+both are readable in the UI ([§5b](#5b-the-metadata-overlay)). Generation is out
+of scope here for the same reason the images are.
+
+### The format
+
+**Keyed on filename, not on id** — a `metadata.json` sidecar in the corpus
+directory, which is what the generator already writes:
+
+```json
+{
+  "001.jpg": {
+    "keywords": [
+      { "text": "verdigris copper", "type": "material" },
+      { "text": "art nouveau",      "type": "movement" },
+      { "text": "wet collodion",    "type": "technique" }
+    ],
+    "story": "The catalogue lists a room that has never been surveyed…"
+  }
+}
+```
+
+The filename key is a deliberate difference from `embeddings.bin`, which is
+row-major by room id and therefore only correct as long as nothing about the
+directory changes. That coupling is why `scan.mjs` has to ignore a blob whose
+count no longer matches: its rows are positional, so a stale one would silently
+attach the wrong vector to the wrong room. A filename-keyed map has no such
+failure mode — add, remove or rename images and every surviving entry still
+lands on its own room. So the staleness rule is different, and weaker on
+purpose: **join per file, tolerate misses, report the count.** A room with no
+entry simply has no keywords, which is exactly what the centre room and the
+generic alternates want anyway.
+
+`type` is optional and worth including if the generator already knows it — it
+lets the overlay label a chip and leaves room for weighting an artist match
+differently from a material one later. Nothing should require it.
+
+### How it reaches the client
+
+Same shape as the embedding blob, for the same reason. `scan.mjs` reads the
+sidecar and surfaces `metadata: { url, count }` into the manifest; the client
+fetches it once, in parallel with `embeddings.bin`, and ranks locally. It does
+**not** go inline in `/api/manifest`: at 5,000 rooms × (three keywords + ~300
+characters of story) the sidecar is ~1.7 MB, comparable to the 2.5 MB blob, and
+the manifest is fetched before anything can render.
+
+That keeps the property phase 4 established — the server runs the text tower and
+nothing else, ranking is the browser's, and a re-rank or a history restore costs
+no round trip.
+
+---
+
+## 3d. Hybrid search — three signals, one sort
+
+Three signals rank the same corpus, and the whole corpus is sorted by their
+blend. Not tiers: an exact-match bucket sorted ahead of a CLIP bucket would let
+a room with one weak partial keyword beat a room CLIP is certain about, and the
+map's whole read is that *everything* rearranged, best in the middle, worst at
+the edge.
+
+```
+score(room) = w_keyword · keywordScore + w_story · storyScore + w_clip · clipScore
+```
+
+The three weights are the "relative priorities of the three search types" and
+live in config ([§3e](#3e-configuration)). Intended ordering, per the design:
+keyword above story above CLIP, with an exact keyword match outweighing anything
+CLIP can say.
+
+**Every term must be normalised to [0, 1] first, and the CLIP term is the one
+that makes this non-obvious.** Cosine similarity is nominally [-1, 1], but on a
+corpus of near-identical library walls the scores for a given query cluster into
+a narrow band — the images differ far less than CLIP's range allows. Blend the
+raw cosine and there is no weight that works: large enough to matter and it is
+still swamped by any keyword bonus, small enough to be balanced against one and
+it is lost in its own noise. So `clipScore` is the raw cosine min-max normalised
+**across the corpus for that query** — one extra pass over an array we have just
+scored, which spends nothing and makes the weights mean what they say.
+
+### Keyword scoring
+
+Fold case and diacritics, tokenise the query, and for each query token take the
+best match across the room's three keywords:
+
+- **exact** token = keyword → `1.0`
+- **partial** → `matched length / keyword length`, so `art` against
+  `art nouveau` scores 3/11 and against `art` scores 1.0. That is "weighted
+  based on match length", and dividing by the *keyword* length is what makes a
+  short query matching a long keyword worth less than one matching it whole.
+- below a minimum token length (3 is the obvious floor, and belongs in config) →
+  no match, or `a` matches everything.
+
+The room's `keywordScore` is the **mean over query tokens** of those bests. Mean
+rather than sum: it stays in [0, 1] without clamping, and it rewards matching
+more *of the query* rather than rewarding long queries.
+
+### Story scoring
+
+Same shape, one deliberate difference: normalise by the **query**, not by the
+text. Dividing a match by the length of the story would mean a longer story
+always scores lower for the same hit, which is backwards. So: the fraction of
+query tokens present in the story, each token weighted by its own length, so
+matching `cartographer` counts for more than matching `the`. Stopwords out.
+
+### Where it runs
+
+In the browser, in `packages/map`, next to `rankByEmbedding()`. For 5,000 rooms
+this is three keywords and a paragraph each — string work measured in
+milliseconds, nowhere near the frame the int8 dot products already fit inside,
+and keeping it client-side is what preserves "a re-rank costs no round trip".
+`/api/search` is unchanged: it still runs only the text tower and returns a
+vector.
+
+The text scoring is meaty enough — folding, tokenising, stopwords — to want its
+own file rather than growing `ordering.js`, which is currently import-free and
+worth keeping that way. `packages/map/scoring.js`, with the blend as a small
+tested function over three arrays.
+
+### What this does to the stub
+
+Better than it sounds. Keyword and story matching are **real search that needs no
+model**, so a corpus with metadata and no `embeddings.bin` gets a genuine ranking
+rather than the deterministic pseudo-ranking. The stub survives only for the case
+it was written for — no metadata *and* no blob — and the UI's honesty about which
+one it is gets a third state: full, text-only, and stub.
+
+---
+
+## 3e. Configuration
+
+**One file for everything meant to be tuned by feel.** Today those values are
+spread across module scope in `camera.js`, defaults in `main.jsx`, and literals
+in the search path, which is fine until the interesting ones need changing
+together.
+
+```
+config.json
+  camera: { minZoom, maxZoom, defaultZoom }
+  map:    { contentRatio, slotSeed, genericVariantSeed }
+  search: { weights: { keyword, story, clip }, minTokenLength }
+```
+
+Loaded by the server, surfaced into the manifest so the client needs no second
+fetch, with the checked-in values as defaults and the file as an overlay.
+
+**The pyramid deliberately stays out of it**, and this is the part worth being
+careful about. `pyramid.js` is the single tuning surface for the tile's
+dimensions, the ladder, the per-level budgets, the hysteresis band and the
+prefetch ring — every one of those is *derived and asserted* rather than tuned by
+feel, and a config file that restated any of them would be a second statement of
+a fact that already has one. `CACHE_SCALE` is the near-miss: it is a genuine
+by-feel dial, but it dials a table whose ratios the tests check, so it belongs
+where the table is.
+
+**Moving the zoom clamps into config creates a new failure mode, and the plan
+should own it.** `pyramid.test.mjs` asserts that every rung of the ladder is
+reachable within `MIN_ZOOM`/`MAX_ZOOM` — a level nothing can select is dead
+weight in the pipeline and a lie in the table. That coupling currently holds at
+test time because both numbers are source. Once the clamps come from a file, a
+config edit can put the ladder out of reach at *runtime*, where no test is
+watching. So:
+
+- Config load **validates and reports**, at server start, in the same voice the
+  pipeline uses for a corpus that cannot agree on an aspect: name the value, name
+  the rung it orphaned, refuse or clamp. Silently accepting it is how a level
+  stops being fetched and nobody finds out.
+- The clamps become **parameters of the camera** rather than module constants —
+  the same refactor shape as `createLayout({ aspect })` — so the pure functions
+  stay pure and testable at any clamp.
+- The suite asserts the shipped defaults *and* a couple of deliberately hostile
+  configs, so the validator is known to fire rather than assumed to.
+
+---
+
 ## 4. Architecture
 
 ```
@@ -666,20 +951,33 @@ babel-index/
   assets/base-tile/        # generated geometry + placeholder         [exists]
   docs/                                                              [exists]
   packages/
-    pipeline/              # mips [exists]; dedup, embed, border-drift score
-    curate/                # local-only review tool
+    pipeline/              # mips [exists]; embed [exists]; border-drift report
     server/                # Express: manifest, text-embed, generate queue
-    web/                   # React: map, search, centre-room controls
+    web/                   # React: map, search, metadata overlay, centre-room controls
 ```
 
-**Data**: SQLite through the pipeline and curation phases — one file, no
-service, trivially backed up. The web app never talks to it; it consumes a
-static `manifest.json` plus `embeddings.bin`.
+**Data: flat files, no database.** SQLite was here to carry scores, tags and
+review status through curation; curation is dropped
+([§3 phase 2](#phase-2--curation-concept-step-3--dropped)) and everything that
+remains is a sidecar next to the images —
 
 ```
-room: id, path, w, h, seed, prompt, model, controlnet, created_at,
-      phash, score (0-5), tags[], status (pending|kept|rejected),
-      embedding (blob), border_drift (mean, peak)
+<dir>/            the images, level 0
+<dir>/<width>/    the pyramid levels          (packages/pipeline)
+embeddings.bin    int8 image vectors, row-major by room id
+embeddings.json   model, dim, count, file order
+metadata.json     keywords + story, keyed on filename   (§3c)
+config.json       tuning surface                        (§3e)
+```
+
+— which keeps "a directory of images is the entire data layer" true, and true of
+a directory that now carries text as well. Provenance (seed, prompt, model,
+ControlNet weights) stays a generation-side sidecar; the map has no use for it
+and should not be the reason a database appears.
+
+```
+room: id, file, w, h, bytes, levels[],
+      embedding (row in embeddings.bin), keywords[3], story
 ```
 
 **Hosting**: a static bundle plus one small endpoint. The dominant cost is image
@@ -748,6 +1046,59 @@ existing slots at a fixed aspect, is asserted at every shape.
 
 ---
 
+## 5b. The metadata overlay
+
+Keywords and a story per room are worth nothing unread, so the map needs a way to
+open one. Three things constrain the design before taste does.
+
+**The gesture cannot be a left click.** [§5](#5-what-the-geometry-is-actually-for)
+reserves that for "focus this room", and a map whose primary button opens a modal
+is a map you cannot explore. So: **right-click on desktop, long-press on mobile**
+— which is also what the user's own instinct said, and it is right.
+
+**The long-press has to lose to a pan.** This is the only fiddly part. A press
+that becomes a drag must cancel the timer, so the press lives on the same pointer
+stream `useMapCamera.js` already owns: start a ~500 ms timer on `pointerdown`,
+cancel it the moment movement exceeds a slop radius or the pointer lifts. Get
+this wrong and every attempt to pan on a phone opens a panel.
+
+**Per-book hit-testing is impossible here, and structurally so.** Inpainting does
+not preserve shelf counts — the test corpus has rooms with four shelves, six, and
+books on the floor — so only the centre room knows where its books are. Any
+design that needs "which book did you click" is dead on arrival for corpus rooms.
+
+### The shape to build first
+
+A closable overlay anchored to the tile. Contents:
+
+- **The three keywords as chips**, each one a live search. Clicking `art nouveau`
+  runs that query and the library rearranges around it — which costs nothing to
+  build once [§3d](#3d-hybrid-search--three-signals-one-sort) exists, and turns
+  reading a room into a way of moving through the library rather than a dead end.
+- **The story text**, styled as a catalogue card or a page rather than a tooltip.
+- Escape, click-outside and an explicit close.
+
+Freed by the death of curation: `scoreSortSpines` in `tile-geometry.json` — shelf
+3, all books — has nothing left to sort by, and is the natural home for the
+centre room's keyword affordances when phase 5 comes to bind it.
+
+### The book-pull, and the trick that makes it affordable
+
+Pulling a book off the shelf and opening it would be the best version of this,
+and the impossibility above is only *half* an obstacle. The insight is that the
+animation does not need to know which real book it came from: sample a
+spine-shaped rectangle from the tile's own pixels, using a plausible spine rect
+from the centre room's measured geometry scaled onto the target tile, and animate
+*that* sliding out and rotating flat into the panel. On an inpainted room it will
+land on a real spine perhaps half the time — and at the zoom where anyone opens
+this, the other half reads as a book being pulled from a shelf that happens to be
+painted differently.
+
+That is a stretch, not the MVP, and it is written down here so the trick does not
+have to be re-derived. Ship the overlay; earn the book.
+
+---
+
 ## 6. Decisions made
 
 Recorded from review, with what changed:
@@ -791,6 +1142,43 @@ Recorded from review, with what changed:
     code was the coarsest cache budget — a shorter tile fits more rows, so the
     worst-case screen went 5700 → 7500 cells and the budget 7000 → 8200. Whether
     4:3 is final is an art call; nothing downstream assumes it.
+14. **Manual curation is dropped.** No scores, no tags, no review tool, no
+    SQLite. Boring variants are discarded at generation time, and the three
+    retrieval signals cover what tagging was for. Border drift survives as a
+    pipeline report because it measures a defect rather than taste. Supersedes
+    concept step 3, and the "sort by my scores and tags" control in step 6.
+    See [§3 phase 2](#phase-2--curation-concept-step-3--dropped).
+15. **Every room carries three stylistic keywords and a short story**, generated
+    upstream with the image. Both are search signals and both are readable.
+    [§3c](#3c-room-metadata--keywords-and-stories).
+16. **Search blends three signals into one sort, rather than tiering them.**
+    Keyword above story above CLIP, weights in config, every term normalised to
+    [0, 1] — including CLIP, whose raw cosines cluster too tightly on this corpus
+    to be blended unnormalised. The whole corpus is sorted by the blend; nothing
+    is spliced to the front. [§3d](#3d-hybrid-search--three-signals-one-sort).
+17. **Metadata is keyed on filename, embeddings on row order**, and the
+    difference is deliberate: a positional blob has to be rejected wholesale when
+    it goes stale, a filename-keyed map degrades per room and tolerates a miss.
+    [§3c](#3c-room-metadata--keywords-and-stories).
+18. **One config file for what is tuned by feel; the pyramid stays out of it.**
+    Zoom clamps, default zoom, search weights and the demo's default generic
+    ratio move to config. The ladder, `BASE_TILE`, the budgets and the hysteresis
+    band do not — they are derived and asserted, not tuned. Moving the clamps
+    means config can now orphan a ladder rung at runtime, so config load
+    validates. [§3e](#3e-configuration).
+19. **The generic room becomes a small set of alternates**, chosen per cell by a
+    seeded hash with the seed in config. They tile by construction, like
+    everything else inpainted from the base. Prerequisite: pinning stops being
+    unbounded. [§3 phase 3](#alternate-generic-rooms).
+20. **Reordering cross-fades in place; rooms never slide.** Sliding would claim a
+    room moved, when the design's whole claim is that the shelf stayed and its
+    contents changed. The fade staggers outward from the centre and follows the
+    fly home rather than racing it. [§3 phase 3](#the-reorder-animation).
+21. **The metadata overlay opens on right-click / long-press, not left-click.**
+    Left-click is reserved for "focus this room", and the long-press must lose to
+    a pan. Per-book hit-testing is impossible on inpainted rooms, so the
+    book-pull animation — if it happens — samples a spine rather than identifying
+    one. [§5b](#5b-the-metadata-overlay).
 
 ## 7. Still open
 
@@ -812,7 +1200,26 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
-6. **The side returns, ceiling and cornice are still eyeballed**, and the
+6. **What the search weights should actually be.** [§3d](#3d-hybrid-search--three-signals-one-sort)
+   fixes the ordering — keyword, then story, then CLIP — and the normalisation
+   that makes the weights comparable, but the numbers themselves are a by-feel
+   call that needs the real corpus and real queries. That is the argument for
+   them being config rather than constants.
+7. **Whether keyword `type` is recorded.** Cheap if the generator already knows
+   which of material / movement / technique / artist a keyword came from; it buys
+   labelled chips in the overlay and leaves room for weighting an artist match
+   differently later. Not worth authoring by hand if it does not.
+8. **How the transition behaves at full zoom-out.** The fade band doubles the
+   working set where it passes, and level 4's budget of 8200 against a 7500-cell
+   screen has little to give. Shorten it, narrow the band, or skip the animation
+   below some zoom — a measurement against `overBudget()`, not a decision to make
+   in advance.
+9. **How many generic alternates.** Enough that the wallpaper stops reading as
+   one image, few enough that pinning them all at the fallback level stays
+   cheap — each is 12 KB decoded at level 4, so the constraint is loose and the
+   answer is probably an art call about how much variety reads as *variety*
+   rather than as noise.
+10. **The side returns, ceiling and cornice are still eyeballed**, and the
    overlay now says so plainly: against the real render the red side-return
    trapezoids converge on the tile's corners while the render's side walls are
    near-vertical bands. It affects the placeholder's looks and nothing else — no
@@ -825,17 +1232,40 @@ Recorded from review, with what changed:
 
 In dependency order, shortest path to a demo that survives a real corpus:
 
-1. **Animated camera moves.** The maths is extracted and tested now, so this is
+1. **Configuration** ([§3e](#3e-configuration)) — flagged high priority, and it
+   is also the cheapest thing here that everything below wants to put a number
+   in. Zoom clamps, default zoom, search weights, default generic ratio, generic
+   variant seed. The work that is not just moving constants: making the clamps
+   camera parameters rather than module scope, and validating a loaded config
+   against the ladder's reachability rule so a config edit cannot silently orphan
+   a level.
+2. **Room metadata end to end** ([§3c](#3c-room-metadata--keywords-and-stories)) —
+   `scan.mjs` joins `metadata.json` on filename and surfaces it into the
+   manifest, the client fetches it beside the blob. No UI yet; this is the data
+   path, and it is what the next two both need.
+3. **Hybrid ranking** ([§3d](#3d-hybrid-search--three-signals-one-sort)) —
+   `packages/map/scoring.js` plus the blend, weights from config. Includes the
+   three-state honesty in the UI: full, text-only, stub.
+4. **The metadata overlay** ([§5b](#5b-the-metadata-overlay)) — right-click and
+   long-press, chips that run searches, story text, closable. The press timer
+   sharing `useMapCamera.js`'s pointer stream is the fiddly part.
+5. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
-   hook; `flyTo` is the seam.
-2. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
+   hook; `flyTo` is the seam. Also the prerequisite for 6.
+6. **The reorder animation** ([§3 phase 3](#the-reorder-animation)) — staggered
+   outward cross-fade in `render.js`, sequenced after the fly home.
+7. **Give the pinned generic its own budget.** It is pinned at every level it is
+   asked for, which is correct and currently free — it is one room. Promoted from
+   tidy-up to prerequisite by 8, which makes it several.
+8. **Alternate generic rooms** ([§3 phase 3](#alternate-generic-rooms)) —
+   `genericVariantAt()` in `ordering.js`, a set rather than a file in `scan.mjs`,
+   and `GENERIC` stopping being a single id downstream.
+9. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
    The asset is in the repo and is the right shape; what is missing is a way for
    the demo to reach a base image that lives outside `--images <dir>`, since
-   `scan.mjs` only looks for `base.*` inside the corpus directory.
-3. **Give the pinned generic its own budget.** It is pinned at every level it is
-   asked for, which is correct and currently free — it is one room. If anything
-   else ever gets pinned, pinning needs to stop being unbounded.
-4. **Re-check the budgets against a real corpus at level 0.** The ladder's
-   worst-case table is computed for each level's own zoom band; what is not yet
-   measured is a long session wandering at high zoom, where level 0's budget of
-   240 is doing the "hold rather than refetch" work on its own.
+   `scan.mjs` only looks for `base.*` inside the corpus directory. Folds
+   naturally into 8, which is rewriting that discovery anyway.
+10. **Re-check the budgets against a real corpus at level 0.** The ladder's
+    worst-case table is computed for each level's own zoom band; what is not yet
+    measured is a long session wandering at high zoom, where level 0's budget of
+    240 is doing the "hold rather than refetch" work on its own.
