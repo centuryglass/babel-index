@@ -328,3 +328,47 @@ test('an unreadable source size degrades to level 0 rather than guessing', async
     { level: 0, w: null, h: null, dir: null },
   ]);
 });
+
+// --- embeddings blob --------------------------------------------------------
+
+test('a corpus without a blob reports no embeddings', async () => {
+  await corpus({ 'base.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+    assert.equal((await scanDirectory(dir)).embeddings, null);
+  });
+});
+
+test('an embeddings sidecar is surfaced with a servable url', async () => {
+  await corpus(
+    {
+      'base.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      '002.jpg': fixture.jpeg(8, 8),
+      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2 }),
+    },
+    async (dir) => {
+      const { embeddings } = await scanDirectory(dir);
+      assert.deepEqual(embeddings, {
+        url: '/images/embeddings.bin',
+        dim: 512,
+        count: 2,
+        model: 'Xenova/clip-vit-base-patch32',
+      });
+    }
+  );
+});
+
+test('a stale blob whose count no longer matches the corpus is ignored', async () => {
+  // The rows are keyed on room ids; a wrong-length blob would rank the wrong
+  // rooms, so a mismatch must degrade to the stub rather than be trusted.
+  await corpus(
+    {
+      'base.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      '002.jpg': fixture.jpeg(8, 8),
+      'embeddings.json': JSON.stringify({ dim: 512, count: 5 }),
+    },
+    async (dir) => {
+      assert.equal((await scanDirectory(dir)).embeddings, null, 'count 5 != 2 rooms');
+    }
+  );
+});

@@ -7,3 +7,6 @@ packages/web/e2e/artifacts/
 
 # Blender's texture cache for babel_shelf.blend.
 assets/blender/textures
+
+# Blender's per-save backup files.
+*.blend1

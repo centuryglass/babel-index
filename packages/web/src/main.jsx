@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { createLayout, shuffledOrder, rankByEmbedding } from '../../map/ordering.js';
 import { CELL_ASPECT } from './camera.js';
 import { createTileCache, GENERIC } from './tiles.js';
 import { createUrlFor } from './rooms.js';
@@ -35,6 +35,24 @@ function Library({ manifest }) {
   const [searchOrder, setSearchOrder] = useState(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+
+  // The embedding blob, fetched once if the corpus has one. Ranking is a few
+  // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
+  // so a search - and every re-rank off the same vector - stays on the client.
+  const embeddings = useRef(null);
+  useEffect(() => {
+    if (!manifest.embeddings) return;
+    let cancelled = false;
+    fetch(manifest.embeddings.url)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        if (!cancelled) embeddings.current = { data: new Int8Array(buf), dim: manifest.embeddings.dim };
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [manifest]);
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -144,8 +162,16 @@ function Library({ manifest }) {
       return;
     }
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`).then((r) => r.json());
-    setSearchOrder(res.order);
-    setStatus(res.stub ? 'stub ranking — no CLIP in offline mode' : '');
+    // A real search returns a query vector and the browser ranks; the stub
+    // returns a ready-made order. The vector path needs the blob to have loaded.
+    if (res.vector && embeddings.current) {
+      const { data, dim } = embeddings.current;
+      setSearchOrder(rankByEmbedding(data, dim, Float32Array.from(res.vector)));
+      setStatus('');
+    } else {
+      setSearchOrder(res.order);
+      setStatus(res.stub ? 'stub ranking — no CLIP in offline mode' : '');
+    }
     flyTo(0, 0);
   };
 
