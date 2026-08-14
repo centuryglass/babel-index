@@ -35,6 +35,14 @@ const artifacts = resolve(repoRoot, 'packages/web/e2e/artifacts');
 /** The server bundles the client on boot, so first response takes a moment. */
 const BOOT_TIMEOUT = 90_000;
 
+/**
+ * The first search loads the CLIP text tower server-side - and downloads the
+ * model on a machine that has never run it - so the reorder can lag well past a
+ * normal request. Only the first search pays this; the window is generous
+ * because a cold model load is the slow path, not a hang.
+ */
+const SEARCH_TIMEOUT = 60_000;
+
 describe('the library, in a browser', { concurrency: false }, () => {
   let server;
   let browser;
@@ -224,7 +232,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.ok(dense.edge < most.edge, 'the whole point of the slider is that it moves the edge');
   });
 
-  test('a search reorders the library and says it is a stub', async () => {
+  test('a search reorders the library around the centre', async () => {
     // Park at the centre and record the view, because a search both moves the
     // camera home AND reorders the rooms. Comparing pixels from two different
     // camera positions would pass on the camera move alone, which is a test
@@ -244,21 +252,23 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await page.locator('input[type=search]').fill('hexagonal galleries');
     await page.locator('input[type=search]').press('Enter');
 
-    // The UI must not imply the ranking means anything.
-    await page.waitForFunction(
-      () => /stub ranking/.test(document.querySelector('.note')?.textContent ?? ''),
-      null,
-      { timeout: 10_000 }
-    );
-    assert.match(await page.locator('.note').textContent(), /no CLIP in offline mode/);
-
     // A search flies back to the centre, which is the visible half of "the
-    // library rearranges around you".
+    // library rearranges around you" - and it is the completion signal we can
+    // observe without knowing whether a real ranking or the stub answered:
+    // the camera only returns home once the response has been applied.
+    await waitFor(
+      async () => {
+        const c = await settled(page);
+        return c.x === parked.x && c.y === parked.y && c.zoom === parked.zoom;
+      },
+      SEARCH_TIMEOUT,
+      'the search never flew the camera back to the centre it started from'
+    );
     const home = await settled(page);
     assert.deepEqual(
       { x: home.x, y: home.y, zoom: home.zoom },
       { x: parked.x, y: parked.y, zoom: parked.zoom },
-      'a search must return the camera to the centre it started from'
+      'a search must return the camera to the centre'
     );
 
     // Same camera, same slots - so any change in pixels is the rooms moving

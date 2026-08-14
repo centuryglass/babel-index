@@ -11,11 +11,13 @@
     "generate:tile": "node tools/base-image/generate.mjs",
     "generate:figures": "node tools/base-image/hexagon-plan.mjs",
     "generate:mips": "node packages/pipeline/index.mjs",
+    "generate:embeddings": "node tools/embed/embed.mjs",
     "test": "node --test",
     "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
     "demo": "node packages/server/index.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "express": "^5.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
