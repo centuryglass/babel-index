@@ -43,6 +43,7 @@ is read per request.
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
 | `packages/map/scoring.js` | folding, tokenising, the two match rules, and the three-signal blend |
+| `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
@@ -102,6 +103,18 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **The overlay opens on right-click or long press, never left-click**, which
+  stays reserved for "focus this room" — a map whose primary button opens a
+  modal is a map you cannot explore. **The long press must lose to a pan**: the
+  timer lives on `useMapCamera.js`'s pointer stream precisely so a press that
+  wanders past the slop radius cancels, and the slop exists because a finger
+  never holds still. Break that and the map is unusable on a phone, which no
+  unit test will tell you — `smoke.e2e.mjs` is what covers it.
+- **Per-book hit-testing is impossible on corpus rooms** and always will be:
+  inpainting does not preserve shelf counts, so only the centre room knows where
+  its books are. Picking resolves to a cell, never to a book. If the book-pull
+  animation ever happens it samples a plausible spine from the tile's pixels
+  rather than identifying a real one.
 - **Search blends three signals into one sort; it does not tier them.** Every
   signal is normalised to [0, 1] *before* weighting, and the CLIP term is
   min-maxed across the corpus for that query — raw cosines on this corpus sit in

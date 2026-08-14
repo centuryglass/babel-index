@@ -174,7 +174,7 @@ hashing goes with the rest of the review tool.
 Consequences recorded where they land: the `curate/` package leaves
 [§4](#4-architecture), `score`/`tags`/`status` leave the room schema, and
 `scoreSortSpines` — a centre-room control with nothing left to sort by — is
-freed for reuse ([§5b](#5b-the-metadata-overlay)).
+freed for reuse ([§5b](#5b-the-metadata-overlay--built)).
 
 ### Phase 3 — the display map *(concept step 4)*
 
@@ -590,7 +590,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-235 tests (`npm test`), in a couple of seconds, with no browser and no network.
+243 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -602,6 +602,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance, roundness at any cell shape |
 | `packages/server/scan.test.mjs` | header parsers, directory rules, the metadata sidecar |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
+| `packages/web/src/picking.test.mjs` | which room is under a point: flooring, the ranking, the centre and generic cells, any zoom or cell shape |
 | `packages/web/src/camera.test.mjs` | the pan/zoom invariants, and that a configured zoom range survives every operation |
 | `packages/web/src/tiles.test.mjs` | per-level budgets, fallback across levels, frame-aware eviction, pinning, prefetch caps |
 | `packages/web/src/render.test.mjs` | level selection on a real layout, never-blank, the ring and the warm pass, a zoomed-out frame's byte cost |
@@ -645,7 +646,8 @@ Three notes on how, since they are the parts that were not obvious:
 
 `packages/web/e2e/smoke.e2e.mjs` — the drive script, committed. It spawns the
 real demo server against the sample corpus and drives Chromium through load,
-pan, zoom, both sliders, a search, and a check that nothing reached the console.
+pan, zoom, both sliders, a search, the room card (right-click, chips, escape)
+and the long press, plus a check that nothing reached the console.
 It is the only layer that catches **"the canvas renders nothing"**, which no unit
 test will and which `bundle.test.mjs` only narrows to "it at least compiled".
 
@@ -681,6 +683,11 @@ Each of those was checked by breaking the app on purpose and confirming the
 test failed: no `drawImage`, a discarded search order, an ignored
 `contentRatio`, and a stray `console.error`. A green e2e test that cannot fail
 is worse than none, because it is believed.
+
+The overlay's two tests were checked the same way, and they are the layer that
+matters most for it — the gesture is the half no unit test can reach. A press
+that no longer cancels on drag, chips wired to nothing, and an Escape key that
+does not close all fail the suite.
 
 ### Still missing
 
@@ -773,7 +780,7 @@ upstream alongside the image:
 - **A short enigmatic fictional setting**, one paragraph, from a fixed prompt.
 
 Both are retrieval signals ([§3d](#3d-hybrid-search--three-signals-one-sort--built)) and
-both are readable in the UI ([§5b](#5b-the-metadata-overlay)). Generation is out
+both are readable in the UI ([§5b](#5b-the-metadata-overlay--built)). Generation is out
 of scope here for the same reason the images are.
 
 ### The format
@@ -852,7 +859,7 @@ question.
 
 Not yet built, and deliberately: nothing *reads* the keywords yet beyond a room
 count in the demo panel. Ranking is [§3d](#3d-hybrid-search--three-signals-one-sort--built)
-and reading them is [§5b](#5b-the-metadata-overlay).
+and reading them is [§5b](#5b-the-metadata-overlay--built).
 
 **The sidecar in `assets/corpus-sample/` is placeholder text**, generated to
 exercise the search path before the real generator output lands — 26 rooms, 41
@@ -1148,7 +1155,7 @@ existing slots at a fixed aspect, is asserted at every shape.
 
 ---
 
-## 5b. The metadata overlay
+## 5b. The metadata overlay — **built**
 
 Keywords and a story per room are worth nothing unread, so the map needs a way to
 open one. Three things constrain the design before taste does.
@@ -1169,16 +1176,38 @@ not preserve shelf counts — the test corpus has rooms with four shelves, six, 
 books on the floor — so only the centre room knows where its books are. Any
 design that needs "which book did you click" is dead on arrival for corpus rooms.
 
-### The shape to build first
+### What was built
 
-A closable overlay anchored to the tile. Contents:
+A closable card, styled as a catalogue slip rather than a tooltip:
 
 - **The three keywords as chips**, each one a live search. Clicking `art nouveau`
-  runs that query and the library rearranges around it — which costs nothing to
-  build once [§3d](#3d-hybrid-search--three-signals-one-sort--built) exists, and turns
-  reading a room into a way of moving through the library rather than a dead end.
-- **The story text**, styled as a catalogue card or a page rather than a tooltip.
-- Escape, click-outside and an explicit close.
+  runs that query and the library rearranges around it — free once
+  [§3d](#3d-hybrid-search--three-signals-one-sort--built) existed, and it turns
+  reading a room into a way of moving through the library rather than a dead
+  end. The card closes as the chip fires, because the map is about to rearrange
+  underneath it and it would then be describing a cell that no longer holds that
+  room.
+- **The story text**, and the room's id and filename.
+- Escape, click-outside and an explicit close. Click-outside listens on
+  `pointerdown` rather than `click`, or the canvas starts a pan under the
+  dismissing press and the map lurches as the card vanishes.
+
+Three things the implementation settled:
+
+- **`picking.js` is the pure half**, and it is what makes any of this testable
+  without a browser: screen point plus camera plus layout gives the room, with
+  the centre and generic cells returning null. It floors rather than rounds,
+  since cells are addressed by their lower corner — rounding shifts every pick
+  half a cell up and left, which is invisible dead centre and wrong everywhere
+  else.
+- **The card is anchored where the gesture happened, not to the tile**, and
+  clamped against its *measured* height. A guessed height is wrong for exactly
+  the long stories most likely to run off a short viewport; measuring in
+  `useLayoutEffect` means the correction lands before the browser paints.
+- **The gesture lives in `useMapCamera.js`** because it has to lose to a pan, and
+  that means watching the same pointer stream the drag does. The slop radius is
+  8px: cancelling on the first pixel of jitter would make long-press unreachable
+  on exactly the touch devices it exists for.
 
 Freed by the death of curation: `scoreSortSpines` in `tile-geometry.json` — shelf
 3, all books — has nothing left to sort by, and is the natural home for the
@@ -1283,7 +1312,7 @@ Recorded from review, with what changed:
     Left-click is reserved for "focus this room", and the long-press must lose to
     a pan. Per-book hit-testing is impossible on inpainted rooms, so the
     book-pull animation — if it happens — samples a spine rather than identifying
-    one. [§5b](#5b-the-metadata-overlay).
+    one. [§5b](#5b-the-metadata-overlay--built).
 
 ## 7. Still open
 
@@ -1352,9 +1381,11 @@ In dependency order, shortest path to a demo that survives a real corpus:
    folding, both match rules and the blend; weights come from config; the panel
    reports which signals actually fired. `assets/corpus-sample/metadata.json` is
    placeholder text so the demo searches for something.
-4. **The metadata overlay** ([§5b](#5b-the-metadata-overlay)) — right-click and
-   long-press, chips that run searches, story text, closable. The press timer
-   sharing `useMapCamera.js`'s pointer stream is the fiddly part.
+4. ~~**The metadata overlay**~~ — **done**,
+   [§5b](#5b-the-metadata-overlay--built). Right-click and long-press, chips that
+   run searches, story text, closable. `picking.js` holds the pure half; the
+   gesture rides `useMapCamera.js`'s pointer stream so a press that becomes a
+   drag opens nothing.
 5. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam. Also the prerequisite for 6.

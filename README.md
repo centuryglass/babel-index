@@ -22,6 +22,8 @@ npm run demo -- --images /path/to/rooms [--base base.jpg] [--port 5173]
 
 Offline mode is just a directory of images — no database, no bucket, no upload
 step. Drag to pan, scroll to zoom, and the edge of the content region resists.
+**Right-click a room** (long press on a touchscreen) to open its card: three
+keywords and a short story, with each keyword a live search.
 
 **Rooms on the map** and **non-generic %** are live controls: both re-derive the
 layout without reloading any image data, so the feel of the thing can be tuned

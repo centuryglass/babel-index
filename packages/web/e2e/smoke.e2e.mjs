@@ -280,6 +280,66 @@ describe('the library, in a browser', { concurrency: false }, () => {
     );
   });
 
+  test('right-clicking a room opens its card, and a chip searches for it', async () => {
+    // The gesture is the part no unit test can reach: `picking.js` proves what
+    // is under a point, but only a browser proves that a right-click reaches it
+    // at all, that the card renders, and that the chips are wired to search.
+    const card = page.locator('.card');
+    await page.mouse.move(640, 400);
+
+    // The map is 100% non-generic by the time this runs, so the centre of the
+    // screen is a corpus room - but the centre CELL is reserved, so aim off it.
+    await page.mouse.click(880, 300, { button: 'right' });
+    await card.waitFor({ timeout: 5000 });
+    assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
+
+    const chips = card.locator('.chip');
+    assert.equal(await chips.count(), 3, 'the sample corpus gives every room three keywords');
+    const term = await chips.first().textContent();
+    assert.ok(await card.locator('.story').textContent(), 'the card shows a story');
+
+    // Escape closes.
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    // A chip is a live search: reopen, click one, and the note must report a
+    // keyword-driven ranking for the term the chip carried.
+    await page.mouse.click(880, 300, { button: 'right' });
+    await card.waitFor({ timeout: 5000 });
+    await chips.first().click();
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    assert.equal(await page.locator('input[type=search]').inputValue(), term);
+    await waitFor(
+      async () => /ranked by/.test(await page.locator('.note').textContent()),
+      SEARCH_TIMEOUT,
+      'clicking a keyword chip never produced a ranking'
+    );
+    assert.match(await page.locator('.note').textContent(), /keywords/);
+  });
+
+  test('a long press opens the card, and a drag cancels it', async () => {
+    // The interaction that decides whether the map is usable on a phone: a
+    // press that becomes a pan must NOT also open a card.
+    const card = page.locator('.card');
+
+    await page.mouse.move(880, 300);
+    await page.mouse.down();
+    await page.waitForTimeout(700); // past the 500ms press threshold
+    await page.mouse.up();
+    await card.waitFor({ timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    // Same hold, but wandering well past the slop radius first.
+    await page.mouse.move(880, 300);
+    await page.mouse.down();
+    await page.mouse.move(700, 380, { steps: 6 });
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+    assert.equal(await card.count(), 0, 'a press that became a drag must not open a card');
+  });
+
   test('nothing was logged to the console', () => {
     assert.deepEqual(consoleErrors, []);
   });
