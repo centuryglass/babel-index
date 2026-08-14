@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createLayout, shuffledOrder, rankByEmbedding } from '../../map/ordering.js';
+import { createLayout, shuffledOrder } from '../../map/ordering.js';
 import { joinMetadata } from '../../map/metadata.js';
+import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { CELL_ASPECT } from './camera.js';
 import { createTileCache, GENERIC } from './tiles.js';
 import { createUrlFor } from './rooms.js';
@@ -80,6 +81,10 @@ function Library({ manifest }) {
   }, [manifest]);
 
   const described = useMemo(() => metadata?.filter(Boolean).length ?? 0, [metadata]);
+
+  // Folded and tokenised once, so a search is set lookups rather than a
+  // megabyte of string work.
+  const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -194,15 +199,29 @@ function Library({ manifest }) {
       return;
     }
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`).then((r) => r.json());
-    // A real search returns a query vector and the browser ranks; the stub
-    // returns a ready-made order. The vector path needs the blob to have loaded.
-    if (res.vector && embeddings.current) {
-      const { data, dim } = embeddings.current;
-      setSearchOrder(rankByEmbedding(data, dim, Float32Array.from(res.vector)));
-      setStatus('');
+
+    // Three signals, blended into one sort over the whole corpus. Any of them
+    // may be missing - no blob, no metadata - and a ranking from the rest is
+    // still a real ranking, so the only case that needs the server's stub is
+    // having neither. The note says which of the three it actually was, rather
+    // than implying more than the corpus can support.
+    const blob = res.vector ? embeddings.current : null;
+    if (blob || searchIndex) {
+      const { order, signals } = rankHybrid({
+        query,
+        count: total,
+        weights: config.search.weights,
+        minTokenLength: config.search.minTokenLength,
+        embeddings: blob?.data,
+        dim: blob?.dim,
+        vector: res.vector,
+        index: searchIndex,
+      });
+      setSearchOrder(order);
+      setStatus(describeSignals(signals, Boolean(searchIndex)));
     } else {
       setSearchOrder(res.order);
-      setStatus(res.stub ? 'stub ranking — no CLIP in offline mode' : '');
+      setStatus('stub ranking — no embeddings and no keywords in this corpus');
     }
     flyTo(0, 0);
   };
@@ -259,6 +278,24 @@ function Library({ manifest }) {
       <div className="hud" id="hud" />
     </>
   );
+}
+
+/**
+ * What actually decided this ranking, in the panel's own voice.
+ *
+ * `signals` reports which of the three found anything for this query, not which
+ * were available - a corpus full of keywords that none of them matched should
+ * not claim the ranking was keyword-driven.
+ */
+function describeSignals({ clip, keyword, story }, hasText) {
+  const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
+  // Nothing matched and no CLIP means every score is zero, so the sort falls
+  // back to index order - which is a real rearrangement, not a no-op, and
+  // saying "unchanged" while the map visibly moves would be the wrong lie.
+  if (!hits.length) return hasText ? 'nothing matched — showing index order' : '';
+  // CLIP alone is the ordinary case for most queries and needs no announcement.
+  if (hits.length === 1 && clip) return '';
+  return `ranked by ${hits.join(' + ')}`;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
