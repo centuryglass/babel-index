@@ -8,6 +8,12 @@
  */
 import express from 'express';
 
+// Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
+// text and image towers point into different spaces and every ranking is quiet
+// nonsense. The image side is fixed the moment embeddings.bin is written; this
+// is the matching text side.
+const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
+
 /**
  * Build the app.
  *
@@ -34,18 +40,32 @@ export function createApp({ manifest, imagesDir, rescan, bundleJs = '', readInde
   });
 
   /**
-   * Offline search.
+   * Search.
    *
-   * There is no CLIP here. This returns a deterministic pseudo-ranking derived
-   * from the query string so the *mechanic* - type a term, watch the library
-   * rearrange around the centre - can be exercised without a model. It is
-   * labelled as a stub in the response so the UI can say so rather than
-   * implying the results mean something.
+   * The server runs only the *text* tower: string -> 512-dim query vector. The
+   * browser owns ranking (rankByEmbedding against embeddings.bin), so a re-rank
+   * or a search-history restore costs no round trip and the endpoint stays a
+   * tiny stateless thing that could sit in front of a static bundle.
+   *
+   * Two fallbacks keep the mechanic - type a term, watch the library rearrange
+   * around the centre - alive without a model: no blob for this corpus, or the
+   * model failing to load (offline with nothing cached). Both return a
+   * deterministic pseudo-ranking, labelled `stub` so the UI can say so rather
+   * than imply the order means something.
    */
-  app.get('/api/search', (req, res) => {
+  app.get('/api/search', async (req, res) => {
     const q = String(req.query.q ?? '').trim();
-    if (!q) return res.json({ stub: true, query: q, order: null });
-    res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q) });
+    if (!q) return res.json({ query: q, order: null });
+
+    if (!manifest.embeddings)
+      return res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q) });
+
+    try {
+      const vector = await embedQuery(q);
+      res.json({ stub: false, query: q, vector });
+    } catch (err) {
+      res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q), note: String(err) });
+    }
   });
 
   // express.static resolves and confines paths itself, so `..` in a request
@@ -69,6 +89,49 @@ export function createApp({ manifest, imagesDir, rescan, bundleJs = '', readInde
     });
 
   return app;
+}
+
+/**
+ * Load the CLIP text tower once, lazily.
+ *
+ * Dynamic `import` so the heavy dependency is pulled only when a real search
+ * actually runs - the stub path, and every test that never sets up a blob,
+ * stays free of it. The promise is memoised, so concurrent first requests share
+ * one load rather than racing two model downloads.
+ */
+let textTowerPromise = null;
+function textTower() {
+  if (!textTowerPromise)
+    textTowerPromise = (async () => {
+      const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
+      const [tokenizer, model] = await Promise.all([
+        AutoTokenizer.from_pretrained(TEXT_MODEL),
+        CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype: 'fp32' }),
+      ]);
+      return { tokenizer, model };
+    })();
+  return textTowerPromise;
+}
+
+/**
+ * A query string to a unit-length 512-dim vector in CLIP's shared space.
+ *
+ * L2-normalised here so the client's int8 dot product is a cosine directly -
+ * the image rows were normalised the same way when the blob was written.
+ *
+ * @param {string} q
+ * @returns {Promise<number[]>}
+ */
+async function embedQuery(q) {
+  const { tokenizer, model } = await textTower();
+  const inputs = tokenizer([q], { padding: true, truncation: true });
+  const { text_embeds } = await model(inputs);
+  const v = Float32Array.from(text_embeds.tolist()[0]);
+  let norm = 0;
+  for (const x of v) norm += x * x;
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < v.length; i++) v[i] /= norm;
+  return Array.from(v);
 }
 
 /**

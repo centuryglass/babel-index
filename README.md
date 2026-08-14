@@ -28,9 +28,14 @@ layout without reloading any image data, so the feel of the thing can be tuned
 by dragging a slider. Growing the corpus keeps existing rooms where they are and
 adds further out, so the map doesn't reshuffle underneath you.
 
-Search is stubbed offline — it returns a deterministic pseudo-ranking so the
-mechanic (type a term, watch the library rearrange around the centre) works
-without a model. The UI says so rather than implying the results mean anything.
+Search is real when the corpus has an embedding blob. `tools/embed` runs the
+CLIP image tower over the rooms once, offline; the demo server runs only the
+text tower per query and returns a vector, and the browser ranks against the
+blob (so a re-rank costs no round trip). The sample corpus ships with a blob, so
+`npm run demo` searches for real. Point it at a directory that has never been
+embedded and search falls back to a deterministic pseudo-ranking — the mechanic
+(type a term, watch the library rearrange around the centre) still works, and
+the UI says so rather than implying the results mean anything.
 
 ## What a tile is
 
