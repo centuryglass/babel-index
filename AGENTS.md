@@ -42,6 +42,7 @@ is read per request.
 | `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
+| `packages/map/scoring.js` | folding, tokenising, the two match rules, and the three-signal blend |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
@@ -101,6 +102,18 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **Search blends three signals into one sort; it does not tier them.** Every
+  signal is normalised to [0, 1] *before* weighting, and the CLIP term is
+  min-maxed across the corpus for that query — raw cosines on this corpus sit in
+  a band too narrow to weight against a keyword ratio. Sorting keyword hits into
+  a bucket ahead of everything else would let one weak partial beat a room CLIP
+  is certain about; there is a test for exactly that, and it fails against a
+  faithful tiering implementation. Rooms with no metadata are ranked by whatever
+  signal does apply, never parked below described ones.
+- **Keyword partials divide by the keyword; story matches divide by the query.**
+  Opposite on purpose. `art` has matched only 3/11 of `art nouveau`, but a hit in
+  a long story is not worth less than the same hit in a short one — the question
+  there is how much of the *query* was found. Both directions are asserted.
 - **`embeddings.bin` is keyed by row order; `metadata.json` is keyed by
   filename. The difference is deliberate and the rules differ with it.** The
   blob is positional, so `scan.mjs` rejects one whose count has drifted — a

@@ -28,12 +28,6 @@ layout without reloading any image data, so the feel of the thing can be tuned
 by dragging a slider. Growing the corpus keeps existing rooms where they are and
 adds further out, so the map doesn't reshuffle underneath you.
 
-A corpus may also carry a `metadata.json` beside its images — three stylistic
-keywords and a short story per room, keyed on filename — which the demo counts
-in its header. Nothing reads them yet; they become search signals and a
-per-room overlay next. Keys that match no image are reported at startup rather
-than passing for "no metadata".
-
 ### Tuning
 
 The values with no right answer — the zoom range, where the camera opens, where
@@ -50,14 +44,34 @@ The overlay is partial: name only what you're changing. Anything the server
 can't honour — a zoom range wider than the camera allows, a ratio outside
 (0, 1] — is clamped and reported at startup rather than silently dropped.
 
-Search is real when the corpus has an embedding blob. `tools/embed` runs the
-CLIP image tower over the rooms once, offline; the demo server runs only the
-text tower per query and returns a vector, and the browser ranks against the
-blob (so a re-rank costs no round trip). The sample corpus ships with a blob, so
-`npm run demo` searches for real. Point it at a directory that has never been
-embedded and search falls back to a deterministic pseudo-ranking — the mechanic
-(type a term, watch the library rearrange around the centre) still works, and
-the UI says so rather than implying the results mean anything.
+### Search
+
+Search ranks the **whole** corpus by a blend of three signals, so the library
+rearranges around your query rather than splicing a few results to the front:
+
+- **keywords** — three stylistic terms per room (material, movement, technique,
+  artist), with an exact match outscoring a partial one;
+- **story text** — a short fictional setting per room, matched by how much of
+  your query it contains;
+- **CLIP** — which orders everything the other two are silent about, and that is
+  most of the corpus for most queries.
+
+The first two come from a `metadata.json` beside the images, keyed on filename.
+CLIP comes from an embedding blob: `tools/embed` runs the image tower over the
+rooms once, offline; the demo server runs only the text tower per query and
+returns a vector, and the browser ranks against the blob, so a re-rank costs no
+round trip. Their relative weights are [config](#tuning).
+
+Any of the three may be missing and the rest still give a real ranking — the
+panel reports which ones actually matched, rather than which were available.
+Only a corpus with neither metadata nor embeddings falls back to a deterministic
+pseudo-ranking, and the UI says so rather than implying the order means
+anything. Sidecar keys matching no image are reported at startup rather than
+passing for "no metadata".
+
+> The `metadata.json` in `assets/corpus-sample/` is **placeholder text**, written
+> so the demo's search has something to find. It describes nothing about the
+> images it is attached to.
 
 ## What a tile is
 

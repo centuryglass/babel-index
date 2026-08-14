@@ -1,0 +1,444 @@
+{
+ "001.jpg": {
+  "keywords": [
+   {
+    "text": "bauhaus",
+    "type": "movement"
+   },
+   {
+    "text": "encaustic",
+    "type": "technique"
+   },
+   {
+    "text": "kahlo",
+    "type": "artist"
+   }
+  ],
+  "story": "The lamp here has never been replaced and has never gone out. There is a chair here, and there is no other chair anywhere in the library. Whatever was catalogued here has been recatalogued somewhere further out."
+ },
+ "002.jpg": {
+  "keywords": [
+   {
+    "text": "tarnished silver",
+    "type": "material"
+   },
+   {
+    "text": "silverpoint",
+    "type": "technique"
+   },
+   {
+    "text": "turner",
+    "type": "artist"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. The floor slopes very slightly toward the centre of the room. It is said to be the only room where the silence has a direction."
+ },
+ "003.jpg": {
+  "keywords": [
+   {
+    "text": "wet clay",
+    "type": "material"
+   },
+   {
+    "text": "arts and crafts",
+    "type": "movement"
+   },
+   {
+    "text": "turner",
+    "type": "artist"
+   }
+  ],
+  "story": "The catalogue lists this room twice, under names that disagree about everything but the number. The floor slopes very slightly toward the centre of the room. The last visitor left a note that reads only: not this one either."
+ },
+ "004.jpg": {
+  "keywords": [
+   {
+    "text": "wet clay",
+    "type": "material"
+   },
+   {
+    "text": "arts and crafts",
+    "type": "movement"
+   },
+   {
+    "text": "fresco secco",
+    "type": "technique"
+   }
+  ],
+  "story": "Someone has been reshelving in the dark, and doing it well. Every volume on the third shelf begins with the same four words. It is said to be the only room where the silence has a direction."
+ },
+ "005.jpg": {
+  "keywords": [
+   {
+    "text": "gothic revival",
+    "type": "movement"
+   },
+   {
+    "text": "encaustic",
+    "type": "technique"
+   },
+   {
+    "text": "moebius",
+    "type": "artist"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. The floor slopes very slightly toward the centre of the room. It is filed under a classification that was retired before the shelves were built."
+ },
+ "006.jpg": {
+  "keywords": [
+   {
+    "text": "burnt oak",
+    "type": "material"
+   },
+   {
+    "text": "sgraffito",
+    "type": "technique"
+   },
+   {
+    "text": "friedrich",
+    "type": "artist"
+   }
+  ],
+  "story": "A surveyor came here once and left without recording which direction they had entered from. One spine is blank, and the blankness is deliberate. The room is considered complete, and no one will say by whom."
+ },
+ "007.jpg": {
+  "keywords": [
+   {
+    "text": "burnt oak",
+    "type": "material"
+   },
+   {
+    "text": "suprematism",
+    "type": "movement"
+   },
+   {
+    "text": "hokusai",
+    "type": "artist"
+   }
+  ],
+  "story": "Someone has been reshelving in the dark, and doing it well. One spine is blank, and the blankness is deliberate. Readers who stay past the second hour report that the ceiling seems lower on the way out."
+ },
+ "008.jpg": {
+  "keywords": [
+   {
+    "text": "verdigris copper",
+    "type": "material"
+   },
+   {
+    "text": "symbolism",
+    "type": "movement"
+   },
+   {
+    "text": "sgraffito",
+    "type": "technique"
+   }
+  ],
+  "story": "Someone has been reshelving in the dark, and doing it well. The dust settles in rings, as though something turns here at night. It is said to be the only room where the silence has a direction."
+ },
+ "009.jpg": {
+  "keywords": [
+   {
+    "text": "symbolism",
+    "type": "movement"
+   },
+   {
+    "text": "mezzotint",
+    "type": "technique"
+   },
+   {
+    "text": "piranesi",
+    "type": "artist"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. A ladder leans against a wall that has no upper shelf. The last visitor left a note that reads only: not this one either."
+ },
+ "010.jpg": {
+  "keywords": [
+   {
+    "text": "wet clay",
+    "type": "material"
+   },
+   {
+    "text": "gilding",
+    "type": "technique"
+   },
+   {
+    "text": "hopper",
+    "type": "artist"
+   }
+  ],
+  "story": "A surveyor came here once and left without recording which direction they had entered from. There is a chair here, and there is no other chair anywhere in the library. Those who find it twice do not agree on how."
+ },
+ "011.jpg": {
+  "keywords": [
+   {
+    "text": "tarnished silver",
+    "type": "material"
+   },
+   {
+    "text": "suprematism",
+    "type": "movement"
+   },
+   {
+    "text": "escher",
+    "type": "artist"
+   }
+  ],
+  "story": "Nobody has explained why this gallery smells faintly of rain. The floor slopes very slightly toward the centre of the room. Those who find it twice do not agree on how."
+ },
+ "012.jpg": {
+  "keywords": [
+   {
+    "text": "bleached vellum",
+    "type": "material"
+   },
+   {
+    "text": "art nouveau",
+    "type": "movement"
+   },
+   {
+    "text": "silverpoint",
+    "type": "technique"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. There is a chair here, and there is no other chair anywhere in the library. Those who find it twice do not agree on how."
+ },
+ "013.jpg": {
+  "keywords": [
+   {
+    "text": "constructivism",
+    "type": "movement"
+   },
+   {
+    "text": "gilding",
+    "type": "technique"
+   },
+   {
+    "text": "moebius",
+    "type": "artist"
+   }
+  ],
+  "story": "Nobody has explained why this gallery smells faintly of rain. There is a chair here, and there is no other chair anywhere in the library. It is filed under a classification that was retired before the shelves were built."
+ },
+ "014.jpg": {
+  "keywords": [
+   {
+    "text": "quarried basalt",
+    "type": "material"
+   },
+   {
+    "text": "sgraffito",
+    "type": "technique"
+   },
+   {
+    "text": "piranesi",
+    "type": "artist"
+   }
+  ],
+  "story": "Someone has been reshelving in the dark, and doing it well. One spine is blank, and the blankness is deliberate. The last visitor left a note that reads only: not this one either."
+ },
+ "015.jpg": {
+  "keywords": [
+   {
+    "text": "oxidised brass",
+    "type": "material"
+   },
+   {
+    "text": "symbolism",
+    "type": "movement"
+   },
+   {
+    "text": "bruegel",
+    "type": "artist"
+   }
+  ],
+  "story": "This room appears in the index between two rooms that do not exist. A ladder leans against a wall that has no upper shelf. The last visitor left a note that reads only: not this one either."
+ },
+ "016.jpg": {
+  "keywords": [
+   {
+    "text": "bleached vellum",
+    "type": "material"
+   },
+   {
+    "text": "arts and crafts",
+    "type": "movement"
+   },
+   {
+    "text": "wet collodion",
+    "type": "technique"
+   }
+  ],
+  "story": "Someone has been reshelving in the dark, and doing it well. A ladder leans against a wall that has no upper shelf. Whatever was catalogued here has been recatalogued somewhere further out."
+ },
+ "017.jpg": {
+  "keywords": [
+   {
+    "text": "romanticism",
+    "type": "movement"
+   },
+   {
+    "text": "encaustic",
+    "type": "technique"
+   },
+   {
+    "text": "bosch",
+    "type": "artist"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. The books are warm to the touch, which the catalogue declines to explain. Whatever was catalogued here has been recatalogued somewhere further out."
+ },
+ "018.jpg": {
+  "keywords": [
+   {
+    "text": "smoked glass",
+    "type": "material"
+   },
+   {
+    "text": "aquatint",
+    "type": "technique"
+   },
+   {
+    "text": "klimt",
+    "type": "artist"
+   }
+  ],
+  "story": "This room appears in the index between two rooms that do not exist. Every volume on the third shelf begins with the same four words. The last visitor left a note that reads only: not this one either."
+ },
+ "019.jpg": {
+  "keywords": [
+   {
+    "text": "raw concrete",
+    "type": "material"
+   },
+   {
+    "text": "futurism",
+    "type": "movement"
+   },
+   {
+    "text": "kahlo",
+    "type": "artist"
+   }
+  ],
+  "story": "The lamp here has never been replaced and has never gone out. One spine is blank, and the blankness is deliberate. Whatever was catalogued here has been recatalogued somewhere further out."
+ },
+ "020.jpg": {
+  "keywords": [
+   {
+    "text": "oxidised brass",
+    "type": "material"
+   },
+   {
+    "text": "arts and crafts",
+    "type": "movement"
+   },
+   {
+    "text": "fresco secco",
+    "type": "technique"
+   }
+  ],
+  "story": "The lamp here has never been replaced and has never gone out. The dust settles in rings, as though something turns here at night. It is filed under a classification that was retired before the shelves were built."
+ },
+ "021.jpg": {
+  "keywords": [
+   {
+    "text": "gothic revival",
+    "type": "movement"
+   },
+   {
+    "text": "sgraffito",
+    "type": "technique"
+   },
+   {
+    "text": "rothko",
+    "type": "artist"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. The floor slopes very slightly toward the centre of the room. The room is considered complete, and no one will say by whom."
+ },
+ "022.jpg": {
+  "keywords": [
+   {
+    "text": "tarnished silver",
+    "type": "material"
+   },
+   {
+    "text": "gilding",
+    "type": "technique"
+   },
+   {
+    "text": "hopper",
+    "type": "artist"
+   }
+  ],
+  "story": "This room appears in the index between two rooms that do not exist. A ladder leans against a wall that has no upper shelf. It is filed under a classification that was retired before the shelves were built."
+ },
+ "023.jpg": {
+  "keywords": [
+   {
+    "text": "burnt oak",
+    "type": "material"
+   },
+   {
+    "text": "suprematism",
+    "type": "movement"
+   },
+   {
+    "text": "escher",
+    "type": "artist"
+   }
+  ],
+  "story": "A surveyor came here once and left without recording which direction they had entered from. The books are warm to the touch, which the catalogue declines to explain. Those who find it twice do not agree on how."
+ },
+ "024.jpg": {
+  "keywords": [
+   {
+    "text": "quarried basalt",
+    "type": "material"
+   },
+   {
+    "text": "futurism",
+    "type": "movement"
+   },
+   {
+    "text": "silverpoint",
+    "type": "technique"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. One spine is blank, and the blankness is deliberate. Whatever was catalogued here has been recatalogued somewhere further out."
+ },
+ "025.jpg": {
+  "keywords": [
+   {
+    "text": "art deco",
+    "type": "movement"
+   },
+   {
+    "text": "sgraffito",
+    "type": "technique"
+   },
+   {
+    "text": "moebius",
+    "type": "artist"
+   }
+  ],
+  "story": "The shelves here were counted in a year the librarians no longer acknowledge. One spine is blank, and the blankness is deliberate. The last visitor left a note that reads only: not this one either."
+ },
+ "026.jpg": {
+  "keywords": [
+   {
+    "text": "powdered malachite",
+    "type": "material"
+   },
+   {
+    "text": "fresco secco",
+    "type": "technique"
+   },
+   {
+    "text": "vermeer",
+    "type": "artist"
+   }
+  ],
+  "story": "A surveyor came here once and left without recording which direction they had entered from. The dust settles in rings, as though something turns here at night. Readers who stay past the second hour report that the ceiling seems lower on the way out."
+ }
+}

@@ -158,7 +158,7 @@ The review tool is gone: no `1`–`5` scores, no free-text tags, no `x`-to-rejec
 no SQLite. Curation happens at generation time — boring variants are discarded
 before they ever reach a corpus directory — and the three retrieval signals of
 [§4a](#4a-hybrid-search--three-signals-one-sort) make a second, manual
-vocabulary redundant ([§3d](#3d-hybrid-search--three-signals-one-sort)). A
+vocabulary redundant ([§3d](#3d-hybrid-search--three-signals-one-sort--built)). A
 hand-typed tag was going to be a worse keyword than the keyword the generator
 already knows, and a 1–5 score was going to be a worse relevance signal than a
 text query against it.
@@ -533,7 +533,7 @@ Four seams, and one of them is a prerequisite rather than a change:
 
 CLIP alone is wired end to end and ranks the whole corpus. Keywords and story
 text join it as two further signals over the same single sort —
-[§3d](#3d-hybrid-search--three-signals-one-sort) is the scoring model, and
+[§3d](#3d-hybrid-search--three-signals-one-sort--built) is the scoring model, and
 [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) is where the text comes from.
 What follows is the CLIP half, which is done.
 
@@ -590,13 +590,14 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-207 tests (`npm test`), in a couple of seconds, with no browser and no network.
+235 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
 | --- | --- |
 | `packages/config/config.test.mjs` | defaults, the narrow-only zoom rule, every validator reporting rather than throwing |
 | `packages/config/load.test.mjs` | a missing overlay, a partial one, a malformed one |
+| `packages/map/scoring.test.mjs` | folding, both partial-match rules, normalisation, and that the blend is a blend rather than tiers |
 | `packages/map/metadata.test.mjs` | entry normalisation, the filename join, coverage vs. a drifted sidecar |
 | `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance, roundness at any cell shape |
 | `packages/server/scan.test.mjs` | header parsers, directory rules, the metadata sidecar |
@@ -771,7 +772,7 @@ upstream alongside the image:
   and so on — the concepts that steered that variant's generation.
 - **A short enigmatic fictional setting**, one paragraph, from a fixed prompt.
 
-Both are retrieval signals ([§3d](#3d-hybrid-search--three-signals-one-sort)) and
+Both are retrieval signals ([§3d](#3d-hybrid-search--three-signals-one-sort--built)) and
 both are readable in the UI ([§5b](#5b-the-metadata-overlay)). Generation is out
 of scope here for the same reason the images are.
 
@@ -850,19 +851,20 @@ normalises to null rather than to an empty record, so "has metadata" stays a rea
 question.
 
 Not yet built, and deliberately: nothing *reads* the keywords yet beyond a room
-count in the demo panel. Ranking is [§3d](#3d-hybrid-search--three-signals-one-sort)
+count in the demo panel. Ranking is [§3d](#3d-hybrid-search--three-signals-one-sort--built)
 and reading them is [§5b](#5b-the-metadata-overlay).
 
-**No sidecar ships with `assets/corpus-sample/`.** Writing one would mean
-inventing keywords and stories for 26 images to demonstrate a feature, and a
-fabricated corpus is a bad thing to have lying around looking authoritative.
-Point `--images` at a corpus that has one; the tests cover the path with
-synthesised fixtures, per the convention that fixtures are built rather than
-committed.
+**The sidecar in `assets/corpus-sample/` is placeholder text**, generated to
+exercise the search path before the real generator output lands — 26 rooms, 41
+distinct keywords across the four categories, a distinct story each. It describes
+nothing about the images it is attached to and is meant to be replaced. The unit
+tests do not read it, per the convention that fixtures are synthesised rather
+than committed; it exists so `npm run demo` demonstrates a search that does
+something.
 
 ---
 
-## 3d. Hybrid search — three signals, one sort
+## 3d. Hybrid search — three signals, one sort — **built**
 
 Three signals rank the same corpus, and the whole corpus is sorted by their
 blend. Not tiers: an exact-match bucket sorted ahead of a CLIP bucket would let
@@ -916,25 +918,40 @@ matching `cartographer` counts for more than matching `the`. Stopwords out.
 
 ### Where it runs
 
-In the browser, in `packages/map`, next to `rankByEmbedding()`. For 5,000 rooms
-this is three keywords and a paragraph each — string work measured in
-milliseconds, nowhere near the frame the int8 dot products already fit inside,
-and keeping it client-side is what preserves "a re-rank costs no round trip".
-`/api/search` is unchanged: it still runs only the text tower and returns a
-vector.
+In the browser, in `packages/map/scoring.js`. For 5,000 rooms this is three
+keywords and a paragraph each — string work measured in milliseconds, nowhere
+near the frame the int8 dot products already fit inside, and keeping it
+client-side is what preserves "a re-rank costs no round trip". `/api/search` is
+unchanged: it still runs only the text tower and returns a vector.
 
-The text scoring is meaty enough — folding, tokenising, stopwords — to want its
-own file rather than growing `ordering.js`, which is currently import-free and
-worth keeping that way. `packages/map/scoring.js`, with the blend as a small
-tested function over three arrays.
+Two things the implementation added that the sketch above did not have:
+
+- **The index is built once, not per query.** Folding and tokenising 5,000
+  stories on every search is about a megabyte and a half of string work;
+  `buildSearchIndex()` does it when the metadata arrives and leaves each query as
+  set lookups. Rooms without metadata stay null, so the array is still indexed by
+  room id.
+- **`embeddingScores()` was split out of `rankByEmbedding()`.** The blend needs
+  the raw cosines to normalise, and the CLIP-only ordering is now built on top of
+  the same function, so the dot product has one implementation.
 
 ### What this does to the stub
 
 Better than it sounds. Keyword and story matching are **real search that needs no
 model**, so a corpus with metadata and no `embeddings.bin` gets a genuine ranking
 rather than the deterministic pseudo-ranking. The stub survives only for the case
-it was written for — no metadata *and* no blob — and the UI's honesty about which
-one it is gets a third state: full, text-only, and stub.
+it was written for — no metadata *and* no blob.
+
+The panel reports which signals actually *found* something, not which were
+available: a corpus full of keywords that this query missed must not claim to
+have been ranked by keywords. So `ranked by keywords + CLIP`, or `ranked by
+story`, or — when the text signals are silent and there is no CLIP to fall back
+on — `nothing matched — showing index order`, which is what a corpus of all-zero
+scores honestly becomes. CLIP alone says nothing, being the ordinary case.
+
+This is not hypothetical: with the text tower unable to reach its model, the demo
+falls back to text-only ranking against the sidecar and says so, which is exactly
+the degradation the three states exist to describe.
 
 ---
 
@@ -964,7 +981,7 @@ defaults would stop having any effect — two statements of one fact, with the
 undocumented one winning. The overlay is partial and optional; `DEFAULTS` stays
 the single statement of every default. `map` and `search` are read by the demo's
 sliders now and by [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) and
-[§3d](#3d-hybrid-search--three-signals-one-sort) when they land.
+[§3d](#3d-hybrid-search--three-signals-one-sort--built) when they land.
 
 It reaches the client on the manifest rather than through an endpoint of its own.
 The client already blocks on that fetch before it can render, so a second round
@@ -1158,7 +1175,7 @@ A closable overlay anchored to the tile. Contents:
 
 - **The three keywords as chips**, each one a live search. Clicking `art nouveau`
   runs that query and the library rearranges around it — which costs nothing to
-  build once [§3d](#3d-hybrid-search--three-signals-one-sort) exists, and turns
+  build once [§3d](#3d-hybrid-search--three-signals-one-sort--built) exists, and turns
   reading a room into a way of moving through the library rather than a dead end.
 - **The story text**, styled as a catalogue card or a page rather than a tooltip.
 - Escape, click-outside and an explicit close.
@@ -1240,7 +1257,7 @@ Recorded from review, with what changed:
     Keyword above story above CLIP, weights in config, every term normalised to
     [0, 1] — including CLIP, whose raw cosines cluster too tightly on this corpus
     to be blended unnormalised. The whole corpus is sorted by the blend; nothing
-    is spliced to the front. [§3d](#3d-hybrid-search--three-signals-one-sort).
+    is spliced to the front. [§3d](#3d-hybrid-search--three-signals-one-sort--built).
 17. **Metadata is keyed on filename, embeddings on row order**, and the
     difference is deliberate: a positional blob has to be rejected wholesale when
     it goes stale, a filename-keyed map degrades per room and tolerates a miss.
@@ -1288,7 +1305,7 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
-6. **What the search weights should actually be.** [§3d](#3d-hybrid-search--three-signals-one-sort)
+6. **What the search weights should actually be.** [§3d](#3d-hybrid-search--three-signals-one-sort--built)
    fixes the ordering — keyword, then story, then CLIP — and the normalisation
    that makes the weights comparable, but the numbers themselves are a by-feel
    call that needs the real corpus and real queries. That is the argument for
@@ -1330,9 +1347,11 @@ In dependency order, shortest path to a demo that survives a real corpus:
    `packages/map/metadata.js` owns the join, `scan.mjs` reports coverage into the
    manifest, the client fetches beside the blob and joins by filename. The demo
    panel counts described rooms; nothing reads the keywords yet, which is 3 and 4.
-3. **Hybrid ranking** ([§3d](#3d-hybrid-search--three-signals-one-sort)) —
-   `packages/map/scoring.js` plus the blend, weights from config. Includes the
-   three-state honesty in the UI: full, text-only, stub.
+3. ~~**Hybrid ranking**~~ — **done**,
+   [§3d](#3d-hybrid-search--three-signals-one-sort--built). `scoring.js` holds
+   folding, both match rules and the blend; weights come from config; the panel
+   reports which signals actually fired. `assets/corpus-sample/metadata.json` is
+   placeholder text so the demo searches for something.
 4. **The metadata overlay** ([§5b](#5b-the-metadata-overlay)) — right-click and
    long-press, chips that run searches, story text, closable. The press timer
    sharing `useMapCamera.js`'s pointer stream is the fiddly part.
