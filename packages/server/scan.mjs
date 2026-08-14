@@ -132,6 +132,20 @@ export async function scanDirectory(dir, { base } = {}) {
   const source = rooms.find((r) => r.w && r.h) ?? baseSize;
   const levels = await discoverLevels(dir, source);
 
+  // If tools/embed has left a blob alongside the images, surface its metadata so
+  // the client can fetch it and rank in the browser. A stale blob - one whose
+  // count no longer matches the corpus - is ignored rather than trusted: its
+  // rows are keyed on room ids that have since moved, so it would rank the wrong
+  // rooms. Missing or unreadable, search simply falls back to the stub.
+  let embeddings = null;
+  try {
+    const meta = JSON.parse(await readFile(join(dir, 'embeddings.json'), 'utf8'));
+    if (meta.count === rooms.length && meta.dim > 0)
+      embeddings = { url: '/images/embeddings.bin', dim: meta.dim, count: meta.count, model: meta.model ?? null };
+  } catch {
+    // no blob, unreadable, or malformed - leave embeddings null
+  }
+
   return {
     mode: 'offline',
     directory: dir,
@@ -142,6 +156,8 @@ export async function scanDirectory(dir, { base } = {}) {
     },
     rooms,
     count: rooms.length,
+    /** The image-embedding blob, if one has been generated; else null. */
+    embeddings,
     /**
      * The pyramid as it exists on disk, finest first. Clients build a level's
      * url as `/images/<dir>/<file>`, or `/images/<file>` where `dir` is null.

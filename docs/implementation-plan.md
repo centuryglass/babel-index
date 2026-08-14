@@ -433,19 +433,41 @@ of fighting. The same helper serves "fly to the best match" after a search,
 which is the case where the movement is carrying meaning — it shows the top
 result's location relative to where you were standing.
 
-### Phase 4 — search *(concept step 5)*
+### Phase 4 — search *(concept step 5)* — **landed**
 
 The CLIP backend is mostly not a cost question, because the expensive half
 precomputes:
 
 - **Image embeddings computed offline**, shipped as one blob. 5,000 rooms × 512
-  dims × int8 = **2.5 MB**.
+  dims × int8 = **2.5 MB** (26-room sample: 13 KB). `tools/embed/embed.mjs`
+  writes `embeddings.bin` + `embeddings.json`.
 - **Ranking runs in the browser** — `rankByEmbedding()` in `packages/map`. A few
   million multiply-adds, well under a frame.
-- **Only the text tower runs at request time.** A tiny stateless endpoint, or
-  `transformers.js` in-browser if the model download is acceptable.
+- **Only the text tower runs at request time.** `/api/search` runs it and
+  returns the query vector; the browser owns ranking, so a re-rank or a
+  history restore costs no round trip.
 
 No CLIP service to pay for in steady state.
+
+**The model choice was correctness, not quality.** Both towers must be the *same*
+CLIP or they point into different spaces and every ranking is quiet nonsense.
+The image side is `transformers.js` (`Xenova/clip-vit-base-patch32`, OpenAI
+weights) so the text side can be the identical model files in Node — no export,
+no parity gamble. laion2b would rank a few benchmark points better, but on a
+corpus of near-identical library walls that gap is imperceptible, and matching
+the towers is not optional. If quality ever matters, the lever is model *size*
+(B/32 → L/14), not the training set.
+
+**Four seams hold it, and none of them restate the model choice.**
+`tools/embed/embed.mjs` borrows `scanDirectory()` for the file order, so a row is
+a room id by construction rather than by a re-implementation that could drift.
+`scan.mjs` surfaces the blob's metadata into the manifest, and ignores a stale
+blob whose count no longer matches the corpus — a wrong-length blob would rank
+the wrong rooms. `app.mjs` lazy-loads the text tower (dynamic `import`, so the
+stub path and the tests never pull the heavy dependency) and falls back to the
+deterministic stub when there is no blob or the model will not load. `main.jsx`
+fetches the blob once and ranks against it. The stub is still there, still
+labelled, for a corpus that was never embedded.
 
 ### Phase 5 — the controls in the centre room *(concept step 6)*
 
