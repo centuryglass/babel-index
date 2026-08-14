@@ -19,7 +19,7 @@ images.
 ```sh
 npm install
 npm run demo                       # http://localhost:5173, against assets/corpus-sample/
-npm run demo -- --images <dir> [--base base.jpg] [--port 5173]
+npm run demo -- --images <dir> [--base base.jpg] [--port 5173] [--config config.json]
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
@@ -39,6 +39,7 @@ is read per request.
 | --- | --- |
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
 | `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
+| `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
@@ -99,6 +100,24 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **Zoom config narrows, never widens, and that is load-bearing.** `ZOOM_LIMITS`
+  in `camera.js` is the hard range and the only statement of it;
+  `pyramid.test.mjs` asserts every ladder rung is reachable inside it. Config can
+  only tighten that range, which is why a config edit can never invalidate the
+  assertion and why nothing has to consult the ladder at load time. A narrowing
+  that leaves the finest rung unreachable is fine and deliberately silent — the
+  cost is inactive code and files nobody requests. `DEFAULTS.camera.minZoom` is
+  `null` for "as far as the camera allows", so 26 and 900 are not restated.
+- **The configured range rides on the camera as `limits`**, the same optional
+  field as `aspect` and with the same hazard: rebuild a camera instead of
+  spreading it and the range is lost mid-gesture while everything still looks
+  applied. Both are asserted.
+- **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
+  committed.** One that spelled out every value would silently become the real
+  surface and editing the documented defaults would stop mattering. The overlay
+  is partial and optional. Config never throws: every adjustment lands in `notes`
+  and the server prints them, because a value that silently did not take effect
+  is the only failure mode a tuning file really has.
 - **Every pyramid number lives in `packages/web/src/pyramid.js`** — the tile's
   dimensions, the ladder, per-level cache budgets, the hysteresis band, the
   prefetch ring. Don't reintroduce one as a literal in `tiles.js` or the render

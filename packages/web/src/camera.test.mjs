@@ -131,6 +131,37 @@ test('scrolling up zooms in, down zooms out, and both stay in range', () => {
   assert.equal(clampZoom(220), 220);
 });
 
+test('a camera carrying narrowed limits is clamped to them, not to the hard ones', () => {
+  // Configuration narrows the range by riding on the camera. If any operation
+  // reached for the module-scope limits instead, the config would look applied
+  // - the slider would sit in the right place - and the wheel would still take
+  // you straight past it.
+  const limits = { min: 100, max: 300 };
+  const narrowed = { ...cam, zoom: 200, limits };
+
+  assert.equal(zoomAt(narrowed, 640, 360, 5000, rect).zoom, 100, 'zoomAt honours the floor');
+  assert.equal(zoomAt(narrowed, 640, 360, -5000, rect).zoom, 300, 'zoomAt honours the ceiling');
+  assert.equal(cameraAtCell(narrowed, 0, 0, MAX_ZOOM).zoom, 300, 'flyTo honours the ceiling');
+  assert.equal(clampZoom(1e6, limits), 300);
+  assert.equal(clampZoom(1, limits), 100);
+});
+
+test('the configured limits survive every camera operation', () => {
+  // Same failure as losing `aspect`: a rebuilt camera drops the field and the
+  // range silently reverts mid-gesture.
+  const limits = { min: 100, max: 300 };
+  const c = { ...cam, zoom: 200, limits };
+  assert.equal(zoomAt(c, 640, 360, -120, rect).limits, limits, 'zoomAt');
+  assert.equal(panByPixels(c, 40, 40, 1).limits, limits, 'panByPixels');
+  assert.equal(glideStep({ ...c, x: 90, y: 90 }, 0).limits, limits, 'glideStep');
+  assert.equal(cameraAtCell(c, 3, 4, 250).limits, limits, 'cameraAtCell');
+});
+
+test('a camera with no limits gets the hard ones', () => {
+  assert.equal(zoomAt(cam, 640, 360, 5000, rect).zoom, MIN_ZOOM);
+  assert.equal(zoomAt(cam, 640, 360, -5000, rect).zoom, MAX_ZOOM);
+});
+
 test('zooming in then back out by the same delta returns to the start', () => {
   const inn = zoomAt(cam, 300, 300, -140, rect);
   const out = zoomAt(inn, 300, 300, 140, rect);

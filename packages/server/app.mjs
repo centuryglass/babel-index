@@ -7,6 +7,7 @@
  * disk beyond the images directory under test.
  */
 import express from 'express';
+import { resolveConfig } from '../config/config.mjs';
 
 // Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
 // text and image towers point into different spaces and every ranking is quiet
@@ -21,14 +22,23 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {object} opts.manifest       the initial scan (see scan.mjs)
  * @param {string} opts.imagesDir      directory the corpus is served from
  * @param {() => Promise<object>} opts.rescan re-read the directory
+ * @param {object} [opts.config]       resolved config (see packages/config); the
+ *                                     defaults when absent
  * @param {string} [opts.bundleJs]     the built client
  * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
  *                                     editing the page needs no restart
  */
-export function createApp({ manifest, imagesDir, rescan, bundleJs = '', readIndexHtml }) {
+export function createApp({ manifest, imagesDir, rescan, config, bundleJs = '', readIndexHtml }) {
   const app = express();
 
-  app.get('/api/manifest', (_req, res) => res.json(manifest));
+  // Config rides on the manifest rather than getting an endpoint of its own:
+  // the client already blocks on this fetch before it can render, and a second
+  // round trip for a hundred bytes would only add a state where the map exists
+  // and does not yet know its own zoom range. `notes` is for the operator, not
+  // the browser, so it is stripped here - index.mjs prints it at startup.
+  const { notes: _notes, source: _source, ...clientConfig } = config ?? resolveConfig();
+
+  app.get('/api/manifest', (_req, res) => res.json({ ...manifest, config: clientConfig }));
 
   app.post('/api/rescan', async (_req, res, next) => {
     try {

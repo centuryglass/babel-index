@@ -28,9 +28,14 @@ function Library({ manifest }) {
   const canvasRef = useRef(null);
   const total = manifest.count;
 
+  // Every by-feel starting value comes from the manifest's config block rather
+  // than from a literal here - see packages/config. The sliders still move
+  // freely afterwards; config decides where they start.
+  const config = manifest.config;
+
   const [roomCount, setRoomCount] = useState(total);
-  const [contentRatio, setContentRatio] = useState(0.2);
-  const [seed, setSeed] = useState(1);
+  const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
+  const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(1);
   const [searchOrder, setSearchOrder] = useState(null);
   const [query, setQuery] = useState('');
@@ -101,7 +106,12 @@ function Library({ manifest }) {
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
-  const { cam, flyTo } = useMapCamera({ canvasRef, resistanceAt, onChange: requestDraw });
+  const { cam, flyTo } = useMapCamera({
+    canvasRef,
+    resistanceAt,
+    onChange: requestDraw,
+    camera: config.camera,
+  });
 
   // --- rendering -----------------------------------------------------------
   useEffect(() => {
@@ -216,7 +226,7 @@ function Library({ manifest }) {
         <div className="buttons">
           <button onClick={() => setOrderSeed((s) => s + 1)}>reorder</button>
           <button onClick={() => setSeed((s) => s + 1)}>rescatter</button>
-          <button onClick={() => flyTo(0, 0, 220)}>centre</button>
+          <button onClick={() => flyTo(0, 0, config.camera.defaultZoom)}>centre</button>
         </div>
 
         <div className="note">

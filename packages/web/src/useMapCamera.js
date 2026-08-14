@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { cameraAtCell, glideStep, panByPixels, zoomAt } from './camera.js';
+import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt } from './camera.js';
 
 /**
  * Pan/zoom camera over an unbounded tile grid.
@@ -10,9 +10,27 @@ import { cameraAtCell, glideStep, panByPixels, zoomAt } from './camera.js';
  * The camera is held in a ref rather than in state. It changes on every pointer
  * move and every animation frame, and React does not need to re-render for any
  * of that - the canvas is redrawn directly.
+ *
+ * The configured zoom range rides on the camera as `limits` rather than being
+ * read here, so every clamp - wheel, flyTo, anything later - goes through the
+ * same field and none of them has to remember to ask.
+ *
+ * `camera` is required, and there is deliberately no fallback opening zoom in
+ * this file: that number is a by-feel one and belongs to `packages/config`, so
+ * a default here would be a second statement of it that could drift.
+ *
+ * @param {object} opts
+ * @param {{minZoom: number, maxZoom: number, defaultZoom: number}} opts.camera
+ *   resolved `config.camera`, from the manifest
  */
-export function useMapCamera({ canvasRef, resistanceAt, onChange }) {
-  const cam = useRef({ x: 0.5, y: 0.5, zoom: 220 });
+export function useMapCamera({ canvasRef, resistanceAt, onChange, camera }) {
+  const limits = { min: camera.minZoom, max: camera.maxZoom };
+  const cam = useRef({
+    x: 0.5,
+    y: 0.5,
+    zoom: clampZoom(camera.defaultZoom, limits),
+    limits,
+  });
   const drag = useRef(null);
 
   useEffect(() => {

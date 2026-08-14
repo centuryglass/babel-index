@@ -6,7 +6,9 @@
  * sits at (0, 0); how many pixels that is on each axis depends on the tile's
  * shape. A camera is `{x, y, zoom}` where x/y are the world point at the centre
  * of the viewport and `zoom` is pixels per cell WIDTH. Cell height follows from
- * the aspect, so one number still drives the whole scale.
+ * the aspect, so one number still drives the whole scale. Two optional fields
+ * may ride along - `aspect` and `limits` - and every function here preserves
+ * them by spreading, which is why callers must do the same.
  *
  * Keeping world coordinates in cells rather than pixels is what lets the tile
  * change shape without rewriting `packages/map`: slot placement and ranking are
@@ -39,14 +41,31 @@ export function pxPerCell(cam) {
 }
 
 /**
- * Zoom is clamped so a cell is never smaller than a thumbnail or larger than
- * the screen. In pixels per cell WIDTH - a short tile is free to be shorter
- * than this, which is what "the cell is the unit" means.
+ * The HARD zoom limits: a cell is never smaller than a thumbnail or larger than
+ * the screen. In pixels per cell WIDTH - a short tile is free to be shorter than
+ * this, which is what "the cell is the unit" means.
+ *
+ * This is the widest range that can ever be offered, and the range everything
+ * derived is checked against - `pyramid.test.mjs` asserts every rung of the
+ * ladder is reachable somewhere inside it. Configuration may narrow it (a
+ * camera carries its own `limits`, below) but may never widen it, so that
+ * assertion keeps covering every state the app can reach at runtime.
  */
-export const MIN_ZOOM = 26;
-export const MAX_ZOOM = 900;
+export const ZOOM_LIMITS = { min: 26, max: 900 };
 
-export const clampZoom = (z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+export const MIN_ZOOM = ZOOM_LIMITS.min;
+export const MAX_ZOOM = ZOOM_LIMITS.max;
+
+/**
+ * Clamp a zoom into a range, defaulting to the hard limits.
+ *
+ * A camera may carry narrower `limits` of its own - the same optional-field
+ * pattern as `aspect`, and with the same requirement: spread the old camera
+ * rather than rebuilding `{x, y, zoom}`, or the range is lost mid-gesture along
+ * with the shape.
+ */
+export const clampZoom = (z, limits = ZOOM_LIMITS) =>
+  Math.min(limits.max, Math.max(limits.min, z));
 
 /** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
 export function screenToWorld(px, py, cam, rect) {
@@ -83,7 +102,7 @@ export function worldToScreen(wx, wy, cam, rect) {
  */
 export function zoomAt(cam, px, py, deltaY, rect) {
   const before = screenToWorld(px, py, cam, rect);
-  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * Math.exp(-deltaY * 0.0014)) };
+  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * Math.exp(-deltaY * 0.0014), cam.limits) };
   const after = screenToWorld(px, py, zoomed, rect);
   return {
     ...zoomed,
@@ -131,5 +150,5 @@ export function glideStep(cam, damp) {
 
 /** Centre the camera on a cell - cells are addressed by corner, so aim at the middle. */
 export function cameraAtCell(cam, x, y, zoom) {
-  return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom) : cam.zoom };
+  return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom, cam.limits) : cam.zoom };
 }
