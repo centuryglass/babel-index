@@ -1,0 +1,252 @@
+/**
+ * THIS FILE IS THE TUNING SURFACE for everything decided by feel.
+ *
+ * The pyramid has its own (`packages/web/src/pyramid.js`) and keeps it: tile
+ * size, the ladder, per-level budgets, the hysteresis band and the prefetch ring
+ * are *derived and asserted*, not tuned - restating any of them here would be a
+ * second statement of a fact that already has one. What lives here is the other
+ * kind of number: the ones with no right answer, only a preferred one.
+ *
+ * `DEFAULTS` below is the surface. Every value carries the reasoning that
+ * justifies it, the way `pyramid.js` does, because a number without its argument
+ * is a number nobody dares change. A `config.json` beside the repo root can
+ * override any subset of it - see `load.mjs` - but it is an overlay and is not
+ * committed, so this object stays the single statement of every default.
+ *
+ * ### Zoom config narrows, and never widens
+ *
+ * `camera.js` states the hard zoom limits; this file can only tighten them.
+ * That asymmetry is what keeps configuration from being able to break anything
+ * derived: `pyramid.test.mjs` asserts every rung of the ladder is reachable
+ * somewhere in the *widest* range, and no config can move that range outward, so
+ * the assertion still covers every reachable state at runtime.
+ *
+ * A narrowed range can leave the finest rung or two unreachable, and that is
+ * fine and deliberately not an error. The cost of a level nothing asks for is a
+ * few inactive lines and some files in a bucket that are never requested - and
+ * the alternative, letting a config edit orphan a rung the tests believed in,
+ * is the failure this asymmetry exists to make impossible.
+ *
+ * No side effects and no filesystem: this is defaults plus validation, so it can
+ * be exercised at any limits without a disk or a server. `load.mjs` is the part
+ * that reads a file.
+ */
+import { ZOOM_LIMITS } from '../web/src/camera.js';
+
+export const DEFAULTS = {
+  camera: {
+    /**
+     * The zoom range actually offered, as pixels per cell WIDTH.
+     *
+     * `null` means "as far as `camera.js` allows" - the honest spelling of "no
+     * narrowing", and the reason this file does not restate 26 and 900. Set a
+     * number to pull the range in; a number outside the hard limits is clamped
+     * to them rather than honoured, because config narrows and never widens.
+     */
+    minZoom: null,
+    maxZoom: null,
+
+    /**
+     * Where the camera opens. 220 px per cell shows a handful of rooms whole -
+     * enough that the map reads as a wall of rooms rather than as one image or
+     * as a mosaic of thumbnails. Clamped into the range above.
+     */
+    defaultZoom: 220,
+  },
+
+  map: {
+    /**
+     * Fraction of cells that may hold a corpus room; the rest are copies of the
+     * generic. 0.2 is the concept's "maybe 80% generic" - sparse enough that
+     * finding a distinct room feels like finding something.
+     */
+    contentRatio: 0.2,
+
+    /** Scatter seed for slot placement. Changing it reshuffles which cells are slots. */
+    slotSeed: 1,
+
+    /**
+     * Seed for choosing between alternate generic rooms. Separate from
+     * `slotSeed` on purpose: sharing one would correlate the choice of
+     * wallpaper with which cells are content slots, and the two patterns would
+     * be visible in each other.
+     */
+    genericVariantSeed: 1,
+  },
+
+  search: {
+    /**
+     * Relative priority of the three retrieval signals. Every signal is
+     * normalised to [0, 1] before weighting - including CLIP, whose raw cosines
+     * cluster far too tightly on a corpus of near-identical library walls to be
+     * blended unnormalised - so these weights mean exactly what they look like
+     * and can be read against each other directly.
+     *
+     * The ordering is the design's: an exact keyword match (1.0 x 1.0) outscores
+     * anything CLIP can say (max 0.25), a whole-story match (0.5) sits between
+     * them, and CLIP still decides the ranking of everything no text touched -
+     * which is most of the corpus for most queries.
+     *
+     * These are a starting point, not a measurement. The real values want the
+     * real corpus and real queries, which is the argument for them being here
+     * rather than in source.
+     */
+    weights: {
+      keyword: 1,
+      story: 0.5,
+      clip: 0.25,
+    },
+
+    /**
+     * Query tokens shorter than this never match. Without a floor, `a` matches
+     * most keywords in the corpus by substring and the partial-match score
+     * stops meaning anything.
+     */
+    minTokenLength: 3,
+  },
+};
+
+/**
+ * Merge an overlay over `DEFAULTS`, validating as it goes.
+ *
+ * Never throws and always returns something usable: a demo that will not start
+ * because of a typo in a tuning file is worse than one that starts and says what
+ * it ignored. Everything adjusted is reported in `notes`, which the server
+ * prints at startup - silence about a value that did not take effect is the
+ * failure mode worth avoiding here.
+ *
+ * @param {object} [raw] the overlay, typically parsed `config.json`
+ * @param {object} [opts]
+ * @param {{min: number, max: number}} [opts.zoomLimits] the hard range this
+ *   config may narrow but not widen. Injected so the whole policy can be
+ *   exercised at limits the app is not currently using.
+ * @returns {{camera: object, map: object, search: object, notes: string[]}}
+ */
+export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
+  const notes = [];
+  const src = asSection(raw, '', notes);
+
+  const camIn = asSection(src.camera, 'camera', notes);
+  const mapIn = asSection(src.map, 'map', notes);
+  const searchIn = asSection(src.search, 'search', notes);
+  const weightsIn = asSection(searchIn.weights, 'search.weights', notes);
+
+  // Resolve "no narrowing" to the hard limits, then intersect. Both directions
+  // are clamped rather than refused: a config asking for more range than exists
+  // is a request that cannot be granted, not a corrupt file.
+  let minZoom = numberOrNull(camIn.minZoom, DEFAULTS.camera.minZoom, 'camera.minZoom', notes);
+  let maxZoom = numberOrNull(camIn.maxZoom, DEFAULTS.camera.maxZoom, 'camera.maxZoom', notes);
+  minZoom = minZoom ?? zoomLimits.min;
+  maxZoom = maxZoom ?? zoomLimits.max;
+
+  if (minZoom < zoomLimits.min) {
+    notes.push(`camera.minZoom ${minZoom} widens the range; clamped to ${zoomLimits.min}`);
+    minZoom = zoomLimits.min;
+  }
+  if (maxZoom > zoomLimits.max) {
+    notes.push(`camera.maxZoom ${maxZoom} widens the range; clamped to ${zoomLimits.max}`);
+    maxZoom = zoomLimits.max;
+  }
+  if (minZoom > maxZoom) {
+    notes.push(
+      `camera.minZoom ${minZoom} is above camera.maxZoom ${maxZoom}; ` +
+        `using the full range ${zoomLimits.min}-${zoomLimits.max}`
+    );
+    minZoom = zoomLimits.min;
+    maxZoom = zoomLimits.max;
+  }
+
+  let defaultZoom = number(camIn.defaultZoom, DEFAULTS.camera.defaultZoom, 'camera.defaultZoom', notes);
+  if (defaultZoom < minZoom || defaultZoom > maxZoom) {
+    const clamped = Math.min(maxZoom, Math.max(minZoom, defaultZoom));
+    notes.push(`camera.defaultZoom ${defaultZoom} is outside ${minZoom}-${maxZoom}; using ${clamped}`);
+    defaultZoom = clamped;
+  }
+
+  return {
+    camera: { minZoom, maxZoom, defaultZoom },
+    map: {
+      contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
+      slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
+      genericVariantSeed: integer(
+        mapIn.genericVariantSeed, DEFAULTS.map.genericVariantSeed, 'map.genericVariantSeed', notes
+      ),
+    },
+    search: {
+      weights: {
+        keyword: weight(weightsIn.keyword, DEFAULTS.search.weights.keyword, 'search.weights.keyword', notes),
+        story: weight(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
+        clip: weight(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
+      },
+      minTokenLength: tokenLength(
+        searchIn.minTokenLength, DEFAULTS.search.minTokenLength, 'search.minTokenLength', notes
+      ),
+    },
+    notes,
+  };
+}
+
+/** A section of the overlay, or an empty one. Anything else is reported and ignored. */
+function asSection(value, path, notes) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    notes.push(`${path || 'config'} should be an object; ignoring it`);
+    return {};
+  }
+  return value;
+}
+
+/** A finite number, or the fallback with a note. */
+function number(value, fallback, path, notes) {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    notes.push(`${path} should be a finite number; using ${fallback}`);
+    return fallback;
+  }
+  return value;
+}
+
+/** Like `number`, but `null` is meaningful rather than an error. */
+function numberOrNull(value, fallback, path, notes) {
+  if (value === null) return null;
+  return number(value, fallback, path, notes);
+}
+
+function integer(value, fallback, path, notes) {
+  const n = number(value, fallback, path, notes);
+  if (!Number.isInteger(n)) {
+    notes.push(`${path} should be a whole number; using ${Math.round(n)}`);
+    return Math.round(n);
+  }
+  return n;
+}
+
+/** A fraction in (0, 1], matching what `createLayout()` will accept. */
+function ratio(value, fallback, path, notes) {
+  const n = number(value, fallback, path, notes);
+  if (!(n > 0 && n <= 1)) {
+    notes.push(`${path} should be in (0, 1]; using ${fallback}`);
+    return fallback;
+  }
+  return n;
+}
+
+/** At least one character, since a zero-length token matches everything. */
+function tokenLength(value, fallback, path, notes) {
+  const n = integer(value, fallback, path, notes);
+  if (n < 1) {
+    notes.push(`${path} must be at least 1; using 1`);
+    return 1;
+  }
+  return n;
+}
+
+/** A search weight: any non-negative number. Zero is a legitimate "ignore this signal". */
+function weight(value, fallback, path, notes) {
+  const n = number(value, fallback, path, notes);
+  if (n < 0) {
+    notes.push(`${path} should not be negative; using ${fallback}`);
+    return fallback;
+  }
+  return n;
+}

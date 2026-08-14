@@ -10,3 +10,6 @@ assets/blender/textures
 
 # Blender's per-save backup files.
 *.blend1
+
+# Local tuning overlay (packages/config). Optional and never committed.
+config.json

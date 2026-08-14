@@ -590,15 +590,17 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-165 tests (`npm test`), in a couple of seconds, with no browser and no network.
+191 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
 | --- | --- |
+| `packages/config/config.test.mjs` | defaults, the narrow-only zoom rule, every validator reporting rather than throwing |
+| `packages/config/load.test.mjs` | a missing overlay, a partial one, a malformed one |
 | `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance, roundness at any cell shape |
 | `packages/server/scan.test.mjs` | header parsers, directory rules |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
-| `packages/web/src/camera.test.mjs` | the pan/zoom invariants |
+| `packages/web/src/camera.test.mjs` | the pan/zoom invariants, and that a configured zoom range survives every operation |
 | `packages/web/src/tiles.test.mjs` | per-level budgets, fallback across levels, frame-aware eviction, pinning, prefetch caps |
 | `packages/web/src/render.test.mjs` | level selection on a real layout, never-blank, the ring and the warm pass, a zoomed-out frame's byte cost |
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
@@ -833,7 +835,7 @@ score(room) = w_keyword · keywordScore + w_story · storyScore + w_clip · clip
 ```
 
 The three weights are the "relative priorities of the three search types" and
-live in config ([§3e](#3e-configuration)). Intended ordering, per the design:
+live in config ([§3e](#3e-configuration--built)). Intended ordering, per the design:
 keyword above story above CLIP, with an exact keyword match outweighing anything
 CLIP can say.
 
@@ -896,49 +898,87 @@ one it is gets a third state: full, text-only, and stub.
 
 ---
 
-## 3e. Configuration
+## 3e. Configuration — **built**
 
-**One file for everything meant to be tuned by feel.** Today those values are
-spread across module scope in `camera.js`, defaults in `main.jsx`, and literals
-in the search path, which is fine until the interesting ones need changing
-together.
+**One surface for everything tuned by feel.** Those values used to be spread
+across module scope in `camera.js` and `useState` defaults in `main.jsx`, which
+is fine until the interesting ones need changing together.
+
+`packages/config/config.mjs` holds `DEFAULTS` — every value with the reasoning
+that justifies it beside it, the way `pyramid.js` does — and a `config.json` in
+the working directory overrides any subset:
 
 ```
-config.json
-  camera: { minZoom, maxZoom, defaultZoom }
-  map:    { contentRatio, slotSeed, genericVariantSeed }
-  search: { weights: { keyword, story, clip }, minTokenLength }
+camera: { minZoom, maxZoom, defaultZoom }
+map:    { contentRatio, slotSeed, genericVariantSeed }
+search: { weights: { keyword, story, clip }, minTokenLength }
 ```
 
-Loaded by the server, surfaced into the manifest so the client needs no second
-fetch, with the checked-in values as defaults and the file as an overlay.
+```sh
+npm run demo -- --config path/to/config.json     # defaults to ./config.json
+```
 
-**The pyramid deliberately stays out of it**, and this is the part worth being
-careful about. `pyramid.js` is the single tuning surface for the tile's
-dimensions, the ladder, the per-level budgets, the hysteresis band and the
-prefetch ring — every one of those is *derived and asserted* rather than tuned by
-feel, and a config file that restated any of them would be a second statement of
-a fact that already has one. `CACHE_SCALE` is the near-miss: it is a genuine
-by-feel dial, but it dials a table whose ratios the tests check, so it belongs
-where the table is.
+**No `config.json` is committed, and that is the point.** One spelling out every
+value would quietly become the real tuning surface, and editing the documented
+defaults would stop having any effect — two statements of one fact, with the
+undocumented one winning. The overlay is partial and optional; `DEFAULTS` stays
+the single statement of every default. `map` and `search` are read by the demo's
+sliders now and by [§3c](#3c-room-metadata--keywords-and-stories) and
+[§3d](#3d-hybrid-search--three-signals-one-sort) when they land.
 
-**Moving the zoom clamps into config creates a new failure mode, and the plan
-should own it.** `pyramid.test.mjs` asserts that every rung of the ladder is
-reachable within `MIN_ZOOM`/`MAX_ZOOM` — a level nothing can select is dead
-weight in the pipeline and a lie in the table. That coupling currently holds at
-test time because both numbers are source. Once the clamps come from a file, a
-config edit can put the ladder out of reach at *runtime*, where no test is
-watching. So:
+It reaches the client on the manifest rather than through an endpoint of its own.
+The client already blocks on that fetch before it can render, so a second round
+trip for a hundred bytes would only buy a state where the map exists and does not
+yet know its own zoom range.
 
-- Config load **validates and reports**, at server start, in the same voice the
-  pipeline uses for a corpus that cannot agree on an aspect: name the value, name
-  the rung it orphaned, refuse or clamp. Silently accepting it is how a level
-  stops being fetched and nobody finds out.
-- The clamps become **parameters of the camera** rather than module constants —
-  the same refactor shape as `createLayout({ aspect })` — so the pure functions
-  stay pure and testable at any clamp.
-- The suite asserts the shipped defaults *and* a couple of deliberately hostile
-  configs, so the validator is known to fire rather than assumed to.
+**The pyramid deliberately stays out of it.** `pyramid.js` is the single tuning
+surface for the tile's dimensions, the ladder, the per-level budgets, the
+hysteresis band and the prefetch ring — every one of those is *derived and
+asserted* rather than tuned by feel, and a config file that restated any of them
+would be a second statement of a fact that already has one. `CACHE_SCALE` is the
+near-miss: a genuine by-feel dial, but it dials a table whose ratios the tests
+check, so it belongs where the table is.
+
+### Zoom config narrows, and never widens
+
+This is the rule that makes configuring the camera safe, and it is worth stating
+as the load-bearing decision it is.
+
+`pyramid.test.mjs` asserts that every rung of the ladder is reachable within
+`ZOOM_LIMITS` — the hard range in `camera.js`. That assertion held for free while
+both numbers were source. Once the range could come from a file, the obvious
+worry was that a config edit could orphan a rung at *runtime*, where no test is
+watching, and the obvious fix was to validate a loaded config against the ladder.
+
+The better answer is to make the question not arise: **config may only tighten
+the range.** A value outside `ZOOM_LIMITS` is clamped to it rather than honoured.
+Since no configuration can move the range outward, the reachability assertion
+still covers every state the app can reach, and the ladder never needs consulting
+at load time at all.
+
+What is left — a narrowed range leaving the finest rung or two unreachable — is
+**not an error and is not reported**. The cost is a few inactive lines and some
+files in a bucket that are never requested; refusing a legitimate narrowing to
+avoid that would be the tail wagging the dog.
+
+Three consequences in the code:
+
+- **`ZOOM_LIMITS` in `camera.js` is the hard range**, and the only statement of
+  it. `DEFAULTS.camera.minZoom`/`maxZoom` are `null`, meaning "as far as the
+  camera allows" — which is why this file does not restate 26 and 900.
+- **The range rides on the camera as `limits`**, the same optional-field pattern
+  as `aspect`, so every clamp goes through one field and no operation has to
+  remember to ask. It carries the same hazard, too: rebuild a camera instead of
+  spreading it and the range is lost mid-gesture. Both are asserted.
+- **`resolveConfig()` takes the limits as a parameter**, so the whole policy is
+  exercisable at limits the app is not using — which is how the tests check
+  narrowing without pinning themselves to whatever `camera.js` currently says.
+
+**Nothing throws.** A demo that will not start because of a typo in a tuning file
+is worse than one that starts and says what it ignored, so every adjustment lands
+in `notes` and the server prints them at startup. The failure mode a config file
+actually has is a value that silently did not take effect; that is the one thing
+this refuses to do.
 
 ---
 
@@ -951,6 +991,7 @@ babel-index/
   assets/base-tile/        # generated geometry + placeholder         [exists]
   docs/                                                              [exists]
   packages/
+    config/                # defaults + validation for the by-feel numbers [exists]
     pipeline/              # mips [exists]; embed [exists]; border-drift report
     server/                # Express: manifest, text-embed, generate queue
     web/                   # React: map, search, metadata overlay, centre-room controls
@@ -962,18 +1003,22 @@ review status through curation; curation is dropped
 remains is a sidecar next to the images —
 
 ```
-<dir>/            the images, level 0
-<dir>/<width>/    the pyramid levels          (packages/pipeline)
-embeddings.bin    int8 image vectors, row-major by room id
-embeddings.json   model, dim, count, file order
-metadata.json     keywords + story, keyed on filename   (§3c)
-config.json       tuning surface                        (§3e)
+<dir>/                  the images, level 0
+<dir>/<width>/          the pyramid levels        (packages/pipeline)
+<dir>/embeddings.bin    int8 image vectors, row-major by room id
+<dir>/embeddings.json   model, dim, count, file order
+<dir>/metadata.json     keywords + story, keyed on filename   (§3c)
 ```
 
 — which keeps "a directory of images is the entire data layer" true, and true of
 a directory that now carries text as well. Provenance (seed, prompt, model,
 ControlNet weights) stays a generation-side sidecar; the map has no use for it
 and should not be the reason a database appears.
+
+`config.json` is the exception and lives beside the *server*, not the corpus
+([§3e](#3e-configuration--built)): it describes how to display a library, not
+which library, so pointing the demo at a different directory should not change
+how the map feels.
 
 ```
 room: id, file, w, h, bytes, levels[],
@@ -1160,12 +1205,15 @@ Recorded from review, with what changed:
     difference is deliberate: a positional blob has to be rejected wholesale when
     it goes stale, a filename-keyed map degrades per room and tolerates a miss.
     [§3c](#3c-room-metadata--keywords-and-stories).
-18. **One config file for what is tuned by feel; the pyramid stays out of it.**
-    Zoom clamps, default zoom, search weights and the demo's default generic
-    ratio move to config. The ladder, `BASE_TILE`, the budgets and the hysteresis
-    band do not — they are derived and asserted, not tuned. Moving the clamps
-    means config can now orphan a ladder rung at runtime, so config load
-    validates. [§3e](#3e-configuration).
+18. **One config surface for what is tuned by feel; the pyramid stays out of it.**
+    Built. Zoom range, default zoom, search weights, slot seeds and the demo's
+    default generic ratio live in `packages/config`; the ladder, `BASE_TILE`, the
+    budgets and the hysteresis band do not — they are derived and asserted, not
+    tuned. **Config narrows the zoom range and never widens it**, which is what
+    keeps the ladder's reachability assertion true at runtime without consulting
+    it at load time. A narrowing that orphans a rung is fine and silent — the
+    cost is inactive code and unrequested files. Nothing throws; everything
+    adjusted is reported. [§3e](#3e-configuration--built).
 19. **The generic room becomes a small set of alternates**, chosen per cell by a
     seeded hash with the seed in config. They tile by construction, like
     everything else inpainted from the base. Prerequisite: pinning stops being
@@ -1232,13 +1280,11 @@ Recorded from review, with what changed:
 
 In dependency order, shortest path to a demo that survives a real corpus:
 
-1. **Configuration** ([§3e](#3e-configuration)) — flagged high priority, and it
-   is also the cheapest thing here that everything below wants to put a number
-   in. Zoom clamps, default zoom, search weights, default generic ratio, generic
-   variant seed. The work that is not just moving constants: making the clamps
-   camera parameters rather than module scope, and validating a loaded config
-   against the ladder's reachability rule so a config edit cannot silently orphan
-   a level.
+1. ~~**Configuration**~~ — **done**, [§3e](#3e-configuration--built).
+   `packages/config` holds the defaults and the validation, `config.json` is an
+   optional partial overlay, and the resolved block rides on the manifest. The
+   zoom range narrows only, which is what let the ladder's reachability rule stay
+   a test-time fact. `map` and `search` are populated and waiting for 2 and 3.
 2. **Room metadata end to end** ([§3c](#3c-room-metadata--keywords-and-stories)) —
    `scan.mjs` joins `metadata.json` on filename and surfaces it into the
    manifest, the client fetches it beside the blob. No UI yet; this is the data

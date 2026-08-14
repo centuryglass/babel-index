@@ -28,6 +28,22 @@ layout without reloading any image data, so the feel of the thing can be tuned
 by dragging a slider. Growing the corpus keeps existing rooms where they are and
 adds further out, so the map doesn't reshuffle underneath you.
 
+### Tuning
+
+The values with no right answer — the zoom range, where the camera opens, where
+the sliders start, how the search signals are weighted — live in
+[`packages/config/config.mjs`](packages/config/config.mjs), each with the
+reasoning behind it. Drop a `config.json` beside the server to override any
+subset of them:
+
+```sh
+npm run demo -- --config path/to/config.json     # defaults to ./config.json
+```
+
+The overlay is partial: name only what you're changing. Anything the server
+can't honour — a zoom range wider than the camera allows, a ratio outside
+(0, 1] — is clamped and reported at startup rather than silently dropped.
+
 Search is real when the corpus has an embedding blob. `tools/embed` runs the
 CLIP image tower over the rooms once, offline; the demo server runs only the
 text tower per query and returns a vector, and the browser ranks against the

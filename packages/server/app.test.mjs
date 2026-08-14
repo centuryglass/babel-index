@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { connect } from 'node:net';
 import { createApp, stubRanking } from './app.mjs';
 import { scanDirectory } from './scan.mjs';
+import { DEFAULTS, resolveConfig } from '../config/config.mjs';
 import * as fixture from './image-fixtures.mjs';
 
 /**
@@ -81,6 +82,41 @@ test('/api/manifest serves the scan', async () => {
       assert.equal(typeof room.bytes, 'number');
     });
   });
+});
+
+test('/api/manifest carries the config, and never the operator notes', async () => {
+  await serving(async ({ get }) => {
+    const m = await (await get('/api/manifest')).json();
+    // The client reads all three of these on its first render, so their absence
+    // is not a degraded map, it is a crash.
+    assert.ok(m.config.camera.defaultZoom > 0);
+    assert.ok(m.config.map.contentRatio > 0);
+    assert.ok(m.config.search.weights.clip >= 0);
+    // `notes` is for whoever started the server; shipping it would invite the
+    // client to start caring what the config could not honour.
+    assert.equal(m.config.notes, undefined);
+    assert.equal(m.config.source, undefined);
+  });
+});
+
+test('/api/manifest serves the defaults when the app was given no config', async () => {
+  // index.mjs always passes one, but app.mjs is built to be usable without the
+  // CLI, and a manifest with no config block would crash the client.
+  await serving(async ({ get }) => {
+    const m = await (await get('/api/manifest')).json();
+    assert.equal(m.config.map.contentRatio, DEFAULTS.map.contentRatio);
+  });
+});
+
+test('a narrowed config reaches the client narrowed', async () => {
+  await serving(
+    async ({ get }) => {
+      const m = await (await get('/api/manifest')).json();
+      assert.equal(m.config.camera.maxZoom, 120);
+      assert.equal(m.config.camera.defaultZoom, 120, 'the opening zoom came with it');
+    },
+    { config: resolveConfig({ camera: { maxZoom: 120 } }) }
+  );
 });
 
 test('every url in the manifest actually serves', async () => {
