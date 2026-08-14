@@ -28,6 +28,12 @@ layout without reloading any image data, so the feel of the thing can be tuned
 by dragging a slider. Growing the corpus keeps existing rooms where they are and
 adds further out, so the map doesn't reshuffle underneath you.
 
+A corpus may also carry a `metadata.json` beside its images — three stylistic
+keywords and a short story per room, keyed on filename — which the demo counts
+in its header. Nothing reads them yet; they become search signals and a
+per-room overlay next. Keys that match no image are reported at startup rather
+than passing for "no metadata".
+
 ### Tuning
 
 The values with no right answer — the zoom range, where the camera opens, where

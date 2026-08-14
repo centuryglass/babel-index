@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder, rankByEmbedding } from '../../map/ordering.js';
+import { joinMetadata } from '../../map/metadata.js';
 import { CELL_ASPECT } from './camera.js';
 import { createTileCache, GENERIC } from './tiles.js';
 import { createUrlFor } from './rooms.js';
@@ -40,6 +41,7 @@ function Library({ manifest }) {
   const [searchOrder, setSearchOrder] = useState(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+  const [metadata, setMetadata] = useState(null);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
@@ -58,6 +60,26 @@ function Library({ manifest }) {
       cancelled = true;
     };
   }, [manifest]);
+
+  // The keyword/story sidecar, fetched alongside the blob rather than inlined
+  // into the manifest: at a full corpus it is megabytes, and the manifest is on
+  // the path to the first frame. Joined by filename into an array indexed by
+  // room id, which is what search and the overlay will both want.
+  useEffect(() => {
+    if (!manifest.metadata) return;
+    let cancelled = false;
+    fetch(manifest.metadata.url)
+      .then((r) => r.json())
+      .then((sidecar) => {
+        if (!cancelled) setMetadata(joinMetadata(manifest.rooms, sidecar));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [manifest]);
+
+  const described = useMemo(() => metadata?.filter(Boolean).length ?? 0, [metadata]);
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -192,6 +214,7 @@ function Library({ manifest }) {
         <h1>The Indexing of Babel</h1>
         <p className="sub">
           offline · {total} rooms in {manifest.directory.split('/').slice(-1)[0]}
+          {described > 0 && <> · {described} described</>}
         </p>
 
         <form onSubmit={runSearch} className="row">

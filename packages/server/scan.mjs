@@ -1,8 +1,12 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import { mipPlan } from '../pipeline/layout.mjs';
+import { metadataCoverage } from '../map/metadata.js';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+/** The keyword/story sidecar, written by the generator. See packages/map/metadata.js. */
+export const METADATA_FILE = 'metadata.json';
 
 /**
  * Read pixel dimensions from a file header, without decoding the image.
@@ -146,6 +150,20 @@ export async function scanDirectory(dir, { base } = {}) {
     // no blob, unreadable, or malformed - leave embeddings null
   }
 
+  // The keyword/story sidecar. Unlike the blob above this is keyed on filename,
+  // so a corpus that has grown or been renamed does not invalidate it wholesale
+  // - it is joined per file and a miss is just a room without keywords. What is
+  // worth surfacing is the pair (matched, entries): a sidecar describing files
+  // this corpus does not have looks exactly like no sidecar at all from the map.
+  let metadata = null;
+  try {
+    const sidecar = JSON.parse(await readFile(join(dir, METADATA_FILE), 'utf8'));
+    const { matched, entries } = metadataCoverage(rooms, sidecar);
+    metadata = { url: `/images/${METADATA_FILE}`, matched, entries };
+  } catch {
+    // no sidecar, unreadable, or malformed - leave metadata null
+  }
+
   return {
     mode: 'offline',
     directory: dir,
@@ -158,6 +176,12 @@ export async function scanDirectory(dir, { base } = {}) {
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */
     embeddings,
+    /**
+     * The keyword/story sidecar, if there is one; else null. The client fetches
+     * it separately - at a full corpus it is megabytes, and this manifest is on
+     * the path to the first frame.
+     */
+    metadata,
     /**
      * The pyramid as it exists on disk, finest first. Clients build a level's
      * url as `/images/<dir>/<file>`, or `/images/<file>` where `dir` is null.

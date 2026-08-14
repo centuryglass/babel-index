@@ -41,6 +41,7 @@ is read per request.
 | `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
 | `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
+| `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
@@ -100,6 +101,16 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **`embeddings.bin` is keyed by row order; `metadata.json` is keyed by
+  filename. The difference is deliberate and the rules differ with it.** The
+  blob is positional, so `scan.mjs` rejects one whose count has drifted — a
+  stale one would attach the wrong vector to the wrong room, quietly. The
+  sidecar is joined per file, so a partial match is simply partial and every
+  entry that does match still lands; never "fix" that into the blob's
+  all-or-nothing rule. The one case worth being loud about is `matched: 0`
+  against a non-zero `entries`: that is keys that have drifted, and from the map
+  it looks exactly like having no sidecar. Both numbers go in the manifest and
+  `index.mjs` warns.
 - **Zoom config narrows, never widens, and that is load-bearing.** `ZOOM_LIMITS`
   in `camera.js` is the hard range and the only statement of it;
   `pyramid.test.mjs` asserts every ladder rung is reachable inside it. Config can
