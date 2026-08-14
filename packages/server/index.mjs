@@ -18,6 +18,7 @@
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { scanDirectory } from './scan.mjs';
@@ -79,8 +80,21 @@ const app = createApp({
 });
 
 app.listen(port, () => {
-  console.log(`\n  the library is open at http://localhost:${port}\n`);
+  console.log(`\n  the library is open at http://localhost:${port}`);
+  // Express binds every interface, so the demo is already reachable from a
+  // phone on the same network - but only if you know which address to type.
+  // Printing them is the difference between "it is exposed" and "it is usable".
+  for (const addr of lanAddresses()) console.log(`                       http://${addr}:${port}`);
+  console.log();
 });
+
+/** Non-internal IPv4 addresses, for testing the map on a device that is not this one. */
+function lanAddresses() {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter((n) => n && n.family === 'IPv4' && !n.internal)
+    .map((n) => n.address);
+}
 
 function parseArgs(args) {
   const out = {};

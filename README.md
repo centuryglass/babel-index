@@ -14,7 +14,10 @@ npm run demo
 ```
 
 Then open <http://localhost:5173>. It runs against the 26-room sample in
-`assets/corpus-sample/` with no further setup. Point it at a bigger corpus with:
+`assets/corpus-sample/` with no further setup. The server binds every interface
+and prints its LAN addresses too, so the map can be opened on a phone on the
+same network — which is the only way to test the long press for real. Point it
+at a bigger corpus with:
 
 ```sh
 npm run demo -- --images /path/to/rooms [--base base.jpg] [--port 5173]
