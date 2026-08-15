@@ -24,6 +24,7 @@ import { build } from 'esbuild';
 import { scanDirectory } from './scan.mjs';
 import { createApp } from './app.mjs';
 import { loadConfig } from '../config/load.mjs';
+import { portInUse } from './port.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, '../web');
@@ -37,6 +38,22 @@ if (!existsSync(imagesDir)) {
   process.exit(1);
 }
 const port = Number(argv.port ?? 5173);
+
+// Checked before anything is scanned or bundled, because the failure mode
+// without it is silent and expensive: Node fires the `listening` callback and
+// only THEN emits EADDRINUSE, so the banner prints, the handle is torn down,
+// the event loop empties and the process exits 0. A second `npm run demo`
+// against a server left running in another window says "the library is open at
+// http://localhost:5173", exits successfully, and serves nothing - every page
+// you then load is the old process, including the code you just changed.
+if (await portInUse(port)) {
+  console.error(
+    `port ${port} is already in use - something else is serving there.\n` +
+      'Stop it first, or pass a different --port. (A demo server left running in\n' +
+      'another window will happily keep serving the code you had before.)'
+  );
+  process.exit(1);
+}
 
 // Loud about anything it could not honour: a tuning value that silently did not
 // take effect is the one failure mode a config file really has.
@@ -79,13 +96,26 @@ const app = createApp({
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`\n  the library is open at http://localhost:${port}`);
   // Express binds every interface, so the demo is already reachable from a
   // phone on the same network - but only if you know which address to type.
   // Printing them is the difference between "it is exposed" and "it is usable".
   for (const addr of lanAddresses()) console.log(`                       http://${addr}:${port}`);
   console.log();
+});
+
+// The backstop. The check above races anything that grabs the port in the
+// moment between, and it is the only thing standing between a failed bind and
+// an exit code of 0 - an unhandled 'error' here would otherwise be reported
+// after the success banner has already been printed.
+server.on('error', (err) => {
+  console.error(
+    err.code === 'EADDRINUSE'
+      ? `\nport ${port} was taken before this server could bind it. Nothing is being served.`
+      : `\nthe server failed to start: ${err.message}`
+  );
+  process.exit(1);
 });
 
 /** Non-internal IPv4 addresses, for testing the map on a device that is not this one. */
