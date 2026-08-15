@@ -75,7 +75,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
     browser = await chromium.launch({
       executablePath: process.env.BABEL_E2E_CHROMIUM || undefined,
     });
-    page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    // `hasTouch` so the pinch test's CDP touch events become real pointer
+    // events. It does not take the mouse away, so the drag and wheel tests are
+    // unaffected - a desktop with a touchscreen is an ordinary machine.
+    page = await browser.newPage({ viewport: { width: 1280, height: 800 }, hasTouch: true });
 
     // Anything the page complains about is a failure; the map is not supposed
     // to be noisy.
@@ -340,10 +343,119 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.equal(await card.count(), 0, 'a press that became a drag must not open a card');
   });
 
+  test('pinching zooms, and two fingers do not fight over the pan', async () => {
+    // Playwright's touchscreen is single-touch, so a real pinch has to be
+    // dispatched through CDP. It is worth the awkwardness: pinch is the one
+    // gesture that cannot be approximated with a mouse, and the multi-pointer
+    // bookkeeping it needs is the same code the drag and the long press run on.
+    const before = await settled(page);
+
+    await pinch(page, { cx: 640, cy: 400, from: 80, to: 260 });
+    const out = await settled(page);
+    assert.ok(out.zoom > before.zoom, `spreading must zoom in: ${before.zoom} -> ${out.zoom}`);
+
+    await pinch(page, { cx: 640, cy: 400, from: 260, to: 80 });
+    const back = await settled(page);
+    assert.ok(back.zoom < out.zoom, `squeezing must zoom out: ${out.zoom} -> ${back.zoom}`);
+
+    // Two fingers held at a fixed distance and slid together are a pan, not a
+    // zoom. Before pointers were tracked by id, both fingers fed one drag ref
+    // and the map juddered between them.
+    const steady = await settled(page);
+    await pinch(page, { cx: 640, cy: 400, from: 160, to: 160, slide: { x: 120, y: 0 } });
+    const slid = await settled(page);
+    assert.equal(slid.zoom, steady.zoom, 'a parallel two-finger slide must not change zoom');
+    assert.ok(slid.x < steady.x, `sliding right must move the camera left: ${steady.x} -> ${slid.x}`);
+  });
+
+  test('lifting one finger hands the gesture to the other without a lurch', async () => {
+    // The gotcha of multi-touch. The remaining finger's next move is measured
+    // from wherever the pinch left off unless the drag is re-anchored to where
+    // that finger actually is - and the symptom is the map jumping by the width
+    // of the gesture at the exact moment a pinch ends, which is constant on a
+    // phone and invisible on a desktop.
+    const survivor = await pinch(page, { cx: 640, cy: 400, from: 200, to: 220, lift: true });
+    const lifted = await settled(page);
+
+    await survivor.move(-200);
+    const dragged = await settled(page);
+    await survivor.end();
+
+    // The survivor moved 200px left, so the camera moves right by 200px worth
+    // of cells - damped a little by the pan resistance, never by a whole
+    // gesture's width.
+    const expected = 200 / dragged.zoom;
+    const actual = dragged.x - lifted.x;
+    assert.ok(actual > 0, `the surviving finger must still pan: ${lifted.x} -> ${dragged.x}`);
+    assert.ok(
+      Math.abs(actual - expected) < expected * 0.5,
+      `expected roughly ${expected.toFixed(2)} cells of pan, got ${actual.toFixed(2)} - a lurch`
+    );
+    assert.equal(dragged.zoom, lifted.zoom, 'one finger must not go on zooming');
+  });
+
   test('nothing was logged to the console', () => {
     assert.deepEqual(consoleErrors, []);
   });
 });
+
+/**
+ * A two-finger pinch, dispatched as real touch events through CDP.
+ *
+ * Playwright's touchscreen is single-touch, so this is the only way to express
+ * the gesture. Two details of `Input.dispatchTouchEvent` are worth writing down,
+ * because both are easy to get wrong and fail silently rather than loudly:
+ *
+ *   - `touchPoints` on a `touchEnd` are the points being RELEASED, not the ones
+ *     that remain. Sending the survivor releases the wrong finger.
+ *   - points carry an explicit `id`. Without one Chromium matches them by
+ *     position, so a move after a release is read as a brand new finger rather
+ *     than as the surviving one - which quietly turns the gesture under test
+ *     into a different gesture.
+ *
+ * `from`/`to` are the half-distance between the fingers, so the pair starts
+ * `2 * from` apart and ends `2 * to` apart; `slide` moves the midpoint while
+ * they do it, which is how a pinch-pan is expressed. `lift` leaves the second
+ * finger down at the end instead of releasing both, and returns a handle for
+ * driving it - which is what exercises the re-anchor on dropping to one finger.
+ */
+async function pinch(page, { cx, cy, from, to, slide = { x: 0, y: 0 }, steps = 12, lift = false }) {
+  const cdp = await page.context().newCDPSession(page);
+  const at = (half, dx, dy) => [
+    { x: cx - half + dx, y: cy + dy, id: 1 },
+    { x: cx + half + dx, y: cy + dy, id: 2 },
+  ];
+  const send = (type, touchPoints) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+
+  await send('touchStart', at(from, 0, 0));
+  let last = at(from, 0, 0);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    last = at(from + (to - from) * t, slide.x * t, slide.y * t);
+    await send('touchMove', last);
+  }
+
+  if (!lift) {
+    await send('touchEnd', last);
+    await cdp.detach();
+    return null;
+  }
+
+  // Release only the first finger; the second stays down.
+  await send('touchEnd', [last[0]]);
+  const survivor = { ...last[1] };
+  return {
+    move: async (dx, dy = 0) => {
+      survivor.x += dx;
+      survivor.y += dy;
+      await send('touchMove', [survivor]);
+    },
+    end: async () => {
+      await send('touchEnd', [survivor]);
+      await cdp.detach();
+    },
+  };
+}
 
 /** Parse the HUD, which is the app's own account of what it just drew. */
 async function hud(page) {

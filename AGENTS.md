@@ -103,6 +103,17 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **`useMapCamera.js` tracks pointers by id, in a Map, and that is load-bearing
+  for touch.** One finger is a drag, two are a pinch, and the pinch is always
+  between the *first two* so a third does not hijack it. Two rules that look
+  optional and are not: a second finger cancels any pending long press, and
+  dropping back to one finger must re-anchor the drag to where that finger
+  actually is — otherwise its next move is measured from wherever the pinch left
+  off and the map lurches by the width of the gesture, every time a pinch ends.
+  `smoke.e2e.mjs` covers both; nothing else can.
+- **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
+  it.** One fixed-point implementation for both gestures — a pinch knows the
+  ratio its fingers moved and has no wheel delta to invent. Don't grow a second.
 - **The overlay opens on right-click or long press, never left-click**, which
   stays reserved for "focus this room" — a map whose primary button opens a
   modal is a map you cannot explore. **The long press must lose to a pan**: the
