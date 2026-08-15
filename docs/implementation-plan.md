@@ -590,7 +590,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-248 tests (`npm test`), in a couple of seconds, with no browser and no network.
+252 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -600,6 +600,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/map/scoring.test.mjs` | folding, both partial-match rules, normalisation, and that the blend is a blend rather than tiers |
 | `packages/map/metadata.test.mjs` | entry normalisation, the filename join, coverage vs. a drifted sidecar |
 | `packages/map/ordering.test.mjs` | slot placement, stability under re-ranking, resistance, roundness at any cell shape |
+| `packages/server/port.test.mjs` | the busy-port check, and that its probe releases what it borrowed |
 | `packages/server/scan.test.mjs` | header parsers, directory rules, the metadata sidecar |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/picking.test.mjs` | which room is under a point: flooring, the ranking, the centre and generic cells, any zoom or cell shape |
@@ -700,22 +701,32 @@ and reads a move after a release as a new finger rather than the surviving one.
 Both were established by experiment rather than assumed, and both are written
 down in the helper.
 
-**And the limit of that approach is worth stating, because it was found the
-hard way.** CDP injection dispatches pointer events straight to the page,
-bypassing the compositor's gesture arbitration and the real pointer-capture
-lifecycle — the very layers `touch-action` and `pointercancel` live in. Pinch
-passed every check here and did not work at all on Android, in two different
-engines, because `set`/`releasePointerCapture` throw `NotFoundError` for a
-pointer the browser does not consider capturable, which is ordinary on touch.
-An unguarded release aborted the handler and stranded a finger in the pointer
-map, after which every gesture was read as a pinch against a finger that had
-left the glass.
+**And the limit of that approach is worth stating.** CDP injection dispatches
+pointer events straight to the page, bypassing the compositor's gesture
+arbitration and the real pointer-capture lifecycle — the very layers
+`touch-action` and `pointercancel` live in. Nothing has actually escaped through
+that gap: pinch was reported broken on Android and the cause turned out to be a
+stale demo server still holding the port and serving old code, not the gesture
+code at all. It is a known blind spot rather than a demonstrated one, and worth
+keeping in mind precisely because the first instinct on a device-only report is
+to believe it.
 
-So the rule for this layer: **a gesture bug suspected on a device gets its
-condition simulated explicitly** — the capture-throws test does exactly that,
-and fails against both original bugs — and `?touchdebug` prints the raw pointer
-stream on screen, because a phone has no console you can read with both thumbs
-busy.
+Two things came out of that round anyway, and both are worth having. **The
+capture calls are now guarded**: `set`/`releasePointerCapture` throw
+`NotFoundError` for a pointer the browser does not consider capturable, which is
+ordinary on touch, and `pointercancel` reaches the release with capture already
+dropped. An unguarded throw would abort the handler and strand a finger in the
+pointer map. There is a test that makes both calls throw, which is the honest
+way to cover a hazard the injected path cannot produce. And **`?touchdebug`
+prints the raw pointer stream on screen**, because a phone has no console you
+can read with both thumbs busy.
+
+The third thing, and the one that actually mattered: **`npm run demo` refuses a
+busy port.** It used to fire its `listening` callback, print "the library is
+open at…", receive `EADDRINUSE` immediately afterwards, tear the handle down and
+exit 0 — a silent no-op wearing a success banner, with an older process still
+answering on that port. A day of device debugging came out of that, so the check
+runs before anything is scanned or bundled.
 
 ### Still missing
 
