@@ -394,10 +394,78 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.equal(dragged.zoom, lifted.zoom, 'one finger must not go on zooming');
   });
 
+  test('a pointer survives capture calls that throw', async () => {
+    // Reproduces what a real touchscreen does and CDP injection does not.
+    // `set/releasePointerCapture` throw NotFoundError for a pointer the browser
+    // does not consider capturable, which is ordinary on touch - capture is
+    // implicit there, and the browser drops it itself at the end of a sequence
+    // or when it cancels one.
+    //
+    // Unguarded, the release threw before the bookkeeping ran and left the
+    // finger in the pointer map forever. Every gesture after the first was then
+    // read as a pinch against a finger no longer on the glass: no zoom, and a
+    // map that twitched. This is that bug, expressed without an Android device.
+    await page.evaluate(() => {
+      const proto = HTMLCanvasElement.prototype;
+      window.__capture = {
+        set: proto.setPointerCapture,
+        release: proto.releasePointerCapture,
+      };
+      const boom = () => {
+        throw new DOMException('no such pointer', 'NotFoundError');
+      };
+      proto.setPointerCapture = boom;
+      proto.releasePointerCapture = boom;
+    });
+
+    try {
+      const moves = [];
+      for (let i = 0; i < 3; i++) {
+        // Re-centre first. Pan resistance grows with distance from the origin,
+        // so three drags in a row from wherever the last one ended would differ
+        // for a reason that has nothing to do with pointer bookkeeping - which
+        // is exactly what the first version of this test measured.
+        await page.locator('button', { hasText: 'centre' }).click();
+        const before = await settled(page);
+        await touchDrag(page, { from: { x: 900, y: 400 }, to: { x: 700, y: 400 } });
+        moves.push((await settled(page)).x - before.x);
+      }
+
+      // Every repetition must behave identically. A stranded pointer makes the
+      // second gesture a phantom pinch, so it is the drift between them - not
+      // any single value - that catches this.
+      assert.ok(moves[0] > 0, `the first drag did not pan: ${moves[0]}`);
+      for (const m of moves.slice(1))
+        assert.ok(
+          Math.abs(m - moves[0]) < 1e-6,
+          `repeat drags differ (${moves.join(', ')}) - a pointer was stranded`
+        );
+    } finally {
+      await page.evaluate(() => {
+        HTMLCanvasElement.prototype.setPointerCapture = window.__capture.set;
+        HTMLCanvasElement.prototype.releasePointerCapture = window.__capture.release;
+      });
+    }
+  });
+
   test('nothing was logged to the console', () => {
     assert.deepEqual(consoleErrors, []);
   });
 });
+
+/** A one-finger touch drag, as real touch events. */
+async function touchDrag(page, { from, to, steps = 6 }) {
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type, touchPoints) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+  const at = (t) => [
+    { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, id: 1 },
+  ];
+
+  await send('touchStart', at(0));
+  for (let i = 1; i <= steps; i++) await send('touchMove', at(i / steps));
+  await send('touchEnd', at(1));
+  await cdp.detach();
+}
 
 /**
  * A two-finger pinch, dispatched as real touch events through CDP.

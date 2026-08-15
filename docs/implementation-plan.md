@@ -700,6 +700,23 @@ and reads a move after a release as a new finger rather than the surviving one.
 Both were established by experiment rather than assumed, and both are written
 down in the helper.
 
+**And the limit of that approach is worth stating, because it was found the
+hard way.** CDP injection dispatches pointer events straight to the page,
+bypassing the compositor's gesture arbitration and the real pointer-capture
+lifecycle — the very layers `touch-action` and `pointercancel` live in. Pinch
+passed every check here and did not work at all on Android, in two different
+engines, because `set`/`releasePointerCapture` throw `NotFoundError` for a
+pointer the browser does not consider capturable, which is ordinary on touch.
+An unguarded release aborted the handler and stranded a finger in the pointer
+map, after which every gesture was read as a pinch against a finger that had
+left the glass.
+
+So the rule for this layer: **a gesture bug suspected on a device gets its
+condition simulated explicitly** — the capture-throws test does exactly that,
+and fails against both original bugs — and `?touchdebug` prints the raw pointer
+stream on screen, because a phone has no console you can read with both thumbs
+busy.
+
 ### Still missing
 
 **A prefetch-ordering test with real timing.** `render.test.mjs` asserts that
