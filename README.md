@@ -14,28 +14,69 @@ npm run demo
 ```
 
 Then open <http://localhost:5173>. It runs against the 26-room sample in
-`assets/corpus-sample/` with no further setup. Point it at a bigger corpus with:
+`assets/corpus-sample/` with no further setup. The server binds every interface
+and prints its LAN addresses too, so the map can be opened on a phone on the
+same network — which is the only way to test the long press for real. Point it
+at a bigger corpus with:
 
 ```sh
 npm run demo -- --images /path/to/rooms [--base base.jpg] [--port 5173]
 ```
 
 Offline mode is just a directory of images — no database, no bucket, no upload
-step. Drag to pan, scroll to zoom, and the edge of the content region resists.
+step. Drag to pan, scroll or pinch to zoom, and the edge of the content region
+resists. **Right-click a room** (long press on a touchscreen) to open its card:
+three keywords and a short story, with each keyword a live search.
 
 **Rooms on the map** and **non-generic %** are live controls: both re-derive the
 layout without reloading any image data, so the feel of the thing can be tuned
 by dragging a slider. Growing the corpus keeps existing rooms where they are and
 adds further out, so the map doesn't reshuffle underneath you.
 
-Search is real when the corpus has an embedding blob. `tools/embed` runs the
-CLIP image tower over the rooms once, offline; the demo server runs only the
-text tower per query and returns a vector, and the browser ranks against the
-blob (so a re-rank costs no round trip). The sample corpus ships with a blob, so
-`npm run demo` searches for real. Point it at a directory that has never been
-embedded and search falls back to a deterministic pseudo-ranking — the mechanic
-(type a term, watch the library rearrange around the centre) still works, and
-the UI says so rather than implying the results mean anything.
+### Tuning
+
+The values with no right answer — the zoom range, where the camera opens, where
+the sliders start, how the search signals are weighted — live in
+[`packages/config/config.mjs`](packages/config/config.mjs), each with the
+reasoning behind it. Drop a `config.json` beside the server to override any
+subset of them:
+
+```sh
+npm run demo -- --config path/to/config.json     # defaults to ./config.json
+```
+
+The overlay is partial: name only what you're changing. Anything the server
+can't honour — a zoom range wider than the camera allows, a ratio outside
+(0, 1] — is clamped and reported at startup rather than silently dropped.
+
+### Search
+
+Search ranks the **whole** corpus by a blend of three signals, so the library
+rearranges around your query rather than splicing a few results to the front:
+
+- **keywords** — three stylistic terms per room (material, movement, technique,
+  artist), with an exact match outscoring a partial one;
+- **story text** — a short fictional setting per room, matched by how much of
+  your query it contains;
+- **CLIP** — which orders everything the other two are silent about, and that is
+  most of the corpus for most queries.
+
+The first two come from a `metadata.json` beside the images, keyed on filename.
+CLIP comes from an embedding blob: `tools/embed` runs the image tower over the
+rooms once, offline; the demo server runs only the text tower per query and
+returns a vector, and the browser ranks against the blob, so a re-rank costs no
+round trip. Their relative weights are [config](#tuning).
+
+Any of the three may be missing and the rest still give a real ranking — the
+panel reports which ones actually matched, rather than which were available.
+Only a corpus with neither metadata nor embeddings falls back to a deterministic
+pseudo-ranking, and the UI says so rather than implying the order means
+anything. Sidecar keys matching no image are reported at startup rather than
+passing for "no metadata".
+
+> The `metadata.json` in `assets/corpus-sample/` is **placeholder text**, written
+> so the demo's search has something to find. It describes nothing about the
+> images it is attached to.
 
 ## What a tile is
 

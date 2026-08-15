@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createLayout, shuffledOrder, rankByEmbedding } from '../../map/ordering.js';
+import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { joinMetadata } from '../../map/metadata.js';
+import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
+import { roomAtPoint } from './picking.js';
 import { CELL_ASPECT } from './camera.js';
 import { createTileCache, GENERIC } from './tiles.js';
 import { createUrlFor } from './rooms.js';
@@ -28,13 +31,19 @@ function Library({ manifest }) {
   const canvasRef = useRef(null);
   const total = manifest.count;
 
+  // Every by-feel starting value comes from the manifest's config block rather
+  // than from a literal here - see packages/config. The sliders still move
+  // freely afterwards; config decides where they start.
+  const config = manifest.config;
+
   const [roomCount, setRoomCount] = useState(total);
-  const [contentRatio, setContentRatio] = useState(0.2);
-  const [seed, setSeed] = useState(1);
+  const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
+  const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(1);
   const [searchOrder, setSearchOrder] = useState(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+  const [metadata, setMetadata] = useState(null);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
@@ -53,6 +62,30 @@ function Library({ manifest }) {
       cancelled = true;
     };
   }, [manifest]);
+
+  // The keyword/story sidecar, fetched alongside the blob rather than inlined
+  // into the manifest: at a full corpus it is megabytes, and the manifest is on
+  // the path to the first frame. Joined by filename into an array indexed by
+  // room id, which is what search and the overlay will both want.
+  useEffect(() => {
+    if (!manifest.metadata) return;
+    let cancelled = false;
+    fetch(manifest.metadata.url)
+      .then((r) => r.json())
+      .then((sidecar) => {
+        if (!cancelled) setMetadata(joinMetadata(manifest.rooms, sidecar));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [manifest]);
+
+  const described = useMemo(() => metadata?.filter(Boolean).length ?? 0, [metadata]);
+
+  // Folded and tokenised once, so a search is set lookups rather than a
+  // megabyte of string work.
+  const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -101,7 +134,37 @@ function Library({ manifest }) {
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
-  const { cam, flyTo } = useMapCamera({ canvasRef, resistanceAt, onChange: requestDraw });
+
+  // Right-click or long press opens the room's card. The pick is anchored to
+  // where it happened rather than tracking the tile: the card names its room,
+  // so a pan underneath it is harmless, and a panel that chases a moving cell
+  // would be the more distracting of the two.
+  const [card, setCard] = useState(null);
+  const onPick = useCallback(
+    (px, py, camera) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
+      const hit = roomAtPoint(px, py, camera, rect, layout, order);
+      setCard(hit && { ...hit, at: { x: px, y: py } });
+    },
+    [layout, order]
+  );
+
+  // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
+  // really be judged on a device, and a phone has no console you can read with
+  // both thumbs busy - so this is how "what did the browser actually send"
+  // stays answerable without a USB cable.
+  const onDebug = useMemo(() => (TOUCH_DEBUG ? appendTouchLog : undefined), []);
+
+  const { cam, flyTo } = useMapCamera({
+    canvasRef,
+    resistanceAt,
+    onChange: requestDraw,
+    camera: config.camera,
+    onPick,
+    onDebug,
+  });
 
   // --- rendering -----------------------------------------------------------
   useEffect(() => {
@@ -154,25 +217,53 @@ function Library({ manifest }) {
   useEffect(() => requestDraw(), [layout, order, requestDraw]);
 
   // --- search --------------------------------------------------------------
-  const runSearch = async (e) => {
-    e.preventDefault();
-    if (!query.trim()) {
+  const search = async (term) => {
+    if (!term.trim()) {
       setSearchOrder(null);
       setStatus('');
       return;
     }
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`).then((r) => r.json());
-    // A real search returns a query vector and the browser ranks; the stub
-    // returns a ready-made order. The vector path needs the blob to have loaded.
-    if (res.vector && embeddings.current) {
-      const { data, dim } = embeddings.current;
-      setSearchOrder(rankByEmbedding(data, dim, Float32Array.from(res.vector)));
-      setStatus('');
+    const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`).then((r) => r.json());
+
+    // Three signals, blended into one sort over the whole corpus. Any of them
+    // may be missing - no blob, no metadata - and a ranking from the rest is
+    // still a real ranking, so the only case that needs the server's stub is
+    // having neither. The note says which of the three it actually was, rather
+    // than implying more than the corpus can support.
+    const blob = res.vector ? embeddings.current : null;
+    if (blob || searchIndex) {
+      const { order, signals } = rankHybrid({
+        query: term,
+        count: total,
+        weights: config.search.weights,
+        minTokenLength: config.search.minTokenLength,
+        embeddings: blob?.data,
+        dim: blob?.dim,
+        vector: res.vector,
+        index: searchIndex,
+      });
+      setSearchOrder(order);
+      setStatus(describeSignals(signals, Boolean(searchIndex)));
     } else {
       setSearchOrder(res.order);
-      setStatus(res.stub ? 'stub ranking — no CLIP in offline mode' : '');
+      setStatus('stub ranking — no embeddings and no keywords in this corpus');
     }
     flyTo(0, 0);
+  };
+
+  const runSearch = (e) => {
+    e.preventDefault();
+    search(query);
+  };
+
+  // A chip on the card is a live search: reading a room becomes a way of moving
+  // through the library rather than a dead end. The card closes because the map
+  // is about to rearrange under it, and it would be describing a cell that no
+  // longer holds that room.
+  const searchKeyword = (text) => {
+    setQuery(text);
+    setCard(null);
+    search(text);
   };
 
   return (
@@ -182,6 +273,7 @@ function Library({ manifest }) {
         <h1>The Indexing of Babel</h1>
         <p className="sub">
           offline · {total} rooms in {manifest.directory.split('/').slice(-1)[0]}
+          {described > 0 && <> · {described} described</>}
         </p>
 
         <form onSubmit={runSearch} className="row">
@@ -216,16 +308,144 @@ function Library({ manifest }) {
         <div className="buttons">
           <button onClick={() => setOrderSeed((s) => s + 1)}>reorder</button>
           <button onClick={() => setSeed((s) => s + 1)}>rescatter</button>
-          <button onClick={() => flyTo(0, 0, 220)}>centre</button>
+          <button onClick={() => flyTo(0, 0, config.camera.defaultZoom)}>centre</button>
         </div>
 
         <div className="note">
-          {status || 'drag to pan, scroll to zoom. the edge resists.'}
+          {status || 'drag to pan, scroll to zoom. right-click a room.'}
         </div>
       </div>
       <div className="hud" id="hud" />
+      {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
+      {card && (
+        <RoomCard
+          card={card}
+          entry={metadata?.[card.id] ?? null}
+          file={manifest.rooms[card.id]?.file}
+          onClose={() => setCard(null)}
+          onKeyword={searchKeyword}
+        />
+      )}
     </>
   );
+}
+
+/** How far the card sits from the pick, and from the edge it is clamped against. */
+const CARD_GAP = 12;
+
+/**
+ * `?touchdebug` prints the raw pointer stream on screen.
+ *
+ * Read at module scope so the whole feature compiles out of a normal session:
+ * nothing renders, and the hook is handed no callback at all rather than one
+ * that discards. Touch is the one layer that cannot be judged from a desktop,
+ * and the CDP touch injection the e2e test uses bypasses the browser's own
+ * gesture arbitration - so a real device reporting for itself is the only way
+ * some of these questions get answered.
+ */
+const TOUCH_DEBUG =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('touchdebug');
+
+const TOUCH_LOG_LINES = 14;
+const touchLog = [];
+
+function appendTouchLog(line) {
+  touchLog.push(line);
+  if (touchLog.length > TOUCH_LOG_LINES) touchLog.shift();
+  const el = document.getElementById('touchlog');
+  if (el) el.textContent = touchLog.join('\n');
+}
+
+/**
+ * One room's keywords and story, opened by right-click or long press.
+ *
+ * Placed where the gesture happened and clamped back inside the viewport, so a
+ * pick near an edge does not open a card half off screen. Escape and a click
+ * anywhere outside close it, which are the two things anyone tries first.
+ */
+function RoomCard({ card, entry, file, onClose, onKeyword }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
+
+  // Clamp against the card's REAL height, not an assumed one: it grows with the
+  // story, so a guess is wrong for exactly the long entries most likely to run
+  // off the bottom of a short viewport. useLayoutEffect so the correction lands
+  // before the browser paints rather than as a visible jump.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    setPos({
+      left: Math.max(CARD_GAP, Math.min(card.at.x + CARD_GAP, window.innerWidth - width - CARD_GAP)),
+      top: Math.max(CARD_GAP, Math.min(card.at.y + CARD_GAP, window.innerHeight - height - CARD_GAP)),
+    });
+  }, [card]);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    // `pointerdown` rather than `click`: the canvas would otherwise start a pan
+    // under a dismissing click, and the map would lurch as the card vanished.
+    const onDown = (e) => {
+      if (!ref.current?.contains(e.target)) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="card" ref={ref} style={pos} role="dialog" aria-label="room">
+      <div className="card-head">
+        <span className="card-id">
+          room {card.id}
+          {file ? ` · ${file}` : ''}
+        </span>
+        <button className="card-close" onClick={onClose} aria-label="close">
+          ×
+        </button>
+      </div>
+
+      {entry?.keywords?.length > 0 && (
+        <div className="chips">
+          {entry.keywords.map((k) => (
+            <button
+              key={k.text}
+              className="chip"
+              title={k.type ? `${k.type} — search for this` : 'search for this'}
+              onClick={() => onKeyword(k.text)}
+            >
+              {k.text}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {entry?.story && <p className="story">{entry.story}</p>}
+
+      {!entry && <p className="story dim">No keywords recorded for this room.</p>}
+    </div>
+  );
+}
+
+/**
+ * What actually decided this ranking, in the panel's own voice.
+ *
+ * `signals` reports which of the three found anything for this query, not which
+ * were available - a corpus full of keywords that none of them matched should
+ * not claim the ranking was keyword-driven.
+ */
+function describeSignals({ clip, keyword, story }, hasText) {
+  const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
+  // Nothing matched and no CLIP means every score is zero, so the sort falls
+  // back to index order - which is a real rearrangement, not a no-op, and
+  // saying "unchanged" while the map visibly moves would be the wrong lie.
+  if (!hits.length) return hasText ? 'nothing matched — showing index order' : '';
+  // CLIP alone is the ordinary case for most queries and needs no announcement.
+  if (hits.length === 1 && clip) return '';
+  return `ranked by ${hits.join(' + ')}`;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

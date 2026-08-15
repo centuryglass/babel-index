@@ -215,9 +215,33 @@ export function shuffledOrder(n, seed = 1) {
 }
 
 /**
- * Rank rooms against a query vector. Embeddings are int8-quantized and stored
- * contiguously; scoring the whole corpus is a few million multiply-adds, which
- * is well under a frame for corpora of this size.
+ * Score every room against a query vector. Embeddings are int8-quantized and
+ * stored contiguously; scoring the whole corpus is a few million multiply-adds,
+ * which is well under a frame for corpora of this size.
+ *
+ * Scores rather than an order, because the hybrid blend in `scoring.js` needs
+ * the numbers to normalise before weighting. `rankByEmbedding` is the CLIP-only
+ * ordering built on top, so the dot product has one implementation.
+ *
+ * @param {Int8Array} embeddings  roomCount * dim, row-major
+ * @param {number} dim
+ * @param {Float32Array} query    length dim, already L2-normalised
+ * @returns {Float32Array} one raw cosine per room, indexed by id
+ */
+export function embeddingScores(embeddings, dim, query) {
+  const n = Math.floor(embeddings.length / dim);
+  const scores = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let dot = 0;
+    const base = i * dim;
+    for (let d = 0; d < dim; d++) dot += embeddings[base + d] * query[d];
+    scores[i] = dot;
+  }
+  return scores;
+}
+
+/**
+ * Rank rooms against a query vector, best first.
  *
  * @param {Int8Array} embeddings  roomCount * dim, row-major
  * @param {number} dim
@@ -225,14 +249,8 @@ export function shuffledOrder(n, seed = 1) {
  * @returns {number[]} room ids, best first
  */
 export function rankByEmbedding(embeddings, dim, query) {
-  const n = Math.floor(embeddings.length / dim);
-  const scored = new Array(n);
-  for (let i = 0; i < n; i++) {
-    let dot = 0;
-    const base = i * dim;
-    for (let d = 0; d < dim; d++) dot += embeddings[base + d] * query[d];
-    scored[i] = { id: i, score: dot };
-  }
+  const scores = embeddingScores(embeddings, dim, query);
+  const scored = Array.from(scores, (score, id) => ({ id, score }));
   scored.sort((a, b) => b.score - a.score);
   return scored.map((s) => s.id);
 }

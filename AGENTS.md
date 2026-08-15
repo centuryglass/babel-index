@@ -19,7 +19,9 @@ images.
 ```sh
 npm install
 npm run demo                       # http://localhost:5173, against assets/corpus-sample/
-npm run demo -- --images <dir> [--base base.jpg] [--port 5173]
+npm run demo -- --images <dir> [--base base.jpg] [--port 5173] [--config config.json]
+# refuses to start if the port is taken - an old instance serving stale code is
+# the classic way to spend a day debugging something you already fixed
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
@@ -39,7 +41,11 @@ is read per request.
 | --- | --- |
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
 | `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
+| `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
+| `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
+| `packages/map/scoring.js` | folding, tokenising, the two match rules, and the three-signal blend |
+| `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
@@ -99,6 +105,91 @@ is read per request.
 - **Re-ranking swaps one array.** Slot positions never move, so a search reads as
   the library rearranging itself. Don't recompute placement on search.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+- **`useMapCamera.js` tracks pointers by id, in a Map, and that is load-bearing
+  for touch.** One finger is a drag, two are a pinch, and the pinch is always
+  between the *first two* so a third does not hijack it. Two rules that look
+  optional and are not: a second finger cancels any pending long press, and
+  dropping back to one finger must re-anchor the drag to where that finger
+  actually is — otherwise its next move is measured from wherever the pinch left
+  off and the map lurches by the width of the gesture, every time a pinch ends.
+  `smoke.e2e.mjs` covers both; nothing else can.
+- **Pointer capture is best-effort and must never be load-bearing.** Both
+  `setPointerCapture` and `releasePointerCapture` throw `NotFoundError` for a
+  pointer the browser does not consider capturable, which is *ordinary* on touch
+  — capture is implicit there and the browser drops it itself. Do the
+  `pointers` bookkeeping FIRST and wrap the capture calls; an `?.` does not help,
+  it guards the method being missing rather than the call throwing. Unguarded,
+  a throw would strand a finger in the Map and every later gesture would be read
+  as a pinch against a finger no longer on the glass. Defensive rather than
+  diagnosed — no such failure has been observed here — but `pointercancel`
+  reaches the release with capture already dropped, so the path is real.
+- **CDP touch injection bypasses the browser's gesture arbitration**, so
+  `smoke.e2e.mjs` cannot see anything involving `touch-action`, `pointercancel`,
+  or the real capture lifecycle — it dispatches straight to the page. Nothing
+  has actually slipped through that gap yet; treat it as a known blind spot, not
+  as a track record. Where a gesture bug is suspected, simulate the condition
+  explicitly (see the test that makes the capture calls throw) and confirm on a
+  device with `?touchdebug`, which prints the raw pointer stream on screen.
+- **Before blaming the code for a device-only bug, check you are talking to the
+  server you think you are.** `npm run demo` used to bind, print its banner and
+  exit 0 when the port was taken, leaving an older process serving stale code —
+  which is what a whole round of "pinch is broken on Android" turned out to be.
+  `index.mjs` now refuses to start on a busy port.
+- **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
+  it.** One fixed-point implementation for both gestures — a pinch knows the
+  ratio its fingers moved and has no wheel delta to invent. Don't grow a second.
+- **The overlay opens on right-click or long press, never left-click**, which
+  stays reserved for "focus this room" — a map whose primary button opens a
+  modal is a map you cannot explore. **The long press must lose to a pan**: the
+  timer lives on `useMapCamera.js`'s pointer stream precisely so a press that
+  wanders past the slop radius cancels, and the slop exists because a finger
+  never holds still. Break that and the map is unusable on a phone, which no
+  unit test will tell you — `smoke.e2e.mjs` is what covers it.
+- **Per-book hit-testing is impossible on corpus rooms** and always will be:
+  inpainting does not preserve shelf counts, so only the centre room knows where
+  its books are. Picking resolves to a cell, never to a book. If the book-pull
+  animation ever happens it samples a plausible spine from the tile's pixels
+  rather than identifying a real one.
+- **Search blends three signals into one sort; it does not tier them.** Every
+  signal is normalised to [0, 1] *before* weighting, and the CLIP term is
+  min-maxed across the corpus for that query — raw cosines on this corpus sit in
+  a band too narrow to weight against a keyword ratio. Sorting keyword hits into
+  a bucket ahead of everything else would let one weak partial beat a room CLIP
+  is certain about; there is a test for exactly that, and it fails against a
+  faithful tiering implementation. Rooms with no metadata are ranked by whatever
+  signal does apply, never parked below described ones.
+- **Keyword partials divide by the keyword; story matches divide by the query.**
+  Opposite on purpose. `art` has matched only 3/11 of `art nouveau`, but a hit in
+  a long story is not worth less than the same hit in a short one — the question
+  there is how much of the *query* was found. Both directions are asserted.
+- **`embeddings.bin` is keyed by row order; `metadata.json` is keyed by
+  filename. The difference is deliberate and the rules differ with it.** The
+  blob is positional, so `scan.mjs` rejects one whose count has drifted — a
+  stale one would attach the wrong vector to the wrong room, quietly. The
+  sidecar is joined per file, so a partial match is simply partial and every
+  entry that does match still lands; never "fix" that into the blob's
+  all-or-nothing rule. The one case worth being loud about is `matched: 0`
+  against a non-zero `entries`: that is keys that have drifted, and from the map
+  it looks exactly like having no sidecar. Both numbers go in the manifest and
+  `index.mjs` warns.
+- **Zoom config narrows, never widens, and that is load-bearing.** `ZOOM_LIMITS`
+  in `camera.js` is the hard range and the only statement of it;
+  `pyramid.test.mjs` asserts every ladder rung is reachable inside it. Config can
+  only tighten that range, which is why a config edit can never invalidate the
+  assertion and why nothing has to consult the ladder at load time. A narrowing
+  that leaves the finest rung unreachable is fine and deliberately silent — the
+  cost is inactive code and files nobody requests. `DEFAULTS.camera.minZoom` is
+  `null` for "as far as the camera allows", so 26 and 900 are not restated.
+- **The configured range rides on the camera as `limits`**, the same optional
+  field as `aspect` and with the same hazard: rebuild a camera instead of
+  spreading it and the range is lost mid-gesture while everything still looks
+  applied. Both are asserted.
+- **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
+  committed.** One that spelled out every value would silently become the real
+  surface and editing the documented defaults would stop mattering. The overlay
+  is partial and optional. Config never throws: every adjustment lands in `notes`
+  and the server prints them, because a value that silently did not take effect
+  is the only failure mode a tuning file really has.
 - **Every pyramid number lives in `packages/web/src/pyramid.js`** — the tile's
   dimensions, the ladder, per-level cache budgets, the hysteresis band, the
   prefetch ring. Don't reintroduce one as a literal in `tiles.js` or the render

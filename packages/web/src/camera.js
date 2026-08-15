@@ -6,7 +6,9 @@
  * sits at (0, 0); how many pixels that is on each axis depends on the tile's
  * shape. A camera is `{x, y, zoom}` where x/y are the world point at the centre
  * of the viewport and `zoom` is pixels per cell WIDTH. Cell height follows from
- * the aspect, so one number still drives the whole scale.
+ * the aspect, so one number still drives the whole scale. Two optional fields
+ * may ride along - `aspect` and `limits` - and every function here preserves
+ * them by spreading, which is why callers must do the same.
  *
  * Keeping world coordinates in cells rather than pixels is what lets the tile
  * change shape without rewriting `packages/map`: slot placement and ranking are
@@ -39,14 +41,31 @@ export function pxPerCell(cam) {
 }
 
 /**
- * Zoom is clamped so a cell is never smaller than a thumbnail or larger than
- * the screen. In pixels per cell WIDTH - a short tile is free to be shorter
- * than this, which is what "the cell is the unit" means.
+ * The HARD zoom limits: a cell is never smaller than a thumbnail or larger than
+ * the screen. In pixels per cell WIDTH - a short tile is free to be shorter than
+ * this, which is what "the cell is the unit" means.
+ *
+ * This is the widest range that can ever be offered, and the range everything
+ * derived is checked against - `pyramid.test.mjs` asserts every rung of the
+ * ladder is reachable somewhere inside it. Configuration may narrow it (a
+ * camera carries its own `limits`, below) but may never widen it, so that
+ * assertion keeps covering every state the app can reach at runtime.
  */
-export const MIN_ZOOM = 26;
-export const MAX_ZOOM = 900;
+export const ZOOM_LIMITS = { min: 26, max: 900 };
 
-export const clampZoom = (z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+export const MIN_ZOOM = ZOOM_LIMITS.min;
+export const MAX_ZOOM = ZOOM_LIMITS.max;
+
+/**
+ * Clamp a zoom into a range, defaulting to the hard limits.
+ *
+ * A camera may carry narrower `limits` of its own - the same optional-field
+ * pattern as `aspect`, and with the same requirement: spread the old camera
+ * rather than rebuilding `{x, y, zoom}`, or the range is lost mid-gesture along
+ * with the shape.
+ */
+export const clampZoom = (z, limits = ZOOM_LIMITS) =>
+  Math.min(limits.max, Math.max(limits.min, z));
 
 /** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
 export function screenToWorld(px, py, cam, rect) {
@@ -67,29 +86,51 @@ export function worldToScreen(wx, wy, cam, rect) {
 }
 
 /**
- * Zoom about a viewport point, keeping the world point under it fixed.
+ * Scale the zoom about a viewport point, keeping the world point under it fixed.
  *
- * That fixed point is the whole feel of scroll-to-zoom: the thing you are
- * pointing at is the thing you zoom into. Once the zoom clamps, the camera
- * must not drift either - so the recentre is computed against the clamped
- * zoom, not the requested one.
+ * That fixed point is the whole feel of both zoom gestures: the thing you are
+ * pointing at, or the thing between your fingers, is the thing you zoom into.
+ * Once the zoom clamps, the camera must not drift either - so the recentre is
+ * computed against the clamped zoom, not the requested one.
+ *
+ * Taking a multiplier rather than a wheel delta is what lets a pinch share this:
+ * a pinch knows the ratio its fingers moved and has no delta to invent.
  *
  * @param {{x: number, y: number, zoom: number}} cam
- * @param {number} px viewport-relative pointer x
- * @param {number} py viewport-relative pointer y
- * @param {number} deltaY wheel delta; positive zooms out
+ * @param {number} px viewport-relative anchor x
+ * @param {number} py viewport-relative anchor y
+ * @param {number} factor multiplier on the zoom; >1 zooms in
  * @param {{width: number, height: number}} rect
  * @returns {{x: number, y: number, zoom: number}} a new camera
  */
-export function zoomAt(cam, px, py, deltaY, rect) {
+export function zoomBy(cam, px, py, factor, rect) {
   const before = screenToWorld(px, py, cam, rect);
-  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * Math.exp(-deltaY * 0.0014)) };
+  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * factor, cam.limits) };
   const after = screenToWorld(px, py, zoomed, rect);
   return {
     ...zoomed,
     x: zoomed.x + before.x - after.x,
     y: zoomed.y + before.y - after.y,
   };
+}
+
+/**
+ * How much of a wheel delta becomes zoom. Exponential so the feel is the same
+ * at every scale - a notch is a fixed *ratio*, not a fixed number of pixels.
+ */
+export const WHEEL_ZOOM_RATE = 0.0014;
+
+/**
+ * Zoom about a viewport point from a wheel delta; positive `deltaY` zooms out.
+ *
+ * @param {{x: number, y: number, zoom: number}} cam
+ * @param {number} px viewport-relative pointer x
+ * @param {number} py viewport-relative pointer y
+ * @param {number} deltaY
+ * @param {{width: number, height: number}} rect
+ */
+export function zoomAt(cam, px, py, deltaY, rect) {
+  return zoomBy(cam, px, py, Math.exp(-deltaY * WHEEL_ZOOM_RATE), rect);
 }
 
 /**
@@ -131,5 +172,5 @@ export function glideStep(cam, damp) {
 
 /** Centre the camera on a cell - cells are addressed by corner, so aim at the middle. */
 export function cameraAtCell(cam, x, y, zoom) {
-  return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom) : cam.zoom };
+  return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom, cam.limits) : cam.zoom };
 }

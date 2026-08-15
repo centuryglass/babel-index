@@ -372,3 +372,81 @@ test('a stale blob whose count no longer matches the corpus is ignored', async (
     }
   );
 });
+
+// --- keyword/story sidecar --------------------------------------------------
+
+test('a corpus without a sidecar reports no metadata', async () => {
+  await corpus({ 'base.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+    assert.equal((await scanDirectory(dir)).metadata, null);
+  });
+});
+
+test('a metadata sidecar is surfaced with a servable url and its coverage', async () => {
+  await corpus(
+    {
+      'base.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      '002.jpg': fixture.jpeg(8, 8),
+      'metadata.json': JSON.stringify({
+        '001.jpg': { keywords: ['brutalism'], story: 'A room of unread indices.' },
+      }),
+    },
+    async (dir) => {
+      assert.deepEqual((await scanDirectory(dir)).metadata, {
+        url: '/images/metadata.json',
+        matched: 1,
+        entries: 1,
+      });
+    }
+  );
+});
+
+test('a sidecar covering only some rooms is kept, unlike a stale blob', async () => {
+  // The asymmetry is the point. A blob's rows are positional, so a mismatch has
+  // to be thrown away wholesale; this is joined per filename, so a partial one
+  // is simply partial and every entry that does match still lands.
+  await corpus(
+    {
+      'base.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      '002.jpg': fixture.jpeg(8, 8),
+      '003.jpg': fixture.jpeg(8, 8),
+      'metadata.json': JSON.stringify({ '002.jpg': { story: 'only this one' } }),
+    },
+    async (dir) => {
+      const { metadata } = await scanDirectory(dir);
+      assert.equal(metadata.matched, 1);
+      assert.equal(metadata.entries, 1);
+    }
+  );
+});
+
+test('a sidecar that matches nothing is reported rather than hidden', async () => {
+  // matched 0 against entries 2 is the signal that the keys have drifted; from
+  // the map it is indistinguishable from having no sidecar at all.
+  await corpus(
+    {
+      'base.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      'metadata.json': JSON.stringify({ 'a.jpg': { story: 'x' }, 'b.jpg': { story: 'y' } }),
+    },
+    async (dir) => {
+      const { metadata } = await scanDirectory(dir);
+      assert.equal(metadata.matched, 0);
+      assert.equal(metadata.entries, 2);
+    }
+  );
+});
+
+test('a malformed sidecar degrades to no metadata rather than throwing', async () => {
+  await corpus(
+    {
+      'base.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      'metadata.json': '{ not json',
+    },
+    async (dir) => {
+      assert.equal((await scanDirectory(dir)).metadata, null);
+    }
+  );
+});
