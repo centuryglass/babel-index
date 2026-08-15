@@ -30,6 +30,16 @@ npm run generate:figures                  # regenerate docs/figures/
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
 
+**Run `npm install` first, before anything else.** It is listed above for a
+reason and it is still the step most often skipped: a fresh checkout or a fresh
+container has no `node_modules`, and the failure it produces looks like a code
+failure rather than a setup one. `npm test` comes back with three red files —
+`mips.test.mjs`, `app.test.mjs` and `bundle.test.mjs` — because `sharp`,
+`express` and `esbuild` are missing, which is easy to spend a few minutes
+reading as damage from whatever you just changed. Most of the suite passes
+without them, which is what makes it convincing. If those three are the only
+failures, install rather than debug.
+
 There is no build step, no bundler config and no linter. The demo server bundles
 the client with esbuild in-process at startup (`packages/server/index.mjs`), so
 editing web sources means restarting `npm run demo` — except `index.html`, which
