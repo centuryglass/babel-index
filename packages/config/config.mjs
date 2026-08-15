@@ -32,6 +32,8 @@
  * that reads a file.
  */
 import { ZOOM_LIMITS } from '../web/src/camera.js';
+import { CERTAINTY_FLOOR } from '../map/ordering.js';
+import { CLIP_CERTAINTY } from '../map/scoring.js';
 
 export const DEFAULTS = {
   camera: {
@@ -103,6 +105,38 @@ export const DEFAULTS = {
      * stops meaning anything.
      */
     minTokenLength: 3,
+
+    /**
+     * How a search's certainty becomes map density - see the gradient section
+     * of `packages/map/ordering.js`. `map.contentRatio` above is the baseline
+     * these numbers lift the middle of the map away from.
+     */
+    density: {
+      /**
+       * Density offered to a rank the search is certain about. 1 packs perfect
+       * matches into every cell they meet, so a handful of exact hits reads as
+       * a solid block against the centre - which is the whole effect. Lower it
+       * to keep some wallpaper showing through even the surest cluster.
+       */
+      peak: 1,
+
+      /**
+       * Certainty under this clusters nothing at all. A query the corpus cannot
+       * answer still ranks *something* first, and without a floor the faintest
+       * hunch would pull it to the centre and claim a find. Defaults to
+       * `CERTAINTY_FLOOR`, which is where the reasoning is written down.
+       */
+      floor: CERTAINTY_FLOOR,
+
+      /**
+       * Raw cosines bounding CLIP's share of certainty: at `clipLow` it is
+       * saying nothing, at `clipHigh` it is as sure as it gets. The one part of
+       * the gradient that is a measurement rather than a preference, and it
+       * wants the real corpus - see `CLIP_CERTAINTY` for where these come from.
+       */
+      clipLow: CLIP_CERTAINTY.low,
+      clipHigh: CLIP_CERTAINTY.high,
+    },
   },
 };
 
@@ -130,6 +164,7 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
   const mapIn = asSection(src.map, 'map', notes);
   const searchIn = asSection(src.search, 'search', notes);
   const weightsIn = asSection(searchIn.weights, 'search.weights', notes);
+  const densityIn = asSection(searchIn.density, 'search.density', notes);
 
   // Resolve "no narrowing" to the hard limits, then intersect. Both directions
   // are clamped rather than refused: a config asking for more range than exists
@@ -181,9 +216,38 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
       minTokenLength: tokenLength(
         searchIn.minTokenLength, DEFAULTS.search.minTokenLength, 'search.minTokenLength', notes
       ),
+      density: density(densityIn, notes),
     },
     notes,
   };
+}
+
+/**
+ * The density gradient's block.
+ *
+ * `peak` below `map.contentRatio` is not rejected here, because the layout
+ * treats the baseline as a floor anyway - a gradient may add density, never
+ * remove it - so the worst such a config can do is switch the effect off. An
+ * inverted cosine band is worth a note: it would silently mean "CLIP never
+ * contributes certainty", which looks exactly like a corpus with no blob.
+ */
+function density(src, notes) {
+  const d = DEFAULTS.search.density;
+  const out = {
+    peak: ratio(src.peak, d.peak, 'search.density.peak', notes),
+    floor: ratio(src.floor, d.floor, 'search.density.floor', notes),
+    clipLow: number(src.clipLow, d.clipLow, 'search.density.clipLow', notes),
+    clipHigh: number(src.clipHigh, d.clipHigh, 'search.density.clipHigh', notes),
+  };
+  if (!(out.clipHigh > out.clipLow)) {
+    notes.push(
+      `search.density.clipHigh ${out.clipHigh} is not above clipLow ${out.clipLow}; ` +
+        `using ${d.clipLow}-${d.clipHigh}`
+    );
+    out.clipLow = d.clipLow;
+    out.clipHigh = d.clipHigh;
+  }
+  return out;
 }
 
 /** A section of the overlay, or an empty one. Anything else is reported and ignored. */

@@ -130,3 +130,45 @@ test('the shipped defaults are valid against the real limits', () => {
   assert.deepEqual(c.notes, [], 'defaults must not need correcting');
   assert.ok(c.camera.defaultZoom >= ZOOM_LIMITS.min && c.camera.defaultZoom <= ZOOM_LIMITS.max);
 });
+
+// --- the search density gradient -------------------------------------------
+
+test('the density block comes through, and a partial one keeps its neighbours', () => {
+  const c = resolveConfig({ search: { density: { peak: 0.6 } } }, { zoomLimits: LIMITS });
+  assert.deepEqual(c.notes, []);
+  assert.equal(c.search.density.peak, 0.6);
+  assert.equal(c.search.density.floor, DEFAULTS.search.density.floor);
+  assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
+});
+
+test('an inverted cosine band is reported rather than silently disabling CLIP', () => {
+  // The failure this note exists for: `clipHigh <= clipLow` would mean CLIP
+  // never contributes certainty, which from the map looks exactly like a corpus
+  // with no embeddings at all.
+  const c = resolveConfig(
+    { search: { density: { clipLow: 0.4, clipHigh: 0.2 } } },
+    { zoomLimits: LIMITS }
+  );
+  assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
+  assert.equal(c.search.density.clipHigh, DEFAULTS.search.density.clipHigh);
+  assert.ok(c.notes.some((n) => n.includes('clipHigh')), c.notes.join('; '));
+});
+
+test('a nonsense peak or floor falls back and says so', () => {
+  const c = resolveConfig(
+    { search: { density: { peak: 1.5, floor: 'lots' } } },
+    { zoomLimits: LIMITS }
+  );
+  assert.equal(c.search.density.peak, DEFAULTS.search.density.peak);
+  assert.equal(c.search.density.floor, DEFAULTS.search.density.floor);
+  assert.equal(c.notes.length, 2, c.notes.join('; '));
+});
+
+test('the default gradient bounds bracket a real CLIP cosine', () => {
+  // Not a preference but a measurement, and the one number here most likely to
+  // move: image-text cosines have to be able to land inside the band for the
+  // gradient to grade anything at all.
+  const { clipLow, clipHigh } = DEFAULTS.search.density;
+  assert.ok(clipHigh > clipLow, `${clipLow}-${clipHigh}`);
+  assert.ok(clipLow > 0 && clipHigh < 1, 'a cosine, not a normalised score');
+});

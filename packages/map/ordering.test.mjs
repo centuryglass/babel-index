@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLayout, isContentSlot, shuffledOrder, rankByEmbedding } from './ordering.js';
+import {
+  cellDistance,
+  cellHash,
+  createLayout,
+  embeddingScores,
+  isContentSlot,
+  rankByEmbedding,
+  shuffledOrder,
+} from './ordering.js';
 
 test('slot density tracks contentRatio', () => {
   for (const ratio of [0.05, 0.2, 0.5]) {
@@ -182,12 +190,208 @@ test('growing the corpus still keeps existing slots, at any cell shape', () => {
   }
 });
 
+// --- the search density gradient -------------------------------------------
+
+/** A layout with a certainty profile, holding everything else steady. */
+const graded = (certainty, opts = {}) =>
+  createLayout({
+    roomCount: 200,
+    contentRatio: 0.1,
+    seed: 17,
+    ...opts,
+    density: certainty ? { certainty, ...(opts.density ?? {}) } : null,
+  });
+
+/** Slots within a given radius - the measurement local density is read from. */
+const within = (L, r) => L.slots.filter((s) => s.d <= r).length;
+
+test('no certainty is the uniform map, cell for cell', () => {
+  // The property the whole design leans on: clearing the search restores the
+  // old layout exactly, so there is no second code path to keep in step.
+  const uniform = graded(null);
+  assert.deepEqual(graded(new Float32Array(200)).slots, uniform.slots, 'all-zero clusters nothing');
+  assert.equal(uniform.gradedCount, 0);
+
+  // And a query nothing is confident about is the same picture as no query,
+  // which is the only honest thing for it to look like.
+  const hunch = Float32Array.from({ length: 200 }, (_, i) => 0.04 * Math.exp(-i / 50));
+  assert.deepEqual(graded(hunch).slots, uniform.slots, 'a hunch under the floor is not a match');
+  assert.equal(graded(hunch).gradedCount, 0);
+});
+
+test('certain ranks take the cells nearest the centre', () => {
+  // Five exact matches, at peak density: they should land in the five nearest
+  // cells there are, not the five nearest cells the hash allows.
+  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 5 ? 1 : 0));
+  const L = graded(certainty, { aspect: 1 });
+
+  const nearest = [];
+  for (let y = -3; y <= 3; y++)
+    for (let x = -3; x <= 3; x++)
+      if (x || y) nearest.push({ x, y, d: Math.hypot(x, y), a: Math.atan2(y, x) });
+  nearest.sort((p, q) => p.d - q.d || p.a - q.a);
+
+  assert.deepEqual(
+    L.slots.slice(0, 5).map((s) => `${s.x},${s.y}`),
+    nearest.slice(0, 5).map((s) => `${s.x},${s.y}`)
+  );
+  assert.equal(L.gradedCount, 5);
+});
+
+test('a hard-edged match clusters, and everything after it does not', () => {
+  // "yuiop": a handful of rooms tagged with it, and nothing else means a thing.
+  // The cluster is dense; past it the map is the baseline scatter it always was.
+  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0));
+  const L = graded(certainty);
+  const uniform = graded(null);
+
+  const core = L.slots[7].d;
+  assert.ok(within(uniform, core) < 3, `baseline holds ${within(uniform, core)} rooms that close in`);
+
+  // Beyond the cluster the local density is back to contentRatio: the same
+  // number of rooms per unit area as the map with no search at all.
+  const ring = (M) => M.slots.filter((s) => s.d > core + 4 && s.d <= core + 10).length;
+  assert.ok(
+    Math.abs(ring(L) - ring(uniform)) <= Math.max(2, ring(uniform) * 0.25),
+    `outside the cluster: ${ring(L)} vs ${ring(uniform)}`
+  );
+});
+
+test('a gradual certainty spreads the packing out gradually', () => {
+  // "red": CLIP's confidence falls off smoothly, so the density should too -
+  // measurably tighter than the hard-edged case at every radius past the core.
+  const hard = graded(Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0)));
+  const soft = graded(Float32Array.from({ length: 200 }, (_, i) => Math.exp(-i / 60)));
+  const uniform = graded(null);
+
+  for (const r of [12, 16, 20]) {
+    assert.ok(
+      within(soft, r) > within(hard, r),
+      `r=${r}: gradual ${within(soft, r)} should hold more than hard-edged ${within(hard, r)}`
+    );
+    assert.ok(within(hard, r) > within(uniform, r), `r=${r}: both must beat the baseline`);
+  }
+  // A gradient adds density and never takes any away, so the library can only
+  // contract - the edge never runs away from a search.
+  assert.ok(soft.boundaryRadius < hard.boundaryRadius);
+  assert.ok(hard.boundaryRadius <= uniform.boundaryRadius);
+});
+
+test('certainty cannot rise with rank', () => {
+  // The ordering claims to be best-first, so a rank more certain than the one
+  // above it is a contradiction; the running minimum is which to believe.
+  const rising = Float32Array.from([1, 0.2, 0.9, 0.9, 0.9, ...new Array(195).fill(0)]);
+  const clamped = Float32Array.from([1, 0.2, 0.2, 0.2, 0.2, ...new Array(195).fill(0)]);
+  assert.deepEqual(graded(rising).slots, graded(clamped).slots);
+});
+
+test('the peak is how much wallpaper survives the surest cluster', () => {
+  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 20 ? 1 : 0));
+  const full = graded(certainty, { density: { peak: 1 } });
+  const half = graded(certainty, { density: { peak: 0.5 } });
+  assert.ok(full.slots[19].d < half.slots[19].d, 'a lower peak packs the same rooms less tightly');
+  assert.ok(half.slots[19].d < graded(null).slots[19].d, 'but still tighter than no gradient');
+});
+
+test('a sparser map makes the same search more legible, not less', () => {
+  // The point of the feature. The cluster is the same size whatever the ratio,
+  // so the sparser the wallpaper the more it stands out against it.
+  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 10 ? 1 : 0));
+  const radii = [0.05, 0.2, 0.6].map((contentRatio) => graded(certainty, { contentRatio }).slots[9].d);
+  for (let i = 1; i < radii.length; i++)
+    assert.ok(Math.abs(radii[i] - radii[0]) < 1e-9, `cluster moved with the ratio: ${radii}`);
+});
+
+test('growing the corpus still keeps existing slots under a gradient', () => {
+  // The slider property, re-checked with a profile in play: acceptance for a
+  // rank depends only on that rank and the cells before it, so a longer corpus
+  // extends the walk rather than redoing it.
+  const certainty = Float32Array.from({ length: 400 }, (_, i) => Math.exp(-i / 40));
+  const small = graded(certainty.slice(0, 100), { roomCount: 100 });
+  const large = graded(certainty, { roomCount: 400 });
+  assert.deepEqual(large.slots.slice(0, 100), small.slots);
+});
+
+test('the pruned sweep places rooms exactly where an unpruned walk would', () => {
+  // collectSlots filters the far field at the baseline rather than at the peak,
+  // which is what keeps a search on a sparse map as cheap as no search at all.
+  // It is sound only because the graded ranks are checked to have landed inside
+  // the core; this is that claim, tested against the walk it stands in for.
+  let rng = 12345;
+  const rand = () => ((rng = Math.imul(rng ^ (rng >>> 15), 0x2c1b3c6d) >>> 0) / 4294967296);
+
+  for (let trial = 0; trial < 40; trial++) {
+    const roomCount = 1 + Math.floor(rand() * 120);
+    const contentRatio = [0.03, 0.1, 0.4, 1][Math.floor(rand() * 4)];
+    const aspect = [1, 0.75, 1.4][Math.floor(rand() * 3)];
+    const seed = Math.floor(rand() * 50);
+    const peak = [1, 0.9, 0.4][Math.floor(rand() * 3)];
+    const shape = Math.floor(rand() * 4);
+    const certainty = Float32Array.from({ length: roomCount }, (_, i) =>
+      shape === 0 ? (i < 3 ? 1 : 0)
+      : shape === 1 ? Math.exp(-i / (2 + rand() * 30))
+      : shape === 2 ? rand()
+      : Math.max(0, 1 - i / roomCount)
+    );
+    const opts = { roomCount, contentRatio, seed, aspect };
+    const got = createLayout({ ...opts, density: { certainty, peak } }).slots;
+    const want = unprunedWalk({ ...opts, certainty, peak });
+    assert.deepEqual(
+      got.map((s) => `${s.x},${s.y}`),
+      want,
+      `trial ${trial}: ${JSON.stringify({ ...opts, peak, shape })}`
+    );
+  }
+});
+
+/**
+ * Every cell in a generously wide radius, walked outward, each offered to the
+ * rank being placed at that rank's own threshold. The definition the optimised
+ * sweep has to agree with, written the slow obvious way.
+ */
+function unprunedWalk({ roomCount, contentRatio, seed, aspect, certainty, peak, floor = 0.05 }) {
+  const ramp = [];
+  let cap = 1;
+  for (let i = 0; i < roomCount; i++) {
+    cap = Math.min(cap, Math.max(0, Math.min(1, certainty[i])));
+    ramp.push(cap < floor ? contentRatio : contentRatio + (Math.max(peak, contentRatio) - contentRatio) * cap);
+  }
+
+  const R = Math.ceil(Math.sqrt((roomCount * aspect) / (contentRatio * Math.PI)) * 3) + 20;
+  const cells = [];
+  for (let y = -Math.ceil(R / aspect); y <= Math.ceil(R / aspect); y++)
+    for (let x = -Math.ceil(R); x <= Math.ceil(R); x++) {
+      if (!x && !y) continue;
+      const d = cellDistance(x, y, aspect);
+      if (d <= R) cells.push({ x, y, d, h: cellHash(x, y, seed), a: Math.atan2(y * aspect, x) });
+    }
+  cells.sort((p, q) => p.d - q.d || p.a - q.a);
+
+  const found = [];
+  for (const c of cells) {
+    if (c.h >= (ramp[found.length] ?? contentRatio)) continue;
+    found.push(`${c.x},${c.y}`);
+    if (found.length === roomCount) break;
+  }
+  return found;
+}
+
 test('embedding ranking sorts by cosine similarity', () => {
   const dim = 4;
   // Room 1 is the exact match, room 0 orthogonal, room 2 opposed.
   const emb = Int8Array.from([0, 127, 0, 0, 127, 0, 0, 0, -127, 0, 0, 0]);
   const query = Float32Array.from([1, 0, 0, 0]);
   assert.deepEqual(rankByEmbedding(emb, dim, query), [1, 0, 2]);
+});
+
+test('embedding scores are cosines, not quantised dot products', () => {
+  // The density gradient reads these against absolute thresholds, so the int8
+  // scale has to be divided back out here rather than assumed away downstream.
+  const emb = Int8Array.from([127, 0, 0, 127, -127, 0]);
+  const scores = embeddingScores(emb, 2, Float32Array.from([1, 0]));
+  assert.ok(Math.abs(scores[0] - 1) < 1e-6, `a unit match must be 1, got ${scores[0]}`);
+  assert.ok(Math.abs(scores[1]) < 1e-6);
+  assert.ok(Math.abs(scores[2] + 1) < 1e-6);
 });
 
 test('shuffledOrder is a permutation and is seed-stable', () => {

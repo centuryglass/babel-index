@@ -1049,7 +1049,6 @@ This is not hypothetical: with the text tower unable to reach its model, the dem
 falls back to text-only ranking against the sidecar and says so, which is exactly
 the degradation the three states exist to describe.
 
----
 
 ## 3e. Configuration — **built**
 
@@ -1132,6 +1131,95 @@ is worse than one that starts and says what it ignored, so every adjustment land
 in `notes` and the server prints them at startup. The failure mode a config file
 actually has is a value that silently did not take effect; that is the one thing
 this refuses to do.
+
+---
+
+## 3f. The search density gradient — **built**
+
+**The problem.** The generic-room ratio and the search were fighting each other.
+At the concept's 80% generic, the top matches are scattered across a wide region
+at one room in five, so the rearrangement is real but nearly invisible — the only
+way to *see* a search work was to push the slider to 100% unique, which throws
+away the wallpaper the map is mostly made of. The feature that makes the library
+feel like a library was making search unreadable.
+
+**The fix.** `map.contentRatio` becomes a *baseline* rather than a constant.
+Placement already walks candidate cells outward from the centre, handing rank 0
+the nearest slot; now the acceptance threshold for the rank being placed is
+
+```
+contentRatio + (peak - contentRatio) * certainty[rank]
+```
+
+so a rank the search is sure about takes very nearly the first cell it meets, and
+a rank it knows nothing about waits for one the baseline hash lets through. A
+certainty profile becomes a density profile, and the cluster is dense *relative
+to its surroundings* by construction — which means a sparser map now makes a
+search **more** legible rather than less. The wallpaper stops being the price of
+readable search and starts being the contrast that makes it readable.
+
+Three behaviours fall out of the one formula, none of them special-cased:
+
+| query | certainty | what the map does |
+| --- | --- | --- |
+| `yuiop`, on a handful of rooms tagged with it | 1 for those, 0 for everything else | a solid block against the centre, then the ordinary scatter — a hard edge |
+| `red` | decays smoothly with CLIP's cosine | packing that loosens gradually outward |
+| `cghjj` | below the floor everywhere | the uniform map, cell for cell |
+
+### Certainty is a different question from ranking
+
+The blend cannot answer "how sure are we". It min-max normalises CLIP across the
+corpus for the query — which is [§3d](#3d-hybrid-search--three-signals-one-sort--built)'s
+whole point, since raw cosines on near-identical library walls sit in a band too
+narrow to weight — and normalisation guarantees *some* room scores 1 for any
+query at all. A gradient driven by the blend would cluster `cghjj` exactly as
+confidently as an exact keyword match.
+
+So certainty is computed alongside the ranking, from the absolute form of each
+signal, and combined as a soft OR (`1 - (1-k)(1-s)(1-c)`) so any one signal can
+carry it and two weak ones agreeing count for more than either alone:
+
+- **keyword and story ratios are already absolute.** An exact match is 1 because
+  it is a match, not because it beat the corpus.
+- **CLIP contributes its raw cosine** against a pair of thresholds
+  (`search.density.clipLow/clipHigh`). This is the only place the unnormalised
+  number is used, and the reason `embeddingScores` now divides the int8
+  quantisation back out and returns a real cosine. A nonsense string still
+  produces a valid text vector; what marks it as nonsense is that its cosine
+  against every image is low in absolute terms, not that the spread vanished.
+
+Two adjustments keep the profile meaning what it claims. Certainty is made
+**non-increasing with rank** — the ordering is best-first by definition, so a
+rank more certain than the one above it is a contradiction, and the running
+minimum is which of the two to believe. And anything under `CERTAINTY_FLOOR`
+snaps to *exactly* the baseline rather than slightly above it, so "nothing
+matched" and "no search" are the same picture. They should be: the alternative is
+a map that says "found it" about noise.
+
+### What it cost
+
+One design commitment, stated plainly: a search now recomputes placement, which
+the uniform scheme never did. It is the same O(slots) rebuild the ratio slider
+already triggers on every drag, rooms still arrive in rank order from the centre
+out, and clearing the box restores the old layout exactly — there is no second
+code path, because no profile *is* the uniform map. Re-ranking without a new
+search is still a swap of one array.
+
+Placement stays as cheap as it was, which took some care. Sorting every cell a
+certain rank *could* take would mean sorting the whole sweep — 380 ms on a
+5,000-room corpus at the slider's sparse end, against 38 ms for the uniform
+layout. Instead each ring carries a lower bound on the rank the walk must have
+reached by the time it gets there (every baseline-admitted cell nearer than it is
+taken whatever rank is current), and since the ramp is non-increasing, a lower
+bound on the rank is an upper bound on the threshold. The far field is therefore
+filtered at the baseline exactly as before, and the extra sweep covers the
+cluster rather than the map. Measured across the same worst cases, every
+configuration now lands at or below the old uniform cost.
+
+That bound is sound rather than lucky, and it is load-bearing enough to be worth
+a test that can actually catch it: `ordering.test.mjs` fuzzes the optimised sweep
+against an unpruned walk over 40 random configurations, and it fails on a
+one-ring off-by-one in the bound, which nothing else notices.
 
 ---
 
@@ -1435,6 +1523,17 @@ Recorded from review, with what changed:
    that makes the weights comparable, but the numbers themselves are a by-feel
    call that needs the real corpus and real queries. That is the argument for
    them being config rather than constants.
+   The same goes double for `search.density.clipLow/clipHigh`
+   ([§3f](#3f-the-search-density-gradient--built)): unlike the weights those are
+   a *measurement* rather than a preference — the cosine at which CLIP starts
+   saying something about a wall of books, and the one at which it is as sure as
+   it gets. The defaults (0.18–0.30) are read off what ViT-B/32 typically does on
+   natural images, narrowed at the bottom because a corpus of near-identical
+   library walls sits higher than a corpus of arbitrary photographs. Getting them
+   wrong is visible rather than silent, which helps: too low and every query
+   clusters, too high and only keyword hits ever do. Worth an afternoon with the
+   real corpus, plotting cosine histograms for a handful of queries that should
+   match and a handful that should not.
 7. **Whether keyword `type` is recorded.** Cheap if the generator already knows
    which of material / movement / technique / artist a keyword came from; it buys
    labelled chips in the overlay and leaves room for weighting an artist match
