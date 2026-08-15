@@ -28,9 +28,6 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-// The app's own flight duration, so this file waits for exactly as long as the
-// camera actually flies rather than for a number that could drift from it.
-import { FLIGHT_MS } from '../src/camera.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const artifacts = resolve(repoRoot, 'packages/web/e2e/artifacts');
@@ -45,6 +42,21 @@ const BOOT_TIMEOUT = 90_000;
  * because a cold model load is the slow path, not a hang.
  */
 const SEARCH_TIMEOUT = 60_000;
+
+/**
+ * The flight duration this server actually resolved, read off the manifest in
+ * `before`.
+ *
+ * Not imported from `camera.js`: that is the shipped default, and
+ * `camera.flightMs` is configurable, so a machine with a `config.json` would
+ * have this file waiting the wrong amount of time for the camera in front of
+ * it. Every timing below is a multiple of whatever the app said.
+ *
+ * One consequence worth knowing: a local config with `flightMs: 0` turns the
+ * animation off, and the flight test below will then correctly report that the
+ * camera teleported.
+ */
+let flightMs;
 
 describe('the library, in a browser', { concurrency: false }, () => {
   let server;
@@ -74,6 +86,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
       BOOT_TIMEOUT,
       () => `the demo server never came up:\n${log}`
     );
+
+    const { config } = await (await fetch(`${origin}/api/manifest`)).json();
+    flightMs = config.camera.flightMs;
+    assert.equal(typeof flightMs, 'number', 'the manifest must carry the resolved flight duration');
 
     browser = await chromium.launch({
       executablePath: process.env.BABEL_E2E_CHROMIUM || undefined,
@@ -251,7 +267,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // Sampling starts before the click, so it spans the whole flight. A
     // teleport shows two cameras - the one before and the one after - and an
     // eased one shows a frame's worth each; the count is what separates them.
-    const sampling = sampleCamera(page, FLIGHT_MS * 3);
+    const sampling = sampleCamera(page, flightMs * 3);
     await page.locator('button', { hasText: 'centre' }).click();
     const seen = await sampling;
     assert.ok(seen.length > 4, `only ${seen.length} distinct cameras: the camera teleported`);
@@ -278,7 +294,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // panel, and a press there never reaches the map at all - which looks
     // exactly like a flight that refused to be interrupted.
     await page.mouse.move(640, 400);
-    await page.waitForTimeout(FLIGHT_MS / 3);
+    await page.waitForTimeout(flightMs / 3);
     // Grab, then wander past the press slop, so this is a drag rather than a
     // long press - which would otherwise fire while we hold and open a card.
     await page.mouse.down();
@@ -289,7 +305,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       `the grab did not catch the flight in the air (${low.zoom} -> ${grabbed.zoom} -> ${centred.zoom})`
     );
 
-    await page.waitForTimeout(FLIGHT_MS);
+    await page.waitForTimeout(flightMs);
     const held = await settled(page);
     await page.mouse.up();
     assert.equal(held.zoom, grabbed.zoom, `the flight flew on under the hand: ${grabbed.zoom} -> ${held.zoom}`);
@@ -299,10 +315,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // from the one above, so separate assertion.
     await page.locator('button', { hasText: 'centre' }).click();
     await page.mouse.move(640, 400);
-    await page.waitForTimeout(FLIGHT_MS / 3);
+    await page.waitForTimeout(flightMs / 3);
     await page.mouse.wheel(0, 600);
     const wheeled = await settled(page);
-    await page.waitForTimeout(FLIGHT_MS);
+    await page.waitForTimeout(flightMs);
     const after = await settled(page);
     assert.ok(wheeled.zoom < centred.zoom, 'the wheel should have caught the flight in the air');
     assert.equal(after.zoom, wheeled.zoom, `the flight flew on under the wheel: ${wheeled.zoom} -> ${after.zoom}`);
@@ -653,7 +669,7 @@ async function settled(page) {
  * The HUD once the camera has stopped moving.
  *
  * Two frames were enough while `flyTo` teleported. It now eases over
- * `FLIGHT_MS`, so anything reading the camera straight after a "centre" click
+ * `camera.flightMs`, so anything reading the camera straight after a "centre" click
  * reads one still in the air - and every assertion here that compares a camera
  * before and after some gesture needs the before to be a camera at rest.
  *
@@ -662,7 +678,7 @@ async function settled(page) {
  * Waiting the flight out and then confirming is both.
  */
 async function landed(page, timeoutMs = 5000) {
-  await page.waitForTimeout(FLIGHT_MS);
+  await page.waitForTimeout(flightMs);
   const deadline = Date.now() + timeoutMs;
   let prev = await settled(page);
   while (Date.now() < deadline) {

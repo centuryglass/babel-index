@@ -189,7 +189,9 @@ is read per request.
   `wheel` each drop the flight, and both lines have their own e2e assertion.
   In the e2e, anything reading the camera after a "centre" click needs
   `landed()`, not `settled()` — two frames stopped being enough the moment
-  `flyTo` started taking 450 ms.
+  `flyTo` started taking 450 ms — and how long that waits is read off the
+  manifest, because `camera.flightMs` is config and importing the source default
+  would wait the wrong amount of time on a machine that retuned it.
 - **The overlay opens on right-click or long press, never left-click**, which
   stays reserved for "focus this room" — a map whose primary button opens a
   modal is a map you cannot explore. **The long press must lose to a pan**: the
@@ -236,6 +238,15 @@ is read per request.
   field as `aspect` and with the same hazard: rebuild a camera instead of
   spreading it and the range is lost mid-gesture while everything still looks
   applied. Both are asserted.
+- **What belongs in config is what is tuned, not what is merely by-feel.** The
+  test is *derived and asserted*, not *corpus-independent*: the pyramid's
+  budgets stay out because a test would contradict them, while `defaultZoom` and
+  `flightMs` are in because nothing derives from them and no test asserts their
+  values. "No corpus argues for a different one" is the wrong test and was used
+  once — config describes how to display a library, not which one, so that is
+  what config is *for*. `WHEEL_ZOOM_RATE`, `LONG_PRESS_MS` and `PRESS_SLOP_PX`
+  are still in source because they predate `packages/config`, which is history
+  rather than a rule.
 - **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
   committed.** One that spelled out every value would silently become the real
   surface and editing the documented defaults would stop mattering. The overlay
