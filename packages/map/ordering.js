@@ -18,6 +18,37 @@
  *     which is what makes the re-order read as the library rearranging itself
  *     rather than as a page reload.
  *
+ * ### The density gradient
+ *
+ * `contentRatio` is a *baseline*, not a constant. A search may hand in a
+ * `density.certainty` array - one number per rank, in [0, 1] - and the
+ * acceptance threshold for the rank being placed becomes
+ * `contentRatio + (peak - contentRatio) * certainty`, so a rank the search is
+ * sure about is allowed into nearly every cell it passes and a rank it knows
+ * nothing about is scattered at the baseline. Walking outward with that
+ * threshold turns a certainty profile directly into a density profile: certain
+ * matches pack tight against the centre, and the packing loosens back to the
+ * user's chosen sparseness exactly as fast as the search's confidence falls off.
+ *
+ * The point is that the sliders and the search stop fighting. At an 80% generic
+ * map the top matches used to be scattered thinly enough to be invisible, so
+ * the only way to *see* a search work was to turn the wallpaper off; now the
+ * cluster is denser than its surroundings by construction, and a sparser
+ * baseline makes it more legible rather than less.
+ *
+ * Three properties come out of the one formula rather than being special-cased:
+ * a handful of exact matches fill the innermost cells and everything after them
+ * falls straight back to the baseline (a hard edge); a signal that decays
+ * gradually spreads the packing out gradually; and a query nothing is confident
+ * about produces certainty 0 everywhere, which is the uniform layout, cell for
+ * cell. Clearing the search drops the profile and restores it exactly.
+ *
+ * The cost is that a search now recomputes placement, which the uniform scheme
+ * never did. It is the same O(slots) rebuild the ratio slider already triggers
+ * on every drag, and the rooms still arrive in rank order from the centre out -
+ * the map still reads as rearranging itself, with the density as one more thing
+ * that rearranges.
+ *
  * ### Distance is measured as it looks, not as it indexes
  *
  * This file is otherwise shape-blind - it deals in cells and has no idea what a
@@ -63,6 +94,54 @@ export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
   !isCentre(x, y) && cellHash(x, y, seed) < contentRatio;
 
 /**
+ * Certainty below this is a hunch rather than a match, and clusters nothing.
+ *
+ * Without a floor, a query the corpus has no answer to still produces a faint
+ * ranking - some room has to come first - and the faintest gradient would pull
+ * it toward the centre, which would say "found it" about noise. The floor is
+ * what makes "no match" and "no search" the same picture, which is the only
+ * honest thing for them to look like.
+ */
+export const CERTAINTY_FLOOR = 0.05;
+
+/**
+ * Turn a per-rank certainty into a per-rank acceptance threshold.
+ *
+ * Two adjustments, both of which are about the profile meaning what it claims:
+ *
+ *   - certainty is made non-increasing with rank. The ordering is best-first by
+ *     definition, so a rank that is *more* certain than the one above it is a
+ *     contradiction, and the running minimum is which of the two to believe.
+ *     Density then falls monotonically outward whatever shape the blend had.
+ *   - anything under `floor` becomes exactly the baseline, not slightly above
+ *     it. See CERTAINTY_FLOOR.
+ *
+ * @param {ArrayLike<number>|null} certainty per rank, in [0, 1]
+ * @param {number} contentRatio the baseline density
+ * @param {number} peak         density offered to a rank of certainty 1
+ * @param {number} floor
+ * @returns {(rank: number) => number} threshold for the rank being placed
+ */
+function densityRamp(certainty, contentRatio, peak, floor) {
+  if (!certainty?.length) return () => contentRatio;
+
+  // Never below the baseline: the gradient adds density near the centre, it
+  // does not take any away from a map the user has already set the sparseness of.
+  const top = Math.max(peak, contentRatio);
+  const ramp = new Float64Array(certainty.length);
+  let cap = 1;
+  for (let i = 0; i < certainty.length; i++) {
+    const raw = Number(certainty[i]);
+    const c = Math.min(cap, Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0);
+    cap = c;
+    ramp[i] = c < floor ? contentRatio : contentRatio + (top - contentRatio) * c;
+  }
+  // Ranks past the profile are baseline, which is also what an absent profile
+  // gives - so a short array is a partial gradient rather than an error.
+  return (rank) => (rank < ramp.length ? ramp[rank] : contentRatio);
+}
+
+/**
  * Distance from the origin in units of cell WIDTHS - the metric everything in
  * this file sorts and clamps by. With a square cell it is plain `hypot`.
  */
@@ -79,9 +158,21 @@ export const cellDistance = (x, y, aspect = 1) => Math.hypot(x, y * aspect);
  * @param {number} [opts.aspect]      cell height / cell width; 1 for a square
  *                                    cell. Makes the library round on screen
  *                                    rather than round in the index.
+ * @param {object} [opts.density]     the search's density gradient, if a search
+ *                                    is running. Absent - or with no certainty
+ *                                    in it - is the uniform map, cell for cell.
+ * @param {ArrayLike<number>} [opts.density.certainty] per rank, in [0, 1]
+ * @param {number} [opts.density.peak]  density offered to a rank of certainty 1
+ * @param {number} [opts.density.floor] certainty under which nothing clusters
  * @returns {MapLayout}
  */
-export function createLayout({ roomCount, contentRatio = 0.2, seed = 0, aspect = 1 } = {}) {
+export function createLayout({
+  roomCount,
+  contentRatio = 0.2,
+  seed = 0,
+  aspect = 1,
+  density = null,
+} = {}) {
   if (!Number.isInteger(roomCount) || roomCount < 0)
     throw new RangeError('roomCount must be a non-negative integer');
   if (!(contentRatio > 0 && contentRatio <= 1))
@@ -89,7 +180,14 @@ export function createLayout({ roomCount, contentRatio = 0.2, seed = 0, aspect =
   if (!(aspect > 0 && Number.isFinite(aspect)))
     throw new RangeError('aspect must be a positive, finite ratio');
 
-  const slots = collectSlots(roomCount, contentRatio, seed, aspect);
+  const ramp = densityRamp(
+    density?.certainty,
+    contentRatio,
+    density?.peak ?? 1,
+    density?.floor ?? CERTAINTY_FLOOR
+  );
+
+  const slots = collectSlots(roomCount, contentRatio, seed, aspect, ramp);
 
   // Reverse index: cell -> rank position. Bounded by roomCount, so small.
   const rankAt = new Map();
@@ -99,9 +197,16 @@ export function createLayout({ roomCount, contentRatio = 0.2, seed = 0, aspect =
   // from crossing, since there is nothing but generic rooms beyond it.
   const boundaryRadius = slots.length ? slots[slots.length - 1].d : 0;
 
+  // How many leading ranks the gradient actually lifts above the baseline -
+  // the size of the cluster, and 0 for a uniform map. Certainty is monotone by
+  // then, so counting until it stops is the whole answer.
+  let gradedCount = 0;
+  while (gradedCount < slots.length && ramp(gradedCount) > contentRatio) gradedCount++;
+
   return {
     slots,
     boundaryRadius,
+    gradedCount,
     contentRatio,
     seed,
     roomCount,
@@ -159,38 +264,115 @@ export function createLayout({ roomCount, contentRatio = 0.2, seed = 0, aspect =
  * reaches `radius` cells across but `radius / aspect` cells up and down. A
  * short cell means more rows to cover the same apparent distance, which is
  * also why the density estimate below carries the aspect.
+ *
+ * The walk is what makes the gradient work: candidates are visited nearest
+ * first, and each is offered to the rank currently being placed at *that rank's*
+ * threshold, so a certain rank takes the first cell it meets and an uncertain
+ * one waits for a cell the baseline hash lets through. With a flat ramp every
+ * candidate is accepted and this is the old scan, cell for cell.
+ *
+ * @param {(rank: number) => number} ramp acceptance threshold per rank
  */
-function collectSlots(count, contentRatio, seed, aspect = 1) {
+function collectSlots(count, contentRatio, seed, aspect = 1, ramp = () => contentRatio) {
   if (count === 0) return [];
-  // A screen-circle of radius r spans r x r/aspect cells, so it contains
-  // pi * r^2 / aspect of them, and at density contentRatio that holds
-  // contentRatio * pi * r^2 / aspect slots. Invert for r, start a little wide,
-  // then grow if the hash happened to be sparse here.
-  let radius = Math.ceil(Math.sqrt((count * aspect) / (contentRatio * Math.PI)) * 1.35) + 4;
+
+  // Placing a rank costs about 1/density cells, so the whole run costs the sum
+  // of that over the ranks. With a flat ramp the sum is count / contentRatio
+  // and this is the estimate it always was; with a gradient it shrinks by
+  // however much the middle of the map tightened.
+  let cells = 0;
+  for (let i = 0; i < count; i++) cells += 1 / ramp(i);
+  let radius = radiusFor(cells, aspect);
 
   for (let attempt = 0; attempt < 24; attempt++) {
-    const found = [];
-    const xMax = Math.ceil(radius);
-    const yMax = Math.ceil(radius / aspect);
-    for (let y = -yMax; y <= yMax; y++) {
-      for (let x = -xMax; x <= xMax; x++) {
-        const d = cellDistance(x, y, aspect);
-        if (d > radius) continue;
-        if (isContentSlot(x, y, { seed, contentRatio })) found.push({ x, y, d });
-      }
+    // Every cell the baseline admits, and a tally of them per ring. These are
+    // the slots the uniform map would have had; a gradient only ever adds to
+    // them, which is what makes the tally a sound bound below.
+    const rings = Math.ceil(radius) + 2;
+    const reached = new Int32Array(rings + 1);
+    const candidates = [];
+    sweep(radius, aspect, (x, y, d) => {
+      const h = cellHash(x, y, seed);
+      if (h >= contentRatio) return;
+      candidates.push({ x, y, d, h, a: Math.atan2(y * aspect, x) });
+      reached[Math.floor(d)]++;
+    });
+
+    // Exclusive prefix: `reached[k]` is now a LOWER BOUND on the rank the walk
+    // has got to by the time it reaches ring k, since every cell counted into
+    // it lies strictly nearer and is taken whatever rank is current. The ramp
+    // is non-increasing, so a lower bound on the rank gives an upper bound on
+    // the threshold - which is what the extra sweep below can trust.
+    for (let k = 0, total = 0; k <= rings; k++) {
+      const here = reached[k];
+      reached[k] = total;
+      total += here;
     }
-    if (found.length >= count) {
-      // Sort by distance; break ties by angle so the ordering is deterministic
-      // and fills rings evenly rather than favouring one axis. The angle is the
-      // on-screen one, for the same reason the distance is.
-      found.sort(
-        (a, b) => a.d - b.d || Math.atan2(a.y * aspect, a.x) - Math.atan2(b.y * aspect, b.x)
-      );
-      return found.slice(0, count);
+
+    // The cells only a graded rank could take: above the baseline, below the
+    // threshold that rank still has. Past the ring where the bound has caught
+    // up with the gradient there are none, so this sweep covers the cluster
+    // rather than the map - and with no gradient it does not run at all.
+    const coreRadius = gradedRadius(reached, ramp, contentRatio, rings);
+    if (coreRadius > 0)
+      sweep(Math.min(coreRadius, radius), aspect, (x, y, d) => {
+        const h = cellHash(x, y, seed);
+        if (h >= contentRatio && h < ramp(reached[Math.floor(d)]))
+          candidates.push({ x, y, d, h, a: Math.atan2(y * aspect, x) });
+      });
+
+    // Sort by distance; break ties by angle so the ordering is deterministic
+    // and fills rings evenly rather than favouring one axis. The angle is the
+    // on-screen one, for the same reason the distance is, and it is computed
+    // once per cell rather than twice per comparison.
+    candidates.sort((p, q) => p.d - q.d || p.a - q.a);
+
+    const found = [];
+    for (const c of candidates) {
+      if (c.h >= ramp(found.length)) continue;
+      found.push({ x: c.x, y: c.y, d: c.d });
+      if (found.length === count) return found;
     }
     radius = Math.ceil(radius * 1.4);
   }
   throw new Error('could not place all rooms; contentRatio may be too small');
+}
+
+/**
+ * Radius, in cell widths, of a screen-circle holding `cells` cells - with a
+ * margin, since the hash may happen to be sparse here and growing costs a full
+ * re-sweep. A circle of radius r spans r x r/aspect cells, so it contains
+ * pi * r^2 / aspect of them; this inverts that.
+ */
+const radiusFor = (cells, aspect) => Math.ceil(Math.sqrt((cells * aspect) / Math.PI) * 1.35) + 4;
+
+/**
+ * Visit every non-centre cell within `radius`, in no particular order.
+ *
+ * A screen-circle of radius r spans r cells across and r / aspect up and down,
+ * so a short cell means more rows for the same apparent distance.
+ */
+function sweep(radius, aspect, visit) {
+  const xMax = Math.ceil(radius);
+  const yMax = Math.ceil(radius / aspect);
+  for (let y = -yMax; y <= yMax; y++)
+    for (let x = -xMax; x <= xMax; x++) {
+      if (isCentre(x, y)) continue;
+      const d = cellDistance(x, y, aspect);
+      if (d <= radius) visit(x, y, d);
+    }
+}
+
+/**
+ * How far out the gradient can still be lifting the threshold above baseline.
+ *
+ * `reached` only grows and the ramp only falls, so once a ring's bound has
+ * reached an ungraded rank every ring beyond it has too, and the answer is the
+ * first such ring. 0 when there is no gradient at all.
+ */
+function gradedRadius(reached, ramp, contentRatio, rings) {
+  for (let k = 0; k <= rings; k++) if (ramp(reached[k]) <= contentRatio) return k;
+  return rings + 1;
 }
 
 const key = (x, y) => `${x},${y}`;
@@ -215,6 +397,16 @@ export function shuffledOrder(n, seed = 1) {
 }
 
 /**
+ * The int8 half-range `tools/embed` quantises rows at. Dequantise as v / 127.
+ *
+ * Stated here because this is where the blob is read. Ranking never cared - a
+ * monotone factor cannot reorder anything, and the blend min-maxes the column
+ * anyway - but the density gradient asks how sure CLIP is *in absolute terms*,
+ * and 0.3 is only a cosine once the quantisation is divided back out.
+ */
+export const EMBEDDING_SCALE = 127;
+
+/**
  * Score every room against a query vector. Embeddings are int8-quantized and
  * stored contiguously; scoring the whole corpus is a few million multiply-adds,
  * which is well under a frame for corpora of this size.
@@ -226,7 +418,7 @@ export function shuffledOrder(n, seed = 1) {
  * @param {Int8Array} embeddings  roomCount * dim, row-major
  * @param {number} dim
  * @param {Float32Array} query    length dim, already L2-normalised
- * @returns {Float32Array} one raw cosine per room, indexed by id
+ * @returns {Float32Array} one cosine per room, indexed by id
  */
 export function embeddingScores(embeddings, dim, query) {
   const n = Math.floor(embeddings.length / dim);
@@ -235,7 +427,10 @@ export function embeddingScores(embeddings, dim, query) {
     let dot = 0;
     const base = i * dim;
     for (let d = 0; d < dim; d++) dot += embeddings[base + d] * query[d];
-    scores[i] = dot;
+    // Both sides are unit vectors, so this is a cosine once the row's
+    // quantisation is undone - and it has to be a real cosine, because
+    // `scoring.js` compares it against absolute thresholds.
+    scores[i] = dot / EMBEDDING_SCALE;
   }
   return scores;
 }

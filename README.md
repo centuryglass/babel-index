@@ -67,6 +67,19 @@ rooms once, offline; the demo server runs only the text tower per query and
 returns a vector, and the browser ranks against the blob, so a re-rank costs no
 round trip. Their relative weights are [config](#tuning).
 
+Search also **clusters what it is sure about**. The best matches pack in tight
+against the centre and the packing loosens outward as the confidence falls off,
+so a handful of exact tags reads as a solid block while a broad, hazy match reads
+as a gradient. A query nothing matches clusters nothing at all — the map stays
+the even scatter it was, because a search that says "found it" about noise is
+worse than one that admits it found nothing. Clearing the box restores the even
+mix exactly.
+
+The nice consequence is that the two controls stop fighting: because the cluster
+is dense *relative to its surroundings*, turning the wallpaper **up** makes a
+search easier to read, not harder. The `non-generic %` slider sets the density
+the map falls back to, not the density of the results.
+
 Any of the three may be missing and the rest still give a real ranking — the
 panel reports which ones actually matched, rather than which were available.
 Only a corpus with neither metadata nor embeddings falls back to a deterministic

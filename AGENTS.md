@@ -42,9 +42,9 @@ is read per request.
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
 | `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
 | `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
-| `packages/map/ordering.js` | slot placement, ranking, pan resistance — no DOM, no imports |
+| `packages/map/ordering.js` | slot placement, the search density gradient, ranking, pan resistance — no DOM, no imports |
 | `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
-| `packages/map/scoring.js` | folding, tokenising, the two match rules, and the three-signal blend |
+| `packages/map/scoring.js` | folding, tokenising, the two match rules, the three-signal blend, and how sure it is |
 | `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
@@ -102,8 +102,40 @@ is read per request.
   `createLayout()`, not build-time settings. Growing the corpus must keep
   existing slots where they are and append further out; that property is what
   makes the sliders usable and it is asserted in `ordering.test.mjs`.
-- **Re-ranking swaps one array.** Slot positions never move, so a search reads as
-  the library rearranging itself. Don't recompute placement on search.
+- **Re-ranking swaps one array; only the density gradient may move slots.**
+  Ranking and placement are separate, and a reorder (the shuffle button, a
+  re-sort of the same results) must stay a swap of `order` — the map rearranges,
+  it does not reload. A *search* is the one thing allowed to rebuild the layout,
+  because its certainty profile is an input to placement; that rebuild is the
+  same O(slots) the ratio slider already does on every drag. Nothing else gets
+  to recompute placement.
+- **The search density gradient is one formula, not three cases.** A rank's
+  acceptance threshold is `contentRatio + (peak - contentRatio) * certainty`,
+  the walk goes outward, and the hard-edged cluster, the gradual falloff and the
+  flat "nothing matched" map all fall out of it. Resist special-casing any of
+  them. Two rules keep it honest and both are asserted: certainty is made
+  **non-increasing with rank** (a rank more certain than the one above it
+  contradicts the ordering being best-first), and anything under
+  `CERTAINTY_FLOOR` snaps to exactly the baseline — so a query the corpus cannot
+  answer produces the uniform map *cell for cell*, which is the only honest
+  thing for it to look like.
+- **Certainty is absolute; ranking is relative. Don't feed one the other's
+  numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
+  for *any* query — drive the gradient off that and nonsense clusters as
+  confidently as an exact match. `matchCertainty` therefore reads raw cosines
+  against absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`),
+  which is also why `embeddingScores` divides the int8 quantisation back out and
+  returns a real cosine. There is a test for exactly this, and it fails against a
+  certainty computed from the normalised column.
+- **`collectSlots` prefilters the far field at the baseline, and that is sound
+  rather than lucky.** Sorting every cell a *certain* rank could take would mean
+  sorting the whole sweep; instead each ring carries a lower bound on the rank
+  the walk must have reached by then (every baseline-admitted cell nearer than it
+  is taken whatever rank is current), and a lower bound on the rank is an upper
+  bound on the threshold *because the ramp is non-increasing*. Break the
+  monotonicity and this prefilter silently starts dropping cells. The fuzz test
+  against an unpruned walk is what guards it — it catches an off-by-one in the
+  ring bound, which nothing else does.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 - **`useMapCamera.js` tracks pointers by id, in a Map, and that is load-bearing
   for touch.** One finger is a drag, two are a pinch, and the pinch is always
