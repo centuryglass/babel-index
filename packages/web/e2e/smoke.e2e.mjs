@@ -28,6 +28,9 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+// The app's own flight duration, so this file waits for exactly as long as the
+// camera actually flies rather than for a number that could drift from it.
+import { FLIGHT_MS } from '../src/camera.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const artifacts = resolve(repoRoot, 'packages/web/e2e/artifacts');
@@ -235,13 +238,87 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.ok(dense.edge < most.edge, 'the whole point of the slider is that it moves the edge');
   });
 
+  test('the camera flies rather than teleports', async () => {
+    // Park at the centre, then zoom well away from the default so "centre" has
+    // a long way to travel. Zoom is the axis to watch: it is independent of the
+    // content boundary, so nothing seen here can be the glide back inside it.
+    await page.locator('button', { hasText: 'centre' }).click();
+    await landed(page);
+    await page.mouse.move(640, 400);
+    for (let i = 0; i < 5; i++) await page.mouse.wheel(0, 600);
+    const far = await settled(page);
+
+    // Sampling starts before the click, so it spans the whole flight. A
+    // teleport shows two cameras - the one before and the one after - and an
+    // eased one shows a frame's worth each; the count is what separates them.
+    const sampling = sampleCamera(page, FLIGHT_MS * 3);
+    await page.locator('button', { hasText: 'centre' }).click();
+    const seen = await sampling;
+    assert.ok(seen.length > 4, `only ${seen.length} distinct cameras: the camera teleported`);
+
+    const home = await landed(page);
+    assert.ok(home.zoom > far.zoom, `the flight never restored the zoom: ${far.zoom} -> ${home.zoom}`);
+    assert.deepEqual({ x: home.x, y: home.y }, { x: 0.5, y: 0.5 }, 'and it must land at the centre');
+  });
+
+  test('a hand on the map interrupts a flight instead of fighting it', async () => {
+    // The half that decides whether the map feels like yours. A flight still
+    // easing under your hand drags the world out from under the finger holding
+    // it, and the zoom is where that is unambiguous: a drag never changes zoom,
+    // so any zoom that moves after the grab is the flight refusing to yield.
+    await page.locator('button', { hasText: 'centre' }).click();
+    const centred = await landed(page);
+    await page.mouse.move(640, 400);
+    for (let i = 0; i < 5; i++) await page.mouse.wheel(0, 600);
+    const low = await settled(page);
+    assert.ok(low.zoom < centred.zoom, `the wheel should have zoomed out: ${centred.zoom} -> ${low.zoom}`);
+
+    await page.locator('button', { hasText: 'centre' }).click();
+    // Back onto the canvas first: clicking the button left the pointer over the
+    // panel, and a press there never reaches the map at all - which looks
+    // exactly like a flight that refused to be interrupted.
+    await page.mouse.move(640, 400);
+    await page.waitForTimeout(FLIGHT_MS / 3);
+    // Grab, then wander past the press slop, so this is a drag rather than a
+    // long press - which would otherwise fire while we hold and open a card.
+    await page.mouse.down();
+    await page.mouse.move(600, 400, { steps: 4 });
+    const grabbed = await settled(page);
+    assert.ok(
+      grabbed.zoom > low.zoom && grabbed.zoom < centred.zoom,
+      `the grab did not catch the flight in the air (${low.zoom} -> ${grabbed.zoom} -> ${centred.zoom})`
+    );
+
+    await page.waitForTimeout(FLIGHT_MS);
+    const held = await settled(page);
+    await page.mouse.up();
+    assert.equal(held.zoom, grabbed.zoom, `the flight flew on under the hand: ${grabbed.zoom} -> ${held.zoom}`);
+
+    // The wheel yields the same way and for the same reason: a flight easing
+    // its own zoom underneath would fight every notch. Separate line of code
+    // from the one above, so separate assertion.
+    await page.locator('button', { hasText: 'centre' }).click();
+    await page.mouse.move(640, 400);
+    await page.waitForTimeout(FLIGHT_MS / 3);
+    await page.mouse.wheel(0, 600);
+    const wheeled = await settled(page);
+    await page.waitForTimeout(FLIGHT_MS);
+    const after = await settled(page);
+    assert.ok(wheeled.zoom < centred.zoom, 'the wheel should have caught the flight in the air');
+    assert.equal(after.zoom, wheeled.zoom, `the flight flew on under the wheel: ${wheeled.zoom} -> ${after.zoom}`);
+  });
+
   test('a search reorders the library around the centre', async () => {
     // Park at the centre and record the view, because a search both moves the
     // camera home AND reorders the rooms. Comparing pixels from two different
     // camera positions would pass on the camera move alone, which is a test
     // that cannot tell a working search from one whose ranking is discarded.
+    //
+    // `landed` rather than `settled`: the camera is flying for ~450ms after the
+    // click, and a "parked" camera read mid-flight is a position the search's
+    // own flight home would only pass through.
     await page.locator('button', { hasText: 'centre' }).click();
-    const parked = await settled(page);
+    const parked = await landed(page);
     const before = await fingerprint(page);
 
     // Wander off, so the fly-home is observable too.
@@ -425,9 +502,11 @@ describe('the library, in a browser', { concurrency: false }, () => {
         // Re-centre first. Pan resistance grows with distance from the origin,
         // so three drags in a row from wherever the last one ended would differ
         // for a reason that has nothing to do with pointer bookkeeping - which
-        // is exactly what the first version of this test measured.
+        // is exactly what the first version of this test measured. And the
+        // re-centre now flies, so the baseline has to be taken after it lands
+        // or the drag is measured partly against the flight.
         await page.locator('button', { hasText: 'centre' }).click();
-        const before = await settled(page);
+        const before = await landed(page);
         await touchDrag(page, { from: { x: 900, y: 400 }, to: { x: 700, y: 400 } });
         moves.push((await settled(page)).x - before.x);
       }
@@ -568,6 +647,58 @@ function fingerprint(page) {
 async function settled(page) {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   return hud(page);
+}
+
+/**
+ * The HUD once the camera has stopped moving.
+ *
+ * Two frames were enough while `flyTo` teleported. It now eases over
+ * `FLIGHT_MS`, so anything reading the camera straight after a "centre" click
+ * reads one still in the air - and every assertion here that compares a camera
+ * before and after some gesture needs the before to be a camera at rest.
+ *
+ * The clock decides, not stillness: the last frames of a smoothstep move by
+ * less than the HUD prints, so "two identical readings" would call it early.
+ * Waiting the flight out and then confirming is both.
+ */
+async function landed(page, timeoutMs = 5000) {
+  await page.waitForTimeout(FLIGHT_MS);
+  const deadline = Date.now() + timeoutMs;
+  let prev = await settled(page);
+  while (Date.now() < deadline) {
+    const now = await settled(page);
+    if (now.x === prev.x && now.y === prev.y && now.zoom === prev.zoom) return now;
+    prev = now;
+  }
+  throw new Error('the camera never came to rest');
+}
+
+/**
+ * Every distinct camera the HUD showed over a window, one sample per frame.
+ *
+ * Start it BEFORE the gesture under test and await it after, so the frames in
+ * between are the ones it catches - which is the only way to observe an
+ * animation rather than its endpoints.
+ */
+function sampleCamera(page, ms) {
+  return page.evaluate(
+    (ms) =>
+      new Promise((resolve) => {
+        const seen = [];
+        const t0 = performance.now();
+        const tick = () => {
+          const m = /· zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+)/.exec(
+            document.getElementById('hud')?.textContent ?? ''
+          );
+          const at = m && `${m[1]}/${m[2]}/${m[3]}`;
+          if (at && at !== seen[seen.length - 1]) seen.push(at);
+          if (performance.now() - t0 < ms) requestAnimationFrame(tick);
+          else resolve(seen);
+        };
+        requestAnimationFrame(tick);
+      }),
+    ms
+  );
 }
 
 async function waitFor(predicate, timeoutMs, message) {

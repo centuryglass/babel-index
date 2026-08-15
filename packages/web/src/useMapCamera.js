@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt, zoomBy } from './camera.js';
+import {
+  beginFlight,
+  cameraAtCell,
+  clampZoom,
+  flightAt,
+  glideStep,
+  panByPixels,
+  zoomAt,
+  zoomBy,
+} from './camera.js';
 
 /**
  * Pan/zoom camera over an unbounded tile grid.
@@ -30,11 +39,35 @@ import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt, zoomBy } from 
  * Left-click stays free: `§5` reserves it for "focus this room", and a map whose
  * primary button opens a modal is a map you cannot explore.
  *
+ * ### Flying, and why it shares the glide's loop
+ *
+ * `flyTo` eases rather than teleports, because a teleport loses the reader's
+ * sense of where they were - and after a search, the flight home is carrying
+ * the meaning: it shows the top result's location relative to where you were
+ * standing. The step is `flightAt` in `camera.js`; what is here is the frame
+ * clock and the interruption.
+ *
+ * It rides the glide's rAF loop rather than starting one of its own. There is
+ * already a permanent loop, and one loop is what makes the precedence between
+ * the two statable in a single `else`: a flight owns the camera while it lasts,
+ * and the glide takes over on arrival - which is what lets a flight land
+ * outside the content region and be pulled back afterwards instead of being
+ * fought all the way there.
+ *
  */
 
 /** How long a press must be held, and how far it may wander before it is a drag. */
 const LONG_PRESS_MS = 500;
 const PRESS_SLOP_PX = 8;
+
+/**
+ * Someone who has asked for less motion gets the old teleport.
+ *
+ * Read per flight rather than once: the setting can change while a page is
+ * open, and this costs nothing next to the flight it is deciding about.
+ */
+const reducedMotion = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * Every pointer currently down, in the order it arrived, so a second finger can
@@ -79,6 +112,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
   const press = useRef(null);
   const pointers = useRef(new Map());
   const pinch = useRef(null);
+  const flight = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -138,6 +172,12 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       // Secondary buttons are the context menu's, not the map's; starting a drag
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
+
+      // A hand on the map beats anything the map was doing to itself. Dropped
+      // here rather than on the first move so that even a press that never
+      // becomes a drag stops the flight - reaching for a room that is still
+      // sliding and having it slide on is the thing this is for.
+      flight.current = null;
 
       // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
       // first would abort the handler before the pointer was recorded - losing
@@ -264,6 +304,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
 
     const onWheel = (e) => {
       e.preventDefault();
+      // Same rule as a drag: the wheel is the reader steering, and a flight
+      // still easing its own zoom underneath would fight every notch.
+      flight.current = null;
       const rect = canvas.getBoundingClientRect();
       cam.current = zoomAt(cam.current, e.clientX - rect.left, e.clientY - rect.top, e.deltaY, rect);
       onChange?.();
@@ -297,12 +340,19 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
     };
   }, [canvasRef, resistanceAt, onChange, onPick, onDebug]);
 
-  // Glide back toward the content region when released outside it, so the edge
-  // pushes back rather than trapping.
+  // Step whichever of the two things is moving the camera on its own: a flight
+  // while one is in the air, otherwise the glide back toward the content region
+  // when the map was released outside it, so the edge pushes back rather than
+  // trapping. One loop, one `else`, and no way for them to overlap.
   useEffect(() => {
     let raf;
-    const tick = () => {
-      if (!drag.current) {
+    const tick = (now) => {
+      if (flight.current) {
+        const { cam: next, done } = flightAt(flight.current, now);
+        cam.current = next;
+        if (done) flight.current = null;
+        onChange?.();
+      } else if (!drag.current) {
         const next = glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
         if (next !== cam.current) {
           cam.current = next;
@@ -315,13 +365,22 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
     return () => cancelAnimationFrame(raf);
   }, [resistanceAt, onChange]);
 
-  const flyTo = useCallback(
-    (x, y, zoom) => {
-      cam.current = cameraAtCell(cam.current, x, y, zoom);
-      onChange?.();
-    },
-    [onChange]
-  );
+  /**
+   * Ease to a cell, rather than teleport to it.
+   *
+   * The target is a whole camera, built by `cameraAtCell` so the clamp and both
+   * optional fields are already settled - the flight then interpolates between
+   * two cameras and cannot lose either one. `performance.now()` shares its time
+   * origin with the rAF timestamp the loop steps on, so the two agree.
+   *
+   * No `onChange` here: the loop owns every camera change for as long as the
+   * flight lasts, and calling it now would only repaint the camera we are
+   * flying away from.
+   */
+  const flyTo = useCallback((x, y, zoom) => {
+    const to = cameraAtCell(cam.current, x, y, zoom);
+    flight.current = beginFlight(cam.current, to, performance.now(), reducedMotion() ? 0 : undefined);
+  }, []);
 
   return { cam, flyTo };
 }

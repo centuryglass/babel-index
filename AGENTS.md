@@ -138,6 +138,16 @@ is read per request.
 - **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
   it.** One fixed-point implementation for both gestures — a pinch knows the
   ratio its fingers moved and has no wheel delta to invent. Don't grow a second.
+- **A flight interpolates zoom geometrically and position linearly**, and it
+  steps on the loop the glide already ran. Zoom is pixels per cell, so a linear
+  ramp from 26 to 900 sits near 900 for nearly the whole flight and reads as a
+  snap and then a crawl — `camera.test.mjs` asserts the midpoint against the
+  geometric mean. Sharing the glide's rAF is what makes the precedence one
+  `else` rather than two loops racing; don't start a second. `pointerdown` and
+  `wheel` each drop the flight, and both lines have their own e2e assertion.
+  In the e2e, anything reading the camera after a "centre" click needs
+  `landed()`, not `settled()` — two frames stopped being enough the moment
+  `flyTo` started taking 450 ms.
 - **The overlay opens on right-click or long press, never left-click**, which
   stays reserved for "focus this room" — a map whose primary button opens a
   modal is a map you cannot explore. **The long press must lose to a pan**: the
