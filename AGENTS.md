@@ -20,6 +20,8 @@ images.
 npm install
 npm run demo                       # http://localhost:5173, against assets/corpus-sample/
 npm run demo -- --images <dir> [--base base.jpg] [--port 5173] [--config config.json]
+# refuses to start if the port is taken - an old instance serving stale code is
+# the classic way to spend a day debugging something you already fixed
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
@@ -117,15 +119,22 @@ is read per request.
   — capture is implicit there and the browser drops it itself. Do the
   `pointers` bookkeeping FIRST and wrap the capture calls; an `?.` does not help,
   it guards the method being missing rather than the call throwing. Unguarded,
-  a throw strands a finger in the Map and every later gesture is read as a pinch
-  against a finger that is no longer on the glass.
+  a throw would strand a finger in the Map and every later gesture would be read
+  as a pinch against a finger no longer on the glass. Defensive rather than
+  diagnosed — no such failure has been observed here — but `pointercancel`
+  reaches the release with capture already dropped, so the path is real.
 - **CDP touch injection bypasses the browser's gesture arbitration**, so
   `smoke.e2e.mjs` cannot see anything involving `touch-action`, `pointercancel`,
-  or the real capture lifecycle — it dispatches straight to the page. Two real
-  Android bugs passed it. Where a gesture bug is suspected there, simulate the
-  condition explicitly (see the test that makes the capture calls throw) and
-  confirm on a device with `?touchdebug`, which prints the raw pointer stream on
-  screen.
+  or the real capture lifecycle — it dispatches straight to the page. Nothing
+  has actually slipped through that gap yet; treat it as a known blind spot, not
+  as a track record. Where a gesture bug is suspected, simulate the condition
+  explicitly (see the test that makes the capture calls throw) and confirm on a
+  device with `?touchdebug`, which prints the raw pointer stream on screen.
+- **Before blaming the code for a device-only bug, check you are talking to the
+  server you think you are.** `npm run demo` used to bind, print its banner and
+  exit 0 when the port was taken, leaving an older process serving stale code —
+  which is what a whole round of "pinch is broken on Android" turned out to be.
+  `index.mjs` now refuses to start on a busy port.
 - **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
   it.** One fixed-point implementation for both gestures — a pinch knows the
   ratio its fingers moved and has no wheel delta to invent. Don't grow a second.

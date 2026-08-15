@@ -395,16 +395,17 @@ describe('the library, in a browser', { concurrency: false }, () => {
   });
 
   test('a pointer survives capture calls that throw', async () => {
-    // Reproduces what a real touchscreen does and CDP injection does not.
     // `set/releasePointerCapture` throw NotFoundError for a pointer the browser
     // does not consider capturable, which is ordinary on touch - capture is
     // implicit there, and the browser drops it itself at the end of a sequence
-    // or when it cancels one.
+    // or when it cancels one. CDP injection keeps the capture state tidy and so
+    // never exercises that path; this makes the calls throw on purpose instead.
     //
-    // Unguarded, the release threw before the bookkeeping ran and left the
-    // finger in the pointer map forever. Every gesture after the first was then
-    // read as a pinch against a finger no longer on the glass: no zoom, and a
-    // map that twitched. This is that bug, expressed without an Android device.
+    // What it protects: an unguarded release aborts the handler before the
+    // bookkeeping runs, leaving the finger in the pointer map, after which every
+    // gesture is read as a pinch against a finger no longer on the glass. That
+    // is a hazard the spec allows rather than one observed in the wild - see the
+    // note in useMapCamera.js - but it is cheap to hold shut.
     await page.evaluate(() => {
       const proto = HTMLCanvasElement.prototype;
       window.__capture = {
