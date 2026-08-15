@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULTS, resolveConfig } from './config.mjs';
-import { ZOOM_LIMITS } from '../web/src/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/camera.js';
 
 /**
  * The limits are injected everywhere below rather than assumed, both because
@@ -129,6 +129,49 @@ test('the shipped defaults are valid against the real limits', () => {
   const c = resolveConfig({}, { zoomLimits: ZOOM_LIMITS });
   assert.deepEqual(c.notes, [], 'defaults must not need correcting');
   assert.ok(c.camera.defaultZoom >= ZOOM_LIMITS.min && c.camera.defaultZoom <= ZOOM_LIMITS.max);
+});
+
+// --- the flight duration ---------------------------------------------------
+
+test('the flight duration comes through, and the default is the source constant', () => {
+  // Imported rather than restated, so `camera.js` and this file cannot end up
+  // shipping two different 450s.
+  assert.equal(DEFAULTS.camera.flightMs, FLIGHT_MS);
+  const c = resolveConfig({ camera: { flightMs: 900 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.flightMs, 900);
+  assert.deepEqual(c.notes, []);
+});
+
+test('zero is a flight duration, not an error', () => {
+  // It means "arrive at once" - the same thing prefers-reduced-motion asks for
+  // - so it is how a config turns the animation off. Rejecting it would leave
+  // no way to say that, and it must not be corrected back to the default.
+  const c = resolveConfig({ camera: { flightMs: 0 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.flightMs, 0);
+  assert.deepEqual(c.notes, []);
+});
+
+test('a negative or absurd flight duration is corrected and reported', () => {
+  const back = resolveConfig({ camera: { flightMs: -200 } }, { zoomLimits: LIMITS });
+  assert.equal(back.camera.flightMs, DEFAULTS.camera.flightMs);
+  assert.match(back.notes.join('\n'), /flightMs/);
+
+  // Past a few seconds a camera move has stopped being a transition, so the
+  // ceiling clamps rather than honouring it - and says which it did.
+  const forever = resolveConfig({ camera: { flightMs: 60_000 } }, { zoomLimits: LIMITS });
+  assert.ok(forever.camera.flightMs > 0 && forever.camera.flightMs < 60_000);
+  assert.match(forever.notes.join('\n'), /longer than/);
+});
+
+test('a duration in seconds is honoured but flagged', () => {
+  // 0.45 is what seconds look like typed into a milliseconds field. It is a
+  // legitimate way to say "no animation", so it is not corrected - but left
+  // silent it is a flight that never appears, which is the one failure mode a
+  // tuning file really has.
+  const c = resolveConfig({ camera: { flightMs: 0.45 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.flightMs, 0.45, 'not corrected');
+  assert.match(c.notes.join('\n'), /shorter than one frame/);
+  assert.match(c.notes.join('\n'), /seconds/);
 });
 
 // --- the search density gradient -------------------------------------------

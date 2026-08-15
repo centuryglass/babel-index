@@ -176,14 +176,18 @@ export function cameraAtCell(cam, x, y, zoom) {
 }
 
 /**
- * How long a camera flight takes, in milliseconds.
+ * How long a camera flight takes by default, in milliseconds.
  *
- * A by-feel number that deliberately stays here rather than in
- * `packages/config`: it belongs to the same layer as `WHEEL_ZOOM_RATE` and the
- * long-press threshold - the feel of a gesture, not a property of the library
- * being displayed. Config holds what a different corpus or a different machine
- * might legitimately want changed, and nothing about a directory of images
- * argues for a different flight time.
+ * The value that ships, not the only statement of it: `packages/config` imports
+ * this as `camera.flightMs`, so a `config.json` can retune it and the resolved
+ * number rides to the client on the manifest. Stated here because this is where
+ * `beginFlight` needs a default, and imported there rather than restated so the
+ * two cannot drift.
+ *
+ * How long a transition should take is a judgement about the map in front of
+ * you, which is the same argument that puts the search weights in config. It
+ * is emphatically not derived from anything - the tests assert the shape of the
+ * curve, never this number - so moving it can invalidate nothing.
  */
 export const FLIGHT_MS = 450;
 

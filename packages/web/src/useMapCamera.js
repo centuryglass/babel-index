@@ -24,9 +24,10 @@ import {
  * read here, so every clamp - wheel, flyTo, anything later - goes through the
  * same field and none of them has to remember to ask.
  *
- * `camera` is required, and there is deliberately no fallback opening zoom in
- * this file: that number is a by-feel one and belongs to `packages/config`, so
- * a default here would be a second statement of it that could drift.
+ * `camera` is required, and there is deliberately no fallback opening zoom or
+ * flight duration in this file: those numbers are by-feel ones and belong to
+ * `packages/config`, so a default here would be a second statement of one that
+ * could drift.
  *
  * ### Picking, and why it lives here
  *
@@ -88,7 +89,7 @@ const spanOf = (a, b) => ({
 
 /**
  * @param {object} opts
- * @param {{minZoom: number, maxZoom: number, defaultZoom: number}} opts.camera
+ * @param {{minZoom: number, maxZoom: number, defaultZoom: number, flightMs: number}} opts.camera
  *   resolved `config.camera`, from the manifest
  * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
  *   canvas-relative point of a right-click or a completed long press, with the
@@ -376,11 +377,20 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
    * No `onChange` here: the loop owns every camera change for as long as the
    * flight lasts, and calling it now would only repaint the camera we are
    * flying away from.
+   *
+   * The duration comes from config, like the opening zoom above it and for the
+   * same reason - it is a by-feel number, and this file states none of those.
+   * Reduced motion overrides it rather than being overridden by it: someone who
+   * has asked for less motion is not asking about this map in particular.
    */
-  const flyTo = useCallback((x, y, zoom) => {
-    const to = cameraAtCell(cam.current, x, y, zoom);
-    flight.current = beginFlight(cam.current, to, performance.now(), reducedMotion() ? 0 : undefined);
-  }, []);
+  const flyTo = useCallback(
+    (x, y, zoom) => {
+      const to = cameraAtCell(cam.current, x, y, zoom);
+      const ms = reducedMotion() ? 0 : camera.flightMs;
+      flight.current = beginFlight(cam.current, to, performance.now(), ms);
+    },
+    [camera.flightMs]
+  );
 
   return { cam, flyTo };
 }

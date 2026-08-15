@@ -441,10 +441,21 @@ evict each other.
 #### Camera movement — built
 
 "Centre" used to teleport, which loses the reader's sense of where they were.
-`flyTo` now eases position and zoom together over 450 ms, interruptible the
-moment a hand touches the map. The same helper serves "fly to the best match"
-after a search, which is the case where the movement is carrying meaning — it
-shows the top result's location relative to where you were standing.
+`flyTo` now eases position and zoom together over `camera.flightMs` — 450 ms by
+default — interruptible the moment a hand touches the map. The same helper
+serves "fly to the best match" after a search, which is the case where the
+movement is carrying meaning: it shows the top result's location relative to
+where you were standing.
+
+**The duration is config, not a constant**, which is a reversal of how this
+first landed — see [§6.22](#6-decisions-made) for why the original argument did
+not hold. Zero is a legitimate value meaning "arrive at once", the same thing
+`prefers-reduced-motion` asks for, so it is how a config switches the animation
+off; reduced motion still wins over whatever is configured. Two guards, both
+reported rather than thrown: a duration past five seconds has stopped being a
+transition and is clamped, and a positive duration shorter than one frame is
+honoured but flagged, because `0.45` is what seconds look like typed into a
+milliseconds field and would otherwise be a flight that silently never appears.
 
 Three things the implementation settled, none of them obvious from the sketch
 above:
@@ -623,12 +634,12 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-260 tests (`npm test`), in a couple of seconds, with no browser and no network.
+287 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
 | --- | --- |
-| `packages/config/config.test.mjs` | defaults, the narrow-only zoom rule, every validator reporting rather than throwing |
+| `packages/config/config.test.mjs` | defaults, the narrow-only zoom rule, the flight duration and its two guards, every validator reporting rather than throwing |
 | `packages/config/load.test.mjs` | a missing overlay, a partial one, a malformed one |
 | `packages/map/scoring.test.mjs` | folding, both partial-match rules, normalisation, and that the blend is a blend rather than tiers |
 | `packages/map/metadata.test.mjs` | entry normalisation, the filename join, coverage vs. a drifted sidecar |
@@ -719,10 +730,15 @@ Three things it does that are worth keeping if it gets rewritten:
   the distinct cameras in between: a teleport shows exactly two. Its companion
   is `landed()` — every assertion that compares a camera before and after some
   gesture now needs the before to be a camera at rest, and two frames is no
-  longer enough. It waits `FLIGHT_MS` out (imported from `camera.js`, so the two
-  cannot drift) and then confirms stillness, because the last frames of a
-  smoothstep move by less than the HUD prints and "two identical readings" would
-  call it early.
+  longer enough. It waits the flight out and then confirms stillness, because
+  the last frames of a smoothstep move by less than the HUD prints and "two
+  identical readings" would call it early. **How long it waits is read off the
+  manifest**, not imported from `camera.js`: the duration is configurable, so a
+  machine with a `config.json` would otherwise have the test waiting the wrong
+  amount of time for the camera in front of it. That the whole suite still
+  passes against a `flightMs` of 1500 is what proves the knob is wired — test 8
+  grabs at a third of the duration, so it would find an already-landed flight if
+  the configured value had not reached the client.
 
 Each of those was checked by breaking the app on purpose and confirming the
 test failed: no `drawImage`, a discarded search order, an ignored
@@ -1061,9 +1077,9 @@ that justifies it beside it, the way `pyramid.js` does — and a `config.json` i
 the working directory overrides any subset:
 
 ```
-camera: { minZoom, maxZoom, defaultZoom }
+camera: { minZoom, maxZoom, defaultZoom, flightMs }
 map:    { contentRatio, slotSeed, genericVariantSeed }
-search: { weights: { keyword, story, clip }, minTokenLength }
+search: { weights: { keyword, story, clip }, minTokenLength, density: { … } }
 ```
 
 ```sh
@@ -1491,12 +1507,28 @@ Recorded from review, with what changed:
     book-pull animation — if it happens — samples a spine rather than identifying
     one. [§5b](#5b-the-metadata-overlay--built).
 22. **Camera moves ease rather than teleport, and zoom eases geometrically.**
-    Built. 450 ms, smoothstep, interrupted by `pointerdown` or the wheel, and
-    stepped on the loop the glide already ran, so a flight and the pull back
-    inside the region can never overlap. The duration stays in `camera.js`
-    beside `WHEEL_ZOOM_RATE` rather than going into config: it is the feel of a
-    gesture, not a property of the library being displayed, and no corpus
-    argues for a different one. [§3 phase 3](#camera-movement--built).
+    Built. Smoothstep, interrupted by `pointerdown` or the wheel, and stepped on
+    the loop the glide already ran, so a flight and the pull back inside the
+    region can never overlap. **The duration is `camera.flightMs` in config**,
+    defaulting to the 450 ms in `camera.js`.
+
+    This reverses the first version of this entry, which argued the number
+    should stay a source constant because it was "the feel of a gesture, not a
+    property of the library being displayed". That test is the wrong one, and
+    [§4](#4-architecture) says so in as many words: config "describes how to
+    display a library, not which library", so being independent of the corpus is
+    what config is *for* rather than grounds for exclusion — `camera.defaultZoom`
+    is the same kind of number and has always been there. The rule that really
+    keeps things out of config is [§3e](#3e-configuration--built)'s: values that
+    are *derived and asserted* rather than tuned, which is why the pyramid stays
+    out. `FLIGHT_MS` is derived from nothing and no test asserts its value — only
+    the shape of the curve — so nothing can break when it moves.
+
+    What survives of the original argument is only that `WHEEL_ZOOM_RATE`,
+    `LONG_PRESS_MS` and `PRESS_SLOP_PX` are now inconsistent with this. They are
+    in source because they predate `packages/config`, not because anyone decided
+    they should be — which is an argument for moving them too, not for leaving
+    the flight behind. [§3 phase 3](#camera-movement--built).
 
 ## 7. Still open
 
@@ -1585,7 +1617,8 @@ In dependency order, shortest path to a demo that survives a real corpus:
    [§3 phase 3](#camera-movement--built). `flightAt()` in `camera.js` is the
    pure step, `useMapCamera.js`'s existing glide loop is the clock, and
    `pointerdown`/`wheel` are the interruption. Zoom eases geometrically, which
-   is the part that would have been wrong if it had been written by feel.
+   is the part that would have been wrong if it had been written by feel; the
+   duration is `camera.flightMs`, which is the part that had to be tunable.
 6. **The reorder animation** ([§3 phase 3](#the-reorder-animation)) — staggered
    outward cross-fade in `render.js`, sequenced after the fly home. Its seam is
    the flight's `done` transition, which 5 left in place and unwired.
