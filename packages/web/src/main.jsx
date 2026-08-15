@@ -40,7 +40,10 @@ function Library({ manifest }) {
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
   const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(1);
-  const [searchOrder, setSearchOrder] = useState(null);
+  // One piece of state, not two: the ranking and its certainty profile describe
+  // the same search, and a frame that paired one search's order with another's
+  // densities would put the wrong rooms in the cluster.
+  const [result, setResult] = useState(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [metadata, setMetadata] = useState(null);
@@ -93,6 +96,11 @@ function Library({ manifest }) {
   // The cell aspect goes in so the library is round on screen rather than round
   // in the index - the edge should be the same distance away whichever way you
   // drag, and with a non-square cell those are not the same thing.
+  //
+  // The search's certainty profile rides in as `density`, which is what makes
+  // the matches cluster toward the centre rather than scatter at the slider's
+  // ratio. No search means no profile, and no profile means the uniform map -
+  // so clearing the box restores it exactly, without a second code path.
   const layout = useMemo(
     () =>
       createLayout({
@@ -100,16 +108,18 @@ function Library({ manifest }) {
         contentRatio,
         seed,
         aspect: CELL_ASPECT,
+        density: result?.certainty
+          ? { ...config.search.density, certainty: result.certainty }
+          : null,
       }),
-    [roomCount, contentRatio, seed, total]
+    [roomCount, contentRatio, seed, total, result, config]
   );
 
   const order = useMemo(() => {
-    const shuffled = shuffledOrder(total, orderSeed);
-    if (!searchOrder) return shuffled;
     // A search ranks the whole corpus; the layout takes as many as it has slots.
-    return searchOrder;
-  }, [total, orderSeed, searchOrder]);
+    if (result) return result.order;
+    return shuffledOrder(total, orderSeed);
+  }, [total, orderSeed, result]);
 
   const draw = useRef(() => {});
   const requestDraw = useCallback(() => {
@@ -198,7 +208,8 @@ function Library({ manifest }) {
           `${cache.size()} cached${over ? ` (+${over} over budget)` : ''} · ` +
           `zoom ${Math.round(stats.zoom)} · ` +
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
-          `edge at r=${layout.boundaryRadius.toFixed(1)}`;
+          `edge at r=${layout.boundaryRadius.toFixed(1)}` +
+          (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '');
       }
     };
 
@@ -219,7 +230,7 @@ function Library({ manifest }) {
   // --- search --------------------------------------------------------------
   const search = async (term) => {
     if (!term.trim()) {
-      setSearchOrder(null);
+      setResult(null);
       setStatus('');
       return;
     }
@@ -232,7 +243,7 @@ function Library({ manifest }) {
     // than implying more than the corpus can support.
     const blob = res.vector ? embeddings.current : null;
     if (blob || searchIndex) {
-      const { order, signals } = rankHybrid({
+      const { order, certainty, signals } = rankHybrid({
         query: term,
         count: total,
         weights: config.search.weights,
@@ -241,11 +252,14 @@ function Library({ manifest }) {
         dim: blob?.dim,
         vector: res.vector,
         index: searchIndex,
+        clipCertainty: { low: config.search.density.clipLow, high: config.search.density.clipHigh },
       });
-      setSearchOrder(order);
+      setResult({ order, certainty });
       setStatus(describeSignals(signals, Boolean(searchIndex)));
     } else {
-      setSearchOrder(res.order);
+      // The stub ranking is a hash, so it is not certain of anything and must
+      // not pretend to be: no profile, and the map stays evenly scattered.
+      setResult({ order: res.order, certainty: null });
       setStatus('stub ranking — no embeddings and no keywords in this corpus');
     }
     flyTo(0, 0);
