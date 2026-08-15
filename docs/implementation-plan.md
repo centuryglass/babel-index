@@ -590,7 +590,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-243 tests (`npm test`), in a couple of seconds, with no browser and no network.
+248 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -646,8 +646,9 @@ Three notes on how, since they are the parts that were not obvious:
 
 `packages/web/e2e/smoke.e2e.mjs` — the drive script, committed. It spawns the
 real demo server against the sample corpus and drives Chromium through load,
-pan, zoom, both sliders, a search, the room card (right-click, chips, escape)
-and the long press, plus a check that nothing reached the console.
+pan, zoom, both sliders, a search, the room card (right-click, chips, escape),
+the long press and a two-finger pinch, plus a check that nothing reached the
+console.
 It is the only layer that catches **"the canvas renders nothing"**, which no unit
 test will and which `bundle.test.mjs` only narrows to "it at least compiled".
 
@@ -684,10 +685,20 @@ test failed: no `drawImage`, a discarded search order, an ignored
 `contentRatio`, and a stray `console.error`. A green e2e test that cannot fail
 is worse than none, because it is believed.
 
-The overlay's two tests were checked the same way, and they are the layer that
-matters most for it — the gesture is the half no unit test can reach. A press
-that no longer cancels on drag, chips wired to nothing, and an Escape key that
-does not close all fail the suite.
+The overlay's and the pinch's tests were checked the same way, and they are the
+layer that matters most for both — the gesture is the half no unit test can
+reach. A press that no longer cancels on drag, chips wired to nothing, an Escape
+key that does not close, a second finger that feeds the drag instead of starting
+a pinch, a pinch that ignores its midpoint, and a finger-lift that does not
+re-anchor all fail the suite.
+
+**Pinch needs raw CDP**, because Playwright's touchscreen is single-touch. Two
+details of `Input.dispatchTouchEvent` are worth knowing, since both fail quietly:
+a `touchEnd`'s `touchPoints` are the points being *released*, not the ones that
+remain; and points need an explicit `id`, or Chromium matches them by position
+and reads a move after a release as a new finger rather than the surviving one.
+Both were established by experiment rather than assumed, and both are written
+down in the helper.
 
 ### Still missing
 

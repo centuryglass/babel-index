@@ -86,29 +86,51 @@ export function worldToScreen(wx, wy, cam, rect) {
 }
 
 /**
- * Zoom about a viewport point, keeping the world point under it fixed.
+ * Scale the zoom about a viewport point, keeping the world point under it fixed.
  *
- * That fixed point is the whole feel of scroll-to-zoom: the thing you are
- * pointing at is the thing you zoom into. Once the zoom clamps, the camera
- * must not drift either - so the recentre is computed against the clamped
- * zoom, not the requested one.
+ * That fixed point is the whole feel of both zoom gestures: the thing you are
+ * pointing at, or the thing between your fingers, is the thing you zoom into.
+ * Once the zoom clamps, the camera must not drift either - so the recentre is
+ * computed against the clamped zoom, not the requested one.
+ *
+ * Taking a multiplier rather than a wheel delta is what lets a pinch share this:
+ * a pinch knows the ratio its fingers moved and has no delta to invent.
  *
  * @param {{x: number, y: number, zoom: number}} cam
- * @param {number} px viewport-relative pointer x
- * @param {number} py viewport-relative pointer y
- * @param {number} deltaY wheel delta; positive zooms out
+ * @param {number} px viewport-relative anchor x
+ * @param {number} py viewport-relative anchor y
+ * @param {number} factor multiplier on the zoom; >1 zooms in
  * @param {{width: number, height: number}} rect
  * @returns {{x: number, y: number, zoom: number}} a new camera
  */
-export function zoomAt(cam, px, py, deltaY, rect) {
+export function zoomBy(cam, px, py, factor, rect) {
   const before = screenToWorld(px, py, cam, rect);
-  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * Math.exp(-deltaY * 0.0014), cam.limits) };
+  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * factor, cam.limits) };
   const after = screenToWorld(px, py, zoomed, rect);
   return {
     ...zoomed,
     x: zoomed.x + before.x - after.x,
     y: zoomed.y + before.y - after.y,
   };
+}
+
+/**
+ * How much of a wheel delta becomes zoom. Exponential so the feel is the same
+ * at every scale - a notch is a fixed *ratio*, not a fixed number of pixels.
+ */
+export const WHEEL_ZOOM_RATE = 0.0014;
+
+/**
+ * Zoom about a viewport point from a wheel delta; positive `deltaY` zooms out.
+ *
+ * @param {{x: number, y: number, zoom: number}} cam
+ * @param {number} px viewport-relative pointer x
+ * @param {number} py viewport-relative pointer y
+ * @param {number} deltaY
+ * @param {{width: number, height: number}} rect
+ */
+export function zoomAt(cam, px, py, deltaY, rect) {
+  return zoomBy(cam, px, py, Math.exp(-deltaY * WHEEL_ZOOM_RATE), rect);
 }
 
 /**
