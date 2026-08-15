@@ -151,12 +151,19 @@ function Library({ manifest }) {
     [layout, order]
   );
 
+  // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
+  // really be judged on a device, and a phone has no console you can read with
+  // both thumbs busy - so this is how "what did the browser actually send"
+  // stays answerable without a USB cable.
+  const onDebug = useMemo(() => (TOUCH_DEBUG ? appendTouchLog : undefined), []);
+
   const { cam, flyTo } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
     camera: config.camera,
     onPick,
+    onDebug,
   });
 
   // --- rendering -----------------------------------------------------------
@@ -309,6 +316,7 @@ function Library({ manifest }) {
         </div>
       </div>
       <div className="hud" id="hud" />
+      {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
       {card && (
         <RoomCard
           card={card}
@@ -324,6 +332,29 @@ function Library({ manifest }) {
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
+
+/**
+ * `?touchdebug` prints the raw pointer stream on screen.
+ *
+ * Read at module scope so the whole feature compiles out of a normal session:
+ * nothing renders, and the hook is handed no callback at all rather than one
+ * that discards. Touch is the one layer that cannot be judged from a desktop,
+ * and the CDP touch injection the e2e test uses bypasses the browser's own
+ * gesture arbitration - so a real device reporting for itself is the only way
+ * some of these questions get answered.
+ */
+const TOUCH_DEBUG =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('touchdebug');
+
+const TOUCH_LOG_LINES = 14;
+const touchLog = [];
+
+function appendTouchLog(line) {
+  touchLog.push(line);
+  if (touchLog.length > TOUCH_LOG_LINES) touchLog.shift();
+  const el = document.getElementById('touchlog');
+  if (el) el.textContent = touchLog.join('\n');
+}
 
 /**
  * One room's keywords and story, opened by right-click or long press.

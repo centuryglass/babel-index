@@ -111,6 +111,21 @@ is read per request.
   actually is — otherwise its next move is measured from wherever the pinch left
   off and the map lurches by the width of the gesture, every time a pinch ends.
   `smoke.e2e.mjs` covers both; nothing else can.
+- **Pointer capture is best-effort and must never be load-bearing.** Both
+  `setPointerCapture` and `releasePointerCapture` throw `NotFoundError` for a
+  pointer the browser does not consider capturable, which is *ordinary* on touch
+  — capture is implicit there and the browser drops it itself. Do the
+  `pointers` bookkeeping FIRST and wrap the capture calls; an `?.` does not help,
+  it guards the method being missing rather than the call throwing. Unguarded,
+  a throw strands a finger in the Map and every later gesture is read as a pinch
+  against a finger that is no longer on the glass.
+- **CDP touch injection bypasses the browser's gesture arbitration**, so
+  `smoke.e2e.mjs` cannot see anything involving `touch-action`, `pointercancel`,
+  or the real capture lifecycle — it dispatches straight to the page. Two real
+  Android bugs passed it. Where a gesture bug is suspected there, simulate the
+  condition explicitly (see the test that makes the capture calls throw) and
+  confirm on a device with `?touchdebug`, which prints the raw pointer stream on
+  screen.
 - **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
   it.** One fixed-point implementation for both gestures — a pinch knows the
   ratio its fingers moved and has no wheel delta to invent. Don't grow a second.

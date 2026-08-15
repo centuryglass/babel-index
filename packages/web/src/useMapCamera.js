@@ -30,13 +30,6 @@ import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt, zoomBy } from 
  * Left-click stays free: `§5` reserves it for "focus this room", and a map whose
  * primary button opens a modal is a map you cannot explore.
  *
- * @param {object} opts
- * @param {{minZoom: number, maxZoom: number, defaultZoom: number}} opts.camera
- *   resolved `config.camera`, from the manifest
- * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
- *   canvas-relative point of a right-click or a completed long press, with the
- *   live camera - which the hook owns, so the consumer does not have to reach
- *   back for a ref this hook has not returned yet
  */
 
 /** How long a press must be held, and how far it may wander before it is a drag. */
@@ -60,7 +53,21 @@ const spanOf = (a, b) => ({
   cy: (a.y + b.y) / 2,
 });
 
-export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick }) {
+/**
+ * @param {object} opts
+ * @param {{minZoom: number, maxZoom: number, defaultZoom: number}} opts.camera
+ *   resolved `config.camera`, from the manifest
+ * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
+ *   canvas-relative point of a right-click or a completed long press, with the
+ *   live camera - which the hook owns, so the consumer does not have to reach
+ *   back for a ref this hook has not returned yet
+ * @param {(line: string) => void} [opts.onDebug] one line per pointer event.
+ *   Off unless asked for. Touch gestures can only really be judged on a device,
+ *   and a phone has no console you can read while both thumbs are busy - so
+ *   this exists to make "what did the browser actually send" answerable from
+ *   the glass. See `?touchdebug` in main.jsx.
+ */
+export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick, onDebug }) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
   const cam = useRef({
     x: 0.5,
@@ -87,13 +94,53 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       press.current = null;
     };
 
+    /**
+     * Pointer capture, which is best-effort and must never be load-bearing.
+     *
+     * Both calls throw `NotFoundError` for a pointer the browser does not
+     * consider captured-or-capturable, and that is a NORMAL state on a
+     * touchscreen: capture is implicit for touch, and the browser drops it
+     * itself at the end of a sequence or when it cancels one. An `?.` does not
+     * help - it guards the method being missing, not the call throwing - so an
+     * unguarded release would abort the rest of the handler and leave a
+     * finger in `pointers` forever, after which every later gesture is read as
+     * a pinch against a finger that is no longer on the glass.
+     */
+    const capture = (id) => {
+      try {
+        canvas.setPointerCapture(id);
+      } catch {
+        // Implicit capture already covers touch; nothing here depends on it.
+      }
+    };
+    const release = (id) => {
+      try {
+        canvas.releasePointerCapture(id);
+      } catch {
+        // Already released, by us or by the browser. The bookkeeping below is
+        // what actually matters, and it must run either way.
+      }
+    };
+
+    /** One line per pointer event, when someone is watching. */
+    const report = (what, e) =>
+      onDebug?.(
+        `${what} id=${e.pointerId ?? '-'} ${e.pointerType ?? '-'} ` +
+          `down=${pointers.current.size} ${pinch.current ? 'pinch' : drag.current ? 'drag' : 'idle'}`
+      );
+
     const onPointerDown = (e) => {
       // Secondary buttons are the context menu's, not the map's; starting a drag
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
-      canvas.setPointerCapture(e.pointerId);
-      canvas.classList.add('dragging');
+
+      // Track FIRST, capture second. Both capture calls can throw, and a throw
+      // here used to abort the handler before the pointer was recorded - which
+      // on a real touchscreen meant the second finger was never tracked, the
+      // pinch never began, and the first finger went on panning alone.
       pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      capture(e.pointerId);
+      canvas.classList.add('dragging');
 
       cancelPress();
 
@@ -104,10 +151,12 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
         const [a, b] = firstTwo(pointers.current);
         pinch.current = spanOf(a, b);
         drag.current = null;
+        report('down', e);
         return;
       }
 
       drag.current = { x: e.clientX, y: e.clientY };
+      report('down', e);
       if (onPick) {
         const { clientX, clientY } = e;
         press.current = {
@@ -163,6 +212,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
         );
         pinch.current = span;
         onChange?.();
+        report('pinch', e);
         return;
       }
 
@@ -178,7 +228,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
     };
 
     const onPointerUp = (e) => {
-      canvas.releasePointerCapture?.(e.pointerId);
+      release(e.pointerId);
       pointers.current.delete(e.pointerId);
       cancelPress();
 
@@ -187,6 +237,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
         // left does not read as a sudden change in distance.
         const [a, b] = firstTwo(pointers.current);
         pinch.current = spanOf(a, b);
+        report(e.type, e);
         return;
       }
 
@@ -197,12 +248,14 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
         const [remaining] = firstTwo(pointers.current);
         pinch.current = null;
         drag.current = { x: remaining.x, y: remaining.y };
+        report(e.type, e);
         return;
       }
 
       canvas.classList.remove('dragging');
       drag.current = null;
       pinch.current = null;
+      report(e.type, e);
     };
 
     const onWheel = (e) => {
@@ -238,7 +291,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onDebug]);
 
   // Glide back toward the content region when released outside it, so the edge
   // pushes back rather than trapping.
