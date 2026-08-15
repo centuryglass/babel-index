@@ -30,9 +30,43 @@
  * is for: the whole library rearranging, best in the middle and worst at the
  * edge, rather than a few results spliced to the front of an unchanged order.
  *
+ * ### Ranking is relative; certainty is not
+ *
+ * The blend answers "which room is most like the query". The map's density
+ * gradient (`ordering.js`) asks a different question - "how sure are we at all"
+ * - and the blended score cannot answer it, because min-max normalisation
+ * destroys exactly the information required: some room always scores 1, whether
+ * the query was `art nouveau` or `cghjj`. Certainty is therefore computed from
+ * the *absolute* form of each signal, alongside the ranking and from the same
+ * pass:
+ *
+ *   - keyword and story ratios are already absolute. An exact keyword match is
+ *     1 because it is a match, not because it beat the corpus.
+ *   - CLIP contributes its raw cosine against a pair of thresholds. This is the
+ *     only place the raw number is used rather than the normalised one, and it
+ *     is the reason `embeddingScores` dequantises: a nonsense string still
+ *     produces a valid text vector, and what marks it as nonsense is that its
+ *     cosine against every image is low in absolute terms, not that the spread
+ *     between images vanished.
+ *
+ * The thresholds are the one part of this that genuinely wants calibrating
+ * against a real corpus, which is the argument for them living in config.
+ *
  * No DOM. One import, for the dot products it would otherwise duplicate.
  */
 import { embeddingScores } from './ordering.js';
+
+/**
+ * Raw-cosine bounds for CLIP's share of certainty: at or below `low` it is
+ * saying nothing, at or above `high` it is as sure as it gets.
+ *
+ * Starting values for CLIP ViT-B/32, where image-text cosines run roughly 0.10
+ * to 0.15 for a string the image has nothing to do with and 0.30 upward for a
+ * good match - narrowed at the bottom because a corpus of near-identical
+ * library walls sits higher than a corpus of arbitrary photographs. Overridable,
+ * and worth measuring once there are real queries to measure against.
+ */
+export const CLIP_CERTAINTY = { low: 0.18, high: 0.3 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -213,6 +247,36 @@ export function normaliseScores(scores) {
 }
 
 /**
+ * How sure the search is that one room is a match, in [0, 1].
+ *
+ * A soft OR of the three absolute readings: `1 - (1-k)(1-s)(1-c)`. Any one
+ * signal can carry it on its own - an exact keyword match is certain whatever
+ * CLIP thinks of the picture - and agreement between two weak ones counts for
+ * more than either alone, which is the behaviour that reads correctly when a
+ * partial keyword and a decent cosine land on the same room.
+ *
+ * Not the weighted blend used for ranking, and deliberately so: the weights say
+ * which signal to *believe* when they disagree about an order, which is a
+ * different question from how sure any of them is.
+ *
+ * @param {object} parts each in [0, 1] except `cosine`, which is a raw cosine
+ * @param {number} [parts.keyword]
+ * @param {number} [parts.story]
+ * @param {number|null} [parts.cosine]
+ * @param {{low: number, high: number}} [clip] raw-cosine bounds
+ */
+export function matchCertainty({ keyword = 0, story = 0, cosine = null }, clip = CLIP_CERTAINTY) {
+  const span = clip.high - clip.low;
+  // A degenerate band is "CLIP has no opinion worth reading" rather than a
+  // divide by zero; the text signals still carry their own certainty.
+  const c = cosine === null || !(span > 0) ? 0 : clamp01((cosine - clip.low) / span);
+  const miss = (1 - clamp01(keyword)) * (1 - clamp01(story)) * (1 - c);
+  return 1 - miss;
+}
+
+const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+
+/**
  * Rank the whole corpus by the blend of whatever signals are available.
  *
  * Missing signals are omitted rather than substituted: no embedding blob means
@@ -229,7 +293,12 @@ export function normaliseScores(scores) {
  * @param {number} [opts.dim]
  * @param {Float32Array|number[]} [opts.vector] the query vector, L2-normalised
  * @param {({keywords: string[], story: Set<string>}|null)[]} [opts.index]
- * @returns {{order: number[], signals: {clip: boolean, keyword: boolean, story: boolean}}}
+ * @param {{low: number, high: number}} [opts.clipCertainty] raw-cosine bounds
+ *   for CLIP's share of certainty
+ * @returns {{order: number[], certainty: Float32Array,
+ *            signals: {clip: boolean, keyword: boolean, story: boolean}}}
+ *   `certainty` is parallel to `order`, i.e. by rank, which is how the map's
+ *   density gradient wants it.
  */
 export function rankHybrid({
   query,
@@ -240,14 +309,19 @@ export function rankHybrid({
   dim = 0,
   vector = null,
   index = null,
+  clipCertainty = CLIP_CERTAINTY,
 }) {
   const foldedQuery = fold(query);
   const queryTokens = tokenise(query, { minLength: minTokenLength });
 
-  // CLIP, normalised across the corpus for this query - see the header.
+  // CLIP twice over, from one pass of dot products: raw cosines for certainty,
+  // and the same column min-maxed for the blend. Two questions, two scalings -
+  // see the header.
+  let cosines = null;
   let clip = null;
   if (embeddings && dim > 0 && vector) {
-    clip = normaliseScores(embeddingScores(embeddings, dim, Float32Array.from(vector)));
+    cosines = embeddingScores(embeddings, dim, Float32Array.from(vector));
+    clip = normaliseScores(cosines);
   }
 
   const hasText = Boolean(index?.some(Boolean)) && (foldedQuery.length > 0 || queryTokens.length > 0);
@@ -260,25 +334,38 @@ export function rankHybrid({
     let score = 0;
     if (clip) score += weights.clip * (clip[id] ?? 0);
 
+    let k = 0;
+    let s = 0;
     if (hasText) {
       const entry = index[id];
       if (entry) {
-        const k = keywordScore(foldedQuery, queryTokens, entry.keywords);
-        const s = storyScore(queryTokens, entry.story);
+        k = keywordScore(foldedQuery, queryTokens, entry.keywords);
+        s = storyScore(queryTokens, entry.story);
         if (k > 0) sawKeyword = true;
         if (s > 0) sawStory = true;
         score += weights.keyword * k + weights.story * s;
       }
     }
-    scored[id] = { id, score };
+    scored[id] = {
+      id,
+      score,
+      certainty: matchCertainty(
+        { keyword: k, story: s, cosine: cosines ? (cosines[id] ?? null) : null },
+        clipCertainty
+      ),
+    };
   }
 
   // Stable sort, so rooms that every signal is silent about keep their id order
   // rather than shuffling for no reason the reader can see.
   scored.sort((a, b) => b.score - a.score);
 
+  const certainty = new Float32Array(count);
+  for (let rank = 0; rank < count; rank++) certainty[rank] = scored[rank].certainty;
+
   return {
     order: scored.map((s) => s.id),
+    certainty,
     signals: { clip: Boolean(clip), keyword: sawKeyword, story: sawStory },
   };
 }
