@@ -2,11 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CELL_ASPECT,
+  FLIGHT_MS,
   MAX_ZOOM,
   MIN_ZOOM,
   WHEEL_ZOOM_RATE,
+  beginFlight,
   cameraAtCell,
   clampZoom,
+  easeInOut,
+  flightAt,
   glideStep,
   panByPixels,
   pxPerCell,
@@ -271,4 +275,106 @@ test('flying to a cell aims at its middle and keeps zoom unless asked', () => {
   assert.deepEqual(cameraAtCell(cam, 0, 0), { x: 0.5, y: 0.5, zoom: 220 });
   assert.deepEqual(cameraAtCell(cam, -4, 9, 300), { x: -3.5, y: 9.5, zoom: 300 });
   assert.equal(cameraAtCell(cam, 0, 0, 1e6).zoom, MAX_ZOOM);
+});
+
+// --- flights ---------------------------------------------------------------
+
+const far = { x: 40, y: -25, zoom: MIN_ZOOM };
+const home = { x: 0.5, y: 0.5, zoom: MAX_ZOOM };
+const at = (t, from = far, to = home) =>
+  flightAt(beginFlight(from, to, 1000), 1000 + t * FLIGHT_MS);
+
+test('a flight starts where it started and lands exactly on its target', () => {
+  assert.deepEqual(at(0).cam, { ...home, ...far }, 'the first frame must not jump');
+  assert.equal(at(0).done, false);
+
+  // Identity, not "within an epsilon of": a flight that lands a rounding error
+  // short leaves the camera somewhere nobody asked for, and "centre" is a
+  // button whose whole promise is that it centres.
+  assert.equal(at(1).cam, home, 'landing must return the target itself');
+  assert.equal(at(1).done, true);
+  assert.equal(at(3).done, true, 'an overshot clock stays landed');
+});
+
+test('a flight before its start time has not moved', () => {
+  // rAF timestamps are taken from the same clock as `performance.now()`, but a
+  // frame issued in the same millisecond can still read fractionally early.
+  assert.deepEqual(at(-0.2).cam, { ...home, ...far });
+});
+
+test('zoom interpolates geometrically, position linearly', () => {
+  // The assertion that fails against a linear zoom ramp, which is the obvious
+  // implementation and the wrong one: halfway through a flight from 26 to 900
+  // the zoom is their geometric mean (~153), not their arithmetic one (463).
+  // A linear ramp puts nearly the whole flight up at the top of the range, so
+  // it reads as a snap followed by a crawl.
+  const mid = at(0.5).cam;
+  assert.ok(
+    Math.abs(mid.zoom - Math.sqrt(MIN_ZOOM * MAX_ZOOM)) < 1e-9,
+    `midpoint zoom ${mid.zoom}, expected the geometric mean ${Math.sqrt(MIN_ZOOM * MAX_ZOOM)}`
+  );
+  assert.ok(Math.abs(mid.x - (far.x + home.x) / 2) < 1e-9, `midpoint x ${mid.x}`);
+  assert.ok(Math.abs(mid.y - (far.y + home.y) / 2) < 1e-9, `midpoint y ${mid.y}`);
+});
+
+test('the ease is slow at both ends and monotonic throughout', () => {
+  // Zero velocity on arrival is what stops the flight ending in a jerk; the
+  // same at the start is what keeps an interrupted flight from snapping.
+  assert.ok(easeInOut(0.1) < 0.05, `${easeInOut(0.1)} is not a slow start`);
+  assert.ok(easeInOut(0.9) > 0.95, `${easeInOut(0.9)} is not a slow finish`);
+  assert.equal(easeInOut(0.5), 0.5, 'the midpoint should be the midpoint');
+
+  let last = -Infinity;
+  for (let t = 0; t <= 1.0001; t += 0.01) {
+    const e = easeInOut(Math.min(1, t));
+    assert.ok(e >= last, `the ease went backwards at t=${t}`);
+    last = e;
+  }
+});
+
+test('progress is monotonic in both position and zoom', () => {
+  let prev = at(0).cam;
+  for (let t = 0.02; t <= 1.0001; t += 0.02) {
+    const now = at(Math.min(1, t)).cam;
+    assert.ok(now.x <= prev.x, `x went backwards at t=${t}`);
+    assert.ok(now.y >= prev.y, `y went backwards at t=${t}`);
+    assert.ok(now.zoom >= prev.zoom, `zoom went backwards at t=${t}`);
+    prev = now;
+  }
+});
+
+test('a flight carries the cell shape and the configured limits', () => {
+  // Same failure as everywhere else in this file: a camera rebuilt from
+  // {x, y, zoom} loses the shape and the range mid-flight, and the map snaps
+  // back to square while still looking configured.
+  const limits = { min: 100, max: 300 };
+  const from = { ...far, zoom: 120, aspect: 720 / 1280, limits };
+  const to = cameraAtCell(from, 0, 0, 1e6);
+  assert.equal(to.zoom, 300, 'the target clamps to the configured ceiling');
+
+  for (const t of [0, 0.25, 0.5, 1]) {
+    const { cam: c } = at(t, from, to);
+    assert.equal(c.aspect, from.aspect, `aspect at t=${t}`);
+    assert.equal(c.limits, limits, `limits at t=${t}`);
+    assert.ok(c.zoom <= 300 + 1e-9, `zoom left the configured range at t=${t}: ${c.zoom}`);
+  }
+});
+
+test('a flight of no duration arrives at once', () => {
+  // How a caller honouring `prefers-reduced-motion` asks for the old teleport,
+  // rather than a second code path that could drift from this one.
+  const { cam: c, done } = flightAt(beginFlight(far, home, 1000, 0), 1000);
+  assert.equal(c, home);
+  assert.equal(done, true);
+});
+
+test('a flight interrupted by another picks up from where it had got to', () => {
+  // The reason `beginFlight` takes the LIVE camera: pressing "centre" twice, or
+  // searching mid-flight, must not restart from the original position.
+  const midway = at(0.4).cam;
+  const second = flightAt(beginFlight(midway, far, 2000), 2000);
+  assert.deepEqual(
+    { x: second.cam.x, y: second.cam.y, zoom: second.cam.zoom },
+    { x: midway.x, y: midway.y, zoom: midway.zoom }
+  );
 });

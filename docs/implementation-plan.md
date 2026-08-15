@@ -157,7 +157,7 @@ carrying into the full run:
 The review tool is gone: no `1`–`5` scores, no free-text tags, no `x`-to-reject,
 no SQLite. Curation happens at generation time — boring variants are discarded
 before they ever reach a corpus directory — and the three retrieval signals of
-[§4a](#4a-hybrid-search--three-signals-one-sort) make a second, manual
+[§3d](#3d-hybrid-search--three-signals-one-sort--built) make a second, manual
 vocabulary redundant ([§3d](#3d-hybrid-search--three-signals-one-sort--built)). A
 hand-typed tag was going to be a worse keyword than the keyword the generator
 already knows, and a 1–5 score was going to be a worse relevance signal than a
@@ -438,14 +438,44 @@ evict each other.
   **74 KB** at level 0, so a far-out screen costs about a sixtieth of what it
   used to. That is the number that matters once this is hosted.
 
-#### Camera movement
+#### Camera movement — built
 
-"Centre" teleports today, which loses the reader's sense of where they were.
-Camera moves should animate: ease position and zoom together over ~450 ms,
-interruptible the moment a drag starts, so a mid-flight grab takes over instead
-of fighting. The same helper serves "fly to the best match" after a search,
-which is the case where the movement is carrying meaning — it shows the top
-result's location relative to where you were standing.
+"Centre" used to teleport, which loses the reader's sense of where they were.
+`flyTo` now eases position and zoom together over 450 ms, interruptible the
+moment a hand touches the map. The same helper serves "fly to the best match"
+after a search, which is the case where the movement is carrying meaning — it
+shows the top result's location relative to where you were standing.
+
+Three things the implementation settled, none of them obvious from the sketch
+above:
+
+- **Zoom interpolates geometrically, position linearly**, and that asymmetry is
+  the whole content of `flightAt()`. Zoom is pixels per cell, so a linear ramp
+  from 26 to 900 spends nearly all its time near 900: the flight reads as a snap
+  followed by a crawl. The ratio is what the eye reads, which is the same reason
+  the wheel is exponential. Position needs no such treatment over the distances
+  this map flies — tens of cells — so the zoom-out-and-back arc a world-scale
+  flight would need is machinery bought for a case that does not arise. The
+  midpoint of a flight is asserted against the geometric mean, which is the
+  assertion a linear ramp fails.
+- **The flight rides the glide's rAF loop rather than starting one of its own.**
+  There was already a permanent loop, and one loop is what makes the precedence
+  between the two statable in a single `else`: a flight owns the camera while it
+  lasts, the glide takes over on arrival. That is what lets a flight *land*
+  outside the content region and be pulled back afterwards, rather than being
+  fought all the way there.
+- **Interruption is two lines and both are load-bearing.** `pointerdown` and
+  `wheel` drop the flight, because a flight still easing its own zoom under a
+  hand drags the world out from under the finger holding it. Dropped on
+  `pointerdown` rather than on the first move, so even a press that never becomes
+  a drag stops the flight — reaching for a room that is still sliding and having
+  it slide on is the thing this is for.
+
+Landing returns the target camera *by identity*, so a flight ends exactly where
+it was aimed rather than within a rounding error of it, and `aspect`/`limits`
+come along without the interpolation knowing they exist. `ms <= 0` arrives
+immediately, which is how `prefers-reduced-motion` gets the old teleport without
+a second code path to keep in step.
 
 #### The reorder animation
 
@@ -471,9 +501,12 @@ So the transition is a cross-fade, and the only real question is its
 - **Sequence it after the fly home, not against it.** Search already calls
   `flyTo(0, 0)`; running a camera flight and a content wave simultaneously makes
   two animations compete for the same attention and neither lands. Land first,
-  then let the wave leave from under you. That makes animated camera moves a
-  prerequisite rather than a parallel task, which is why they stay first in
-  [§8](#8-next-session).
+  then let the wave leave from under you. That made animated camera moves a
+  prerequisite rather than a parallel task, and they have landed — the seam is
+  the `done` transition in `useMapCamera.js`'s loop, which is the one place that
+  knows a flight has arrived. Nothing is wired to it yet, deliberately: whether
+  the wave leaves on arrival or overlaps the last of the descent is a call for
+  whoever builds it, and an unused callback would have pre-empted it.
 - **Drive it from `render.js`.** It already owns the frame and no React; the
   transition is `(orderPrev, orderNext, t0)` on the draw state and a per-cell
   alpha, and it stays assertable without a browser the way the byte-cost test is.
@@ -590,7 +623,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-252 tests (`npm test`), in a couple of seconds, with no browser and no network.
+260 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -604,7 +637,7 @@ not autoscaling. Keep it behind a flag.
 | `packages/server/scan.test.mjs` | header parsers, directory rules, the metadata sidecar |
 | `packages/server/app.test.mjs` | the four endpoints, against a live socket |
 | `packages/web/src/picking.test.mjs` | which room is under a point: flooring, the ranking, the centre and generic cells, any zoom or cell shape |
-| `packages/web/src/camera.test.mjs` | the pan/zoom invariants, and that a configured zoom range survives every operation |
+| `packages/web/src/camera.test.mjs` | the pan/zoom invariants, that a configured zoom range survives every operation, and that a flight eases geometrically in zoom and lands exactly |
 | `packages/web/src/tiles.test.mjs` | per-level budgets, fallback across levels, frame-aware eviction, pinning, prefetch caps |
 | `packages/web/src/render.test.mjs` | level selection on a real layout, never-blank, the ring and the warm pass, a zoomed-out frame's byte cost |
 | `packages/web/src/pyramid.test.mjs` | level selection, fallback, budgets against one screen |
@@ -647,9 +680,9 @@ Three notes on how, since they are the parts that were not obvious:
 
 `packages/web/e2e/smoke.e2e.mjs` — the drive script, committed. It spawns the
 real demo server against the sample corpus and drives Chromium through load,
-pan, zoom, both sliders, a search, the room card (right-click, chips, escape),
-the long press and a two-finger pinch, plus a check that nothing reached the
-console.
+pan, zoom, both sliders, a camera flight and its interruption, a search, the
+room card (right-click, chips, escape), the long press and a two-finger pinch,
+plus a check that nothing reached the console.
 It is the only layer that catches **"the canvas renders nothing"**, which no unit
 test will and which `bundle.test.mjs` only narrows to "it at least compiled".
 
@@ -680,11 +713,28 @@ Three things it does that are worth keeping if it gets rewritten:
   compares at a provably identical camera.
 - **The sliders are driven by `Home`/`End` on a focused range input**, which is
   real user input, rather than by reaching into React's value setter.
+- **An animation is observed frame by frame, not by its endpoints.** A flight
+  and a teleport have the same start and the same finish, so `sampleCamera()`
+  starts a per-frame sampler in the page *before* pressing "centre" and counts
+  the distinct cameras in between: a teleport shows exactly two. Its companion
+  is `landed()` — every assertion that compares a camera before and after some
+  gesture now needs the before to be a camera at rest, and two frames is no
+  longer enough. It waits `FLIGHT_MS` out (imported from `camera.js`, so the two
+  cannot drift) and then confirms stillness, because the last frames of a
+  smoothstep move by less than the HUD prints and "two identical readings" would
+  call it early.
 
 Each of those was checked by breaking the app on purpose and confirming the
 test failed: no `drawImage`, a discarded search order, an ignored
-`contentRatio`, and a stray `console.error`. A green e2e test that cannot fail
-is worse than none, because it is believed.
+`contentRatio`, a stray `console.error`, a `flyTo` restored to a teleport, and
+each of the two interruption lines removed in turn. A green e2e test that cannot
+fail is worse than none, because it is believed.
+
+The interruption test earned its own footnote by failing for the wrong reason
+first: `locator.click()` leaves the pointer over the button it pressed, so the
+`mouse.down()` meant to grab the map never reached the canvas at all — which
+looks exactly like a flight that refused to be interrupted. Move back onto the
+canvas before grabbing.
 
 The overlay's and the pinch's tests were checked the same way, and they are the
 layer that matters most for both — the gesture is the half no unit test can
@@ -1352,6 +1402,13 @@ Recorded from review, with what changed:
     a pan. Per-book hit-testing is impossible on inpainted rooms, so the
     book-pull animation — if it happens — samples a spine rather than identifying
     one. [§5b](#5b-the-metadata-overlay--built).
+22. **Camera moves ease rather than teleport, and zoom eases geometrically.**
+    Built. 450 ms, smoothstep, interrupted by `pointerdown` or the wheel, and
+    stepped on the loop the glide already ran, so a flight and the pull back
+    inside the region can never overlap. The duration stays in `camera.js`
+    beside `WHEEL_ZOOM_RATE` rather than going into config: it is the feel of a
+    gesture, not a property of the library being displayed, and no corpus
+    argues for a different one. [§3 phase 3](#camera-movement--built).
 
 ## 7. Still open
 
@@ -1425,11 +1482,14 @@ In dependency order, shortest path to a demo that survives a real corpus:
    run searches, story text, closable. `picking.js` holds the pure half; the
    gesture rides `useMapCamera.js`'s pointer stream so a press that becomes a
    drag opens nothing.
-5. **Animated camera moves.** The maths is extracted and tested now, so this is
-   an easing function over `camera.js` plus an interruptible rAF loop in the
-   hook; `flyTo` is the seam. Also the prerequisite for 6.
+5. ~~**Animated camera moves**~~ — **done**,
+   [§3 phase 3](#camera-movement--built). `flightAt()` in `camera.js` is the
+   pure step, `useMapCamera.js`'s existing glide loop is the clock, and
+   `pointerdown`/`wheel` are the interruption. Zoom eases geometrically, which
+   is the part that would have been wrong if it had been written by feel.
 6. **The reorder animation** ([§3 phase 3](#the-reorder-animation)) — staggered
-   outward cross-fade in `render.js`, sequenced after the fly home.
+   outward cross-fade in `render.js`, sequenced after the fly home. Its seam is
+   the flight's `done` transition, which 5 left in place and unwired.
 7. **Give the pinned generic its own budget.** It is pinned at every level it is
    asked for, which is correct and currently free — it is one room. Promoted from
    tidy-up to prerequisite by 8, which makes it several.
