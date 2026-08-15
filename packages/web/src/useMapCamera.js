@@ -102,9 +102,14 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
      * touchscreen: capture is implicit for touch, and the browser drops it
      * itself at the end of a sequence or when it cancels one. An `?.` does not
      * help - it guards the method being missing, not the call throwing - so an
-     * unguarded release would abort the rest of the handler and leave a
-     * finger in `pointers` forever, after which every later gesture is read as
-     * a pinch against a finger that is no longer on the glass.
+     * unguarded release would abort the rest of the handler and leave a finger
+     * in `pointers` forever, after which every later gesture would be read as a
+     * pinch against a finger no longer on the glass.
+     *
+     * This is a hazard the spec allows, not a bug anyone has hit here: it was
+     * found while chasing a pinch failure that turned out to be a stale server
+     * process serving old code. Kept because `pointercancel` reaches this path
+     * with capture already dropped, and the cost is a try/catch.
      */
     const capture = (id) => {
       try {
@@ -134,10 +139,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
 
-      // Track FIRST, capture second. Both capture calls can throw, and a throw
-      // here used to abort the handler before the pointer was recorded - which
-      // on a real touchscreen meant the second finger was never tracked, the
-      // pinch never began, and the first finger went on panning alone.
+      // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
+      // first would abort the handler before the pointer was recorded - losing
+      // the finger entirely, so a second one would never start a pinch.
       pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       capture(e.pointerId);
       canvas.classList.add('dragging');
