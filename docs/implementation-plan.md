@@ -447,54 +447,79 @@ of fighting. The same helper serves "fly to the best match" after a search,
 which is the case where the movement is carrying meaning — it shows the top
 result's location relative to where you were standing.
 
-#### The reorder animation
+#### The reorder animation - built
 
-A search swaps one array and every slot stays put ([§6.6](#6-decisions-made)),
-so what changes across the map is *content*, not position: a few thousand
-visible cells each become a different room at the same coordinate. That rules
-out the intuitive animation before anything else is considered. **Rooms must not
-be seen to slide into their new slots** — sliding is a statement that a room
-moved, the whole design says the shelf stayed and its contents changed, and
-honouring it would mean recomputing placement on search, which is exactly what
-`ordering.js` exists not to do.
+A rearrangement is a **sliding-tile illusion**: whole rows and columns rotate,
+and nothing is ever seen to move over anything else. See
+[`packages/map/illusion.js`](../packages/map/illusion.js) for the planner,
+[`board.js`](../packages/map/board.js) for the map-shaped half, and
+[`packages/web/src/slide.js`](../packages/web/src/slide.js) for the animation.
 
-So the transition is a cross-fade, and the only real question is its
-*choreography*. The recommendation:
+**This replaces the cross-fade**, which was decided on a premise that has since
+expired. That premise was "a search swaps one array and every slot stays put, so
+what changes is content, not position" - true when it was written, and false
+since [§3f](#3f-the-search-density-gradient--built) made the certainty profile an
+input to placement. A search now genuinely relocates slots, so a cross-fade
+would be *hiding* a movement rather than honestly declining to invent one.
 
-- **Stagger the fade by distance from the origin**, so the change propagates
-  outward as a ring from the centre room. Delay is `cellDistance(x, y, aspect) ×
-  spread`, using the same metric as everything else in `packages/map` so the wave
-  is round on screen for the same reason the boundary is
-  ([§5a](#5a-why-the-map-knows-the-cell-shape)). It reads as the library
-  rearranging itself starting where the reader is standing, which is the
-  sentence the mechanic has been trying to say since concept step 5.
-- **Sequence it after the fly home, not against it.** Search already calls
-  `flyTo(0, 0)`; running a camera flight and a content wave simultaneously makes
-  two animations compete for the same attention and neither lands. Land first,
-  then let the wave leave from under you. That makes animated camera moves a
-  prerequisite rather than a parallel task, which is why they stay first in
-  [§8](#8-next-session).
-- **Drive it from `render.js`.** It already owns the frame and no React; the
-  transition is `(orderPrev, orderNext, t0)` on the draw state and a per-cell
-  alpha, and it stays assertable without a browser the way the byte-cost test is.
+The deeper objection to sliding was mine and it was wrong in an instructive way.
+The map's cells are walls, not slots on a board: the generic room is as much a
+wall as a corpus room is, and 80% of them being identical is a fact about the
+art, not a licence to treat them as empty space. A room that glides across the
+wallpaper to reach its new cell reads as a tile floating above a backdrop, and
+the grid stops being somewhere you are standing. That is what rules out the
+free-form glide - *not* the claim that rooms must never move.
 
-Two things to get right, both cache-shaped:
+What a real sliding puzzle does instead is move a whole line at once. The move
+set makes that structural rather than checked: rows and columns may rotate
+anywhere, and an arbitrary swap - which would read as teleportation - is legal
+only off camera. "Preserve the illusion" reduces to "emit only legal moves", so
+no renderer has to be careful.
 
-- **A cell mid-fade wants both rooms resident**, so the working set doubles
-  across the fade band. The band is a ring, not the screen, so the overshoot is
-  bounded by how wide the stagger makes it — `spread` is therefore a memory
-  parameter as much as an aesthetic one, and wants measuring against
-  `overBudget()` rather than picking by eye.
-- **At full zoom-out the animation may not be worth its cost.** A cell is ~26px
-  there and a screen is ~7500 of them against a level-4 budget of 8200, so a wave
-  that doubles the band would push an already-tight level over while rendering as
-  a shimmer nobody can resolve. Shortening or skipping the transition below some
-  zoom is the likely answer; it is a measurement, not a decision to make here.
+How it fits the map:
 
-Rejected alternatives, briefly: a per-cell **spine flip** about the vertical axis
-is a card trick rather than a library, and costs a transform plus two draws per
-cell at a thousand-plus cells; a plain **dissolve** is cheaper than the stagger
-by nothing meaningful and says less.
+- **The centre needs no special case.** It is cell (0, 0), already reserved by
+  `ordering.js`, so it holds the same value in both boards and is simply handed
+  over as the planner's fixed tile. Its row and column become unshiftable, which
+  is what makes everything visibly pivot around it.
+- **The board is finite, the map is not.** A window is cut per rearrangement and
+  thrown away. That is only honest because the camera is parked on the centre at
+  the opening zoom for the duration - the rotations wrap, and the wrap has to
+  happen where nothing is drawn. It is also why the animation ends the moment
+  the map is touched.
+- **Visible cost is the viewport's, not the corpus's.** Everything outside the
+  on-camera rectangle is a swap, and swaps are invisible, so a 5000-room corpus
+  costs the same slides as a 50-room one - measured, and asserted across a 16x
+  range. A 5000-room board is 157x209 and plans in 138ms.
+- **The region is the viewport plus one cell.** The planner swaps into the cell
+  just outside it and then slides that cell inward; a region hugging the
+  viewport would put that swap on a partially visible cell and break the
+  illusion along the screen edge.
+- **The rooms-on-the-map slider cannot be animated.** Pulled back, a reorder
+  changes *which* rooms are placed, and a room that was never on the board
+  cannot slide in from a cell it was never in. `buildRearrangement` returns null
+  and the caller keeps the instant rebuild. Faking it would mean a tile changing
+  its face off camera and sliding on as something else.
+
+Rejected alternatives: a **free-form glide** along each room's true heading is
+cheap and answers the "leaves left, returns right" problem by construction, but
+it is the one that treats the wallpaper as empty space. A per-cell **spine flip**
+is a card trick rather than a library. A plain **dissolve** says less than the
+stagger and costs the same.
+
+**What is still open is the duration.** A desktop rearrangement is about four
+seconds, a phone under two. Runs play strictly one after another, because each
+run's swaps have to be applied after the previous run's last rotation. The
+planner's column loop is *nearly* independent enough to overlap - the reference
+notes the loop may be reordered freely - but only becomes fully so if every
+column's values are parked before any are inserted, rather than per column. That
+is a change to the planner, not to a timing constant, and it is what would take
+a desktop rearrangement under two seconds by letting the conveyor sweep across
+columns as a wave instead of a queue. It is the obvious next thing here.
+
+Two things measured rather than assumed: the animation holds one level for its
+whole duration (the zoom is parked, so `pickLevel` cannot move), and no frame
+went blank on the sample corpus at any point in a rearrangement.
 
 #### Alternate generic rooms
 
@@ -1431,10 +1456,14 @@ Recorded from review, with what changed:
     seeded hash with the seed in config. They tile by construction, like
     everything else inpainted from the base. Prerequisite: pinning stops being
     unbounded. [§3 phase 3](#alternate-generic-rooms).
-20. **Reordering cross-fades in place; rooms never slide.** Sliding would claim a
-    room moved, when the design's whole claim is that the shelf stayed and its
-    contents changed. The fade staggers outward from the centre and follows the
-    fly home rather than racing it. [§3 phase 3](#the-reorder-animation).
+20. **Reordering is a sliding-tile illusion: whole lines rotate, and nothing
+    crosses anything.** This reverses the earlier "cross-fade in place; rooms
+    never slide", whose premise - that a search leaves every slot where it was -
+    stopped being true when the density gradient made certainty an input to
+    placement. The generic room is a wall, not a gap, so a room may not glide
+    over it; a row or column moving as one piece is the only way a room travels
+    without the grid ceasing to be a space. Legality is structural - rotations
+    anywhere, swaps only off camera. [§3 phase 3](#the-reorder-animation--built).
 21. **The metadata overlay opens on right-click / long-press, not left-click.**
     Left-click is reserved for "focus this room", and the long-press must lose to
     a pan. Per-book hit-testing is impossible on inpainted rooms, so the
@@ -1481,11 +1510,14 @@ Recorded from review, with what changed:
    which of material / movement / technique / artist a keyword came from; it buys
    labelled chips in the overlay and leaves room for weighting an artist match
    differently later. Not worth authoring by hand if it does not.
-8. **How the transition behaves at full zoom-out.** The fade band doubles the
-   working set where it passes, and level 4's budget of 8200 against a 7500-cell
-   screen has little to give. Shorten it, narrow the band, or skip the animation
-   below some zoom — a measurement against `overBudget()`, not a decision to make
-   in advance.
+8. **Whether a rearrangement should be reachable from anywhere but the opening
+   zoom.** It parks the camera on the centre at `defaultZoom` and plans against
+   exactly those cells, which sidesteps the old cross-fade's zoom problem
+   entirely — one level for the whole animation, and a region small enough that
+   the working set never approaches a budget. The open question is whether being
+   returned home is worth it every time, or whether a search from far out should
+   rearrange without the animation. Related: overlapping the runs, which is what
+   would make the trip cheap enough not to mind.
 9. **How many generic alternates.** Enough that the wallpaper stops reading as
    one image, few enough that pinning them all at the fallback level stays
    cheap — each is 12 KB decoded at level 4, so the constraint is loose and the
@@ -1527,8 +1559,12 @@ In dependency order, shortest path to a demo that survives a real corpus:
 5. **Animated camera moves.** The maths is extracted and tested now, so this is
    an easing function over `camera.js` plus an interruptible rAF loop in the
    hook; `flyTo` is the seam. Also the prerequisite for 6.
-6. **The reorder animation** ([§3 phase 3](#the-reorder-animation)) — staggered
-   outward cross-fade in `render.js`, sequenced after the fly home.
+6. ~~**The reorder animation**~~ — **done**, as a sliding-tile illusion rather
+   than the cross-fade this line used to describe;
+   [§3 phase 3](#the-reorder-animation--built). `illusion.js` plans the moves,
+   `board.js` cuts the board out of the map, `slide.js` is the second renderer.
+   What is left is overlapping the runs, which needs the planner to park every
+   column's values before inserting any - see that section.
 7. **Give the pinned generic its own budget.** It is pinned at every level it is
    asked for, which is correct and currently free — it is one room. Promoted from
    tidy-up to prerequisite by 8, which makes it several.
