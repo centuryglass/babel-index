@@ -305,6 +305,7 @@ function Library({ manifest }) {
         board,
         moves: planMoves(built.start, built.end, built.bounds, built.fixed),
         apply: applyMove,
+        timing: config.slide,
       });
       anim.current = { show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now() };
 

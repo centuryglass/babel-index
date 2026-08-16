@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
 import { buildRearrangement, CENTRE, GENERIC as BOARD_GENERIC } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
-import { buildTimeline, createSlideshow, createSlideRenderer, SLIDE_TIMING } from './slide.js';
+import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
+import { DEFAULTS } from '../../config/config.mjs';
 import { createTileCache, GENERIC } from './tiles.js';
 import { CELL_ASPECT } from './camera.js';
 
+// The shipped defaults, so these tests exercise what the demo actually runs.
+const TIMING = DEFAULTS.slide;
 const VIEW = { x0: -4, y0: -3, x1: 5, y1: 4 };
 const ZOOM = 220;
 
@@ -63,7 +66,7 @@ const moverOf = (lane) => lane.runs.find((r) => r.cells > 0);
 
 test('a conveyor becomes one run, not one run per step', () => {
   const { moves } = rearrangement();
-  const timeline = buildTimeline(moves);
+  const timeline = buildTimeline(moves, TIMING);
   const runs = allRuns(timeline);
 
   // The planner emits a column's k rotations separately, each fed by a swap.
@@ -79,7 +82,7 @@ test('a conveyor becomes one run, not one run per step', () => {
 
 test('runs only ever group one line moving one way', () => {
   const { moves } = rearrangement();
-  for (const run of allRuns(buildTimeline(moves))) {
+  for (const run of allRuns(buildTimeline(moves, TIMING))) {
     if (run.kind === 'none') continue;
     for (const { move } of run.steps) {
       if (move.type === 'swap') continue;
@@ -95,7 +98,7 @@ test('the conveyor plays as one wave, not a queue of columns', () => {
   // The whole point of parking a batch before feeding it. Without the wave the
   // columns queue and a desktop rearrangement takes four seconds.
   const { moves } = rearrangement();
-  const timeline = buildTimeline(moves);
+  const timeline = buildTimeline(moves, TIMING);
   const waves = timeline.stages.filter((s) => s.wave);
   assert.ok(waves.length > 0, 'the planner marked no stage as waveable');
 
@@ -123,7 +126,7 @@ test('a cascade overlaps its runs but never finishes them out of order', () => {
   // picture stops being a queue; let a completion slip out of order and the
   // plan is silently applied in the wrong sequence.
   const { moves } = rearrangement(50, 1, 2);
-  const timeline = buildTimeline(moves);
+  const timeline = buildTimeline(moves, TIMING);
   let sawOverlap = false;
   for (const stage of timeline.stages) {
     if (stage.wave) continue;
@@ -147,7 +150,7 @@ test('the wave sets off from the centre outward', () => {
   // The plan has wanted this since the cross-fade design: the change should
   // leave from where the reader is standing, not sweep in from an edge.
   const { built, moves } = rearrangement();
-  const conveyor = buildTimeline(moves).stages
+  const conveyor = buildTimeline(moves, TIMING).stages
     .filter((s) => s.wave)
     .reduce((a, b) => (b.lanes.length > a.lanes.length ? b : a));
 
@@ -162,7 +165,7 @@ test('the wave sets off from the centre outward', () => {
 test('the board absorbs exactly what the motion has passed', () => {
   const { built, moves } = rearrangement();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const show = createSlideshow({ board, moves, apply: applyMove });
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
 
   // Sampled finely enough to land inside runs rather than only between them.
   const runs = show.stages.flatMap((st) => st.lanes.flatMap((l) => l.runs));
@@ -202,11 +205,11 @@ test('advancing in one jump lands on the same board as advancing smoothly', () =
   const { built, moves } = rearrangement(120, 3, 4);
   const boards = [0, 1].map(() => ({ ...built.start, cells: built.start.cells.slice() }));
 
-  const smooth = createSlideshow({ board: boards[0], moves, apply: applyMove });
+  const smooth = createSlideshow({ board: boards[0], moves, apply: applyMove, timing: TIMING });
   for (let t = 0; t <= smooth.totalMs; t += 16) smooth.advanceTo(t);
   smooth.advanceTo(smooth.totalMs);
 
-  const jumped = createSlideshow({ board: boards[1], moves, apply: applyMove });
+  const jumped = createSlideshow({ board: boards[1], moves, apply: applyMove, timing: TIMING });
   jumped.advanceTo(jumped.totalMs);
 
   assert.deepEqual(boards[0].cells, boards[1].cells);
@@ -217,7 +220,7 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
   const { built, moves } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const show = createSlideshow({ board, moves, apply: applyMove });
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
   const frame = (motions) => {
@@ -264,7 +267,7 @@ test('the centre room is never drawn anywhere but the centre', () => {
   const { built, moves } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const show = createSlideshow({ board, moves, apply: applyMove });
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache });
   settle();
 
@@ -283,11 +286,13 @@ test('duration is set by the viewport, not by the corpus', () => {
     board: { width: 1, height: 1, cells: [] },
     moves: rearrangement(50, 1, 2).moves,
     apply: () => {},
+    timing: TIMING,
   });
   const large = createSlideshow({
     board: { width: 1, height: 1, cells: [] },
     moves: rearrangement(800, 1, 2).moves,
     apply: () => {},
+    timing: TIMING,
   });
   // The claim is one-sided: growing the corpus must never lengthen this. It
   // may well shorten it, and does - a small corpus keeps most of its distinct
@@ -308,11 +313,12 @@ test('a narrow viewport costs proportionally less', () => {
     aspect: CELL_ASPECT,
   });
   const moves = planMoves(phone.start, phone.end, phone.bounds, phone.fixed);
-  const { totalMs } = buildTimeline(moves, SLIDE_TIMING);
+  const { totalMs } = buildTimeline(moves, TIMING);
   const desktop = createSlideshow({
     board: { width: 1, height: 1, cells: [] },
     moves: rearrangement().moves,
     apply: () => {},
+    timing: TIMING,
   });
   assert.ok(totalMs < desktop.totalMs, 'a phone should not take longer than a desktop');
   assert.ok(BOARD_GENERIC === 'generic');

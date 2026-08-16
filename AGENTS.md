@@ -287,6 +287,13 @@ is read per request.
   field as `aspect` and with the same hazard: rebuild a camera instead of
   spreading it and the range is lost mid-gesture while everything still looks
   applied. Both are asserted.
+- **The animation's five durations live in config, not in `slide.js`.** They
+  are by-feel numbers, so they belong to the same surface the opening zoom does,
+  and `slide.js` takes `timing` with no fallback for the reason
+  `useMapCamera.js` takes `camera` with none: a default there would be a second
+  statement of the same fact and the two would drift. `stagger` is the one that
+  matters most - it sets how long the wave takes to cross the screen, where
+  `perCell` only sets how fast one line rides.
 - **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
   committed.** One that spelled out every value would silently become the real
   surface and editing the documented defaults would stop mattering. The overlay
