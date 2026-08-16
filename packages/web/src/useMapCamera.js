@@ -155,10 +155,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
      * in `pointers` forever, after which every later gesture would be read as a
      * pinch against a finger no longer on the glass.
      *
-     * This is a hazard the spec allows, not a bug anyone has hit here: it was
-     * found while chasing a pinch failure that turned out to be a stale server
-     * process serving old code. Kept because `pointercancel` reaches this path
-     * with capture already dropped, and the cost is a try/catch.
+     * A hazard the spec allows rather than a bug observed here, kept because
+     * `pointercancel` reaches this path with capture already dropped and the
+     * cost is a try/catch.
      */
     const capture = (id) => {
       try {
