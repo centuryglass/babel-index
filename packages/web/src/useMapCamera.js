@@ -115,6 +115,20 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
   const pinch = useRef(null);
   const flight = useRef(null);
 
+  /**
+   * End whatever is in the air, telling the caller whether it arrived.
+   *
+   * `flyTo` hands back a promise so a caller can sequence something after the
+   * landing, and the answer has to distinguish the two ways a flight ends: it
+   * got there, or a hand landed on the map. Anything waiting to happen "after
+   * the flight home" must not happen when the reader has taken the map instead.
+   */
+  const endFlight = useCallback((landed) => {
+    const settle = flight.current?.settle;
+    flight.current = null;
+    settle?.(landed);
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -178,7 +192,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       // here rather than on the first move so that even a press that never
       // becomes a drag stops the flight - reaching for a room that is still
       // sliding and having it slide on is the thing this is for.
-      flight.current = null;
+      endFlight(false);
 
       // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
       // first would abort the handler before the pointer was recorded - losing
@@ -307,7 +321,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       e.preventDefault();
       // Same rule as a drag: the wheel is the reader steering, and a flight
       // still easing its own zoom underneath would fight every notch.
-      flight.current = null;
+      endFlight(false);
       const rect = canvas.getBoundingClientRect();
       cam.current = zoomAt(cam.current, e.clientX - rect.left, e.clientY - rect.top, e.deltaY, rect);
       onChange?.();
@@ -339,7 +353,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onDebug]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onDebug, endFlight]);
 
   // Step whichever of the two things is moving the camera on its own: a flight
   // while one is in the air, otherwise the glide back toward the content region
@@ -351,7 +365,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       if (flight.current) {
         const { cam: next, done } = flightAt(flight.current, now);
         cam.current = next;
-        if (done) flight.current = null;
+        if (done) endFlight(true);
         onChange?.();
       } else if (!drag.current) {
         const next = glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
@@ -364,7 +378,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [resistanceAt, onChange]);
+  }, [resistanceAt, onChange, endFlight]);
 
   /**
    * Ease to a cell, rather than teleport to it.
@@ -382,14 +396,25 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
    * same reason - it is a by-feel number, and this file states none of those.
    * Reduced motion overrides it rather than being overridden by it: someone who
    * has asked for less motion is not asking about this map in particular.
+   *
+   * Returns a promise for the landing - true if it arrived, false if the reader
+   * took the map first. Callers that only want the camera moved can ignore it;
+   * the one that cannot is the rearrangement, which has to know both WHEN the
+   * camera stopped, because it plans against the cells that are on screen, and
+   * WHETHER it stopped where it was aimed, because a reader who has grabbed the
+   * map is not asking to watch the library rebuild itself.
    */
   const flyTo = useCallback(
     (x, y, zoom) => {
       const to = cameraAtCell(cam.current, x, y, zoom);
       const ms = reducedMotion() ? 0 : camera.flightMs;
-      flight.current = beginFlight(cam.current, to, performance.now(), ms);
+      // A second flight replaces the first, and the first did not arrive.
+      endFlight(false);
+      return new Promise((settle) => {
+        flight.current = { ...beginFlight(cam.current, to, performance.now(), ms), settle };
+      });
     },
-    [camera.flightMs]
+    [camera.flightMs, endFlight]
   );
 
   return { cam, flyTo };
