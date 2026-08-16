@@ -566,6 +566,15 @@ function fingerprint(page) {
 
 /** The HUD after the next frame, so a just-issued change is reflected. */
 async function settled(page) {
+  // A rearrangement takes over the HUD while it runs, and reports its own
+  // progress rather than the frame's numbers. Waiting it out is what "settled"
+  // has to mean now: reading mid-slide would be reading a frame of an animation
+  // rather than the state it lands on.
+  await page.waitForFunction(
+    () => !document.getElementById('hud')?.textContent?.startsWith('rearranging'),
+    null,
+    { timeout: 30_000 }
+  );
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   return hud(page);
 }
