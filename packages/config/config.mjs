@@ -31,7 +31,7 @@
  * be exercised at any limits without a disk or a server. `load.mjs` is the part
  * that reads a file.
  */
-import { ZOOM_LIMITS } from '../web/src/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/camera.js';
 import { CERTAINTY_FLOOR } from '../map/ordering.js';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
@@ -54,6 +54,23 @@ export const DEFAULTS = {
      * as a mosaic of thumbnails. Clamped into the range above.
      */
     defaultZoom: 220,
+
+    /**
+     * How long a camera flight takes - "centre", and the fly home after a
+     * search - in milliseconds.
+     *
+     * 450 is a starting point rather than a measurement, which is the same
+     * argument that puts the search weights here: how long a transition should
+     * take is a judgement about the map in front of you, and the only way to
+     * settle it is to sit with it. The number itself is `FLIGHT_MS` in
+     * `camera.js`, imported rather than restated, so the source default and the
+     * documented one cannot drift.
+     *
+     * Zero is meaningful: it means arrive at once, which is what
+     * `prefers-reduced-motion` asks for and how a config switches the animation
+     * off. Reduced motion still wins over any value set here.
+     */
+    flightMs: FLIGHT_MS,
   },
 
   map: {
@@ -256,7 +273,12 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
   }
 
   return {
-    camera: { minZoom, maxZoom, defaultZoom },
+    camera: {
+      minZoom,
+      maxZoom,
+      defaultZoom,
+      flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
+    },
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
@@ -311,28 +333,22 @@ function density(src, notes) {
 /**
  * The rearrangement animation's timings.
  *
- * Every one is a duration in milliseconds, so the only rule is that it cannot
- * be negative - a negative beat would schedule a run to start before the one it
- * follows and the animation would apply its plan out of order. Zero is
- * meaningful and allowed throughout: no gap, no stagger and no per-run constant
- * are all things someone tuning this will reasonably want to try.
+ * Each is a duration in milliseconds and gets the same treatment as the flight
+ * above, with one difference: `composed`. These five do not each describe a
+ * whole animation, they add up to one - a run takes `base + perCell x cells`,
+ * and `gap`, `stagger` and `cascade` are beats between things that are
+ * themselves moving. So a value under one frame is ordinary here rather than
+ * suspicious, and warning about it would be noise. The ceiling and the
+ * not-negative rule still apply, and both still matter: a negative beat would
+ * schedule a run to start before the one it follows, and the animation applies
+ * its plan in completion order.
  */
 function slideTiming(src, notes) {
   const d = DEFAULTS.slide;
   const out = {};
   for (const key of ['base', 'perCell', 'gap', 'stagger', 'cascade'])
-    out[key] = millis(src[key], d[key], `slide.${key}`, notes);
+    out[key] = duration(src[key], d[key], `slide.${key}`, notes, { composed: true });
   return out;
-}
-
-/** A duration in milliseconds: finite and not negative. */
-function millis(value, fallback, path, notes) {
-  const n = number(value, fallback, path, notes);
-  if (n < 0) {
-    notes.push(`${path} should not be negative; using ${fallback}`);
-    return fallback;
-  }
-  return n;
 }
 
 /** A section of the overlay, or an empty one. Anything else is reported and ignored. */
@@ -386,6 +402,45 @@ function tokenLength(value, fallback, path, notes) {
   if (n < 1) {
     notes.push(`${path} must be at least 1; using 1`);
     return 1;
+  }
+  return n;
+}
+
+/**
+ * An animation duration in milliseconds.
+ *
+ * Zero is legitimate and stays - it means "arrive at once", the same thing
+ * `prefers-reduced-motion` asks for, so it is how a config switches an
+ * animation off rather than an error. Negative is not a slower flight or a
+ * reversed one; it is a typo.
+ *
+ * The ceiling is a judgement rather than a limit of anything: past a few
+ * seconds a camera move has stopped being a transition and become a wait, and a
+ * value that far out is much likelier to be a units mistake than a taste.
+ *
+ * The sub-frame note is the one worth having. `0.45` is what seconds look like
+ * typed into a milliseconds field, and it is not rejected - it is a perfectly
+ * good way to say "no animation" - but it would otherwise be a flight that
+ * silently never appears, which is exactly the failure mode a tuning file has.
+ */
+const DURATION_MAX_MS = 5000;
+const ONE_FRAME_MS = 1000 / 60;
+
+function duration(value, fallback, path, notes, { composed = false } = {}) {
+  const n = number(value, fallback, path, notes);
+  if (n < 0) {
+    notes.push(`${path} should not be negative; using ${fallback}`);
+    return fallback;
+  }
+  if (n > DURATION_MAX_MS) {
+    notes.push(`${path} ${n} is longer than ${DURATION_MAX_MS}ms; using ${DURATION_MAX_MS}`);
+    return DURATION_MAX_MS;
+  }
+  // Only for a number that IS an animation's duration. One that merely
+  // contributes to a longer one is legitimately sub-frame - a four millisecond
+  // beat between two slides is a beat, not a flight nobody will see.
+  if (!composed && n > 0 && n < ONE_FRAME_MS) {
+    notes.push(`${path} ${n} is shorter than one frame, so nothing will animate - milliseconds, not seconds?`);
   }
   return n;
 }

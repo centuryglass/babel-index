@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt, zoomBy } from './camera.js';
+import {
+  beginFlight,
+  cameraAtCell,
+  clampZoom,
+  flightAt,
+  glideStep,
+  panByPixels,
+  zoomAt,
+  zoomBy,
+} from './camera.js';
 
 /**
  * Pan/zoom camera over an unbounded tile grid.
@@ -15,9 +24,10 @@ import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt, zoomBy } from 
  * read here, so every clamp - wheel, flyTo, anything later - goes through the
  * same field and none of them has to remember to ask.
  *
- * `camera` is required, and there is deliberately no fallback opening zoom in
- * this file: that number is a by-feel one and belongs to `packages/config`, so
- * a default here would be a second statement of it that could drift.
+ * `camera` is required, and there is deliberately no fallback opening zoom or
+ * flight duration in this file: those numbers are by-feel ones and belong to
+ * `packages/config`, so a default here would be a second statement of one that
+ * could drift.
  *
  * ### Picking, and why it lives here
  *
@@ -30,11 +40,35 @@ import { cameraAtCell, clampZoom, glideStep, panByPixels, zoomAt, zoomBy } from 
  * Left-click stays free: `§5` reserves it for "focus this room", and a map whose
  * primary button opens a modal is a map you cannot explore.
  *
+ * ### Flying, and why it shares the glide's loop
+ *
+ * `flyTo` eases rather than teleports, because a teleport loses the reader's
+ * sense of where they were - and after a search, the flight home is carrying
+ * the meaning: it shows the top result's location relative to where you were
+ * standing. The step is `flightAt` in `camera.js`; what is here is the frame
+ * clock and the interruption.
+ *
+ * It rides the glide's rAF loop rather than starting one of its own. There is
+ * already a permanent loop, and one loop is what makes the precedence between
+ * the two statable in a single `else`: a flight owns the camera while it lasts,
+ * and the glide takes over on arrival - which is what lets a flight land
+ * outside the content region and be pulled back afterwards instead of being
+ * fought all the way there.
+ *
  */
 
 /** How long a press must be held, and how far it may wander before it is a drag. */
 const LONG_PRESS_MS = 500;
 const PRESS_SLOP_PX = 8;
+
+/**
+ * Someone who has asked for less motion gets the old teleport.
+ *
+ * Read per flight rather than once: the setting can change while a page is
+ * open, and this costs nothing next to the flight it is deciding about.
+ */
+const reducedMotion = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * Every pointer currently down, in the order it arrived, so a second finger can
@@ -55,7 +89,7 @@ const spanOf = (a, b) => ({
 
 /**
  * @param {object} opts
- * @param {{minZoom: number, maxZoom: number, defaultZoom: number}} opts.camera
+ * @param {{minZoom: number, maxZoom: number, defaultZoom: number, flightMs: number}} opts.camera
  *   resolved `config.camera`, from the manifest
  * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
  *   canvas-relative point of a right-click or a completed long press, with the
@@ -79,6 +113,21 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
   const press = useRef(null);
   const pointers = useRef(new Map());
   const pinch = useRef(null);
+  const flight = useRef(null);
+
+  /**
+   * End whatever is in the air, telling the caller whether it arrived.
+   *
+   * `flyTo` hands back a promise so a caller can sequence something after the
+   * landing, and the answer has to distinguish the two ways a flight ends: it
+   * got there, or a hand landed on the map. Anything waiting to happen "after
+   * the flight home" must not happen when the reader has taken the map instead.
+   */
+  const endFlight = useCallback((landed) => {
+    const settle = flight.current?.settle;
+    flight.current = null;
+    settle?.(landed);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -138,6 +187,12 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       // Secondary buttons are the context menu's, not the map's; starting a drag
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
+
+      // A hand on the map beats anything the map was doing to itself. Dropped
+      // here rather than on the first move so that even a press that never
+      // becomes a drag stops the flight - reaching for a room that is still
+      // sliding and having it slide on is the thing this is for.
+      endFlight(false);
 
       // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
       // first would abort the handler before the pointer was recorded - losing
@@ -264,6 +319,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
 
     const onWheel = (e) => {
       e.preventDefault();
+      // Same rule as a drag: the wheel is the reader steering, and a flight
+      // still easing its own zoom underneath would fight every notch.
+      endFlight(false);
       const rect = canvas.getBoundingClientRect();
       cam.current = zoomAt(cam.current, e.clientX - rect.left, e.clientY - rect.top, e.deltaY, rect);
       onChange?.();
@@ -295,14 +353,21 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onDebug]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onDebug, endFlight]);
 
-  // Glide back toward the content region when released outside it, so the edge
-  // pushes back rather than trapping.
+  // Step whichever of the two things is moving the camera on its own: a flight
+  // while one is in the air, otherwise the glide back toward the content region
+  // when the map was released outside it, so the edge pushes back rather than
+  // trapping. One loop, one `else`, and no way for them to overlap.
   useEffect(() => {
     let raf;
-    const tick = () => {
-      if (!drag.current) {
+    const tick = (now) => {
+      if (flight.current) {
+        const { cam: next, done } = flightAt(flight.current, now);
+        cam.current = next;
+        if (done) endFlight(true);
+        onChange?.();
+      } else if (!drag.current) {
         const next = glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
         if (next !== cam.current) {
           cam.current = next;
@@ -313,14 +378,43 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [resistanceAt, onChange]);
+  }, [resistanceAt, onChange, endFlight]);
 
+  /**
+   * Ease to a cell, rather than teleport to it.
+   *
+   * The target is a whole camera, built by `cameraAtCell` so the clamp and both
+   * optional fields are already settled - the flight then interpolates between
+   * two cameras and cannot lose either one. `performance.now()` shares its time
+   * origin with the rAF timestamp the loop steps on, so the two agree.
+   *
+   * No `onChange` here: the loop owns every camera change for as long as the
+   * flight lasts, and calling it now would only repaint the camera we are
+   * flying away from.
+   *
+   * The duration comes from config, like the opening zoom above it and for the
+   * same reason - it is a by-feel number, and this file states none of those.
+   * Reduced motion overrides it rather than being overridden by it: someone who
+   * has asked for less motion is not asking about this map in particular.
+   *
+   * Returns a promise for the landing - true if it arrived, false if the reader
+   * took the map first. Callers that only want the camera moved can ignore it;
+   * the one that cannot is the rearrangement, which has to know both WHEN the
+   * camera stopped, because it plans against the cells that are on screen, and
+   * WHETHER it stopped where it was aimed, because a reader who has grabbed the
+   * map is not asking to watch the library rebuild itself.
+   */
   const flyTo = useCallback(
     (x, y, zoom) => {
-      cam.current = cameraAtCell(cam.current, x, y, zoom);
-      onChange?.();
+      const to = cameraAtCell(cam.current, x, y, zoom);
+      const ms = reducedMotion() ? 0 : camera.flightMs;
+      // A second flight replaces the first, and the first did not arrive.
+      endFlight(false);
+      return new Promise((settle) => {
+        flight.current = { ...beginFlight(cam.current, to, performance.now(), ms), settle };
+      });
     },
-    [onChange]
+    [camera.flightMs, endFlight]
   );
 
   return { cam, flyTo };

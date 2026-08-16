@@ -197,10 +197,15 @@ function Library({ manifest }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { alpha: false });
-    let pending = false;
+    // The pending frame's id, so it can be cancelled - not just a flag. This
+    // closure captures `layout` and `order`, so a frame scheduled through it
+    // and left to fire after the effect has been rebuilt repaints the state
+    // this render pass replaced. That is a real frame of the old map, arriving
+    // after the new one and winning, which is what a stale draw looks like.
+    let pending = 0;
 
     const render = () => {
-      pending = false;
+      pending = 0;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -210,22 +215,33 @@ function Library({ manifest }) {
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // A rearrangement draws itself, from its own board and at the camera it
-      // was planned for. The live camera is not consulted: the board is a
-      // finite window and panning off it would show the wrap that makes the
-      // whole illusion affordable.
+      // Three states, and the middle one is why this is not an `if`.
+      //
+      // While SLIDING, the rearrangement draws itself from its own board at the
+      // camera it was planned for; the live camera is not consulted, because
+      // the board is a finite window and panning off it would show the wrap
+      // that makes the whole illusion affordable.
+      //
+      // While FLYING home to start one, the ordinary renderer draws - but the
+      // arrangement it draws is the one being flown away from, not the one just
+      // computed. `layout` and `order` update the moment a search resolves,
+      // which is before the camera has moved, so drawing them here would show
+      // the new library, fly to it, and then slide it in from the old one.
       const running = anim.current;
-      const stats = running
-        ? slideRenderer.draw({
-            ctx, width: w, height: h, dpr, cam: running.cam,
-            board: running.board, origin: running.origin, motions: running.motions,
-          })
-        : renderer.draw({
-            ctx, width: w, height: h, dpr, cam: cam.current, layout, order,
-          });
+      const showing = running?.before ?? { layout, order };
+      const stats =
+        running?.board
+          ? slideRenderer.draw({
+              ctx, width: w, height: h, dpr, cam: running.cam,
+              board: running.board, origin: running.origin, motions: running.motions,
+            })
+          : renderer.draw({
+              ctx, width: w, height: h, dpr, cam: cam.current,
+              layout: showing.layout, order: showing.order,
+            });
 
       const hud = document.getElementById('hud');
-      if (running && hud) {
+      if (running?.board && hud) {
         const pct = Math.round((100 * Math.min(running.show.totalMs, performance.now() - running.t0)) / running.show.totalMs);
         hud.textContent =
           `rearranging · ${pct}% · ${running.motions.length} lines moving · ` +
@@ -247,8 +263,7 @@ function Library({ manifest }) {
 
     draw.current = () => {
       if (pending) return;
-      pending = true;
-      requestAnimationFrame(render);
+      pending = requestAnimationFrame(render);
     };
 
     render();
@@ -259,13 +274,18 @@ function Library({ manifest }) {
     const onDown = () => {
       const running = anim.current;
       if (!running) return;
-      running.show.advanceTo(running.show.totalMs);
+      // Mid-slide, the remaining moves land at once - which is the instant
+      // rebuild this replaced. Still flying home, there is no slideshow yet and
+      // nothing to finish; dropping the hold is enough, and the next draw shows
+      // the new arrangement. `useMapCamera` cancels the flight itself.
+      running.show?.advanceTo(running.show.totalMs);
       anim.current = null;
       draw.current();
     };
     window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onDown);
     return () => {
+      if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
     };
@@ -283,11 +303,29 @@ function Library({ manifest }) {
    * animated legally, which is the caller's cue to let it happen at once.
    */
   const startRearrangement = useCallback(
-    (before, after) => {
+    async (before, after) => {
       const canvas = canvasRef.current;
       if (!canvas) return false;
 
-      flyTo(0, 0, config.camera.defaultZoom);
+      // Hold the old arrangement on screen for the flight. `layout` and `order`
+      // already describe the new one, and without this the map would show it,
+      // fly to it, and only then slide it in from the arrangement it had
+      // already replaced.
+      anim.current = { before };
+
+      // Land before rearranging, rather than racing it: two animations
+      // competing for the same attention and neither lands. It is also a
+      // correctness requirement now that flights ease - the plan is made
+      // against exactly the cells on screen, so it cannot be made until the
+      // camera has stopped moving.
+      const landed = await flyTo(0, 0, config.camera.defaultZoom);
+      if (anim.current?.before !== before) return true; // superseded; not ours to undo
+      if (!landed) {
+        // The reader took the map. Not the moment to rebuild the library.
+        anim.current = null;
+        return false;
+      }
+
       const parked = { ...cam.current };
       const perCell = pxPerCell(parked);
       const halfW = canvas.clientWidth / 2 / perCell.x;
@@ -298,7 +336,10 @@ function Library({ manifest }) {
       };
 
       const built = buildRearrangement({ before, after, view, aspect: CELL_ASPECT });
-      if (!built) return false;
+      if (!built) {
+        anim.current = null;
+        return false;
+      }
 
       const board = { width: built.width, height: built.height, cells: built.start.cells.slice() };
       const show = createSlideshow({
@@ -307,11 +348,13 @@ function Library({ manifest }) {
         apply: applyMove,
         timing: config.slide,
       });
-      anim.current = { show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now() };
+      anim.current = {
+        before, show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now(),
+      };
 
       const tick = () => {
         const running = anim.current;
-        if (!running) return; // interrupted
+        if (!running?.show) return; // interrupted
         const { done, motions } = running.show.advanceTo(performance.now() - running.t0);
         running.motions = motions;
         if (done) anim.current = null;
@@ -327,15 +370,24 @@ function Library({ manifest }) {
   // Every change to what is on the map arrives here. Only the ones a control
   // asked to be animated are: the sliders change the layout on every drag, and
   // a rearrangement per frame would be neither legible nor affordable.
-  useEffect(() => {
+  //
+  // `useLayoutEffect` so the hold is in place before the first paint of the new
+  // arrangement. The drawing effect above calls `render()` when it is set up,
+  // and effects of the same kind run in declaration order - so an ordinary
+  // effect here would paint one frame of the new library before the hold could
+  // stop it.
+  useLayoutEffect(() => {
     const current = { layout, order };
     const previous = arrangement.current;
     arrangement.current = current;
-    if (animateNext.current && previous) {
-      animateNext.current = false;
-      if (startRearrangement(previous, current)) return;
+    if (!animateNext.current || !previous) {
+      requestDraw();
+      return;
     }
-    requestDraw();
+    animateNext.current = false;
+    startRearrangement(previous, current).then((started) => {
+      if (!started) requestDraw();
+    });
   }, [layout, order, startRearrangement, requestDraw]);
 
   // --- search --------------------------------------------------------------
