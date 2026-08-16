@@ -5,6 +5,7 @@ import {
   cellHash,
   createLayout,
   embeddingScores,
+  genericVariantAt,
   isContentSlot,
   rankByEmbedding,
   shuffledOrder,
@@ -91,6 +92,62 @@ test('cells outside the corpus are generic', () => {
   assert.ok(generic > 0, 'most of the map is the base room');
   const far = L.roomAt(9999, 9999, order);
   assert.equal(far.generic, true);
+});
+
+// --- wallpaper variants -----------------------------------------------------
+
+test('a variant is a stable index in range, and -1 when there are none', () => {
+  for (const count of [1, 3, 9]) {
+    for (let y = -20; y <= 20; y++)
+      for (let x = -20; x <= 20; x++) {
+        const v = genericVariantAt(x, y, { seed: 1, count });
+        assert.ok(Number.isInteger(v) && v >= 0 && v < count, `${x},${y} count ${count} -> ${v}`);
+        assert.equal(genericVariantAt(x, y, { seed: 1, count }), v, 'and it is stable');
+      }
+  }
+  assert.equal(genericVariantAt(3, 4, { seed: 1, count: 0 }), -1, 'no variants -> fall back to the base tile');
+});
+
+test('the variant a cell shows does not depend on the search order', () => {
+  // This is the property the rearrangement animation leans on: a reorder never
+  // changes a generic cell's face, so the board can treat every generic as one
+  // interchangeable value.
+  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, variantCount: 6, variantSeed: 3 });
+  for (let y = -8; y <= 8; y++)
+    for (let x = -8; x <= 8; x++)
+      assert.equal(L.variantAt(x, y), genericVariantAt(x, y, { seed: 3, count: 6 }));
+});
+
+test('the variant seed is independent of the slot seed', () => {
+  // Sharing them would correlate which cells are slots with which wallpaper they
+  // wear, and the two patterns would show through each other.
+  const span = 60;
+  let sameAsSlotHash = 0;
+  let total = 0;
+  for (let y = -span; y <= span; y++)
+    for (let x = -span; x <= span; x++) {
+      if (x === 0 && y === 0) continue;
+      total++;
+      // A cell's variant (seed A) vs. whether the slot hash (seed B) is in its
+      // low band: if the two seeds moved together these would be locked.
+      const variant = genericVariantAt(x, y, { seed: 5, count: 4 });
+      const slotBand = Math.floor(cellHash(x, y, 5) * 4); // same seed, to contrast
+      if (variant === slotBand) sameAsSlotHash++;
+    }
+  // Same seed and same bucketing is of course identical; the point of the assert
+  // is the opposite direction - a DIFFERENT variant seed decorrelates.
+  assert.equal(sameAsSlotHash, total, 'same seed and bucketing is identical, as a control');
+  let matches = 0;
+  for (let y = -span; y <= span; y++)
+    for (let x = -span; x <= span; x++) {
+      if (x === 0 && y === 0) continue;
+      const variant = genericVariantAt(x, y, { seed: 5, count: 4 });
+      const other = genericVariantAt(x, y, { seed: 6, count: 4 });
+      if (variant === other) matches++;
+    }
+  // Two independent seeds agree about a quarter of the time by chance, nowhere
+  // near the lockstep above.
+  assert.ok(matches / total < 0.4, `variant seeds are not independent: ${(matches / total).toFixed(2)}`);
 });
 
 test('resistance is flat inside the region and falls off outside', () => {

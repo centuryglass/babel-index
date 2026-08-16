@@ -5,7 +5,7 @@ import { buildRearrangement, CENTRE, GENERIC as BOARD_GENERIC } from '../../map/
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
 import { DEFAULTS } from '../../config/config.mjs';
-import { createTileCache, GENERIC } from './tiles.js';
+import { createTileCache, CENTRE as CENTRE_TILE } from './tiles.js';
 import { CELL_ASPECT } from './camera.js';
 
 // The shipped defaults, so these tests exercise what the demo actually runs.
@@ -40,7 +40,7 @@ function readyCache() {
       return img;
     },
   });
-  cache.pin(GENERIC);
+  cache.pin(CENTRE_TILE);
   return { cache, settle: () => made.forEach((i) => i.onload?.()) };
 }
 

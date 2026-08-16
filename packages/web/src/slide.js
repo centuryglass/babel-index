@@ -58,11 +58,30 @@
  */
 import { PYRAMID } from './pyramid.js';
 import { pxPerCell } from './camera.js';
-import { GENERIC } from './tiles.js';
-import { CENTRE } from '../../map/board.js';
+import { CENTRE, variantId } from './tiles.js';
+import { CENTRE as BOARD_CENTRE, GENERIC as BOARD_GENERIC } from '../../map/board.js';
 
-/** The cache id for a board value. Centre and generic share the wallpaper image. */
-const idOf = (v) => (v === CENTRE ? GENERIC : v);
+/**
+ * The cache id for a board value at its HOME map cell.
+ *
+ * The board carries one interchangeable `GENERIC` value everywhere the wallpaper
+ * sits - `board.js` and `illusion.js` never need to know one variant from
+ * another - so the actual variant is resolved here, positionally, from the cell
+ * the value lives at. A generic tile therefore carries its own face as its line
+ * slides: `variantAt` is read at the value's board home, not at wherever the
+ * slide has pushed it to, so nothing flips variant mid-ride.
+ *
+ * @param {*} value board value: CENTRE, GENERIC, or a numeric room id
+ * @param {number} homeMx home map x of the board cell holding it
+ * @param {number} homeMy home map y
+ * @param {(x: number, y: number) => number} variantAt positional variant chooser
+ */
+const idFor = (value, homeMx, homeMy, variantAt) =>
+  value === BOARD_CENTRE
+    ? CENTRE
+    : value === BOARD_GENERIC
+      ? variantId(variantAt(homeMx, homeMy))
+      : value;
 
 /**
  * Lay a move list out in time.
@@ -277,9 +296,12 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {Array<object>} opts.motions from `advanceTo` - several at once
    *   during a wave. They can never overlap on screen: a wave stage's lines are
    *   all rows or all columns, and two rows share no cell
+   * @param {(x: number, y: number) => number} [opts.variantAt] which wallpaper
+   *   variant a generic cell shows, by map coordinate (the same positional
+   *   chooser the main renderer uses, so the wallpaper matches across the handoff)
    * @param {boolean} [opts.chrome] the centre-room marker
    */
-  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motions = [], chrome = true }) {
+  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motions = [], variantAt = () => -1, chrome = true }) {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -306,10 +328,14 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
     let blank = 0;
     const wanted = [];
 
-    const paint = (value, mx, my) => {
-      const sx = (mx - cam.x) * cellPx.x + w / 2;
-      const sy = (my - cam.y) * cellPx.y + h / 2;
-      const hit = cache.get(idOf(value), level);
+    // A value's variant is read at its HOME map cell, which is not always where
+    // it is drawn: a sliding line reads its board home but paints at the shifted
+    // position, so the tile carries its own face across the ride.
+    const paint = (value, homeMx, homeMy, drawMx, drawMy) => {
+      const sx = (drawMx - cam.x) * cellPx.x + w / 2;
+      const sy = (drawMy - cam.y) * cellPx.y + h / 2;
+      const id = idFor(value, homeMx, homeMy, variantAt);
+      const hit = cache.get(id, level);
       if (hit) {
         ctx.drawImage(hit.img, sx, sy, cw, ch);
         drawn++;
@@ -318,7 +344,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
         ctx.fillRect(sx, sy, cw, ch);
         blank++;
       }
-      wanted.push(idOf(value));
+      wanted.push(id);
     };
 
     // The still field. Lines in motion are skipped here and drawn after, so
@@ -332,7 +358,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
     for (let my = y0; my <= y1; my++)
       for (let mx = x0; mx <= x1; mx++) {
         if (movingRows.has(my) || movingCols.has(mx)) continue;
-        paint(valueAt(mx + origin.x, my + origin.y), mx, my);
+        paint(valueAt(mx + origin.x, my + origin.y), mx, my, mx, my);
       }
 
     // Each line in motion, extended by however far it has travelled so the
@@ -342,10 +368,10 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
       const pad = Math.ceil(Math.abs(shift)) + 1;
       if (m.kind === 'row')
         for (let mx = x0 - pad; mx <= x1 + pad; mx++)
-          paint(valueAt(mx + origin.x, m.index), mx + shift, m.index - origin.y);
+          paint(valueAt(mx + origin.x, m.index), mx, m.index - origin.y, mx + shift, m.index - origin.y);
       else
         for (let my = y0 - pad; my <= y1 + pad; my++)
-          paint(valueAt(m.index, my + origin.y), m.index - origin.x, my + shift);
+          paint(valueAt(m.index, my + origin.y), m.index - origin.x, my, m.index - origin.x, my + shift);
     }
 
     // The tiles about to arrive: a ring outside the viewport, at the one level
@@ -353,7 +379,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
     for (let my = y0 - 2; my <= y1 + 2; my++)
       for (let mx = x0 - 2; mx <= x1 + 2; mx++)
         if (my < y0 || my > y1 || mx < x0 || mx > x1)
-          cache.prefetch(idOf(valueAt(mx + origin.x, my + origin.y)), level);
+          cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, variantAt), level);
 
     if (chrome) {
       // The centre room, which by construction has not moved.

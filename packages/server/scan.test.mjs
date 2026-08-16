@@ -104,22 +104,36 @@ test('scans a directory into a manifest', async () => {
   });
 });
 
-test('the generic room is base.* by default, and is not also a corpus room', async () => {
+test('the centre tile is base.* by default, and is not also a corpus room', async () => {
   await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir);
-    assert.equal(m.generic.file, 'base.png');
-    assert.deepEqual(m.generic, { file: 'base.png', url: '/images/base.png', w: 1024, h: 1024 });
+    assert.equal(m.base.centre.file, 'base.png');
+    // Served from /base, even when the base directory is the corpus directory.
+    assert.deepEqual(m.base.centre, { file: 'base.png', url: '/base/base.png', w: 1024, h: 1024 });
     // Being both the wallpaper and a search result would put the same picture
     // everywhere and in the ranking too.
     assert.ok(!m.rooms.some((r) => r.file === 'base.png'));
   });
 });
 
-test('--base picks the generic room, by filename or by stem', async () => {
+test('base.tile.* wins over a plain base.*', async () => {
+  // The demo's centre render is base.tile.png; a stray base.png next to it must
+  // not steal the slot.
+  await corpus(
+    { ...three(), 'base.png': fixture.png(64, 64), 'base.tile.png': fixture.png(1024, 768) },
+    async (dir) => {
+      const m = await scanDirectory(dir);
+      assert.equal(m.base.centre.file, 'base.tile.png');
+      assert.ok(m.rooms.some((r) => r.file === 'base.png'), 'the plain base is a room like any other');
+    }
+  );
+});
+
+test('--base picks the centre tile, by filename or by stem', async () => {
   for (const base of ['002.png', '002']) {
     await corpus(three(), async (dir) => {
       const m = await scanDirectory(dir, { base });
-      assert.equal(m.generic.file, '002.png', `--base ${base}`);
+      assert.equal(m.base.centre.file, '002.png', `--base ${base}`);
       assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '003.webp']);
       assert.deepEqual(m.rooms.map((r) => r.id), [0, 1], 'ids stay contiguous');
     });
@@ -129,15 +143,15 @@ test('--base picks the generic room, by filename or by stem', async () => {
 test('--base beats a file called base.*', async () => {
   await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir, { base: '003.webp' });
-    assert.equal(m.generic.file, '003.webp');
+    assert.equal(m.base.centre.file, '003.webp');
     assert.ok(m.rooms.some((r) => r.file === 'base.png'), 'the demoted base is a room like any other');
   });
 });
 
-test('with no base at all, the first file stands in', async () => {
+test('with no base at all, the first file stands in - but only when it lives with the corpus', async () => {
   await corpus(three(), async (dir) => {
     const m = await scanDirectory(dir);
-    assert.equal(m.generic.file, '001.jpg');
+    assert.equal(m.base.centre.file, '001.jpg');
     assert.equal(m.count, 2);
   });
 });
@@ -145,8 +159,59 @@ test('with no base at all, the first file stands in', async () => {
 test('a --base that matches nothing falls back rather than failing', async () => {
   await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir, { base: 'nope.jpg' });
-    assert.equal(m.generic.file, 'base.png');
+    assert.equal(m.base.centre.file, 'base.png');
   });
+});
+
+test('the variants are the sorted base_variations folder, served from /base', async () => {
+  await corpus(
+    {
+      ...three(),
+      'base.tile.png': fixture.png(1024, 768),
+      'base_variations/v2.webp': fixture.webpVp8(1024, 768),
+      'base_variations/v1.webp': fixture.webpVp8(1024, 768),
+      'base_variations/notes.txt': 'ignored',
+    },
+    async (dir) => {
+      const m = await scanDirectory(dir);
+      assert.deepEqual(
+        m.base.variants.map((v) => [v.file, v.url]),
+        [
+          ['v1.webp', '/base/base_variations/v1.webp'],
+          ['v2.webp', '/base/base_variations/v2.webp'],
+        ]
+      );
+      // The variants are wallpaper, not corpus - they never become rooms.
+      assert.ok(!m.rooms.some((r) => r.file.startsWith('v')));
+    }
+  );
+});
+
+test('no base_variations folder means no variants, not a failure', async () => {
+  await corpus({ ...three(), 'base.tile.png': fixture.png(1024, 768) }, async (dir) => {
+    const m = await scanDirectory(dir);
+    assert.deepEqual(m.base.variants, []);
+  });
+});
+
+test('a base directory outside the corpus leaves every corpus image a room', async () => {
+  // The demo shape: --images points at the rooms, --base-dir at the shared
+  // assets. Nothing in the corpus is the wallpaper, so nothing is excluded.
+  await corpus(
+    {
+      'rooms/001.jpg': fixture.jpeg(512, 512),
+      'rooms/002.jpg': fixture.jpeg(512, 512),
+      'base.tile.png': fixture.png(1024, 768),
+      'base_variations/v1.webp': fixture.webpVp8(1024, 768),
+    },
+    async (dir) => {
+      const m = await scanDirectory(join(dir, 'rooms'), { baseDir: dir });
+      assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '002.jpg']);
+      assert.equal(m.count, 2, 'the base tiles do not steal a corpus slot');
+      assert.equal(m.base.centre.file, 'base.tile.png');
+      assert.deepEqual(m.base.variants.map((v) => v.file), ['v1.webp']);
+    }
+  );
 });
 
 test('ids are stable across scans, because the map keys slots on them', async () => {
@@ -176,7 +241,7 @@ test('non-image files are ignored, whatever their case', async () => {
     async (dir) => {
       const m = await scanDirectory(dir);
       assert.deepEqual(m.rooms.map((r) => r.file), ['002.JPEG']);
-      assert.equal(m.generic.file, '001.JPG');
+      assert.equal(m.base.centre.file, '001.JPG');
     }
   );
 });
@@ -228,10 +293,10 @@ test('a missing directory fails rather than returning an empty corpus', async ()
   await assert.rejects(scanDirectory(join(tmpdir(), 'babel-does-not-exist-9e3779b1')));
 });
 
-test('a directory with one image serves it as the generic and has no rooms', async () => {
+test('a directory with one image serves it as the centre tile and has no rooms', async () => {
   await corpus({ 'only.png': fixture.png(64, 64) }, async (dir) => {
     const m = await scanDirectory(dir);
-    assert.equal(m.generic.file, 'only.png');
+    assert.equal(m.base.centre.file, 'only.png');
     assert.deepEqual(m.rooms, []);
     assert.equal(m.count, 0);
   });
