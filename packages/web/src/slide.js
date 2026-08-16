@@ -43,64 +43,23 @@
  * six-cell row shift nothing is absorbed until the end, so the offset runs all
  * the way to six. One rule, both behaviours, and no case analysis.
  *
- * ### Timing is the tuning surface here
+ * ### Timing comes from config, and there is deliberately no fallback here
  *
- * The visible cost is the region's, not the corpus's - one row shift per region
- * row, then one column slide per region column - so the duration is set by the
- * viewport and nothing else. It is also the part with no right answer, which is
- * why the numbers are collected at the top with their reasoning rather than
- * spread through the code. With the wave, `stagger` matters more than
- * `perCell`: it is what sets how long the sweep takes to cross the screen.
+ * The five durations are by-feel numbers, so they live in `packages/config`
+ * with their reasoning, the way the opening zoom does - and for the same
+ * reason `useMapCamera.js` refuses to default one: a fallback in this file
+ * would be a second statement of the same fact, and the two would drift. What
+ * this file owns is how a plan is laid out in time; what the numbers should be
+ * is somebody else's question.
+ *
+ * The visible cost is the region's, not the corpus's - only lines crossing the
+ * on-camera rectangle ever slide - so the duration is set by the viewport and
+ * corpus size does not enter into it.
  */
 import { PYRAMID } from './pyramid.js';
 import { pxPerCell } from './camera.js';
 import { GENERIC } from './tiles.js';
 import { CENTRE } from '../../map/board.js';
-
-/**
- * How long the motion takes.
- *
- * `perCell` dominates: a full rearrangement slides the region's height once per
- * region column, so total travel is roughly the region's area in cells and the
- * whole animation is that times this. At the default zoom a desktop region is
- * about 12 x 10, so ~110 cells of travel - which is why this is 26ms and not
- * the 100ms a single tile sliding would want. A line moving as one piece reads
- * at a speed a single tile would not.
- *
- * `base` is a per-run constant so a one-cell slide is not instantaneous, and
- * `gap` is the beat between runs that keeps them legible as separate moves
- * rather than one continuous churn.
- *
- * `gap` only separates runs within one lane; the lines of a wave are spaced by
- * `stagger` instead, so widening the region lengthens the sweep rather than
- * multiplying it.
- */
-export const SLIDE_TIMING = {
-  base: 80,
-  perCell: 26,
-  gap: 20,
-  /**
-   * How far apart the lines of a wave set off.
-   *
-   * A feed stage's lines are independent - the planner parks a whole batch
-   * before feeding any of it - so they need not queue. Starting them together
-   * would read as the whole field scrolling, which is a pan rather than a
-   * rearrangement; starting them one after another turns the conveyor into a
-   * sweep. The planner orders them outward from the centre, so the sweep leaves
-   * from where the reader is standing.
-   */
-  stagger: 65,
-  /**
-   * How far apart the runs of a sequential lane set off.
-   *
-   * They still finish in order - that is what keeps the plan honoured - but
-   * starting the next one before the last has landed turns a queue of separate
-   * moves into a cascade. Shorter than `stagger`, because these are incidental
-   * motion rather than the main event: mostly rotations that free a room the
-   * new arrangement wants but which has no copy off camera to swap in.
-   */
-  cascade: 45,
-};
 
 /** The cache id for a board value. Centre and generic share the wallpaper image. */
 const idOf = (v) => (v === CENTRE ? GENERIC : v);
@@ -120,10 +79,10 @@ const idOf = (v) => (v === CENTRE ? GENERIC : v);
  *     turns a column's ten separate rotations into one ride upward.
  *
  * @param {Array<object>} moves from `planMoves`, carrying `stage`, `line`, `wave`
- * @param {object} [timing]
+ * @param {{base, perCell, gap, stagger, cascade}} timing from `packages/config`
  * @returns {{stages: Array<object>, totalMs: number}}
  */
-export function buildTimeline(moves, timing = SLIDE_TIMING) {
+export function buildTimeline(moves, timing) {
   const stages = [];
   for (const move of moves) {
     const last = stages[stages.length - 1];
@@ -234,9 +193,9 @@ const ease = (t) => t * t * (3 - 2 * t);
  * @param {{width: number, height: number, cells: Array}} opts.board mutated in place
  * @param {Array<object>} opts.moves
  * @param {(board: object, move: object) => void} opts.apply usually `applyMove`
- * @param {object} [opts.timing]
+ * @param {object} opts.timing from `packages/config`
  */
-export function createSlideshow({ board, moves, apply, timing = SLIDE_TIMING }) {
+export function createSlideshow({ board, moves, apply, timing }) {
   const { stages, totalMs } = buildTimeline(moves, timing);
   let stageIndex = 0;
 

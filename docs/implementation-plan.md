@@ -523,6 +523,10 @@ Two changes fixed it, both structural rather than tuning:
   many of, since most of its rooms are on camera at once and a value with no
   copy off camera has to be rotated out before it can be staged.
 
+The five durations are config (`slide.base`, `perCell`, `gap`, `stagger`,
+`cascade`), beside the opening zoom and for the same reason - they are by-feel
+numbers with no right answer. `slide.js` takes them and states none of its own.
+
 Measured, desktop / laptop / phone: 1.20s / 0.74s / 0.60s at 200 rooms and
 above, 1.73s / 1.31s / 0.99s on the 26-room sample corpus, which needs the most
 extractions. Planning is 5ms, or 110ms for a 5000-room board. Growing the corpus
