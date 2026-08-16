@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
 import { createRenderer } from './render.js';
-import { createTileCache, GENERIC } from './tiles.js';
+import { createTileCache, CENTRE } from './tiles.js';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.js';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.js';
 
@@ -52,7 +52,9 @@ function world({ only = null, concurrency = 4 } = {}) {
     createImage: images.createImage,
     concurrency,
   });
-  cache.pin(GENERIC);
+  // No variants here, so every generic cell falls back to the centre base tile;
+  // pinning it is what keeps rule 1 (never blank) true across a zoom.
+  cache.pin(CENTRE);
   const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT });
   return {
     images,
@@ -157,6 +159,35 @@ test('a flat corpus renders exactly as it did before the pyramid', () => {
   const stats = frame(w, { zoom: MIN_ZOOM });
   assert.equal(stats.blank, 0);
   for (const level of w.images.levelsRequested()) assert.equal(level, 0);
+});
+
+test('generic cells draw wallpaper variants, positionally and never blank', () => {
+  // With variants in play a generic cell is one of several ids, chosen by
+  // position; the far-out field must still fill, from a handful of pinned tiles.
+  const images = fakeImages();
+  const cache = createTileCache({
+    urlFor: (id, level) => `/l${level}/${id}.jpg`,
+    createImage: images.createImage,
+  });
+  const VARIANTS = 6;
+  for (let i = 0; i < VARIANTS; i++) cache.pin(`base:v${i}`);
+  cache.pin(CENTRE);
+  const layout = createLayout({
+    roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT,
+    variantCount: VARIANTS, variantSeed: 3,
+  });
+  const renderer = createRenderer({ cache });
+  const order = shuffledOrder(ROOMS, 1);
+  const drawOnce = (ctx) =>
+    renderer.draw({ ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order });
+
+  drawOnce(fakeCtx());
+  images.settleAll();
+  const stats = drawOnce(fakeCtx());
+  assert.equal(stats.blank, 0, 'the wallpaper fills every generic cell');
+
+  const variantsSeen = new Set(images.urls().filter((u) => /\/base:v\d+\.jpg$/.test(u)));
+  assert.ok(variantsSeen.size > 1, `expected several variants on screen, saw ${variantsSeen.size}`);
 });
 
 // --- rule 2: load ahead -----------------------------------------------------

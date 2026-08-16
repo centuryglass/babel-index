@@ -35,8 +35,16 @@
  */
 import { PYRAMID, PREFETCH } from './pyramid.js';
 
-/** The generic room's id. Not a number, so it can never collide with a room. */
-export const GENERIC = 'generic';
+/**
+ * The base-tile ids. Strings, so they can never collide with a numeric room id.
+ *
+ * `CENTRE` is the blank base tile at cell (0, 0). The wallpaper elsewhere is one
+ * of N inpainted variants, addressed by `variantId(i)`; a generic cell with no
+ * variant available (an empty `base_variations`) falls back to `CENTRE`, which
+ * is why `variantId(-1)` is `CENTRE` rather than an id that resolves to nothing.
+ */
+export const CENTRE = 'base:centre';
+export const variantId = (i) => (i < 0 ? CENTRE : `base:v${i}`);
 
 /** How many prefetches may be waiting at once. See prefetch() for why. */
 const QUEUE_LIMIT = 256;
@@ -82,7 +90,7 @@ export function createTileCache({
     for (const { level } of pyramid.levels) evict(level);
   }
 
-  /** Keep every level of this room forever. The generic is the floor rule 1 lands on. */
+  /** Keep every level of this room forever. The base tiles are the floor rule 1 lands on. */
   function pin(id) {
     pinned.add(id);
   }

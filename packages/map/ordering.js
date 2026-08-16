@@ -94,6 +94,29 @@ export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
   !isCentre(x, y) && cellHash(x, y, seed) < contentRatio;
 
 /**
+ * Which wallpaper variant a generic cell shows.
+ *
+ * A stable, storage-free choice over the same `cellHash` machinery as
+ * `isContentSlot`, but salted with its OWN seed: sharing `slotSeed` would
+ * correlate the pattern of variants with the pattern of content slots, and the
+ * two would be visible in each other. The choice depends only on the cell, not
+ * on the search order, so a reorder never changes a generic cell's face - which
+ * is exactly why the rearrangement animation can leave `board.js` treating every
+ * generic as one interchangeable value.
+ *
+ * Returns -1 when there are no variants to choose from (an empty
+ * `base_variations`), which the renderers read as "fall back to the base tile"
+ * so the map still draws.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {{seed?: number, count?: number}} [opts] count is how many variants exist
+ * @returns {number} variant index in [0, count), or -1
+ */
+export const genericVariantAt = (x, y, { seed = 0, count = 0 } = {}) =>
+  count > 0 ? Math.min(count - 1, Math.floor(cellHash(x, y, seed) * count)) : -1;
+
+/**
  * Certainty below this is a hunch rather than a match, and clusters nothing.
  *
  * Without a floor, a query the corpus has no answer to still produces a faint
@@ -158,6 +181,11 @@ export const cellDistance = (x, y, aspect = 1) => Math.hypot(x, y * aspect);
  * @param {number} [opts.aspect]      cell height / cell width; 1 for a square
  *                                    cell. Makes the library round on screen
  *                                    rather than round in the index.
+ * @param {number} [opts.variantCount] how many wallpaper variants exist, so a
+ *                                    generic cell can be given one. 0 means the
+ *                                    map has only the base tile to fall back on.
+ * @param {number} [opts.variantSeed] salt for the variant choice, kept separate
+ *                                    from `seed` - see `genericVariantAt`.
  * @param {object} [opts.density]     the search's density gradient, if a search
  *                                    is running. Absent - or with no certainty
  *                                    in it - is the uniform map, cell for cell.
@@ -171,10 +199,14 @@ export function createLayout({
   contentRatio = 0.2,
   seed = 0,
   aspect = 1,
+  variantCount = 0,
+  variantSeed = 0,
   density = null,
 } = {}) {
   if (!Number.isInteger(roomCount) || roomCount < 0)
     throw new RangeError('roomCount must be a non-negative integer');
+  if (!Number.isInteger(variantCount) || variantCount < 0)
+    throw new RangeError('variantCount must be a non-negative integer');
   if (!(contentRatio > 0 && contentRatio <= 1))
     throw new RangeError('contentRatio must be in (0, 1]');
   if (!(aspect > 0 && Number.isFinite(aspect)))
@@ -211,6 +243,18 @@ export function createLayout({
     seed,
     roomCount,
     aspect,
+    variantCount,
+    variantSeed,
+
+    /**
+     * Which wallpaper variant a generic cell shows, in [0, variantCount), or -1
+     * when there are none. Positional and order-independent - see
+     * `genericVariantAt`. Only meaningful for a cell `roomAt` calls generic; the
+     * centre draws the base tile, not a variant.
+     */
+    variantAt(x, y) {
+      return genericVariantAt(x, y, { seed: variantSeed, count: variantCount });
+    },
 
     /** Rank position of a cell, or -1 if it holds a generic room. */
     rankOf(x, y) {
