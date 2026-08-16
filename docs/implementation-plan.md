@@ -1,8 +1,9 @@
 # The Indexing of Babel — implementation plan
 
-A sketch of how to get from [`concept.md`](../concept.md) to a working thing.
-Revised after the first round of review; the decisions that were open are now
-recorded in [§6](#6-decisions-made).
+How to get from [`concept.md`](../concept.md) to a working thing: what a tile is,
+what exists, the phases, and what is next. The settled decisions are listed in
+[§6](#6-decisions-made); decisions that were reversed and alternatives that were
+rejected live in [`design-history.md`](design-history.md).
 
 ---
 
@@ -53,7 +54,7 @@ npm run demo -- --images <dir>     # against a full corpus
 ```
 
 A directory of images is the entire data layer — plus, once
-[§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) lands, two text sidecars beside
+[§3c](#3c-room-metadata--keywords-and-stories) lands, two text sidecars beside
 it. Corpus size and generic ratio are sliders, not settings. Search runs real
 CLIP against a corpus that has been embedded, and falls back to a deterministic
 pseudo-ranking labelled as such when it has not.
@@ -138,7 +139,7 @@ circle nor the stretching can quietly become the other.
 
 ## 3. Phases
 
-### Phase 1 — variant generation *(concept step 2)* — **you have this working**
+### Phase 1 — variant generation *(concept step 2)*
 
 Out of scope for this repo. Two observations from the test corpus that are worth
 carrying into the full run:
@@ -154,27 +155,20 @@ carrying into the full run:
 
 ### Phase 2 — curation *(concept step 3)* — **dropped**
 
-The review tool is gone: no `1`–`5` scores, no free-text tags, no `x`-to-reject,
-no SQLite. Curation happens at generation time — boring variants are discarded
-before they ever reach a corpus directory — and the three retrieval signals of
-[§3d](#3d-hybrid-search--three-signals-one-sort--built) make a second, manual
-vocabulary redundant ([§3d](#3d-hybrid-search--three-signals-one-sort--built)). A
-hand-typed tag was going to be a worse keyword than the keyword the generator
-already knows, and a 1–5 score was going to be a worse relevance signal than a
-text query against it.
+No review tool: no scores, no tags, no `x`-to-reject, no SQLite. Curation happens
+at generation time, and the three retrieval signals of
+[§3d](#3d-hybrid-search--three-signals-one-sort) cover what tagging was
+for. See [`design-history.md`](design-history.md#curation-dropped) for the
+reasoning.
 
-What survives, and it is not curation: **border drift** (mean + peak deviation
-from the corpus mean frame), demoted from a review sort key to a *pipeline
-report*. It stays because it measures a structural defect rather than taste —
-~2% of the test corpus reaches the frame and will read as a repeating bright
-blot at every tile junction ([§3 phase 1](#phase-1--variant-generation-concept-step-2--you-have-this-working)),
-and the seam argument in [§1](#1-what-a-tile-is) is what it verifies. Perceptual
-hashing goes with the rest of the review tool.
-
-Consequences recorded where they land: the `curate/` package leaves
-[§4](#4-architecture), `score`/`tags`/`status` leave the room schema, and
-`scoreSortSpines` — a centre-room control with nothing left to sort by — is
-freed for reuse ([§5b](#5b-the-metadata-overlay--built)).
+What survives, and is not curation: **border drift** (mean + peak deviation from
+the corpus mean frame), a *pipeline report* rather than a sort key. It measures a
+structural defect rather than taste — ~2% of the test corpus reaches the frame
+and reads as a repeating bright blot at every tile junction, which is exactly the
+seam argument in [§1](#1-what-a-tile-is) verified. The `curate/` package,
+`score`/`tags`/`status` in the room schema, and perceptual hashing all left with
+the tool; `scoreSortSpines` — a centre-room control with nothing left to sort
+by — is freed for reuse ([§5b](#5b-the-metadata-overlay)).
 
 ### Phase 3 — the display map *(concept step 4)*
 
@@ -215,44 +209,27 @@ zoom keeps decoded bytes per screen roughly constant however far out the camera
 goes, which is the property that makes corpus size stop mattering for rendering
 cost.
 
-##### What the thrashing actually looked like, and the half of it now fixed
+##### Two faults, one of them independent of the pyramid
 
-Found by panning at full zoom-out against a large corpus: rooms that were
-already on screen blinked out and came back as new tiles loaded. Measured by
-replaying the render loop headlessly against the real layout and the real cache
-— at `MIN_ZOOM` on a 1600×900 viewport a screen holds ~3100 cells wanting **~800
-distinct room images against a budget of 240**, and a brisk pan was evicting and
-refetching **~90 tiles per frame that had never left the viewport**.
+Panning at full zoom-out against a large corpus, rooms already on screen blinked
+out and came back. Two separate faults:
 
-Two separate faults, and only one of them is the budget:
-
-- **The cache is smaller than a screen.** Unfixable without the pyramid: 800
-  full-resolution rooms is 2.4 GB decoded. This is the ceiling described above,
-  and it is what the ladder exists to lower.
+- **The cache is smaller than a screen.** At `MIN_ZOOM` a screen wants ~800
+  distinct rooms (2.4 GB decoded) against a budget of 240. Unfixable without the
+  pyramid — this is the ceiling the ladder exists to lower.
 - **Eviction picked the wrong victims.** The renderer walks cells row by row, so
   within a frame the tiles it has *already drawn* are the least recently used
-  entries in the cache. A miss half way down the screen evicted the rows above
-  it. That is a plain bug, independent of the budget, and it is what turned "the
-  cache is too small" into "tiles flicker".
+  entries; a miss halfway down the screen evicted the rows above it. A plain bug,
+  independent of the budget, and what turned "the cache is too small" into "tiles
+  flicker". `tiles.js` now stamps each entry with the frame it was drawn in and
+  will not evict anything touched by the current or previous frame (the previous
+  included, because a pan moves the viewport by a cell or two). When a screen
+  genuinely does not fit, the cache holds it and `overBudget()` reports the
+  overage rather than pretending.
 
-`tiles.js` now stamps each entry with the frame it was drawn in and refuses to
-evict anything touched by the current frame or the one before it — the previous
-frame included because a pan moves the viewport by a cell or two, so last
-frame's working set is very nearly this frame's. Refetches went to **zero**, and
-peak cache size barely moved (815 → 804 entries), because the old code was
-already blowing through its budget by skipping in-flight entries; it was just
-doing so while also thrashing. When a screen genuinely does not fit, the cache
-now holds it and `overBudget()` reports the overage in the HUD rather than
-pretending.
-
-Rule 1's third layer landed with it: a cell whose room has not arrived draws the
-**pinned generic room** instead of the flat `#15120f`, so a miss is a wall
-rather than a hole. At the zooms where this happens a cell is ~26px wide and the
-substitution is invisible; the hole was not.
-
-None of this makes the pyramid unnecessary. It makes the map usable at
-zoom-out today, and it removes a bug that would still have been there afterwards
-— per-level budgets would not have saved a frame from evicting its own rows.
+Rule 1's third layer landed with the fix: a cell whose room has not arrived draws
+the **pinned generic room** instead of a flat `#15120f`, so a miss is a wall, not
+a hole — invisible at the ~26px cells where this happens.
 
 ##### The three rules, in priority order
 
@@ -332,21 +309,14 @@ not be what gets evicted to make room for a zoom-in.
 ##### Level selection
 
 Demand is `zoom × devicePixelRatio` — **device** pixels, because that is what a
-tile actually covers. Picking on CSS pixels ships half-resolution art to every
-retina display. The chosen level is the smallest tile not smaller than the
+tile actually covers. Picking on CSS pixels would ship half-resolution art to
+every retina display. The chosen level is the smallest tile not smaller than the
 demand, so a tile is never upscaled while a big enough one is available.
 
-Two corrections to the earlier draft of this table, both caught by writing the
-selection down as testable code:
-
-- It keyed on raw `zoom`, not device pixels — the retina bug above.
-- Its bottom level was used at "zoom < 24", but
-  [`camera.js`](../packages/web/src/camera.js) clamps `MIN_ZOOM = 26`, so that
-  level could never be selected at all. A level nothing can reach is dead weight
-  in the pipeline and a lie in the table, so `pyramid.test.mjs` now asserts that
-  every level is reachable by some zoom within the camera's own clamp. That test
-  couples the ladder to `MIN_ZOOM`/`MAX_ZOOM`: change the clamp and it will tell
-  you the ladder needs a rung added or dropped.
+Every level must be reachable by some zoom within the camera's own clamp — a
+level nothing can select is dead weight in the pipeline. `pyramid.test.mjs`
+couples the ladder to `MIN_ZOOM`/`MAX_ZOOM` and asserts it: change the clamp and
+it names the rung to add or drop.
 
 Switching carries a **15% hysteresis band** (`HYSTERESIS`). Without it, holding a
 zoom near a boundary flickers between two levels and every flicker is a full
@@ -388,7 +358,7 @@ evict each other.
   connections per host. A prefetch that queues ahead of a visible tile has made
   rule 1 worse in order to serve rule 2, which is backwards.
 
-##### How it is wired, end to end — **done**
+##### How it is wired, end to end
 
 - **`scan.mjs` discovers the levels.** It works out what the ladder would
   produce at the corpus's own source size, then keeps the rungs whose `<width>/`
@@ -438,7 +408,7 @@ evict each other.
   **74 KB** at level 0, so a far-out screen costs about a sixtieth of what it
   used to. That is the number that matters once this is hosted.
 
-#### Camera movement — built
+#### Camera movement
 
 "Centre" used to teleport, which loses the reader's sense of where they were.
 `flyTo` now eases position and zoom together over `camera.flightMs` — 450 ms by
@@ -447,90 +417,60 @@ serves "fly to the best match" after a search, which is the case where the
 movement is carrying meaning: it shows the top result's location relative to
 where you were standing.
 
-**The duration is config, not a constant**, which is a reversal of how this
-first landed — see [§6.22](#6-decisions-made) for why the original argument did
-not hold. Zero is a legitimate value meaning "arrive at once", the same thing
-`prefers-reduced-motion` asks for, so it is how a config switches the animation
-off; reduced motion still wins over whatever is configured. Two guards, both
-reported rather than thrown: a duration past five seconds has stopped being a
-transition and is clamped, and a positive duration shorter than one frame is
+**The duration is `camera.flightMs` in config**, not a constant (see
+[`design-history.md`](design-history.md#flight-duration-source-constant--config)).
+Zero means "arrive at once", the same thing `prefers-reduced-motion` asks for, so
+it is how a config switches the animation off; reduced motion still wins over
+whatever is configured. Two guards, both reported rather than thrown: a duration
+past five seconds is clamped, and a positive duration shorter than one frame is
 honoured but flagged, because `0.45` is what seconds look like typed into a
-milliseconds field and would otherwise be a flight that silently never appears.
+milliseconds field.
 
-Three things the implementation settled, none of them obvious from the sketch
-above:
+Three things the implementation settled:
 
-- **Zoom interpolates geometrically, position linearly**, and that asymmetry is
-  the whole content of `flightAt()`. Zoom is pixels per cell, so a linear ramp
-  from 26 to 900 spends nearly all its time near 900: the flight reads as a snap
-  followed by a crawl. The ratio is what the eye reads, which is the same reason
-  the wheel is exponential. Position needs no such treatment over the distances
-  this map flies — tens of cells — so the zoom-out-and-back arc a world-scale
-  flight would need is machinery bought for a case that does not arise. The
-  midpoint of a flight is asserted against the geometric mean, which is the
-  assertion a linear ramp fails.
-- **The flight rides the glide's rAF loop rather than starting one of its own.**
-  There was already a permanent loop, and one loop is what makes the precedence
-  between the two statable in a single `else`: a flight owns the camera while it
-  lasts, the glide takes over on arrival. That is what lets a flight *land*
-  outside the content region and be pulled back afterwards, rather than being
-  fought all the way there.
-- **Interruption is two lines and both are load-bearing.** `pointerdown` and
-  `wheel` drop the flight, because a flight still easing its own zoom under a
-  hand drags the world out from under the finger holding it. Dropped on
-  `pointerdown` rather than on the first move, so even a press that never becomes
-  a drag stops the flight — reaching for a room that is still sliding and having
-  it slide on is the thing this is for.
+- **Zoom interpolates geometrically, position linearly**, which is the whole
+  content of `flightAt()`. Zoom is pixels per cell, so a linear ramp from 26 to
+  900 spends nearly all its time near 900 and reads as a snap then a crawl; the
+  ratio is what the eye reads, the same reason the wheel is exponential. Position
+  needs no such treatment over the tens of cells this map flies. The midpoint is
+  asserted against the geometric mean, which a linear ramp fails.
+- **The flight rides the glide's rAF loop rather than starting its own.** One
+  loop makes the precedence statable in a single `else`: a flight owns the camera
+  while it lasts, the glide takes over on arrival. That is what lets a flight
+  *land* outside the content region and be pulled back afterwards, rather than
+  being fought all the way there.
+- **Interruption is `pointerdown` and `wheel` dropping the flight**, because a
+  flight easing its zoom under a hand drags the world out from under the finger.
+  Dropped on `pointerdown` rather than first move, so even a press that never
+  becomes a drag stops it.
 
 Landing returns the target camera *by identity*, so a flight ends exactly where
-it was aimed rather than within a rounding error of it, and `aspect`/`limits`
-come along without the interpolation knowing they exist. `ms <= 0` arrives
-immediately, which is how `prefers-reduced-motion` gets the old teleport without
-a second code path to keep in step.
+it was aimed, and `aspect`/`limits` come along without the interpolation knowing
+they exist.
 
-#### The reorder animation - built
+#### The reorder animation
 
 A rearrangement is a **sliding-tile illusion**: whole rows and columns rotate,
 and nothing is ever seen to move over anything else. See
 [`packages/map/illusion.js`](../packages/map/illusion.js) for the planner,
 [`board.js`](../packages/map/board.js) for the map-shaped half, and
 [`packages/web/src/slide.js`](../packages/web/src/slide.js) for the animation.
+It replaces a cross-fade;
+[`design-history.md`](design-history.md#rearrangement-cross-fade--sliding-tile-illusion)
+covers why, and why a free-form glide was the wrong sliding motion.
 
-**This replaces the cross-fade**, which was decided on a premise that has since
-expired. That premise was "a search swaps one array and every slot stays put, so
-what changes is content, not position" - true when it was written, and false
-since [§3f](#3f-the-search-density-gradient--built) made the certainty profile an
-input to placement. A search now genuinely relocates slots, so a cross-fade
-would be *hiding* a movement rather than honestly declining to invent one.
+The move set makes the illusion structural rather than checked: rows and columns
+may rotate anywhere, and an arbitrary swap — which would read as teleportation —
+is legal only off camera. "Preserve the illusion" reduces to "emit only legal
+moves", so no renderer has to be careful.
 
-The deeper objection to sliding was mine and it was wrong in an instructive way.
-The map's cells are walls, not slots on a board: the generic room is as much a
-wall as a corpus room is, and 80% of them being identical is a fact about the
-art, not a licence to treat them as empty space. A room that glides across the
-wallpaper to reach its new cell reads as a tile floating above a backdrop, and
-the grid stops being somewhere you are standing. That is what rules out the
-free-form glide - *not* the claim that rooms must never move.
-
-One thing the cross-fade design got right survives intact, and is now wired:
-**sequence the rearrangement after the fly home, not against it.** Running a
-camera flight and a rearrangement at once makes two animations compete for the
-same attention and neither lands. Animated camera moves landed first and left
-the flight's `done` transition as the seam, deliberately unwired; `flyTo` now
-returns a promise for the landing and `startRearrangement` awaits it. For the
-slide that is not only taste - the plan is made against exactly the cells on
-screen, so it cannot be made until the camera has stopped moving.
-
-The promise answers *whether* it landed as well as *when*, and both halves are
-used. A flight ends either by arriving or because a hand landed on the map, and
-a reader who has grabbed the map is not asking to watch the library rebuild
-itself - so an interrupted flight falls back to the instant rebuild rather than
-rearranging under them.
-
-What a real sliding puzzle does instead is move a whole line at once. The move
-set makes that structural rather than checked: rows and columns may rotate
-anywhere, and an arbitrary swap - which would read as teleportation - is legal
-only off camera. "Preserve the illusion" reduces to "emit only legal moves", so
-no renderer has to be careful.
+**The rearrangement is sequenced after the fly home, not against it.** Two
+animations competing for attention and neither lands; and the plan is made
+against exactly the cells on screen, so it cannot be made until the camera stops.
+`flyTo` returns a promise for the landing and `startRearrangement` awaits it. The
+promise answers *whether* it landed as well as *when*: a flight ended by a hand
+landing on the map falls back to the instant rebuild rather than rearranging
+under a reader who has just grabbed it.
 
 How it fits the map:
 
@@ -557,27 +497,19 @@ How it fits the map:
   and the caller keeps the instant rebuild. Faking it would mean a tile changing
   its face off camera and sliding on as something else.
 
-Rejected alternatives: a **free-form glide** along each room's true heading is
-cheap and answers the "leaves left, returns right" problem by construction, but
-it is the one that treats the wallpaper as empty space. A per-cell **spine flip**
-is a card trick rather than a library. A plain **dissolve** says less than the
-stagger and costs the same.
+**The animation plays as a wave, not a queue.** Two mechanisms, both structural:
 
-**The duration was the weak point and is now the answer.** Runs used to play
-strictly one after another, which put a desktop rearrangement at four seconds.
-Two changes fixed it, both structural rather than tuning:
-
-- **The planner parks a batch of columns rather than one**, which makes the
-  batch's columns independent of each other, and it says so in the move list -
-  every move carries a `stage` (a hard barrier) and a `line`, and feed stages
-  are marked `wave`. The animation plays a wave's lines concurrently, staggered
-  outward from the centre, so eleven columns that used to queue now sweep.
-- **Everything else cascades.** Runs start a beat apart but are forced to finish
-  in plan order, which is safe because a run's moves are applied as it passes
-  them and the last at its completion - ordered completions are ordered
-  application. That covers the extraction rotations, which a small corpus needs
-  many of, since most of its rooms are on camera at once and a value with no
-  copy off camera has to be rotated out before it can be staged.
+- **The planner parks a batch of columns rather than one**, making the batch's
+  columns independent, and says so in the move list — every move carries a
+  `stage` (a hard barrier) and a `line`, and feed stages are marked `wave`. The
+  animation plays a wave's lines concurrently, staggered outward from the centre,
+  so a batch of columns sweeps rather than queues.
+- **Everything else cascades.** Runs start a beat apart but finish in plan order,
+  which is safe because a run's moves are applied as it passes them and the last
+  at its completion — ordered completions are ordered application. That covers
+  the extraction rotations, which a small corpus needs many of, since most of its
+  rooms are on camera at once and a value with no copy off camera has to be
+  rotated out before it can be staged.
 
 The five durations are config (`slide.base`, `perCell`, `gap`, `stagger`,
 `cascade`), beside the opening zoom and for the same reason - they are by-feel
@@ -629,8 +561,8 @@ Four seams, and one of them is a prerequisite rather than a change:
 
 CLIP alone is wired end to end and ranks the whole corpus. Keywords and story
 text join it as two further signals over the same single sort —
-[§3d](#3d-hybrid-search--three-signals-one-sort--built) is the scoring model, and
-[§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) is where the text comes from.
+[§3d](#3d-hybrid-search--three-signals-one-sort) is the scoring model, and
+[§3c](#3c-room-metadata--keywords-and-stories) is where the text comes from.
 What follows is the CLIP half, which is done.
 
 The CLIP backend is mostly not a cost question, because the expensive half
@@ -686,7 +618,7 @@ not autoscaling. Keep it behind a flag.
 
 ## 3a. Testing
 
-287 tests (`npm test`), in a couple of seconds, with no browser and no network.
+~300 tests (`npm test`), in a couple of seconds, with no browser and no network.
 `node --test` discovers `*.test.mjs` on its own, so a new file needs no wiring.
 
 | | |
@@ -792,59 +724,47 @@ Three things it does that are worth keeping if it gets rewritten:
   grabs at a third of the duration, so it would find an already-landed flight if
   the configured value had not reached the client.
 
-Each of those was checked by breaking the app on purpose and confirming the
-test failed: no `drawImage`, a discarded search order, an ignored
-`contentRatio`, a stray `console.error`, a `flyTo` restored to a teleport, and
-each of the two interruption lines removed in turn. A green e2e test that cannot
-fail is worse than none, because it is believed.
+Each of those was checked by breaking the app on purpose and confirming the test
+failed: no `drawImage`, a discarded search order, an ignored `contentRatio`, a
+stray `console.error`, a `flyTo` restored to a teleport, and each of the two
+interruption lines removed in turn. A green e2e test that cannot fail is worse
+than none, because it is believed. (One trap in writing them: `locator.click()`
+leaves the pointer over the button, so a following `mouse.down()` meant to grab
+the map never reaches the canvas — move back onto the canvas before grabbing.)
 
-The interruption test earned its own footnote by failing for the wrong reason
-first: `locator.click()` leaves the pointer over the button it pressed, so the
-`mouse.down()` meant to grab the map never reached the canvas at all — which
-looks exactly like a flight that refused to be interrupted. Move back onto the
-canvas before grabbing.
-
-The overlay's and the pinch's tests were checked the same way, and they are the
-layer that matters most for both — the gesture is the half no unit test can
-reach. A press that no longer cancels on drag, chips wired to nothing, an Escape
-key that does not close, a second finger that feeds the drag instead of starting
-a pinch, a pinch that ignores its midpoint, and a finger-lift that does not
-re-anchor all fail the suite.
+The overlay's and the pinch's tests are the layer that matters most, since the
+gesture is the half no unit test can reach. A press that no longer cancels on
+drag, chips wired to nothing, an Escape key that does not close, a second finger
+that feeds the drag instead of starting a pinch, a pinch that ignores its
+midpoint, and a finger-lift that does not re-anchor all fail the suite.
 
 **Pinch needs raw CDP**, because Playwright's touchscreen is single-touch. Two
-details of `Input.dispatchTouchEvent` are worth knowing, since both fail quietly:
-a `touchEnd`'s `touchPoints` are the points being *released*, not the ones that
-remain; and points need an explicit `id`, or Chromium matches them by position
-and reads a move after a release as a new finger rather than the surviving one.
-Both were established by experiment rather than assumed, and both are written
-down in the helper.
+details of `Input.dispatchTouchEvent`, both of which fail quietly: a `touchEnd`'s
+`touchPoints` are the points being *released*, not the ones that remain; and
+points need an explicit `id`, or Chromium matches them by position and reads a
+move after a release as a new finger rather than the surviving one. Both are
+written down in the helper.
 
-**And the limit of that approach is worth stating.** CDP injection dispatches
-pointer events straight to the page, bypassing the compositor's gesture
-arbitration and the real pointer-capture lifecycle — the very layers
-`touch-action` and `pointercancel` live in. Nothing has actually escaped through
-that gap: pinch was reported broken on Android and the cause turned out to be a
-stale demo server still holding the port and serving old code, not the gesture
-code at all. It is a known blind spot rather than a demonstrated one, and worth
-keeping in mind precisely because the first instinct on a device-only report is
-to believe it.
+**The limit of that approach is worth stating.** CDP injection dispatches pointer
+events straight to the page, bypassing the compositor's gesture arbitration and
+the real pointer-capture lifecycle — the very layers `touch-action` and
+`pointercancel` live in. It is a known blind spot, and the first instinct on a
+device-only report should not be to believe it: at least once, "pinch is broken
+on Android" was a stale demo server serving old code, not the gesture code.
 
-Two things came out of that round anyway, and both are worth having. **The
-capture calls are now guarded**: `set`/`releasePointerCapture` throw
-`NotFoundError` for a pointer the browser does not consider capturable, which is
-ordinary on touch, and `pointercancel` reaches the release with capture already
-dropped. An unguarded throw would abort the handler and strand a finger in the
-pointer map. There is a test that makes both calls throw, which is the honest
-way to cover a hazard the injected path cannot produce. And **`?touchdebug`
-prints the raw pointer stream on screen**, because a phone has no console you
-can read with both thumbs busy.
+Three things around that blind spot are worth having:
 
-The third thing, and the one that actually mattered: **`npm run demo` refuses a
-busy port.** It used to fire its `listening` callback, print "the library is
-open at…", receive `EADDRINUSE` immediately afterwards, tear the handle down and
-exit 0 — a silent no-op wearing a success banner, with an older process still
-answering on that port. A day of device debugging came out of that, so the check
-runs before anything is scanned or bundled.
+- **The capture calls are guarded.** `set`/`releasePointerCapture` throw
+  `NotFoundError` for a pointer the browser does not consider capturable, which
+  is ordinary on touch, and `pointercancel` reaches the release with capture
+  already dropped. An unguarded throw would strand a finger in the pointer map. A
+  test makes both calls throw — the honest way to cover a hazard the injected
+  path cannot produce.
+- **`?touchdebug` prints the raw pointer stream on screen**, because a phone has
+  no console you can read with both thumbs busy.
+- **`npm run demo` refuses a busy port**, checked before anything is scanned or
+  bundled — it used to bind, print its banner, take `EADDRINUSE` and exit 0,
+  leaving an older process answering on that port with stale code.
 
 ### Still missing
 
@@ -927,7 +847,7 @@ second run resizes the originals rather than compounding on its own output.
 
 ---
 
-## 3c. Room metadata — keywords and stories — **the data path is built**
+## 3c. Room metadata — keywords and stories
 
 Every room but the centre carries two pieces of authored text, both generated
 upstream alongside the image:
@@ -936,8 +856,8 @@ upstream alongside the image:
   and so on — the concepts that steered that variant's generation.
 - **A short enigmatic fictional setting**, one paragraph, from a fixed prompt.
 
-Both are retrieval signals ([§3d](#3d-hybrid-search--three-signals-one-sort--built)) and
-both are readable in the UI ([§5b](#5b-the-metadata-overlay--built)). Generation is out
+Both are retrieval signals ([§3d](#3d-hybrid-search--three-signals-one-sort)) and
+both are readable in the UI ([§5b](#5b-the-metadata-overlay)). Generation is out
 of scope here for the same reason the images are.
 
 ### The format
@@ -1015,8 +935,8 @@ normalises to null rather than to an empty record, so "has metadata" stays a rea
 question.
 
 Not yet built, and deliberately: nothing *reads* the keywords yet beyond a room
-count in the demo panel. Ranking is [§3d](#3d-hybrid-search--three-signals-one-sort--built)
-and reading them is [§5b](#5b-the-metadata-overlay--built).
+count in the demo panel. Ranking is [§3d](#3d-hybrid-search--three-signals-one-sort)
+and reading them is [§5b](#5b-the-metadata-overlay).
 
 **The sidecar in `assets/corpus-sample/` is placeholder text**, generated to
 exercise the search path before the real generator output lands — 26 rooms, 41
@@ -1028,7 +948,7 @@ something.
 
 ---
 
-## 3d. Hybrid search — three signals, one sort — **built**
+## 3d. Hybrid search — three signals, one sort
 
 Three signals rank the same corpus, and the whole corpus is sorted by their
 blend. Not tiers: an exact-match bucket sorted ahead of a CLIP bucket would let
@@ -1041,7 +961,7 @@ score(room) = w_keyword · keywordScore + w_story · storyScore + w_clip · clip
 ```
 
 The three weights are the "relative priorities of the three search types" and
-live in config ([§3e](#3e-configuration--built)). Intended ordering, per the design:
+live in config ([§3e](#3e-configuration)). Intended ordering, per the design:
 keyword above story above CLIP, with an exact keyword match outweighing anything
 CLIP can say.
 
@@ -1088,7 +1008,7 @@ near the frame the int8 dot products already fit inside, and keeping it
 client-side is what preserves "a re-rank costs no round trip". `/api/search` is
 unchanged: it still runs only the text tower and returns a vector.
 
-Two things the implementation added that the sketch above did not have:
+Two implementation details worth calling out:
 
 - **The index is built once, not per query.** Folding and tokenising 5,000
   stories on every search is about a megabyte and a half of string work;
@@ -1118,7 +1038,7 @@ falls back to text-only ranking against the sidecar and says so, which is exactl
 the degradation the three states exist to describe.
 
 
-## 3e. Configuration — **built**
+## 3e. Configuration
 
 **One surface for everything tuned by feel.** Those values used to be spread
 across module scope in `camera.js` and `useState` defaults in `main.jsx`, which
@@ -1143,8 +1063,8 @@ value would quietly become the real tuning surface, and editing the documented
 defaults would stop having any effect — two statements of one fact, with the
 undocumented one winning. The overlay is partial and optional; `DEFAULTS` stays
 the single statement of every default. `map` and `search` are read by the demo's
-sliders now and by [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built) and
-[§3d](#3d-hybrid-search--three-signals-one-sort--built) when they land.
+sliders now and by [§3c](#3c-room-metadata--keywords-and-stories) and
+[§3d](#3d-hybrid-search--three-signals-one-sort) when they land.
 
 It reaches the client on the manifest rather than through an endpoint of its own.
 The client already blocks on that fetch before it can render, so a second round
@@ -1202,7 +1122,7 @@ this refuses to do.
 
 ---
 
-## 3f. The search density gradient — **built**
+## 3f. The search density gradient
 
 **The problem.** The generic-room ratio and the search were fighting each other.
 At the concept's 80% generic, the top matches are scattered across a wide region
@@ -1237,7 +1157,7 @@ Three behaviours fall out of the one formula, none of them special-cased:
 ### Certainty is a different question from ranking
 
 The blend cannot answer "how sure are we". It min-max normalises CLIP across the
-corpus for the query — which is [§3d](#3d-hybrid-search--three-signals-one-sort--built)'s
+corpus for the query — which is [§3d](#3d-hybrid-search--three-signals-one-sort)'s
 whole point, since raw cosines on near-identical library walls sit in a band too
 narrow to weight — and normalisation guarantees *some* room scores 1 for any
 query at all. A gradient driven by the blend would cluster `cghjj` exactly as
@@ -1325,7 +1245,7 @@ ControlNet weights) stays a generation-side sidecar; the map has no use for it
 and should not be the reason a database appears.
 
 `config.json` is the exception and lives beside the *server*, not the corpus
-([§3e](#3e-configuration--built)): it describes how to display a library, not
+([§3e](#3e-configuration)): it describes how to display a library, not
 which library, so pointing the demo at a different directory should not change
 how the map feels.
 
@@ -1400,7 +1320,7 @@ existing slots at a fixed aspect, is asserted at every shape.
 
 ---
 
-## 5b. The metadata overlay — **built**
+## 5b. The metadata overlay
 
 Keywords and a story per room are worth nothing unread, so the map needs a way to
 open one. Three things constrain the design before taste does.
@@ -1427,7 +1347,7 @@ A closable card, styled as a catalogue slip rather than a tooltip:
 
 - **The three keywords as chips**, each one a live search. Clicking `art nouveau`
   runs that query and the library rearranges around it — free once
-  [§3d](#3d-hybrid-search--three-signals-one-sort--built) existed, and it turns
+  [§3d](#3d-hybrid-search--three-signals-one-sort) existed, and it turns
   reading a room into a way of moving through the library rather than a dead
   end. The card closes as the chip fires, because the map is about to rearrange
   underneath it and it would then be describing a cell that no longer holds that
@@ -1477,22 +1397,21 @@ have to be re-derived. Ship the overlay; earn the book.
 
 ## 6. Decisions made
 
-Recorded from review, with what changed:
+The settled decisions, in the order they were made. Decisions that were later
+reversed are in [`design-history.md`](design-history.md).
 
 1. **Tile = one shelved wall, shallow perspective.** The unrolled-hexagon
    elevation is gone, along with the straddle-band and corner machinery it
    needed. Faithful 3D Library reconstructions already exist; this isn't that.
-2. **The Blender render is the source of truth.** Built; needs to land in the
-   repo.
+2. **The Blender render is the source of truth.**
 3. **Seam accuracy is not enforced.** Inpainting from a shared base with an
    edge-clear mask makes it structural. `verify-seams` and the seam-mask assets
-   are deleted. Border drift survives only as a curation sort key.
+   are deleted. Border drift survives only as a pipeline report.
 4. **No canonical inpainting mask in the repo.** Masks are a pipeline concern
    and will change between runs; encoding one would freeze a false constraint.
-5. **Synthetic corpus: done** — 512 images, SD inference is cheap enough that
-   the placeholder-driven bootstrap was unnecessary.
-6. **Corpus size and generic ratio are runtime-tweakable.** Implemented and
-   tested in `packages/map`.
+5. **Synthetic corpus** — 512 images, SD inference cheap enough that the
+   placeholder-driven bootstrap was unnecessary.
+6. **Corpus size and generic ratio are runtime-tweakable**, in `packages/map`.
 7. **Generate-on-demand is a stretch goal**, selectively enabled.
 8. **Geometry comes from an Inkscape trace, not the `.blend`.** Five minutes of
    human effort beats a parser; the `.blend` is in the repo as the source of
@@ -1512,12 +1431,10 @@ Recorded from review, with what changed:
     `packages/map` takes the aspect and measures in cell widths. It is the one
     place that module is not shape-blind, and it is a deliberate trade:
     [§5a](#5a-why-the-map-knows-the-cell-shape).
-13. **The tile is 1024×768.** The square shelf felt cramped, which was the last
-    entry in §7; 4:3 gives the books room without changing what a tile *is*. The
-    render, the trace and `BASE_TILE` moved together, and the only knock-on in
-    code was the coarsest cache budget — a shorter tile fits more rows, so the
-    worst-case screen went 5700 → 7500 cells and the budget 7000 → 8200. Whether
-    4:3 is final is an art call; nothing downstream assumes it.
+13. **The tile is 1024×768.** 4:3 gives the books room without changing what a
+    tile *is*; `BASE_TILE` is the only place the shape is stated and nothing
+    downstream assumes it. Whether 4:3 is final is an art call. (It was 1024²;
+    see [`design-history.md`](design-history.md#the-tile-1024--1024768).)
 14. **Manual curation is dropped.** No scores, no tags, no review tool, no
     SQLite. Boring variants are discarded at generation time, and the three
     retrieval signals cover what tagging was for. Border drift survives as a
@@ -1526,65 +1443,51 @@ Recorded from review, with what changed:
     See [§3 phase 2](#phase-2--curation-concept-step-3--dropped).
 15. **Every room carries three stylistic keywords and a short story**, generated
     upstream with the image. Both are search signals and both are readable.
-    [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built).
+    [§3c](#3c-room-metadata--keywords-and-stories).
 16. **Search blends three signals into one sort, rather than tiering them.**
     Keyword above story above CLIP, weights in config, every term normalised to
     [0, 1] — including CLIP, whose raw cosines cluster too tightly on this corpus
     to be blended unnormalised. The whole corpus is sorted by the blend; nothing
-    is spliced to the front. [§3d](#3d-hybrid-search--three-signals-one-sort--built).
+    is spliced to the front. [§3d](#3d-hybrid-search--three-signals-one-sort).
 17. **Metadata is keyed on filename, embeddings on row order**, and the
     difference is deliberate: a positional blob has to be rejected wholesale when
     it goes stale, a filename-keyed map degrades per room and tolerates a miss.
-    [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built).
+    [§3c](#3c-room-metadata--keywords-and-stories).
 18. **One config surface for what is tuned by feel; the pyramid stays out of it.**
-    Built. Zoom range, default zoom, search weights, slot seeds and the demo's
-    default generic ratio live in `packages/config`; the ladder, `BASE_TILE`, the
-    budgets and the hysteresis band do not — they are derived and asserted, not
-    tuned. **Config narrows the zoom range and never widens it**, which is what
+    Zoom range, default zoom, search weights, slot seeds and the demo's default
+    generic ratio live in `packages/config`; the ladder, `BASE_TILE`, the budgets
+    and the hysteresis band do not — they are derived and asserted, not tuned.
+    **Config narrows the zoom range and never widens it**, which is what
     keeps the ladder's reachability assertion true at runtime without consulting
     it at load time. A narrowing that orphans a rung is fine and silent — the
     cost is inactive code and unrequested files. Nothing throws; everything
-    adjusted is reported. [§3e](#3e-configuration--built).
+    adjusted is reported. [§3e](#3e-configuration).
 19. **The generic room becomes a small set of alternates**, chosen per cell by a
     seeded hash with the seed in config. They tile by construction, like
     everything else inpainted from the base. Prerequisite: pinning stops being
     unbounded. [§3 phase 3](#alternate-generic-rooms).
 20. **Reordering is a sliding-tile illusion: whole lines rotate, and nothing
-    crosses anything.** This reverses the earlier "cross-fade in place; rooms
-    never slide", whose premise - that a search leaves every slot where it was -
-    stopped being true when the density gradient made certainty an input to
-    placement. The generic room is a wall, not a gap, so a room may not glide
-    over it; a row or column moving as one piece is the only way a room travels
-    without the grid ceasing to be a space. Legality is structural - rotations
-    anywhere, swaps only off camera. [§3 phase 3](#the-reorder-animation--built).
+    crosses anything.** The generic room is a wall, not a gap, so a room may not
+    glide over it; a row or column moving as one piece is the only way a room
+    travels without the grid ceasing to be a space. Legality is structural —
+    rotations anywhere, swaps only off camera. Reverses an earlier cross-fade;
+    [§3 phase 3](#the-reorder-animation) and
+    [`design-history.md`](design-history.md#rearrangement-cross-fade--sliding-tile-illusion).
 21. **The metadata overlay opens on right-click / long-press, not left-click.**
     Left-click is reserved for "focus this room", and the long-press must lose to
     a pan. Per-book hit-testing is impossible on inpainted rooms, so the
     book-pull animation — if it happens — samples a spine rather than identifying
-    one. [§5b](#5b-the-metadata-overlay--built).
+    one. [§5b](#5b-the-metadata-overlay).
 22. **Camera moves ease rather than teleport, and zoom eases geometrically.**
-    Built. Smoothstep, interrupted by `pointerdown` or the wheel, and stepped on
-    the loop the glide already ran, so a flight and the pull back inside the
-    region can never overlap. **The duration is `camera.flightMs` in config**,
-    defaulting to the 450 ms in `camera.js`.
-
-    This reverses the first version of this entry, which argued the number
-    should stay a source constant because it was "the feel of a gesture, not a
-    property of the library being displayed". That test is the wrong one, and
-    [§4](#4-architecture) says so in as many words: config "describes how to
-    display a library, not which library", so being independent of the corpus is
-    what config is *for* rather than grounds for exclusion — `camera.defaultZoom`
-    is the same kind of number and has always been there. The rule that really
-    keeps things out of config is [§3e](#3e-configuration--built)'s: values that
-    are *derived and asserted* rather than tuned, which is why the pyramid stays
-    out. `FLIGHT_MS` is derived from nothing and no test asserts its value — only
-    the shape of the curve — so nothing can break when it moves.
-
-    What survives of the original argument is only that `WHEEL_ZOOM_RATE`,
-    `LONG_PRESS_MS` and `PRESS_SLOP_PX` are now inconsistent with this. They are
-    in source because they predate `packages/config`, not because anyone decided
-    they should be — which is an argument for moving them too, not for leaving
-    the flight behind. [§3 phase 3](#camera-movement--built).
+    Smoothstep, interrupted by `pointerdown` or the wheel, and stepped on the
+    loop the glide already runs, so a flight and the pull back inside the region
+    can never overlap. **The duration is `camera.flightMs` in config**, defaulting
+    to 450 ms. It belongs in config because it derives from nothing and no test
+    pins its value — the rule that keeps things *out* is being derived and
+    asserted, not being independent of the corpus. (`WHEEL_ZOOM_RATE`,
+    `LONG_PRESS_MS` and `PRESS_SLOP_PX` remain in source only because they predate
+    `packages/config`.) [§3 phase 3](#camera-movement),
+    [`design-history.md`](design-history.md#flight-duration-source-constant--config).
 
 ## 7. Still open
 
@@ -1606,13 +1509,13 @@ Recorded from review, with what changed:
    tiles put their frames side by side, so the grid reads as separated boxes
    rather than one continuous wall. Faithful to the render; whether it is wanted
    is an art call. Visible in the demo at any zoom.
-6. **What the search weights should actually be.** [§3d](#3d-hybrid-search--three-signals-one-sort--built)
+6. **What the search weights should actually be.** [§3d](#3d-hybrid-search--three-signals-one-sort)
    fixes the ordering — keyword, then story, then CLIP — and the normalisation
    that makes the weights comparable, but the numbers themselves are a by-feel
    call that needs the real corpus and real queries. That is the argument for
    them being config rather than constants.
    The same goes double for `search.density.clipLow/clipHigh`
-   ([§3f](#3f-the-search-density-gradient--built)): unlike the weights those are
+   ([§3f](#3f-the-search-density-gradient)): unlike the weights those are
    a *measurement* rather than a preference — the cosine at which CLIP starts
    saying something about a wall of books, and the one at which it is as sure as
    it gets. The defaults (0.18–0.30) are read off what ViT-B/32 typically does on
@@ -1650,53 +1553,29 @@ Recorded from review, with what changed:
 
 ## 8. Next session
 
-In dependency order, shortest path to a demo that survives a real corpus:
+Already landed and folded into the phase sections: configuration
+([§3e](#3e-configuration)), room metadata end to end
+([§3c](#3c-room-metadata--keywords-and-stories)), hybrid ranking
+([§3d](#3d-hybrid-search--three-signals-one-sort)), the metadata overlay
+([§5b](#5b-the-metadata-overlay)), animated camera moves
+([§camera movement](#camera-movement)) and the reorder animation
+([§the reorder animation](#the-reorder-animation)).
 
-1. ~~**Configuration**~~ — **done**, [§3e](#3e-configuration--built).
-   `packages/config` holds the defaults and the validation, `config.json` is an
-   optional partial overlay, and the resolved block rides on the manifest. The
-   zoom range narrows only, which is what let the ladder's reachability rule stay
-   a test-time fact. `map` and `search` are populated and waiting for 2 and 3.
-2. ~~**Room metadata end to end**~~ — **done**,
-   [§3c](#3c-room-metadata--keywords-and-stories--the-data-path-is-built).
-   `packages/map/metadata.js` owns the join, `scan.mjs` reports coverage into the
-   manifest, the client fetches beside the blob and joins by filename. The demo
-   panel counts described rooms; nothing reads the keywords yet, which is 3 and 4.
-3. ~~**Hybrid ranking**~~ — **done**,
-   [§3d](#3d-hybrid-search--three-signals-one-sort--built). `scoring.js` holds
-   folding, both match rules and the blend; weights come from config; the panel
-   reports which signals actually fired. `assets/corpus-sample/metadata.json` is
-   placeholder text so the demo searches for something.
-4. ~~**The metadata overlay**~~ — **done**,
-   [§5b](#5b-the-metadata-overlay--built). Right-click and long-press, chips that
-   run searches, story text, closable. `picking.js` holds the pure half; the
-   gesture rides `useMapCamera.js`'s pointer stream so a press that becomes a
-   drag opens nothing.
-5. ~~**Animated camera moves**~~ — **done**,
-   [§3 phase 3](#camera-movement--built). `flightAt()` in `camera.js` is the
-   pure step, `useMapCamera.js`'s existing glide loop is the clock, and
-   `pointerdown`/`wheel` are the interruption. Zoom eases geometrically, which
-   is the part that would have been wrong if it had been written by feel; the
-   duration is `camera.flightMs`, which is the part that had to be tunable.
-6. ~~**The reorder animation**~~ — **done**, as a sliding-tile illusion rather
-   than the cross-fade this line used to describe;
-   [§3 phase 3](#the-reorder-animation--built). `illusion.js` plans the moves,
-   `board.js` cuts the board out of the map, `slide.js` is the second renderer.
-   The lines play as a wave rather than a queue, which is what took it from four
-   seconds to just over one. It is wired to the seam 5 left: `flyTo` returns a
-   promise for the landing, and the rearrangement waits for it.
-7. **Give the pinned generic its own budget.** It is pinned at every level it is
+The queue, in dependency order — shortest path to a demo that survives a real
+corpus:
+
+1. **Give the pinned generic its own budget.** It is pinned at every level it is
    asked for, which is correct and currently free — it is one room. Promoted from
-   tidy-up to prerequisite by 8, which makes it several.
-8. **Alternate generic rooms** ([§3 phase 3](#alternate-generic-rooms)) —
+   tidy-up to prerequisite by 2, which makes it several.
+2. **Alternate generic rooms** ([§3 phase 3](#alternate-generic-rooms)) —
    `genericVariantAt()` in `ordering.js`, a set rather than a file in `scan.mjs`,
    and `GENERIC` stopping being a single id downstream.
-9. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
+3. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
    The asset is in the repo and is the right shape; what is missing is a way for
    the demo to reach a base image that lives outside `--images <dir>`, since
    `scan.mjs` only looks for `base.*` inside the corpus directory. Folds
-   naturally into 8, which is rewriting that discovery anyway.
-10. **Re-check the budgets against a real corpus at level 0.** The ladder's
-    worst-case table is computed for each level's own zoom band; what is not yet
-    measured is a long session wandering at high zoom, where level 0's budget of
-    240 is doing the "hold rather than refetch" work on its own.
+   naturally into 2, which is rewriting that discovery anyway.
+4. **Re-check the budgets against a real corpus at level 0.** The ladder's
+   worst-case table is computed for each level's own zoom band; what is not yet
+   measured is a long session wandering at high zoom, where level 0's budget of
+   240 is doing the "hold rather than refetch" work on its own.
