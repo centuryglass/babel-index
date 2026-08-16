@@ -171,13 +171,38 @@ is read per request.
   column, which is why the map visibly pivots around it - and why phase 1 exists
   at all, to feed a column that can never be rotated.
 - **Staging is why the conveyor works, and randomized tests do not cover it.**
-  Phase 2 parks all of a column's values before inserting any, because
-  extracting a later one can rotate the column holding an earlier one. A board
+  Phase 2 parks a whole BATCH of columns before feeding any of them, because
+  extracting a later value can rotate the column holding an earlier one. A board
   with a small alphabet never reaches that path - every value has a copy off
   camera, so nothing is ever trapped. The case that does is a board whose
   distinct values all start on camera, which is exactly what the density
   gradient builds; `illusion.test.mjs` carries it, and gather-as-you-go passes
   every other test in the file.
+- **Parking a batch is what makes the animation a wave, so the batch size is
+  not a tuning knob.** It is `capacity / valuesPerLine`, and one line per batch -
+  which is the strictly sequential original - is what a region too wide to leave
+  room for its own parking degrades to. Nothing breaks at batch size 1; it just
+  gets slower, which is the right way round.
+- **Two parking pools, and the difference is load-bearing.** The conveyor parks
+  in any column outside the region, because phase 2 rotates only region columns.
+  The fixed tile's column parks in the CORNERS - outside the region's columns
+  and its rows - because phase 1 rotates region rows, and a row rotation sweeps
+  every column including the outside ones. Using the conveyor's pool there
+  silently loses the staged value.
+- **A reserved cell is never a source.** `makeAvailable` skips them, and without
+  that a copy standing by for one slot gets handed back for another, swapped
+  away into a fresh cell, and the earlier reservation is left pointing at a cell
+  holding something else. This was latent in the per-column version - the window
+  was only one column wide - and batching is what made it fire.
+- **The animation may overlap runs, but only two ways, and both are proved
+  rather than eyeballed.** A `wave` stage's lines are independent because the
+  planner parked them together, so its lanes just run concurrently. Any other
+  stage CASCADES: runs start a beat apart but are forced to finish in plan
+  order, and since a run's moves are applied as it passes them - the last at its
+  completion - ordered completions are exactly ordered application. That is why
+  a swap emitted after a shift must attach to that shift's run at its
+  completion, not to the next run's start. Move it and the cascade silently
+  applies the plan out of order.
 - **Visible cost is the viewport's, not the corpus's.** Every move outside the
   region is a swap and swaps are invisible, so the board can be as large as it
   needs to be - 157x209 at 5000 rooms - without lengthening the animation. If a

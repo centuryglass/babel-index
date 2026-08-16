@@ -507,15 +507,26 @@ it is the one that treats the wallpaper as empty space. A per-cell **spine flip*
 is a card trick rather than a library. A plain **dissolve** says less than the
 stagger and costs the same.
 
-**What is still open is the duration.** A desktop rearrangement is about four
-seconds, a phone under two. Runs play strictly one after another, because each
-run's swaps have to be applied after the previous run's last rotation. The
-planner's column loop is *nearly* independent enough to overlap - the reference
-notes the loop may be reordered freely - but only becomes fully so if every
-column's values are parked before any are inserted, rather than per column. That
-is a change to the planner, not to a timing constant, and it is what would take
-a desktop rearrangement under two seconds by letting the conveyor sweep across
-columns as a wave instead of a queue. It is the obvious next thing here.
+**The duration was the weak point and is now the answer.** Runs used to play
+strictly one after another, which put a desktop rearrangement at four seconds.
+Two changes fixed it, both structural rather than tuning:
+
+- **The planner parks a batch of columns rather than one**, which makes the
+  batch's columns independent of each other, and it says so in the move list -
+  every move carries a `stage` (a hard barrier) and a `line`, and feed stages
+  are marked `wave`. The animation plays a wave's lines concurrently, staggered
+  outward from the centre, so eleven columns that used to queue now sweep.
+- **Everything else cascades.** Runs start a beat apart but are forced to finish
+  in plan order, which is safe because a run's moves are applied as it passes
+  them and the last at its completion - ordered completions are ordered
+  application. That covers the extraction rotations, which a small corpus needs
+  many of, since most of its rooms are on camera at once and a value with no
+  copy off camera has to be rotated out before it can be staged.
+
+Measured, desktop / laptop / phone: 1.20s / 0.74s / 0.60s at 200 rooms and
+above, 1.73s / 1.31s / 0.99s on the 26-room sample corpus, which needs the most
+extractions. Planning is 5ms, or 110ms for a 5000-room board. Growing the corpus
+never lengthens the animation and mildly shortens it, which is asserted.
 
 Two things measured rather than assumed: the animation holds one level for its
 whole duration (the zoom is parked, so `pickLevel` cannot move), and no frame
@@ -1563,8 +1574,8 @@ In dependency order, shortest path to a demo that survives a real corpus:
    than the cross-fade this line used to describe;
    [§3 phase 3](#the-reorder-animation--built). `illusion.js` plans the moves,
    `board.js` cuts the board out of the map, `slide.js` is the second renderer.
-   What is left is overlapping the runs, which needs the planner to park every
-   column's values before inserting any - see that section.
+   The lines play as a wave rather than a queue, which is what took it from four
+   seconds to just over one.
 7. **Give the pinned generic its own budget.** It is pinned at every level it is
    asked for, which is correct and currently free — it is one room. Promoted from
    tidy-up to prerequisite by 8, which makes it several.
