@@ -56,9 +56,15 @@ function rearrangement(n = 200, seedA = 1, seedB = 2) {
   return { built, moves: planMoves(built.start, built.end, built.bounds, built.fixed) };
 }
 
+const allRuns = (timeline) => timeline.stages.flatMap((s) => s.lanes.flatMap((l) => l.runs));
+
+/** The first run in a lane that actually moves - lanes open with their swaps. */
+const moverOf = (lane) => lane.runs.find((r) => r.cells > 0);
+
 test('a conveyor becomes one run, not one run per step', () => {
   const { moves } = rearrangement();
-  const { runs } = buildTimeline(moves);
+  const timeline = buildTimeline(moves);
+  const runs = allRuns(timeline);
 
   // The planner emits a column's k rotations separately, each fed by a swap.
   // Animated literally that is k jerks; grouped, it is one ride upward.
@@ -69,15 +75,11 @@ test('a conveyor becomes one run, not one run per step', () => {
 
   const shifts = moves.filter((m) => m.type !== 'swap').length;
   assert.ok(runs.length < shifts, `${runs.length} runs for ${shifts} shifts is no grouping at all`);
-
-  // Every move survives the grouping, in order.
-  const flat = runs.flatMap((r) => r.steps.map((s) => s.move));
-  assert.deepEqual(flat, moves);
 });
 
 test('runs only ever group one line moving one way', () => {
   const { moves } = rearrangement();
-  for (const run of buildTimeline(moves).runs) {
+  for (const run of allRuns(buildTimeline(moves))) {
     if (run.kind === 'none') continue;
     for (const { move } of run.steps) {
       if (move.type === 'swap') continue;
@@ -89,38 +91,108 @@ test('runs only ever group one line moving one way', () => {
   }
 });
 
+test('the conveyor plays as one wave, not a queue of columns', () => {
+  // The whole point of parking a batch before feeding it. Without the wave the
+  // columns queue and a desktop rearrangement takes four seconds.
+  const { moves } = rearrangement();
+  const timeline = buildTimeline(moves);
+  const waves = timeline.stages.filter((s) => s.wave);
+  assert.ok(waves.length > 0, 'the planner marked no stage as waveable');
+
+  const conveyor = waves.reduce((a, b) => (b.lanes.length > a.lanes.length ? b : a));
+  assert.ok(conveyor.lanes.length > 4, `only ${conveyor.lanes.length} lanes in the conveyor wave`);
+
+  // Lanes overlap in time - that is what makes it a wave - and each is a
+  // different line, so they can never collide on screen.
+  const spans = conveyor.lanes.map((l) => [moverOf(l).startMs, l.endMs]);
+  const overlapping = spans.some(([s1, e1], i) =>
+    spans.some(([s2], j) => j !== i && s2 > s1 && s2 < e1)
+  );
+  assert.ok(overlapping, 'no two lanes of the wave are ever moving at once');
+
+  const lines = conveyor.lanes.map((l) => `${moverOf(l).kind}${moverOf(l).index}`);
+  assert.equal(new Set(lines).size, lines.length, 'two lanes share a line');
+  assert.equal(new Set(conveyor.lanes.map((l) => moverOf(l).kind)).size, 1,
+    'a wave mixes rows and columns, which could collide on screen');
+});
+
+test('a cascade overlaps its runs but never finishes them out of order', () => {
+  // The safety argument for overlapping a sequential stage: a run's moves are
+  // applied as it passes them and the last of them at its completion, so
+  // ordered completions ARE ordered application. Overlap the starts and the
+  // picture stops being a queue; let a completion slip out of order and the
+  // plan is silently applied in the wrong sequence.
+  const { moves } = rearrangement(50, 1, 2);
+  const timeline = buildTimeline(moves);
+  let sawOverlap = false;
+  for (const stage of timeline.stages) {
+    if (stage.wave) continue;
+    for (const lane of stage.lanes) {
+      let previousEnd = -Infinity;
+      let previousStart = -Infinity;
+      for (const run of lane.runs) {
+        const end = run.startMs + run.durMs;
+        assert.ok(end >= previousEnd - 1e-6, `run finishes before the one it follows`);
+        if (run.durMs > 0 && run.startMs < previousEnd - 1e-6) sawOverlap = true;
+        assert.ok(run.startMs >= previousStart - 1e-6, 'runs start out of order');
+        previousEnd = end;
+        previousStart = run.startMs;
+      }
+    }
+  }
+  assert.ok(sawOverlap, 'nothing overlapped, so the cascade is doing nothing');
+});
+
+test('the wave sets off from the centre outward', () => {
+  // The plan has wanted this since the cross-fade design: the change should
+  // leave from where the reader is standing, not sweep in from an edge.
+  const { built, moves } = rearrangement();
+  const conveyor = buildTimeline(moves).stages
+    .filter((s) => s.wave)
+    .reduce((a, b) => (b.lanes.length > a.lanes.length ? b : a));
+
+  const order = conveyor.lanes
+    .map((l) => ({ start: moverOf(l).startMs, from: Math.abs(moverOf(l).index - built.fixed.x) }));
+  order.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < order.length; i++)
+    assert.ok(order[i].from >= order[i - 1].from,
+      `lane ${i} starts sooner but sits further out (${order[i].from} after ${order[i - 1].from})`);
+});
+
 test('the board absorbs exactly what the motion has passed', () => {
   const { built, moves } = rearrangement();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove });
 
   // Sampled finely enough to land inside runs rather than only between them.
-  const byRun = new Map(show.runs.map((r) => [r, 0]));
-  let sawOffsetOverOne = false;
+  const runs = show.stages.flatMap((st) => st.lanes.flatMap((l) => l.runs));
+  const peak = new Map();
+  let sawConcurrent = false;
   for (let t = 0; t <= show.totalMs; t += 7) {
-    const { motion } = show.advanceTo(t);
-    if (!motion) continue;
-    const run = show.runs.find((r) => r.kind === motion.kind && r.index === motion.index);
-    assert.ok(motion.offset >= -1e-6, `negative offset ${motion.offset}`);
-    // The offset is a remainder, so it can never exceed the run's whole travel
-    // however the run is made up. It is not always under one cell: a column run
-    // can open with a multi-cell extraction rotation before its conveyor, since
-    // the planner frees a trapped value by rotating that column outright.
-    assert.ok(motion.offset <= run.cells + 1e-6, `offset ${motion.offset} past a ${run.cells}-cell run`);
-    byRun.set(run, Math.max(byRun.get(run) ?? 0, motion.offset));
-    if (motion.offset > 1) sawOffsetOverOne = true;
+    const { motions } = show.advanceTo(t);
+    if (motions.length > 1) sawConcurrent = true;
+    for (const motion of motions) {
+      const run = runs.find((r) => r.kind === motion.kind && r.index === motion.index);
+      assert.ok(motion.offset >= -1e-6, `negative offset ${motion.offset}`);
+      // The offset is a remainder, so it can never exceed the run's whole
+      // travel however the run is made up. It is not always under one cell: a
+      // run can open with a multi-cell extraction rotation before its conveyor,
+      // since the planner frees a trapped value by rotating that line outright.
+      assert.ok(motion.offset <= run.cells + 1e-6, `offset ${motion.offset} past a ${run.cells}-cell run`);
+      peak.set(run, Math.max(peak.get(run) ?? 0, motion.offset));
+    }
   }
-  assert.ok(sawOffsetOverOne, 'no multi-cell slide was ever observed');
+  assert.ok(sawConcurrent, 'never saw two lines moving at once');
 
   // Most column runs are pure conveyor and do stay inside a cell - if that ever
   // stopped being true the animation would be lurching rather than riding.
-  const cols = [...byRun].filter(([r]) => r.kind === 'col');
-  const tight = cols.filter(([, peak]) => peak <= 1 + 1e-6).length;
+  const cols = [...peak].filter(([r]) => r.kind === 'col');
+  const tight = cols.filter(([, p]) => p <= 1 + 1e-6).length;
   assert.ok(tight > cols.length / 2, `only ${tight} of ${cols.length} column runs ride smoothly`);
 
-  const { done, motion } = show.advanceTo(show.totalMs + 1);
+  const { done, motions } = show.advanceTo(show.totalMs + 1);
   assert.equal(done, true);
-  assert.equal(motion, null);
+  assert.deepEqual(motions, []);
   assert.deepEqual(board.cells, built.end.cells, 'the board did not finish on the end board');
 });
 
@@ -148,22 +220,22 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
   const show = createSlideshow({ board, moves, apply: applyMove });
   const renderer = createSlideRenderer({ cache });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
-  const frame = (motion) => {
+  const frame = (motions) => {
     const ctx = fakeCtx();
     const stats = renderer.draw({
       ctx, width: 1920, height: 1080, dpr: 1, cam,
-      board, origin: built.origin, motion,
+      board, origin: built.origin, motions,
     });
     return { ctx, stats };
   };
 
-  frame(null);
+  frame([]);
   settle(); // the first frame requests; from here the cache answers
 
   const cellPx = { x: ZOOM, y: ZOOM * CELL_ASPECT };
   for (let t = 0; t <= show.totalMs; t += 37) {
-    const { motion } = show.advanceTo(t);
-    const { ctx } = frame(motion);
+    const { motions } = show.advanceTo(t);
+    const { ctx } = frame(motions);
 
     // Nothing in the viewport is left unpainted. A cell with no image yet still
     // gets a fill, so both count - what this catches is the gap that would open
@@ -182,7 +254,7 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
     // once the loads have landed leaves nothing blank. That is the claim worth
     // making - a renderer that never requested a tile would stay blank forever.
     settle();
-    assert.equal(frame(motion).stats.blank, 0, `still blank after settling, at t=${t}`);
+    assert.equal(frame(motions).stats.blank, 0, `still blank after settling, at t=${t}`);
   }
 });
 
@@ -217,13 +289,15 @@ test('duration is set by the viewport, not by the corpus', () => {
     moves: rearrangement(800, 1, 2).moves,
     apply: () => {},
   });
-  // Not identical: a few slides either way come from values that happened to
-  // need rotating out of the region, which depends on the data. What matters is
-  // that a 16x corpus moves this by a tenth and not by sixteen.
+  // The claim is one-sided: growing the corpus must never lengthen this. It
+  // may well shorten it, and does - a small corpus keeps most of its distinct
+  // rooms on screen at once, so more of them have to be rotated out of the
+  // region before they can be staged, and each of those is a slide the big
+  // corpus does not pay for.
   const ratio = large.totalMs / small.totalMs;
-  assert.ok(ratio > 0.8 && ratio < 1.25, `a 16x corpus changed the duration by ${ratio.toFixed(2)}x`);
+  assert.ok(ratio <= 1.05, `a 16x corpus made the animation ${ratio.toFixed(2)}x longer`);
   // And it is a showpiece, not a stall: seconds, not tens of seconds.
-  assert.ok(small.totalMs < 12000, `${Math.round(small.totalMs)}ms is too long to sit through`);
+  assert.ok(small.totalMs < 3000, `${Math.round(small.totalMs)}ms is too long to sit through`);
 });
 
 test('a narrow viewport costs proportionally less', () => {

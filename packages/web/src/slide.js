@@ -25,6 +25,16 @@
  * conveyor becomes one long slide, and phase 1's single multi-cell row shift
  * becomes one slide of that many cells.
  *
+ * ### A wave, not a queue
+ *
+ * The planner marks the stages whose lines are independent - it parks a whole
+ * batch of values before feeding any of them, so no column's ride can disturb
+ * another's. Those play concurrently, one lane per line, set off a stagger
+ * apart and ordered outward from the centre. That is most of the animation:
+ * eleven columns that used to queue for four seconds now sweep across in one.
+ * Stages that are not marked stay strictly ordered, because a parking stage's
+ * extraction rotates a line and the swap after it depends on that rotation.
+ *
  * ### Why the offset is a remainder
  *
  * A run's visual offset is `progress - applied`: how far it has travelled, less
@@ -39,7 +49,8 @@
  * row, then one column slide per region column - so the duration is set by the
  * viewport and nothing else. It is also the part with no right answer, which is
  * why the numbers are collected at the top with their reasoning rather than
- * spread through the code.
+ * spread through the code. With the wave, `stagger` matters more than
+ * `perCell`: it is what sets how long the sweep takes to cross the screen.
  */
 import { PYRAMID } from './pyramid.js';
 import { pxPerCell } from './camera.js';
@@ -60,70 +71,151 @@ import { CENTRE } from '../../map/board.js';
  * `gap` is the beat between runs that keeps them legible as separate moves
  * rather than one continuous churn.
  *
- * These land a desktop rearrangement at about 4 seconds and a phone at under
- * two. The real lever is not here: runs are played strictly one after another
- * because each one's swaps have to be applied after the previous one's last
- * rotation, and the planner's column loop only becomes independent enough to
- * overlap if every column's values are parked before any are inserted. That is
- * a change to the planner rather than to a number, and it is what would take
- * this under two seconds on a desktop - see the note in the implementation plan.
+ * `gap` only separates runs within one lane; the lines of a wave are spaced by
+ * `stagger` instead, so widening the region lengthens the sweep rather than
+ * multiplying it.
  */
 export const SLIDE_TIMING = {
   base: 80,
   perCell: 26,
   gap: 20,
+  /**
+   * How far apart the lines of a wave set off.
+   *
+   * A feed stage's lines are independent - the planner parks a whole batch
+   * before feeding any of it - so they need not queue. Starting them together
+   * would read as the whole field scrolling, which is a pan rather than a
+   * rearrangement; starting them one after another turns the conveyor into a
+   * sweep. The planner orders them outward from the centre, so the sweep leaves
+   * from where the reader is standing.
+   */
+  stagger: 65,
+  /**
+   * How far apart the runs of a sequential lane set off.
+   *
+   * They still finish in order - that is what keeps the plan honoured - but
+   * starting the next one before the last has landed turns a queue of separate
+   * moves into a cascade. Shorter than `stagger`, because these are incidental
+   * motion rather than the main event: mostly rotations that free a room the
+   * new arrangement wants but which has no copy off camera to swap in.
+   */
+  cascade: 45,
 };
 
 /** The cache id for a board value. Centre and generic share the wallpaper image. */
 const idOf = (v) => (v === CENTRE ? GENERIC : v);
 
 /**
- * Group a move list into runs of continuous motion.
+ * Lay a move list out in time.
  *
- * Swaps carry no motion, so each is attached to the run whose first shift
- * follows it - which is where it has to be applied anyway: after the previous
- * run's last rotation, and before the next one starts moving. Trailing swaps
- * (the planner's off-camera cycle sort) become a final run of zero length.
+ * Three levels, and each exists for a reason the one below it cannot serve:
  *
- * @param {Array<object>} moves from `planMoves`
+ *   - a **stage** is a barrier. The planner guarantees nothing about a stage
+ *     until every earlier one has been applied, so stages are strictly ordered.
+ *   - a **lane** is a line's worth of work within a stage. In a `wave` stage
+ *     there is one per line and they run concurrently, staggered; otherwise
+ *     there is a single lane and everything in it is sequential.
+ *   - a **run** is one continuous slide: consecutive shifts of the same line in
+ *     the same direction, with the swaps that feed them attached. This is what
+ *     turns a column's ten separate rotations into one ride upward.
+ *
+ * @param {Array<object>} moves from `planMoves`, carrying `stage`, `line`, `wave`
  * @param {object} [timing]
- * @returns {{runs: Array<object>, totalMs: number}}
+ * @returns {{stages: Array<object>, totalMs: number}}
  */
 export function buildTimeline(moves, timing = SLIDE_TIMING) {
-  const runs = [];
-  let pending = [];
-  let current = null;
-
+  const stages = [];
   for (const move of moves) {
-    if (move.type === 'swap') {
-      pending.push(move);
-      continue;
-    }
-    const isRow = move.type === 'shiftRow';
-    const index = isRow ? move.row : move.col;
-    const dir = Math.sign(move.distance);
-    if (!current || current.kind !== (isRow ? 'row' : 'col') || current.index !== index || current.dir !== dir) {
-      current = { kind: isRow ? 'row' : 'col', index, dir, cells: 0, steps: [] };
-      runs.push(current);
-    }
-    for (const swap of pending) current.steps.push({ move: swap });
-    pending = [];
-    current.cells += Math.abs(move.distance);
-    current.steps.push({ move, at: current.cells });
+    const last = stages[stages.length - 1];
+    if (!last || last.stage !== move.stage)
+      stages.push({ stage: move.stage, wave: Boolean(move.wave), moves: [move] });
+    else last.moves.push(move);
   }
-
-  // Everything the planner does after the last slide is off camera by
-  // construction, so it costs no time and simply lands when the motion stops.
-  if (pending.length) runs.push({ kind: 'none', index: -1, dir: 0, cells: 0, steps: pending.map((move) => ({ move })) });
 
   let at = 0;
-  for (const run of runs) {
-    run.startMs = at;
-    run.durMs = run.cells === 0 ? 0 : timing.base + timing.perCell * run.cells;
-    at += run.durMs + (run.cells === 0 ? 0 : timing.gap);
+  for (const stage of stages) {
+    // One lane per line when the stage says its lines are independent; a single
+    // lane otherwise, which is the sequential case and also what a stage of
+    // pure off-camera swaps collapses to.
+    const lanes = [];
+    const byLine = new Map();
+    for (const move of stage.moves) {
+      const key = stage.wave && move.line ? `${move.line.kind}${move.line.index}` : '';
+      let lane = byLine.get(key);
+      if (!lane) byLine.set(key, (lane = { runs: [] }));
+      pushMove(lane, move);
+    }
+    lanes.push(...byLine.values());
+
+    stage.startMs = at;
+    stage.lanes = lanes;
+    let end = at;
+    lanes.forEach((lane, i) => {
+      // A wave's lanes are independent, so each simply sets off a stagger after
+      // the last and runs its own course.
+      //
+      // A sequential lane instead CASCADES: its runs start a beat apart and so
+      // overlap on screen, but each is forced to finish no earlier than the one
+      // before it. Since a run's moves are applied as it passes them, and the
+      // last of them at its completion, ordered completions are exactly ordered
+      // application - the plan is honoured to the letter while the picture stops
+      // being a queue. This is what the extraction rotations ride on: a small
+      // corpus keeps most of its rooms on camera, so it needs many of them.
+      let cursor = at + (stage.wave ? i * timing.stagger : 0);
+      let previousEnd = cursor;
+      for (const run of lane.runs) {
+        run.durMs = run.cells === 0 ? 0 : timing.base + timing.perCell * run.cells;
+        let start = cursor;
+        if (!stage.wave && start + run.durMs < previousEnd) start = previousEnd - run.durMs;
+        run.startMs = start;
+        previousEnd = Math.max(previousEnd, start + run.durMs);
+        cursor = stage.wave
+          ? previousEnd + (run.cells === 0 ? 0 : timing.gap)
+          : cursor + (run.cells === 0 ? 0 : timing.cascade);
+      }
+      lane.endMs = previousEnd;
+      end = Math.max(end, previousEnd);
+    });
+    stage.endMs = end;
+    at = end;
   }
 
-  return { runs, totalMs: at };
+  return { stages, totalMs: at };
+}
+
+/**
+ * Append a move to a lane, extending its current run or opening a new one.
+ *
+ * Every step carries the travel the run must have reached before it may be
+ * applied. For a shift that is the far end of its own motion; for a swap it is
+ * wherever the run already stands, so a swap emitted after a shift lands at
+ * that shift's COMPLETION rather than at the next run's start. The distinction
+ * is invisible while runs play strictly in sequence and load-bearing the
+ * moment they overlap - see the cascade in `buildTimeline`.
+ */
+function pushMove(lane, move) {
+  let run = lane.runs[lane.runs.length - 1];
+
+  if (move.type === 'swap') {
+    // A swap has no motion of its own. Before the lane's first shift it lands
+    // at once; after one, it lands when that shift finishes.
+    if (!run) {
+      run = { kind: 'none', index: -1, dir: 0, cells: 0, steps: [], stepIndex: 0, absorbed: 0 };
+      lane.runs.push(run);
+    }
+    run.steps.push({ move, at: run.cells });
+    return;
+  }
+
+  const kind = move.type === 'shiftRow' ? 'row' : 'col';
+  const index = move.type === 'shiftRow' ? move.row : move.col;
+  const dir = Math.sign(move.distance);
+  if (!run || run.kind !== kind || run.index !== index || run.dir !== dir) {
+    run = { kind, index, dir, cells: 0, steps: [], stepIndex: 0, absorbed: 0 };
+    lane.runs.push(run);
+  }
+  run.cells += Math.abs(move.distance);
+  run.steps.push({ move, at: run.cells, absorbs: true });
 }
 
 /** Smooth the ends of a run so a line does not start and stop dead. */
@@ -134,8 +226,9 @@ const ease = (t) => t * t * (3 - 2 * t);
  *
  * Owns the mutable board and how much of the plan has been absorbed into it.
  * `advanceTo` is the whole interface: hand it a time and it applies whatever
- * the board should have absorbed by then, and answers with the line currently
- * in motion and how far it has travelled.
+ * the board should have absorbed by then, and answers with every line currently
+ * in motion. There can be several, which is the point of a wave - and they can
+ * never overlap on screen, because a wave stage's lines are all the same kind.
  *
  * @param {object} opts
  * @param {{width: number, height: number, cells: Array}} opts.board mutated in place
@@ -144,60 +237,65 @@ const ease = (t) => t * t * (3 - 2 * t);
  * @param {object} [opts.timing]
  */
 export function createSlideshow({ board, moves, apply, timing = SLIDE_TIMING }) {
-  const { runs, totalMs } = buildTimeline(moves, timing);
-  const absorbed = runs.map(() => 0); // cells of travel each run has committed
-  let cursor = 0; // index into the flattened step list
-  let runIndex = 0;
-  let stepIndex = 0;
+  const { stages, totalMs } = buildTimeline(moves, timing);
+  let stageIndex = 0;
 
-  function applyStep(run, ri) {
-    const step = run.steps[stepIndex];
-    apply(board, step.move);
-    if (step.at !== undefined) absorbed[ri] = step.at;
-    stepIndex++;
-    cursor++;
+  /** Absorb every step this run has travelled past. Returns true if it is blocked. */
+  function absorb(run, progress) {
+    while (run.stepIndex < run.steps.length) {
+      const step = run.steps[run.stepIndex];
+      if (progress < step.at - 1e-9) return true;
+      apply(board, step.move);
+      if (step.absorbs) run.absorbed = step.at;
+      run.stepIndex++;
+    }
+    return false;
   }
+
+  const motionOf = (run) =>
+    run.cells === 0
+      ? null
+      : { kind: run.kind, index: run.index, dir: run.dir, offset: run.progress - run.absorbed };
 
   /**
    * Bring the board up to `elapsed`, and report the motion to draw.
    *
-   * @returns {{done: boolean, motion: object|null}} `motion` is
-   *   `{kind, index, dir, offset}` in cells, or null when nothing is moving
+   * @returns {{done: boolean, motions: Array<object>}}
    */
   function advanceTo(elapsed) {
-    while (runIndex < runs.length) {
-      const run = runs[runIndex];
-      const t = run.durMs === 0 ? 1 : Math.min(1, Math.max(0, (elapsed - run.startMs) / run.durMs));
-      const progress = ease(t) * run.cells;
-
-      // Absorb every step this run has already travelled past. Swaps have no
-      // threshold and go as soon as the run is current, which is exactly when
-      // they are due: after the previous run's last rotation.
-      let blocked = false;
-      while (stepIndex < run.steps.length) {
-        const step = run.steps[stepIndex];
-        if (step.at !== undefined && progress < step.at - 1e-9) {
-          blocked = true;
-          break;
-        }
-        applyStep(run, runIndex);
+    while (stageIndex < stages.length) {
+      const stage = stages[stageIndex];
+      if (elapsed >= stage.endMs) {
+        // Past it: everything in every lane lands. Lanes are independent within
+        // a stage, so the order they are finished off in cannot matter.
+        for (const lane of stage.lanes)
+          for (const run of lane.runs) {
+            run.progress = run.cells;
+            absorb(run, run.cells);
+          }
+        stageIndex++;
+        continue;
       }
 
-      // Still travelling, or held up waiting to cross the next cell: either way
-      // this run is what is on screen.
-      if (blocked || t < 1)
-        return { done: false, motion: motionOf(run, progress - absorbed[runIndex]) };
-
-      runIndex++;
-      stepIndex = 0;
+      const motions = [];
+      for (const lane of stage.lanes)
+        for (const run of lane.runs) {
+          const t = run.durMs === 0 ? 1 : Math.min(1, Math.max(0, (elapsed - run.startMs) / run.durMs));
+          if (t <= 0) break; // this lane has not reached this run yet
+          run.progress = ease(t) * run.cells;
+          absorb(run, run.progress);
+          if (t < 1) {
+            const motion = motionOf(run);
+            if (motion) motions.push(motion);
+            break;
+          }
+        }
+      return { done: false, motions };
     }
-    return { done: true, motion: null };
+    return { done: true, motions: [] };
   }
 
-  const motionOf = (run, offset) =>
-    run.cells === 0 ? null : { kind: run.kind, index: run.index, dir: run.dir, offset };
-
-  return { advanceTo, totalMs, runs, cursor: () => cursor };
+  return { advanceTo, totalMs, stages };
 }
 
 /**
@@ -217,10 +315,12 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {{x: number, y: number, zoom: number}} opts.cam parked on the centre
    * @param {{width: number, height: number, cells: Array}} opts.board
    * @param {{x: number, y: number}} opts.origin board index of map cell (0, 0)
-   * @param {object|null} opts.motion from `advanceTo`
+   * @param {Array<object>} opts.motions from `advanceTo` - several at once
+   *   during a wave. They can never overlap on screen: a wave stage's lines are
+   *   all rows or all columns, and two rows share no cell
    * @param {boolean} [opts.chrome] the centre-room marker
    */
-  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motion, chrome = true }) {
+  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motions = [], chrome = true }) {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -262,27 +362,31 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
       wanted.push(idOf(value));
     };
 
-    // The still field. The line in motion is skipped here and drawn after, so
-    // its tiles land on top of their neighbours rather than under them.
-    const movingRow = motion?.kind === 'row' ? motion.index - origin.y : null;
-    const movingCol = motion?.kind === 'col' ? motion.index - origin.x : null;
+    // The still field. Lines in motion are skipped here and drawn after, so
+    // their tiles land on top of their neighbours rather than under them.
+    const movingRows = new Set();
+    const movingCols = new Set();
+    for (const m of motions)
+      (m.kind === 'row' ? movingRows : movingCols).add(
+        m.kind === 'row' ? m.index - origin.y : m.index - origin.x
+      );
     for (let my = y0; my <= y1; my++)
       for (let mx = x0; mx <= x1; mx++) {
-        if (my === movingRow || mx === movingCol) continue;
+        if (movingRows.has(my) || movingCols.has(mx)) continue;
         paint(valueAt(mx + origin.x, my + origin.y), mx, my);
       }
 
-    // The line in motion, extended by however far it has travelled so the cells
-    // sliding in from off screen are drawn too.
-    if (motion) {
-      const shift = motion.offset * motion.dir;
+    // Each line in motion, extended by however far it has travelled so the
+    // cells sliding in from off screen are drawn too.
+    for (const m of motions) {
+      const shift = m.offset * m.dir;
       const pad = Math.ceil(Math.abs(shift)) + 1;
-      if (movingRow !== null)
+      if (m.kind === 'row')
         for (let mx = x0 - pad; mx <= x1 + pad; mx++)
-          paint(valueAt(mx + origin.x, motion.index), mx + shift, movingRow);
+          paint(valueAt(mx + origin.x, m.index), mx + shift, m.index - origin.y);
       else
         for (let my = y0 - pad; my <= y1 + pad; my++)
-          paint(valueAt(motion.index, my + origin.y), movingCol, my + shift);
+          paint(valueAt(m.index, my + origin.y), m.index - origin.x, my + shift);
     }
 
     // The tiles about to arrive: a ring outside the viewport, at the one level

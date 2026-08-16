@@ -142,6 +142,30 @@ export function planMoves(start, end, bounds, fixed) {
   lock(at(fx, fy));
 
   // --- primitives: each simulates its own effect and appends to `moves` -----
+  //
+  // Every move carries the two tags the animation schedules by. `stage` is a
+  // hard barrier: stage n must be fully applied before stage n+1 begins.
+  // `line` says which row or column a move belongs to, and within one stage,
+  // moves on different lines are INDEPENDENT - they may be applied in any
+  // interleaving, which is what lets the renderer play a stage as one wave
+  // instead of a queue. A swap that belongs to no line carries null and simply
+  // keeps its place in the order.
+  //
+  // These are a promise the phases below have to keep, not something checked
+  // here. What keeps it is the staging: a batch's values are all parked before
+  // any of them are fed, so no line's work can disturb another's.
+  //
+  // `wave` distinguishes the two kinds of stage. A FEED stage is waveable: its
+  // moves partition by line and the lines are independent, because the batch's
+  // values were all parked before any were fed. A PARKING stage is not: an
+  // extraction rotates a line and the swap that follows depends on it, so those
+  // moves keep their order. Marking it rather than inferring it from stage
+  // parity means a phase can be reshaped without the animation quietly
+  // mis-scheduling it.
+  let stage = 0;
+  let line = null;
+  let wave = false;
+
 
   function shiftRow(r, d) {
     const dist = ((d % W) + W) % W;
@@ -152,7 +176,10 @@ export function planMoves(start, end, bounds, fixed) {
     for (let x = 0; x < W; x++) idxDel(base + x);
     for (let x = 0; x < W; x++) board[base + x] = old[(x - dist + W) % W];
     for (let x = 0; x < W; x++) idxAdd(base + x);
-    moves.push({ type: 'shiftRow', row: r, distance: normaliseDistance(dist, W) });
+    moves.push({
+      type: 'shiftRow', row: r, distance: normaliseDistance(dist, W),
+      stage, wave, line: { kind: 'row', index: r },
+    });
   }
 
   function shiftCol(c, d) {
@@ -164,7 +191,10 @@ export function planMoves(start, end, bounds, fixed) {
     for (let y = 0; y < H; y++) idxDel(at(c, y));
     for (let y = 0; y < H; y++) board[at(c, y)] = old[(y - dist + H) % H];
     for (let y = 0; y < H; y++) idxAdd(at(c, y));
-    moves.push({ type: 'shiftCol', col: c, distance: normaliseDistance(dist, H) });
+    moves.push({
+      type: 'shiftCol', col: c, distance: normaliseDistance(dist, H),
+      stage, wave, line: { kind: 'col', index: c },
+    });
   }
 
   function swap(p, q) {
@@ -182,6 +212,9 @@ export function planMoves(start, end, bounds, fixed) {
       type: 'swap',
       a: { x: xOf(p), y: yOf(p) },
       b: { x: xOf(q), y: yOf(q) },
+      stage,
+      wave,
+      line,
     });
   }
 
@@ -212,70 +245,121 @@ export function planMoves(start, end, bounds, fixed) {
    * region column is locked yet.
    */
   function makeAvailable(v) {
-    const free = find(v, (p) => !insideAt(p));
+    // Never a cell already staged for something else. Without this a copy that
+    // is standing by for another slot can be handed back as a source, and the
+    // caller swaps it away into a fresh cell - leaving the earlier reservation
+    // pointing at a cell that now holds something entirely different. The
+    // multiset invariant guarantees an unreserved copy exists whenever one is
+    // legitimately needed, so skipping them can never starve a real request.
+    const free = find(v, (p) => !insideAt(p) && !reserved[p]);
     if (free !== -1) return free;
 
-    const trapped = find(v, () => true);
+    const trapped = find(v, (p) => !reserved[p]);
     if (trapped === -1) throw new Error('value missing from board (multisets differ?)');
+    // Rotate it out the near side. Either exit is off camera and equally legal,
+    // so taking the shorter one is free - and it matters, because an extraction
+    // is a visible slide and a trapped value sitting near the bottom of the
+    // region would otherwise ride all the way up past the top of it.
     const x = xOf(trapped);
     const y = yOf(trapped);
     if (lockedInCol[x] === 0) {
-      shiftCol(x, ymin - 1 - y); // drop it just above the region
-      return at(x, ymin - 1);
+      const exit = y - ymin <= ymax - y ? ymin - 1 : ymax + 1;
+      shiftCol(x, exit - y);
+      return at(x, exit);
     }
     if (lockedInRow[y] === 0) {
-      shiftRow(y, xmin - 1 - x); // or just left of it
-      return at(xmin - 1, y);
+      const exit = x - xmin <= xmax - x ? xmin - 1 : xmax + 1;
+      shiftRow(y, exit - x);
+      return at(exit, y);
     }
     throw new Error('trapped value in a fully locked cross');
   }
 
-  // Staged values live in columns outside [xmin, xmax]. Phase 2 shifts only
-  // region columns and swaps only off-camera cells, so a parked value cannot be
-  // dislodged between staging and consumption. Capacity is at least 2H against
-  // a peak demand of the region's height, which is what the bounds never
-  // touching an edge buys.
+  /**
+   * A pool of cells a staged value can wait in without being disturbed.
+   *
+   * Which cells those are depends on what is about to move, and getting it
+   * wrong is silent - the value simply is not where it was left. Two pools are
+   * needed:
+   *
+   *   - for the conveyor, any cell in a column outside the region. Phase 2
+   *     rotates only region columns, so nothing it does can reach one.
+   *   - for the fixed tile's column, a cell outside the region's columns AND
+   *     its rows. That phase rotates region ROWS, and a row rotation sweeps
+   *     every column including the outside ones - so the conveyor's pool is not
+   *     safe here, and only the corners are.
+   *
+   * The cursor exists because cells are released as they are consumed, so the
+   * next free one is almost always just ahead of the last.
+   */
   const reserved = new Uint8Array(W * H);
-  const parking = [];
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) if (x < xmin || x > xmax) parking.push(at(x, y));
-  // A cursor rather than a scan from the start: parking cells are released as
-  // they are consumed, so the next free one is almost always just ahead of the
-  // last, and a full pass only happens if it is not.
-  let parkCursor = 0;
 
-  function freeParking() {
-    for (let i = 0; i < parking.length; i++) {
-      const p = parking[(parkCursor + i) % parking.length];
-      if (!locked[p] && !reserved[p]) {
-        parkCursor = (parkCursor + i + 1) % parking.length;
-        return p;
+  function makeParker(parkable) {
+    const pool = [];
+    for (let p = 0; p < W * H; p++) if (parkable(p)) pool.push(p);
+    let cursor = 0;
+
+    function free() {
+      for (let i = 0; i < pool.length; i++) {
+        const p = pool[(cursor + i) % pool.length];
+        if (!locked[p] && !reserved[p]) {
+          cursor = (cursor + i + 1) % pool.length;
+          return p;
+        }
       }
+      throw new Error('no parking available');
     }
-    throw new Error('no parking available');
+
+    /**
+     * Stage one copy of `v` out of harm's way, and reserve it.
+     *
+     * A copy already sitting in the pool is reserved in place and costs no move
+     * at all; otherwise one is obtained - extracted from the region if it must
+     * be - and swapped in. The reservation is what stops two staged values
+     * claiming the same copy.
+     */
+    return {
+      capacity: pool.length,
+      park(v) {
+        let p = find(v, (q) => parkable(q) && !reserved[q]);
+        if (p === -1) {
+          const src = makeAvailable(v);
+          if (parkable(src) && !reserved[src]) {
+            p = src;
+          } else {
+            p = free();
+            swap(src, p);
+          }
+        }
+        reserved[p] = 1;
+        return p;
+      },
+    };
   }
 
+  const conveyorPark = makeParker(outsideColumn);
+  const cornerPark = makeParker((p) => {
+    const y = yOf(p);
+    return outsideColumn(p) && (y < ymin || y > ymax);
+  });
+
   /**
-   * Stage one copy of `v` where no later shift can reach it, and reserve it.
+   * Split a list of lines into batches the parking pool can hold at once.
    *
-   * A copy already sitting in a non-region column is reserved in place and
-   * costs no move at all; otherwise one is obtained - extracted from the region
-   * if it must be - and swapped into a parking cell. The reservation is what
-   * stops two staged values claiming the same copy.
+   * Staging a whole batch before feeding any of it is what makes the batch's
+   * lines independent of each other, which is what lets the animation play them
+   * as one wave instead of a queue. The limit on batch size is simply how many
+   * values can wait at the same time; one line per batch is the sequential
+   * behaviour, and is what a region wide enough to crowd out its own parking
+   * degrades to rather than failing.
    */
-  function park(v) {
-    let p = find(v, (q) => outsideColumn(q) && !reserved[q]);
-    if (p === -1) {
-      const src = makeAvailable(v);
-      if (outsideColumn(src) && !reserved[src]) {
-        p = src;
-      } else {
-        p = freeParking();
-        swap(src, p);
-      }
-    }
-    reserved[p] = 1;
-    return p;
+  function batched(lines, perLine, capacity) {
+    // A margin, because `locked` and `reserved` both eat into the pool as the
+    // plan proceeds and `capacity` is counted once, up front.
+    const size = Math.max(1, Math.floor((capacity * 0.9) / Math.max(1, perLine)));
+    const out = [];
+    for (let i = 0; i < lines.length; i += size) out.push(lines.slice(i, i + size));
+    return out;
   }
 
   // --- phase 1: the fixed tile's column, if it crosses the region ----------
@@ -290,21 +374,55 @@ export function planMoves(start, end, bounds, fixed) {
   // the common case of it being nowhere near the camera.
   if (fx >= xmin && fx <= xmax) {
     const entryX = xmin - 1;
-    for (let r = ymin; r <= ymax; r++) {
-      if (r === fy) continue; // the fixed tile itself: correct by precondition
-      const v = target[at(fx, r)];
-      if (board[at(fx, r)] !== v) {
-        // Stage the value immediately left of the region, then slide the row
-        // right so it lands on the fixed column. The rest of the row is
-        // scrambled by that, which is fine: those cells are either off camera,
-        // where phase 3 fixes them, or region cells in other columns, which
-        // phase 2 fills.
-        const src = makeAvailable(v);
+    // Which rows actually need feeding. A row already holding the right value
+    // costs nothing and is simply locked with the rest.
+    const rows = [];
+    for (let r = ymin; r <= ymax; r++)
+      if (r !== fy && board[at(fx, r)] !== target[at(fx, r)]) rows.push(r);
+
+    // Outward from the centre, so the wave leaves from where the reader is
+    // standing rather than sweeping in from an edge. Within a batch the order
+    // is only the order the animation staggers by; correctness does not depend
+    // on it, which is the whole point of parking a batch before feeding it.
+    rows.sort((a, b) => Math.abs(a - fy) - Math.abs(b - fy));
+
+    // Rows already holding the right value are final NOW, not at the end. A
+    // later batch's parking can extract a trapped value by rotating a region
+    // column, and an unlocked cell that merely happens to be correct is fair
+    // game for it - locking is the only thing that evicts a cell from the index
+    // and so puts it out of reach.
+    for (let r = ymin; r <= ymax; r++)
+      if (r !== fy && !rows.includes(r)) lock(at(fx, r));
+
+    for (const batch of batched(rows, 1, cornerPark.capacity)) {
+      // Park the batch first. This is what makes its rows independent: no row's
+      // feed can then need a value that another row's slide is carrying, so the
+      // slides may all run at once.
+      stage++;
+      line = null;
+      const parked = batch.map((r) => cornerPark.park(target[at(fx, r)]));
+
+      // Feed each row: swap its value into the cell immediately left of the
+      // region, then slide the row right so it lands on the fixed column. The
+      // rest of the row is scrambled by that, which is fine - those cells are
+      // either off camera, where phase 3 fixes them, or region cells in other
+      // columns, which phase 2 fills.
+      stage++;
+      wave = true;
+      batch.forEach((r, i) => {
+        line = { kind: 'row', index: r };
         const entry = at(entryX, r);
-        if (src !== entry) swap(src, entry);
+        if (parked[i] !== entry) swap(parked[i], entry);
+        reserved[parked[i]] = 0;
         shiftRow(r, fx - entryX);
-      }
-      lock(at(fx, r));
+      });
+      line = null;
+      wave = false;
+
+      // Locked per batch, not at the end: a later batch's parking may extract a
+      // trapped value by rotating a region column, and a fed cell that was not
+      // yet final could be carried off by it.
+      for (const r of batch) lock(at(fx, r));
     }
   }
 
@@ -323,26 +441,49 @@ export function planMoves(start, end, bounds, fixed) {
   //
   // Note this never needs the column emptied first, which matters because a
   // legal region may be taller than half the board.
+  //
+  // Columns are parked a BATCH at a time rather than one at a time. Staging a
+  // column's values before feeding any of them is what stops an extraction
+  // rotating the column holding an earlier one; staging a whole batch extends
+  // that to the batch, so no column in it can disturb another and the animation
+  // can run them together. The batch is as large as the parking pool allows,
+  // and one column per batch - which is the original, strictly sequential
+  // behaviour - is what a region too wide to leave room for its own parking
+  // degrades to.
   const k = ymax - ymin + 1;
-  for (let c = xmin; c <= xmax; c++) {
-    if (c === fx) continue; // handled in phase 1
+  const cols = [];
+  for (let c = xmin; c <= xmax; c++) if (c !== fx) cols.push(c);
+  cols.sort((a, b) => Math.abs(a - fx) - Math.abs(b - fx));
 
-    // Stage all k values before inserting any: extracting a later one can
-    // rotate the column holding an earlier one, so gather-as-you-go is wrong.
-    const parked = new Array(k);
-    for (let i = 0; i < k; i++) parked[i] = park(target[at(c, ymin + i)]);
-
-    const entry = at(c, ymax + 1);
-    for (let i = 0; i < k; i++) {
-      const src = parked[i];
-      if (src !== entry) swap(src, entry);
-      reserved[src] = 0; // that parking cell is free again
-      shiftCol(c, -1);
+  for (const batch of batched(cols, k, conveyorPark.capacity)) {
+    stage++;
+    line = null;
+    const parked = new Map();
+    for (const c of batch) {
+      const forColumn = new Array(k);
+      for (let i = 0; i < k; i++) forColumn[i] = conveyorPark.park(target[at(c, ymin + i)]);
+      parked.set(c, forColumn);
     }
 
-    for (let y = ymin; y <= ymax; y++) lock(at(c, y));
+    stage++;
+    wave = true;
+    for (const c of batch) {
+      line = { kind: 'col', index: c };
+      const entry = at(c, ymax + 1);
+      for (let i = 0; i < k; i++) {
+        const src = parked.get(c)[i];
+        if (src !== entry) swap(src, entry);
+        reserved[src] = 0; // that parking cell is free again
+        shiftCol(c, -1);
+      }
+    }
+    line = null;
+    wave = false;
+
+    for (const c of batch) for (let y = ymin; y <= ymax; y++) lock(at(c, y));
   }
 
+  stage++;
   // --- phase 3: everything off camera, by cycle sort -----------------------
   //
   // Every region cell is locked by now, so every unlocked cell is off camera

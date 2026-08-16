@@ -218,7 +218,7 @@ function Library({ manifest }) {
       const stats = running
         ? slideRenderer.draw({
             ctx, width: w, height: h, dpr, cam: running.cam,
-            board: running.board, origin: running.origin, motion: running.motion,
+            board: running.board, origin: running.origin, motions: running.motions,
           })
         : renderer.draw({
             ctx, width: w, height: h, dpr, cam: cam.current, layout, order,
@@ -228,7 +228,7 @@ function Library({ manifest }) {
       if (running && hud) {
         const pct = Math.round((100 * Math.min(running.show.totalMs, performance.now() - running.t0)) / running.show.totalMs);
         hud.textContent =
-          `rearranging · ${pct}% · ${running.show.runs.length} slides · ` +
+          `rearranging · ${pct}% · ${running.motions.length} lines moving · ` +
           `level ${stats.level} · ${stats.blank} blank · ${cache.size()} cached`;
       } else if (hud) {
         const size = pyramidSizeOf(stats.level);
@@ -306,13 +306,13 @@ function Library({ manifest }) {
         moves: planMoves(built.start, built.end, built.bounds, built.fixed),
         apply: applyMove,
       });
-      anim.current = { show, board, origin: built.origin, cam: parked, motion: null, t0: performance.now() };
+      anim.current = { show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now() };
 
       const tick = () => {
         const running = anim.current;
         if (!running) return; // interrupted
-        const { done, motion } = running.show.advanceTo(performance.now() - running.t0);
-        running.motion = motion;
+        const { done, motions } = running.show.advanceTo(performance.now() - running.t0);
+        running.motions = motions;
         if (done) anim.current = null;
         requestDraw();
         if (!done) requestAnimationFrame(tick);
