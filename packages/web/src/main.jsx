@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
 import { joinMetadata } from '../../map/metadata.js';
 import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
+import { buildRearrangement } from '../../map/board.js';
+import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
-import { CELL_ASPECT } from './camera.js';
+import { CELL_ASPECT, pxPerCell } from './camera.js';
 import { createTileCache, GENERIC } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
+import { createSlideshow, createSlideRenderer } from './slide.js';
 import { FALLBACK_LEVEL, sizeOf as pyramidSizeOf } from './pyramid.js';
 import { useMapCamera } from './useMapCamera.js';
 
@@ -142,6 +145,20 @@ function Library({ manifest }) {
   }, [manifest, requestDraw]);
 
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
+  const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
+
+  // The rearrangement animation, when one is running.
+  //
+  // A ref rather than state on purpose: it changes every frame, and the render
+  // effect must not be torn down and rebuilt sixty times a second. What it
+  // holds is the whole animation - its board, how far through it is, and the
+  // camera it was planned for, which is the one the frame must be drawn at
+  // however the live camera has been nudged since.
+  const anim = useRef(null);
+  // Set by the two controls that mean "rearrange the library", and consumed by
+  // the effect below. Slider drags change the layout too, and must not animate.
+  const animateNext = useRef(false);
+  const arrangement = useRef(null);
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
 
@@ -180,10 +197,15 @@ function Library({ manifest }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { alpha: false });
-    let pending = false;
+    // The pending frame's id, so it can be cancelled - not just a flag. This
+    // closure captures `layout` and `order`, so a frame scheduled through it
+    // and left to fire after the effect has been rebuilt repaints the state
+    // this render pass replaced. That is a real frame of the old map, arriving
+    // after the new one and winning, which is what a stale draw looks like.
+    let pending = 0;
 
     const render = () => {
-      pending = false;
+      pending = 0;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -193,12 +215,38 @@ function Library({ manifest }) {
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const stats = renderer.draw({
-        ctx, width: w, height: h, dpr, cam: cam.current, layout, order,
-      });
+      // Three states, and the middle one is why this is not an `if`.
+      //
+      // While SLIDING, the rearrangement draws itself from its own board at the
+      // camera it was planned for; the live camera is not consulted, because
+      // the board is a finite window and panning off it would show the wrap
+      // that makes the whole illusion affordable.
+      //
+      // While FLYING home to start one, the ordinary renderer draws - but the
+      // arrangement it draws is the one being flown away from, not the one just
+      // computed. `layout` and `order` update the moment a search resolves,
+      // which is before the camera has moved, so drawing them here would show
+      // the new library, fly to it, and then slide it in from the old one.
+      const running = anim.current;
+      const showing = running?.before ?? { layout, order };
+      const stats =
+        running?.board
+          ? slideRenderer.draw({
+              ctx, width: w, height: h, dpr, cam: running.cam,
+              board: running.board, origin: running.origin, motions: running.motions,
+            })
+          : renderer.draw({
+              ctx, width: w, height: h, dpr, cam: cam.current,
+              layout: showing.layout, order: showing.order,
+            });
 
       const hud = document.getElementById('hud');
-      if (hud) {
+      if (running?.board && hud) {
+        const pct = Math.round((100 * Math.min(running.show.totalMs, performance.now() - running.t0)) / running.show.totalMs);
+        hud.textContent =
+          `rearranging · ${pct}% · ${running.motions.length} lines moving · ` +
+          `level ${stats.level} · ${stats.blank} blank · ${cache.size()} cached`;
+      } else if (hud) {
         const size = pyramidSizeOf(stats.level);
         const over = cache.overBudget();
         hud.textContent =
@@ -215,20 +263,138 @@ function Library({ manifest }) {
 
     draw.current = () => {
       if (pending) return;
-      pending = true;
-      requestAnimationFrame(render);
+      pending = requestAnimationFrame(render);
     };
 
     render();
     const onResize = () => draw.current();
+    // Touching the map ends a rearrangement rather than fighting it: the
+    // remaining moves land at once, which is exactly the instant rebuild this
+    // animation replaced. A map you cannot interrupt is not a map.
+    const onDown = () => {
+      const running = anim.current;
+      if (!running) return;
+      // Mid-slide, the remaining moves land at once - which is the instant
+      // rebuild this replaced. Still flying home, there is no slideshow yet and
+      // nothing to finish; dropping the hold is enough, and the next draw shows
+      // the new arrangement. `useMapCamera` cancels the flight itself.
+      running.show?.advanceTo(running.show.totalMs);
+      anim.current = null;
+      draw.current();
+    };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [layout, order, renderer, cache, cam]);
+    canvas.addEventListener('pointerdown', onDown);
+    return () => {
+      if (pending) cancelAnimationFrame(pending);
+      window.removeEventListener('resize', onResize);
+      canvas.removeEventListener('pointerdown', onDown);
+    };
+  }, [layout, order, renderer, slideRenderer, cache, cam]);
 
-  useEffect(() => requestDraw(), [layout, order, requestDraw]);
+  // --- the rearrangement animation -----------------------------------------
+
+  /**
+   * Slide the library from one arrangement into another.
+   *
+   * The camera is parked on the centre at the opening zoom first, and stays
+   * there: the plan is made against exactly the cells that are on screen, and
+   * the guarantee it offers - that nothing is ever seen to teleport - is a
+   * guarantee about that rectangle. Returns false when the change cannot be
+   * animated legally, which is the caller's cue to let it happen at once.
+   */
+  const startRearrangement = useCallback(
+    async (before, after) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return false;
+
+      // Hold the old arrangement on screen for the flight. `layout` and `order`
+      // already describe the new one, and without this the map would show it,
+      // fly to it, and only then slide it in from the arrangement it had
+      // already replaced.
+      anim.current = { before };
+
+      // Land before rearranging, rather than racing it: two animations
+      // competing for the same attention and neither lands. It is also a
+      // correctness requirement now that flights ease - the plan is made
+      // against exactly the cells on screen, so it cannot be made until the
+      // camera has stopped moving.
+      const landed = await flyTo(0, 0, config.camera.defaultZoom);
+      if (anim.current?.before !== before) return true; // superseded; not ours to undo
+      if (!landed) {
+        // The reader took the map. Not the moment to rebuild the library.
+        anim.current = null;
+        return false;
+      }
+
+      const parked = { ...cam.current };
+      const perCell = pxPerCell(parked);
+      const halfW = canvas.clientWidth / 2 / perCell.x;
+      const halfH = canvas.clientHeight / 2 / perCell.y;
+      const view = {
+        x0: Math.floor(parked.x - halfW), x1: Math.ceil(parked.x + halfW),
+        y0: Math.floor(parked.y - halfH), y1: Math.ceil(parked.y + halfH),
+      };
+
+      const built = buildRearrangement({ before, after, view, aspect: CELL_ASPECT });
+      if (!built) {
+        anim.current = null;
+        return false;
+      }
+
+      const board = { width: built.width, height: built.height, cells: built.start.cells.slice() };
+      const show = createSlideshow({
+        board,
+        moves: planMoves(built.start, built.end, built.bounds, built.fixed),
+        apply: applyMove,
+        timing: config.slide,
+      });
+      anim.current = {
+        before, show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now(),
+      };
+
+      const tick = () => {
+        const running = anim.current;
+        if (!running?.show) return; // interrupted
+        const { done, motions } = running.show.advanceTo(performance.now() - running.t0);
+        running.motions = motions;
+        if (done) anim.current = null;
+        requestDraw();
+        if (!done) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      return true;
+    },
+    [flyTo, cam, config, requestDraw]
+  );
+
+  // Every change to what is on the map arrives here. Only the ones a control
+  // asked to be animated are: the sliders change the layout on every drag, and
+  // a rearrangement per frame would be neither legible nor affordable.
+  //
+  // `useLayoutEffect` so the hold is in place before the first paint of the new
+  // arrangement. The drawing effect above calls `render()` when it is set up,
+  // and effects of the same kind run in declaration order - so an ordinary
+  // effect here would paint one frame of the new library before the hold could
+  // stop it.
+  useLayoutEffect(() => {
+    const current = { layout, order };
+    const previous = arrangement.current;
+    arrangement.current = current;
+    if (!animateNext.current || !previous) {
+      requestDraw();
+      return;
+    }
+    animateNext.current = false;
+    startRearrangement(previous, current).then((started) => {
+      if (!started) requestDraw();
+    });
+  }, [layout, order, startRearrangement, requestDraw]);
 
   // --- search --------------------------------------------------------------
   const search = async (term) => {
+    // Both branches rearrange the library - clearing the box restores the
+    // uniform map, which is as much a rearrangement as finding something is.
+    animateNext.current = true;
     if (!term.trim()) {
       setResult(null);
       setStatus('');
@@ -262,7 +428,6 @@ function Library({ manifest }) {
       setResult({ order: res.order, certainty: null });
       setStatus('stub ranking — no embeddings and no keywords in this corpus');
     }
-    flyTo(0, 0);
   };
 
   const runSearch = (e) => {
@@ -320,8 +485,12 @@ function Library({ manifest }) {
         </div>
 
         <div className="buttons">
-          <button onClick={() => setOrderSeed((s) => s + 1)}>reorder</button>
-          <button onClick={() => setSeed((s) => s + 1)}>rescatter</button>
+          <button onClick={() => { animateNext.current = true; setOrderSeed((s) => s + 1); }}>
+            reorder
+          </button>
+          <button onClick={() => { animateNext.current = true; setSeed((s) => s + 1); }}>
+            rescatter
+          </button>
           <button onClick={() => flyTo(0, 0, config.camera.defaultZoom)}>centre</button>
         </div>
 

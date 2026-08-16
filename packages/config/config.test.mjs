@@ -24,6 +24,31 @@ test('an empty overlay is exactly the defaults', () => {
   assert.equal(c.camera.maxZoom, LIMITS.max);
 });
 
+test('the slide timings default and validate as durations', () => {
+  const c = resolveConfig({}, { zoomLimits: LIMITS });
+  assert.deepEqual(c.slide, DEFAULTS.slide);
+
+  // Zero is meaningful for every one of them - no gap, no stagger, no per-run
+  // constant are all reasonable things to try - so only a negative is refused.
+  // A negative beat would schedule a run to start before the one it follows,
+  // and the animation applies its plan in completion order.
+  const zeroed = resolveConfig({ slide: { gap: 0, stagger: 0, base: 0 } }, { zoomLimits: LIMITS });
+  assert.deepEqual(zeroed.notes, []);
+  assert.equal(zeroed.slide.gap, 0);
+  assert.equal(zeroed.slide.stagger, 0);
+  assert.equal(zeroed.slide.base, 0);
+
+  const bad = resolveConfig(
+    { slide: { perCell: -5, cascade: 'soon', gap: 12 } },
+    { zoomLimits: LIMITS }
+  );
+  assert.equal(bad.slide.perCell, DEFAULTS.slide.perCell);
+  assert.equal(bad.slide.cascade, DEFAULTS.slide.cascade);
+  assert.equal(bad.slide.gap, 12, 'a good value beside a bad one must still land');
+  assert.equal(bad.notes.length, 2, `expected a note each: ${bad.notes}`);
+  assert.ok(bad.notes.every((n) => n.startsWith('slide.')));
+});
+
 test('a missing overlay is the same as an empty one', () => {
   assert.deepEqual(resolveConfig(undefined, { zoomLimits: LIMITS }), resolveConfig({}, { zoomLimits: LIMITS }));
 });

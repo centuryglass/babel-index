@@ -54,7 +54,10 @@ is read per request.
 | `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, the search density gradient, ranking, pan resistance — no DOM, no imports |
 | `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
+| `packages/map/illusion.js` | the sliding-tile planner: rows and columns rotate, swaps are legal only off camera. No DOM, no imports |
+| `packages/map/board.js` | cuts a finite board out of the infinite map for one rearrangement, and decides when a change cannot be animated |
 | `packages/map/scoring.js` | folding, tokenising, the two match rules, the three-signal blend, and how sure it is |
+| `packages/web/src/slide.js` | the second renderer, for a rearrangement only: a board, a parked camera, one line mid-slide |
 | `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
@@ -146,6 +149,94 @@ is read per request.
   monotonicity and this prefilter silently starts dropping cells. The fuzz test
   against an unpruned walk is what guards it — it catches an off-by-one in the
   ring bound, which nothing else does.
+- **A rearrangement is a sliding-tile illusion, and the wallpaper is not a
+  gap.** The generic room is a wall like any other; 80% of cells being identical
+  is a fact about the art, not permission to slide a room *over* them. Rooms
+  travel only as part of a whole row or column rotating. `illusion.js` makes
+  that structural rather than checked - rotations are legal anywhere, and a
+  `swap` (which reads as teleportation) is rejected outright if either end is
+  inside the on-camera rectangle - so "keep the illusion" is "emit legal moves"
+  and no renderer has to be careful. Don't add a move type that moves one cell.
+- **The illusion bounds are the viewport PLUS one cell, and that margin is
+  load-bearing.** The planner swaps a value into the cell just outside the
+  region and then slides it inward. With the region hugging the viewport that
+  swap happens on a partially visible cell and the illusion breaks along the
+  screen edge. `board.js` refuses a margin under 1.
+- **`flyTo` returns a promise for the landing, and the rearrangement awaits
+  it.** Since flights ease, `cam.current` is unchanged when `flyTo` returns, so
+  planning against it would plan for wherever the reader was standing. The
+  promise also says WHETHER it landed - false means a hand hit the map - and an
+  interrupted flight must fall back to the instant rebuild rather than
+  rearranging under someone who has just grabbed it.
+- **While flying home to start a rearrangement, the map draws the OLD
+  arrangement.** `layout` and `order` update the moment a search resolves, which
+  is before the camera has moved, so without the hold in `anim.current.before`
+  the map shows the new library, flies to it, and only then slides it in from
+  the one it already replaced. Proved by fingerprinting the canvas across the
+  flight window; a unit test cannot see it.
+- **The render effect must cancel its pending frame on cleanup.** Its closure
+  captures `layout` and `order`, so a frame scheduled through the old closure
+  and left to fire after the effect is rebuilt repaints the state that render
+  pass replaced - arriving after the new frame and winning. This only became
+  reachable when the rearrangement trigger moved to `useLayoutEffect` (it has
+  to run before the first paint of the new arrangement), which puts a
+  `requestDraw` before the render effect is rebuilt. It cost a slider that
+  silently stopped moving the edge.
+- **The board is finite only because the camera is parked.** Rotations wrap
+  around the board, and that is invisible solely because the camera sits on the
+  centre at the opening zoom for the whole animation and the board is far larger
+  than the screen. Anything that lets the camera move mid-rearrangement - a pan,
+  a zoom, a `flyTo` - has to end the animation instead, which is what the
+  canvas `pointerdown` handler in `main.jsx` does.
+- **`board.js` returning null is a real answer, not a failure.** With the "rooms
+  on the map" slider pulled back, a reorder changes *which* rooms are placed, so
+  a room the new order wants on camera may never have been on the board at all.
+  It cannot slide in from a cell it was never in, so the caller falls back to
+  the instant rebuild. Don't "fix" this by substituting a tile off camera: a
+  tile changing its face and then sliding on as something else is precisely
+  what the whole approach exists to prevent.
+- **The centre room is the planner's fixed tile, and gets there for free.** It
+  is cell (0, 0), already reserved by `ordering.js`, so it holds the same value
+  in both boards by construction. Locking it forbids every shift of its row and
+  column, which is why the map visibly pivots around it - and why phase 1 exists
+  at all, to feed a column that can never be rotated.
+- **Staging is why the conveyor works, and randomized tests do not cover it.**
+  Phase 2 parks a whole BATCH of columns before feeding any of them, because
+  extracting a later value can rotate the column holding an earlier one. A board
+  with a small alphabet never reaches that path - every value has a copy off
+  camera, so nothing is ever trapped. The case that does is a board whose
+  distinct values all start on camera, which is exactly what the density
+  gradient builds; `illusion.test.mjs` carries it, and gather-as-you-go passes
+  every other test in the file.
+- **Parking a batch is what makes the animation a wave, so the batch size is
+  not a tuning knob.** It is `capacity / valuesPerLine`, and one line per batch -
+  which is the strictly sequential original - is what a region too wide to leave
+  room for its own parking degrades to. Nothing breaks at batch size 1; it just
+  gets slower, which is the right way round.
+- **Two parking pools, and the difference is load-bearing.** The conveyor parks
+  in any column outside the region, because phase 2 rotates only region columns.
+  The fixed tile's column parks in the CORNERS - outside the region's columns
+  and its rows - because phase 1 rotates region rows, and a row rotation sweeps
+  every column including the outside ones. Using the conveyor's pool there
+  silently loses the staged value.
+- **A reserved cell is never a source.** `makeAvailable` skips them, and without
+  that a copy standing by for one slot gets handed back for another, swapped
+  away into a fresh cell, and the earlier reservation is left pointing at a cell
+  holding something else. This was latent in the per-column version - the window
+  was only one column wide - and batching is what made it fire.
+- **The animation may overlap runs, but only two ways, and both are proved
+  rather than eyeballed.** A `wave` stage's lines are independent because the
+  planner parked them together, so its lanes just run concurrently. Any other
+  stage CASCADES: runs start a beat apart but are forced to finish in plan
+  order, and since a run's moves are applied as it passes them - the last at its
+  completion - ordered completions are exactly ordered application. That is why
+  a swap emitted after a shift must attach to that shift's run at its
+  completion, not to the next run's start. Move it and the cascade silently
+  applies the plan out of order.
+- **Visible cost is the viewport's, not the corpus's.** Every move outside the
+  region is a swap and swaps are invisible, so the board can be as large as it
+  needs to be - 157x209 at 5000 rooms - without lengthening the animation. If a
+  change starts making slide count scale with corpus size, that is the bug.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 - **`useMapCamera.js` tracks pointers by id, in a Map, and that is load-bearing
   for touch.** One finger is a drag, two are a pinch, and the pinch is always
@@ -247,6 +338,16 @@ is read per request.
   what config is *for*. `WHEEL_ZOOM_RATE`, `LONG_PRESS_MS` and `PRESS_SLOP_PX`
   are still in source because they predate `packages/config`, which is history
   rather than a rule.
+- **The animation's five durations are in config by that same test**, beside
+  `flightMs`: nothing derives from them and no test pins their values. What the
+  tests do assert is a *consequence* of the shipped defaults — that a
+  rearrangement is seconds rather than tens of them — which is a check on the
+  default, not a derivation from it, and a `config.json` cannot break it.
+  `slide.js` states no fallback of its own, for the reason `useMapCamera.js`
+  states no opening zoom or flight duration: a default in the consuming file is
+  a second statement of the same fact and the two drift. Of the five, `stagger`
+  is the one that shapes the animation most — it sets how long the wave takes to
+  cross the screen, where `perCell` only sets how fast one line rides.
 - **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
   committed.** One that spelled out every value would silently become the real
   surface and editing the documented defaults would stop mattering. The overlay

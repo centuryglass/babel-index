@@ -93,6 +93,63 @@ export const DEFAULTS = {
     genericVariantSeed: 1,
   },
 
+  slide: {
+    /**
+     * How long a rearrangement takes, in milliseconds.
+     *
+     * The visible cost is the viewport's, not the corpus's - the planner slides
+     * only lines that cross the on-camera rectangle, and everything else is an
+     * invisible swap - so these numbers set the whole duration and the corpus
+     * size does not enter into it. See `packages/web/src/slide.js` for how a
+     * plan is laid out in time, and `packages/map/illusion.js` for why the
+     * lines of a wave are free to move at once.
+     *
+     * Lowering all five proportionally makes the same animation faster; the
+     * ratios between them are what shape it.
+     */
+
+    /**
+     * Per-run constant, so a one-cell slide is not instantaneous. This is what
+     * a move costs before any distance is travelled.
+     */
+    base: 80,
+
+    /**
+     * Per cell of travel. A line moving as one piece reads at a speed a single
+     * tile would not, which is why this is nearer 25ms than the 100ms a lone
+     * sliding tile would want. It dominates a long ride: a column crossing a
+     * ten-cell region is `base + 10 x perCell`.
+     */
+    perCell: 26,
+
+    /**
+     * The beat between two runs in the same lane, keeping them legible as
+     * separate moves rather than one continuous churn.
+     */
+    gap: 20,
+
+    /**
+     * How far apart the lines of a wave set off.
+     *
+     * A wave's lines are independent - the planner stages a whole batch before
+     * feeding any of it - so they need not queue. Starting them together would
+     * read as the whole field scrolling, which is a pan rather than a
+     * rearrangement; starting them a beat apart turns the conveyor into a sweep
+     * that leaves from the centre. This, not `perCell`, is what sets how long
+     * the sweep takes to cross the screen.
+     */
+    stagger: 65,
+
+    /**
+     * How far apart the runs of a sequential lane set off. They still finish in
+     * plan order - that is what keeps the plan honoured - but starting the next
+     * before the last has landed turns a queue into a cascade. Shorter than
+     * `stagger`, because these are incidental motion: mostly rotations freeing
+     * a room the new arrangement wants but which has no copy off camera.
+     */
+    cascade: 45,
+  },
+
   search: {
     /**
      * Relative priority of the three retrieval signals. Every signal is
@@ -222,6 +279,7 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
       defaultZoom,
       flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
     },
+    slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
@@ -269,6 +327,27 @@ function density(src, notes) {
     out.clipLow = d.clipLow;
     out.clipHigh = d.clipHigh;
   }
+  return out;
+}
+
+/**
+ * The rearrangement animation's timings.
+ *
+ * Each is a duration in milliseconds and gets the same treatment as the flight
+ * above, with one difference: `composed`. These five do not each describe a
+ * whole animation, they add up to one - a run takes `base + perCell x cells`,
+ * and `gap`, `stagger` and `cascade` are beats between things that are
+ * themselves moving. So a value under one frame is ordinary here rather than
+ * suspicious, and warning about it would be noise. The ceiling and the
+ * not-negative rule still apply, and both still matter: a negative beat would
+ * schedule a run to start before the one it follows, and the animation applies
+ * its plan in completion order.
+ */
+function slideTiming(src, notes) {
+  const d = DEFAULTS.slide;
+  const out = {};
+  for (const key of ['base', 'perCell', 'gap', 'stagger', 'cascade'])
+    out[key] = duration(src[key], d[key], `slide.${key}`, notes, { composed: true });
   return out;
 }
 
@@ -347,7 +426,7 @@ function tokenLength(value, fallback, path, notes) {
 const DURATION_MAX_MS = 5000;
 const ONE_FRAME_MS = 1000 / 60;
 
-function duration(value, fallback, path, notes) {
+function duration(value, fallback, path, notes, { composed = false } = {}) {
   const n = number(value, fallback, path, notes);
   if (n < 0) {
     notes.push(`${path} should not be negative; using ${fallback}`);
@@ -357,7 +436,10 @@ function duration(value, fallback, path, notes) {
     notes.push(`${path} ${n} is longer than ${DURATION_MAX_MS}ms; using ${DURATION_MAX_MS}`);
     return DURATION_MAX_MS;
   }
-  if (n > 0 && n < ONE_FRAME_MS) {
+  // Only for a number that IS an animation's duration. One that merely
+  // contributes to a longer one is legitimately sub-frame - a four millisecond
+  // beat between two slides is a beat, not a flight nobody will see.
+  if (!composed && n > 0 && n < ONE_FRAME_MS) {
     notes.push(`${path} ${n} is shorter than one frame, so nothing will animate - milliseconds, not seconds?`);
   }
   return n;

@@ -661,8 +661,30 @@ function fingerprint(page) {
 
 /** The HUD after the next frame, so a just-issued change is reflected. */
 async function settled(page) {
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-  return hud(page);
+  // A rearrangement takes over the HUD while it runs, and reports its own
+  // progress rather than the frame's numbers. Waiting it out is what "settled"
+  // has to mean now: reading mid-slide would be reading a frame of an animation
+  // rather than the state it lands on.
+  //
+  // The loop is the point. A search starts its rearrangement only once the
+  // response has been ranked, so "not rearranging" can be true when it is
+  // checked and false two frames later, and reading between those two is how
+  // this intermittently caught the HUD mid-animation. Re-check after settling
+  // and go round again if one started underneath us.
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    await page.waitForFunction(
+      () => !document.getElementById('hud')?.textContent?.startsWith('rearranging'),
+      null,
+      { timeout: Math.max(1000, deadline - Date.now()) }
+    );
+    await page.evaluate(
+      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    );
+    const text = await page.locator('#hud').textContent();
+    if (!text.startsWith('rearranging')) return hud(page);
+    assert.ok(Date.now() < deadline, 'a rearrangement never finished');
+  }
 }
 
 /**
