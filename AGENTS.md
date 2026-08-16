@@ -30,6 +30,16 @@ npm run generate:figures                  # regenerate docs/figures/
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
 
+**Run `npm install` first, before anything else.** It is listed above for a
+reason and it is still the step most often skipped: a fresh checkout or a fresh
+container has no `node_modules`, and the failure it produces looks like a code
+failure rather than a setup one. `npm test` comes back with three red files —
+`mips.test.mjs`, `app.test.mjs` and `bundle.test.mjs` — because `sharp`,
+`express` and `esbuild` are missing, which is easy to spend a few minutes
+reading as damage from whatever you just changed. Most of the suite passes
+without them, which is what makes it convincing. If those three are the only
+failures, install rather than debug.
+
 There is no build step, no bundler config and no linter. The demo server bundles
 the client with esbuild in-process at startup (`packages/server/index.mjs`), so
 editing web sources means restarting `npm run demo` — except `index.html`, which
@@ -152,6 +162,26 @@ is read per request.
   region and then slides it inward. With the region hugging the viewport that
   swap happens on a partially visible cell and the illusion breaks along the
   screen edge. `board.js` refuses a margin under 1.
+- **`flyTo` returns a promise for the landing, and the rearrangement awaits
+  it.** Since flights ease, `cam.current` is unchanged when `flyTo` returns, so
+  planning against it would plan for wherever the reader was standing. The
+  promise also says WHETHER it landed - false means a hand hit the map - and an
+  interrupted flight must fall back to the instant rebuild rather than
+  rearranging under someone who has just grabbed it.
+- **While flying home to start a rearrangement, the map draws the OLD
+  arrangement.** `layout` and `order` update the moment a search resolves, which
+  is before the camera has moved, so without the hold in `anim.current.before`
+  the map shows the new library, flies to it, and only then slides it in from
+  the one it already replaced. Proved by fingerprinting the canvas across the
+  flight window; a unit test cannot see it.
+- **The render effect must cancel its pending frame on cleanup.** Its closure
+  captures `layout` and `order`, so a frame scheduled through the old closure
+  and left to fire after the effect is rebuilt repaints the state that render
+  pass replaced - arriving after the new frame and winning. This only became
+  reachable when the rearrangement trigger moved to `useLayoutEffect` (it has
+  to run before the first paint of the new arrangement), which puts a
+  `requestDraw` before the render effect is rebuilt. It cost a slider that
+  silently stopped moving the edge.
 - **The board is finite only because the camera is parked.** Rotations wrap
   around the board, and that is invisible solely because the camera sits on the
   centre at the opening zoom for the whole animation and the board is far larger
@@ -241,6 +271,18 @@ is read per request.
 - **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
   it.** One fixed-point implementation for both gestures — a pinch knows the
   ratio its fingers moved and has no wheel delta to invent. Don't grow a second.
+- **A flight interpolates zoom geometrically and position linearly**, and it
+  steps on the loop the glide already ran. Zoom is pixels per cell, so a linear
+  ramp from 26 to 900 sits near 900 for nearly the whole flight and reads as a
+  snap and then a crawl — `camera.test.mjs` asserts the midpoint against the
+  geometric mean. Sharing the glide's rAF is what makes the precedence one
+  `else` rather than two loops racing; don't start a second. `pointerdown` and
+  `wheel` each drop the flight, and both lines have their own e2e assertion.
+  In the e2e, anything reading the camera after a "centre" click needs
+  `landed()`, not `settled()` — two frames stopped being enough the moment
+  `flyTo` started taking 450 ms — and how long that waits is read off the
+  manifest, because `camera.flightMs` is config and importing the source default
+  would wait the wrong amount of time on a machine that retuned it.
 - **The overlay opens on right-click or long press, never left-click**, which
   stays reserved for "focus this room" — a map whose primary button opens a
   modal is a map you cannot explore. **The long press must lose to a pan**: the
@@ -287,13 +329,25 @@ is read per request.
   field as `aspect` and with the same hazard: rebuild a camera instead of
   spreading it and the range is lost mid-gesture while everything still looks
   applied. Both are asserted.
-- **The animation's five durations live in config, not in `slide.js`.** They
-  are by-feel numbers, so they belong to the same surface the opening zoom does,
-  and `slide.js` takes `timing` with no fallback for the reason
-  `useMapCamera.js` takes `camera` with none: a default there would be a second
-  statement of the same fact and the two would drift. `stagger` is the one that
-  matters most - it sets how long the wave takes to cross the screen, where
-  `perCell` only sets how fast one line rides.
+- **What belongs in config is what is tuned, not what is merely by-feel.** The
+  test is *derived and asserted*, not *corpus-independent*: the pyramid's
+  budgets stay out because a test would contradict them, while `defaultZoom` and
+  `flightMs` are in because nothing derives from them and no test asserts their
+  values. "No corpus argues for a different one" is the wrong test and was used
+  once — config describes how to display a library, not which one, so that is
+  what config is *for*. `WHEEL_ZOOM_RATE`, `LONG_PRESS_MS` and `PRESS_SLOP_PX`
+  are still in source because they predate `packages/config`, which is history
+  rather than a rule.
+- **The animation's five durations are in config by that same test**, beside
+  `flightMs`: nothing derives from them and no test pins their values. What the
+  tests do assert is a *consequence* of the shipped defaults — that a
+  rearrangement is seconds rather than tens of them — which is a check on the
+  default, not a derivation from it, and a `config.json` cannot break it.
+  `slide.js` states no fallback of its own, for the reason `useMapCamera.js`
+  states no opening zoom or flight duration: a default in the consuming file is
+  a second statement of the same fact and the two drift. Of the five, `stagger`
+  is the one that shapes the animation most — it sets how long the wave takes to
+  cross the screen, where `perCell` only sets how fast one line rides.
 - **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
   committed.** One that spelled out every value would silently become the real
   surface and editing the documented defaults would stop mattering. The overlay
