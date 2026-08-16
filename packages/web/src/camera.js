@@ -174,3 +174,73 @@ export function glideStep(cam, damp) {
 export function cameraAtCell(cam, x, y, zoom) {
   return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom, cam.limits) : cam.zoom };
 }
+
+/**
+ * How long a camera flight takes by default, in milliseconds.
+ *
+ * The value that ships, not the only statement of it: `packages/config` imports
+ * this as `camera.flightMs`, so a `config.json` can retune it and the resolved
+ * number rides to the client on the manifest. Stated here because this is where
+ * `beginFlight` needs a default, and imported there rather than restated so the
+ * two cannot drift.
+ *
+ * How long a transition should take is a judgement about the map in front of
+ * you, which is the same argument that puts the search weights in config. It
+ * is emphatically not derived from anything - the tests assert the shape of the
+ * curve, never this number - so moving it can invalidate nothing.
+ */
+export const FLIGHT_MS = 450;
+
+/**
+ * Smoothstep: slow at both ends, quickest in the middle, no magic numbers.
+ *
+ * Zero velocity on arrival is the half that matters - a flight that stops at
+ * full speed reads as a jerk, and "centre" is a button people press repeatedly.
+ */
+export const easeInOut = (t) => t * t * (3 - 2 * t);
+
+/**
+ * Begin a flight from one camera to another, as a value.
+ *
+ * Both endpoints are whole cameras, so `aspect` and `limits` come along without
+ * this having to know they exist - build the target with `cameraAtCell` and the
+ * clamping has already happened. `from` being the LIVE camera rather than some
+ * remembered one is what makes a second flight during a first pick up smoothly
+ * from wherever it had got to.
+ */
+export function beginFlight(from, to, now, ms = FLIGHT_MS) {
+  return { from, to, t0: now, ms };
+}
+
+/**
+ * The camera part way through a flight, and whether it has arrived.
+ *
+ * **Zoom interpolates geometrically, position linearly**, and the asymmetry is
+ * the whole content of this function. Zoom is pixels per cell, so a linear ramp
+ * from 26 to 900 spends nearly all of its time close to 900 and the flight
+ * looks like a snap followed by a crawl; the ratio is what the eye reads, which
+ * is the same reason the wheel is exponential. Position has no such problem
+ * over the distances this map flies - tens of cells, not a continent - so the
+ * zoom-out-and-back arc that a world-scale flight needs would be machinery
+ * bought for a case that does not arise.
+ *
+ * `ms <= 0` arrives immediately, which is how a caller honouring
+ * `prefers-reduced-motion` asks for the old teleport without a second path.
+ */
+export function flightAt(flight, now) {
+  const { from, to, t0, ms } = flight;
+  const t = ms > 0 ? (now - t0) / ms : 1;
+  // Landing returns the target itself, so a flight ends exactly where it was
+  // aimed rather than within a rounding error of it.
+  if (t >= 1) return { cam: to, done: true };
+  const e = easeInOut(Math.max(0, t));
+  return {
+    cam: {
+      ...to,
+      x: from.x + (to.x - from.x) * e,
+      y: from.y + (to.y - from.y) * e,
+      zoom: from.zoom * Math.pow(to.zoom / from.zoom, e),
+    },
+    done: false,
+  };
+}

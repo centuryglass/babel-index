@@ -30,6 +30,16 @@ npm run generate:figures                  # regenerate docs/figures/
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
 
+**Run `npm install` first, before anything else.** It is listed above for a
+reason and it is still the step most often skipped: a fresh checkout or a fresh
+container has no `node_modules`, and the failure it produces looks like a code
+failure rather than a setup one. `npm test` comes back with three red files —
+`mips.test.mjs`, `app.test.mjs` and `bundle.test.mjs` — because `sharp`,
+`express` and `esbuild` are missing, which is easy to spend a few minutes
+reading as damage from whatever you just changed. Most of the suite passes
+without them, which is what makes it convincing. If those three are the only
+failures, install rather than debug.
+
 There is no build step, no bundler config and no linter. The demo server bundles
 the client with esbuild in-process at startup (`packages/server/index.mjs`), so
 editing web sources means restarting `npm run demo` — except `index.html`, which
@@ -170,6 +180,18 @@ is read per request.
 - **`zoomBy` takes a factor, `zoomAt` is the wheel's exponential wrapper around
   it.** One fixed-point implementation for both gestures — a pinch knows the
   ratio its fingers moved and has no wheel delta to invent. Don't grow a second.
+- **A flight interpolates zoom geometrically and position linearly**, and it
+  steps on the loop the glide already ran. Zoom is pixels per cell, so a linear
+  ramp from 26 to 900 sits near 900 for nearly the whole flight and reads as a
+  snap and then a crawl — `camera.test.mjs` asserts the midpoint against the
+  geometric mean. Sharing the glide's rAF is what makes the precedence one
+  `else` rather than two loops racing; don't start a second. `pointerdown` and
+  `wheel` each drop the flight, and both lines have their own e2e assertion.
+  In the e2e, anything reading the camera after a "centre" click needs
+  `landed()`, not `settled()` — two frames stopped being enough the moment
+  `flyTo` started taking 450 ms — and how long that waits is read off the
+  manifest, because `camera.flightMs` is config and importing the source default
+  would wait the wrong amount of time on a machine that retuned it.
 - **The overlay opens on right-click or long press, never left-click**, which
   stays reserved for "focus this room" — a map whose primary button opens a
   modal is a map you cannot explore. **The long press must lose to a pan**: the
@@ -216,6 +238,15 @@ is read per request.
   field as `aspect` and with the same hazard: rebuild a camera instead of
   spreading it and the range is lost mid-gesture while everything still looks
   applied. Both are asserted.
+- **What belongs in config is what is tuned, not what is merely by-feel.** The
+  test is *derived and asserted*, not *corpus-independent*: the pyramid's
+  budgets stay out because a test would contradict them, while `defaultZoom` and
+  `flightMs` are in because nothing derives from them and no test asserts their
+  values. "No corpus argues for a different one" is the wrong test and was used
+  once — config describes how to display a library, not which one, so that is
+  what config is *for*. `WHEEL_ZOOM_RATE`, `LONG_PRESS_MS` and `PRESS_SLOP_PX`
+  are still in source because they predate `packages/config`, which is history
+  rather than a rule.
 - **`packages/config/config.mjs` is the tuning surface, and no `config.json` is
   committed.** One that spelled out every value would silently become the real
   surface and editing the documented defaults would stop mattering. The overlay

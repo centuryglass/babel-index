@@ -31,7 +31,7 @@
  * be exercised at any limits without a disk or a server. `load.mjs` is the part
  * that reads a file.
  */
-import { ZOOM_LIMITS } from '../web/src/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/camera.js';
 import { CERTAINTY_FLOOR } from '../map/ordering.js';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
@@ -54,6 +54,23 @@ export const DEFAULTS = {
      * as a mosaic of thumbnails. Clamped into the range above.
      */
     defaultZoom: 220,
+
+    /**
+     * How long a camera flight takes - "centre", and the fly home after a
+     * search - in milliseconds.
+     *
+     * 450 is a starting point rather than a measurement, which is the same
+     * argument that puts the search weights here: how long a transition should
+     * take is a judgement about the map in front of you, and the only way to
+     * settle it is to sit with it. The number itself is `FLIGHT_MS` in
+     * `camera.js`, imported rather than restated, so the source default and the
+     * documented one cannot drift.
+     *
+     * Zero is meaningful: it means arrive at once, which is what
+     * `prefers-reduced-motion` asks for and how a config switches the animation
+     * off. Reduced motion still wins over any value set here.
+     */
+    flightMs: FLIGHT_MS,
   },
 
   map: {
@@ -199,7 +216,12 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
   }
 
   return {
-    camera: { minZoom, maxZoom, defaultZoom },
+    camera: {
+      minZoom,
+      maxZoom,
+      defaultZoom,
+      flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
+    },
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
@@ -301,6 +323,42 @@ function tokenLength(value, fallback, path, notes) {
   if (n < 1) {
     notes.push(`${path} must be at least 1; using 1`);
     return 1;
+  }
+  return n;
+}
+
+/**
+ * An animation duration in milliseconds.
+ *
+ * Zero is legitimate and stays - it means "arrive at once", the same thing
+ * `prefers-reduced-motion` asks for, so it is how a config switches an
+ * animation off rather than an error. Negative is not a slower flight or a
+ * reversed one; it is a typo.
+ *
+ * The ceiling is a judgement rather than a limit of anything: past a few
+ * seconds a camera move has stopped being a transition and become a wait, and a
+ * value that far out is much likelier to be a units mistake than a taste.
+ *
+ * The sub-frame note is the one worth having. `0.45` is what seconds look like
+ * typed into a milliseconds field, and it is not rejected - it is a perfectly
+ * good way to say "no animation" - but it would otherwise be a flight that
+ * silently never appears, which is exactly the failure mode a tuning file has.
+ */
+const DURATION_MAX_MS = 5000;
+const ONE_FRAME_MS = 1000 / 60;
+
+function duration(value, fallback, path, notes) {
+  const n = number(value, fallback, path, notes);
+  if (n < 0) {
+    notes.push(`${path} should not be negative; using ${fallback}`);
+    return fallback;
+  }
+  if (n > DURATION_MAX_MS) {
+    notes.push(`${path} ${n} is longer than ${DURATION_MAX_MS}ms; using ${DURATION_MAX_MS}`);
+    return DURATION_MAX_MS;
+  }
+  if (n > 0 && n < ONE_FRAME_MS) {
+    notes.push(`${path} ${n} is shorter than one frame, so nothing will animate - milliseconds, not seconds?`);
   }
   return n;
 }
