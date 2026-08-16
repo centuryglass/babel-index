@@ -30,8 +30,8 @@
  * The planner marks the stages whose lines are independent - it parks a whole
  * batch of values before feeding any of them, so no column's ride can disturb
  * another's. Those play concurrently, one lane per line, set off a stagger
- * apart and ordered outward from the centre. That is most of the animation:
- * eleven columns that used to queue for four seconds now sweep across in one.
+ * apart and ordered outward from the centre. That is most of the animation: a
+ * batch of columns sweeps across together rather than queuing one after another.
  * Stages that are not marked stay strictly ordered, because a parking stage's
  * extraction rotates a line and the swap after it depends on that rotation.
  *

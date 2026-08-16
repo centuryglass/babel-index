@@ -174,7 +174,7 @@ same distance away whichever way you drag.
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 
 ```sh
-npm test    # 165 tests, no browser and no network
+npm test    # ~300 tests, no browser and no network
 ```
 
 `node --test` discovers `*.test.mjs`, so a new test file needs no wiring.
