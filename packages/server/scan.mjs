@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, extname, basename } from 'node:path';
+import { join, extname, basename, resolve } from 'node:path';
 import { mipPlan } from '../pipeline/layout.mjs';
 import { metadataCoverage } from '../map/metadata.js';
 
@@ -7,6 +7,14 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 /** The keyword/story sidecar, written by the generator. See packages/map/metadata.js. */
 export const METADATA_FILE = 'metadata.json';
+
+/**
+ * The subdirectory of the base directory that holds the wallpaper variants. It
+ * is a folder rather than a `base*` glob so the base tile can sit in the repo's
+ * `assets/` root without every stray image beside it (masks, canny maps) being
+ * mistaken for wallpaper.
+ */
+export const VARIATIONS_DIR = 'base_variations';
 
 /**
  * Read pixel dimensions from a file header, without decoding the image.
@@ -93,6 +101,53 @@ export async function discoverLevels(dir, source) {
   return found;
 }
 
+/** Image filenames in a directory, sorted. Rejects if the directory is missing. */
+async function listImages(dir) {
+  const entries = await readdir(dir);
+  return entries.filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort();
+}
+
+/** One base asset: its file, a `/base/`-rooted url, and its size if readable. */
+async function describeBase(baseDir, sub, file) {
+  const size = await imageSize(join(baseDir, sub, file)).catch(() => null);
+  return { file, url: `/base/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
+}
+
+/**
+ * Discover the base tiles: the blank centre and the wallpaper variants.
+ *
+ * The centre is served at cell (0, 0) and reserved for the search box and
+ * controls, so it is always the plain base render - `--base`, else `base.tile.*`,
+ * else `base.*`. `allowFirst` keeps the old single-directory behaviour working:
+ * when the base assets live in the corpus directory itself and nothing named
+ * base is present, the first image stands in as the centre.
+ *
+ * The variants are every image in the `base_variations/` subdirectory, sorted.
+ * There may be none (an empty or absent folder), which is the "only the base
+ * tile" case the renderers fall back to.
+ *
+ * @param {string} baseDir
+ * @param {{base?: string, allowFirst?: boolean}} opts
+ * @returns {Promise<{centre: object|null, variants: object[]}>}
+ */
+async function scanBase(baseDir, { base, allowFirst = false } = {}) {
+  const files = await listImages(baseDir).catch(() => []);
+  const centreFile =
+    (base && files.find((f) => f === base || basename(f, extname(f)) === base)) ??
+    files.find((f) => basename(f, extname(f)).toLowerCase() === 'base.tile') ??
+    files.find((f) => basename(f, extname(f)).toLowerCase() === 'base') ??
+    (allowFirst ? files[0] : null);
+
+  const centre = centreFile ? await describeBase(baseDir, '', centreFile) : null;
+
+  const variantFiles = await listImages(join(baseDir, VARIATIONS_DIR)).catch(() => []);
+  const variants = await Promise.all(
+    variantFiles.map((f) => describeBase(baseDir, VARIATIONS_DIR, f))
+  );
+
+  return { centre, variants };
+}
+
 /**
  * Scan a directory into a corpus manifest.
  *
@@ -101,24 +156,31 @@ export async function discoverLevels(dir, source) {
  * stable across restarts, which matters because the map's slot assignment is
  * keyed on them.
  *
+ * The base tiles - the blank centre and the wallpaper variants - live in
+ * `baseDir`, which defaults to the corpus directory (the old behaviour, where a
+ * `base.*` in the images folder is the wallpaper) but is usually pointed at the
+ * repo's `assets/` so the base render can be shared across corpora and reached
+ * from outside `--images`.
+ *
  * @param {string} dir
- * @param {{base?: string}} [opts] filename to use as the generic room
+ * @param {{base?: string, baseDir?: string}} [opts] base names the centre tile;
+ *   baseDir is where the base tiles live (default: the corpus directory)
  */
-export async function scanDirectory(dir, { base } = {}) {
-  const entries = await readdir(dir);
-  const files = entries.filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort();
+export async function scanDirectory(dir, { base, baseDir = dir } = {}) {
+  const files = await listImages(dir);
 
   if (!files.length) throw new Error(`no images found in ${dir}`);
 
-  // The generic room: whatever was asked for, else a file called base.*, else
-  // the first one. It is excluded from the ranked corpus so it is not both the
-  // wallpaper and a search result.
-  const baseFile =
-    (base && files.find((f) => f === base || basename(f, extname(f)) === base)) ??
-    files.find((f) => basename(f, extname(f)).toLowerCase() === 'base') ??
-    files[0];
+  // When the base tiles are the corpus directory itself, the centre may be one
+  // of these files and the first image can stand in for a missing base.
+  const sameDir = resolve(baseDir) === resolve(dir);
+  const baseAssets = await scanBase(baseDir, { base, allowFirst: sameDir });
 
-  const corpus = files.filter((f) => f !== baseFile);
+  // A centre living in the corpus directory is not also a ranked room - being
+  // both the wallpaper and a search result would put it everywhere and in the
+  // ranking too. A centre living elsewhere excludes nothing.
+  const excluded = sameDir && baseAssets.centre ? baseAssets.centre.file : null;
+  const corpus = files.filter((f) => f !== excluded);
 
   const rooms = await Promise.all(
     corpus.map(async (file, id) => {
@@ -128,13 +190,14 @@ export async function scanDirectory(dir, { base } = {}) {
     })
   );
 
-  const baseSize = await imageSize(join(dir, baseFile)).catch(() => null);
-
-  // The ladder is measured off the corpus, not the generic room: the generic is
-  // one file and may be anything, while the rooms are what the map is mostly
-  // made of. Fall back to the generic only when no room reported a size.
-  const source = rooms.find((r) => r.w && r.h) ?? baseSize;
-  const levels = await discoverLevels(dir, source);
+  // The ladder is measured off the corpus, not the base tiles: a base tile is
+  // one file and may be any shape, while the rooms are what the map is mostly
+  // made of. Fall back to a base tile only when no room reported a size.
+  const source =
+    rooms.find((r) => r.w && r.h) ??
+    [baseAssets.centre, ...baseAssets.variants].find((b) => b?.w && b?.h) ??
+    null;
+  const levels = await discoverLevels(dir, source && source.w ? { w: source.w, h: source.h } : null);
 
   // If tools/embed has left a blob alongside the images, surface its metadata so
   // the client can fetch it and rank in the browser. A stale blob - one whose
@@ -167,11 +230,12 @@ export async function scanDirectory(dir, { base } = {}) {
   return {
     mode: 'offline',
     directory: dir,
-    generic: {
-      file: baseFile,
-      url: `/images/${encodeURIComponent(baseFile)}`,
-      ...(baseSize ?? {}),
-    },
+    /**
+     * The base tiles: the blank `centre` (or null if none was found) and the
+     * `variants` array that the wallpaper is drawn from. Served from `/base/`,
+     * which the demo points at `--base-dir`.
+     */
+    base: baseAssets,
     rooms,
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */

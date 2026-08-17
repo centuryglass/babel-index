@@ -3,7 +3,7 @@
  * The offline demo server.
  *
  *   npm run demo -- --images /path/to/rooms [--base base.png] [--port 5173]
- *                    [--config config.json]
+ *                    [--config config.json] [--base-dir assets]
  *
  * Point it at a directory of images and it serves a browsable library. No
  * database, no bucket, no upload step - the directory *is* the corpus. That is
@@ -37,6 +37,10 @@ if (!existsSync(imagesDir)) {
   console.error(`no such directory: ${imagesDir}`);
   process.exit(1);
 }
+// The base tiles (centre + wallpaper variants) live outside the corpus, in the
+// repo's assets by default, so the base render can be shared across corpora and
+// changed without touching --images. See scan.mjs.
+const baseDir = resolve(process.cwd(), argv['base-dir'] ?? 'assets');
 const port = Number(argv.port ?? 5173);
 
 // Checked before anything is scanned or bundled, because the failure mode
@@ -62,8 +66,16 @@ if (config.source) console.log(`config: ${config.source}`);
 for (const note of config.notes) console.warn(`config: ${note}`);
 
 console.log(`scanning ${imagesDir} ...`);
-const manifest = await scanDirectory(imagesDir, { base: argv.base });
-console.log(`  ${manifest.count} rooms, generic room: ${manifest.generic.file}`);
+const manifest = await scanDirectory(imagesDir, { base: argv.base, baseDir });
+const centre = manifest.base.centre?.file ?? '(none)';
+console.log(
+  `  ${manifest.count} rooms, base tile: ${centre}, ${manifest.base.variants.length} wallpaper variant(s)`
+);
+// A base directory with no centre means the map has no blank tile to draw at
+// the origin or to fall back on - worth saying, since it reads on the map as a
+// hole rather than an error.
+if (!manifest.base.centre)
+  console.warn(`  no base tile found in ${baseDir} - expected base.tile.* (or pass --base)`);
 
 if (manifest.metadata) {
   const { matched, entries } = manifest.metadata;
@@ -90,8 +102,9 @@ const bundle = await build({
 const app = createApp({
   manifest,
   imagesDir,
+  baseDir,
   config,
-  rescan: () => scanDirectory(imagesDir, { base: argv.base }),
+  rescan: () => scanDirectory(imagesDir, { base: argv.base, baseDir }),
   bundleJs: bundle.outputFiles[0].text,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
 });

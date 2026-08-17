@@ -58,12 +58,16 @@ async function main() {
   const argv = parseArgs(process.argv.slice(2));
   const imagesDir = argv.images ?? 'assets/corpus-sample';
   const outDir = argv.out ?? imagesDir;
+  // Must match the server's base directory, or the room set embed writes here
+  // and the room set the server ranks against drift - and the blob is keyed by
+  // row order, so a drift ranks the wrong rooms. Same default as index.mjs.
+  const baseDir = argv['base-dir'] ?? 'assets';
 
   // One source of truth for which files are rooms and in what id order.
-  const manifest = await scanDirectory(imagesDir, { base: argv.base });
+  const manifest = await scanDirectory(imagesDir, { base: argv.base, baseDir });
   const files = manifest.rooms.map((r) => r.file);
   if (!files.length) throw new Error(`no corpus rooms in ${imagesDir}`);
-  console.log(`${files.length} rooms (generic: ${manifest.generic.file}), model ${MODEL_ID}`);
+  console.log(`${files.length} rooms (base tile: ${manifest.base.centre?.file ?? '(none)'}), model ${MODEL_ID}`);
 
   const processor = await AutoProcessor.from_pretrained(MODEL_ID);
   const model = await CLIPVisionModelWithProjection.from_pretrained(MODEL_ID, { dtype: 'fp32' });

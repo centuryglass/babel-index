@@ -19,7 +19,7 @@ images.
 ```sh
 npm install                        # run this first
 npm run demo                       # http://localhost:5173, against assets/corpus-sample/
-npm run demo -- --images <dir> [--base base.jpg] [--port 5173] [--config config.json]
+npm run demo -- --images <dir> [--base base.jpg] [--base-dir assets] [--port 5173] [--config config.json]
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
@@ -57,8 +57,9 @@ stale instance.
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
 | `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
-| `assets/corpus-sample/` | 26 rooms + a generic, with all five pyramid levels, so the demo needs no setup |
-| `assets/base.cell.png` | the preferred base tile, inpainted and tiling; `mask.png` is its inpainting mask. Nothing reads either yet |
+| `assets/corpus-sample/` | 27 ranked rooms, with all five pyramid levels, so the demo needs no setup. The wallpaper is not here - it comes from `--base-dir` (below) |
+| `assets/base.tile.png` | the blank base tile, served at cell (0, 0); `mask.png` is its inpainting mask. This is the demo's `--base-dir` default |
+| `assets/base_variations/` | the inpainted wallpaper variants, one per file; the map picks between them per cell. Swap these for real inpainting output |
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
 
@@ -147,6 +148,35 @@ stale instance.
   that rebuild is the same O(slots) the ratio slider does on every drag. Nothing
   else recomputes placement.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
+
+### The base tile and its wallpaper variants
+
+- **The centre and the wallpaper are different images, and neither is the
+  other.** Cell (0, 0) always draws the blank `base.tile.png` (the `CENTRE` tile
+  id), reserved for the search box and controls; every generic cell draws one of
+  the inpainted variants (`variantId(i)`), never the blank tile. `variantId(-1)`
+  is `CENTRE`, which is only the fallback for a corpus with no variants at all.
+- **The variant is positional and order-independent, and that is load-bearing.**
+  `layout.variantAt(x, y)` is a seeded hash of the coordinate alone — a reorder
+  never changes a generic cell's face. That is the whole reason `board.js` and
+  `illusion.js` still see one interchangeable `GENERIC` value and the
+  rearrangement planner did not have to learn about variants. `roomAt` is
+  unchanged; only the two renderers (`render.js`, `slide.js`) resolve a cell to a
+  variant. `slide.js` reads the variant at each tile's *home* board cell so a
+  sliding line carries its own faces instead of flipping variant mid-ride.
+- **The base tiles live outside `--images`.** `scan.mjs` discovers them in
+  `--base-dir` (default `assets/`): the centre by name (`base.tile.*`, else
+  `base.*`, else `--base`) and the variants as every image in `base_variations/`.
+  They ride in the manifest as `base: { centre, variants }` and are served from
+  the `/base/` mount, not `/images/`. The old "a `base.*` inside the corpus dir is
+  the wallpaper" behaviour survives only as the `baseDir === imagesDir` case.
+- **The base tiles are served flat (level 0) for now.** `rooms.js` resolves a base
+  id to its url at level 0 only; every coarser request falls back through
+  `servableLevel`. Bounded, because the cache keys on id not cell, but it means
+  `main.jsx` pins each base id at level 0 rather than at the coarsest rung — so
+  the "12 KB pinned generic" is a full-res download until the base assets get
+  their own pyramid (plan §8). Do not pin a base id at `FALLBACK_LEVEL`; there is
+  no tile there.
 
 ### Search and the density gradient
 
