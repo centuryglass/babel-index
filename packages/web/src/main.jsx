@@ -6,13 +6,20 @@ import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
-import { assignTitles, pickTags, bookAtPoint, centreCellRect, HISTORY_SLOT_COUNT } from './centre.js';
-import { CELL_ASPECT, pxPerCell } from './camera.js';
+import {
+  assignTitles,
+  pickTags,
+  bookAtPoint,
+  centreCellRect,
+  HISTORY_SLOT_COUNT,
+  CENTRE_SHELF_RECT,
+} from './centre.js';
+import { CELL_ASPECT, pxPerCell, fitZoom } from './camera.js';
 import { createTileCache, CENTRE, variantId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
 import { createSlideshow, createSlideRenderer } from './slide.js';
-import { sizeOf as pyramidSizeOf } from './pyramid.js';
+import { sizeOf as pyramidSizeOf, BASE_TILE } from './pyramid.js';
 import { useMapCamera } from './useMapCamera.js';
 
 function App() {
@@ -223,11 +230,37 @@ function Library({ manifest }) {
   // stays answerable without a USB cable.
   const onDebug = useMemo(() => (TOUCH_DEBUG ? appendTouchLog : undefined), []);
 
+  // Where the map opens: centred on the centre room's bookshelf and zoomed so it
+  // fills the display, rather than at a fixed zoom that is too far out on a phone
+  // and too far in on a wide monitor. Capped at the tile's NATIVE width so a page
+  // never loads already upscaled - a reader can still zoom to the 2x ceiling by
+  // hand, and this cap rises once the centre tile earns a finer pyramid rung.
+  // Computed once at mount from the viewport; a resize afterwards is the reader's
+  // camera to move, not ours, so this deliberately does not track window size.
+  const opening = useMemo(() => {
+    const rect = CENTRE_SHELF_RECT;
+    const zoom = Math.min(
+      BASE_TILE.w,
+      fitZoom({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        target: rect,
+        aspect: CELL_ASPECT,
+        limits: { min: config.camera.minZoom, max: config.camera.maxZoom },
+        margin: OPENING_MARGIN,
+      })
+    );
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2, zoom };
+    // Intentionally empty deps: the opening view is a one-time mount decision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { cam, flyTo } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
     camera: config.camera,
+    opening,
     onPick,
     onTap,
     onDebug,
@@ -588,6 +621,14 @@ function Library({ manifest }) {
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
+
+/**
+ * How much of the binding axis the opening view fills - a hair under 1 so the
+ * bookshelf clears the screen edges rather than bleeding off them. A by-feel
+ * number, like the chrome thresholds: nothing derives from it and no test pins
+ * its value.
+ */
+const OPENING_MARGIN = 0.94;
 
 /**
  * Books on the centre shelf with a distinct function, reserved by slot index.

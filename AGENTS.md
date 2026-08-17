@@ -207,14 +207,25 @@ stale instance.
   random keyword tag (the pool is cycled to letter all 160). Assignment order is
   override → history (newest first) → tags, and override books are reserved
   first. Titles read top-to-bottom, as printed spines do.
-- **Two zoom configs, and they are not interchangeable.** `initialZoom`
-  (`ZOOM_LIMITS.max`) is the page-load view, fully in so the spines are legible;
-  `defaultZoom` (220) is the return-to-centre view, used by the "centre" button
-  and by the rearrangement's park. The split exists precisely so the reorder
-  animation has a wall of rooms to slide across rather than the one cell the
-  opening shows — collapsing them back to one number silently breaks whichever
-  view loses. `useMapCamera` opens at `initialZoom`; `main.jsx` flies to
-  `defaultZoom`.
+- **Two opening views, and they are not interchangeable.** The page-load view is
+  DERIVED, not configured: `main.jsx` computes it once at mount with `fitZoom`
+  (camera.js), framing the centre room's `caseFrame` (exported as
+  `CENTRE_SHELF_RECT` from `centre.js`) on the display so the spines are legible,
+  centred on the shelf and capped at the tile's NATIVE width so a page never
+  loads upscaled. It is passed to `useMapCamera` as `opening` — do not restate it
+  as a config number, and do not read the viewport inside the hook. `defaultZoom`
+  (220, config) is the return-to-centre view, used by the "centre" button and the
+  rearrangement's park; the split exists precisely so the reorder animation has a
+  wall of rooms to slide across rather than the one shelf the opening shows.
+  Collapsing them silently breaks whichever view loses.
+- **The zoom cap is `MAX_ZOOM_FACTOR` × the tile's native width** (2× = 2048 at
+  1024w), derived in `ZOOM_LIMITS` so it tracks the tile, not a literal. Past 1×
+  the flat base tile is upscaled and softens; the OPENING view is separately
+  capped at 1× in `main.jsx` so a load is never blurry, while a reader may zoom to
+  2× by hand to read a spine. Raising the cap breaks the "tile too large to reach"
+  example in `pyramid.test.mjs` (its base scales with `MAX_ZOOM_FACTOR`); that is
+  the test working, not a regression. Config's `camera.maxZoom` may only narrow
+  this, never widen it.
 
 ### Search and the density gradient
 
@@ -394,10 +405,10 @@ stale instance.
   the screen, where `perCell` only sets how fast one line rides. `WHEEL_ZOOM_RATE`,
   `LONG_PRESS_MS` and `PRESS_SLOP_PX` remain in source because they predate
   `packages/config`, not by rule.
-- **Consuming files state no fallback defaults.** `slide.js` and `useMapCamera.js`
-  take their durations and opening zoom from config and restate none — a default
-  in the consuming file is a second statement of the same fact, and the two
-  drift.
+- **Consuming files state no fallback defaults.** `slide.js` takes its durations
+  from config and `useMapCamera.js` takes its flight duration from config and its
+  opening camera from `main.jsx` (derived) — each restates none. A default in the
+  consuming file is a second statement of the same fact, and the two drift.
 - **Zoom config narrows, never widens.** `ZOOM_LIMITS` in `camera.js` is the hard
   range and the only statement of it; `pyramid.test.mjs` asserts every ladder
   rung is reachable inside it. Config can only tighten the range, which is why a

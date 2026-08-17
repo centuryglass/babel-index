@@ -657,12 +657,19 @@ Where it lives, and the decisions that shaped it:
 - **`render.js` composites on the centre cell only, and it is zoom-gated.** A
   spine narrower than a legibility floor carries no text at all — the shelf holds
   Borges' 32 books, so a title is only readable once the reader has zoomed in.
-  The map now OPENS fully zoomed in (`initialZoom = ZOOM_LIMITS.max`) so the
-  history is legible on load. The **return-to-centre** zoom is a separate config
-  value (`defaultZoom`, back to 220): the "centre" button and the rearrangement
-  park there, so the reorder animation still has a wall of rooms to slide across
-  rather than the one cell the opening view shows. Two zooms, because the opening
-  and the home-for-rearrangement views want opposite things.
+  The map OPENS framed on the bookshelf so the history is legible on load: the
+  opening zoom is DERIVED at mount (`main.jsx`, via `fitZoom` in camera.js) to
+  fit the centre room's `caseFrame` to the display, centred on it and capped at
+  the tile's native width so a page never loads upscaled. It is not a config
+  value — being derived from the viewport, it is too far out on a phone and too
+  far in on a wide monitor to state as one number. The **return-to-centre** zoom
+  stays a config value (`defaultZoom`, 220): the "centre" button and the
+  rearrangement park there, so the reorder animation still has a wall of rooms to
+  slide across rather than the one shelf the opening view shows. Two zooms,
+  because the opening and the home-for-rearrangement views want opposite things.
+  Manual zoom now reaches 2x the tile's native width (`MAX_ZOOM_FACTOR`), so a
+  reader can enlarge a spine past 1:1 to read it; past 1x the flat base tile is
+  upscaled, which is what the base-tile LOD step (§8) will fix.
 - **The gesture is a left-click / tap**, added to `useMapCamera.js` as `onTap`:
   fired on a pointer-up that neither panned past the slop nor stopped a flight,
   and cleared by a completed long-press so a press is never also a tap. Left
@@ -1114,7 +1121,7 @@ that justifies it beside it, the way `pyramid.js` does — and a `config.json` i
 the working directory overrides any subset:
 
 ```
-camera: { minZoom, maxZoom, defaultZoom, initialZoom, flightMs }
+camera: { minZoom, maxZoom, defaultZoom, flightMs }   # opening zoom is derived, not configured
 map:    { contentRatio, slotSeed, genericVariantSeed }
 search: { weights: { keyword, story, clip }, minTokenLength, density: { … } }
 ```
@@ -1602,10 +1609,10 @@ reversed are in [`design-history.md`](design-history.md).
    returned home is worth it every time, or whether a search from far out should
    rearrange without the animation. Related: overlapping the runs, which is what
    would make the trip cheap enough not to mind.
-   **Partly settled:** the history spines needed the map to *open* fully zoomed
-   in, which would have flattened the rearrangement if the two shared a zoom. So
-   the opening zoom and the return-to-centre zoom are now separate config values
-   (`initialZoom` at the cap, `defaultZoom` back to 220), and the rearrangement
+   **Partly settled:** the history spines needed the map to *open* framed on the
+   bookshelf, which would have flattened the rearrangement if the two shared a
+   zoom. So the opening zoom (now derived from the display, `fitZoom`) and the
+   return-to-centre zoom (`defaultZoom`, 220) are separate, and the rearrangement
    parks at the wider `defaultZoom` — the wave is intact. What remains open is the
    original question: whether a search from *far out* should rearrange in place
    rather than always being flown home first.
@@ -1634,7 +1641,9 @@ Already landed and folded into the phase sections: configuration
 ([§the reorder animation](#the-reorder-animation)), the base tile with its
 wallpaper variants ([§3 phase 3](#alternate-generic-rooms)) and the centre
 room's history spines ([§phase 5](#the-history-spines--landed)) — the first
-control bound to the tile geometry, which also moved the opening zoom fully in.
+control bound to the tile geometry. The opening view now frames itself on the
+bookshelf (derived from the display, not a config number), and manual zoom
+reaches 2x the tile's native width so a spine can be enlarged past 1:1 to read.
 
 The queue, in dependency order — shortest path to a demo that survives a real
 corpus:
@@ -1652,15 +1661,37 @@ corpus:
    worst-case table is computed for each level's own zoom band; what is not yet
    measured is a long session wandering at high zoom, where level 0's budget of
    240 is doing the "hold rather than refetch" work on its own.
-3. **Make the centre-room spine titles legible.** They are composited and read
-   top-to-bottom on all 160 books, but even fully zoomed in the text is barely
-   readable — a spine is ~8px wide at the cap, so the font is tiny and the gilt
-   is fighting the painted spine tone. The current zoom-gate (`MIN_SPINE_PX` in
-   `centre.js`) only decides *whether* to draw, not how to make it read. Options
-   to weigh: a hover/near-cursor state that enlarges the book under the pointer;
-   a tooltip or floating label for the hovered spine; a heavier plate or gilt
-   band behind the text; or drawing the title larger and letting it overflow the
-   spine at high zoom. It is the last rough edge on the history spines and the
-   reason the shelf is more satisfying to look at than to read. Kept small on
-   purpose — the compositing, the geometry and the interaction are done; this is
-   presentation only.
+3. **Make the centre-room spine titles legible (typography).** They are
+   composited and read top-to-bottom on all 160 books. Raising the zoom cap to 2x
+   native already helped the *physical* size — a spine is now ~27px wide at the
+   cap rather than ~12px — but the gilt still fights the painted spine tone and
+   the font stays small. The zoom-gate (`MIN_SPINE_PX` in `centre.js`) only
+   decides *whether* to draw, not how to make it read. Options to weigh: a
+   hover/near-cursor state that enlarges the book under the pointer; a tooltip or
+   floating label for the hovered spine; a heavier plate or gilt band behind the
+   text; or drawing the title larger and letting it overflow the spine at high
+   zoom. Because the composited text is canvas `fillText`, it is resolution-
+   independent and already crisp — this is a size-and-contrast call, distinct from
+   the base-tile *art* being upscaled (item 4). Kept small on purpose: the
+   compositing, geometry and interaction are done; this is presentation only.
+4. **An ultra-res LOD rung for the centre tile (crisp zoom past 1:1).** The base
+   tiles are served flat at native width, so zooming a reader past 1x (up to the
+   new 2x cap) upscales the flat art and it softens — the composited spine text
+   stays sharp, but the shelf *behind* it blurs. The fix is a finer-than-level-0
+   rung for the centre tile specifically: a pre-generated high-res render swapped
+   in by semantic zoom as the reader comes in past 1:1. **Pre-generated, not
+   dynamic upscaling** — a static asset the pyramid selects, the same LOD
+   machinery as item 1 but pointing *up* the resolution ladder rather than down.
+   Lands naturally alongside item 1 (base assets earn a pyramid); the opening cap
+   at native width in `main.jsx` can then rise. Cosmetic backdrop polish — gate on
+   whether the blur past 1x actually bothers a reader before investing.
+5. **Accessibility: a secondary, non-canvas interface to the corpus.** The whole
+   map is a single canvas — no DOM per room, book titles are painted pixels, and
+   picking resolves to a cell — which is a dead end for screen readers, keyboard
+   navigation, copy/paste and reduced-input use. Accommodating this well is not a
+   tweak to the canvas but likely a *parallel* interface over the same dataset (a
+   navigable list/search view of rooms, keywords and stories), reachable and
+   synchronised with the map. **Needs its own planning session** — it touches
+   data shape, routing and how the two interfaces share state — so this is a
+   placeholder to discuss, not a scoped task. Consult `docs/design-history.md`
+   before re-treading the "it's all one canvas" decision.
