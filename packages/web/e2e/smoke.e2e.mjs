@@ -385,6 +385,8 @@ describe('the library, in a browser', { concurrency: false }, () => {
 
     // The map is 100% non-generic by the time this runs, so the centre of the
     // screen is a corpus room - but the centre CELL is reserved, so aim off it.
+    // (The reader last returned to the centre at `defaultZoom`, not the fully-in
+    // page-load zoom, so rooms around the centre are on screen here.)
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
     assert.match(await card.locator('.card-id').textContent(), /^room \d+/);

@@ -89,24 +89,30 @@ const spanOf = (a, b) => ({
 
 /**
  * @param {object} opts
- * @param {{minZoom: number, maxZoom: number, defaultZoom: number, flightMs: number}} opts.camera
+ * @param {{minZoom: number, maxZoom: number, defaultZoom: number, initialZoom: number, flightMs: number}} opts.camera
  *   resolved `config.camera`, from the manifest
  * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
  *   canvas-relative point of a right-click or a completed long press, with the
  *   live camera - which the hook owns, so the consumer does not have to reach
  *   back for a ref this hook has not returned yet
+ * @param {(px: number, py: number, cam: object) => void} [opts.onTap]
+ *   canvas-relative point of a left-click / tap that neither panned nor stopped
+ *   a flight. The centre room's book spines are what this selects.
  * @param {(line: string) => void} [opts.onDebug] one line per pointer event.
  *   Off unless asked for. Touch gestures can only really be judged on a device,
  *   and a phone has no console you can read while both thumbs are busy - so
  *   this exists to make "what did the browser actually send" answerable from
  *   the glass. See `?touchdebug` in main.jsx.
  */
-export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick, onDebug }) {
+export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick, onTap, onDebug }) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
   const cam = useRef({
     x: 0.5,
     y: 0.5,
-    zoom: clampZoom(camera.defaultZoom, limits),
+    // The PAGE-LOAD zoom, which is not the return-to-centre zoom: the map opens
+    // fully in on the readable centre, and `defaultZoom` (wider) is where the
+    // "centre" button and the rearrangement go.
+    zoom: clampZoom(camera.initialZoom, limits),
     limits,
   });
   const drag = useRef(null);
@@ -114,6 +120,10 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
   const pointers = useRef(new Map());
   const pinch = useRef(null);
   const flight = useRef(null);
+  // A candidate left-click tap, tracked from its pointerdown so pointerup can
+  // tell a tap from a pan. Left as null the moment it becomes anything else - a
+  // drag, a pinch, or the press that stopped a flight.
+  const tap = useRef(null);
 
   /**
    * End whatever is in the air, telling the caller whether it arrived.
@@ -191,6 +201,11 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       // here rather than on the first move so that even a press that never
       // becomes a drag stops the flight - reaching for a room that is still
       // sliding and having it slide on is the thing this is for.
+      //
+      // Whether a flight was in the air is remembered: a press that stopped one
+      // is the reader halting the map, not a tap on whatever ended up under the
+      // finger, and must not fire `onTap`.
+      const interruptedFlight = !!flight.current;
       endFlight(false);
 
       // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
@@ -209,11 +224,13 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
         const [a, b] = firstTwo(pointers.current);
         pinch.current = spanOf(a, b);
         drag.current = null;
+        tap.current = null; // two fingers is a pinch, never a tap
         report('down', e);
         return;
       }
 
       drag.current = { x: e.clientX, y: e.clientY };
+      tap.current = onTap ? { x: e.clientX, y: e.clientY, moved: false, interruptedFlight } : null;
       report('down', e);
       if (onPick) {
         const { clientX, clientY } = e;
@@ -222,6 +239,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
           y: clientY,
           timer: setTimeout(() => {
             press.current = null;
+            // A press that became the overlay gesture is not also a tap; drop
+            // the tap candidate so lifting the finger does not fire onTap too.
+            tap.current = null;
             pick(clientX, clientY);
           }, LONG_PRESS_MS),
         };
@@ -240,6 +260,11 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       // unreachable on exactly the devices it exists for.
       if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > PRESS_SLOP_PX)
         cancelPress();
+
+      // A tap that wanders past the slop is a pan, by the same measure the long
+      // press uses.
+      if (tap.current && Math.hypot(e.clientX - tap.current.x, e.clientY - tap.current.y) > PRESS_SLOP_PX)
+        tap.current.moved = true;
 
       if (pinch.current && pointers.current.size >= 2) {
         const [a, b] = firstTwo(pointers.current);
@@ -306,6 +331,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
         const [remaining] = firstTwo(pointers.current);
         pinch.current = null;
         drag.current = { x: remaining.x, y: remaining.y };
+        tap.current = null; // a pinch was in progress; the release is not a tap
         report(e.type, e);
         return;
       }
@@ -313,6 +339,16 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       canvas.classList.remove('dragging');
       drag.current = null;
       pinch.current = null;
+
+      // A clean tap: the last finger up, having not wandered and not stopped a
+      // flight, and not a cancel. Left-click/tap is otherwise unclaimed, so this
+      // is what selects a book on the centre room.
+      const t = tap.current;
+      tap.current = null;
+      if (onTap && t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {
+        const rect = canvas.getBoundingClientRect();
+        onTap(t.x - rect.left, t.y - rect.top, cam.current);
+      }
       report(e.type, e);
     };
 
@@ -352,7 +388,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onDebug, endFlight]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDebug, endFlight]);
 
   // Step whichever of the two things is moving the camera on its own: a flight
   // while one is in the air, otherwise the glide back toward the content region

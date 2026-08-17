@@ -178,6 +178,44 @@ stale instance.
   their own pyramid (plan §8). Do not pin a base id at `FALLBACK_LEVEL`; there is
   no tile there.
 
+### The centre room's controls
+
+- **`centre.js` is the pure half, and the geometry comes from the tools tree.**
+  The book layout, `assignTitles`, the hit-test and `pickTags` live in
+  `packages/web/src/centre.js` and are asserted browser-free in `centre.test.mjs`
+  — the same split as `picking.js`. All 160 books are lettered; a book is one
+  flat slot id (`BOOK_COUNT` of them) and the history shelf is just the id range
+  on it, so there is no (shelf, index) pair to keep in step. The rects come from
+  `layout({ width: 1, height: 1 })` in `tools/base-image/lib/geometry.js`, the
+  one module the manifest is generated from, so there is no second copy to drift.
+  `HISTORY_SHELF = 1` restates the `historySpines` anchor because the anchors
+  live only in the generated JSON, not in a JS constant.
+- **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
+  the centre tile width→`cellPx.x` and height→`cellPx.y` independently, so a
+  spine rect is `{x,w}` against the cell width and `{y,h}` against its height —
+  `layout({width:1,height:1})` returns exactly that. One divisor for both axes is
+  the same silent-stretch bug the tile geometry warns about.
+- **Compositing is content, not chrome, and it is zoom-gated.** It draws on the
+  centre cell whenever `centreSlots` is passed, but `composeSpines` itself draws
+  nothing below a legible spine width — so far out it is free. `render.test.mjs`
+  never passes `centreSlots`, which is why its recording `fakeCtx` needs no
+  `save`/`rotate` and the byte-cost assertions are untouched. Keep it that way.
+- **`onTap` must lose to a pan and to a flight.** It fires only on a pointer-up
+  that stayed within the slop and did not stop a flight, and a completed
+  long-press clears the tap candidate so a press is never also a tap. History is
+  session-only React state on the history shelf only; every other book is a
+  random keyword tag (the pool is cycled to letter all 160). Assignment order is
+  override → history (newest first) → tags, and override books are reserved
+  first. Titles read top-to-bottom, as printed spines do.
+- **Two zoom configs, and they are not interchangeable.** `initialZoom`
+  (`ZOOM_LIMITS.max`) is the page-load view, fully in so the spines are legible;
+  `defaultZoom` (220) is the return-to-centre view, used by the "centre" button
+  and by the rearrangement's park. The split exists precisely so the reorder
+  animation has a wall of rooms to slide across rather than the one cell the
+  opening shows — collapsing them back to one number silently breaks whichever
+  view loses. `useMapCamera` opens at `initialZoom`; `main.jsx` flies to
+  `defaultZoom`.
+
 ### Search and the density gradient
 
 - **Search blends three signals into one sort; it does not tier them.** Every

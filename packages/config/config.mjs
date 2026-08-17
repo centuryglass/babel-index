@@ -49,9 +49,26 @@ export const DEFAULTS = {
     maxZoom: null,
 
     /**
-     * Where the camera opens. 220 px per cell shows a handful of rooms whole -
-     * enough that the map reads as a wall of rooms rather than as one image or
-     * as a mosaic of thumbnails. Clamped into the range above.
+     * Where the camera opens on page load: fully zoomed in, on the centre room.
+     * The centre carries the search box, the controls and the history spines,
+     * and a spine is only legible once it is wide enough on screen - so the map
+     * opens having already zoomed in far enough to read and click them.
+     * `ZOOM_LIMITS.max` rather than a restated literal keeps the cap a single
+     * source in camera.js.
+     *
+     * Deliberately SEPARATE from `defaultZoom`: the opening view wants the centre
+     * filling the screen, but returning to the centre (and the rearrangement that
+     * parks there) wants a handful of rooms in view so the animation reads. One
+     * number could not be both.
+     */
+    initialZoom: ZOOM_LIMITS.max,
+
+    /**
+     * Where the camera returns: the "centre" button, and the zoom a search flies
+     * home to before rearranging. 220 px per cell shows a handful of rooms whole
+     * - enough that the map reads as a wall of rooms rather than one image, and
+     * enough that the reorder animation has cells to slide. Clamped into the
+     * range above. Distinct from `initialZoom` (the page-load view); see there.
      */
     defaultZoom: 220,
 
@@ -272,11 +289,19 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
     defaultZoom = clamped;
   }
 
+  let initialZoom = number(camIn.initialZoom, DEFAULTS.camera.initialZoom, 'camera.initialZoom', notes);
+  if (initialZoom < minZoom || initialZoom > maxZoom) {
+    const clamped = Math.min(maxZoom, Math.max(minZoom, initialZoom));
+    notes.push(`camera.initialZoom ${initialZoom} is outside ${minZoom}-${maxZoom}; using ${clamped}`);
+    initialZoom = clamped;
+  }
+
   return {
     camera: {
       minZoom,
       maxZoom,
       defaultZoom,
+      initialZoom,
       flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
     },
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
