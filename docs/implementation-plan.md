@@ -524,7 +524,7 @@ Two things measured rather than assumed: the animation holds one level for its
 whole duration (the zoom is parked, so `pickLevel` cannot move), and no frame
 went blank on the sample corpus at any point in a rearrangement.
 
-#### Alternate generic rooms
+#### Alternate generic rooms — **landed**
 
 The generic room is ~80% of every screen, so it is the single asset the map leans
 on hardest, and one of it is visibly one of it. A handful of alternates —
@@ -536,26 +536,44 @@ every alternate is inpainted from the same base with the same edge-clear mask, s
 alternates tile with each other and with every corpus room by exactly the
 argument in [§1](#1-what-a-tile-is). There is nothing extra to verify.
 
-Four seams, and one of them is a prerequisite rather than a change:
+**Where the design shifted from the original sketch.** The centre and the
+wallpaper are now *different* images. The centre at cell (0, 0) is always the
+blank `base.tile.png` — the plain render, reserved for the search box and
+controls — and the wallpaper elsewhere is one of the inpainted variants, *never*
+the blank tile. So there is a distinct `CENTRE` tile id and N `variantId(i)` ids,
+not one shared `GENERIC`. The base assets also live *outside* `--images`, in a
+`--base-dir` (default `assets/`): the blank tile at its root, the variants in a
+`base_variations/` folder. That is what lets the base render be shared across
+corpora and swapped from the inpainting pipeline without touching a corpus, and
+it is why `000.jpg` is now an ordinary ranked room rather than the wallpaper.
 
-- **`ordering.js` picks the variant.** A `genericVariantAt(x, y)` alongside
+The seams, as built:
+
+- **`ordering.js` picks the variant.** `genericVariantAt(x, y)` alongside
   `isContentSlot`, on the same `cellHash` machinery — stable, stored nowhere,
-  infinite — but salted with its own seed so the choice of wallpaper does not
-  correlate with which cells are content slots. The centre room is still cell
-  (0, 0) and is not a variant.
-- **`scan.mjs` discovers a set, not a file.** Today the generic is one `base.*`;
-  it becomes every `base*.{jpg,png,webp}` in the directory, sorted, with the
-  existing single-file behaviour falling out as the one-element case. `--base`
-  keeps naming the first.
-- **`rooms.js` and `tiles.js` stop treating `GENERIC` as one id.** The cache keys
-  on `(id, level)` already, so alternates are ordinary ids that happen to be
-  excluded from the ranked corpus.
-- **Pinning has to stop being unbounded first.** Every alternate must be pinned
-  at the fallback level, because the pinned generic is what makes "a cell never
-  fails to display" true rather than likely. Pinning is currently free because it
-  is one room and unbudgeted; N rooms unbudgeted is a hole in rule 1's floor.
-  [§8](#8-next-session) already carried "give the pinned generic its own budget"
-  as a tidy-up — this is what promotes it to a dependency.
+  infinite — but salted with `genericVariantSeed` so the choice of wallpaper does
+  not correlate with which cells are content slots. It is **positional and
+  order-independent**, which is load-bearing: a reorder never changes a generic
+  cell's face, so `board.js`/`illusion.js` still see one interchangeable
+  `GENERIC` value and the rearrangement planner did not have to change at all.
+  `roomAt` is unchanged; the layout gains a `variantAt(x, y)` the renderers call.
+- **`scan.mjs` discovers a base set.** `scanBase()` finds the centre (`base.tile.*`,
+  else `base.*`, else `--base`) and every image in `base_variations/`. The
+  manifest field is `base: { centre, variants }`, served from `/base/` (a new
+  static mount in `app.mjs`). The old single-directory behaviour survives as the
+  `baseDir === imagesDir` case.
+- **The two renderers translate a cell to a tile id.** `render.js` maps the
+  centre to `CENTRE`, a generic to `variantId(layout.variantAt(x, y))`, a slot to
+  its room id; `slide.js` does the same off board values, reading the variant at
+  each tile's *home* board cell so a sliding line carries its own faces rather
+  than flipping variant mid-ride. `variantId(-1)` is `CENTRE`, so a corpus with
+  an empty `base_variations` still draws.
+- **Pinning is bounded, not budgeted-per-level.** The base tiles are served flat
+  (level 0), so `main.jsx` pins the centre plus each variant at level 0 — a
+  handful of entries under a 240 budget, rather than the unbounded across-levels
+  pinning the original sketch worried about. Giving the base assets their own
+  pyramid (so the fallback is 12 KB again, not a full-res download) is
+  [§8](#8-next-session) item 1.
 
 ### Phase 4 — search *(concept step 5)* — **CLIP landed; two more signals to come**
 
@@ -1558,24 +1576,23 @@ Already landed and folded into the phase sections: configuration
 ([§3c](#3c-room-metadata--keywords-and-stories)), hybrid ranking
 ([§3d](#3d-hybrid-search--three-signals-one-sort)), the metadata overlay
 ([§5b](#5b-the-metadata-overlay)), animated camera moves
-([§camera movement](#camera-movement)) and the reorder animation
-([§the reorder animation](#the-reorder-animation)).
+([§camera movement](#camera-movement)), the reorder animation
+([§the reorder animation](#the-reorder-animation)) and the base tile with its
+wallpaper variants ([§3 phase 3](#alternate-generic-rooms)).
 
 The queue, in dependency order — shortest path to a demo that survives a real
 corpus:
 
-1. **Give the pinned generic its own budget.** It is pinned at every level it is
-   asked for, which is correct and currently free — it is one room. Promoted from
-   tidy-up to prerequisite by 2, which makes it several.
-2. **Alternate generic rooms** ([§3 phase 3](#alternate-generic-rooms)) —
-   `genericVariantAt()` in `ordering.js`, a set rather than a file in `scan.mjs`,
-   and `GENERIC` stopping being a single id downstream.
-3. **Serve `assets/base.cell.png` as the generic room**, replacing `000.jpg`.
-   The asset is in the repo and is the right shape; what is missing is a way for
-   the demo to reach a base image that lives outside `--images <dir>`, since
-   `scan.mjs` only looks for `base.*` inside the corpus directory. Folds
-   naturally into 2, which is rewriting that discovery anyway.
-4. **Re-check the budgets against a real corpus at level 0.** The ladder's
+1. **Give the base variants a resolution pyramid.** They are served flat (level 0
+   only) and drawn full-res at every zoom, which is bounded — the cache keys on id,
+   so a far-out screen holds only the handful of distinct base images — but it is
+   the wrong *shape* on the wire: a variant is a 1024×768 download where the pinned
+   generic used to be 12 KB. Running `generate:mips` over `base_variations/` and
+   `base.tile.png`, then teaching `rooms.js` a base level ladder rather than "level
+   0 only", is the fix. Until then, `main.jsx` pins each base id at level 0, which
+   is a real budget question the moment there are many variants: N pinned level-0
+   entries against a budget of 240.
+2. **Re-check the budgets against a real corpus at level 0.** The ladder's
    worst-case table is computed for each level's own zoom band; what is not yet
    measured is a long session wandering at high zoom, where level 0's budget of
    240 is doing the "hold rather than refetch" work on its own.

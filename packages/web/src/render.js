@@ -25,10 +25,16 @@
  */
 import { PYRAMID, prefetchBounds } from './pyramid.js';
 import { pxPerCell } from './camera.js';
-import { GENERIC } from './tiles.js';
+import { CENTRE, variantId } from './tiles.js';
 
-/** The cache id for whatever a cell holds. Centre and generic share one image. */
-const idOf = (cell) => (cell.centre || cell.generic ? GENERIC : cell.id);
+/**
+ * The cache id for whatever a cell holds. The centre is the blank base tile; a
+ * generic cell is one of the wallpaper variants, chosen positionally by the
+ * layout (so a reorder never changes it); a slot is its room. `variantId(-1)`
+ * falls back to the centre tile, which covers a corpus with no variants at all.
+ */
+const idOf = (cell, layout, gx, gy) =>
+  cell.centre ? CENTRE : cell.generic ? variantId(layout.variantAt(gx, gy)) : cell.id;
 
 export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
   // Survives across frames purely so hysteresis has something to compare to.
@@ -81,7 +87,7 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
     for (let gy = bounds.y0; gy <= bounds.y1; gy++) {
       for (let gx = bounds.x0; gx <= bounds.x1; gx++) {
         const cell = layout.roomAt(gx, gy, order);
-        const id = idOf(cell);
+        const id = idOf(cell, layout, gx, gy);
         visible.push(id);
 
         const [sx, sy] = toScreen(gx, gy);
@@ -110,7 +116,7 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
-        cache.prefetch(idOf(layout.roomAt(gx, gy, order)), level);
+        cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
       }
 
     // Zooming out needs ~4x as many tiles at once and has nothing to show until

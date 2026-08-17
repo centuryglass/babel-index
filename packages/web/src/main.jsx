@@ -7,11 +7,11 @@ import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
 import { CELL_ASPECT, pxPerCell } from './camera.js';
-import { createTileCache, GENERIC } from './tiles.js';
+import { createTileCache, CENTRE, variantId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
 import { createSlideshow, createSlideRenderer } from './slide.js';
-import { FALLBACK_LEVEL, sizeOf as pyramidSizeOf } from './pyramid.js';
+import { sizeOf as pyramidSizeOf } from './pyramid.js';
 import { useMapCamera } from './useMapCamera.js';
 
 function App() {
@@ -104,6 +104,13 @@ function Library({ manifest }) {
   // the matches cluster toward the centre rather than scatter at the slider's
   // ratio. No search means no profile, and no profile means the uniform map -
   // so clearing the box restores it exactly, without a second code path.
+  // How many wallpaper variants the corpus shipped, and the seed that scatters
+  // them. Both are positional and order-independent, so they never change under
+  // a search or a reorder - which is why the rearrangement can treat every
+  // generic cell as one interchangeable value.
+  const variantCount = manifest.base?.variants?.length ?? 0;
+  const variantSeed = config.map.genericVariantSeed;
+
   const layout = useMemo(
     () =>
       createLayout({
@@ -111,11 +118,13 @@ function Library({ manifest }) {
         contentRatio,
         seed,
         aspect: CELL_ASPECT,
+        variantCount,
+        variantSeed,
         density: result?.certainty
           ? { ...config.search.density, certainty: result.certainty }
           : null,
       }),
-    [roomCount, contentRatio, seed, total, result, config]
+    [roomCount, contentRatio, seed, total, result, config, variantCount, variantSeed]
   );
 
   const order = useMemo(() => {
@@ -137,10 +146,15 @@ function Library({ manifest }) {
       urlFor: createUrlFor(manifest),
       onLoad: () => requestDraw(),
     });
-    // Pinned and preloaded at its coarsest: 12 KB that guarantees every cell
-    // has something to draw, however little of its own room has arrived.
-    tiles.pin(GENERIC);
-    tiles.request(GENERIC, FALLBACK_LEVEL);
+    // The base tiles are rule 1's floor: pinned and preloaded so every cell has
+    // something to draw however little of its own room has arrived. That is now
+    // the blank centre plus one entry per wallpaper variant - a bounded handful,
+    // so pinning them all still fits under the level's budget. They are served
+    // flat (level 0), so preload and pin there rather than at the coarsest rung.
+    for (const id of [CENTRE, ...(manifest.base?.variants ?? []).map((_, i) => variantId(i))]) {
+      tiles.pin(id);
+      tiles.request(id, 0);
+    }
     return tiles;
   }, [manifest, requestDraw]);
 
@@ -234,6 +248,7 @@ function Library({ manifest }) {
           ? slideRenderer.draw({
               ctx, width: w, height: h, dpr, cam: running.cam,
               board: running.board, origin: running.origin, motions: running.motions,
+              variantAt: layout.variantAt,
             })
           : renderer.draw({
               ctx, width: w, height: h, dpr, cam: cam.current,

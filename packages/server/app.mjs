@@ -21,6 +21,8 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {object} opts
  * @param {object} opts.manifest       the initial scan (see scan.mjs)
  * @param {string} opts.imagesDir      directory the corpus is served from
+ * @param {string} [opts.baseDir]      directory the base tiles are served from,
+ *                                     under /base (default: the images directory)
  * @param {() => Promise<object>} opts.rescan re-read the directory
  * @param {object} [opts.config]       resolved config (see packages/config); the
  *                                     defaults when absent
@@ -28,7 +30,7 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
  *                                     editing the page needs no restart
  */
-export function createApp({ manifest, imagesDir, rescan, config, bundleJs = '', readIndexHtml }) {
+export function createApp({ manifest, imagesDir, baseDir = imagesDir, rescan, config, bundleJs = '', readIndexHtml }) {
   const app = express();
 
   // Config rides on the manifest rather than getting an endpoint of its own:
@@ -81,6 +83,11 @@ export function createApp({ manifest, imagesDir, rescan, config, bundleJs = '', 
   // express.static resolves and confines paths itself, so `..` in a request
   // cannot climb out of the images directory.
   app.use('/images', express.static(imagesDir, { maxAge: '1h', immutable: true }));
+
+  // The base tiles (centre + wallpaper variants) live outside the corpus, so
+  // they get their own mount. When baseDir is the images directory the two
+  // overlap harmlessly - the manifest still addresses base tiles via /base.
+  app.use('/base', express.static(baseDir, { maxAge: '1h', immutable: true }));
 
   // The tab icon would otherwise be a 404 on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
