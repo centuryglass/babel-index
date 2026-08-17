@@ -55,7 +55,9 @@ test('a missing overlay is the same as an empty one', () => {
 
 test('config narrows the zoom range', () => {
   const c = resolveConfig(
-    { camera: { minZoom: 40, maxZoom: 80, defaultZoom: 60 } },
+    // Both zooms in-range, so nothing is clamped and the narrowing is silent -
+    // the default initialZoom sits at the cap and would otherwise be reported.
+    { camera: { minZoom: 40, maxZoom: 80, defaultZoom: 60, initialZoom: 80 } },
     { zoomLimits: LIMITS }
   );
   assert.deepEqual(c.notes, []);
@@ -102,11 +104,23 @@ test('narrowing far enough to orphan a rung is allowed and silent', () => {
   // leaving the finest levels unreachable needs no complaint. What it must not
   // do is quietly *widen* anything, which the tests above cover.
   const c = resolveConfig(
-    { camera: { minZoom: 26, maxZoom: 30, defaultZoom: 28 } },
+    // Both zooms must be given in-range: the defaults sit at opposite ends (the
+    // opening zoom at the cap, the return zoom mid-range), so a narrowed range
+    // would clamp at least one of them and that is reported, not silent.
+    { camera: { minZoom: 26, maxZoom: 30, defaultZoom: 28, initialZoom: 30 } },
     { zoomLimits: ZOOM_LIMITS }
   );
   assert.deepEqual(c.notes, []);
   assert.equal(c.camera.maxZoom, 30);
+});
+
+test('initialZoom is clamped into the configured range, like defaultZoom', () => {
+  const c = resolveConfig(
+    { camera: { minZoom: 400, maxZoom: 800, initialZoom: 5000 } },
+    { zoomLimits: LIMITS }
+  );
+  assert.equal(c.camera.initialZoom, 800);
+  assert.match(c.notes.join('\n'), /initialZoom/);
 });
 
 test('nonsense values fall back and say so, rather than throwing', () => {
@@ -154,6 +168,7 @@ test('the shipped defaults are valid against the real limits', () => {
   const c = resolveConfig({}, { zoomLimits: ZOOM_LIMITS });
   assert.deepEqual(c.notes, [], 'defaults must not need correcting');
   assert.ok(c.camera.defaultZoom >= ZOOM_LIMITS.min && c.camera.defaultZoom <= ZOOM_LIMITS.max);
+  assert.ok(c.camera.initialZoom >= ZOOM_LIMITS.min && c.camera.initialZoom <= ZOOM_LIMITS.max);
 });
 
 // --- the flight duration ---------------------------------------------------

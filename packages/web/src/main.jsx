@@ -6,6 +6,7 @@ import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
+import { assignTitles, pickTags, bookAtPoint, centreCellRect, HISTORY_SLOT_COUNT } from './centre.js';
 import { CELL_ASPECT, pxPerCell } from './camera.js';
 import { createTileCache, CENTRE, variantId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
@@ -50,6 +51,13 @@ function Library({ manifest }) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [metadata, setMetadata] = useState(null);
+  // Session-only search history, newest first, one book per entry. Kept in
+  // React state like every other runtime value - it does not survive a reload,
+  // which matches the camera and the current ranking.
+  const [history, setHistory] = useState([]);
+  const pushHistory = useCallback((term) => {
+    setHistory((prev) => [term, ...prev.filter((t) => t !== term)].slice(0, HISTORY_SLOT_COUNT));
+  }, []);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
@@ -92,6 +100,16 @@ function Library({ manifest }) {
   // Folded and tokenised once, so a search is set lookups rather than a
   // megabyte of string work.
   const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
+
+  // The centre room's 160 book titles. Every book shows a stable random corpus
+  // keyword; the history shelf shows past searches, newest first, in front of
+  // those. Reserved override books are never overwritten. `assignTitles` is
+  // pure, so this is a memo, not per-frame work.
+  const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
+  const centreSlots = useMemo(
+    () => assignTitles({ history, tags, overrides: CENTRE_OVERRIDES }),
+    [history, tags]
+  );
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -192,6 +210,13 @@ function Library({ manifest }) {
     [layout, order]
   );
 
+  // A tap selects a book on the centre room. Stable identity - so the pointer
+  // listeners are not re-bound every render - over a ref that always holds the
+  // latest logic, since the handler closes over `search` and `centreSlots`,
+  // which are redefined below and on every render.
+  const tapRef = useRef(() => {});
+  const onTap = useCallback((px, py, camera) => tapRef.current(px, py, camera), []);
+
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
   // really be judged on a device, and a phone has no console you can read with
   // both thumbs busy - so this is how "what did the browser actually send"
@@ -204,6 +229,7 @@ function Library({ manifest }) {
     onChange: requestDraw,
     camera: config.camera,
     onPick,
+    onTap,
     onDebug,
   });
 
@@ -252,7 +278,7 @@ function Library({ manifest }) {
             })
           : renderer.draw({
               ctx, width: w, height: h, dpr, cam: cam.current,
-              layout: showing.layout, order: showing.order,
+              layout: showing.layout, order: showing.order, centreSlots,
             });
 
       const hud = document.getElementById('hud');
@@ -304,7 +330,7 @@ function Library({ manifest }) {
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
     };
-  }, [layout, order, renderer, slideRenderer, cache, cam]);
+  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots]);
 
   // --- the rearrangement animation -----------------------------------------
 
@@ -415,6 +441,10 @@ function Library({ manifest }) {
       setStatus('');
       return;
     }
+    // A real search is a history entry, and the frontmost book from now on. Done
+    // before the fetch, so a click on that book is remembered even if the
+    // ranking that follows is a stub.
+    pushHistory(term.trim());
     const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`).then((r) => r.json());
 
     // Three signals, blended into one sort over the whole corpus. Any of them
@@ -458,6 +488,34 @@ function Library({ manifest }) {
     setQuery(text);
     setCard(null);
     search(text);
+  };
+
+  // A future override book does something other than search - an artist's
+  // statement, say. Nothing reserves a slot yet (CENTRE_OVERRIDES is empty), so
+  // this is the seam, not a live feature; it is wired so adding an override is
+  // the only change needed.
+  const onOverride = (slot) => {
+    void slot; // e.g. switch (slot.action) { case 'statement': ... }
+  };
+
+  // Selecting a book on the centre room. Off the centre cell or on an empty
+  // book, nothing happens - the tap is not otherwise claimed. A history or tag
+  // book repeats its search; an override book runs its function.
+  tapRef.current = (px, py, camera) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
+    const cell = centreCellRect(camera, rect);
+    const slotIndex = bookAtPoint(px, py, cell);
+    if (slotIndex == null) return;
+    const slot = centreSlots[slotIndex];
+    if (!slot) return;
+    if (slot.term) {
+      setQuery(slot.term);
+      search(slot.term);
+    } else if (slot.action) {
+      onOverride(slot);
+    }
   };
 
   return (
@@ -530,6 +588,18 @@ function Library({ manifest }) {
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
+
+/**
+ * Books on the centre shelf with a distinct function, reserved by slot index.
+ *
+ * The seam the concept asks for - "certain books will have distinct functions,
+ * e.g. displaying an artist's statement" - built so history can never overwrite
+ * them. It ships empty; the shape a future entry takes is
+ *   { 0: { text: 'artist’s statement', action: 'statement' } }
+ * where `action` is dispatched by `onOverride` below. Add nothing here until the
+ * function it names exists, so an override always does something.
+ */
+const CENTRE_OVERRIDES = {};
 
 /**
  * `?touchdebug` prints the raw pointer stream on screen.

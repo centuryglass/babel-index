@@ -624,8 +624,55 @@ Bind to the anchors in `tile-geometry.json`: `searchField`, `submitButton`,
 positioned by the same transform that draws the centre tile, with the visible
 affordance painted into the art.
 
-Search-term spines need text composited onto spine rectangles at runtime — a
-small canvas overlay per spine.
+#### The history spines — landed
+
+Every book on all five shelves — 160 of them — carries a composited title that
+reads top-to-bottom down the spine, the way a shelved book is printed. Two roles
+share the wall: the `historySpines` anchor (shelf 1) holds the **search
+history** — every search projects onto its frontmost book, newest first, and
+clicking a book repeats its search — while every other book shows a random corpus
+keyword. Confining history to one shelf keeps it legible as history and turns the
+rest of the wall into a browsable index; clicking any keyword book runs it as a
+search. Reserved **override** books — a future artist's statement, say — are a
+built seam that ships empty; history never overwrites them.
+
+Why all 160 rather than the one history shelf: the history alone is a shelf of
+text among four blank ones, and a much smaller pool of keywords to stumble on.
+Lettering the whole wall is more of the corpus surfaced and a more finished tile
+— the extra books are tags, so nothing about history changes.
+
+Where it lives, and the decisions that shaped it:
+
+- **`packages/web/src/centre.js` is the pure half**, split out like `picking.js`:
+  the book geometry, `assignTitles` (override → history → tags, in that
+  precedence), the hit-test, `pickTags` and the text compositing, all assertable
+  without a browser (`centre.test.mjs`). Every book is one flat slot id — the
+  history shelf is just the id range that falls on it — so there is one address
+  for a book, not a (shelf, index) pair to keep in step. The geometry comes from
+  the SINGLE SOURCE — `layout({ width: 1, height: 1 })` from
+  `tools/base-image/lib/geometry.js`, the same module the manifest is generated
+  from — as raw per-axis fractions, which is exactly the space `render.js`
+  stretches the tile into. There is no shared JS constant for the anchors, so
+  `HISTORY_SHELF = 1` restates the one number the manifest states.
+- **`render.js` composites on the centre cell only, and it is zoom-gated.** A
+  spine narrower than a legibility floor carries no text at all — the shelf holds
+  Borges' 32 books, so a title is only readable once the reader has zoomed in.
+  The map now OPENS fully zoomed in (`initialZoom = ZOOM_LIMITS.max`) so the
+  history is legible on load. The **return-to-centre** zoom is a separate config
+  value (`defaultZoom`, back to 220): the "centre" button and the rearrangement
+  park there, so the reorder animation still has a wall of rooms to slide across
+  rather than the one cell the opening view shows. Two zooms, because the opening
+  and the home-for-rearrangement views want opposite things.
+- **The gesture is a left-click / tap**, added to `useMapCamera.js` as `onTap`:
+  fired on a pointer-up that neither panned past the slop nor stopped a flight,
+  and cleared by a completed long-press so a press is never also a tap. Left
+  click was reserved for "focus this room" and otherwise unused, so the centre
+  books claim it without collision. History is session-only React state, newest
+  first, capped at the 32 books.
+
+Still unbound, for a later pass: `scoreSortSpines` (freed by the death of
+curation — §5b), `shuffleSpine`, and making `searchField`/`submitButton`
+themselves the hit regions rather than the side panel.
 
 ### Phase 6 — generate-on-demand *(stretch)*
 
@@ -1067,7 +1114,7 @@ that justifies it beside it, the way `pyramid.js` does — and a `config.json` i
 the working directory overrides any subset:
 
 ```
-camera: { minZoom, maxZoom, defaultZoom, flightMs }
+camera: { minZoom, maxZoom, defaultZoom, initialZoom, flightMs }
 map:    { contentRatio, slotSeed, genericVariantSeed }
 search: { weights: { keyword, story, clip }, minTokenLength, density: { … } }
 ```
@@ -1555,6 +1602,13 @@ reversed are in [`design-history.md`](design-history.md).
    returned home is worth it every time, or whether a search from far out should
    rearrange without the animation. Related: overlapping the runs, which is what
    would make the trip cheap enough not to mind.
+   **Partly settled:** the history spines needed the map to *open* fully zoomed
+   in, which would have flattened the rearrangement if the two shared a zoom. So
+   the opening zoom and the return-to-centre zoom are now separate config values
+   (`initialZoom` at the cap, `defaultZoom` back to 220), and the rearrangement
+   parks at the wider `defaultZoom` — the wave is intact. What remains open is the
+   original question: whether a search from *far out* should rearrange in place
+   rather than always being flown home first.
 9. **How many generic alternates.** Enough that the wallpaper stops reading as
    one image, few enough that pinning them all at the fallback level stays
    cheap — each is 12 KB decoded at level 4, so the constraint is loose and the
@@ -1577,8 +1631,10 @@ Already landed and folded into the phase sections: configuration
 ([§3d](#3d-hybrid-search--three-signals-one-sort)), the metadata overlay
 ([§5b](#5b-the-metadata-overlay)), animated camera moves
 ([§camera movement](#camera-movement)), the reorder animation
-([§the reorder animation](#the-reorder-animation)) and the base tile with its
-wallpaper variants ([§3 phase 3](#alternate-generic-rooms)).
+([§the reorder animation](#the-reorder-animation)), the base tile with its
+wallpaper variants ([§3 phase 3](#alternate-generic-rooms)) and the centre
+room's history spines ([§phase 5](#the-history-spines--landed)) — the first
+control bound to the tile geometry, which also moved the opening zoom fully in.
 
 The queue, in dependency order — shortest path to a demo that survives a real
 corpus:
@@ -1596,3 +1652,15 @@ corpus:
    worst-case table is computed for each level's own zoom band; what is not yet
    measured is a long session wandering at high zoom, where level 0's budget of
    240 is doing the "hold rather than refetch" work on its own.
+3. **Make the centre-room spine titles legible.** They are composited and read
+   top-to-bottom on all 160 books, but even fully zoomed in the text is barely
+   readable — a spine is ~8px wide at the cap, so the font is tiny and the gilt
+   is fighting the painted spine tone. The current zoom-gate (`MIN_SPINE_PX` in
+   `centre.js`) only decides *whether* to draw, not how to make it read. Options
+   to weigh: a hover/near-cursor state that enlarges the book under the pointer;
+   a tooltip or floating label for the hovered spine; a heavier plate or gilt
+   band behind the text; or drawing the title larger and letting it overflow the
+   spine at high zoom. It is the last rough edge on the history spines and the
+   reason the shelf is more satisfying to look at than to read. Kept small on
+   purpose — the compositing, the geometry and the interaction are done; this is
+   presentation only.

@@ -26,6 +26,7 @@
 import { PYRAMID, prefetchBounds } from './pyramid.js';
 import { pxPerCell } from './camera.js';
 import { CENTRE, variantId } from './tiles.js';
+import { composeSpines } from './centre.js';
 
 /**
  * The cache id for whatever a cell holds. The centre is the blank base tile; a
@@ -50,9 +51,12 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {object} opts.layout  from packages/map
    * @param {number[]} opts.order room ids, best first
    * @param {boolean} [opts.chrome] draw the centre-room marker and rank labels
+   * @param {Array|null} [opts.centreSlots] the 32 history/tag titles to composite
+   *   onto the centre tile's spines, or null to draw none. Optional so tests and
+   *   the slide renderer, which never pass it, exercise no text compositing.
    * @returns {object} what the frame did, for the HUD and for tests
    */
-  function draw({ ctx, width: w, height: h, dpr, cam, layout, order, chrome = true }) {
+  function draw({ ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null }) {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -106,6 +110,11 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
         }
 
         if (chrome) drawChrome(ctx, cell, sx, sy, cellPx, zoom);
+        // The centre room's spines carry the search history. Content, not
+        // chrome, so it is not gated on that flag - but it is gated on legible
+        // spine width inside composeSpines, so far out it draws nothing.
+        if (cell.centre && centreSlots)
+          composeSpines(ctx, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots);
       }
     }
 
