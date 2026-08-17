@@ -304,8 +304,8 @@ test('a flight before its start time has not moved', () => {
 
 test('zoom interpolates geometrically, position linearly', () => {
   // The assertion that fails against a linear zoom ramp, which is the obvious
-  // implementation and the wrong one: halfway through a flight from 26 to 900
-  // the zoom is their geometric mean (~153), not their arithmetic one (463).
+  // implementation and the wrong one: halfway through a flight from 26 to 2048
+  // the zoom is their geometric mean (~231), not their arithmetic one (~1037).
   // A linear ramp puts nearly the whole flight up at the top of the range, so
   // it reads as a snap followed by a crawl.
   const mid = at(0.5).cam;
