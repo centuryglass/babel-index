@@ -177,11 +177,13 @@ test('every level is reachable within the camera clamp', () => {
 });
 
 test('a tile too large for the camera to ever zoom into is reported', () => {
-  // Not a hypothetical: at 4096 the source art can never be selected, because
-  // MAX_ZOOM x dpr 2 does not reach half of it. The reachability test is what
-  // says so, and this is the proof it is live rather than vacuously true.
-  const p = createPyramid({ base: { w: 4096, h: 4096 } });
-  assert.ok(!reachableLevels(p).has(0), 'level 0 at 4096 should be unreachable, and flagged');
+  // Not a hypothetical: at 8192 the source art can never be selected, because
+  // MAX_ZOOM x dpr 2 lands exactly at half of it (level 1), and selection needs
+  // to EXCEED a level's width to reach the finer one. The reachability test is
+  // what says so, and this is the proof it is live rather than vacuously true.
+  // The threshold tracks MAX_ZOOM: this example doubled when the zoom cap did.
+  const p = createPyramid({ base: { w: 8192, h: 8192 } });
+  assert.ok(!reachableLevels(p).has(0), 'level 0 at 8192 should be unreachable, and flagged');
 });
 
 test('the coarsest level is what the far-out view actually gets', () => {

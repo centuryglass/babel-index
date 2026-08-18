@@ -47,6 +47,17 @@ export const HISTORY_SHELF = 1;
 const GEOMETRY = layout({ width: 1, height: 1 });
 
 /**
+ * The bookshelf's bounding box within the centre cell, in cell fractions
+ * (`{x, y, w, h}` against width and height). It is the case uprights enclosing
+ * all five shelves - the thing a reader comes to the centre to read - and it
+ * sits LOW in the tile, below the cornice and above the floor. The opening view
+ * frames itself on this rect rather than on the cell so the shelf fills the
+ * display; `main.jsx` fits and centres on it. Sourced from the one geometry
+ * module, so it tracks any re-trace of the tile.
+ */
+export const CENTRE_SHELF_RECT = GEOMETRY.caseFrame;
+
+/**
  * Every book on the tile, flat and shelf-major, as `{shelf, x, y, w, h}`
  * fractions. A book's index in this array is its slot id everywhere below - in
  * the assignment, the hit-test and the overrides - so there is one address for a
