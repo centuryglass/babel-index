@@ -24,10 +24,10 @@ import {
  * read here, so every clamp - wheel, flyTo, anything later - goes through the
  * same field and none of them has to remember to ask.
  *
- * `camera` is required, and there is deliberately no fallback opening zoom or
- * flight duration in this file: those numbers are by-feel ones and belong to
- * `packages/config`, so a default here would be a second statement of one that
- * could drift.
+ * `camera` and `opening` are required, and this file states no fallback for
+ * either: the opening camera is derived from the display by the caller and the
+ * flight duration is a by-feel number from `packages/config`, so a default here
+ * would be a second statement of one that could drift.
  *
  * ### Picking, and why it lives here
  *
@@ -89,8 +89,12 @@ const spanOf = (a, b) => ({
 
 /**
  * @param {object} opts
- * @param {{minZoom: number, maxZoom: number, defaultZoom: number, initialZoom: number, flightMs: number}} opts.camera
+ * @param {{minZoom: number, maxZoom: number, defaultZoom: number, flightMs: number}} opts.camera
  *   resolved `config.camera`, from the manifest
+ * @param {{x: number, y: number, zoom: number}} opts.opening
+ *   the page-load camera - where the map opens and how far in. Derived from the
+ *   viewport and the centre room's geometry by the caller, not configured, so it
+ *   is handed in whole rather than read from `camera`. See `fitZoom` in camera.js.
  * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
  *   canvas-relative point of a right-click or a completed long press, with the
  *   live camera - which the hook owns, so the consumer does not have to reach
@@ -104,15 +108,17 @@ const spanOf = (a, b) => ({
  *   this exists to make "what did the browser actually send" answerable from
  *   the glass. See `?touchdebug` in main.jsx.
  */
-export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, onPick, onTap, onDebug }) {
+export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, opening, onPick, onTap, onDebug }) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
   const cam = useRef({
-    x: 0.5,
-    y: 0.5,
-    // The PAGE-LOAD zoom, which is not the return-to-centre zoom: the map opens
-    // fully in on the readable centre, and `defaultZoom` (wider) is where the
-    // "centre" button and the rearrangement go.
-    zoom: clampZoom(camera.initialZoom, limits),
+    // The PAGE-LOAD camera: centred on the centre room's bookshelf and zoomed to
+    // fit the display, computed by the caller from the viewport. Not the
+    // return-to-centre view - `defaultZoom` (wider) is where the "centre" button
+    // and the rearrangement park, so the animation has a wall of rooms to slide
+    // across. Derived from the display rather than configured, so it arrives
+    // whole; the zoom is re-clamped here only to defend the invariant.
+    ...opening,
+    zoom: clampZoom(opening.zoom, limits),
     limits,
   });
   const drag = useRef(null);

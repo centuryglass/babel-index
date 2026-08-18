@@ -41,9 +41,25 @@ export function pxPerCell(cam) {
 }
 
 /**
- * The HARD zoom limits: a cell is never smaller than a thumbnail or larger than
- * the screen. In pixels per cell WIDTH - a short tile is free to be shorter than
- * this, which is what "the cell is the unit" means.
+ * How far past the tile's native resolution the camera may zoom, as a multiple
+ * of the tile width. At 1x a spine is drawn 1:1; past that the flat base tile is
+ * upscaled and softens, so 2x is the practical ceiling - enough to turn a ~32px
+ * spine into a comfortable ~64px to read, before the blur outruns the benefit.
+ *
+ * Raise this only once the centre tile earns a finer-than-level-0 pyramid rung
+ * (the LOD step in the plan); until then the OPENING view is separately capped
+ * at 1x in main.jsx, so a page never loads already upscaled, while a reader may
+ * still zoom in to the 2x ceiling by hand.
+ */
+export const MAX_ZOOM_FACTOR = 2;
+
+/**
+ * The HARD zoom limits, as pixels per cell WIDTH. A cell is never smaller than a
+ * thumbnail (min), nor zoomed past MAX_ZOOM_FACTOR times the tile's native width
+ * (max) - the point beyond which the flat base tile is being upscaled. The max
+ * derives from BASE_TILE so it tracks the tile's resolution rather than restating
+ * it; a short tile is free to be shorter than the min, which is what "the cell is
+ * the unit" means.
  *
  * This is the widest range that can ever be offered, and the range everything
  * derived is checked against - `pyramid.test.mjs` asserts every rung of the
@@ -51,7 +67,7 @@ export function pxPerCell(cam) {
  * camera carries its own `limits`, below) but may never widen it, so that
  * assertion keeps covering every state the app can reach at runtime.
  */
-export const ZOOM_LIMITS = { min: 26, max: 900 };
+export const ZOOM_LIMITS = { min: 26, max: BASE_TILE.w * MAX_ZOOM_FACTOR };
 
 export const MIN_ZOOM = ZOOM_LIMITS.min;
 export const MAX_ZOOM = ZOOM_LIMITS.max;
@@ -66,6 +82,27 @@ export const MAX_ZOOM = ZOOM_LIMITS.max;
  */
 export const clampZoom = (z, limits = ZOOM_LIMITS) =>
   Math.min(limits.max, Math.max(limits.min, z));
+
+/**
+ * The zoom at which a target rectangle fills a viewport without overflowing it.
+ *
+ * `target` is measured in CELL FRACTIONS - `{w, h}` where `w` is a fraction of
+ * the cell WIDTH and `h` of the cell HEIGHT, the same basis
+ * `layout({width: 1, height: 1})` returns. On screen that rect is `zoom*w` wide
+ * and `zoom*aspect*h` tall, so the fit is the smaller of the two axis ratios:
+ * the axis that would spill off the edge first. The result is clamped into
+ * `limits`, so a target that wants more zoom than the camera allows simply opens
+ * at the cap. A `margin` below 1 leaves breathing room - 0.94 fills 94% of the
+ * binding axis - so "fits" is not "jammed to the edge".
+ *
+ * Pure and DOM-free, so the opening view can be reasoned about at any viewport
+ * without a browser.
+ */
+export function fitZoom({ width, height, target, aspect = CELL_ASPECT, limits = ZOOM_LIMITS, margin = 1 }) {
+  const byWidth = (width * margin) / target.w;
+  const byHeight = (height * margin) / (aspect * target.h);
+  return clampZoom(Math.min(byWidth, byHeight), limits);
+}
 
 /** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
 export function screenToWorld(px, py, cam, rect) {
