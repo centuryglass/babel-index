@@ -1646,6 +1646,13 @@ reversed are in [`design-history.md`](design-history.md).
    near-vertical bands. It affects the placeholder's looks and nothing else — no
    hit-testing depends on them — but they are the obvious next thing to trace if
    the placeholder is ever meant to pass for the render.
+11. **Check the in-tile search field on an actual iOS device.** Its font size
+   is whatever `.centre-search input` inherits (13px, the app's body size),
+   well under the ~16px that keeps iOS Safari from auto-zooming the viewport
+   on focus. The page's `maximum-scale=1, user-scalable=no` viewport meta
+   likely suppresses that already, but it was never verified against this
+   field specifically, and a real device is the only way to know — same
+   caveat as every other touch behaviour in this doc.
 
 ---
 
