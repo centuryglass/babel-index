@@ -116,16 +116,7 @@ That writes `tools/base-image/lib/measured.js`, and the importer fails loudly if
 the trace stops agreeing with the story — wrong shelf count, uneven book counts,
 spines outside every bay. If the tile's aspect changes, the trace changes with
 it: the SVG's `viewBox` and `BASE_TILE` are two statements of one fact, and the
-tests fail if they drift apart. To check the result against a real image:
-
-```sh
-npm run generate:tile -- --base assets/blender/base_render.png
-```
-
-which draws every measured rectangle over it, and writes the result to
-`assets/base-tile/`. The committed `geometry-overlay.png` is that command's
-output against the render the trace was taken from, so it is the picture to look
-at to see whether the geometry still lands on the art.
+tests fail if they drift apart.
 
 ## The resolution pyramid
 
@@ -169,7 +160,7 @@ same distance away whichever way you drag.
 | `packages/web/` | canvas map — pan, zoom, live layout controls |
 | `packages/map/ordering.js` | slot placement, ranking, pan resistance |
 | `packages/pipeline/` | the resolution-pyramid generator |
-| `tools/base-image/` | tile geometry, importer, placeholder, overlay |
+| `tools/base-image/` | tile geometry and the SVG importer |
 | `assets/blender/` | the base render source |
 | `docs/borges-parameters.md` | every number, with the passage it comes from |
 

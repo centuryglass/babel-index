@@ -8,7 +8,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "generate:tile": "node tools/base-image/generate.mjs",
     "generate:figures": "node tools/base-image/hexagon-plan.mjs",
     "generate:mips": "node packages/pipeline/index.mjs",
     "generate:embeddings": "node tools/embed/embed.mjs",
@@ -23,7 +22,6 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@resvg/resvg-js": "^2.6.2",
     "esbuild": "^0.28.2",
     "playwright": "^1.62.1",
     "sharp": "^0.35.3"

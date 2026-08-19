@@ -23,7 +23,7 @@
  * happened and `main.jsx` owns the history state.
  *
  * The geometry comes from the SINGLE SOURCE - `tools/base-image/lib/geometry.js`,
- * the same pure module the manifest is generated from. `layout({ width: 1,
+ * the same pure module the tile trace is imported into. `layout({ width: 1,
  * height: 1 })` returns every rect as raw per-axis fractions (x, w against width;
  * y, h against height), which is exactly the space the map draws the centre tile
  * in: `render.js` stretches the tile image width -> cellPx.x and height ->
@@ -37,10 +37,9 @@ import { prng, seedFrom } from '../../../tools/base-image/lib/prng.js';
 import { pxPerCell, worldToScreen } from './camera.js';
 
 /**
- * Which shelf the history lives on. Ties to `uiAnchors.historySpines` in the
- * generated `tile-geometry.json` (`{ shelf: 1, books: 'all' }`); there is no
- * shared JS constant for the anchors, and the manifest is generated from this
- * same lib, so this restates the one number rather than importing it.
+ * Which shelf the history lives on (`{ shelf: 1, books: 'all' }`). There is no
+ * shared JS constant for the shelf anchors, so this states the one number
+ * directly rather than importing it.
  */
 export const HISTORY_SHELF = 1;
 
