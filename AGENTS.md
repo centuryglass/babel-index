@@ -23,7 +23,6 @@ npm run demo -- --images <dir> [--base base.jpg] [--base-dir assets] [--port 517
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
-npm run generate:tile -- --base <image>   # draw the measured geometry over a real image
 npm run generate:figures                  # regenerate docs/figures/
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
@@ -55,8 +54,7 @@ stale instance.
 | `packages/web/src/slide.js` | the second renderer, for a rearrangement only: a board, a parked camera, one line mid-slide |
 | `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
-| `tools/base-image/` | tile geometry, the SVG importer, the placeholder renderer, the overlay |
-| `assets/base-tile/` | generated geometry + placeholder art, 1024×768 like the tile |
+| `tools/base-image/` | tile geometry (`lib/geometry.js`) and the SVG importer that generates `lib/measured.js` |
 | `assets/corpus-sample/` | 27 ranked rooms, with all five pyramid levels, so the demo needs no setup. The wallpaper is not here - it comes from `--base-dir` (below) |
 | `assets/base.tile.png` | the blank base tile, served at cell (0, 0); `mask.png` is its inpainting mask. This is the demo's `--base-dir` default |
 | `assets/base_variations/` | the inpainted wallpaper variants, one per file; the map picks between them per cell. Swap these for real inpainting output |
@@ -90,9 +88,8 @@ stale instance.
 
 - **`tools/base-image/lib/measured.js` is generated.** Never hand-edit it. Change
   the Blender render, re-trace in Inkscape, re-run `import-shelf-svg.mjs`, then
-  `npm run generate:tile` and `npm test`. The importer fails loudly if the trace
-  stops agreeing with the story (wrong shelf count, uneven book counts, spines
-  outside every bay).
+  `npm test`. The importer fails loudly if the trace stops agreeing with the
+  story (wrong shelf count, uneven book counts, spines outside every bay).
 - **Changing the tile's aspect is two edits, not one.** `BASE_TILE` and the
   `viewBox` of `shelf_geometry.svg` state the same fact, and measured coords are
   normalised against the traced width and height separately — disagree and every
@@ -107,8 +104,9 @@ stale instance.
 - **`layout()` defaults its height to the traced aspect, never to a square.** A
   `height = width` default is how a 4:3 trace would come out 1024²: each rect is
   still inside the tile, so nothing complains and the books stop landing on the
-  books. Same rule in `geometryManifest()` — x normalises against width, y
-  against height; one divisor for both axes is the same bug. Both asserted.
+  books. The same rule governs how the trace is normalised — x against width, y
+  against height (see `centre.js`'s per-axis spine fractions); one divisor for
+  both axes is the same bug. Asserted.
 - **Don't pin art choices in tests.** Shelf spacing, book width and how much of a
   board shows are free to move. Assert the story's invariants (5 × 32 = 160,
   books inside the opening, books resting on their board), nothing more.
@@ -187,9 +185,9 @@ stale instance.
   flat slot id (`BOOK_COUNT` of them) and the history shelf is just the id range
   on it, so there is no (shelf, index) pair to keep in step. The rects come from
   `layout({ width: 1, height: 1 })` in `tools/base-image/lib/geometry.js`, the
-  one module the manifest is generated from, so there is no second copy to drift.
-  `HISTORY_SHELF = 1` restates the `historySpines` anchor because the anchors
-  live only in the generated JSON, not in a JS constant.
+  one module the tile trace feeds, so there is no second copy to drift.
+  `HISTORY_SHELF = 1` states the `historySpines` anchor directly because there is
+  no shared JS constant for the shelf anchors.
 - **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
   the centre tile width→`cellPx.x` and height→`cellPx.y` independently, so a
   spine rect is `{x,w}` against the cell width and `{y,h}` against its height —
