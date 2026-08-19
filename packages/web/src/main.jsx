@@ -108,10 +108,10 @@ function Library({ manifest }) {
   // megabyte of string work.
   const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
-  // The centre room's 160 book titles. Every book shows a stable random corpus
-  // keyword; the history shelf shows past searches, newest first, in front of
-  // those. Reserved override books are never overwritten. `assignTitles` is
-  // pure, so this is a memo, not per-frame work.
+  // The centre room's book titles. Every book shows a stable random corpus
+  // keyword until history reaches it: past searches fill the wall newest first,
+  // top left to bottom right. Reserved override books are never overwritten.
+  // `assignTitles` is pure, so this is a memo, not per-frame work.
   const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
   const centreSlots = useMemo(
     () => assignTitles({ history, tags, overrides: CENTRE_OVERRIDES }),

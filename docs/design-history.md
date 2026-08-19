@@ -79,6 +79,51 @@ so the worst-case screen went 5700 → 7500 cells and its budget 7000 → 8200.
 Whether 4:3 is final is an art call; nothing downstream assumes it. Treat any
 "1024²" still in prose as a stale bug, not a fact.
 
+## The centre trace: story-exact 5×32 → a UI-sized wall, and the lamp dropped
+
+The centre tile's book grid was traced to match Borges exactly - 5 shelves of 32
+books, 160 total - and `checkAgainstStory()` failed loudly if a re-trace drifted
+from those numbers. That premise broke on contact with the feature it was for:
+at story-accurate spine width, a composited search-history title is a handful of
+illegible pixels. Usable text needs fewer, wider books, so the centre's own book
+count is now a UI choice sized for legibility, not a restatement of the story's
+shelf - 3 shelves, 40 books at the time of writing, with the middle shelf split
+into two runs around a baked-in "Index of Babel" nameplate that occupies no book
+slot at all. `checkAgainstStory` and the STORY coupling in `geometry.js` are
+gone; what is still asserted is the trace's own internal consistency (books
+inside the opening, no overlap, one baseline per shelf), not any particular
+count. `centre.js`'s hit-test walks per-shelf *runs* rather than per-shelf
+*bands* for exactly this reason - a shelf split by art must not resolve a click
+over the gap to a phantom book.
+
+The case uprights, the shelf boards and the lamp were traced for the same reason
+the story-exact count was: fidelity to the render, not because anything read
+them. Nothing in the app ever drew the lamp - it was baked into the tile pixels
+from the start - and once the case frame stopped needing uprights to compute (the
+opening is now just the bounding box of the books themselves), tracing them was
+effort spent on numbers nothing consumed. The trace is now exactly two kinds of
+rect: `book<n>` and one `search_box`, the latter reserving where a live search
+field will eventually sit on the tile - traced and exposed as
+`CENTRE_SEARCH_RECT`, but not yet wired to the DOM search form.
+
+## Search history: one anchor shelf → the whole wall
+
+History first lived on a single anchor shelf (`HISTORY_SHELF = 1`, `historySpines`
+in the original concept doc) - every other book stayed a keyword tag, and
+confining history to one shelf was the thing that kept it legible as *history*
+rather than blurring into the tag wall. That premise was sized for a 32-book
+shelf. Once the redesign above shrank shelves to as few as 8 books, one shelf
+of history turned over almost immediately - a handful of searches and the
+oldest was already gone.
+
+History now fills the entire wall as one queue, top left to bottom right,
+skipping any book an override has claimed - the same precedence as before
+(override → history → tags), just no longer gated on which shelf a book sits
+on. `HISTORY_SHELF` and the shelf-scoped `HISTORY_SLOTS` are gone;
+`HISTORY_SLOT_COUNT` is simply `BOOK_COUNT`. The "browsable index of keywords"
+role tags always played is unchanged - it is what still shows on every book
+history has not yet reached.
+
 ## Rejected in passing
 
 - **Tiering the search** (an exact-match bucket sorted ahead of a CLIP bucket)

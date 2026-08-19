@@ -51,7 +51,7 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {object} opts.layout  from packages/map
    * @param {number[]} opts.order room ids, best first
    * @param {boolean} [opts.chrome] draw the centre-room marker and rank labels
-   * @param {Array|null} [opts.centreSlots] the 32 history/tag titles to composite
+   * @param {Array|null} [opts.centreSlots] the history/tag titles to composite
    *   onto the centre tile's spines, or null to draw none. Optional so tests and
    *   the slide renderer, which never pass it, exercise no text compositing.
    * @returns {object} what the frame did, for the HUD and for tests
