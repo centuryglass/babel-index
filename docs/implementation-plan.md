@@ -41,7 +41,7 @@ nothing more.
 | `packages/server/` + `packages/web/` | **the offline demo** — `npm run demo` |
 | `packages/map/` | slot placement, ranking, pan resistance |
 | `packages/pipeline/` | the pyramid generator — `npm run generate:mips` |
-| `tools/base-image/` | tile geometry, SVG importer, placeholder, overlay |
+| `tools/base-image/` | tile geometry and the SVG importer |
 | `assets/blender/babel_shelf.blend` | the base render source |
 | `assets/corpus-sample/` | 26 rooms + a generic, with all five pyramid levels, so the demo needs no setup |
 | `docs/borges-parameters.md` | the story's numbers, with sources |
@@ -78,7 +78,7 @@ colour, and fails if the trace stops agreeing with the story. The current trace
 imports as 5 bays × 32 books, 160/160 spines placed, 0 unclassified, and the
 overlay confirms every rectangle lands on a real book.
 
-Still eyeballed, and affecting the placeholder's appearance only: the side
+Still eyeballed, and part of the geometry's non-measured features: the side
 returns, the ceiling strip and the cornice.
 
 #### Changing the geometry
@@ -91,8 +91,7 @@ is a three-step loop and touches no code:
 # 1. adjust the render in Blender, re-trace in Inkscape
 # 2. re-import
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
-# 3. check it against a real image
-npm run generate:tile -- --base <new-render.png>
+# 3. confirm the trace still agrees with the story and the tile
 npm test
 ```
 
@@ -1287,9 +1286,8 @@ one-ring off-by-one in the bound, which nothing else notices.
 
 ```
 babel-index/
-  tools/base-image/        # tile geometry, placeholder, overlay      [exists]
+  tools/base-image/        # tile geometry, SVG importer               [exists]
   packages/map/            # slot placement, ranking, resistance      [exists]
-  assets/base-tile/        # generated geometry + placeholder         [exists]
   docs/                                                              [exists]
   packages/
     config/                # defaults + validation for the by-feel numbers [exists]
