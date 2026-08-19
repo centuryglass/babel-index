@@ -1,30 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layout, checkAgainstStory, TILE_ASPECT } from './lib/geometry.js';
-import { MEASURED, SHELF_COUNT, BOOKS_PER_SHELF } from './lib/measured.js';
-import { STORY } from './lib/story.js';
+import { layout, TILE_ASPECT } from './lib/geometry.js';
+import { MEASURED, SHELF_COUNT, BOOK_COUNT } from './lib/measured.js';
 import { BASE_TILE } from '../../packages/web/src/pyramid.js';
 
-test('the trace still agrees with the story', () => {
-  assert.deepEqual(checkAgainstStory(), []);
-  assert.equal(SHELF_COUNT, STORY.shelvesPerSide);
-  assert.equal(BOOKS_PER_SHELF, STORY.booksPerShelf);
-  const total = MEASURED.shelves.reduce((n, s) => n + s.books.length, 0);
-  assert.equal(total, STORY.shelvesPerSide * STORY.booksPerShelf, 'expected 160 books per tile');
-});
-
 test('measured rects are normalised and inside the tile', () => {
-  const all = [
-    MEASURED.opening,
-    ...MEASURED.uprights,
-    ...MEASURED.shelves.flatMap((s) => [s.board, ...s.books]),
-  ];
+  const all = [MEASURED.opening, MEASURED.searchBox, ...MEASURED.shelves.flatMap((s) => s.books)];
   for (const [x, y, w, h] of all) {
     assert.ok(w > 0 && h > 0, `degenerate rect ${[x, y, w, h]}`);
     assert.ok(x >= 0 && y >= 0 && x + w <= 1.0001 && y + h <= 1.0001, `outside tile: ${[x, y, w, h]}`);
   }
-  const { cx, cy, r } = MEASURED.lamp;
-  assert.ok(cx - r >= 0 && cx + r <= 1 && cy - r >= 0 && cy + r <= 1);
+});
+
+test('the trace has as many shelves and books as it says it does', () => {
+  assert.equal(MEASURED.shelves.length, SHELF_COUNT);
+  const total = MEASURED.shelves.reduce((n, s) => n + s.books.length, 0);
+  assert.equal(total, BOOK_COUNT);
 });
 
 test('books sit inside the opening, in order, without overlapping', () => {
@@ -41,27 +32,19 @@ test('books sit inside the opening, in order, without overlapping', () => {
 });
 
 test('every book on a shelf stands on the same line', () => {
-  // Books do NOT sit flush against the board's front face: the view is a
-  // shallow perspective, so the further a shelf is from eye level the more of
-  // the board's top surface shows between the face and the spines. That gap
-  // grows monotonically down the case (0.0003 at the top to 0.0113 at the
-  // bottom). What must hold is that each shelf has ONE baseline, and that
-  // books rest above their board rather than sinking through it.
+  // No board is traced any more, so all that is asserted is that a shelf has
+  // ONE baseline - every book on it rests at the same depth, whether or not
+  // the shelf's books form one contiguous run.
   for (const [i, shelf] of MEASURED.shelves.entries()) {
     const bases = new Set(shelf.books.map((b) => +(b[1] + b[3]).toFixed(5)));
     assert.equal(bases.size, 1, `shelf ${i}: expected one baseline, got ${[...bases]}`);
-    const base = [...bases][0];
-    const boardTop = shelf.board[1];
-    assert.ok(base <= boardTop + 1e-6, `shelf ${i}: books sink through the board`);
-    assert.ok(boardTop - base < 0.02, `shelf ${i}: books float ${boardTop - base} above the board`);
   }
 });
 
 test('layout scales linearly with tile size', () => {
   const a = layout({ width: 512 });
   const b = layout({ width: 1024 });
-  assert.equal(a.shelves.length, STORY.shelvesPerSide);
-  assert.equal(b.shelves.length, STORY.shelvesPerSide);
+  assert.equal(a.shelves.length, b.shelves.length);
   for (let s = 0; s < a.shelves.length; s++)
     for (let i = 0; i < a.shelves[s].books.length; i++) {
       const p = a.shelves[s].books[i];
@@ -69,13 +52,12 @@ test('layout scales linearly with tile size', () => {
       assert.ok(Math.abs(p.x * 2 - q.x) < 0.02, `x mismatch at shelf ${s} book ${i}`);
       assert.ok(Math.abs(p.w * 2 - q.w) < 0.02, `w mismatch at shelf ${s} book ${i}`);
     }
-  assert.ok(Math.abs(a.lamp.r * 2 - b.lamp.r) < 0.02);
 });
 
-test('layout exposes 160 addressable books', () => {
+test('layout exposes every book as an addressable slot', () => {
   const L = layout({ width: 1024 });
   const books = L.shelves.flatMap((s) => s.books);
-  assert.equal(books.length, 160);
+  assert.equal(books.length, BOOK_COUNT);
   assert.deepEqual(
     L.shelves.map((s) => s.books.map((b) => b.index)).flat().slice(0, 3),
     [0, 1, 2]
@@ -84,47 +66,7 @@ test('layout exposes 160 addressable books', () => {
 
 // --- tile shape ------------------------------------------------------------
 
-test('the lamp is a circle at every tile shape', () => {
-  // Deliberate, and the one thing not stretched with the tile: a single scalar
-  // radius, never an rx/ry pair. A globe that became an ellipse because the
-  // wall got wider would read as a mistake rather than as a wider wall.
-  for (const [width, height] of [[1024, 1024], [1280, 720], [768, 1024], [900, 675]]) {
-    const { lamp } = layout({ width, height });
-    assert.equal(typeof lamp.r, 'number', `${width}x${height}: radius must stay scalar`);
-    assert.ok(lamp.r > 0);
-    assert.equal(lamp.rx, undefined, 'an rx/ry pair would mean an ellipse');
-    assert.equal(lamp.ry, undefined);
-  }
-
-  // Sized off the width alone, so stretching the tile vertically moves the lamp
-  // without resizing it. Scaling by height too is what would make it an oval.
-  const short = layout({ width: 1024, height: 512 });
-  const tall = layout({ width: 1024, height: 2048 });
-  assert.equal(short.lamp.r, tall.lamp.r, 'height must not touch the radius');
-  assert.notEqual(short.lamp.cy, tall.lamp.cy, 'but it must still move with the wall');
-});
-
-test('the glow is concentric with the globe and scales with it', () => {
-  const square = layout({ width: 1024, height: 1024 }).lamp;
-  const baseline = square.glow / square.r;
-
-  for (const [width, height] of [[1280, 720], [640, 360], [768, 1024]]) {
-    const { lamp } = layout({ width, height });
-    // Concentric: the renderer draws both at (cx, cy), so a glow that drifted
-    // would halo off to one side.
-    assert.ok(lamp.glow > lamp.r, `${width}x${height}: the glow must be the larger circle`);
-    // And a fixed multiple of the globe, so it is a circle for the same reason
-    // the globe is. Rounding is at 1e-4, so compare with a tolerance.
-    assert.ok(
-      Math.abs(lamp.glow / lamp.r - baseline) < 1e-4,
-      `${width}x${height}: glow ratio ${lamp.glow / lamp.r} drifted from ${baseline}`
-    );
-  }
-});
-
 test('rects stretch with the tile, on each axis independently', () => {
-  // The other half of the lamp rule: everything that is not the lamp DOES
-  // follow the tile's shape, because it was traced as part of the wall.
   const square = layout({ width: 1000, height: 1000 });
   const wide = layout({ width: 1000, height: 500 });
   assert.equal(wide.opening.w, square.opening.w, 'width is unchanged');
