@@ -31,6 +31,32 @@
       canvas { display: block; cursor: grab; touch-action: none; }
       canvas.dragging { cursor: grabbing; }
 
+      /*
+       * The live search field, anchored to the centre tile's traced search
+       * box. `main.jsx` drives display/left/top/width/height imperatively
+       * from the render loop each frame - `display: none` here is only the
+       * pre-first-frame default, never re-asserted by React.
+       */
+      /*
+       * pointer-events: none until focused. Without this, the field is a real
+       * DOM element sitting over the canvas by z-order alone, so a pan or
+       * pinch whose fingers happen to cross its screen rect at a moment it is
+       * visible gets eaten by the input instead of reaching the map - even
+       * though nobody meant to touch a text field. It is reachable at all
+       * because `goToSearch`'s `.focus()` call is a DOM API, not a pointer
+       * event, so pointer-events does not block it; `:focus-within` then
+       * opens the field back up so a reader can click inside it to place a
+       * cursor once they are actually typing.
+       */
+      .centre-search { position: absolute; display: none; margin: 0; padding: 0; border: none; background: none; pointer-events: none; }
+      .centre-search:focus-within { pointer-events: auto; }
+      .centre-search input[type="search"] {
+        width: 100%; height: 100%; padding: 0 10px; text-align: center;
+        background: rgba(10,8,6,0.55); color: var(--ink);
+        border: 1px solid rgba(200,169,95,0.45); border-radius: 4px; font: inherit;
+      }
+      .centre-search input[type="search"]:focus { outline: none; border-color: #c8a95f; background: rgba(10,8,6,0.75); }
+
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
         background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
@@ -53,6 +79,7 @@
         border: 1px solid var(--edge); border-radius: 5px; font: inherit; cursor: pointer;
       }
       button:hover { background: rgba(200,169,95,0.24); }
+      .search-trigger { width: 100%; }
       .note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--edge); color: var(--dim); font-size: 11px; }
       .hud {
         position: absolute; bottom: 14px; left: 16px; color: var(--dim); font-size: 11px;
