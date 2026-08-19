@@ -1,21 +1,25 @@
-import { STORY } from './story.js';
-import { MEASURED, SHELF_COUNT, BOOKS_PER_SHELF } from './measured.js';
+import { MEASURED } from './measured.js';
 
 /**
  * Layout of one tile.
  *
  * A tile is ONE SHELVED WALL of a gallery, seen in shallow one-point
- * perspective - not a whole room. Four tiles are the shelved sides of one
- * gallery.
+ * perspective - not a whole room. Only the centre tile (cell (0, 0)) is
+ * traced exactly; every corpus room is inpainted and needs only a bounding
+ * box, so this module's precision exists for the centre alone.
  *
- *   one tile = 5 shelves x 32 books = 160 books
- *   4 tiles  = one gallery          = 640 books
+ * The centre's own book count and shelf count are a UI choice - legible
+ * search-history titles - not a restatement of Borges' 5 shelves x 32 books;
+ * see docs/borges-parameters.md for the story's numbers, which this module no
+ * longer tracks.
  *
  * TWO CLASSES OF NUMBER LIVE HERE, and the difference matters:
  *
- *   MEASURED - the opening, the case uprights, all five shelf boards, all 160
- *   book rectangles and the lamp come from measured.js, traced off the Blender
- *   render in Inkscape and imported by import-shelf-svg.mjs. These are exact.
+ *   MEASURED - the opening, the search box and every book rectangle come from
+ *   measured.js, traced off the Blender render in Inkscape and imported by
+ *   import-shelf-svg.mjs. These are exact. Shelf boards, case uprights and the
+ *   lamp used to be traced too; they no longer are; only books and the search
+ *   box are read from the SVG.
  *
  *   PROVISIONAL - the side returns, the ceiling strip and the cornice were not
  *   traced, so they are still eyeballed fractions. They only affect the
@@ -30,7 +34,6 @@ import { MEASURED, SHELF_COUNT, BOOKS_PER_SHELF } from './measured.js';
 const PROVISIONAL = {
   sideReturn: 0.085,
   ceiling: 0.055,
-  lampGlow: 4.2, // glow radius, as a multiple of the measured globe radius
 };
 
 const round = (n) => Math.round(n * 1e4) / 1e4;
@@ -63,62 +66,26 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
   const r = ([x, y, w, h]) => ({ x: round(x * W), y: round(y * H), w: round(w * W), h: round(h * H) });
 
   const opening = r(MEASURED.opening);
-  const uprights = MEASURED.uprights.map(r);
+  const searchBox = r(MEASURED.searchBox);
 
-  // THE LAMP IS A CIRCLE AND STAYS ONE. It is the one thing here deliberately
-  // not stretched with the tile: a single scalar radius scaled by WIDTH on both
-  // axes, never an rx/ry pair. A globe that turned into an ellipse because the
-  // wall got wider would read as a mistake rather than as a wider wall.
-  //
-  // The importer normalises its radius against width alone, so this round-trips
-  // the traced circle exactly as long as the trace and the tile agree on aspect
-  // - which they must, and which geometry.test.mjs asserts.
-  const lamp = {
-    cx: round(MEASURED.lamp.cx * W),
-    cy: round(MEASURED.lamp.cy * H),
-    r: round(MEASURED.lamp.r * W),
-    glow: round(MEASURED.lamp.r * W * PROVISIONAL.lampGlow),
-  };
+  const shelves = MEASURED.shelves.map((s, index) => ({
+    index,
+    books: s.books.map((b, i) => ({ index: i, ...r(b) })),
+  }));
 
-  const shelves = MEASURED.shelves.map((s, index) => {
-    const board = r(s.board);
-    const books = s.books.map((b, i) => ({ index: i, ...r(b) }));
-    return {
-      index,
-      board,
-      books,
-      /** The clear space a book stands in, for hit-testing a whole slot. */
-      rect: {
-        x: opening.x,
-        y: books.length ? Math.min(...books.map((b) => b.y)) : board.y,
-        w: opening.w,
-        h: books.length ? round(board.y - Math.min(...books.map((b) => b.y))) : 0,
-      },
-    };
-  });
-
-  const caseFrame = uprights.length
-    ? {
-        x: uprights[0].x,
-        y: uprights[0].y,
-        w: round(uprights[uprights.length - 1].x + uprights[uprights.length - 1].w - uprights[0].x),
-        h: uprights[0].h,
-      }
-    : opening;
-
+  // No case uprights are traced any more, so the opening IS the case frame -
+  // the bounding box of every book on the wall.
   const sideReturn = round(W * PROVISIONAL.sideReturn);
   const ceilingH = round(H * PROVISIONAL.ceiling);
-  const floorLine = round(caseFrame.y + caseFrame.h);
+  const floorLine = round(opening.y + opening.h);
 
   return {
     width: W,
     height: H,
     measured: true,
     opening,
-    uprights,
-    caseFrame,
+    searchBox,
     shelves,
-    lamp,
     floorLine,
     sideReturn,
     // Provisional frame elements.
@@ -139,23 +106,10 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
       x: sideReturn,
       y: ceilingH,
       w: round(W - 2 * sideReturn),
-      h: round(caseFrame.y - ceilingH),
+      h: round(opening.y - ceilingH),
     },
     floor: { x: 0, y: floorLine, w: W, h: round(H - floorLine) },
   };
-}
-
-/**
- * The measured tile disagrees with the story only where the story is silent.
- * Fail loudly if a re-trace ever breaks a number the story does state.
- */
-export function checkAgainstStory() {
-  const problems = [];
-  if (SHELF_COUNT !== STORY.shelvesPerSide)
-    problems.push(`traced ${SHELF_COUNT} shelves, story says ${STORY.shelvesPerSide}`);
-  if (BOOKS_PER_SHELF !== STORY.booksPerShelf)
-    problems.push(`traced ${BOOKS_PER_SHELF} books per shelf, story says ${STORY.booksPerShelf}`);
-  return problems;
 }
 
 export { PROVISIONAL as PROVISIONAL_FRACTIONS };

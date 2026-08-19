@@ -3,19 +3,22 @@
  *
  * Cell (0, 0) is the one room whose art we control, so it is the one room where
  * per-book hit-testing is meaningful (inpainting does not preserve shelf counts,
- * so no corpus room can be addressed book by book). Every book on all five
- * shelves - 160 of them - carries a composited title, and clicking a book runs
- * that title as a search.
+ * so no corpus room can be addressed book by book). Every book on the wall
+ * (`BOOK_COUNT` of them) carries a composited title, and clicking a book runs
+ * that title as a search. The book count and shelf count are a UI choice, sized
+ * for legible search-history titles - see the trace itself, not a number
+ * restated here that would only drift.
  *
  * Two roles share the wall:
  *
- *   - SEARCH HISTORY lives on the one `historySpines` shelf (shelf 1). Every
- *     search projects onto its frontmost book, newest first, and clicking a book
- *     repeats its search.
- *   - Every OTHER book shows a random corpus keyword. Confining history to one
- *     shelf keeps it legible as history while the rest of the wall becomes a
- *     browsable index - a much larger pool of keywords to stumble on, and a wall
- *     with text on every book rather than one lettered shelf among five blank.
+ *   - SEARCH HISTORY fills the wall as ONE continuous list, top left to bottom
+ *     right, skipping any book an override has reserved. Every search projects
+ *     onto the frontmost open slot, newest first, and clicking a book repeats
+ *     its search. Shelves are small now that books are sized for legible
+ *     titles, so a history confined to one shelf ran out of room fast; the
+ *     whole wall is the queue instead.
+ *   - Any book history has not yet reached shows a random corpus keyword, so
+ *     the wall never carries a blank book while it fills in.
  *
  * This is the pure half, split out like `picking.js`: the part with a right
  * answer, assertable without a browser. It owns the book geometry, the title
@@ -36,68 +39,74 @@ import { layout } from '../../../tools/base-image/lib/geometry.js';
 import { prng, seedFrom } from '../../../tools/base-image/lib/prng.js';
 import { pxPerCell, worldToScreen } from './camera.js';
 
-/**
- * Which shelf the history lives on (`{ shelf: 1, books: 'all' }`). There is no
- * shared JS constant for the shelf anchors, so this states the one number
- * directly rather than importing it.
- */
-export const HISTORY_SHELF = 1;
-
 const GEOMETRY = layout({ width: 1, height: 1 });
 
 /**
  * The bookshelf's bounding box within the centre cell, in cell fractions
- * (`{x, y, w, h}` against width and height). It is the case uprights enclosing
- * all five shelves - the thing a reader comes to the centre to read - and it
- * sits LOW in the tile, below the cornice and above the floor. The opening view
- * frames itself on this rect rather than on the cell so the shelf fills the
- * display; `main.jsx` fits and centres on it. Sourced from the one geometry
- * module, so it tracks any re-trace of the tile.
+ * (`{x, y, w, h}` against width and height). It is the union of every shelf's
+ * books - the thing a reader comes to the centre to read - and it sits LOW in
+ * the tile, below the cornice and above the floor. The opening view frames
+ * itself on this rect rather than on the cell so the shelf fills the display;
+ * `main.jsx` fits and centres on it. Sourced from the one geometry module, so
+ * it tracks any re-trace of the tile.
  */
-export const CENTRE_SHELF_RECT = GEOMETRY.caseFrame;
+export const CENTRE_SHELF_RECT = GEOMETRY.opening;
 
 /**
- * Every book on the tile, flat and shelf-major, as `{shelf, x, y, w, h}`
- * fractions. A book's index in this array is its slot id everywhere below - in
- * the assignment, the hit-test and the overrides - so there is one address for a
- * book, not a (shelf, index) pair to keep in step.
+ * Where the live search field belongs on the centre tile, in the same cell
+ * fractions as `CENTRE_SHELF_RECT`. Traced from the SVG's `search_box` rect -
+ * reserved space, not yet wired to the DOM search form.
  */
-const BOOKS = GEOMETRY.shelves.flatMap((s) =>
-  s.books.map(({ x, y, w, h }) => ({ shelf: s.index, x, y, w, h }))
-);
+export const CENTRE_SEARCH_RECT = GEOMETRY.searchBox;
 
-/** How many books the wall has in total (5 x 32 = 160). */
+/**
+ * Every book on the tile, flat, shelf-major and left to right within a shelf -
+ * top left to bottom right, the way a reader's eye moves. A book's index in
+ * this array is its slot id everywhere below - in the assignment, the hit-test
+ * and the overrides - so there is one address for a book, not a (shelf, index)
+ * pair to keep in step.
+ */
+const BOOKS = GEOMETRY.shelves.flatMap((s) => s.books.map(({ x, y, w, h }) => ({ x, y, w, h })));
+
+/** How many books the wall has in total. */
 export const BOOK_COUNT = BOOKS.length;
 
-/** The flat slot ids that fall on the history shelf, in shelf order. */
-const HISTORY_SLOTS = BOOKS.reduce((acc, b, i) => {
-  if (b.shelf === HISTORY_SHELF) acc.push(i);
-  return acc;
-}, []);
+/** How many searches the history queue can show at once - the whole wall. */
+export const HISTORY_SLOT_COUNT = BOOK_COUNT;
 
-/** How many searches the history shelf can show at once. */
-export const HISTORY_SLOT_COUNT = HISTORY_SLOTS.length;
-
-// Per-shelf band, in fractions: the rectangle each shelf's books occupy as a
-// whole, plus the flat index its first book sits at. The hit-test floors a point
-// into that shelf's columns rather than testing each spine, so a click in the
-// thin gap between two spines resolves to a book - the same "addressed by a
-// pitch" discipline `picking.js` uses for cells.
-const SHELF_BANDS = (() => {
-  let start = 0;
-  return GEOMETRY.shelves.map((s) => {
-    const bks = s.books;
-    const band = {
-      start,
-      count: bks.length,
-      x0: bks[0].x,
-      x1: bks[bks.length - 1].x + bks[bks.length - 1].w,
-      y0: Math.min(...bks.map((b) => b.y)),
-      y1: Math.max(...bks.map((b) => b.y + b.h)),
-    };
-    start += bks.length;
-    return band;
-  });
+// Per-run bands, in fractions: a run is a CONTIGUOUS group of books on one
+// shelf, and a shelf may hold more than one - the trace is free to leave a gap
+// wider than a book for art occupying part of the shelf (the open "Index of
+// Babel" book on the middle shelf, say), and that gap must not resolve to a
+// phantom book. A gap no wider than a book is still just the thin margin
+// between two spines, and
+// the hit-test floors a point into the run's columns so a click there still
+// resolves to a book - the same "addressed by a pitch" discipline
+// `picking.js` uses for cells. Runs, not shelves, are what the hit-test walks.
+const RUNS = (() => {
+  const runs = [];
+  let flat = 0;
+  for (const s of GEOMETRY.shelves) {
+    let run = null;
+    for (const b of s.books) {
+      if (run && b.x - run.x1 > b.w) run = null;
+      if (!run) {
+        run = { start: flat, books: [] };
+        runs.push(run);
+      }
+      run.books.push(b);
+      run.x1 = b.x + b.w;
+      flat++;
+    }
+  }
+  return runs.map((run) => ({
+    start: run.start,
+    count: run.books.length,
+    x0: run.books[0].x,
+    x1: run.books[run.books.length - 1].x + run.books[run.books.length - 1].w,
+    y0: Math.min(...run.books.map((b) => b.y)),
+    y1: Math.max(...run.books.map((b) => b.y + b.h)),
+  }));
 })();
 
 // --- rendering constants, by feel ------------------------------------------
@@ -128,7 +137,7 @@ export function centreCellRect(cam, canvasRect) {
   return { x: tl.x, y: tl.y, w: per.x, h: per.y };
 }
 
-/** All 160 book rects in screen pixels, scaled onto a centre-cell rect. */
+/** Every book rect in screen pixels, scaled onto a centre-cell rect. */
 export function bookScreenRects(cellRect) {
   return BOOKS.map((b) => ({
     x: cellRect.x + b.x * cellRect.w,
@@ -141,39 +150,42 @@ export function bookScreenRects(cellRect) {
 /**
  * Which book is under a screen point, or null.
  *
- * Finds the shelf whose row band holds the point, then floors into that shelf's
- * columns, so a click in the gap between two spines resolves to a book. Returns
- * null when the point is on no shelf's books.
+ * Finds the run whose row band holds the point AND whose columns hold it, then
+ * floors into those columns, so a click in the gap between two spines resolves
+ * to a book. A shelf with more than one run (art breaking up the run) is
+ * exactly why this checks every run rather than stopping at the first whose row
+ * matches - a point between two runs on the same shelf must fall through to
+ * null, not snap into whichever run happened to be checked first.
  */
 export function bookAtPoint(px, py, cellRect) {
-  for (const band of SHELF_BANDS) {
-    const y0 = cellRect.y + band.y0 * cellRect.h;
-    const y1 = cellRect.y + band.y1 * cellRect.h;
+  for (const run of RUNS) {
+    const y0 = cellRect.y + run.y0 * cellRect.h;
+    const y1 = cellRect.y + run.y1 * cellRect.h;
     if (py < y0 || py >= y1) continue;
-    const x0 = cellRect.x + band.x0 * cellRect.w;
-    const x1 = cellRect.x + band.x1 * cellRect.w;
-    if (px < x0 || px >= x1) return null;
-    const local = Math.floor(((px - x0) / (x1 - x0)) * band.count);
-    return band.start + Math.max(0, Math.min(band.count - 1, local));
+    const x0 = cellRect.x + run.x0 * cellRect.w;
+    const x1 = cellRect.x + run.x1 * cellRect.w;
+    if (px < x0 || px >= x1) continue;
+    const local = Math.floor(((px - x0) / (x1 - x0)) * run.count);
+    return run.start + Math.max(0, Math.min(run.count - 1, local));
   }
   return null;
 }
 
 /**
- * Lay out what each of the 160 books shows.
+ * Lay out what each book on the wall shows.
  *
  * Three sources, in strict precedence:
  *
  *   1. OVERRIDES - reserved books with a distinct function (a future artist's
  *      statement, say). Keyed by flat book id, placed first, and never
  *      overwritten. This is the seam the concept asks for; it ships empty.
- *   2. HISTORY - past searches, newest first, into the history shelf's books
- *      only. So the most recent search is the frontmost book of that shelf, and
- *      the rest of the wall is free for keywords.
- *   3. TAGS - a random selection of corpus keywords, filling every other book
- *      (and any history-shelf book history has not reached). Cycled if the pool
- *      is smaller than the wall, so every book carries a title rather than
- *      leaving blanks - repeats only show up on the tiny sample corpus.
+ *   2. HISTORY - past searches, newest first, into the wall's books in flat
+ *      order (top left to bottom right), skipping any book an override has
+ *      claimed. So the most recent search is the first open book on the wall.
+ *   3. TAGS - a random selection of corpus keywords, filling every book history
+ *      has not reached. Cycled if the pool is smaller than the wall, so every
+ *      book carries a title rather than leaving blanks - repeats only show up
+ *      on the tiny sample corpus.
  *
  * Pure and deterministic in its inputs. A `history`/`tag` book carries a `term`
  * to search; an `override` book carries an `action` to dispatch.
@@ -191,8 +203,7 @@ export function assignTitles({ history = [], tags = [], overrides = {} } = {}) {
   }
 
   let hi = 0;
-  for (const i of HISTORY_SLOTS) {
-    if (hi >= history.length) break;
+  for (let i = 0; i < BOOK_COUNT && hi < history.length; i++) {
     if (slots[i]) continue;
     const term = history[hi++];
     slots[i] = { kind: 'history', text: term, term };
@@ -242,9 +253,8 @@ export function pickTags(metadata, seed = 1) {
  *
  * ZOOM-GATED: a spine narrower than MIN_SPINE_PX carries no legible text, so it
  * carries none at all rather than a smear of sub-pixels. This is the "faithful
- * zoom-in reward" - the wall holds Borges' 160 books, so a title is only
- * readable once the reader has zoomed into the centre, which the map now opens
- * having done.
+ * zoom-in reward" - a title is only readable once the reader has zoomed into
+ * the centre, which the map now opens having done.
  *
  * Each title reads TOP-TO-BOTTOM down the spine, the way a shelved book is
  * printed, truncated to the spine's length with an ellipsis, over a dark halo so

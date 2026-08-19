@@ -651,14 +651,14 @@ Where it lives, and the decisions that shaped it:
   the SINGLE SOURCE — `layout({ width: 1, height: 1 })` from
   `tools/base-image/lib/geometry.js`, the same module the manifest is generated
   from — as raw per-axis fractions, which is exactly the space `render.js`
-  stretches the tile into. There is no shared JS constant for the anchors, so
-  `HISTORY_SHELF = 1` restates the one number the manifest states.
+  stretches the tile into. (Superseded below: history no longer anchors to one
+  shelf.)
 - **`render.js` composites on the centre cell only, and it is zoom-gated.** A
   spine narrower than a legibility floor carries no text at all — the shelf holds
   Borges' 32 books, so a title is only readable once the reader has zoomed in.
   The map OPENS framed on the bookshelf so the history is legible on load: the
   opening zoom is DERIVED at mount (`main.jsx`, via `fitZoom` in camera.js) to
-  fit the centre room's `caseFrame` to the display, centred on it and capped at
+  fit the centre room's book-bounding box (`GEOMETRY.opening`) to the display, centred on it and capped at
   the tile's native width so a page never loads upscaled. It is not a config
   value — being derived from the viewport, it is too far out on a phone and too
   far in on a wide monitor to state as one number. The **return-to-centre** zoom
@@ -679,6 +679,27 @@ Where it lives, and the decisions that shaped it:
 Still unbound, for a later pass: `scoreSortSpines` (freed by the death of
 curation — §5b), `shuffleSpine`, and making `searchField`/`submitButton`
 themselves the hit regions rather than the side panel.
+
+**Update — book size and count changed for legibility.** At story-accurate
+spine width the composited titles above were a handful of illegible pixels even
+at the 2x zoom cap. The centre tile was redrawn with fewer, wider books (3
+shelves, 40 total at the time of writing, one shelf split into two runs around a
+baked-in "Index of Babel" nameplate that holds no book slot), and the trace now
+also reserves a `search_box` rect - exposed as `CENTRE_SEARCH_RECT` - for a
+future pass to move the DOM search form onto the tile itself. The story-exact
+count and `checkAgainstStory()` are gone; see
+[design-history.md](design-history.md#the-centre-trace-story-exact-532--a-ui-sized-wall-and-the-lamp-dropped)
+for why. This also folds in §8 item 3 (typography): the physical size half of
+that item is done; contrast/weight are still open.
+
+**Update — history is no longer confined to one shelf.** With shelves this
+small, 8 slots on one shelf turned over too fast to be useful as history. History
+now fills the whole wall as one queue, top left to bottom right, skipping any
+book an override has claimed — `HISTORY_SLOT_COUNT` is `BOOK_COUNT`. The
+`HISTORY_SHELF` constant and the "one shelf is history, the rest is tags" split
+are gone; a book shows history until the queue runs out, then falls back to a
+tag, same precedence as before (override → history → tags), just no longer
+gated on which shelf a book sits on.
 
 ### Phase 6 — generate-on-demand *(stretch)*
 
@@ -1659,19 +1680,19 @@ corpus:
    worst-case table is computed for each level's own zoom band; what is not yet
    measured is a long session wandering at high zoom, where level 0's budget of
    240 is doing the "hold rather than refetch" work on its own.
-3. **Make the centre-room spine titles legible (typography).** They are
-   composited and read top-to-bottom on all 160 books. Raising the zoom cap to 2x
-   native already helped the *physical* size — a spine is now ~27px wide at the
-   cap rather than ~12px — but the gilt still fights the painted spine tone and
-   the font stays small. The zoom-gate (`MIN_SPINE_PX` in `centre.js`) only
-   decides *whether* to draw, not how to make it read. Options to weigh: a
-   hover/near-cursor state that enlarges the book under the pointer; a tooltip or
-   floating label for the hovered spine; a heavier plate or gilt band behind the
-   text; or drawing the title larger and letting it overflow the spine at high
-   zoom. Because the composited text is canvas `fillText`, it is resolution-
-   independent and already crisp — this is a size-and-contrast call, distinct from
-   the base-tile *art* being upscaled (item 4). Kept small on purpose: the
-   compositing, geometry and interaction are done; this is presentation only.
+3. **Make the centre-room spine titles legible (typography). Partly settled.**
+   Raising the zoom cap to 2x native helped the physical size, but composited
+   text on story-accurate spines was still a handful of illegible pixels — so
+   the centre tile itself was redrawn with fewer, wider books (see the "Update"
+   under [§phase 5](#the-history-spines--landed)), which is the bigger lever the
+   options below were compensating for the lack of. Still open: the gilt fights
+   the painted spine tone at small sizes, and font choice was explored with
+   `tools/font-lab/` but is not yet reflected in the shipped composite. Options
+   to weigh: a hover/near-cursor state that enlarges the book under the pointer;
+   a tooltip or floating label for the hovered spine; a heavier plate or gilt
+   band behind the text. Distinct from the base-tile *art* being upscaled
+   (item 4) — the composited text is canvas `fillText`, resolution-independent
+   and already crisp.
 4. **An ultra-res LOD rung for the centre tile (crisp zoom past 1:1).** The base
    tiles are served flat at native width, so zooming a reader past 1x (up to the
    new 2x cap) upscales the flat art and it softens — the composited spine text

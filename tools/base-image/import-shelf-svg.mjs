@@ -6,10 +6,18 @@
  *   node tools/base-image/import-shelf-svg.mjs <shelf_geometry.svg> [--out <file>]
  *
  * Conventions in that file, per the author:
- *   black rects  -> book spines
- *   red rects    -> the front face of the shelves (horizontal boards, plus the
- *                   two vertical uprights of the case)
- *   white circle -> the lamp
+ *   rect labelled "search_box"   -> where the live search field sits
+ *   rects labelled "book0".."bookN" -> book spines, addressed by that label
+ *
+ * That is the whole trace now - no board, upright or lamp is read from the
+ * SVG any more. Only the label is authoritative; fill colour is decorative.
+ * Spines are grouped into shelves purely by y - the trace gives every book on
+ * one shelf the same y, so no board or upright needs to be traced to find the
+ * bays. A shelf's books need not be evenly spaced or contiguous across x: a
+ * gap wider than a book (art occupying part of the shelf, say) simply means
+ * that shelf has more than one addressable run, and it is left to the
+ * consumer (centre.js) to treat those runs as separate clusters for
+ * hit-testing.
  *
  * Everything is emitted normalised to the tile edge (0-1), so it is resolution
  * independent. Tracing by hand in Inkscape is five minutes of work and avoids
@@ -59,28 +67,6 @@ function attr(tag, name) {
   return null;
 }
 
-function classify(fill) {
-  if (!fill) return 'other';
-  const c = fill.toLowerCase().replace(/\s/g, '');
-  let r, g, b;
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(c);
-  if (hex) {
-    const h = hex[1].length === 3 ? hex[1].replace(/./g, (d) => d + d) : hex[1];
-    [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
-  } else {
-    const rgb = /^rgb\((\d+),(\d+),(\d+)\)/.exec(c);
-    if (rgb) [r, g, b] = rgb.slice(1).map(Number);
-    else if (c === 'black') [r, g, b] = [0, 0, 0];
-    else if (c === 'red') [r, g, b] = [255, 0, 0];
-    else if (c === 'white') [r, g, b] = [255, 255, 255];
-    else return 'other';
-  }
-  if (r < 60 && g < 60 && b < 60) return 'spine';
-  if (r > 140 && g < 100 && b < 100) return 'shelfFace';
-  if (r > 200 && g > 200 && b > 200) return 'lamp';
-  return 'other';
-}
-
 const round = (v) => Math.round(v * 1e5) / 1e5;
 
 const rects = [];
@@ -91,78 +77,65 @@ for (const m of svg.matchAll(/<rect\b[\s\S]*?\/>/g)) {
   const w = Number(attr(tag, 'width'));
   const h = Number(attr(tag, 'height'));
   if ([x, y, w, h].some(Number.isNaN)) continue;
-  rects.push({ kind: classify(attr(tag, 'fill')), x, y, w, h });
+  rects.push({ label: attr(tag, 'inkscape:label'), x, y, w, h });
 }
 
-let lamp = null;
-const circleTag = /<circle\b[\s\S]*?\/>/.exec(svg);
-if (circleTag) {
-  lamp = {
-    cx: Number(attr(circleTag[0], 'cx')) + tx,
-    cy: Number(attr(circleTag[0], 'cy')) + ty,
-    r: Number(attr(circleTag[0], 'r')),
-  };
+const searchBoxRects = rects.filter((r) => r.label === 'search_box');
+const spines = rects
+  .filter((r) => /^book\d+$/.test(r.label ?? ''))
+  .sort((a, b) => a.y - b.y || a.x - b.x);
+const other = rects.filter((r) => r !== searchBoxRects[0] && !/^book\d+$/.test(r.label ?? ''));
+
+// Every book on one shelf shares its y in the trace - no board or upright is
+// needed to find the bays. A small tolerance absorbs sub-pixel trace noise
+// without merging two genuinely different shelves, which in practice sit tens
+// of units apart.
+const ROW_EPSILON = vbH * 0.01;
+const shelves = [];
+for (const s of spines) {
+  const row = shelves.find((r) => Math.abs(r.y - s.y) <= ROW_EPSILON);
+  if (row) row.books.push(s);
+  else shelves.push({ y: s.y, books: [s] });
 }
-
-const spines = rects.filter((r) => r.kind === 'spine');
-const red = rects.filter((r) => r.kind === 'shelfFace');
-const other = rects.filter((r) => r.kind === 'other');
-
-// Red rects are either horizontal boards (wide and thin) or the case uprights.
-const boards = red.filter((r) => r.w > r.h).sort((a, b) => a.y - b.y);
-const uprights = red.filter((r) => r.h >= r.w).sort((a, b) => a.x - b.x);
-
-// N boards delimit N-1 shelf bays. A spine belongs to the bay its base sits in.
-const bays = [];
-for (let i = 0; i < boards.length - 1; i++) {
-  const top = boards[i].y + boards[i].h;
-  const bottom = boards[i + 1].y + boards[i + 1].h;
-  bays.push({
-    index: i,
-    top,
-    bottom,
-    board: boards[i + 1],
-    books: spines
-      .filter((s) => s.y + s.h > top && s.y + s.h <= bottom + 1e-6)
-      .sort((a, b) => a.x - b.x),
-  });
-}
-
-const placed = bays.reduce((n, b) => n + b.books.length, 0);
+shelves.sort((a, b) => a.y - b.y);
+for (const row of shelves) row.books.sort((a, b) => a.x - b.x);
 
 const nx = (v) => round(v / vbW);
 const ny = (v) => round(v / vbH);
 const nrect = (r) => [nx(r.x), ny(r.y), nx(r.w), ny(r.h)];
 
-const opening = {
-  x: uprights.length ? uprights[0].x + uprights[0].w : Math.min(...spines.map((s) => s.x)),
-  y: boards[0].y + boards[0].h,
+// No case uprights are traced any more, so the opening is simply the bounding
+// box of every book on the wall - the thing a reader comes to read.
+const openingRect = {
+  x: Math.min(...spines.map((s) => s.x)),
+  y: Math.min(...spines.map((s) => s.y)),
   get w() {
-    return uprights.length > 1 ? uprights[1].x - this.x : Math.max(...spines.map((s) => s.x + s.w)) - this.x;
+    return Math.max(...spines.map((s) => s.x + s.w)) - this.x;
   },
   get h() {
-    return boards[boards.length - 1].y + boards[boards.length - 1].h - this.y;
+    return Math.max(...spines.map((s) => s.y + s.h)) - this.y;
   },
 };
-const openingRect = { x: opening.x, y: opening.y, w: opening.w, h: opening.h };
+
+const searchBox = searchBoxRects[0] ?? null;
 
 console.log(
   `viewBox ${round(vbW)} x ${round(vbH)} (aspect ${round(vbH / vbW)}), ` +
     `layer translate ${round(tx)},${round(ty)}`
 );
 console.log('  -> BASE_TILE in packages/web/src/pyramid.js must match this aspect');
-console.log(`rects ${rects.length}: ${spines.length} spines, ${boards.length} boards, ${uprights.length} uprights, ${other.length} unclassified`);
-console.log(`lamp: ${lamp ? `${nx(lamp.cx)}, ${ny(lamp.cy)}  r ${nx(lamp.r)}` : 'MISSING'}`);
+console.log(`rects ${rects.length}: ${spines.length} books, ${searchBoxRects.length} search_box, ${other.length} unlabelled`);
+console.log(`search_box: ${searchBox ? nrect(searchBox).join(', ') : 'MISSING'}`);
 console.log(`opening: ${nrect(openingRect).join(', ')}`);
-console.log(`\n${bays.length} shelf bays, ${placed}/${spines.length} spines placed:`);
-for (const b of bays)
-  console.log(`  bay ${b.index}: ${b.books.length} books   y ${round(b.top)} .. ${round(b.bottom)}`);
+console.log(`\n${shelves.length} shelves, ${spines.length} books total:`);
+for (const [i, row] of shelves.entries())
+  console.log(`  shelf ${i}: ${row.books.length} books   y ${round(row.y)}`);
 
 const problems = [];
-if (other.length) problems.push(`${other.length} rects could not be classified by colour`);
-if (placed !== spines.length) problems.push(`${spines.length - placed} spines fell outside every bay`);
-const counts = [...new Set(bays.map((b) => b.books.length))];
-if (counts.length !== 1) problems.push(`bays hold differing book counts: ${bays.map((b) => b.books.length).join(', ')}`);
+if (other.length) problems.push(`${other.length} rects had no recognised label (book<n> or search_box)`);
+if (searchBoxRects.length > 1) problems.push(`${searchBoxRects.length} rects labelled search_box, expected one`);
+if (!searchBox) problems.push('no rect labelled search_box');
+if (!spines.length) problems.push('no rects labelled book<n>');
 if (problems.length) {
   console.error('\nPROBLEMS:');
   for (const p of problems) console.error(`  ! ${p}`);
@@ -181,25 +154,20 @@ const body = `/**
  * normalisation throws away and the one thing that has to keep agreeing with
  * BASE_TILE in packages/web/src/pyramid.js.
  *
- * Rects are [x, y, w, h]. The lamp's radius is normalised against WIDTH alone,
- * because the lamp is a circle and stays one - see lib/geometry.js.
+ * Rects are [x, y, w, h].
  */
 
 export const MEASURED = {
   source: ${JSON.stringify(basename(src))},
   tile: { w: ${round(vbW)}, h: ${round(vbH)}, aspect: ${round(vbH / vbW)} },
-  lamp: ${lamp ? `{ cx: ${nx(lamp.cx)}, cy: ${ny(lamp.cy)}, r: ${nx(lamp.r)} }` : 'null'},
   opening: [${nrect(openingRect).join(', ')}],
-  uprights: [
-${uprights.map((u) => `    [${nrect(u).join(', ')}],`).join('\n')}
-  ],
+  searchBox: ${searchBox ? `[${nrect(searchBox).join(', ')}]` : 'null'},
   shelves: [
-${bays
+${shelves
   .map(
-    (b) => `    {
-      board: [${nrect(b.board).join(', ')}],
+    (row) => `    {
       books: [
-${b.books.map((k) => `        [${nrect(k).join(', ')}],`).join('\n')}
+${row.books.map((k) => `        [${nrect(k).join(', ')}],`).join('\n')}
       ],
     },`
   )
@@ -207,8 +175,8 @@ ${b.books.map((k) => `        [${nrect(k).join(', ')}],`).join('\n')}
   ],
 };
 
-export const SHELF_COUNT = ${bays.length};
-export const BOOKS_PER_SHELF = ${bays[0]?.books.length ?? 0};
+export const SHELF_COUNT = ${shelves.length};
+export const BOOK_COUNT = ${spines.length};
 `;
 
 await writeFile(outPath, body);

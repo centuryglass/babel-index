@@ -88,8 +88,12 @@ stale instance.
 
 - **`tools/base-image/lib/measured.js` is generated.** Never hand-edit it. Change
   the Blender render, re-trace in Inkscape, re-run `import-shelf-svg.mjs`, then
-  `npm test`. The importer fails loudly if the trace stops agreeing with the
-  story (wrong shelf count, uneven book counts, spines outside every bay).
+  `npm test`. The trace is just `book<n>` rects plus one `search_box` rect now —
+  no board, upright or lamp is read from the SVG. The importer fails loudly on a
+  rect it cannot label (not `book<n>` or `search_box`) or a missing `search_box`;
+  it no longer requires an even book count per shelf, because the centre's own
+  shelves do not have one (art can break a shelf into more than one run - see
+  `centre.js`'s `RUNS`).
 - **Changing the tile's aspect is two edits, not one.** `BASE_TILE` and the
   `viewBox` of `shelf_geometry.svg` state the same fact, and measured coords are
   normalised against the traced width and height separately — disagree and every
@@ -97,19 +101,17 @@ stale instance.
   the books, silently (each rect is individually still inside the tile). The
   trace records its own aspect and `geometry.test.mjs` asserts the two agree.
   Re-trace, re-import, then update `BASE_TILE`.
-- **The lamp is a circle and stays one.** It is the single thing in `geometry.js`
-  deliberately not stretched with the tile: one scalar radius scaled by *width*
-  on both axes, never an `rx`/`ry` pair. Everything else is part of the wall and
-  follows the tile's shape. Both halves are asserted.
 - **`layout()` defaults its height to the traced aspect, never to a square.** A
   `height = width` default is how a 4:3 trace would come out 1024²: each rect is
   still inside the tile, so nothing complains and the books stop landing on the
   books. The same rule governs how the trace is normalised — x against width, y
   against height (see `centre.js`'s per-axis spine fractions); one divisor for
   both axes is the same bug. Asserted.
-- **Don't pin art choices in tests.** Shelf spacing, book width and how much of a
-  board shows are free to move. Assert the story's invariants (5 × 32 = 160,
-  books inside the opening, books resting on their board), nothing more.
+- **Don't pin art choices in tests.** Shelf spacing, book width, shelf count and
+  book count are free to move - the centre's own book count is a UI choice
+  (legible search-history titles), not a restatement of the story. Assert only
+  that books stay inside the opening, don't overlap, and each shelf has one
+  baseline.
 - **Only the centre room needs exact geometry.** It is cell (0, 0), reserved by
   `packages/map`, and carries the search box and controls. Every other room
   needs only a bounding box, because inpainting doesn't preserve shelf counts —
@@ -181,13 +183,14 @@ stale instance.
 - **`centre.js` is the pure half, and the geometry comes from the tools tree.**
   The book layout, `assignTitles`, the hit-test and `pickTags` live in
   `packages/web/src/centre.js` and are asserted browser-free in `centre.test.mjs`
-  — the same split as `picking.js`. All 160 books are lettered; a book is one
-  flat slot id (`BOOK_COUNT` of them) and the history shelf is just the id range
-  on it, so there is no (shelf, index) pair to keep in step. The rects come from
+  — the same split as `picking.js`. Every book is lettered; a book is one
+  flat slot id (`BOOK_COUNT` of them), assigned top left to bottom right, so
+  there is no (shelf, index) pair to keep in step. A shelf need not be one
+  contiguous run - art can break it into more than one, and `centre.js`'s
+  `RUNS` (not `GEOMETRY.shelves` directly) is what the hit-test walks, so a gap
+  wider than a book resolves to nothing rather than a phantom book. The rects come from
   `layout({ width: 1, height: 1 })` in `tools/base-image/lib/geometry.js`, the
   one module the tile trace feeds, so there is no second copy to drift.
-  `HISTORY_SHELF = 1` states the `historySpines` anchor directly because there is
-  no shared JS constant for the shelf anchors.
 - **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
   the centre tile width→`cellPx.x` and height→`cellPx.y` independently, so a
   spine rect is `{x,w}` against the cell width and `{y,h}` against its height —
@@ -201,14 +204,16 @@ stale instance.
 - **`onTap` must lose to a pan and to a flight.** It fires only on a pointer-up
   that stayed within the slop and did not stop a flight, and a completed
   long-press clears the tap candidate so a press is never also a tap. History is
-  session-only React state on the history shelf only; every other book is a
-  random keyword tag (the pool is cycled to letter all 160). Assignment order is
+  session-only React state; it fills the whole wall as one queue, newest search
+  first, top left to bottom right, skipping any book an override has claimed.
+  Every book history has not reached is a random keyword tag (the pool is
+  cycled to letter the whole wall). Assignment order is
   override → history (newest first) → tags, and override books are reserved
   first. Titles read top-to-bottom, as printed spines do.
 - **Two opening views, and they are not interchangeable.** The page-load view is
   DERIVED, not configured: `main.jsx` computes it once at mount with `fitZoom`
-  (camera.js), framing the centre room's `caseFrame` (exported as
-  `CENTRE_SHELF_RECT` from `centre.js`) on the display so the spines are legible,
+  (camera.js), framing the centre room's book-bounding box (`GEOMETRY.opening`,
+  exported as `CENTRE_SHELF_RECT` from `centre.js`) on the display so the spines are legible,
   centred on the shelf and capped at the tile's NATIVE width so a page never
   loads upscaled. It is passed to `useMapCamera` as `opening` — do not restate it
   as a config number, and do not read the viewport inside the hook. `defaultZoom`
@@ -224,6 +229,11 @@ stale instance.
   example in `pyramid.test.mjs` (its base scales with `MAX_ZOOM_FACTOR`); that is
   the test working, not a regression. Config's `camera.maxZoom` may only narrow
   this, never widen it.
+- **`CENTRE_SEARCH_RECT` is traced but not wired up.** The SVG's `search_box`
+  rect reserves where the live search field belongs on the centre tile, in the
+  same cell fractions as `CENTRE_SHELF_RECT`. The DOM search form in `main.jsx`
+  does not read it yet - it still lives in the fixed side panel - so a change
+  here is reserved space for a future pass, not a live feature.
 
 ### Search and the density gradient
 
