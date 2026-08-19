@@ -4,7 +4,6 @@ import { layout } from '../../../tools/base-image/lib/geometry.js';
 import {
   BOOK_COUNT,
   HISTORY_SLOT_COUNT,
-  HISTORY_SHELF,
   bookScreenRects,
   centreCellRect,
   bookAtPoint,
@@ -14,15 +13,10 @@ import {
 import { CELL_ASPECT } from './camera.js';
 
 const GEO = layout({ width: 1, height: 1 });
-// The flat id of the first book on the history shelf, shelf-major.
-const HISTORY_START = GEO.shelves
-  .slice(0, HISTORY_SHELF)
-  .reduce((n, s) => n + s.books.length, 0);
 
-test('every book on all five shelves is a slot', () => {
-  assert.equal(BOOK_COUNT, 160);
-  assert.equal(HISTORY_SLOT_COUNT, 32);
-  assert.equal(HISTORY_SHELF, 1);
+test('every book on the wall is a slot, and the whole wall is the history queue', () => {
+  assert.equal(BOOK_COUNT, 40);
+  assert.equal(HISTORY_SLOT_COUNT, BOOK_COUNT);
 });
 
 test('book rects scale onto a cell rect, each inside its shelf', () => {
@@ -79,20 +73,41 @@ test('a point in the gap between two spines resolves to a book, not null', () =>
   assert.ok(hit === 0 || hit === 1, `a gap must resolve to an adjacent book, got ${hit}`);
 });
 
-test('history fills the history shelf newest-first, and tags fill the rest', () => {
+test('a gap wider than a book (art breaking up a shelf) is not a book', () => {
+  // The middle shelf leaves room for a decorative element mid-shelf, so its
+  // books form two runs rather than one. A click over that gap must fall
+  // through to null - it must not snap to whichever run was checked first.
+  const cell = { x: 0, y: 0, w: 1000, h: 1000 };
+  const rects = bookScreenRects(cell);
+  let k = 0;
+  let sawWideGap = false;
+  for (const shelf of GEO.shelves) {
+    for (let i = 1; i < shelf.books.length; i++) {
+      const prev = rects[k + i - 1];
+      const cur = rects[k + i];
+      const gap = cur.x - (prev.x + prev.w);
+      if (gap <= prev.w) continue;
+      sawWideGap = true;
+      const midX = prev.x + prev.w + gap / 2;
+      const midY = prev.y + prev.h / 2;
+      assert.equal(bookAtPoint(midX, midY, cell), null);
+    }
+    k += shelf.books.length;
+  }
+  assert.ok(sawWideGap, 'expected the trace to have at least one shelf split into runs');
+});
+
+test('history fills the wall newest-first from the top left, and tags fill the rest', () => {
   const history = ['newest', 'older', 'oldest'];
   const tags = ['a', 'b'];
   const slots = assignTitles({ history, tags });
 
   assert.equal(slots.length, BOOK_COUNT);
-  // History lands on the history shelf, front book first.
-  assert.equal(slots[HISTORY_START].kind, 'history');
-  assert.deepEqual(
-    [slots[HISTORY_START], slots[HISTORY_START + 1], slots[HISTORY_START + 2]].map((s) => s.text),
-    ['newest', 'older', 'oldest']
-  );
-  // Books off the history shelf are tags, never history.
-  assert.equal(slots[0].kind, 'tag');
+  // History lands at the front of the wall, first book first.
+  assert.equal(slots[0].kind, 'history');
+  assert.deepEqual([slots[0], slots[1], slots[2]].map((s) => s.text), ['newest', 'older', 'oldest']);
+  // Books past the history entries are tags, never history.
+  assert.equal(slots[3].kind, 'tag');
   assert.ok(slots.every((s) => s && s.text), 'every book carries a title');
   assert.ok(slots.every((s) => s.kind !== 'empty'), 'a non-empty tag pool leaves no blanks');
 });
@@ -106,17 +121,17 @@ test('tags cycle to fill the whole wall when the pool is smaller than it', () =>
   assert.equal(slots[2].text, 'x');
 });
 
-test('assignTitles reserves override books and history never overwrites them', () => {
-  // Reserve the front book of the history shelf.
-  const overrides = { [HISTORY_START]: { text: 'statement', action: 'statement' } };
+test('assignTitles reserves override books and the history queue skips them', () => {
+  // Reserve the very first book on the wall.
+  const overrides = { 0: { text: 'statement', action: 'statement' } };
   const slots = assignTitles({ history: ['h1', 'h2'], tags: [], overrides });
 
-  assert.equal(slots[HISTORY_START].kind, 'override');
-  assert.equal(slots[HISTORY_START].action, 'statement');
-  assert.equal(slots[HISTORY_START].term, undefined);
-  // History skips the reserved book and starts at the next history slot.
-  assert.equal(slots[HISTORY_START + 1].text, 'h1');
-  assert.equal(slots[HISTORY_START + 2].text, 'h2');
+  assert.equal(slots[0].kind, 'override');
+  assert.equal(slots[0].action, 'statement');
+  assert.equal(slots[0].term, undefined);
+  // History skips the reserved book and starts at the next open slot.
+  assert.equal(slots[1].text, 'h1');
+  assert.equal(slots[2].text, 'h2');
 });
 
 test('pickTags is a deduped, stable, bounded selection of corpus keywords', () => {
