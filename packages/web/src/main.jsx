@@ -11,8 +11,11 @@ import {
   pickTags,
   bookAtPoint,
   centreCellRect,
+  searchBoxScreenRect,
+  isSearchBoxUsable,
+  searchBoxAtPoint,
   HISTORY_SLOT_COUNT,
-  CENTRE_SHELF_RECT,
+  CENTRE_OPENING_RECT,
 } from './centre.js';
 import { CELL_ASPECT, pxPerCell, fitZoom } from './camera.js';
 import { createTileCache, CENTRE, variantId } from './tiles.js';
@@ -40,6 +43,10 @@ function App() {
 
 function Library({ manifest }) {
   const canvasRef = useRef(null);
+  // The live search field lives on the centre tile, not in the panel; its
+  // position is driven imperatively from the render loop below, the same way
+  // the canvas itself is - see `positionSearchBox`.
+  const searchFormRef = useRef(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -238,7 +245,7 @@ function Library({ manifest }) {
   // Computed once at mount from the viewport; a resize afterwards is the reader's
   // camera to move, not ours, so this deliberately does not track window size.
   const opening = useMemo(() => {
-    const rect = CENTRE_SHELF_RECT;
+    const rect = CENTRE_OPENING_RECT;
     const zoom = Math.min(
       BASE_TILE.w,
       fitZoom({
@@ -266,6 +273,21 @@ function Library({ manifest }) {
     onDebug,
   });
 
+  // Whether the live search field (on the centre tile) is currently on screen
+  // and large enough to use, and where it sits if so - the one computation
+  // both the render loop (to position and show/hide it) and the panel's
+  // search trigger (to decide whether to fly home first) need, so neither
+  // restates the other's notion of "usable".
+  const searchBoxState = useCallback(
+    (w, h) => {
+      const cellRect = centreCellRect(cam.current, { width: w, height: h });
+      const box = searchBoxScreenRect(cellRect);
+      const onScreen = box.x + box.w > 0 && box.x < w && box.y + box.h > 0 && box.y < h;
+      return { box, usable: onScreen && !anim.current && isSearchBoxUsable(cellRect) };
+    },
+    [cam]
+  );
+
   // --- rendering -----------------------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -287,6 +309,22 @@ function Library({ manifest }) {
         canvas.height = h * dpr;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // The centre tile's live search field, positioned every frame like the
+      // canvas content it sits over - it is not React state, for the same
+      // reason the camera itself is a ref: it moves on every pan, zoom and
+      // flight, and a re-render per frame is not the architecture here.
+      const searchEl = searchFormRef.current;
+      if (searchEl) {
+        const { box, usable } = searchBoxState(w, h);
+        searchEl.style.display = usable ? 'block' : 'none';
+        if (usable) {
+          searchEl.style.left = `${box.x}px`;
+          searchEl.style.top = `${box.y}px`;
+          searchEl.style.width = `${box.w}px`;
+          searchEl.style.height = `${box.h}px`;
+        }
+      }
 
       // Three states, and the middle one is why this is not an `if`.
       //
@@ -363,7 +401,7 @@ function Library({ manifest }) {
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
     };
-  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots]);
+  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots, searchBoxState]);
 
   // --- the rearrangement animation -----------------------------------------
 
@@ -513,6 +551,28 @@ function Library({ manifest }) {
     search(query);
   };
 
+  // The panel's one remaining search affordance: reach the live field on the
+  // centre tile. If it is already on screen and legible, just focus it -
+  // otherwise fly home to the opening view first, the same framing the map
+  // loads on, and focus once landed. A dropped flight (the reader grabbed the
+  // map mid-flight) leaves the field alone rather than fighting for focus.
+  const goToSearch = useCallback(async () => {
+    const canvas = canvasRef.current;
+    const input = searchFormRef.current?.querySelector('input');
+    if (!canvas || !input) return;
+    if (searchBoxState(canvas.clientWidth, canvas.clientHeight).usable) {
+      input.focus();
+      return;
+    }
+    // flyTo always routes through cameraAtCell, which adds +0.5 to aim at a
+    // cell's MIDDLE - every other caller flies to a whole cell by its corner
+    // index. `opening` is already a raw camera target, not a cell index (see
+    // useMapCamera's mount-time use of it, unmodified), so that offset has to
+    // be cancelled here or the flight lands half a cell short on each axis.
+    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
+    if (landed) input.focus();
+  }, [flyTo, opening, searchBoxState]);
+
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
   // is about to rearrange under it, and it would be describing a cell that no
@@ -539,6 +599,18 @@ function Library({ manifest }) {
     if (!canvas) return;
     const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
     const cell = centreCellRect(camera, rect);
+
+    // A tap on the live search field focuses it - checked before the books,
+    // since the box sits above the shelf and never overlaps one. Routing
+    // through `onTap` rather than the field's own pointer events is what lets
+    // a real click activate it while a pan or pinch that merely crosses its
+    // screen rect keeps doing what it was doing: `onTap` only ever fires for
+    // a genuine tap in the first place.
+    if (searchBoxAtPoint(px, py, cell)) {
+      searchFormRef.current?.querySelector('input')?.focus();
+      return;
+    }
+
     const slotIndex = bookAtPoint(px, py, cell);
     if (slotIndex == null) return;
     const slot = centreSlots[slotIndex];
@@ -554,6 +626,25 @@ function Library({ manifest }) {
   return (
     <>
       <canvas ref={canvasRef} />
+      {/*
+        The live search field, on the centre tile itself rather than in the
+        panel. Always mounted - Playwright's `inputValue()` and React's
+        controlled `value` both need it attached - but hidden by the
+        stylesheet (`.centre-search { display: none }`) until the render loop
+        above finds it on screen and legible, at which point it takes over
+        `display`/position directly. No `style` prop here on purpose: a React
+        re-render (every keystroke touches `query`) would otherwise reapply
+        whatever style this component declared and fight the imperative
+        positioning every frame.
+      */}
+      <form ref={searchFormRef} onSubmit={runSearch} className="centre-search">
+        <input
+          type="search"
+          placeholder="search the library…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </form>
       <div className="panel">
         <h1>The Indexing of Babel</h1>
         <p className="sub">
@@ -561,14 +652,11 @@ function Library({ manifest }) {
           {described > 0 && <> · {described} described</>}
         </p>
 
-        <form onSubmit={runSearch} className="row">
-          <input
-            type="search"
-            placeholder="search the library…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </form>
+        <div className="row">
+          <button className="search-trigger" onClick={goToSearch} aria-label="search the library">
+            🔍 search
+          </button>
+        </div>
 
         <div className="row">
           <label>
