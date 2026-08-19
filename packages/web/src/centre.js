@@ -54,10 +54,26 @@ export const CENTRE_SHELF_RECT = GEOMETRY.opening;
 
 /**
  * Where the live search field belongs on the centre tile, in the same cell
- * fractions as `CENTRE_SHELF_RECT`. Traced from the SVG's `search_box` rect -
- * reserved space, not yet wired to the DOM search form.
+ * fractions as `CENTRE_SHELF_RECT`. Traced from the SVG's `search_box` rect.
  */
 export const CENTRE_SEARCH_RECT = GEOMETRY.searchBox;
+
+/**
+ * The opening view's real framing target: the bounding-box union of the
+ * bookshelf and the search box. The search box sits above the shelf, outside
+ * `CENTRE_SHELF_RECT`, so fitting to the shelf alone risks leaving the live
+ * field off the top edge depending on viewport aspect. `main.jsx` fits and
+ * centres the opening camera on this rect instead.
+ */
+export const CENTRE_OPENING_RECT = (() => {
+  const a = CENTRE_SHELF_RECT;
+  const b = CENTRE_SEARCH_RECT;
+  const x0 = Math.min(a.x, b.x);
+  const y0 = Math.min(a.y, b.y);
+  const x1 = Math.max(a.x + a.w, b.x + b.w);
+  const y1 = Math.max(a.y + a.h, b.y + b.h);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+})();
 
 /**
  * Every book on the tile, flat, shelf-major and left to right within a shelf -
@@ -116,6 +132,8 @@ const RUNS = (() => {
 
 /** Below this on-screen spine width, a title is sub-pixel; do not draw it. */
 const MIN_SPINE_PX = 5;
+/** Below this on-screen height, the live search field is too small to use or read. */
+const MIN_SEARCH_BOX_PX = 22;
 /** Title colour - warm gilt, legible on the range of spine tones in the art. */
 const INK = 'rgba(238,230,214,0.92)';
 /** A dark halo so the gilt reads on a light spine as well as a dark one. */
@@ -145,6 +163,41 @@ export function bookScreenRects(cellRect) {
     w: b.w * cellRect.w,
     h: b.h * cellRect.h,
   }));
+}
+
+/** The live search field's rect in screen pixels, scaled onto a centre-cell rect. */
+export function searchBoxScreenRect(cellRect) {
+  const b = CENTRE_SEARCH_RECT;
+  return {
+    x: cellRect.x + b.x * cellRect.w,
+    y: cellRect.y + b.y * cellRect.h,
+    w: b.w * cellRect.w,
+    h: b.h * cellRect.h,
+  };
+}
+
+/**
+ * Whether the live search field is large enough on screen to show and use.
+ * Gated on height, the box's thin axis - the same idea as `MIN_SPINE_PX`, but
+ * a wide short strip is limited by how tall it is on screen, not how wide.
+ */
+export function isSearchBoxUsable(cellRect) {
+  return searchBoxScreenRect(cellRect).h >= MIN_SEARCH_BOX_PX;
+}
+
+/**
+ * Whether a screen point lands on the live, currently-usable search field -
+ * the same "addressed by a pitch" hit-test `bookAtPoint` runs for a spine,
+ * reused so a tap on the box and a tap on a book resolve through one path.
+ * That path already only fires on a genuine tap (`onTap` loses to a pan, a
+ * pinch, or a flight), which is what lets a click activate the field while a
+ * gesture that merely crosses its screen rect keeps panning or zooming - no
+ * separate arbitration needed here.
+ */
+export function searchBoxAtPoint(px, py, cellRect) {
+  if (!isSearchBoxUsable(cellRect)) return false;
+  const b = searchBoxScreenRect(cellRect);
+  return px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
 }
 
 /**

@@ -345,6 +345,11 @@ describe('the library, in a browser', { concurrency: false }, () => {
     const wandered = await settled(page);
     assert.notEqual(wandered.x, parked.x, 'the drag did not move the camera');
 
+    // The live field lives on the centre tile, not the panel - wandered this
+    // far out it is off screen, so reaching it is itself a flight the search
+    // trigger starts. Land that one before typing into what it flew to.
+    await page.locator('button.search-trigger').click();
+    await landed(page);
     await page.locator('input[type=search]').fill('hexagonal galleries');
     await page.locator('input[type=search]').press('Enter');
 
@@ -625,7 +630,20 @@ async function pinch(page, { cx, cy, from, to, slide = { x: 0, y: 0 }, steps = 1
 
 /** Parse the HUD, which is the app's own account of what it just drew. */
 async function hud(page) {
-  const text = await page.locator('#hud').textContent();
+  return parseHud(await page.locator('#hud').textContent());
+}
+
+/**
+ * The parsing half of `hud`, split out so a caller that already holds a
+ * confirmed-non-rearranging read (`settled`, below) can parse that exact
+ * string rather than fetching a second, later one. Re-fetching there is a
+ * real race, not a hypothetical one: between confirming the text is not
+ * "rearranging…" and a fresh read moments later, a slow-resolving search (the
+ * first one pays for a cold CLIP model load) can start its own rearrangement
+ * in the gap, and the second read lands mid-animation, on text this regex
+ * cannot parse at all.
+ */
+function parseHud(text) {
   // `over` is only printed when a screen needs more than the level's cache
   // budget, so it is optional here - but it is parsed rather than skipped,
   // because it is the number that says the view is over its memory budget.
@@ -684,7 +702,8 @@ async function settled(page) {
       () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     );
     const text = await page.locator('#hud').textContent();
-    if (!text.startsWith('rearranging')) return hud(page);
+    // Parse THIS text, not a freshly re-fetched one - see `parseHud`'s comment.
+    if (!text.startsWith('rearranging')) return parseHud(text);
     assert.ok(Date.now() < deadline, 'a rearrangement never finished');
   }
 }

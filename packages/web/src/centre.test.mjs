@@ -4,7 +4,13 @@ import { layout } from '../../../tools/base-image/lib/geometry.js';
 import {
   BOOK_COUNT,
   HISTORY_SLOT_COUNT,
+  CENTRE_SHELF_RECT,
+  CENTRE_SEARCH_RECT,
+  CENTRE_OPENING_RECT,
   bookScreenRects,
+  searchBoxScreenRect,
+  isSearchBoxUsable,
+  searchBoxAtPoint,
   centreCellRect,
   bookAtPoint,
   assignTitles,
@@ -34,6 +40,51 @@ test('book rects scale onto a cell rect, each inside its shelf', () => {
       assert.ok(Math.abs(r.w / cell.w - b.w) < 1e-9);
     }
   }
+});
+
+test('CENTRE_OPENING_RECT is the tight bounding union of the shelf and the search box', () => {
+  const a = CENTRE_SHELF_RECT;
+  const b = CENTRE_SEARCH_RECT;
+  const u = CENTRE_OPENING_RECT;
+  // Both source rects are fully contained.
+  assert.ok(u.x <= a.x && u.y <= a.y && u.x + u.w >= a.x + a.w && u.y + u.h >= a.y + a.h);
+  assert.ok(u.x <= b.x && u.y <= b.y && u.x + u.w >= b.x + b.w && u.y + u.h >= b.y + b.h);
+  // Tight: each edge is pinned by one of the two source rects, not padded.
+  assert.ok([a.x, b.x].includes(u.x));
+  assert.ok([a.y, b.y].includes(u.y));
+  assert.ok([a.x + a.w, b.x + b.w].includes(u.x + u.w));
+  assert.ok([a.y + a.h, b.y + b.h].includes(u.y + u.h));
+});
+
+test('searchBoxScreenRect scales the search box onto a cell rect, per axis', () => {
+  const cell = { x: 100, y: 50, w: 800, h: 600 };
+  const r = searchBoxScreenRect(cell);
+  const b = CENTRE_SEARCH_RECT;
+  assert.ok(Math.abs((r.x - cell.x) / cell.w - b.x) < 1e-9);
+  assert.ok(Math.abs((r.y - cell.y) / cell.h - b.y) < 1e-9);
+  assert.ok(Math.abs(r.w / cell.w - b.w) < 1e-9);
+  assert.ok(Math.abs(r.h / cell.h - b.h) < 1e-9);
+});
+
+test('isSearchBoxUsable gates on the box on-screen height', () => {
+  const tiny = { x: 0, y: 0, w: 100, h: 100 };
+  const huge = { x: 0, y: 0, w: 4000, h: 4000 };
+  assert.equal(isSearchBoxUsable(tiny), false);
+  assert.equal(isSearchBoxUsable(huge), true);
+});
+
+test('searchBoxAtPoint hits the box only when it is usable, and misses outside it', () => {
+  const huge = { x: 0, y: 0, w: 4000, h: 4000 };
+  const box = searchBoxScreenRect(huge);
+  assert.equal(searchBoxAtPoint(box.x + box.w / 2, box.y + box.h / 2, huge), true);
+  // Just outside the box, still on the cell.
+  assert.equal(searchBoxAtPoint(box.x - 5, box.y + box.h / 2, huge), false);
+  assert.equal(searchBoxAtPoint(box.x + box.w / 2, box.y + box.h + 5, huge), false);
+  // A point that is geometrically inside the box's fraction, but the cell is
+  // too small for the box to be usable, must still miss.
+  const tiny = { x: 0, y: 0, w: 100, h: 100 };
+  const tinyBox = searchBoxScreenRect(tiny);
+  assert.equal(searchBoxAtPoint(tinyBox.x + tinyBox.w / 2, tinyBox.y + tinyBox.h / 2, tiny), false);
 });
 
 test('centreCellRect places cell (0,0) and sizes it one cell each axis', () => {
