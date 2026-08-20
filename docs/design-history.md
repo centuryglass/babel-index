@@ -161,6 +161,28 @@ shapes considered and dropped, because each is the obvious first idea.
   separate again: a handful of hand-written sentences, because the same generated
   one repeated hundreds of times per screen is noise, not access.
 
+- **A windowed DOM grid mirroring the cells in view**, with focus authoritative
+  and the camera following it. This was the accessibility plan's own first
+  answer to "the whole grid cannot be in the DOM" - keep the grid, make it a
+  window. It survived until the keyboard bindings were specified, and then died
+  on a constraint that has nothing to do with cost: in browse mode a screen
+  reader owns the arrow keys and the page never sees them, so a browsable DOM
+  grid needs browse mode while arrow-key panning needs focus mode. **No node
+  budget buys both.** Recorded because "just mirror fewer cells" is the obvious
+  fix to try, and it does not address the actual obstacle.
+
+  What replaced it inverts the coupling: the map is one `role="application"`
+  region with a single **cursor** at the cell under the camera centre
+  (`floor(cam.x), floor(cam.y)` - the camera is already in world cells). Arrows
+  pan, the cursor rides along and is announced, and ctrl+arrow jumps to the next
+  room the way ctrl+arrow jumps a word. The camera leads and the cursor follows,
+  where the mirror had focus leading and the camera following. Three things fall
+  out for free: the cursor cannot be scrolled off screen or stranded by a
+  rebuild, a pointer pan and a keyboard pan produce the same "where am I", and
+  the node count drops from ~33,000 to ~110. The rule that survives unchanged is
+  that the camera and the announced position must never disagree; only the
+  direction of the arrow changed.
+
 - **An accessible mode toggle** - the map for sighted users, an alternate linear
   list of unique tiles for everyone else - was the natural answer to "four in five
   arrow presses land on blank wall", and it is one toggle away from being right.
