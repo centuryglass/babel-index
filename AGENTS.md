@@ -478,6 +478,14 @@ stale instance.
   decodes, which is how the pyramid test flaked about one run in five. Anything
   asserting on `blank` must poll for it, bounded, rather than trust the first
   reading.
+- **The HUD updates on the next animation frame, not before `page.keyboard.press`
+  returns.** A keyboard test reading `hud(page)` immediately after a PageUp/
+  PageDown raced that frame and read the stale zoom about one run in four -
+  `zoomStep` is instant (no flight), but "instant" still means "next rAF", not
+  synchronous. Poll for the change, same as `blank` above. The live region's
+  text is a different story: it comes from a React state commit, not a
+  `requestAnimationFrame` callback, and has not been observed to race across
+  many runs - but if that ever changes, it gets the same treatment.
 - **A green e2e test that cannot fail is worse than none.** If you change it,
   break the app on purpose and confirm it fails.
 - **CDP touch injection bypasses the browser's gesture arbitration**, so

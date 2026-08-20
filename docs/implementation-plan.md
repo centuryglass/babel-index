@@ -1712,11 +1712,15 @@ corpus:
    at native width in `main.jsx` can then rise. Cosmetic backdrop polish — gate on
    whether the blur past 1x actually bothers a reader before investing.
 5. **Accessibility: a keyboard interface and an accessible reading of the map.**
-   **Planned — see [`accessibility-plan.md`](accessibility-plan.md).** The whole
-   map is a single canvas — no DOM per room, book titles are painted pixels,
-   picking resolves to a cell, and every gesture is a pointer gesture — so today
-   there is no way in without a mouse or a touchscreen. The planning session this
-   item asked for has happened; what it settled, in short:
+   **Phases A, B and C landed — see [`accessibility-plan.md`](accessibility-plan.md).**
+   The map now has a real keyboard interface: a cursor at the cell under the
+   camera centre, arrow keys that pan it, ctrl+arrow that jumps room to room,
+   Enter/Escape/Home/PgUp/PgDn/`/`/`?`, a live region that announces moves, and
+   a visible ring once a key has been pressed. **Not yet done**, and not to be
+   read as finished: nobody has run this against a real screen reader (the
+   plan's stated top risk, unchanged), and a rearrangement does not announce
+   its new occupant at all (accessibility-plan.md §8 item 4 — written up in §4.3
+   as settled design, but never wired). What it settled going in, in short:
 
    - It is **not** a parallel interface. One DOM tree with two orderings over it
      — the map's cursor and a ranked listbox — sharing the handlers and the

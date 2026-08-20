@@ -589,10 +589,13 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.doesNotMatch(viewport, /maximum-scale/, 'page zoom must not be capped');
   });
 
-  test('the canvas is a named graphic rather than an anonymous one', async () => {
-    // Until the map grows its cursor (phase C) the canvas IS the application,
-    // and the one thing it must not be is unnamed.
-    await page.getByRole('img', { name: /library map/i }).waitFor({ timeout: 5000 });
+  test('the canvas is a named application region, not an anonymous graphic', async () => {
+    // Superseded by phase C: the canvas WAS `role="img"` with a static label,
+    // a placeholder for the picture nobody could yet navigate. Now it is the
+    // cursor's own `role="application"` region, named by whatever cell is
+    // currently under the camera centre - "the centre of the library" at
+    // page load, since the opening view starts there.
+    await page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 5000 });
   });
 
   test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
@@ -725,6 +728,253 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.notEqual(ring.tag, 'BODY', 'Tab must reach a control');
     assert.notEqual(ring.outlineStyle, 'none', `a keyboard-focused ${ring.tag} must show an outline`);
     assert.ok(parseFloat(ring.outlineWidth) >= 2, `the focus ring must be visible, got ${ring.outlineWidth}`);
+  });
+
+  // --- the keyboard cursor (docs/accessibility-plan.md phase C) --------------
+  //
+  // The map's own keyboard interface: `role="application"` on the canvas turns
+  // off a screen reader's browse-mode reading for exactly this element, which
+  // is what lets arrow keys reach the page at all rather than being consumed
+  // by the reader's own navigation. None of that can be asserted from JSX -
+  // only a real browser resolves whether a role actually changes what a key
+  // press does.
+
+  test('the map is reachable, and the sample corpus is small enough to have a real edge', async () => {
+    // The 26-room sample corpus gives a `boundaryRadius` of only a few cells
+    // even fully dense - discovered while driving this by hand, not designed
+    // in - which is what makes the boundary-crossing test below reachable in
+    // a handful of presses rather than needing a huge synthetic corpus.
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('End');
+
+    await page.locator('canvas').focus();
+    await assert.doesNotReject(
+      page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 2000 })
+    );
+  });
+
+  test('arrows pan the cursor and announce it; ctrl+arrow always lands on a room', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const home = await hud(page);
+
+    await page.keyboard.press('ArrowRight');
+    await waitFor(
+      async () => (await hud(page)).x !== home.x,
+      2000,
+      'an arrow press must move the camera by exactly one cell'
+    );
+    const afterOneStep = await hud(page);
+    assert.ok(
+      Math.abs(afterOneStep.x - home.x - 1) < 1e-6,
+      `one arrow press must move exactly one cell: ${home.x} -> ${afterOneStep.x}`
+    );
+    await waitFor(
+      async () => /Room \d+|blank wall/.test((await live.textContent()) ?? ''),
+      2000,
+      'an arrow press must announce something about the new cursor cell'
+    );
+
+    // Ctrl+arrow's whole point: whatever it lands on, if it finds anything at
+    // all, is a real room - never the wallpaper a plain arrow could have just
+    // as easily landed on. That is the one thing worth asserting without
+    // hard-coding a room id or a step count from the sample corpus, both of
+    // which would be pinning an art/layout fact this test does not own.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    await page.keyboard.press('Control+ArrowRight');
+    await waitFor(
+      async () => /^Room \d+|^nothing further/.test((await live.textContent()) ?? ''),
+      2000,
+      'ctrl+arrow must announce a room or say it found nothing'
+    );
+    const ctrlArrowText = await live.textContent();
+    if (!/^nothing further/.test(ctrlArrowText)) {
+      assert.match(ctrlArrowText, /^Room \d+/, 'ctrl+arrow must never land announcing a blank wall');
+      // And it must actually have MOVED the camera - a room announcement
+      // without a matching jump would mean the text and the map disagree.
+      await waitFor(async () => (await hud(page)).x !== home.x, 2000, 'ctrl+arrow never moved the camera');
+    }
+  });
+
+  test('the boundary is announced once on crossing, not on every step past it', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    // Walk outward until the crossing message appears, or give up - the exact
+    // step count depends on which direction the corpus's slots happen to
+    // extend, so this does not hard-code one.
+    let crossedAt = -1;
+    for (let i = 1; i <= 30; i++) {
+      await page.keyboard.press('ArrowRight');
+      const text = (await live.textContent()) ?? '';
+      if (/edge of the library/.test(text)) {
+        crossedAt = i;
+        break;
+      }
+    }
+    assert.ok(crossedAt > 0, 'walking outward must eventually cross the boundary and say so');
+
+    // One more step past it must NOT repeat the boundary sentence - only the
+    // crossing itself is announced, or the room name would be drowned every
+    // single press through the far field.
+    await page.keyboard.press('ArrowRight');
+    const next = (await live.textContent()) ?? '';
+    assert.doesNotMatch(next, /edge of the library/, 'the boundary sentence must not repeat on every step');
+  });
+
+  test('Home and ctrl+Home fly the cursor, and Enter opens what it lands on', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    await canvas.focus();
+
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+    await waitFor(
+      async () => /^Room \d+, rank 1 of/.test((await live.textContent()) ?? ''),
+      2000,
+      'ctrl+Home must land on the best-ranked room (rank 1)'
+    );
+
+    // Standing on a real room, Enter opens its card - the keyboard path into
+    // a room's content that right-click and long-press never gave a keyboard
+    // user.
+    await page.keyboard.press('Enter');
+    const card = page.locator('.card');
+    await card.waitFor({ timeout: 5000 });
+    assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
+
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.tagName),
+      'CANVAS',
+      'closing a card opened by the map keyboard must return focus to the map'
+    );
+
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    await waitFor(
+      async () => (await live.textContent()) === 'the centre of the library',
+      2000,
+      'Home must return to the centre and announce it'
+    );
+  });
+
+  test('PageUp/PageDown zoom without moving the cursor cell', async () => {
+    // `zoomStep` is instant (no flight - the whole point of a keyboard move),
+    // but "instant" still means "on the next animation frame", not "before
+    // `page.keyboard.press` returns". Reading the HUD immediately raced that
+    // frame and read the stale zoom about one run in four; poll for the
+    // change instead, the same discipline `settled()` uses elsewhere in this
+    // file for a different kind of asynchrony.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const before = await hud(page);
+
+    await page.keyboard.press('PageUp');
+    await waitFor(async () => (await hud(page)).zoom !== before.zoom, 2000, 'PageUp never changed the zoom');
+    const zoomedIn = await hud(page);
+    assert.ok(zoomedIn.zoom > before.zoom, `PageUp must zoom in: ${before.zoom} -> ${zoomedIn.zoom}`);
+    assert.ok(Math.abs(zoomedIn.x - before.x) < 1e-6, 'PageUp must not pan the cursor');
+    assert.ok(Math.abs(zoomedIn.y - before.y) < 1e-6, 'PageUp must not pan the cursor');
+
+    await page.keyboard.press('PageDown');
+    await page.keyboard.press('PageDown');
+    await waitFor(
+      async () => (await hud(page)).zoom < before.zoom,
+      2000,
+      'PageDown never brought the zoom back below where it started'
+    );
+    const zoomedOut = await hud(page);
+    assert.ok(zoomedOut.zoom < before.zoom, `PageDown must zoom out: ${before.zoom} -> ${zoomedOut.zoom}`);
+  });
+
+  test('/ reaches the search field from the map keyboard', async () => {
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    await page.keyboard.press('/');
+    await waitFor(
+      async () => (await page.evaluate(() => document.activeElement?.tagName)) === 'INPUT',
+      2000,
+      '/ must move focus to the search field'
+    );
+  });
+
+  test('? announces the surroundings, on request rather than on every move', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    await page.keyboard.press('?');
+    await waitFor(
+      async () => /edge of the library is about/.test((await live.textContent()) ?? ''),
+      2000,
+      '? must report the distance to the edge'
+    );
+  });
+
+  test("the cursor's own story and chips are real, touch-reachable elements - not gated on Enter", async () => {
+    // `role="application"` plus a keyboard IS the desktop story, but VoiceOver
+    // and TalkBack have nothing that corresponds to "press Enter" - accessibility-
+    // plan.md §4.2b/§4.4 requires the cursor's content to be reachable without
+    // it. Canvas fallback content is never PAINTED (that is the whole point -
+    // it does not duplicate what is already on screen for sighted users), so a
+    // real pointer click cannot reach it; `dispatchEvent` is the stand-in here
+    // for how an assistive technology's own activation lands on an element
+    // regardless of visibility.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    const chips = canvas.locator('button');
+    await waitFor(async () => (await chips.count()) > 0, 2000, 'the best-ranked room must have keyword chips');
+    const term = await chips.first().textContent();
+
+    await chips.first().dispatchEvent('click');
+    await waitFor(
+      async () => (await page.locator('input[type=search]').inputValue()) === term,
+      SEARCH_TIMEOUT,
+      'activating a cursor chip must run the same search a card chip does'
+    );
+  });
+
+  test('axe finds no WCAG violations with the keyboard cursor active', async () => {
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+    assert.deepEqual(summary, [], `axe reported violations with the cursor active:\n  ${summary.join('\n  ')}`);
+
+    // Restore the centre for whatever runs next, and the ratio slider this
+    // block's first test set - the long-press and pinch tests after this rely
+    // on a dense map to reliably land on a room at a fixed screen point.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('End');
   });
 
   test('a long press opens the card, and a drag cancels it', async () => {

@@ -462,5 +462,53 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
     [camera.flightMs, endFlight]
   );
 
-  return { cam, flyTo };
+  // The keyboard's three instant moves (accessibility-plan.md §4.2/§4.2a) - no
+  // `flyTo` for any of them. A cell's cursor is announced on arrival, and an
+  // eased flight between every arrow press would both feel unusable and race:
+  // `cam.current` is unchanged until a flight resolves, so a second press
+  // mid-flight would read - and pan from - a stale position. Interrupting
+  // whatever flight is in the air first is what "instant" actually requires;
+  // otherwise a keyboard move can be silently overridden by an in-flight
+  // animation landing after it.
+
+  /** Pan by whole cells - one arrow press, or a screenful with shift held. */
+  const panCells = useCallback(
+    (dx, dy) => {
+      endFlight(false);
+      cam.current = { ...cam.current, x: cam.current.x + dx, y: cam.current.y + dy };
+      onChange?.();
+    },
+    [endFlight, onChange]
+  );
+
+  /** Jump the cursor to a specific cell - Home, ctrl+Home, ctrl+arrow's landing. */
+  const jumpToCell = useCallback(
+    (x, y) => {
+      endFlight(false);
+      cam.current = { ...cam.current, x: x + 0.5, y: y + 0.5 };
+      onChange?.();
+    },
+    [endFlight, onChange]
+  );
+
+  /**
+   * Zoom by a factor about the viewport CENTRE - PgUp/PgDn. Anchoring on
+   * centre rather than a pointer position is what keeps the cursor cell fixed
+   * across a keyboard zoom: `zoomBy`'s invariant is that the world point under
+   * the anchor does not move, and the viewport centre is exactly where
+   * `cursorCell` reads from.
+   */
+  const zoomStep = useCallback(
+    (factor) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      endFlight(false);
+      const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
+      cam.current = zoomBy(cam.current, rect.width / 2, rect.height / 2, factor, rect);
+      onChange?.();
+    },
+    [canvasRef, endFlight, onChange]
+  );
+
+  return { cam, flyTo, panCells, jumpToCell, zoomStep };
 }

@@ -9,10 +9,12 @@ import {
   beginFlight,
   cameraAtCell,
   clampZoom,
+  cursorCell,
   easeInOut,
   flightAt,
   glideStep,
   panByPixels,
+  pickGranularity,
   pxPerCell,
   screenToWorld,
   worldToScreen,
@@ -377,4 +379,54 @@ test('a flight interrupted by another picks up from where it had got to', () => 
     { x: second.cam.x, y: second.cam.y, zoom: second.cam.zoom },
     { x: midway.x, y: midway.y, zoom: midway.zoom }
   );
+});
+
+test('the cursor cell is the cell under the camera centre', () => {
+  // `cam.x`/`cam.y` are already world cells (the same convention
+  // `cameraAtCell`'s `+ 0.5` states the other way round), so this is a floor
+  // and nothing more - asserted so a future refactor cannot quietly swap in a
+  // round or a different rounding direction.
+  assert.deepEqual(cursorCell({ x: 3.9, y: -0.1, zoom: 220 }), { x: 3, y: -1 });
+  assert.deepEqual(cursorCell({ x: 0, y: 0, zoom: 220 }), { x: 0, y: 0 });
+});
+
+test('the cursor tracks a fractional camera position exactly at cell boundaries', () => {
+  // A camera sitting exactly on an integer is the edge case `Math.floor` gets
+  // right and a naive round would not: cell N owns its own lower corner.
+  assert.deepEqual(cursorCell({ x: 5, y: 5, zoom: 220 }), { x: 5, y: 5 });
+  assert.deepEqual(cursorCell({ x: 4.999999, y: 5, zoom: 220 }), { x: 4, y: 5 });
+});
+
+test('granularity picks region only once a cell is too small to be a specific place', () => {
+  assert.equal(pickGranularity(200), 'cell');
+  assert.equal(pickGranularity(5), 'region');
+});
+
+test('granularity has hysteresis, like the pyramid level it copies the shape from', () => {
+  // Held exactly at the ideal threshold with no prior state, pick fresh.
+  const atThreshold = pickGranularity(24, null);
+  assert.equal(atThreshold, 'cell');
+
+  // Once 'cell' is current, a small dip just under the threshold must not
+  // immediately flip to 'region' - that is the whole point of hysteresis.
+  const stillCell = pickGranularity(20, 'cell');
+  assert.equal(stillCell, 'cell', 'a small dip below threshold must not flicker');
+
+  // But a real drop, well past the biased threshold, does flip.
+  const dropsToRegion = pickGranularity(5, 'cell');
+  assert.equal(dropsToRegion, 'region');
+
+  // And the same holds coming back the other way.
+  const stillRegion = pickGranularity(26, 'region');
+  assert.equal(stillRegion, 'region', 'a small rise above threshold must not flicker');
+  const risesToCell = pickGranularity(60, 'region');
+  assert.equal(risesToCell, 'cell');
+});
+
+test('granularity never oscillates across a boundary held steady', () => {
+  // A zoom sitting exactly on the raw threshold, sampled every frame: without
+  // hysteresis this is the classic flicker case.
+  let g = null;
+  for (let i = 0; i < 20; i++) g = pickGranularity(24, g);
+  assert.equal(g, 'cell');
 });

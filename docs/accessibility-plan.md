@@ -601,11 +601,61 @@ are (`listitem`, not the button inside it — a bare `button` does not support
 them), but whether a real screen reader's platform API receives them is
 unverified by anything in this repository.
 
-**Phase C — the cursor, and the keyboard.** `role="application"` scoped to the
-map, the bindings in §4.2a, the cursor node, the live regions, ctrl+arrow's
-next-room walk, `?`, the boundary announcement, and the canvas focus ring. This
-is the phase that makes the map a map rather than a list, and the one to test
-with a real screen reader before believing any of it (§8 item 1).
+**Phase C — the cursor, and the keyboard. Landed**, with real gaps flagged
+rather than papered over. `role="application"` on the canvas (nowhere else),
+every binding in §4.2a, the cursor as canvas fallback content, `nextRoom`'s
+walk for ctrl+arrow, `?`, the boundary crossing, and the visible ring - all in
+`main.jsx`/`camera.js`/`render.js`/`packages/map`. Still the phase to test
+with a real screen reader before believing any of it (§8 item 1 - unchanged
+and unverified; everything below is confidence from browser/ARIA semantics and
+axe, not from NVDA or JAWS actually running it).
+
+Four scope decisions made while building it, none of them in the original
+text:
+
+- **Announcements are keyboard-driven only, not continuous.** `cam` is a ref
+  precisely so panning does not re-render React on every pointer-drag frame
+  (see `useMapCamera.js`'s own comment on why); the cursor honours that rather
+  than fighting it. A pointer drag moves the camera and therefore the
+  UNDERLYING cursor cell, but nothing is pushed to the live region or the
+  canvas's `aria-label` until the next KEYBOARD action re-syncs it. The
+  alternative - announcing on every pixel of a mouse drag - would spam a
+  screen reader running alongside a sighted user's mouse, which is a real
+  combination (low vision, or someone else driving). The coupling requirement
+  (camera and announced position must never DISAGREE) still holds: a stale
+  announcement is not a wrong one, it is simply not yet re-asked-for, and the
+  next arrow press or Enter reads the camera fresh.
+- **One live region, not two.** §4.2b budgeted a polite and an assertive
+  region. Only the polite one exists, because nothing yet has anything to say
+  assertively - Phase A's status span carries every announcement here,
+  including the boundary crossing (judged informational, not an error). The
+  assertive region is deferred until something actually needs it, rather than
+  shipped empty and untested.
+- **`?` checks four directions, not eight.** The plan's own example
+  ("Room 17 three north-west") implies a true nearest-room search across
+  diagonals; what shipped is `nextRoom` run straight in each cardinal
+  direction, reusing the exact primitive ctrl+arrow already uses rather than
+  inventing a second search. Simpler, and a diagonal answer was judged more
+  geometry than a `?` press needs to earn its keep - revisit if it turns out
+  to matter in practice.
+- **The boundary is not a hard stop for the keyboard.** §8 item 3 left this
+  open; it is decided now. Arrows cross the boundary freely - the map really
+  is infinite, and stopping the keyboard at an edge the pointer never respects
+  would be a keyboard-only restriction to explain. The crossing itself is
+  announced once, in either direction, not repeated on every step already past
+  it (verified: sabotaging the once-only tracking is what the e2e suite's
+  boundary test exists to catch, and does).
+
+And the visible ring (§8 item 6) is answered too: it appears only once a
+keyboard action has actually happened (`render.js`'s `cursor` param is `null`
+until then), so a reader who never touches a key never sees a reticle
+appended to a page they did not ask to look different.
+
+**One real gap, not a decision: the rearrangement does not announce its new
+occupant.** §4.3 states that as settled design; §8 item 4 is where the honest
+status lives. Standing still while the library reorders around you and
+hearing nothing about what arrived is not a finished accessible experience,
+and this document does not claim it is.
 
 **Phase D — the centre room's books.** The 40 spines as real buttons (§3.3).
 Independent of B and C — it is a control surface, not a navigation model — and
@@ -658,11 +708,13 @@ Found by audit, in rough order of severity. All are Phase A.
    takes focus on open, is named by `aria-labelledby` on its room line, and
    restores focus to whatever opened it.
 
-   **Still open, and it needs phase C:** *reachability*. There is no keyboard
-   way to open a card, so the restore path is written but not yet exercised —
-   right-clicking the canvas blurs the focused control to the body before the
-   card mounts, so a pointer-opened card has no opener to return to. Enter on
-   the map cursor gives it one; assert the restore there, where it can fail.
+   **Resolved by phase C.** Enter on the map cursor opens the card with the
+   canvas as its opener, so the restore-on-close path — written in phase A,
+   unexercised until now — is finally reachable and asserted where it can
+   fail: closing a card Enter opened returns focus to the canvas. A
+   pointer-opened card (right-click) still has no opener, for the reason
+   given above; that gap is inherent to the gesture, not something phase C
+   was expected to close.
 
    One thing found while testing it, worth knowing before naming anything after
    an acronym: **Chrome folds CSS `text-transform: uppercase` into the computed
@@ -758,40 +810,69 @@ still fails when the tiles genuinely never arrive. Expect the keyboard tests to
 have the same shape of hazard: a focus move is asynchronous, and a camera
 follows it.
 
+**Phase C confirmed the prediction.** `zoomStep` is instant - no flight, no
+promise - but "instant" still means "on the next animation frame," not "before
+`page.keyboard.press` returns": a test reading the HUD immediately after
+PageUp raced that frame and read the stale zoom about one run in four. Fixed
+by polling for the change, same discipline as the pyramid fix. Not every new
+read had the same exposure - the live region's text comes from a React state
+commit, not a `requestAnimationFrame` callback, and empirically never raced
+across a dozen runs - but the HUD specifically, wherever a keyboard test
+touches it, needs the same poll `settled()` already uses for other reasons.
+
+Phase C's pure modules landed as specified: `packages/map/nextRoom.js`
+(ctrl+arrow's walk - skips wallpaper, stops at the boundary, never returns the
+start cell) and `cursorCell`/`pickGranularity` in `camera.js` (the cursor
+arithmetic and its hysteresis, mirroring `pickLevel`'s shape). `render.js`
+gained a third pure-ish surface: the cursor ring is asserted through the same
+recording `fakeCtx` pattern `render.test.mjs` already uses for `drawImage`/
+`fillRect`, extended to record `strokeRect` calls too.
+
 ---
 
 ## 8. Still open
 
-1. **Does `role="application"` survive contact with a real screen reader?** The
-   whole cursor model rests on it: scoped to the map, arrows reach the page and
-   the cursor works; if a reader in the wild does not honour it, arrows never
-   arrive and Phase C is inert. This is the single highest-risk assumption in
-   this document and it cannot be settled by argument — it needs NVDA, JAWS and
-   VoiceOver, in that order of doubt. Phase B is ordered first precisely so
-   there is something usable if the answer is bad.
-2. **What the far-out announcement should say.** "the far field; nothing ranked
-   within four cells" is a placeholder. The useful summary is probably about the
-   gradient — how concentrated the current search is — not about counts.
-3. **Whether the boundary should be a hard stop for the keyboard.** Pan
-   resistance is analogue and a key press is not. Either panning stops at the
-   boundary (crisp, but the map really is infinite) or it crosses and the
-   announcement carries the change (honest, but nothing out there is worth
-   arrowing through).
-4. **When the rearrangement announcement fires.** §4.3 keeps the cursor still,
-   but the cell under it is animated for a second-odd. Whether the announcement
-   waits for the animation to land or fires immediately is a real choice, and
-   the answer is probably "fires immediately, because the animation is not for
-   this reader".
+1. **Does `role="application"` survive contact with a real screen reader?**
+   Still open, and still the single highest-risk item in this document — Phase
+   C landed the whole cursor model on top of it, which raises the stakes rather
+   than lowering them. Nothing here has run against NVDA, JAWS or VoiceOver;
+   the confidence behind Phase C is browser-observable (CDP's computed roles
+   and properties, axe's WCAG sweep, `:focus-visible` behaviour) and none of
+   that is the same claim as "a real reader announces and reacts correctly."
+   It needs a person with a screen reader, in that order of doubt, before this
+   item can move. Phase B shipped first precisely so there is something usable
+   if the answer turns out to be bad.
+2. **What the far-out announcement should say.** What shipped in Phase C —
+   *"the far field near (x, y) - too far out to name a single room"* — is a
+   different placeholder than the one originally sketched here, not a real
+   answer either. The useful summary is probably about the gradient — how
+   concentrated the current search is — not about coordinates.
+3. ~~**Whether the boundary should be a hard stop for the keyboard.**~~
+   **Decided in Phase C: no.** Arrows cross it freely; the crossing is
+   announced once, in either direction, and not repeated on every step already
+   past it. The map really is infinite, and a keyboard-only stop the pointer
+   does not share would be a restriction that needs explaining rather than one
+   that reads as obviously correct.
+4. **The rearrangement does not announce its new occupant at all yet.** Not a
+   timing question to weigh, as this item first framed it — Phase C simply
+   never wired it up. `announceCursorMove` fires only from the discrete
+   keyboard actions in §4.2a; nothing calls it when a reorder lands, so a
+   screen reader user hears whatever `describeSignals` already said about the
+   search (`"ranked by keywords"`) and nothing about what is now actually under
+   their cursor. §4.3's "the new occupant is announced" is written as settled
+   design; it is not built. Worth doing before this document claims the
+   rearrangement is accessible at all — the timing question (immediately vs.
+   after the animation lands) is real but secondary to simply existing.
 5. **How far should ctrl+arrow look before giving up?** It walks `rankOf` along
    an axis to the boundary, which is nothing at 27 rooms and a 200-cell walk at
    the far edge of a full corpus. Bounded per keypress, almost certainly, but
    the bound is a feel question: too short and the key does nothing in the far
    field, too long and one press crosses half the library.
-6. **Does the cursor want a visible twin for sighted keyboard users?** §3.6
-   proposes drawing its ring on the canvas, which doubles as a desync detector.
-   But the cursor is *always* the centre cell, so a permanent reticle in the
-   middle of the screen is a strong visual choice to make on accessibility's
-   behalf. Perhaps it appears only once a key is pressed.
+6. ~~**Does the cursor want a visible twin for sighted keyboard users?**~~
+   **Landed in Phase C**, with the suggested resolution: the ring in
+   `render.js` draws only once a keyboard action has actually happened, so a
+   reader who never touches a key never sees a reticle appended to a page they
+   did not ask to look different.
 7. **Whether the dense view and this plan should share any code.** §3.7 defers
    the dense/linear view as its own subproject and argues it must not be built
    as an accessibility feature. The thing to watch when it does get built is

@@ -213,6 +213,52 @@ export function cameraAtCell(cam, x, y, zoom) {
 }
 
 /**
+ * The cell a screen reader's cursor stands on: whatever is under the camera
+ * centre (accessibility-plan.md §4.2). Costs nothing - `cam.x`/`cam.y` are
+ * already world cells, and `cameraAtCell`'s `+ 0.5` above is the same
+ * convention stated the other way round. Panning IS moving this cursor, which
+ * is what lets a pointer pan and a keyboard pan agree on "where am I" without
+ * a second notion of position to keep in step.
+ */
+export function cursorCell(cam) {
+  return { x: Math.floor(cam.x), y: Math.floor(cam.y) };
+}
+
+/**
+ * Below this many device pixels per cell width, a cell is too small on screen
+ * to be a specific place to stand - the announcement goes regional instead of
+ * naming one cell (§3.1's "semantic zoom on the announcement"). A by-feel
+ * number, like the chrome thresholds elsewhere: nothing derives from it and no
+ * test pins its value.
+ */
+const CURSOR_GRANULARITY_PX = 24;
+
+/** How much the threshold moves once picked, so a zoom held near it does not flicker. */
+const GRANULARITY_HYSTERESIS = 0.35;
+
+/**
+ * 'cell' or 'region': what kind of thing the cursor names at this zoom.
+ *
+ * Same shape as `pyramid.js`'s `pickLevel` - current-state-aware, and a zoom
+ * held near the boundary is biased toward staying where it is rather than
+ * picked fresh every frame. Here the cost of flicker is sharper than a texture
+ * swap: an announcement that alternates between naming a cell and naming a
+ * region is worse than either one held steady.
+ *
+ * @param {number} cellPx device pixels per cell width, e.g. `pxPerCell(cam).x * dpr`
+ * @param {'cell'|'region'|null} [current] the granularity last announced
+ */
+export function pickGranularity(cellPx, current = null) {
+  const ideal = cellPx >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
+  if (current == null || current === ideal) return ideal;
+
+  const biased =
+    ideal === 'region' ? cellPx * (1 + GRANULARITY_HYSTERESIS) : cellPx / (1 + GRANULARITY_HYSTERESIS);
+  const rebiased = biased >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
+  return rebiased === current ? current : ideal;
+}
+
+/**
  * How long a camera flight takes by default, in milliseconds.
  *
  * The value that ships, not the only statement of it: `packages/config` imports
