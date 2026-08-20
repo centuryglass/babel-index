@@ -207,6 +207,46 @@ export function glideStep(cam, damp) {
   return { ...cam, x: cam.x * (1 - pull), y: cam.y * (1 - pull) };
 }
 
+/**
+ * However many frames `glideStep` would take, without taking them. High
+ * because the pull can shrink very slowly near the rest point - `camera.test.mjs`
+ * measures the gap directly against thousands of real `glideStep` calls - and
+ * because every "frame" here is arithmetic, not a paint: tens of thousands of
+ * them cost microseconds, which is cheap next to a reader stranded short of
+ * where the animated version would actually have settled.
+ */
+const GLIDE_REST_MAX_STEPS = 20_000;
+
+/**
+ * Where the glide would eventually settle, computed rather than animated - the
+ * `prefers-reduced-motion` reading of the same physics `glideStep` eases
+ * toward one frame at a time. There is no closed form for the rest point (the
+ * pull shrinks as `resistanceAt` climbs back toward 1, which is exactly what
+ * makes the eased version smooth), so this iterates the same step function to
+ * convergence instead of inventing a different endpoint - motion-on and
+ * motion-off end up in the same place, one visibly and one not.
+ *
+ * Bounded rather than run to exact convergence: the pull can shrink for a long
+ * time before crossing `GLIDE_EPSILON`, and every step here is arithmetic, not
+ * a frame, so five hundred of them cost nothing next to getting the reader
+ * stranded on a value that never quite settles.
+ *
+ * @param {(x: number, y: number) => number} resistanceAt
+ */
+export function glideToRest(cam, resistanceAt) {
+  let next = cam;
+  for (let i = 0; i < GLIDE_REST_MAX_STEPS; i++) {
+    const stepped = glideStep(next, resistanceAt(next.x, next.y));
+    if (stepped === next) break;
+    if (Math.abs(stepped.x - next.x) < 1e-6 && Math.abs(stepped.y - next.y) < 1e-6) {
+      next = stepped;
+      break;
+    }
+    next = stepped;
+  }
+  return next;
+}
+
 /** Centre the camera on a cell - cells are addressed by corner, so aim at the middle. */
 export function cameraAtCell(cam, x, y, zoom) {
   return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom, cam.limits) : cam.zoom };

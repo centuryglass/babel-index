@@ -351,6 +351,37 @@ stale instance.
   says WHETHER it landed — false means a hand hit the map — and an interrupted
   flight must fall back to the instant rebuild rather than rearranging under
   someone who has just grabbed it.
+- **`flyTo`'s third-argument `{ ms }` overrides the configured duration for one
+  call**, which is what lets the keyboard's short nudges (arrow, ctrl+arrow,
+  PgUp/PgDn — `camera.keyboardMoveMs`, 140ms) share every mechanic a "fly home"
+  already has — interrupt-on-a-new-flight, the landing promise, reduced motion
+  collapsing it to zero — rather than a second, parallel "ease the camera"
+  implementation. A keyboard handler chaining a SECOND move off the first must
+  not read `cam.current` for the target — that is the flight's INTERPOLATED
+  position, not where it is headed, and two key-repeat presses landing in the
+  same rAF tick will both read a value that has not moved yet and compute the
+  same target. Read `flightTarget()` (`flight.current?.to ?? cam.current`)
+  instead; found by two `PageDown` presses back to back silently cancelling
+  each other rather than compounding.
+- **The glide (`glideStep`, pan resistance easing back after a release) must
+  not correct a position a completed flight put there on purpose.** Every
+  `flyTo` caller before the keyboard cursor landed well inside the content
+  region, where the glide is a no-op anyway — so a flight landing PAST the
+  boundary (a keyboard arrow crossing it on purpose) was new territory, and
+  the very next frame would see no flight and no drag in progress and ease the
+  camera back toward the origin, fighting a position the cursor had just
+  announced. `glideExempt` (a ref) is set on every natural landing and cleared
+  the instant a pointer grabs the map, so a keyboard-placed position holds
+  until something else moves the camera, while a genuine pointer release still
+  gets the ordinary spring-back.
+- **The glide respects `prefers-reduced-motion` too, via `glideToRest` rather
+  than skipping the correction.** There is no closed form for where `glideStep`
+  would eventually settle — the pull shrinks as resistance climbs back toward
+  1, which is what makes the eased version smooth — so `glideToRest` runs the
+  same step function to convergence (bounded at 20,000 iterations; every one
+  is arithmetic, not a frame) instead of inventing a different endpoint.
+  Motion-on and motion-off settle in the same place, differing only in whether
+  the trip is visible.
 - **While flying home to start a rearrangement, the map draws the OLD
   arrangement.** `layout` and `order` update the moment a search resolves, before
   the camera has moved, so without the hold in `anim.current.before` the map
@@ -481,11 +512,42 @@ stale instance.
 - **The HUD updates on the next animation frame, not before `page.keyboard.press`
   returns.** A keyboard test reading `hud(page)` immediately after a PageUp/
   PageDown raced that frame and read the stale zoom about one run in four -
-  `zoomStep` is instant (no flight), but "instant" still means "next rAF", not
+  even a keyboard move with `keyboardMoveMs: 0` (reduced motion) still takes
+  one rAF tick to notice the flight is already done, so "instant" never means
   synchronous. Poll for the change, same as `blank` above. The live region's
   text is a different story: it comes from a React state commit, not a
   `requestAnimationFrame` callback, and has not been observed to race across
   many runs - but if that ever changes, it gets the same treatment.
+- **A rapid second keyboard press can read the same stale value the first one
+  did.** `cam.current` is the flight's INTERPOLATED position, not its target -
+  two `PageDown` presses back to back both computed their zoom from a value
+  that had not moved a single frame yet, so the second press cancelled the
+  first's effect instead of compounding it. The fix pattern generalises:
+  anything a keyboard handler chains off (the camera's target zoom, the
+  cursor's next cell) needs a source that is synchronously correct across two
+  same-tick calls - `flightTarget()` (`flight.current?.to ?? cam.current`) for
+  the camera, a ref written directly inside the handler rather than mirrored
+  from React state by an effect for the cursor. A `useEffect` syncing a ref
+  from state is NOT synchronously faster than the state itself; both lag the
+  same render.
+- **Two reads of the same UI, separated by a slow call, can describe two
+  different renders.** A test read a search's result count, then - after a
+  CDP `Accessibility.getFullAXTree` round trip - read an attribute off what it
+  assumed was the same list. The ranking can still change shortly after
+  results first appear (CLIP arrives after an initial keyword/story rank), and
+  the gap was wide enough to land on that window once the suite had grown
+  long enough to shift timing. Read values that must agree back to back, not
+  separated by the slowest call in the test; where genuine settling is needed,
+  poll for two AGREEING reads with a real gap between them, not two reads
+  taken one after another with nothing elapsed - that proves nothing.
+- **A test's own cleanup belongs in `finally`, not at the end of the function
+  body.** The fix above still let one assertion failing mid-test skip the
+  cleanup after it - stranding the ratio slider and the camera in a state only
+  that test expected, for every test that shares this suite's one `page`
+  afterward. One flake became two unrelated-looking failures in two other
+  tests. Sabotage-test the cleanup itself, not just the assertion it is
+  guarding: force the slow path the original flake depended on and confirm
+  the cascade is actually gone, not just less likely.
 - **A green e2e test that cannot fail is worse than none.** If you change it,
   break the app on purpose and confirm it fails.
 - **CDP touch injection bypasses the browser's gesture arbitration**, so

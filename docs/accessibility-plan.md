@@ -657,6 +657,58 @@ status lives. Standing still while the library reorders around you and
 hearing nothing about what arrived is not a finished accessible experience,
 and this document does not claim it is.
 
+**Update: the keyboard nudge eases, and the edge pushback stopped fighting
+it.** Landed after Phase C shipped, from user testing rather than from this
+plan's own foresight. Two things were true at once and neither was intended:
+
+- **Every keyboard move was instant** - `panCells`/`jumpToCell`/`zoomStep`
+  wrote `cam.current` directly, with no flight at all. Against a map where
+  every OTHER transition (Home, a search, a click) eases, a snap read as
+  broken rather than deliberate. Fixed by routing every keyboard move through
+  `flyTo` itself, given a duration override (`{ ms }`) short enough not to feel
+  laggy under key-repeat: `camera.keyboardMoveMs` in `packages/config`, 140ms
+  against `flightMs`'s 450, because a single cell is not a cross-map jump and
+  animating it at the same pace reads as sluggish. Reduced motion collapses it
+  to zero the same way it already collapsed `flightMs` - one `duration`
+  expression in `flyTo`, not two.
+- **The edge pushback (`glideStep`, the "felt affordance" pan resistance eases
+  back with) was fighting the keyboard the instant it crossed the boundary on
+  purpose.** Every `flyTo` caller before this landed well inside the content
+  region, where the glide is a no-op - so a keyboard press landing PAST the
+  boundary (§4.1's "arrows cross it freely") was new territory, and the very
+  next animation frame saw no flight and no drag in progress and started
+  easing the camera back toward the origin, silently overriding a position
+  the cursor had just announced. Motion setting aside, that was a
+  correctness bug: the camera and the announced position disagreeing is
+  exactly what this whole design promises never happens. Fixed with a
+  `glideExempt` ref in `useMapCamera.js` - set on every flight that actually
+  lands, cleared the instant a pointer grabs the map - so a keyboard-placed
+  position simply stays where the reader put it until something else moves
+  the camera, and a POINTER release afterward still gets the ordinary
+  spring-back.
+- **And the glide itself had never checked `prefers-reduced-motion` at
+  all** - an ambient gap older than the keyboard work, surfaced by looking
+  for it. `camera.js` gained `glideToRest`, which runs `glideStep`'s own
+  physics to convergence instead of animating it, so motion-on and
+  motion-off settle in the same place and differ only in whether the trip is
+  visible.
+
+A rapid-repeat bug turned up while wiring the eased zoom: two `PageDown`
+presses back to back both read `cam.current.zoom`, which had not moved a
+single frame yet, and computed the SAME target - the second press silently
+cancelled the first's effect instead of compounding it. `cam.current` is the
+INTERPOLATED position; what a chained keyboard press needs is the
+fully-resolved target of whatever is already in flight, which `flightTarget()`
+(`flight.current?.to ?? cam.current`) now provides. The same shape of bug
+existed for panning too, one layer up: `main.jsx`'s `cursor` React state does
+not update within the same tick a second keydown can arrive in, so
+`cursorRef` - previously synced by an effect, no faster than the state itself
+- is now written synchronously inside `announceCursorMove`, and the keyboard
+handler reads `cursorRef.current` rather than the closure's `cursor` for every
+target it computes. Both were found by hand, driving the app after Phase C
+shipped, not by any test - `camera.test.mjs`/e2e now cover the specific
+double-press cases that exposed them.
+
 **Phase D — the centre room's books.** The 40 spines as real buttons (§3.3).
 Independent of B and C — it is a control surface, not a navigation model — and
 placed last only because B and C are what make the corpus reachable at all. Move
@@ -827,6 +879,25 @@ arithmetic and its hysteresis, mirroring `pickLevel`'s shape). `render.js`
 gained a third pure-ish surface: the cursor ring is asserted through the same
 recording `fakeCtx` pattern `render.test.mjs` already uses for `drawImage`/
 `fillRect`, extended to record `strokeRect` calls too.
+
+**A pre-existing flake surfaced by the suite simply growing longer.** The
+ranked listbox test (Phase B) read a search's result count, then - several
+awaits and one slow CDP `getFullAXTree` round trip later - read an
+`aria-setsize` off the same list and compared them. The two reads described
+different renders about one run in several: the first search's ranking can
+still change shortly after `.results-list` first appears (CLIP embeddings
+load asynchronously and can re-rank a keyword/story-only result), and the gap
+between the two reads was wide enough, once the suite had enough OTHER tests
+in front of it to shift the timing, to land on that window often enough to
+notice. Two fixes, not one: the count is now polled for two AGREEING reads at
+least one real 200ms gap apart before anything is asserted about it (not just
+read twice back to back, which proves nothing), and the test's own cleanup -
+restoring the ratio slider and the camera - moved into a `finally`, because
+the first version of this fix still let one assertion failing mid-test strand
+shared `page` state for every test after it. A single flake in one test
+became two unrelated-looking failures in two others purely from that missing
+`finally`; sabotaging the fix (forcing the slow "opening view" flight path on
+every run) confirmed the cascade is gone.
 
 ---
 

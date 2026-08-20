@@ -5,6 +5,7 @@ import {
   clampZoom,
   flightAt,
   glideStep,
+  glideToRest,
   panByPixels,
   zoomAt,
   zoomBy,
@@ -136,6 +137,27 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   const tap = useRef(null);
 
   /**
+   * Whether the camera's current position was placed there ON PURPOSE by a
+   * completed flight, and so must not be corrected by the glide.
+   *
+   * Every existing `flyTo` caller before the keyboard cursor (Home, a search's
+   * fly-home, the "centre" button, a chip search) lands well inside the
+   * content region, where `resistanceAt` is 1 and the glide is a no-op anyway
+   * - so this was never reachable before. It became reachable the moment
+   * keyboard arrows were allowed to cross the boundary on purpose
+   * (accessibility-plan.md §4.1/§8 item 3): without this flag, the very next
+   * frame after landing past the edge would see no flight and no drag in
+   * progress and ease the camera back toward the origin, silently fighting a
+   * position the cursor had just announced - motion aside, that is a
+   * correctness bug, not merely an unwanted animation.
+   *
+   * Set on every natural landing (`endFlight(true)`) and cleared the moment a
+   * hand actually grabs the map, so a POINTER release afterward still gets the
+   * spring-back it is for.
+   */
+  const glideExempt = useRef(false);
+
+  /**
    * End whatever is in the air, telling the caller whether it arrived.
    *
    * `flyTo` hands back a promise so a caller can sequence something after the
@@ -146,6 +168,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   const endFlight = useCallback((landed) => {
     const settle = flight.current?.settle;
     flight.current = null;
+    if (landed) glideExempt.current = true;
     settle?.(landed);
   }, []);
 
@@ -217,6 +240,11 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
       // finger, and must not fire `onTap`.
       const interruptedFlight = !!flight.current;
       endFlight(false);
+      // A hand on the map resumes ordinary pan-resistance semantics for
+      // whatever happens next: a release outside the region should spring back
+      // as usual, regardless of whether the camera got here via a keyboard
+      // move a moment ago.
+      glideExempt.current = false;
 
       // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
       // first would abort the handler before the pointer was recorded - losing
@@ -412,8 +440,15 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
         cam.current = next;
         if (done) endFlight(true);
         onChange?.();
-      } else if (!drag.current) {
-        const next = glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
+      } else if (!drag.current && !glideExempt.current) {
+        // Reduced motion asks for the rest point without the frames it takes
+        // to ease there - `glideToRest` runs the same physics to convergence
+        // instead of inventing a different destination, so motion-on and
+        // motion-off agree on WHERE, differing only in whether the trip is
+        // seen.
+        const next = prefersReducedMotion()
+          ? glideToRest(cam.current, resistanceAt)
+          : glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
         if (next !== cam.current) {
           cam.current = next;
           onChange?.();
@@ -442,6 +477,14 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * Reduced motion overrides it rather than being overridden by it: someone who
    * has asked for less motion is not asking about this map in particular.
    *
+   * `ms` overrides the configured duration for a single call, which is what
+   * lets the keyboard's short nudges (accessibility-plan.md §4.2a - one arrow
+   * press, a ctrl+arrow jump, a PgUp/PgDn zoom step) share every mechanic a
+   * "fly home" already has - the interrupt-on-a-new-flight below, the landing
+   * promise, `prefers-reduced-motion` collapsing it to zero - rather than a
+   * second, parallel implementation of "ease the camera." Omit it for the
+   * ordinary configured flight.
+   *
    * Returns a promise for the landing - true if it arrived, false if the reader
    * took the map first. Callers that only want the camera moved can ignore it;
    * the one that cannot is the rearrangement, which has to know both WHEN the
@@ -450,65 +493,34 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * map is not asking to watch the library rebuild itself.
    */
   const flyTo = useCallback(
-    (x, y, zoom) => {
+    (x, y, zoom, { ms } = {}) => {
       const to = cameraAtCell(cam.current, x, y, zoom);
-      const ms = prefersReducedMotion() ? 0 : camera.flightMs;
+      const duration = prefersReducedMotion() ? 0 : ms ?? camera.flightMs;
       // A second flight replaces the first, and the first did not arrive.
       endFlight(false);
       return new Promise((settle) => {
-        flight.current = { ...beginFlight(cam.current, to, performance.now(), ms), settle };
+        flight.current = { ...beginFlight(cam.current, to, performance.now(), duration), settle };
       });
     },
     [camera.flightMs, endFlight]
   );
 
-  // The keyboard's three instant moves (accessibility-plan.md §4.2/§4.2a) - no
-  // `flyTo` for any of them. A cell's cursor is announced on arrival, and an
-  // eased flight between every arrow press would both feel unusable and race:
-  // `cam.current` is unchanged until a flight resolves, so a second press
-  // mid-flight would read - and pan from - a stale position. Interrupting
-  // whatever flight is in the air first is what "instant" actually requires;
-  // otherwise a keyboard move can be silently overridden by an in-flight
-  // animation landing after it.
-
-  /** Pan by whole cells - one arrow press, or a screenful with shift held. */
-  const panCells = useCallback(
-    (dx, dy) => {
-      endFlight(false);
-      cam.current = { ...cam.current, x: cam.current.x + dx, y: cam.current.y + dy };
-      onChange?.();
-    },
-    [endFlight, onChange]
-  );
-
-  /** Jump the cursor to a specific cell - Home, ctrl+Home, ctrl+arrow's landing. */
-  const jumpToCell = useCallback(
-    (x, y) => {
-      endFlight(false);
-      cam.current = { ...cam.current, x: x + 0.5, y: y + 0.5 };
-      onChange?.();
-    },
-    [endFlight, onChange]
-  );
-
   /**
-   * Zoom by a factor about the viewport CENTRE - PgUp/PgDn. Anchoring on
-   * centre rather than a pointer position is what keeps the cursor cell fixed
-   * across a keyboard zoom: `zoomBy`'s invariant is that the world point under
-   * the anchor does not move, and the viewport centre is exactly where
-   * `cursorCell` reads from.
+   * The camera a NEW keyboard move should chain off, rather than teleporting
+   * from wherever an in-progress flight currently is.
+   *
+   * `cam.current` is the INTERPOLATED position - correct for drawing a frame,
+   * wrong for planning the next flight. `flyTo` itself never mutates
+   * `cam.current` (only the rAF loop does, as a flight progresses), so a
+   * second keyboard press arriving before that loop has ticked even once - two
+   * PgDn presses back to back is the case that surfaced this - would compute
+   * ITS target from the same pre-flight zoom the first press already started
+   * leaving, and the two presses would collapse into one. The already-known,
+   * fully-resolved target of a flight in progress (`flight.current.to`) is
+   * what a chained press should build on instead; idle, this is just
+   * `cam.current`.
    */
-  const zoomStep = useCallback(
-    (factor) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      endFlight(false);
-      const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
-      cam.current = zoomBy(cam.current, rect.width / 2, rect.height / 2, factor, rect);
-      onChange?.();
-    },
-    [canvasRef, endFlight, onChange]
-  );
+  const flightTarget = useCallback(() => flight.current?.to ?? cam.current, []);
 
-  return { cam, flyTo, panCells, jumpToCell, zoomStep };
+  return { cam, flyTo, flightTarget };
 }

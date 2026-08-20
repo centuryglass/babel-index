@@ -79,6 +79,21 @@ export const DEFAULTS = {
      * off. Reduced motion still wins over any value set here.
      */
     flightMs: FLIGHT_MS,
+
+    /**
+     * How long a single keyboard nudge takes - one arrow press, a ctrl+arrow
+     * jump, a PgUp/PgDn zoom step - in milliseconds. Deliberately its own
+     * number rather than a reuse of `flightMs`: a keyboard move is a single
+     * cell or a screenful, not a cross-map jump, and animating it at the same
+     * pace as "fly home" reads as sluggish under repeated key presses. Short
+     * enough that a held-down key still feels responsive; long enough to read
+     * as a glide rather than a snap.
+     *
+     * Zero means arrive at once, the same `prefers-reduced-motion` escape hatch
+     * `flightMs` has - and for the same reason, since `useMapCamera.js` routes
+     * every keyboard move through `flyTo` with this as the duration override.
+     */
+    keyboardMoveMs: 140,
   },
 
   map: {
@@ -286,6 +301,9 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
       maxZoom,
       defaultZoom,
       flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
+      keyboardMoveMs: duration(
+        camIn.keyboardMoveMs, DEFAULTS.camera.keyboardMoveMs, 'camera.keyboardMoveMs', notes
+      ),
     },
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
     map: {

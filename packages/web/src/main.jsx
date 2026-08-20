@@ -316,7 +316,7 @@ function Library({ manifest }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cam, flyTo, panCells, jumpToCell, zoomStep } = useMapCamera({
+  const { cam, flyTo, flightTarget } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
@@ -354,6 +354,16 @@ function Library({ manifest }) {
   // rebuilt render EFFECT per keypress is not (see that effect's own comment
   // on why it must not depend on anything that changes this often).
   const [cursor, setCursor] = useState(() => cursorCell(cam.current));
+  // Written SYNCHRONOUSLY by `announceCursorMove`, not just mirrored from
+  // `cursor` state by an effect - an effect only runs after React commits, no
+  // faster than the state update itself, so it cannot make this any more
+  // current for a SECOND keyboard press arriving in the same tick as the
+  // first (rapid key-repeat, or two presses close enough together that
+  // neither the effect nor a re-render has run between them). Reading a
+  // stale value here is exactly what let two quick PageDown presses collapse
+  // into one - `onMapKeyDown` computes the next target from this ref now, not
+  // from the `cursor` closure variable, so a chained press always builds on
+  // the move the last press actually requested.
   const cursorRef = useRef(cursor);
   // Whether ANY keyboard action has happened yet. Gates the ring in `render.js`
   // - a permanent reticle in the middle of a page nobody has touched would be a
@@ -362,7 +372,6 @@ function Library({ manifest }) {
   // frame reads it, not to trigger a render of its own.
   const keyboardUsed = useRef(false);
   useEffect(() => {
-    cursorRef.current = cursor;
     requestDraw();
   }, [cursor, requestDraw]);
 
@@ -388,6 +397,7 @@ function Library({ manifest }) {
    */
   const announceCursorMove = useCallback(
     (cell) => {
+      cursorRef.current = cell;
       setCursor(cell);
 
       const canvas = canvasRef.current;
@@ -451,9 +461,9 @@ function Library({ manifest }) {
         keyboardUsed.current = true;
 
         if (e.ctrlKey || e.metaKey) {
-          const found = nextRoom(layout, cursor, dir);
+          const found = nextRoom(layout, cursorRef.current, dir);
           if (found) {
-            jumpToCell(found.x, found.y);
+            flyTo(found.x, found.y, undefined, { ms: config.camera.keyboardMoveMs });
             announceCursorMove(found);
           } else {
             setStatus('nothing further in that direction');
@@ -473,19 +483,48 @@ function Library({ manifest }) {
           dx *= cellsX;
           dy *= cellsY;
         }
-        panCells(dx, dy);
-        announceCursorMove({ x: cursor.x + dx, y: cursor.y + dy });
+        // The target is built from `cursorRef.current`, not the `cursor`
+        // closure variable - two presses landing in the same tick (rapid
+        // key-repeat, or simply faster than React has re-rendered) would
+        // otherwise both read the SAME pre-move value and collapse into one
+        // step. The ref is written synchronously by `announceCursorMove`
+        // below, so a chained press always builds on what the previous one
+        // actually requested, not on wherever the animation has visually got
+        // to.
+        //
+        // Announced synchronously, not awaited on the flight landing: the
+        // cursor's cell is a logical fact settled the instant the key is
+        // processed, and `keyboardMoveMs` exists to make that motion visible
+        // to sighted readers, not to gate anything else. A rapid run of arrow
+        // presses each interrupts the previous flight - the same "a second
+        // flight replaces the first" `flyTo` already gives Home - so
+        // key-repeat chases smoothly rather than queuing animations.
+        const target = { x: cursorRef.current.x + dx, y: cursorRef.current.y + dy };
+        flyTo(target.x, target.y, undefined, { ms: config.camera.keyboardMoveMs });
+        announceCursorMove(target);
         return;
       }
 
       if (e.key === 'PageUp' || e.key === 'PageDown') {
         e.preventDefault();
         keyboardUsed.current = true;
-        zoomStep(e.key === 'PageUp' ? 1.6 : 1 / 1.6);
-        // The cursor cell itself does not move - `zoomStep` anchors on the
-        // viewport centre for exactly that reason - but the granularity might,
-        // so re-announce.
-        announceCursorMove(cursor);
+        // Flies to the CURSOR's own cell at a new zoom, which keeps the
+        // cursor fixed across the zoom the way the old pixel-anchored
+        // `zoomBy` did, and lands the camera exactly cell-centred.
+        //
+        // The zoom is built off `flightTarget()`, not `cam.current.zoom` -
+        // `cam.current` is the INTERPOLATED value, which a flight in progress
+        // has not necessarily moved from its start at all yet. Two PageDown
+        // presses back to back both reading `cam.current.zoom` would compute
+        // the SAME target and the second would silently cancel the first's
+        // effect rather than compounding it - `flightTarget()` chains off the
+        // fully-resolved target of whatever is already in flight instead.
+        const factor = e.key === 'PageUp' ? 1.6 : 1 / 1.6;
+        const zoom = flightTarget().zoom * factor;
+        flyTo(cursorRef.current.x, cursorRef.current.y, zoom, { ms: config.camera.keyboardMoveMs });
+        // The cursor cell itself does not move, but the granularity might, so
+        // re-announce.
+        announceCursorMove(cursorRef.current);
         return;
       }
 
@@ -513,14 +552,14 @@ function Library({ manifest }) {
         // Opening a card over the wallpaper would make the gesture read as
         // broken rather than as empty - the same rule `picking.js` states for
         // a click, applied here to a keypress.
-        const at = layout.roomAt(cursor.x, cursor.y, order);
+        const at = layout.roomAt(cursorRef.current.x, cursorRef.current.y, order);
         if (at.centre || at.generic) return;
         e.preventDefault();
         const canvas = canvasRef.current;
         const at2 = canvas
           ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
           : { x: 0, y: 0 };
-        setCard({ id: at.id, rank: at.rank, x: cursor.x, y: cursor.y, at: at2 });
+        setCard({ id: at.id, rank: at.rank, x: cursorRef.current.x, y: cursorRef.current.y, at: at2 });
         return;
       }
 
@@ -536,7 +575,7 @@ function Library({ manifest }) {
       }
     },
     [
-      cursor, layout, order, panCells, jumpToCell, zoomStep, flyTo, config,
+      layout, order, flyTo, flightTarget, config,
       announceCursorMove, announceSurroundings, cam,
     ]
   );

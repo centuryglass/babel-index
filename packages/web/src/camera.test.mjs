@@ -13,6 +13,7 @@ import {
   easeInOut,
   flightAt,
   glideStep,
+  glideToRest,
   panByPixels,
   pickGranularity,
   pxPerCell,
@@ -271,6 +272,37 @@ test('repeated glide steps converge on the origin', () => {
   let c = { x: 60, y: 60, zoom: 220 };
   for (let i = 0; i < 4000; i++) c = glideStep(c, 0);
   assert.ok(Math.hypot(c.x, c.y) < 1, `still at ${c.x}, ${c.y}`);
+});
+
+test('glideToRest reaches the same place repeated glideStep calls would', () => {
+  // A REALISTIC resistance function - full damp near the origin, easing to
+  // nothing further out - unlike the constant-damp cases above. That easing is
+  // exactly what makes real convergence fast: the pull shrinks as the camera
+  // approaches the origin AND resistance climbs back toward 1 at the same
+  // time, unlike the pathological constant-zero case those tests use.
+  const resistanceAt = (x, y) => {
+    const d = Math.hypot(x, y);
+    if (d <= 5) return 1;
+    return Math.max(0, 1 - (d - 5) / 12) ** 3;
+  };
+  const start = { x: 40, y: 0, zoom: 220 };
+
+  let iterated = start;
+  for (let i = 0; i < 5000; i++) iterated = glideStep(iterated, resistanceAt(iterated.x, iterated.y));
+
+  const rested = glideToRest(start, resistanceAt);
+  assert.ok(
+    Math.abs(rested.x - iterated.x) < 1e-3 && Math.abs(rested.y - iterated.y) < 1e-3,
+    `glideToRest landed at ${rested.x},${rested.y}, five thousand steps reached ${iterated.x},${iterated.y}`
+  );
+  assert.equal(rested.zoom, start.zoom);
+});
+
+test('glideToRest is a no-op, by identity, when already at rest', () => {
+  // The render loop skips a redraw on an unchanged reference - a fresh object
+  // with the same numbers would defeat that every frame.
+  const cam = { x: 3, y: 3, zoom: 220 };
+  assert.equal(glideToRest(cam, () => 1), cam);
 });
 
 test('flying to a cell aims at its middle and keeps zoom unless asked', () => {

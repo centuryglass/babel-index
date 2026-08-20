@@ -486,79 +486,127 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await ratio.focus();
     await ratio.press('Home');
 
-    // "brass" is a confirmed hit in the sample corpus's own metadata - see the
-    // keyword chips test above, which reads real keywords off a real card.
-    // Anything that finds zero matches would test the empty state instead of
-    // this one, so a query known to match is not a convenience, it is the point.
-    await page.locator('button.search-trigger').click();
-    await landed(page);
-    await page.locator('input[type=search]').fill('brass');
-    await page.locator('input[type=search]').press('Enter');
+    // try/finally, not just a trailing restore at the end of the test: several
+    // tests after this one - long-press, pinch, capture-throw - rely on the
+    // map being dense, so an assertion failing partway through must not ALSO
+    // strand the ratio slider sparse for everything that runs afterward. That
+    // turns one failure into an unrelated-looking cascade, which is exactly
+    // what made a flake here harder to diagnose than it needed to be.
+    try {
+      // "brass" is a confirmed hit in the sample corpus's own metadata - see
+      // the keyword chips test above, which reads real keywords off a real
+      // card. Anything that finds zero matches would test the empty state
+      // instead of this one, so a query known to match is not a convenience,
+      // it is the point.
+      await page.locator('button.search-trigger').click();
+      await landed(page);
+      await page.locator('input[type=search]').fill('brass');
+      await page.locator('input[type=search]').press('Enter');
 
-    const results = page.locator('.results-list');
-    await results.waitFor({ timeout: SEARCH_TIMEOUT });
+      const results = page.locator('.results-list');
+      await results.waitFor({ timeout: SEARCH_TIMEOUT });
 
-    const options = results.locator('.result');
-    const count = await options.count();
-    assert.ok(count > 0, 'a query with a known match must produce at least one result');
+      // The first search's ranking can change again shortly after it first
+      // appears - CLIP embeddings load asynchronously and can re-rank a
+      // keyword/story-only result (see SEARCH_TIMEOUT's own comment on why
+      // the first search is slow) - so `.results-list` existing is not the
+      // same claim as "the search is done." Poll for the mounted count to
+      // hold steady across two reads before trusting it; found by this test
+      // failing intermittently, once on a run that also happened to send the
+      // search-trigger flight to the far-zoomed opening view rather than
+      // simply focusing the field, which is circumstantial evidence for
+      // "still settling," not proof, but the poll costs nothing either way.
+      const options = results.locator('.result');
+      let previousCount = null;
+      let count;
+      // `previousCount` starts at `null`, which cannot equal a real count, so
+      // this always waits out at least one real 200ms gap (`waitFor`'s own
+      // poll interval) between two AGREEING reads before trusting one - not
+      // just two reads taken back to back with nothing between them, which
+      // would prove nothing about whether it had actually settled.
+      await waitFor(
+        async () => {
+          count = await options.count();
+          const stable = count === previousCount;
+          previousCount = count;
+          return stable;
+        },
+        SEARCH_TIMEOUT,
+        'the results list never stopped changing count'
+      );
+      assert.ok(count > 0, 'a query with a known match must produce at least one result');
 
-    // The label reports the TRUE match count, not just what got mounted - that
-    // is the whole point of windowing rather than silently truncating.
-    const label = await page.locator('#results-label').textContent();
-    assert.match(label, /results\s+\d+/, `the results label must report a count, got ${JSON.stringify(label)}`);
+      const label = await page.locator('#results-label').textContent();
+      const first = results.locator('li').first();
+      const posinset = await first.getAttribute('aria-posinset');
+      const setsize = await first.getAttribute('aria-setsize');
 
-    // The BUTTON is what carries the name a reader hears - `listitem` has no
-    // "name from contents" in the accessible-name algorithm, so the `<li>`
-    // wrapping it is correctly nameless in the tree; only its child speaks.
-    const nodes = await axNodes(page);
-    assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
+      // The label reports the TRUE match count, not just what got mounted -
+      // that is the whole point of windowing rather than silently truncating.
+      assert.match(label, /results\s+\d+/, `the results label must report a count, got ${JSON.stringify(label)}`);
 
-    // `aria-setsize`/`aria-posinset` went on the `<li>` rather than the button
-    // because only `listitem` supports them - a bare `button` does not, and
-    // axe's `aria-allowed-attr` rule would catch that placement mistake. But
-    // Chrome's CDP `Accessibility.getFullAXTree` does not surface either
-    // property for a native `<li>` at all - confirmed by dumping a node in full
-    // rather than guessing from an empty read - so this can only check that the
-    // DOM carries the values, not that a real screen reader's platform API
-    // receives them the way it receives the button's name above. Left as an
-    // open question in accessibility-plan.md rather than a claim this test
-    // does not back up.
-    const first = results.locator('li').first();
-    assert.equal(await first.getAttribute('aria-posinset'), '1');
-    assert.ok(Number(await first.getAttribute('aria-setsize')) >= count);
+      // `aria-setsize`/`aria-posinset` go on the `<li>` rather than the button
+      // because only `listitem` supports them - a bare `button` does not, and
+      // axe's `aria-allowed-attr` rule would catch that placement mistake. But
+      // Chrome's CDP `Accessibility.getFullAXTree` does not surface either
+      // property for a native `<li>` at all - confirmed by dumping a node in
+      // full rather than guessing from an empty read - so this can only check
+      // that the DOM carries the values, not that a real screen reader's
+      // platform API receives them the way it receives the button's name
+      // checked below. Left as an open question in accessibility-plan.md
+      // rather than a claim this test does not back up.
+      assert.equal(posinset, '1');
+      assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
 
-    // No arrow keys anywhere in this flow - Tab is the whole story, which is
-    // the reason this phase ships before the map's keyboard interface (§5).
-    await options.first().focus();
-    await page.keyboard.press('Enter');
+      // The BUTTON is what carries the name a reader hears - `listitem` has
+      // no "name from contents" in the accessible-name algorithm, so the
+      // `<li>` wrapping it is correctly nameless in the tree; only its child
+      // speaks. Checked last, since it is the slow CDP round trip and nothing
+      // after it depends on the count/setsize/label read above staying in
+      // sync with it.
+      const nodes = await axNodes(page);
+      assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
 
-    const card = page.locator('.card');
-    await card.waitFor({ timeout: 5000 });
-    const cardText = await card.locator('.card-id').textContent();
-    const firstResultText = await options.first().textContent();
-    assert.ok(
-      firstResultText.startsWith(cardText.split(' · ')[0].replace(/^room/i, 'Room')),
-      `the opened card must be the room the result named: ${JSON.stringify({ firstResultText, cardText })}`
-    );
+      // No arrow keys anywhere in this flow - Tab is the whole story, which
+      // is the reason this phase ships before the map's keyboard interface (§5).
+      await options.first().focus();
+      await page.keyboard.press('Enter');
 
-    // And the whole thing - search active, listbox populated, card open - is
-    // still clean. The opening-view sweep above cannot see any of this; it ran
-    // before a search existed.
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
-    const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
-    assert.deepEqual(summary, [], `axe reported violations with a search active:\n  ${summary.join('\n  ')}`);
+      const card = page.locator('.card');
+      await card.waitFor({ timeout: 5000 });
+      const cardText = await card.locator('.card-id').textContent();
+      const firstResultText = await options.first().textContent();
+      assert.ok(
+        firstResultText.startsWith(cardText.split(' · ')[0].replace(/^room/i, 'Room')),
+        `the opened card must be the room the result named: ${JSON.stringify({ firstResultText, cardText })}`
+      );
 
-    await page.keyboard.press('Escape');
-    await card.waitFor({ state: 'detached', timeout: 5000 });
+      // And the whole thing - search active, listbox populated, card open -
+      // is still clean. The opening-view sweep above cannot see any of this;
+      // it ran before a search existed.
+      const { violations } = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+      assert.deepEqual(summary, [], `axe reported violations with a search active:\n  ${summary.join('\n  ')}`);
 
-    // This suite shares one `page` across every test, and several tests after
-    // this one - the long-press, pinch and capture-throw tests among them -
-    // rely on the map being dense (from earlier in the file) so a gesture at a
-    // fixed screen point reliably lands on a room rather than the wallpaper.
-    // Put the ratio back where this test found it.
-    await ratio.press('End');
+      await page.keyboard.press('Escape');
+      await card.waitFor({ state: 'detached', timeout: 5000 });
+    } finally {
+      // Restores the RATIO and the CAMERA, not just the ratio. A search that
+      // finds the field off screen flies to the far-zoomed `opening` view
+      // (fitted tight on the centre tile) rather than simply focusing it; an
+      // assertion failing before this test flies anywhere else left the
+      // camera there once, and a right-click at a fixed screen point in a
+      // LATER test landed on the centre tile's own controls instead of a room
+      // - one test's failure taking down an unrelated one's precondition,
+      // which is worse than the original failure. Clicking "centre" is cheap
+      // and makes every subsequent test's assumption ("a dense map, framed
+      // normally") true regardless of how far this one got.
+      await ratio.press('End');
+      await page.getByRole('button', { name: 'centre' }).click();
+      await landed(page);
+    }
   });
 
   test('the panel controls carry accessible names, and the sliders say what they count', async () => {
@@ -898,6 +946,171 @@ describe('the library, in a browser', { concurrency: false }, () => {
     );
     const zoomedOut = await hud(page);
     assert.ok(zoomedOut.zoom < before.zoom, `PageDown must zoom out: ${before.zoom} -> ${zoomedOut.zoom}`);
+  });
+
+  test('a keyboard nudge eases under normal motion and arrives at once under reduced motion', async () => {
+    // The keyboard used to write the camera directly - instant, no animation
+    // at all, which read as jarring against a search or a click that always
+    // eases. `keyboardMoveMs` (config) gives a short flight instead; this is
+    // the only layer that can see whether one is actually happening, since
+    // `flyTo`'s timing lives in a rAF loop no unit test drives.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const before = await hud(page);
+
+    await page.keyboard.press('ArrowRight');
+    const samples = [];
+    for (let i = 0; i < 8; i++) {
+      samples.push((await hud(page)).x);
+      await page.waitForTimeout(20);
+    }
+    // Three, not merely more-than-one: an "instant" arrival still spans two
+    // distinct values in a sampling window this wide, because the flight
+    // machinery takes exactly one rAF tick even at 0ms duration to notice it
+    // is already done - `before.x` on the sample that lands before that tick,
+    // `before.x + 1` on every one after. That two-value pattern is what a
+    // broken "always instant" sabotage produces and this test failed to catch
+    // the first time it was written; three or more values is only reachable
+    // by genuinely easing across several frames of `keyboardMoveMs`.
+    const distinctValues = new Set(samples.map((x) => x.toFixed(3))).size;
+    assert.ok(
+      distinctValues >= 3,
+      `an arrow press under normal motion must ease across several frames, saw ${JSON.stringify(samples)}`
+    );
+    await waitFor(async () => (await hud(page)).x === before.x + 1, 1000, 'the arrow press never finished arriving');
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    try {
+      await canvas.focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(50);
+      const rmBefore = await hud(page);
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(30); // well under keyboardMoveMs - nothing to ease if this is instant
+      const rmAfter = await hud(page);
+      assert.equal(
+        rmAfter.x, rmBefore.x + 1,
+        `reduced motion must arrive at once, not ease: ${rmBefore.x} -> ${rmAfter.x} after 30ms`
+      );
+    } finally {
+      await page.emulateMedia({ reducedMotion: null });
+    }
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('rapid keyboard presses compound instead of collapsing into one', async () => {
+    // A real regression, found driving this by hand: two PageDown presses back
+    // to back both read the camera's pre-flight zoom (nothing had eased yet,
+    // even one frame in) and computed the SAME target, so the second press
+    // silently cancelled the first instead of zooming out twice. Fixed by
+    // chaining off the in-flight target rather than the interpolated one;
+    // this is the test that would have caught it.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const before = await hud(page);
+
+    await page.keyboard.press('PageUp');
+    await waitFor(async () => (await hud(page)).zoom !== before.zoom, 1000, 'PageUp never took effect');
+    const zoomedIn = await hud(page);
+
+    await page.keyboard.press('PageDown');
+    await page.keyboard.press('PageDown');
+    await waitFor(
+      async () => (await hud(page)).zoom < before.zoom,
+      2000,
+      'two PageDown presses must bring the zoom back below the starting point, not just to it'
+    );
+    const zoomedOut = await hud(page);
+    assert.ok(
+      zoomedOut.zoom < before.zoom * 0.9,
+      `two PageDown presses must compound: started ${before.zoom}, zoomed in to ${zoomedIn.zoom}, ` +
+        `two steps back landed at ${zoomedOut.zoom} - a single collapsed step would land back near ${before.zoom}`
+    );
+
+    // Same check the other direction, cheaply: two rapid arrow presses must
+    // move two cells, not one.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const beforeArrows = await hud(page);
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await waitFor(
+      async () => (await hud(page)).x === beforeArrows.x + 2,
+      1000,
+      'two rapid arrow presses must move two cells, not collapse into one'
+    );
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('the edge pushback does not fight a keyboard-placed cursor, and itself respects reduced motion', async () => {
+    // Two related fixes. First: `panCells`'s successor lands the camera past
+    // the boundary on purpose (arrows cross it freely - accessibility-plan.md
+    // §8 item 3), and the permanent glide loop used to see "no flight, no
+    // drag" on the very next frame and ease it straight back - fighting the
+    // cursor's own announced position, motion setting aside entirely. Second:
+    // where the glide DOES still apply (a pointer released outside the
+    // region), it never checked prefers-reduced-motion at all, an ambient gap
+    // that predates the keyboard work.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    let crossedX = null;
+    for (let i = 0; i < 15; i++) {
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(200);
+      const text = (await page.locator('[role=status]').textContent()) ?? '';
+      if (/edge of the library/.test(text)) {
+        crossedX = (await hud(page)).x;
+        break;
+      }
+    }
+    assert.ok(crossedX !== null, 'walking outward must cross the boundary within a bounded number of presses');
+
+    // If the glide were still fighting a keyboard-placed cursor, waiting would
+    // show it creeping back toward the origin over these frames.
+    await page.waitForTimeout(1500);
+    const stillX = (await hud(page)).x;
+    assert.equal(stillX, crossedX, `a keyboard-placed cursor past the boundary must not drift: ${crossedX} -> ${stillX}`);
+
+    // Second: a genuine POINTER release outside the region, under reduced
+    // motion, must settle in roughly one frame rather than visibly easing.
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    try {
+      await page.mouse.move(900, 400);
+      await page.mouse.down();
+      await page.mouse.move(0, 400, { steps: 5 });
+      await page.mouse.up();
+      const justReleased = (await hud(page)).x;
+      await page.waitForTimeout(80);
+      const afterOneFrame = (await hud(page)).x;
+      await page.waitForTimeout(1200);
+      const later = (await hud(page)).x;
+      assert.notEqual(justReleased, afterOneFrame, 'a release outside the region must still correct SOMETHING');
+      assert.equal(
+        afterOneFrame, later,
+        `reduced motion must settle the glide near-instantly, not ease it over seconds: ${afterOneFrame} -> ${later}`
+      );
+    } finally {
+      await page.emulateMedia({ reducedMotion: null });
+    }
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
   });
 
   test('/ reaches the search field from the map keyboard', async () => {
