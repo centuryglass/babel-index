@@ -658,22 +658,34 @@ function Library({ manifest }) {
           </button>
         </div>
 
+        {/*
+          Both sliders carry an explicit `htmlFor`/`id` pair: the label is a
+          SIBLING of its input rather than wrapping it, so without the
+          association neither slider has an accessible name and both announce
+          as a bare number. `aria-valuetext` then says what the number counts -
+          a range reports "42" on its own, which is the one thing about it that
+          was never in question.
+        */}
         <div className="row">
-          <label>
+          <label htmlFor="rooms-on-map">
             rooms on the map <b>{Math.min(roomCount, total)}</b>
           </label>
           <input
+            id="rooms-on-map"
             type="range" min="1" max={total} value={Math.min(roomCount, total)}
+            aria-valuetext={`${Math.min(roomCount, total)} of ${total} rooms`}
             onChange={(e) => setRoomCount(Number(e.target.value))}
           />
         </div>
 
         <div className="row">
-          <label>
+          <label htmlFor="non-generic">
             non-generic <b>{Math.round(contentRatio * 100)}%</b>
           </label>
           <input
+            id="non-generic"
             type="range" min="2" max="100" value={Math.round(contentRatio * 100)}
+            aria-valuetext={`${Math.round(contentRatio * 100)}% of cells hold a corpus room`}
             onChange={(e) => setContentRatio(Number(e.target.value) / 100)}
           />
         </div>

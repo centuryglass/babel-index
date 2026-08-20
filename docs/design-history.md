@@ -151,13 +151,32 @@ shapes considered and dropped, because each is the obvious first idea.
 - **Alt text generated at runtime from the images.** The demo's data layer is a
   directory of images and two text sidecars, and `npm test` needs no network; a
   per-view model call would put latency, cost and non-determinism on the path to
-  a first frame. It is also redundant - every described room already ships three
-  keywords and a story written by the process that made the image, so a second
-  description of a picture the reader cannot see would sit beside the first and
-  be free to contradict it. Where a short description is genuinely wanted it is
-  an optional `alt` in the sidecar, produced once, offline, in the corpus. The
-  wallpaper wants a handful of hand-written sentences rather than the same
-  generated one repeated hundreds of times per screen.
+  a first frame. Captioning happens once, offline, alongside the stories, as an
+  optional `alt` in the filename-keyed sidecar - so nothing in `packages/` grows
+  a model dependency. The near-miss worth recording: the first objection to a
+  generated caption at all was that it could contradict the room's story, since
+  both describe an image the reader cannot see. That objection dissolved rather
+  than being weighed, because the captioner is given the story as context - the
+  two accounts cannot diverge if one is written from the other. The wallpaper is
+  separate again: a handful of hand-written sentences, because the same generated
+  one repeated hundreds of times per screen is noise, not access.
+
+- **An accessible mode toggle** - the map for sighted users, an alternate linear
+  list of unique tiles for everyone else - was the natural answer to "four in five
+  arrow presses land on blank wall", and it is one toggle away from being right.
+  Three things sank it as a *mode*: an accessible path that is opt-in is one most
+  people never take; routing screen readers away from the map is the paternalism
+  this work exists to avoid; and a mode carries state that can desync (which mode
+  is a reorder announced against?). What replaced it costs nothing extra, because
+  the two readings are not duplicates: the grid is **windowed to the viewport**
+  (what is around you now) and the ranked listbox is **the whole ranking** (what
+  matched). Different questions, so both can be present at once and nothing forces
+  a choice. Also recorded so it is not rediscovered as new machinery: "100% unique
+  tiles" is already `contentRatio: 1` - `isContentSlot` is `cellHash < contentRatio`
+  and `createLayout` validates the range on `(0, 1]`. A dense map is a runtime
+  parameter, not a second layout. It is a fine feature to ship to everyone; it is
+  not an accessibility feature, and building it as one would give the accessible
+  interface a map of its own to keep in sync.
 
 Also rejected as a *goal*: **"invisible to sighted users."** Kept as the default
 for semantics, but most people this work helps do not use a screen reader -

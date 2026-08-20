@@ -1729,11 +1729,21 @@ corpus:
      centre tile's 40 book spines as real buttons deliver most of the value and
      depend on none of the mirror.
    - **Alt text is not generated at runtime.** Every described room already
-     carries keywords and a story; where a short description is genuinely
-     wanted it is an optional sidecar field produced offline in the corpus.
+     carries keywords and a story; a short description is an optional `alt` in
+     the sidecar, captioned once offline with the room's own story passed in as
+     context so the two accounts cannot diverge.
+   - **Two readings, not two modes.** A dense linear view was proposed as a
+     toggle; it is present alongside the grid instead, because the two answer
+     different questions — the grid is windowed to the viewport, the ranked
+     listbox is the whole ranking. Worth knowing before anyone builds it: a
+     wallpaper-free map is already `contentRatio: 1`, a runtime parameter
+     rather than a second layout.
 
-   Phase A of that plan is a set of existing conformance bugs — unlabelled
-   sliders, page zoom disabled, a card unreachable by keyboard, reduced motion
-   honoured for the flight but not the rearrangement — each small and isolated.
-   Consult `docs/design-history.md` before re-treading the "it's all one canvas"
-   decision, or the three alternatives that plan rejected.
+   Phase A of that plan is a set of existing conformance bugs — page zoom
+   disabled by the viewport meta, a card unreachable by keyboard and unmanaged
+   once open, reduced motion honoured for the camera flight but not for the
+   rearrangement — each small and isolated. (The unlabelled panel sliders are
+   already fixed; they are becoming a dev-only control, so that was tidiness
+   rather than an investment.) Consult `docs/design-history.md` before
+   re-treading the "it's all one canvas" decision, or the alternatives that plan
+   rejected.
