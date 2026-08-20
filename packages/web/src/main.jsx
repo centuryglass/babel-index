@@ -6,6 +6,7 @@ import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
+import { describeCell } from '../../map/describe.js';
 import {
   assignTitles,
   pickTags,
@@ -223,6 +224,51 @@ function Library({ manifest }) {
     },
     [layout, order]
   );
+
+  // The card's accessible name and its story text, from the one function that
+  // also names a listbox option: `describeCell`. Computed here rather than
+  // inside `RoomCard`, because this is where `layout`/`order`/`metadata` are
+  // already in scope - the card itself only knows the cell it was opened for.
+  const cardDescription = useMemo(
+    () => (card ? describeCell(card.x, card.y, { layout, order, metadata }) : null),
+    [card, layout, order, metadata]
+  );
+
+  // The ranked listbox: every rank the search's gradient actually lifted above
+  // the baseline (`gradedCount` - "the size of the cluster", 0 for a uniform
+  // map), each named by the same `describeCell` the card uses. This is the
+  // LOSSLESS channel accessibility-plan.md §3.2 argues for - position on the
+  // map is lossy (rank and certainty, not adjacency), the ranking is not.
+  //
+  // Windowed to `RESULTS_WINDOW`: `gradedCount` is normally tens of rooms, not
+  // thousands, but nothing bounds it against a corpus where it could be. Capped
+  // a second way too - only ranks that actually landed a cell (`cellOfRank`)
+  // are listed, because there is nowhere to fly a reader to otherwise. Pulling
+  // the "rooms on the map" slider down can make that the tighter of the two
+  // bounds; either way `total` still reports the true match count via
+  // `aria-setsize`, so the list stays honest about what it is not showing.
+  //
+  // Worth knowing before "fixing" an empty list that looks wrong: at
+  // `contentRatio: 1` (the "non-generic" slider maxed) `gradedCount` is ALWAYS
+  // 0. It counts ranks the gradient lifts above the baseline, and there is no
+  // "above" left once the baseline already is the maximum - every cell already
+  // holds a room regardless of match quality, so there is nothing left for a
+  // search to cluster. That is the ratio slider's own logic working as
+  // designed, not a bug in this list.
+  const searchResults = useMemo(() => {
+    if (!result) return null;
+    const total = Math.min(layout.gradedCount, RESULTS_WINDOW);
+    const rooms = [];
+    for (let rank = 0; rank < total; rank++) {
+      const cell = layout.cellOfRank(rank);
+      if (!cell) continue;
+      rooms.push({
+        id: order[rank], rank, x: cell.x, y: cell.y,
+        name: describeCell(cell.x, cell.y, { layout, order, metadata }).name,
+      });
+    }
+    return { rooms, total: layout.gradedCount };
+  }, [result, layout, order, metadata]);
 
   // A tap selects a book on the centre room. Stable identity - so the pointer
   // listeners are not re-bound every render - over a ref that always holds the
@@ -595,6 +641,25 @@ function Library({ manifest }) {
     search(text);
   };
 
+  // Choosing a result in the ranked list (below) moves the camera AND opens
+  // the room's card, in that order but not waiting on one another. The card is
+  // an independent DOM dialog with its own position, so its content is
+  // reachable the instant this runs regardless of whether - or how fast - the
+  // camera arrives; the flight is for the sighted reader's continuity, not a
+  // precondition for anyone else's access. This is the touch/VoiceOver path
+  // into a room's content that right-click and long-press never gave them.
+  const openRoom = useCallback(
+    (x, y, id, rank) => {
+      const canvas = canvasRef.current;
+      const at = canvas
+        ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
+        : { x: 0, y: 0 };
+      setCard({ id, rank, x, y, at });
+      flyTo(x, y, config.camera.defaultZoom);
+    },
+    [flyTo, config]
+  );
+
   // A future override book does something other than search - an artist's
   // statement, say. Nothing reserves a slot yet (CENTRE_OVERRIDES is empty), so
   // this is the seam, not a live feature; it is wired so adding an override is
@@ -680,6 +745,46 @@ function Library({ manifest }) {
         </div>
 
         {/*
+          The ranked listbox: the lossless reading of a search, next to the map's
+          lossy spatial one (accessibility-plan.md §3.2). A plain list of buttons
+          rather than `role="listbox"` with arrow-key roving on purpose - that
+          widget pattern needs the keyboard model phase C brings, and a listbox
+          that does not implement roving is a broken widget, worse than none.
+          Every button here is independently reachable by Tab today, which is
+          what makes this the phase that ships before the map's keyboard
+          interface (§5): it works with no arrow keys at all.
+
+          Absent entirely when there is no search, or when one ran and matched
+          nothing worth clustering (`gradedCount === 0`) - the empty state IS the
+          uniform map, and a list with nothing ranked in it would be noise.
+        */}
+        {searchResults && searchResults.total > 0 && (
+          <div className="row results" role="region" aria-labelledby="results-label">
+            <label id="results-label">
+              results <b>{searchResults.total}</b>
+              {searchResults.total > searchResults.rooms.length &&
+                ` (showing ${searchResults.rooms.length})`}
+            </label>
+            {/*
+              `aria-setsize`/`aria-posinset` go on the `<li>`, not the button
+              inside it: those two are valid on the `listitem` role (a `<li>`'s
+              implicit role inside a `<ul>`) and are not valid on a bare
+              `button` - axe's `aria-allowed-attr` rule would flag the wrong
+              placement.
+            */}
+            <ul className="results-list">
+              {searchResults.rooms.map((r) => (
+                <li key={r.id} aria-setsize={searchResults.total} aria-posinset={r.rank + 1}>
+                  <button className="result" onClick={() => openRoom(r.x, r.y, r.id, r.rank)}>
+                    {r.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/*
           Both sliders carry an explicit `htmlFor`/`id` pair: the label is a
           SIBLING of its input rather than wrapping it, so without the
           association neither slider has an accessible name and both announce
@@ -736,9 +841,10 @@ function Library({ manifest }) {
       </div>
       <div className="hud" id="hud" />
       {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
-      {card && (
+      {card && cardDescription && (
         <RoomCard
           card={card}
+          desc={cardDescription}
           entry={metadata?.[card.id] ?? null}
           file={manifest.rooms[card.id]?.file}
           onClose={() => setCard(null)}
@@ -751,6 +857,13 @@ function Library({ manifest }) {
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
+
+/**
+ * The most options the ranked listbox mounts at once - the DOM budget from
+ * accessibility-plan.md §4.2b. `gradedCount` is normally tens of rooms, not
+ * thousands, so this rarely bites; it exists for the corpus where it would.
+ */
+const RESULTS_WINDOW = 50;
 
 /**
  * How much of the binding axis the opening view fills - a hair under 1 so the
@@ -802,7 +915,7 @@ function appendTouchLog(line) {
  * pick near an edge does not open a card half off screen. Escape and a click
  * anywhere outside close it, which are the two things anyone tries first.
  */
-function RoomCard({ card, entry, file, onClose, onKeyword }) {
+function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
 
@@ -862,9 +975,10 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
     };
   }, [onClose]);
 
-  // `aria-labelledby` on the id line rather than a hand-written label: the card
-  // is named by the room it describes, and "room" - which is what it used to
-  // announce - is the one fact a reader already knows.
+  // Named by `desc.name` - the same string a listbox option and (once the
+  // cursor lands, phase C) the map itself would say for this cell. "room" -
+  // which is what this used to announce on its own - is the one fact a reader
+  // already had; the rank and the keywords are the reason to have opened it.
   //
   // `tabIndex={-1}` makes it focusable without putting it in the tab order,
   // which is what lets focus be moved here programmatically above.
@@ -875,10 +989,10 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
       style={pos}
       role="dialog"
       tabIndex={-1}
-      aria-labelledby={`card-id-${card.id}`}
+      aria-label={desc.name}
     >
       <div className="card-head">
-        <span className="card-id" id={`card-id-${card.id}`}>
+        <span className="card-id">
           room {card.id}
           {file ? ` · ${file}` : ''}
         </span>
@@ -902,7 +1016,7 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
         </div>
       )}
 
-      {entry?.story && <p className="story">{entry.story}</p>}
+      {desc.description && <p className="story">{desc.description}</p>}
 
       {!entry && <p className="story dim">No keywords recorded for this room.</p>}
     </div>

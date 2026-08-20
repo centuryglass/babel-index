@@ -563,13 +563,43 @@ above: Chrome puts CSS `text-transform` into the accessible name (§6.3), and th
 card's focus *restore* cannot be exercised until something other than a pointer
 can open it (phase C).
 
-**Phase B — `describeCell`, and the ranked listbox.** The pure naming module
-(§7), plus the windowed `listbox` (§3.2, §4.2b). This is now *before* the map's
-keyboard interface rather than after it, and the reason is §4.2b's last point:
-the listbox is the half that works with no arrow keys at all, which is every
-touch device and every VoiceOver user. It is also the half that needs no
-`role="application"` commitment, so it can ship and be lived with before
-anything riskier is built on top. Cheap — a list over data already in memory.
+**Phase B — `describeCell`, and the ranked listbox. Landed.** The pure naming
+module (`packages/map/describe.js`) now names a cell for both consumers this
+phase has: the room card's accessible name (replacing the bare "room N" from
+phase A) and the search results list in the panel. The list is a plain `<ul>`
+of buttons rather than `role="listbox"` with arrow-key roving — that widget
+pattern needs the keyboard model phase C brings, and a listbox that does not
+implement roving is a broken widget, worse than none. Every result is
+independently reachable by Tab today, which is the point of shipping this
+*before* the map's keyboard interface: it works with no arrow keys at all,
+which is every touch device and every VoiceOver user, and it needs no
+`role="application"` commitment.
+
+Windowed to `RESULTS_WINDOW` (50) and to `layout.gradedCount` — the number of
+ranks the search's density gradient actually lifted above the baseline, not
+the whole corpus. One interaction worth knowing before it looks like a bug:
+**at `contentRatio: 1` (the "non-generic" slider maxed) the list is always
+empty.** `gradedCount` counts ranks *above* the baseline, and there is no
+"above" left once the baseline already is the maximum — every cell already
+holds a room regardless of match quality, so a search has nothing left to
+cluster. That is the ratio slider working as designed, not the listbox
+failing; `main.jsx`'s `searchResults` memo says so in a comment, because the
+next person to hit it in the browser will not have this document open.
+
+Selecting a result opens the room's card and flies the camera there, without
+waiting on the flight — the card is an independent DOM dialog, reachable the
+instant it mounts regardless of how fast (or whether, under reduced motion)
+the camera arrives. This is the first real path into a room's content that
+does not require a pointer: right-click and long-press still cannot be reached
+without one.
+
+One thing the e2e work surfaced and is now §8 item 8: Chrome's CDP
+accessibility tree does not surface `aria-posinset`/`aria-setsize` for a
+native `<li>` at all, confirmed by dumping a node in full rather than trusting
+an empty read. The attributes are on the DOM and are spec-correct where they
+are (`listitem`, not the button inside it — a bare `button` does not support
+them), but whether a real screen reader's platform API receives them is
+unverified by anything in this repository.
 
 **Phase C — the cursor, and the keyboard.** `role="application"` scoped to the
 map, the bindings in §4.2a, the cursor node, the live regions, ctrl+arrow's
@@ -768,3 +798,14 @@ follows it.
    `describeCell` — it is the one module both would want, and it is the one
    module that is safe to share, because it names rooms rather than arranging
    them.
+8. **Does a real screen reader receive `aria-posinset`/`aria-setsize` on a
+   native `<li>` at all?** The ranked listbox (phase B, landed) puts both on
+   the `<li>` per spec — `listitem` is where they belong, a bare `button` does
+   not support them — but Chrome's CDP `Accessibility.getFullAXTree` does not
+   surface either property for a native list item, confirmed by dumping a node
+   in full rather than trusting an empty read. CDP is not the platform
+   accessibility API a screen reader actually queries (UIA on Windows, AT-SPI
+   on Linux, AX API on macOS), so this may be a CDP gap rather than a real one
+   — but it has not been checked against NVDA or JAWS, and the e2e suite can
+   only assert the DOM attributes are present, not that a reader announces
+   position from them. Folds into item 1's need for a real screen reader pass.

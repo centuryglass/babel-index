@@ -448,7 +448,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.match(await page.locator('.note').textContent(), /keywords/);
   });
 
-  // --- accessibility (docs/accessibility-plan.md phase A) ----------------------
+  // --- accessibility (docs/accessibility-plan.md phase A/B) --------------------
   //
   // These are exactly the assertions no unit test can make: an accessible name
   // is what the BROWSER computes from labels, roles and attributes together, so
@@ -471,6 +471,94 @@ describe('the library, in a browser', { concurrency: false }, () => {
 
     const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
     assert.deepEqual(summary, [], `axe reported violations:\n  ${summary.join('\n  ')}`);
+  });
+
+  test('the ranked listbox is honestly counted, reachable with no arrow keys, and axe-clean', async () => {
+    // The "non-generic" slider was driven to 100% by an earlier test (so a
+    // right-click reliably lands on a room) and is still there. At 100% the
+    // density gradient CANNOT show a cluster - `gradedCount` counts ranks the
+    // gradient lifts ABOVE the baseline, and there is no "above" left when the
+    // baseline already is the maximum. That is not a bug in the listbox; it is
+    // what a maxed ratio means, and this test would otherwise time out waiting
+    // for a listbox a correct app is right not to show. Pull it back down so a
+    // cluster can exist at all.
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('Home');
+
+    // "brass" is a confirmed hit in the sample corpus's own metadata - see the
+    // keyword chips test above, which reads real keywords off a real card.
+    // Anything that finds zero matches would test the empty state instead of
+    // this one, so a query known to match is not a convenience, it is the point.
+    await page.locator('button.search-trigger').click();
+    await landed(page);
+    await page.locator('input[type=search]').fill('brass');
+    await page.locator('input[type=search]').press('Enter');
+
+    const results = page.locator('.results-list');
+    await results.waitFor({ timeout: SEARCH_TIMEOUT });
+
+    const options = results.locator('.result');
+    const count = await options.count();
+    assert.ok(count > 0, 'a query with a known match must produce at least one result');
+
+    // The label reports the TRUE match count, not just what got mounted - that
+    // is the whole point of windowing rather than silently truncating.
+    const label = await page.locator('#results-label').textContent();
+    assert.match(label, /results\s+\d+/, `the results label must report a count, got ${JSON.stringify(label)}`);
+
+    // The BUTTON is what carries the name a reader hears - `listitem` has no
+    // "name from contents" in the accessible-name algorithm, so the `<li>`
+    // wrapping it is correctly nameless in the tree; only its child speaks.
+    const nodes = await axNodes(page);
+    assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
+
+    // `aria-setsize`/`aria-posinset` went on the `<li>` rather than the button
+    // because only `listitem` supports them - a bare `button` does not, and
+    // axe's `aria-allowed-attr` rule would catch that placement mistake. But
+    // Chrome's CDP `Accessibility.getFullAXTree` does not surface either
+    // property for a native `<li>` at all - confirmed by dumping a node in full
+    // rather than guessing from an empty read - so this can only check that the
+    // DOM carries the values, not that a real screen reader's platform API
+    // receives them the way it receives the button's name above. Left as an
+    // open question in accessibility-plan.md rather than a claim this test
+    // does not back up.
+    const first = results.locator('li').first();
+    assert.equal(await first.getAttribute('aria-posinset'), '1');
+    assert.ok(Number(await first.getAttribute('aria-setsize')) >= count);
+
+    // No arrow keys anywhere in this flow - Tab is the whole story, which is
+    // the reason this phase ships before the map's keyboard interface (§5).
+    await options.first().focus();
+    await page.keyboard.press('Enter');
+
+    const card = page.locator('.card');
+    await card.waitFor({ timeout: 5000 });
+    const cardText = await card.locator('.card-id').textContent();
+    const firstResultText = await options.first().textContent();
+    assert.ok(
+      firstResultText.startsWith(cardText.split(' · ')[0].replace(/^room/i, 'Room')),
+      `the opened card must be the room the result named: ${JSON.stringify({ firstResultText, cardText })}`
+    );
+
+    // And the whole thing - search active, listbox populated, card open - is
+    // still clean. The opening-view sweep above cannot see any of this; it ran
+    // before a search existed.
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+    assert.deepEqual(summary, [], `axe reported violations with a search active:\n  ${summary.join('\n  ')}`);
+
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    // This suite shares one `page` across every test, and several tests after
+    // this one - the long-press, pinch and capture-throw tests among them -
+    // rely on the map being dense (from earlier in the file) so a gesture at a
+    // fixed screen point reliably lands on a room rather than the wallpaper.
+    // Put the ratio back where this test found it.
+    await ratio.press('End');
   });
 
   test('the panel controls carry accessible names, and the sliders say what they count', async () => {
@@ -863,18 +951,25 @@ async function hud(page) {
  */
 function parseHud(text) {
   // `over` is only printed when a screen needs more than the level's cache
-  // budget, so it is optional here - but it is parsed rather than skipped,
-  // because it is the number that says the view is over its memory budget.
+  // budget, and `clustered` only when a search's density gradient actually
+  // lifted some ranks above the baseline (`layout.gradedCount > 0` - main.jsx)
+  // - both optional here, but parsed rather than skipped, because both are
+  // numbers a test might need. `clustered` went unexercised until a test ran a
+  // search at a non-maxed "non-generic" ratio: every earlier test in this file
+  // left that slider at 100%, where a cluster is structurally impossible (see
+  // the ranked-listbox test), so the suffix never appeared and this regex
+  // never had to parse it.
   const m = text.match(
-    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)$/
+    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?$/
   );
   assert.ok(m, `could not read the hud: ${JSON.stringify(text)}`);
-  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge] = m;
+  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered] = m;
   return {
     cells: +cells, drawn: +drawn, level: +level, tilePx: +tilePx,
     substituted: +substituted, blank: +blank, cached: +cached,
     over: over === undefined ? 0 : +over,
     zoom: +zoom, x: +x, y: +y, edge: +edge,
+    clustered: clustered === undefined ? 0 : +clustered,
   };
 }
 

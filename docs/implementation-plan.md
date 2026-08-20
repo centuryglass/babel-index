@@ -1727,8 +1727,12 @@ corpus:
      cell under the camera centre replaces the mirror — about 110 nodes against
      ~33,000 for the board. Arrows pan, the cursor rides along and is announced,
      and ctrl+arrow jumps to the next room the way ctrl+arrow jumps a word.
-   - **The ranked listbox ships first.** It is the half that works with no arrow
-     keys at all — every touch device, every VoiceOver user — and it needs no
+   - **The ranked listbox ships first, and has.** `describeCell` (in
+     `packages/map`) names both the search results list and the room card; the
+     list is a plain `<ul>` of buttons, not `role="listbox"` — arrow-key roving
+     needs the keyboard model phase C brings, and a listbox without it is a
+     broken widget. It is the half that works with no arrow keys at all —
+     every touch device, every VoiceOver user — and it needs no
      `role="application"` commitment, so it can be lived with before anything
      riskier is built on it. Whether that role survives contact with a real
      screen reader is the plan's stated highest-risk assumption.
