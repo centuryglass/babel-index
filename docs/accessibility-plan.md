@@ -50,8 +50,9 @@ this table is the summary.
 | Side panel controls one layer up from the grid | **Changed.** Landmarks and a skip link, not nesting depth. §3.2 |
 | Stories, tags and centre controls nested in their grid squares | **Kept, with a split.** Short name on the cell, long content inside it. The centre books become real buttons — the highest-value item here. §3.3 |
 | Live-region announcements for centring and reordering | **Kept, narrowed.** Announce outcomes, not motion, and let native widget semantics carry what they already carry. §3.4 |
-| Cheap generated alt text for every grid image | **Mostly declined.** The descriptions already exist; where they do not, generate them offline in the corpus, never at runtime. §3.5 |
+| Cheap generated alt text for every grid image | **Settled.** Generated once, offline, with each room's story passed to the captioner as context so the two accounts cannot diverge. Never at runtime. §3.5 |
 | Completely invisible to sighted users | **Rejected as a goal, kept as a default.** Three tiers instead. §3.6 |
+| *(added)* An alternate linear mode, unique tiles, toggleable | **Kept, de-moded.** Both readings live at once — they answer different questions, so nothing forces a choice. And "unique tiles" is already `contentRatio: 1`. §3.7 |
 
 And five things the proposal did not mention that have to be decided before any
 of it can be built: keyboard bindings at all, how focus and camera relate,
@@ -71,8 +72,10 @@ of which is enough:
   at 5000 rooms, roughly 33,000 cells. `AGENTS.md` states the constraint
   directly: *the map is virtualized canvas, do not mount thousands of DOM
   nodes.* The accessibility tree is rebuilt on mutation, so this is not only a
-  paint cost; it is a cost paid again on every reorder, every slider drag, and
-  every one of the O(slots) rebuilds the ratio slider does *per drag frame*.
+  paint cost — it is paid again on every reorder and every search, which are
+  the production paths. (The ratio slider's O(slots) rebuild *per drag frame*
+  is the worst case, but it is on its way to being dev-only, so it is the
+  cheapest of these three reasons and should not be the one leaned on.)
 - **Signal.** About 80% of cells are wallpaper. A reader arrowing across a row
   hears "blank wall" four times for every room. The density gradient — the
   thing a search actually produces — is invisible in a flat enumeration; you
@@ -237,12 +240,24 @@ short name  = keywords     (already there)
 long text   = story        (already there)
 ```
 
-Where a genuine short description is wanted, it belongs in `metadata.json` as an
-optional `alt` field — the sidecar is joined per filename and already tolerant
-of partial data, so an optional field costs nothing and degrades to keywords
-when absent. Producing it is the generator's job, upstream of this repo. Haiku
-is a perfectly good way to write it; that just happens offline, in the corpus,
-not in `main.jsx`.
+**Settled:** captioning happens once, offline, alongside the stories, and the
+room's story is passed to the captioner as context. That is a better answer than
+this document originally reached for — the contradiction risk above was the main
+objection to a second description, and writing the caption *from* the story
+removes it at the source rather than papering over it downstream. The map never
+has to reconcile two accounts of one image, because there was only ever one.
+
+Mechanically: an optional `alt` field in `metadata.json`. The sidecar is joined
+per filename and already tolerant of partial data (`metadata.js` is deliberately
+liberal about shape, and "exactly three keywords" is not enforced), so an
+optional field costs nothing, lands per room, and degrades to keywords when
+absent. Producing it is the generator's job, upstream of this repo — nothing in
+`packages/` grows a model dependency.
+
+One rule to carry into the captioner: it must be free to say *nothing*. A room
+whose story is thin should get no `alt` rather than a padded one, because §3.3's
+honesty rule ("no description recorded") is a better answer than a confident
+sentence about a wall of books that could be any wall of books.
 
 **And the wallpaper does not want per-cell alt text at all.** There is a handful
 of distinct base variants covering ~80% of every screen. They need one
@@ -283,6 +298,81 @@ Tier 3 needs the usual care: hide with a clip-based visually-hidden class, never
 accessibility tree along with the pixels. And the canvas itself gets
 `aria-hidden="true"` — it has no focusable descendants, so this is safe, and
 without it every room is announced twice.
+
+### 3.7 The wallpaper problem: two orderings, not two modes
+
+The sharpest objection to the windowed grid is the one §3.1 raises and does not
+answer: at the default ratio, four in five arrow presses land on a blank wall.
+Enumerating the map faithfully means enumerating mostly nothing.
+
+The proposal on the table is an alternate mode — the same corpus presented as a
+single list in search order, every tile unique, toggleable so a reader can take
+the map or take the list. Three things about it, in order.
+
+**The dense map is not new machinery.** "100% unique tiles" is already a runtime
+parameter. `isContentSlot` is `cellHash(x, y, seed) < contentRatio`, and
+`createLayout` validates `contentRatio` on `(0, 1]` — so at exactly 1 every
+non-centre cell holds a ranked room, the wallpaper disappears, and `collectSlots`
+lays the whole corpus out nearest-first by rank. No new layout code, no new
+board, and `board.js` and `illusion.js` need to know nothing about it. That is
+worth knowing before anyone builds a second map.
+
+**But dense is not linear, and dense does not fix the real problem.** At
+`contentRatio: 1` the map is still two-dimensional and its adjacency is still
+arbitrary: rank spirals outward from the centre, so pressing Down from rank 5
+lands on rank 23 or 41 depending on where the spiral happened to be. Removing
+the wallpaper solves the *sparseness* — perhaps a fifth of the problem — and
+leaves the *meaninglessness*, which is the other four fifths and the reason
+§3.1 argues position encodes rank rather than adjacency in the first place. A
+reader who wants "the next best match" wants one keystroke, not a spiral.
+
+So the alternate reading should be genuinely one-dimensional. And once it is,
+`role="grid"` is the wrong role for it: a `listbox` announces "3 of 511"
+natively, supports type-ahead to jump by name, and carries none of the
+row/column noise a single-row grid still emits.
+
+**And it should not be a mode.** Four reasons, the last one being the one that
+actually settles it:
+
+- **An accessible path that is opt-in is one most people never take.** Defaulting
+  a screen reader into the structure we have just argued is hostile, and asking
+  them to discover a toggle, means the reader who does not find it gets the worse
+  experience — which is most of them.
+- **But routing them *away* from the map is the other failure.** The map is the
+  artwork. "You get the list version" is precisely the paternalism this work
+  exists to avoid, and a mode makes it a fork in the road where someone has to
+  choose wrong.
+- **Modes carry state, and state desyncs.** Which mode is a reorder announced
+  against? What happens to focus when the mode flips under it? Every one of those
+  is a bug that does not exist if there is no mode.
+- **The two readings are not duplicates, so nothing forces a choice.** This is
+  the crux. The grid is **windowed to the viewport** — *what is around you right
+  now*, a few dozen cells. The list is **the ranking** — *what matched*, all of
+  it. Different scopes, different questions, and neither answers the other's.
+  That is what defuses the "two landmarks holding the same rooms" objection to
+  having both.
+
+So: both live in the DOM at all times, both are reachable by Tab, both are named
+for the question they answer ("Library map — what is in view" / "Search results —
+ranked"). Focusing a room in either moves the camera and the focused cell for
+both, so moving between them is coherent rather than a context switch. This is
+exactly §3.2's *one DOM tree, two orderings* — the proposal arrived at it from
+the other direction, which is a good sign for it.
+
+The cost to respect is verbosity: two places a reader can find rooms. That is
+paid down by naming them sharply, and by the far-out rung in §3.1 — zoomed out,
+the grid collapses to a summary, so at most zooms the two are not competing for
+attention at all.
+
+**Where the toggle idea does belong: the canvas, for everybody.** A dense view —
+*show me only the matches, packed* — is a good feature on its own merits, for
+sighted users too, and it is `contentRatio: 1` plus a button. If the ratio slider
+is becoming a dev-only control (§6.1), dense mode is arguably the production-
+facing thing that should replace it. Build it because it is worth building; do
+not build it as an accessibility accommodation, because then the accessible
+interface owns a map of its own and we are back to two things to keep in sync.
+
+---
 
 ---
 
@@ -364,11 +454,11 @@ rule in §4.2, the canvas focus ring, and the 40 centre books as real buttons
 usable, and it delivers the main control surface. If only one phase ever lands,
 this is the one.
 
-**Phase C — `describeCell`, and the results list.** The pure naming module
-(§7), plus the ranked results list in the panel (§3.2). Gives a screen reader
-the lossless channel — every room, in rank order, with keywords and story —
-before any grid mirror exists. Cheap, because it is a list over data already in
-memory.
+**Phase C — `describeCell`, and the ranked reading.** The pure naming module
+(§7), plus the ranked `listbox` (§3.2, §3.7). Gives a screen reader the lossless
+channel — every room, in rank order, with keywords and story — before any grid
+mirror exists. Cheap, because it is a list over data already in memory, and it
+is the half of §3.7 that does not depend on the grid existing.
 
 **Phase D — the windowed grid mirror.** §3.1: the two rungs, the hysteresis, the
 absolute row/column indices, the wallpaper runs, the boundary announcement. The
@@ -386,11 +476,14 @@ rather than on anything here.
 
 Found by audit, in rough order of severity. All are Phase A.
 
-1. **The panel's sliders have no accessible name.** `<label>rooms on the
-   map</label>` is a *sibling* of its `<input type="range">`, with no `htmlFor`
-   and no wrapping, so both sliders announce as bare numbers. Add the
-   association, and `aria-valuetext` so the value means something ("42 of 511
-   rooms" rather than "42").
+1. ~~**The panel's sliders have no accessible name.**~~ **Fixed.**
+   `<label>rooms on the map</label>` was a *sibling* of its
+   `<input type="range">`, with no `htmlFor` and no wrapping, so both sliders
+   announced as bare numbers. Both now carry an explicit `htmlFor`/`id` pair and
+   an `aria-valuetext` that says what the number counts. Noted for whoever
+   touches the panel next: **the sliders are headed for dev-only**, so this was
+   tidiness rather than an investment — do not build further on them, and see
+   §3.7 for the production-facing control that could replace the ratio one.
 2. **Page zoom is disabled.** `maximum-scale=1, user-scalable=no` in the
    viewport meta is a documented WCAG 1.4.4 failure and locks out exactly the
    low-vision users this map is hardest on. It is there to stop iOS treating a
@@ -456,20 +549,39 @@ card, Escape closes it and focus returns to the cell it came from; the live
 region holds the expected text after a search. Per the repo's own rule, break
 each of these on purpose once and confirm it fails.
 
-**One open dependency question.** `@axe-core/playwright` would catch the whole
-class of regression in §6 automatically, which matters precisely because tier-3
-semantics are invisible and rot unwatched (§3.6). It would be e2e-only —
-`e2e.yml` is manual dispatch, not a merge gate — so it never touches `npm test`
-or the required check. Still a dependency in a repo that is deliberately short
-on them, so it is a call to make rather than assume.
+**`@axe-core/playwright`, approved.** It catches the whole class of regression in
+§6 automatically, which matters precisely because tier-3 semantics are invisible
+and rot unwatched (§3.6). It is a devDependency used only by the browser suite,
+so `npm test` stays what it is — a second of `node --test` with no browser and no
+network. Lands with Phase A, since Phase A is what gives it something to assert.
+
+**And e2e is a merge gate now**, which is what makes any of this load-bearing: a
+keyboard interface that CI never drives is a keyboard interface nobody knows is
+broken. `ci.yml` calls `e2e.yml` as a reusable workflow and the aggregate `ci`
+job needs both, so branch protection still requires exactly one check and
+`e2e.yml` keeps its manual dispatch. The cost to respect, now that a red browser
+run blocks everyone: **a flaky smoke test is no longer merely annoying.** Wait on
+conditions, never on durations — the existing suite's `landed()`/`settled()`
+distinction, and its habit of reading timings off the manifest rather than
+hard-coding them, is the pattern to keep.
+
+Promoting the suite already surfaced one instance. The pyramid test read `blank`
+from the first settled frame, but `settled()` waits out a rearrangement and two
+frames — the camera and the animation, not the network — so a level still
+decoding failed it about one run in five. It polls for the condition now, and
+still fails when the tiles genuinely never arrive. Expect the keyboard tests to
+have the same shape of hazard: a focus move is asynchronous, and a camera
+follows it.
 
 ---
 
 ## 8. Still open
 
-1. **Is the grid mirror worth building at all?** Phase C's ranked list is the
+1. **Is the grid mirror worth building at all?** Phase C's ranked reading is the
    lossless channel; Phase D is the *experience*, and it is most of the work
-   here. Worth deciding with a real screen reader user rather than by argument.
+   here. §3.7 argues both should exist because they answer different questions —
+   but that argument is made from a chair, and the honest version of this
+   question needs a real screen reader user driving a real corpus.
 2. **What the far-out rung should say.** "1,664 walls, 38 rooms" is a
    placeholder. The useful summary is probably about the gradient — how
    concentrated the current search is — not about counts.
@@ -482,6 +594,12 @@ on them, so it is a call to make rather than assume.
    is being animated for a second-odd. Whether the announcement waits for the
    animation to land or fires immediately is a real choice, and the answer is
    probably "fires immediately, because the animation is not for this reader".
-5. **Does the results list survive a 5,000-room corpus?** It is a list of every
-   ranked room. It will want its own windowing, which is the same problem as
-   §3.1 with none of the spatial complications.
+5. **Does the ranked reading survive a 5,000-room corpus?** It is a listbox over
+   every ranked room. It will want its own windowing, which is the same problem
+   as §3.1 with none of the spatial complications — and `aria-setsize` lets a
+   windowed listbox still announce "3 of 5,000" honestly.
+6. **Does a dense view (`contentRatio: 1`) want to ship to everyone?** §3.7 says
+   it is a good feature on its own merits and a plausible production replacement
+   for the ratio slider, but that is a product call and not an accessibility
+   one. Worth keeping the two decisions apart so neither is made as a side
+   effect of the other.

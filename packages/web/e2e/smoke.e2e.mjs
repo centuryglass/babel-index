@@ -205,7 +205,16 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // it the whole pyramid could be selecting levels nothing ever fetches.
     await page.mouse.move(640, 400);
     for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 600);
-    const out = await settled(page);
+    // `settled()` waits out a rearrangement and two frames, which covers the
+    // camera but NOT a tile that has not finished decoding - so a far-out
+    // screen can be settled and still be a cell or two short for a frame or
+    // two. `blank === 0` is a condition, and waiting a fixed number of frames
+    // for it is what made this flake (~1 run in 5 on a slow machine). Poll it
+    // instead, bounded, so a cell that never arrives still fails the assertion
+    // below rather than hanging.
+    let out = await settled(page);
+    for (const until = Date.now() + 5000; out.blank > 0 && Date.now() < until; )
+      out = await settled(page);
 
     for (let i = 0; i < 12; i++) await page.mouse.wheel(0, -600);
     const inClose = await settled(page);

@@ -465,9 +465,19 @@ stale instance.
 
 ### Testing and CI
 
-- **e2e is not a merge gate.** `ci.yml` runs `npm test` on every push and PR to
-  `main` and is the single required check; `e2e.yml` is manual dispatch only. Run
-  the smoke test yourself when the map itself changed.
+- **e2e IS a merge gate now.** `ci.yml` runs `npm test` across the Node matrix
+  *and* calls `e2e.yml` as a reusable workflow; the aggregate `ci` job needs both,
+  so it stays the single required check. `e2e.yml` keeps its `workflow_dispatch`
+  for ad-hoc runs against a chosen Node version. The consequence to respect: a
+  flaky browser test now blocks merges for everyone, so a smoke test that is
+  timing-dependent rather than state-dependent is no longer merely annoying.
+  Wait on a condition, never on a duration.
+- **`settled()` does not mean the tiles have arrived.** It waits out a
+  rearrangement and two frames - the camera and the animation, not the network.
+  A far-out screen can be settled and still be a cell or two short while a level
+  decodes, which is how the pyramid test flaked about one run in five. Anything
+  asserting on `blank` must poll for it, bounded, rather than trust the first
+  reading.
 - **A green e2e test that cannot fail is worse than none.** If you change it,
   break the app on purpose and confirm it fails.
 - **CDP touch injection bypasses the browser's gesture arbitration**, so

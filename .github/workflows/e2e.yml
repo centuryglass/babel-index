@@ -1,13 +1,26 @@
 name: e2e
 
-# Manual only. Spinning a browser up on every pull request is more machinery
-# than this earns; the smoke test is here for when the map itself is what
-# changed - the render loop, the camera, the tile cache, the panel - and for
-# before anything that matters ships.
+# A merge gate, and still runnable by hand.
+#
+# This used to be manual only, on the grounds that a browser per pull request
+# was more machinery than the smoke test earned. That trade changed: the map's
+# gestures, its focus handling and - once the accessibility work lands - its
+# whole keyboard interface are things only a browser can see, and a minute of
+# CI is cheaper than merging a map nobody drove. `ci.yml` calls this workflow
+# and will not go green without it, so branch protection still requires exactly
+# one check.
+#
+# Manual runs pick their own Node version:
 #
 #   gh workflow run e2e.yml
 #   ...or the "Run workflow" button on the Actions tab.
 on:
+  workflow_call:
+    inputs:
+      node:
+        description: Node version to run against
+        type: string
+        default: '22'
   workflow_dispatch:
     inputs:
       node:
@@ -35,7 +48,8 @@ jobs:
 
       - run: npm ci
 
-      # Only Chromium, and only here - the fast suite never needs a browser.
+      # Only Chromium, and only here - the fast `npm test` suite never opens a
+      # browser and must not spend a minute downloading one.
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
