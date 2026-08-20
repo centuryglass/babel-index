@@ -137,27 +137,6 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   const tap = useRef(null);
 
   /**
-   * Whether the camera's current position was placed there ON PURPOSE by a
-   * completed flight, and so must not be corrected by the glide.
-   *
-   * Every existing `flyTo` caller before the keyboard cursor (Home, a search's
-   * fly-home, the "centre" button, a chip search) lands well inside the
-   * content region, where `resistanceAt` is 1 and the glide is a no-op anyway
-   * - so this was never reachable before. It became reachable the moment
-   * keyboard arrows were allowed to cross the boundary on purpose
-   * (accessibility-plan.md §4.1/§8 item 3): without this flag, the very next
-   * frame after landing past the edge would see no flight and no drag in
-   * progress and ease the camera back toward the origin, silently fighting a
-   * position the cursor had just announced - motion aside, that is a
-   * correctness bug, not merely an unwanted animation.
-   *
-   * Set on every natural landing (`endFlight(true)`) and cleared the moment a
-   * hand actually grabs the map, so a POINTER release afterward still gets the
-   * spring-back it is for.
-   */
-  const glideExempt = useRef(false);
-
-  /**
    * End whatever is in the air, telling the caller whether it arrived.
    *
    * `flyTo` hands back a promise so a caller can sequence something after the
@@ -168,7 +147,6 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   const endFlight = useCallback((landed) => {
     const settle = flight.current?.settle;
     flight.current = null;
-    if (landed) glideExempt.current = true;
     settle?.(landed);
   }, []);
 
@@ -240,11 +218,6 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
       // finger, and must not fire `onTap`.
       const interruptedFlight = !!flight.current;
       endFlight(false);
-      // A hand on the map resumes ordinary pan-resistance semantics for
-      // whatever happens next: a release outside the region should spring back
-      // as usual, regardless of whether the camera got here via a keyboard
-      // move a moment ago.
-      glideExempt.current = false;
 
       // Track FIRST, capture second. `setPointerCapture` can throw, and doing it
       // first would abort the handler before the pointer was recorded - losing
@@ -440,7 +413,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
         cam.current = next;
         if (done) endFlight(true);
         onChange?.();
-      } else if (!drag.current && !glideExempt.current) {
+      } else if (!drag.current) {
         // Reduced motion asks for the rest point without the frames it takes
         // to ease there - `glideToRest` runs the same physics to convergence
         // instead of inventing a different destination, so motion-on and

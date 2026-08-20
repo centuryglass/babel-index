@@ -363,17 +363,19 @@ stale instance.
   same target. Read `flightTarget()` (`flight.current?.to ?? cam.current`)
   instead; found by two `PageDown` presses back to back silently cancelling
   each other rather than compounding.
-- **The glide (`glideStep`, pan resistance easing back after a release) must
-  not correct a position a completed flight put there on purpose.** Every
-  `flyTo` caller before the keyboard cursor landed well inside the content
-  region, where the glide is a no-op anyway — so a flight landing PAST the
-  boundary (a keyboard arrow crossing it on purpose) was new territory, and
-  the very next frame would see no flight and no drag in progress and ease the
-  camera back toward the origin, fighting a position the cursor had just
-  announced. `glideExempt` (a ref) is set on every natural landing and cleared
-  the instant a pointer grabs the map, so a keyboard-placed position holds
-  until something else moves the camera, while a genuine pointer release still
-  gets the ordinary spring-back.
+- **The glide applies to the keyboard exactly as it does to a pointer, and
+  must not be exempted for it.** The boundary's pushback is an affordance, not
+  an obstacle: walking out past the last ranked room and feeling the library
+  pull you home is the point, and arrow keys get it for the same reason a
+  released drag does. This was briefly broken by a `glideExempt` ref that
+  skipped the glide after any landed flight — reasoned from "the glide would
+  fight the cursor's announced position", which has the causality backwards
+  (the cursor is DERIVED from the camera, so it moves WITH the glide, and only
+  a separately-tracked copy could disagree). Because the flag was set on every
+  landing and cleared only by a pointerdown, it disabled the pushback for the
+  whole keyboard session: pan out forever, then get yanked back the moment a
+  mouse touched the map. `smoke.e2e.mjs` now asserts the drift happens with no
+  pointer involved.
 - **The glide respects `prefers-reduced-motion` too, via `glideToRest` rather
   than skipping the correction.** There is no closed form for where `glideStep`
   would eventually settle — the pull shrinks as resistance climbs back toward
@@ -525,11 +527,14 @@ stale instance.
   first's effect instead of compounding it. The fix pattern generalises:
   anything a keyboard handler chains off (the camera's target zoom, the
   cursor's next cell) needs a source that is synchronously correct across two
-  same-tick calls - `flightTarget()` (`flight.current?.to ?? cam.current`) for
-  the camera, a ref written directly inside the handler rather than mirrored
-  from React state by an effect for the cursor. A `useEffect` syncing a ref
-  from state is NOT synchronously faster than the state itself; both lag the
-  same render.
+  same-tick calls. `flightTarget()` (`flight.current?.to ?? cam.current`) is
+  that source, and DERIVING from it beats tracking a second copy: the cursor
+  is `cursorCell(flightTarget())`, so it is synchronously correct for a
+  chained press AND cannot drift from the camera when something else (the
+  edge's glide) moves it. A hand-maintained ref was the first fix and it went
+  stale exactly where it mattered. Note a `useEffect` syncing a ref from state
+  is NOT synchronously faster than the state itself; both lag the same render,
+  so that is never the answer either.
 - **Two reads of the same UI, separated by a slow call, can describe two
   different renders.** A test read a search's result count, then - after a
   CDP `Accessibility.getFullAXTree` round trip - read an attribute off what it

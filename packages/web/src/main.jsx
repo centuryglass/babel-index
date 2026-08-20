@@ -344,33 +344,46 @@ function Library({ manifest }) {
 
   // --- the keyboard cursor ---------------------------------------------------
   //
-  // The cell under the camera centre (accessibility-plan.md §4.2): panning IS
-  // moving this cursor, so it costs nothing to compute and needs no separate
-  // notion of "where the reader is" to keep in step with the camera. It is
-  // React state (not just a ref) because it drives JSX - the canvas's
-  // `aria-label` and its nested, touch-reachable story/chips - but the render
-  // loop reads it through `cursorRef` rather than as a dependency, for the same
-  // reason `cam` is a ref: a re-render per keypress is fine, a torn-down and
-  // rebuilt render EFFECT per keypress is not (see that effect's own comment
-  // on why it must not depend on anything that changes this often).
+  // The cell under the camera centre (accessibility-plan.md §4.2), and
+  // DERIVED rather than separately tracked - that definition is the whole
+  // design, so anything that moves the camera moves the cursor with it and
+  // there is no second copy that can drift out of step. That includes the
+  // edge's own glide easing back after a keyboard press crosses the boundary:
+  // the camera moves, so the cursor does too, which is correct rather than a
+  // conflict. (An earlier version kept a hand-maintained ref and exempted
+  // keyboard landings from the glide to protect it - that got the causality
+  // backwards, and disabled the boundary pushback for the whole session.)
+  //
+  // `cursor` is React state only because JSX needs it - the canvas's
+  // `aria-label` and its nested, touch-reachable story/chips. The render loop
+  // does NOT read it (see `cursorNow` below), for the same reason `cam` is a
+  // ref: a re-render per keypress is fine, a torn-down and rebuilt render
+  // EFFECT per keypress is not.
   const [cursor, setCursor] = useState(() => cursorCell(cam.current));
-  // Written SYNCHRONOUSLY by `announceCursorMove`, not just mirrored from
-  // `cursor` state by an effect - an effect only runs after React commits, no
-  // faster than the state update itself, so it cannot make this any more
-  // current for a SECOND keyboard press arriving in the same tick as the
-  // first (rapid key-repeat, or two presses close enough together that
-  // neither the effect nor a re-render has run between them). Reading a
-  // stale value here is exactly what let two quick PageDown presses collapse
-  // into one - `onMapKeyDown` computes the next target from this ref now, not
-  // from the `cursor` closure variable, so a chained press always builds on
-  // the move the last press actually requested.
-  const cursorRef = useRef(cursor);
+
+  /**
+   * Where the cursor is RIGHT NOW, for the keyboard's own next move.
+   *
+   * `flightTarget()` rather than `cam.current`: mid-flight the latter is the
+   * interpolated position, so a second key press arriving in the same tick as
+   * the first would compute its move from a camera that has not gone anywhere
+   * yet, and the two presses would collapse into one. The flight's resolved
+   * target is where the previous press actually put the cursor. Idle - which
+   * includes while the glide is easing back from outside the region - it is
+   * just the live camera, so the next press builds on where the reader has
+   * actually drifted to rather than on where they last aimed.
+   */
+  const cursorNow = useCallback(() => cursorCell(flightTarget()), [flightTarget]);
   // Whether ANY keyboard action has happened yet. Gates the ring in `render.js`
   // - a permanent reticle in the middle of a page nobody has touched would be a
   // strong visual choice made on nobody's behalf (accessibility-plan.md §3.6,
   // §8 item 6). A ref, not state: it only needs to be true by the time the next
   // frame reads it, not to trigger a render of its own.
   const keyboardUsed = useRef(false);
+  // The ring itself is derived from the live camera in the render loop, and
+  // every camera change already requests a draw - so this covers the one case
+  // that is not a camera move: the FIRST keypress flipping `keyboardUsed`,
+  // which makes the ring appear.
   useEffect(() => {
     requestDraw();
   }, [cursor, requestDraw]);
@@ -397,7 +410,6 @@ function Library({ manifest }) {
    */
   const announceCursorMove = useCallback(
     (cell) => {
-      cursorRef.current = cell;
       setCursor(cell);
 
       const canvas = canvasRef.current;
@@ -461,7 +473,7 @@ function Library({ manifest }) {
         keyboardUsed.current = true;
 
         if (e.ctrlKey || e.metaKey) {
-          const found = nextRoom(layout, cursorRef.current, dir);
+          const found = nextRoom(layout, cursorNow(), dir);
           if (found) {
             flyTo(found.x, found.y, undefined, { ms: config.camera.keyboardMoveMs });
             announceCursorMove(found);
@@ -483,14 +495,10 @@ function Library({ manifest }) {
           dx *= cellsX;
           dy *= cellsY;
         }
-        // The target is built from `cursorRef.current`, not the `cursor`
-        // closure variable - two presses landing in the same tick (rapid
-        // key-repeat, or simply faster than React has re-rendered) would
-        // otherwise both read the SAME pre-move value and collapse into one
-        // step. The ref is written synchronously by `announceCursorMove`
-        // below, so a chained press always builds on what the previous one
-        // actually requested, not on wherever the animation has visually got
-        // to.
+        // The target is built from `cursorNow()`, not the `cursor` closure
+        // variable - two presses landing in the same tick (rapid key-repeat,
+        // or simply faster than React has re-rendered) would otherwise both
+        // read the SAME pre-move value and collapse into one step.
         //
         // Announced synchronously, not awaited on the flight landing: the
         // cursor's cell is a logical fact settled the instant the key is
@@ -499,7 +507,8 @@ function Library({ manifest }) {
         // presses each interrupts the previous flight - the same "a second
         // flight replaces the first" `flyTo` already gives Home - so
         // key-repeat chases smoothly rather than queuing animations.
-        const target = { x: cursorRef.current.x + dx, y: cursorRef.current.y + dy };
+        const from = cursorNow();
+        const target = { x: from.x + dx, y: from.y + dy };
         flyTo(target.x, target.y, undefined, { ms: config.camera.keyboardMoveMs });
         announceCursorMove(target);
         return;
@@ -521,10 +530,11 @@ function Library({ manifest }) {
         // fully-resolved target of whatever is already in flight instead.
         const factor = e.key === 'PageUp' ? 1.6 : 1 / 1.6;
         const zoom = flightTarget().zoom * factor;
-        flyTo(cursorRef.current.x, cursorRef.current.y, zoom, { ms: config.camera.keyboardMoveMs });
+        const here = cursorNow();
+        flyTo(here.x, here.y, zoom, { ms: config.camera.keyboardMoveMs });
         // The cursor cell itself does not move, but the granularity might, so
         // re-announce.
-        announceCursorMove(cursorRef.current);
+        announceCursorMove(here);
         return;
       }
 
@@ -552,14 +562,15 @@ function Library({ manifest }) {
         // Opening a card over the wallpaper would make the gesture read as
         // broken rather than as empty - the same rule `picking.js` states for
         // a click, applied here to a keypress.
-        const at = layout.roomAt(cursorRef.current.x, cursorRef.current.y, order);
+        const here = cursorNow();
+        const at = layout.roomAt(here.x, here.y, order);
         if (at.centre || at.generic) return;
         e.preventDefault();
         const canvas = canvasRef.current;
         const at2 = canvas
           ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
           : { x: 0, y: 0 };
-        setCard({ id: at.id, rank: at.rank, x: cursorRef.current.x, y: cursorRef.current.y, at: at2 });
+        setCard({ id: at.id, rank: at.rank, x: here.x, y: here.y, at: at2 });
         return;
       }
 
@@ -575,7 +586,7 @@ function Library({ manifest }) {
       }
     },
     [
-      layout, order, flyTo, flightTarget, config,
+      layout, order, flyTo, flightTarget, cursorNow, config,
       announceCursorMove, announceSurroundings, cam,
     ]
   );
@@ -642,7 +653,7 @@ function Library({ manifest }) {
           : renderer.draw({
               ctx, width: w, height: h, dpr, cam: cam.current,
               layout: showing.layout, order: showing.order, centreSlots,
-              cursor: keyboardUsed.current ? cursorRef.current : null,
+              cursor: keyboardUsed.current ? cursorCell(cam.current) : null,
             });
 
       const hud = document.getElementById('hud');

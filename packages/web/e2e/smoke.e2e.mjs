@@ -1053,15 +1053,20 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await landed(page);
   });
 
-  test('the edge pushback does not fight a keyboard-placed cursor, and itself respects reduced motion', async () => {
-    // Two related fixes. First: `panCells`'s successor lands the camera past
-    // the boundary on purpose (arrows cross it freely - accessibility-plan.md
-    // §8 item 3), and the permanent glide loop used to see "no flight, no
-    // drag" on the very next frame and ease it straight back - fighting the
-    // cursor's own announced position, motion setting aside entirely. Second:
-    // where the glide DOES still apply (a pointer released outside the
-    // region), it never checked prefers-reduced-motion at all, an ambient gap
-    // that predates the keyboard work.
+  test('the edge pushes back on a keyboard cursor too, and respects reduced motion', async () => {
+    // The boundary's pan resistance is a REAL affordance, not an obstacle for
+    // the keyboard to be exempted from: walking out past the last ranked room
+    // and feeling the library pull you home is the same thing a pointer drag
+    // gets on release (accessibility-plan.md §3.1's "the edge speaks").
+    //
+    // Written after shipping the opposite. An earlier fix exempted every
+    // landed flight from the glide, on the theory that correcting a
+    // keyboard-placed camera would fight the cursor's announced position -
+    // which got the causality backwards (the cursor is DERIVED from the
+    // camera, so it simply moves with it) and, because the exemption was set
+    // on every landing and only cleared by a pointerdown, silently disabled
+    // the pushback for the entire keyboard session. This is the test that
+    // would have caught that.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Home');
@@ -1079,14 +1084,34 @@ describe('the library, in a browser', { concurrency: false }, () => {
     }
     assert.ok(crossedX !== null, 'walking outward must cross the boundary within a bounded number of presses');
 
-    // If the glide were still fighting a keyboard-placed cursor, waiting would
-    // show it creeping back toward the origin over these frames.
-    await page.waitForTimeout(1500);
-    const stillX = (await hud(page)).x;
-    assert.equal(stillX, crossedX, `a keyboard-placed cursor past the boundary must not drift: ${crossedX} -> ${stillX}`);
+    // Walk a few cells clear of the boundary so the pull is unambiguous, then
+    // stop touching anything. The drift back must happen on its own - no
+    // pointer, no further keys. A mouse pan producing a sudden correction that
+    // idling does not is precisely the "snaps back when I try to pan" symptom.
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(200);
+    }
+    const far = await hud(page);
+    assert.ok(far.x > far.edge, `the walk must end outside the content region: x=${far.x}, edge=${far.edge}`);
 
-    // Second: a genuine POINTER release outside the region, under reduced
-    // motion, must settle in roughly one frame rather than visibly easing.
+    await waitFor(
+      async () => (await hud(page)).x < far.x - 0.5,
+      5000,
+      'the edge must pull a keyboard-placed camera back on its own, with no pointer involved'
+    );
+
+    // And it keeps pulling toward the region rather than stalling partway.
+    const settling = await hud(page);
+    await waitFor(
+      async () => (await hud(page)).x < settling.x,
+      5000,
+      'the pull must continue, not stop after one frame'
+    );
+
+    // Reduced motion gets the same correction without the frames it takes to
+    // ease there - the glide had never checked the setting at all, an ambient
+    // gap older than any of the keyboard work.
     await page.getByRole('button', { name: 'centre' }).click();
     await landed(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });

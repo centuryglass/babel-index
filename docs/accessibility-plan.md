@@ -671,21 +671,27 @@ plan's own foresight. Two things were true at once and neither was intended:
   animating it at the same pace reads as sluggish. Reduced motion collapses it
   to zero the same way it already collapsed `flightMs` - one `duration`
   expression in `flyTo`, not two.
-- **The edge pushback (`glideStep`, the "felt affordance" pan resistance eases
-  back with) was fighting the keyboard the instant it crossed the boundary on
-  purpose.** Every `flyTo` caller before this landed well inside the content
-  region, where the glide is a no-op - so a keyboard press landing PAST the
-  boundary (§4.1's "arrows cross it freely") was new territory, and the very
-  next animation frame saw no flight and no drag in progress and started
-  easing the camera back toward the origin, silently overriding a position
-  the cursor had just announced. Motion setting aside, that was a
-  correctness bug: the camera and the announced position disagreeing is
-  exactly what this whole design promises never happens. Fixed with a
-  `glideExempt` ref in `useMapCamera.js` - set on every flight that actually
-  lands, cleared the instant a pointer grabs the map - so a keyboard-placed
-  position simply stays where the reader put it until something else moves
-  the camera, and a POINTER release afterward still gets the ordinary
-  spring-back.
+- **The edge pushback applies to the keyboard exactly as it does to a
+  pointer.** This one was got wrong first and is worth recording as a
+  cautionary tale rather than quietly corrected. The first attempt read the
+  glide easing a keyboard-placed camera back as a *conflict* - "it fights the
+  position the cursor just announced" - and added a `glideExempt` ref to
+  suppress it. That reasoning has the causality backwards: the cursor is
+  DERIVED from the camera (§4.2), so when the glide moves the camera the
+  cursor moves with it and nothing disagrees. The only thing that could go
+  stale was a hand-maintained copy of the cursor, which was itself the other
+  half of the same mistake. And because the flag was set on every landed
+  flight and cleared only by a pointerdown, it did not merely soften one
+  landing - it disabled the boundary pushback for the entire keyboard
+  session, so a reader could walk out forever and then get yanked back the
+  instant a mouse touched the map.
+
+  The actual requirement was the one already stated in §3.1: **the edge
+  speaks.** Walking out past the last ranked room and feeling the library pull
+  you home is the affordance, and the keyboard wants it for the same reason a
+  released drag does. `glideExempt` is gone; the glide is unconditional again,
+  and `cursorNow()` derives the cursor from `flightTarget()` so it tracks the
+  camera through the drift rather than needing protection from it.
 - **And the glide itself had never checked `prefers-reduced-motion` at
   all** - an ambient gap older than the keyboard work, surfaced by looking
   for it. `camera.js` gained `glideToRest`, which runs `glideStep`'s own
@@ -701,13 +707,14 @@ INTERPOLATED position; what a chained keyboard press needs is the
 fully-resolved target of whatever is already in flight, which `flightTarget()`
 (`flight.current?.to ?? cam.current`) now provides. The same shape of bug
 existed for panning too, one layer up: `main.jsx`'s `cursor` React state does
-not update within the same tick a second keydown can arrive in, so
-`cursorRef` - previously synced by an effect, no faster than the state itself
-- is now written synchronously inside `announceCursorMove`, and the keyboard
-handler reads `cursorRef.current` rather than the closure's `cursor` for every
-target it computes. Both were found by hand, driving the app after Phase C
-shipped, not by any test - `camera.test.mjs`/e2e now cover the specific
-double-press cases that exposed them.
+not update within the same tick a second keydown can arrive in (and a
+`useEffect` mirroring it into a ref is no faster - both lag the same render).
+The keyboard handler now computes every target from `cursorNow()`, which is
+`cursorCell(flightTarget())` - synchronously correct for a chained press
+because it reads the in-flight target, and immune to going stale because it is
+derived rather than tracked. Both bugs were found by hand, driving the app
+after Phase C shipped, not by any test - `camera.test.mjs`/e2e now cover the
+specific double-press cases that exposed them.
 
 **Phase D — the centre room's books.** The 40 spines as real buttons (§3.3).
 Independent of B and C — it is a control surface, not a navigation model — and
