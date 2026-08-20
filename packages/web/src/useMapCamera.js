@@ -66,8 +66,12 @@ const PRESS_SLOP_PX = 8;
  *
  * Read per flight rather than once: the setting can change while a page is
  * open, and this costs nothing next to the flight it is deciding about.
+ *
+ * Exported because the rearrangement asks the same question in `main.jsx`, and
+ * a second `matchMedia` call there would be a second statement of one fact -
+ * the two would drift the first time the query string needed changing.
  */
-const reducedMotion = () =>
+export const prefersReducedMotion = () =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
@@ -448,7 +452,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   const flyTo = useCallback(
     (x, y, zoom) => {
       const to = cameraAtCell(cam.current, x, y, zoom);
-      const ms = reducedMotion() ? 0 : camera.flightMs;
+      const ms = prefersReducedMotion() ? 0 : camera.flightMs;
       // A second flight replaces the first, and the first did not arrive.
       endFlight(false);
       return new Promise((settle) => {

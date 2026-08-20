@@ -2,7 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <!--
+      No `maximum-scale` and no `user-scalable=no`. Blocking page zoom is a
+      WCAG 1.4.4 failure and it locks out exactly the low-vision readers this
+      map is hardest on. Those attributes were here to stop iOS treating a
+      two-finger map pinch as a page zoom, but that job is actually done by
+      `touch-action: none`, set all the way up the tree below - the browser
+      decides at touch-start from the computed touch-action of the hit element
+      AND its ancestors, so nothing is left claimable. Worth re-checking on a
+      real device alongside the in-tile search field (plan §7 item 11); a
+      simulator does not settle iOS gesture arbitration.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Indexing of Babel</title>
     <style>
       :root {
@@ -55,7 +66,7 @@
         background: rgba(10,8,6,0.55); color: var(--ink);
         border: 1px solid rgba(200,169,95,0.45); border-radius: 4px; font: inherit;
       }
-      .centre-search input[type="search"]:focus { outline: none; border-color: #c8a95f; background: rgba(10,8,6,0.75); }
+      .centre-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
 
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
@@ -72,7 +83,34 @@
         width: 100%; padding: 7px 9px; background: rgba(0,0,0,0.4); color: var(--ink);
         border: 1px solid var(--edge); border-radius: 5px; font: inherit;
       }
-      input[type="search"]:focus { outline: none; border-color: #c8a95f; }
+      input[type="search"]:focus { border-color: #c8a95f; }
+      /*
+       * One focus ring for everything, and it must stay visible. The search
+       * fields used to say `outline: none` and lean on a border-colour shift
+       * instead - a one-pixel hue change is not an indicator, and it is the
+       * kind that disappears entirely against the panel at low contrast. The
+       * offset is what keeps the ring off the control's own border so the two
+       * do not read as one thicker edge.
+       *
+       * `:focus-visible` rather than `:focus` so a mouse click on a button does
+       * not leave a ring behind, which is the reason `outline: none` gets
+       * reached for in the first place.
+       */
+      :focus-visible {
+        outline: 2px solid #c8a95f;
+        outline-offset: 2px;
+      }
+
+      /*
+       * Present to assistive technology, absent to the eye. `display: none` and
+       * `visibility: hidden` both drop the node out of the accessibility tree
+       * along with the pixels, which is the opposite of what this is for.
+       */
+      .sr-only {
+        position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+      }
+
       .buttons { display: flex; gap: 7px; }
       button {
         flex: 1; padding: 6px 8px; background: rgba(200,169,95,0.12); color: var(--ink);

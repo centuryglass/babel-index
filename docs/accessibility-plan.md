@@ -556,9 +556,12 @@ Ordered by dependency, and by value delivered per unit of work. Each phase is
 independently shippable; nothing later is required for something earlier to be
 worth having.
 
-**Phase A — the existing bugs.** Everything in §6. Small, isolated, no new
-architecture, and several are outright conformance failures today. Land first
-regardless of what follows.
+**Phase A — the existing bugs. Landed.** Everything in §6, each with a browser
+test confirmed to fail against the unfixed app, plus an axe sweep over the
+opening view as the broad net under them. Two things it taught, both folded in
+above: Chrome puts CSS `text-transform` into the accessible name (§6.3), and the
+card's focus *restore* cannot be exercised until something other than a pointer
+can open it (phase C).
 
 **Phase B — `describeCell`, and the ranked listbox.** The pure naming module
 (§7), plus the windowed `listbox` (§3.2, §4.2b). This is now *before* the map's
@@ -596,6 +599,12 @@ survives in Phase C at a fraction of the cost.
 
 Found by audit, in rough order of severity. All are Phase A.
 
+> **Phase A has landed.** Every item below is fixed, each with a browser test
+> that was confirmed to fail against the unfixed app. Two are struck through
+> with a note rather than simply removed, because what was learned fixing them
+> outlived the fix. Kept as a record of what the audit found — delete it when it
+> stops being useful.
+
 1. ~~**The panel's sliders have no accessible name.**~~ **Fixed.**
    `<label>rooms on the map</label>` was a *sibling* of its
    `<input type="range">`, with no `htmlFor` and no wrapping, so both sliders
@@ -604,7 +613,7 @@ Found by audit, in rough order of severity. All are Phase A.
    touches the panel next: **the sliders are headed for dev-only**, so this was
    tidiness rather than an investment — do not build further on them, and see
    §3.7 for the production-facing control that could replace the ratio one.
-2. **Page zoom is disabled.** `maximum-scale=1, user-scalable=no` in the
+2. ~~**Page zoom is disabled.**~~ **Fixed.** `maximum-scale=1, user-scalable=no` in the
    viewport meta is a documented WCAG 1.4.4 failure and locks out exactly the
    low-vision users this map is hardest on. It is there to stop iOS treating a
    two-finger map pinch as a page zoom — but `touch-action: none` is already
@@ -612,28 +621,41 @@ Found by audit, in rough order of severity. All are Phase A.
    actually does the work. Recommend dropping both attributes and verifying on
    a device; this ties into plan §7 item 11, which already wants an iOS pass on
    the in-tile search field.
-3. **The room card is unreachable and unmanaged.** It opens only on right-click
+3. ~~**The room card is unreachable and unmanaged.**~~ **Partly fixed.** It opens only on right-click
    or long press — no keyboard path at all. It is `role="dialog"` with
    `aria-label="room"`, which tells a reader nothing; focus never moves into it,
-   Escape does not close it, and focus is not restored on close. Give it a real
-   label from `describeCell`, move focus in, close on Escape, restore focus to
-   the originating cell.
-4. **Reduced motion is honoured for the flight and not for the rearrangement.**
+   Escape does not close it (it did), and focus is not restored on close. It now
+   takes focus on open, is named by `aria-labelledby` on its room line, and
+   restores focus to whatever opened it.
+
+   **Still open, and it needs phase C:** *reachability*. There is no keyboard
+   way to open a card, so the restore path is written but not yet exercised —
+   right-clicking the canvas blurs the focused control to the body before the
+   card mounts, so a pointer-opened card has no opener to return to. Enter on
+   the map cursor gives it one; assert the restore there, where it can fail.
+
+   One thing found while testing it, worth knowing before naming anything after
+   an acronym: **Chrome folds CSS `text-transform: uppercase` into the computed
+   accessible name.** `.card-id` is styled uppercase, so the reader is handed
+   "ROOM 21 · 022.JPG" rather than the DOM's own text. Harmless for a word that
+   is still pronounceable, and it goes away when the card's label comes from
+   `describeCell` (phase B) rather than from a visually-transformed node.
+4. ~~**Reduced motion is honoured for the flight and not for the rearrangement.**~~ **Fixed.**
    `useMapCamera.js` checks `prefers-reduced-motion` per flight; `slide.js`'s
    five durations run unconditionally, so someone who asked for less motion
    still gets 1.2 seconds of sliding tiles on every search. See §4.3 — the
    fallback path already exists.
-5. **The focus indicator on the search fields is `outline: none` plus a
-   border-colour change.** A one-pixel hue shift is a weak indicator and is
+5. ~~**The focus indicator on the search fields is `outline: none` plus a
+   border-colour change.**~~ **Fixed.** A one-pixel hue shift is a weak indicator and is
    unlikely to clear the contrast requirement. Replace with a visible ring.
-6. **The canvas has no role, no label and no fallback content.** Per §3.6 it
+6. ~~**The canvas has no role, no label and no fallback content.**~~ **Fixed.** Per §3.6 it
    should be `aria-hidden="true"` once the mirror exists; until then it needs a
    label, or it is an unnamed graphic that is also the entire application.
-7. **The status note is not a live region.** `status` already carries exactly
+7. ~~**The status note is not a live region.**~~ **Fixed.** `status` already carries exactly
    the text §3.4 wants announced — search results, rearrangement outcomes — and
    silently updates a `<div class="note">`. Making it the polite region is
    nearly free.
-8. **The in-tile search field has no label**, relying on its placeholder, and
+8. ~~**The in-tile search field has no label**~~ **Fixed.** It relying on its placeholder, and
    leaves the tab order entirely when the centre tile is off screen (it is
    `display: none` until the render loop finds it legible). The second part is
    defensible — the panel's labelled 🔍 button is the entry point, and
@@ -672,12 +694,21 @@ card, Escape closes it and focus returns to the cell it came from; the live
 region holds the expected text after a search. Per the repo's own rule, break
 each of these on purpose once and confirm it fails.
 
-**`@axe-core/playwright`, approved.** It catches the whole class of regression in
-§6 automatically, which matters precisely because tier-3 semantics are invisible
-and rot unwatched (§3.6). It is a devDependency used only by the browser suite,
-so `npm test` stays what it is — a second of `node --test` with no browser and no
-network. Lands with Phase A, since Phase A is what first gives it something to
-assert.
+**`@axe-core/playwright`, in.** It catches the whole class of regression in §6
+automatically, which matters precisely because tier-3 semantics are invisible and
+rot unwatched (§3.6). A devDependency used only by the browser suite, so
+`npm test` stays what it is — a second of `node --test` with no browser and no
+network. The opening view reports zero violations across `wcag2a`/`wcag2aa`/
+`wcag21a`/`wcag21aa`, and removing a slider's label brings it back as a critical
+`label` violation, so the sweep is doing work rather than passing vacuously.
+
+Two mechanics worth knowing before adding to it. **`page.accessibility` is gone**
+as of Playwright 1.51, so computed properties are read over CDP
+(`Accessibility.getFullAXTree`, wrapped as `axNodes`); `locator.ariaSnapshot()`
+reports a slider's raw value and not the `valuetext` that replaces it. And **axe
+refuses a page whose context it did not see created**, which is why the suite now
+makes an explicit `browser.newContext()` rather than letting `newPage()` make one
+implicitly.
 
 **And e2e is a merge gate now**, which is what makes any of this load-bearing: a
 keyboard interface that CI never drives is a keyboard interface nobody knows is
