@@ -1719,25 +1719,27 @@ corpus:
    item asked for has happened; what it settled, in short:
 
    - It is **not** a parallel interface. One DOM tree with two orderings over it
-     — a windowed grid mirror and a ranked results list — sharing the handlers
-     and the naming module, so there is no second view to keep in sync.
-   - The **whole grid cannot be in the DOM**: 33k cells at 5000 rooms, 80% of
-     them identical wallpaper, and cell position encodes rank and certainty
-     rather than adjacency. The mirror is windowed and gets its own two-rung
-     ladder, granularity where the pyramid drops resolution.
-   - **Keyboard first.** The bindings, the focus-is-authoritative rule, and the
-     centre tile's 40 book spines as real buttons deliver most of the value and
-     depend on none of the mirror.
+     — the map's cursor and a ranked listbox — sharing the handlers and the
+     naming module, so there is no second view to keep in sync.
+   - **There is no DOM grid at all — the map is a cursor, not a mirror.** A
+     browsable DOM grid needs the screen reader in browse mode; arrow keys that
+     pan need focus mode. No node budget buys both, so a single cursor at the
+     cell under the camera centre replaces the mirror — about 110 nodes against
+     ~33,000 for the board. Arrows pan, the cursor rides along and is announced,
+     and ctrl+arrow jumps to the next room the way ctrl+arrow jumps a word.
+   - **The ranked listbox ships first.** It is the half that works with no arrow
+     keys at all — every touch device, every VoiceOver user — and it needs no
+     `role="application"` commitment, so it can be lived with before anything
+     riskier is built on it. Whether that role survives contact with a real
+     screen reader is the plan's stated highest-risk assumption.
    - **Alt text is not generated at runtime.** Every described room already
      carries keywords and a story; a short description is an optional `alt` in
      the sidecar, captioned once offline with the room's own story passed in as
      context so the two accounts cannot diverge.
-   - **Two readings, not two modes.** A dense linear view was proposed as a
-     toggle; it is present alongside the grid instead, because the two answer
-     different questions — the grid is windowed to the viewport, the ranked
-     listbox is the whole ranking. Worth knowing before anyone builds it: a
-     wallpaper-free map is already `contentRatio: 1`, a runtime parameter
-     rather than a second layout.
+   - **A dense/linear view is deferred as its own subproject** — a real toggle
+     for everyone rather than an accessibility path. Worth knowing before anyone
+     builds it: a wallpaper-free map is already `contentRatio: 1`, a runtime
+     parameter rather than a second layout.
 
    Phase A of that plan is a set of existing conformance bugs — page zoom
    disabled by the viewport meta, a card unreachable by keyboard and unmanaged
