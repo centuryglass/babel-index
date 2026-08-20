@@ -124,6 +124,49 @@ on. `HISTORY_SHELF` and the shelf-scoped `HISTORY_SLOTS` are gone;
 role tags always played is unchanged - it is what still shows on every book
 history has not yet reached.
 
+## Accessibility: three rejected shapes
+
+Planned in [`accessibility-plan.md`](accessibility-plan.md); these are the
+shapes considered and dropped, because each is the obvious first idea.
+
+- **The whole grid in the DOM.** Mirroring every cell as a node is the intuitive
+  reading of "make the map accessible", and it fails three ways at once: the
+  board is corpus-sized rather than screen-sized (157x209 at 5000 rooms, and the
+  accessibility tree is rebuilt on every reorder and every frame of a slider
+  drag); ~80% of cells are identical wallpaper, so a row reads as "blank wall"
+  four times per room; and cell position encodes rank and certainty, not
+  adjacency, so a grid presented as a grid promises a relationship that is not
+  there. The mirror is windowed instead, with its own two-rung granularity
+  ladder - the same instinct as the pyramid, applied to detail rather than
+  resolution.
+
+- **A separate accessible view of the corpus.** The earlier placeholder in the
+  plan proposed a *parallel* interface over the same dataset. Two interfaces are
+  two things to keep in sync, and the one nobody looks at is the one that rots.
+  What replaced it is one DOM tree with two orderings over it - a spatial grid
+  and a ranked list - sharing handlers and one naming module (`describeCell`),
+  the same "one implementation, two consumers" rule `metadata.js` already
+  follows.
+
+- **Alt text generated at runtime from the images.** The demo's data layer is a
+  directory of images and two text sidecars, and `npm test` needs no network; a
+  per-view model call would put latency, cost and non-determinism on the path to
+  a first frame. It is also redundant - every described room already ships three
+  keywords and a story written by the process that made the image, so a second
+  description of a picture the reader cannot see would sit beside the first and
+  be free to contradict it. Where a short description is genuinely wanted it is
+  an optional `alt` in the sidecar, produced once, offline, in the corpus. The
+  wallpaper wants a handful of hand-written sentences rather than the same
+  generated one repeated hundreds of times per screen.
+
+Also rejected as a *goal*: **"invisible to sighted users."** Kept as the default
+for semantics, but most people this work helps do not use a screen reader -
+keyboard-only, motor-impaired, low-vision and vestibular users all need changes
+that are visible by definition (focus rings, reduced motion, page zoom). And an
+invisible layer nobody can see breaking desyncs from the canvas silently. Hence
+drawing the focused cell's ring on the canvas: it is the keyboard affordance and
+it makes a desync visible to everyone rather than only to the person it breaks.
+
 ## Rejected in passing
 
 - **Tiering the search** (an exact-match bucket sorted ahead of a CLIP bucket)

@@ -1711,13 +1711,29 @@ corpus:
    Lands naturally alongside item 1 (base assets earn a pyramid); the opening cap
    at native width in `main.jsx` can then rise. Cosmetic backdrop polish — gate on
    whether the blur past 1x actually bothers a reader before investing.
-5. **Accessibility: a secondary, non-canvas interface to the corpus.** The whole
-   map is a single canvas — no DOM per room, book titles are painted pixels, and
-   picking resolves to a cell — which is a dead end for screen readers, keyboard
-   navigation, copy/paste and reduced-input use. Accommodating this well is not a
-   tweak to the canvas but likely a *parallel* interface over the same dataset (a
-   navigable list/search view of rooms, keywords and stories), reachable and
-   synchronised with the map. **Needs its own planning session** — it touches
-   data shape, routing and how the two interfaces share state — so this is a
-   placeholder to discuss, not a scoped task. Consult `docs/design-history.md`
-   before re-treading the "it's all one canvas" decision.
+5. **Accessibility: a keyboard interface and an accessible reading of the map.**
+   **Planned — see [`accessibility-plan.md`](accessibility-plan.md).** The whole
+   map is a single canvas — no DOM per room, book titles are painted pixels,
+   picking resolves to a cell, and every gesture is a pointer gesture — so today
+   there is no way in without a mouse or a touchscreen. The planning session this
+   item asked for has happened; what it settled, in short:
+
+   - It is **not** a parallel interface. One DOM tree with two orderings over it
+     — a windowed grid mirror and a ranked results list — sharing the handlers
+     and the naming module, so there is no second view to keep in sync.
+   - The **whole grid cannot be in the DOM**: 33k cells at 5000 rooms, 80% of
+     them identical wallpaper, and cell position encodes rank and certainty
+     rather than adjacency. The mirror is windowed and gets its own two-rung
+     ladder, granularity where the pyramid drops resolution.
+   - **Keyboard first.** The bindings, the focus-is-authoritative rule, and the
+     centre tile's 40 book spines as real buttons deliver most of the value and
+     depend on none of the mirror.
+   - **Alt text is not generated at runtime.** Every described room already
+     carries keywords and a story; where a short description is genuinely
+     wanted it is an optional sidecar field produced offline in the corpus.
+
+   Phase A of that plan is a set of existing conformance bugs — unlabelled
+   sliders, page zoom disabled, a card unreachable by keyboard, reduced motion
+   honoured for the flight but not the rearrangement — each small and isolated.
+   Consult `docs/design-history.md` before re-treading the "it's all one canvas"
+   decision, or the three alternatives that plan rejected.
