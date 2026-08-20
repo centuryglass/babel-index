@@ -14,7 +14,15 @@
  *   npx playwright install chromium   # once
  *   npm run test:e2e
  *
- * In CI it runs from .github/workflows/e2e.yml, which is manual-dispatch only.
+ * In CI it runs from .github/workflows/e2e.yml, which `ci.yml` now calls as a
+ * reusable workflow - so this suite is a MERGE GATE, and a test in here that is
+ * timing-dependent rather than state-dependent blocks everyone. Wait on a
+ * condition, never on a duration.
+ *
+ * The accessibility block asserts what only a browser can compute: an
+ * accessible name comes from labels, roles and content together, so checking
+ * the JSX would only restate the source. Those tests read the real tree back
+ * out - `axNodes` for Chromium's computed properties, axe for the broad sweep.
  *
  * If Playwright's bundled Chromium is not the one on the machine - a sandbox
  * with its own browsers, a distro package - point BABEL_E2E_CHROMIUM at the
@@ -28,6 +36,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const artifacts = resolve(repoRoot, 'packages/web/e2e/artifacts');
@@ -97,7 +106,16 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // `hasTouch` so the pinch test's CDP touch events become real pointer
     // events. It does not take the mouse away, so the drag and wheel tests are
     // unaffected - a desktop with a touchscreen is an ordinary machine.
-    page = await browser.newPage({ viewport: { width: 1280, height: 800 }, hasTouch: true });
+    //
+    // An explicit context rather than `browser.newPage()`, which makes one
+    // implicitly: axe refuses to run against a page whose context it did not
+    // see created, and the accessibility sweep below is the whole reason this
+    // suite can claim anything about the parts of the app nobody looks at.
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      hasTouch: true,
+    });
+    page = await context.newPage();
 
     // Anything the page complains about is a failure; the map is not supposed
     // to be noisy.
@@ -428,6 +446,197 @@ describe('the library, in a browser', { concurrency: false }, () => {
       'clicking a keyword chip never produced a ranking'
     );
     assert.match(await page.locator('.note').textContent(), /keywords/);
+  });
+
+  // --- accessibility (docs/accessibility-plan.md phase A) ----------------------
+  //
+  // These are exactly the assertions no unit test can make: an accessible name
+  // is what the BROWSER computes from labels, roles and attributes together, so
+  // asserting on the JSX would only restate the source. Reading them back out
+  // of the real accessibility tree is the only way to know they landed.
+
+  test('axe finds no WCAG violations on the opening view', async () => {
+    // The broad net under the specific assertions below. Those say what this
+    // app in particular must do; this one catches the whole class of ordinary
+    // mistake - an unlabelled control, a bad contrast ratio, a role with a
+    // required attribute missing - in the parts of the page nobody is looking
+    // at, which is exactly where accessibility work rots.
+    //
+    // It is not a substitute for the named tests: axe cannot know that the
+    // rooms slider ought to say what its number counts, only that it has a
+    // name at all.
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+    assert.deepEqual(summary, [], `axe reported violations:\n  ${summary.join('\n  ')}`);
+  });
+
+  test('the panel controls carry accessible names, and the sliders say what they count', async () => {
+    const nodes = await axNodes(page);
+
+    // Both labels used to be SIBLINGS of their input with no `htmlFor`, so both
+    // sliders reached the reader as a bare number with no indication of what it
+    // measured.
+    const rooms = axFind(nodes, 'slider', /rooms on the map/i);
+    const ratio = axFind(nodes, 'slider', /non-generic/i);
+    assert.ok(rooms, 'the rooms slider must have an accessible name');
+    assert.ok(ratio, 'the ratio slider must have an accessible name');
+
+    // The name is only half of it: a range announces its raw number, which is
+    // the one thing about it nobody was wondering about.
+    assert.match(rooms.props.valuetext ?? '', /\d+ of \d+ rooms/, 'the rooms slider must say what it counts');
+    assert.match(ratio.props.valuetext ?? '', /%/, 'the ratio slider must say what its percentage is of');
+
+    assert.ok(axFind(nodes, 'button', /search the library/i), 'the search trigger must be named');
+  });
+
+  test('the page may be zoomed', async () => {
+    // Blocking page zoom is a WCAG 1.4.4 failure, and the attributes that did
+    // it here are easy to reintroduce by reflex the next time a touch gesture
+    // misbehaves on iOS. Asserted so that reflex fails loudly.
+    const viewport = await page.locator('meta[name=viewport]').getAttribute('content');
+    assert.doesNotMatch(viewport, /user-scalable\s*=\s*no/, 'page zoom must not be disabled');
+    assert.doesNotMatch(viewport, /maximum-scale/, 'page zoom must not be capped');
+  });
+
+  test('the canvas is a named graphic rather than an anonymous one', async () => {
+    // Until the map grows its cursor (phase C) the canvas IS the application,
+    // and the one thing it must not be is unnamed.
+    await page.getByRole('img', { name: /library map/i }).waitFor({ timeout: 5000 });
+  });
+
+  test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
+    const card = page.locator('.card');
+
+    await page.mouse.click(880, 300, { button: 'right' });
+    await card.waitFor({ timeout: 5000 });
+
+    // Focus moves in - otherwise a keyboard user is told a dialog opened and
+    // has no way to reach a word of it.
+    assert.ok(
+      await page.evaluate(() => document.activeElement?.classList.contains('card')),
+      'the card must take focus when it opens'
+    );
+
+    // And it is named by the room it describes. "room" - what it used to
+    // announce - is the one fact the reader already had.
+    //
+    // Matched case-insensitively on purpose: `.card-id` is styled
+    // `text-transform: uppercase`, and Chrome folds that INTO the computed
+    // accessible name, so the reader is handed "ROOM 21 · 022.JPG" rather than
+    // the DOM's own "room 21 · 022.jpg". Harmless for a word that is still
+    // pronounceable, worth knowing before naming anything after an acronym, and
+    // it goes away when the card takes its label from `describeCell` (phase B)
+    // rather than from a visually-transformed node.
+    const dialog = axFind(await axNodes(page), 'dialog', /^room \d+/i);
+    assert.ok(dialog, 'the card must be named by the room it describes');
+
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    // And focus is not stranded on the node that just left the document, which
+    // is the way this breaks: focus on a detached element belongs to nothing,
+    // Tab restarts from the top, and a screen reader is left describing a card
+    // that is no longer there.
+    //
+    // What is NOT asserted here, because it is not yet true: returning focus to
+    // whatever opened the card. Right-clicking the canvas blurs the focused
+    // control to the body before the card ever mounts, so a pointer-opened card
+    // has no opener to go back to. `RoomCard` restores when there is one, and
+    // the path that gives it one is Enter on the map cursor (phase C). Assert
+    // it there, where it can actually fail.
+    assert.ok(
+      await page.evaluate(() => document.activeElement?.isConnected ?? false),
+      'focus must not be left on a detached node'
+    );
+  });
+
+  test('what the map just did is announced politely', async () => {
+    // The status text already existed and already said the right thing; it
+    // simply updated a div nothing was listening to. The hint must stay OUT of
+    // the live region - a node that falls back to the instructions would read
+    // them aloud again every time a status cleared.
+    const live = page.locator('[role=status]');
+    await live.waitFor({ timeout: 5000 });
+    await waitFor(
+      async () => /ranked by/.test((await live.textContent()) ?? ''),
+      SEARCH_TIMEOUT,
+      'the live region never carried the result of the search'
+    );
+    assert.doesNotMatch(await live.textContent(), /drag to pan/, 'the hint must not be announced');
+  });
+
+  test('reduced motion rebuilds the library instead of sliding it', async () => {
+    // Asserted through the CAMERA rather than by watching for the absence of an
+    // animation, which would be a race dressed up as a test. A normal
+    // rearrangement parks the camera on the centre first, because the slide is
+    // planned against exactly the cells on screen. Reduced motion bails out
+    // before that flight - there is no animation to set up, and moving someone's
+    // camera unasked is the very thing they turned off - so the giveaway is a
+    // camera that did not move at all.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    try {
+      // Somewhere clearly not the centre, so "did not move" is unambiguous.
+      await page.mouse.move(700, 420);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(700 - i * 25, 420 - i * 15);
+      await page.mouse.up();
+      const before = await settled(page);
+      assert.ok(
+        Math.abs(before.x) > 0.2 || Math.abs(before.y) > 0.2,
+        `the drag must leave the centre, got (${before.x}, ${before.y})`
+      );
+
+      // "rescatter", not "reorder", and the difference is load-bearing: a
+      // search is still active by the time this runs, and `order` is then
+      // `result.order` - the same array by reference no matter how often
+      // `orderSeed` is bumped - so the render effect's deps never change and
+      // "reorder" rearranges nothing at all. Rescatter bumps the layout seed,
+      // which rebuilds `layout` and always triggers a rearrangement. Written
+      // down because this test passed against a deliberately broken app until
+      // the button was swapped.
+      await page.getByRole('button', { name: 'rescatter' }).click();
+      const after = await settled(page);
+
+      assert.ok(
+        Math.abs(after.x - before.x) < 1e-6 && Math.abs(after.y - before.y) < 1e-6,
+        `reduced motion must not fly the camera home: (${before.x}, ${before.y}) -> (${after.x}, ${after.y})`
+      );
+      assert.ok(
+        Math.abs(after.zoom - before.zoom) < 1e-6,
+        `reduced motion must not change the zoom: ${before.zoom} -> ${after.zoom}`
+      );
+    } finally {
+      await page.emulateMedia({ reducedMotion: null });
+    }
+
+    // Put the reader back on the centre for whatever runs next.
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('keyboard focus is visible', async () => {
+    // The search fields used to say `outline: none` and lean on a border-colour
+    // shift. Reading the computed outline back is the only way to catch that
+    // returning, since it looks perfectly reasonable in the stylesheet.
+    // Focus has to arrive by KEYBOARD. `:focus-visible` follows the most recent
+    // input modality, so an `el.focus()` from the test inherits the mouse click
+    // that came before it and correctly shows no ring - which would fail this
+    // test for a reason that has nothing to do with the stylesheet. Click
+    // something unfocusable to park focus on the body, then Tab.
+    await page.locator('.panel h1').click();
+    await page.keyboard.press('Tab');
+
+    const ring = await page.evaluate(() => {
+      const el = document.activeElement;
+      const { outlineStyle, outlineWidth } = getComputedStyle(el);
+      return { tag: el.tagName, cls: el.className, outlineStyle, outlineWidth };
+    });
+    assert.notEqual(ring.tag, 'BODY', 'Tab must reach a control');
+    assert.notEqual(ring.outlineStyle, 'none', `a keyboard-focused ${ring.tag} must show an outline`);
+    assert.ok(parseFloat(ring.outlineWidth) >= 2, `the focus ring must be visible, got ${ring.outlineWidth}`);
   });
 
   test('a long press opens the card, and a drag cancels it', async () => {
@@ -768,6 +977,35 @@ function sampleCamera(page, ms) {
     ms
   );
 }
+
+/**
+ * The accessibility tree as the browser actually computed it.
+ *
+ * Not `page.accessibility` - that API is gone as of Playwright 1.51 - and not
+ * the attributes themselves, which would only restate the source. An accessible
+ * name is computed from labels, roles, `aria-labelledby` and content together,
+ * so the only way to know it landed is to read it back out of the tree the
+ * screen reader would be handed. CDP is the one route to it that still exposes
+ * computed properties like `valuetext`; `locator.ariaSnapshot()` reports a
+ * slider's raw value and not the text that replaces it.
+ *
+ * Chromium-only, which is what this suite runs.
+ */
+async function axNodes(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  await cdp.detach();
+  return nodes.map((n) => ({
+    role: n.role?.value,
+    name: n.name?.value ?? '',
+    props: Object.fromEntries((n.properties ?? []).map((x) => [x.name, x.value?.value])),
+  }));
+}
+
+/** The one node with this role whose accessible name matches, or undefined. */
+const axFind = (nodes, role, name) =>
+  nodes.find((n) => n.role === role && name.test(n.name));
 
 async function waitFor(predicate, timeoutMs, message) {
   const deadline = Date.now() + timeoutMs;

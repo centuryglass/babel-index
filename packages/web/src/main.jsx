@@ -23,7 +23,7 @@ import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
 import { createSlideshow, createSlideRenderer } from './slide.js';
 import { sizeOf as pyramidSizeOf, BASE_TILE } from './pyramid.js';
-import { useMapCamera } from './useMapCamera.js';
+import { useMapCamera, prefersReducedMotion } from './useMapCamera.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -419,6 +419,18 @@ function Library({ manifest }) {
       const canvas = canvasRef.current;
       if (!canvas) return false;
 
+      // Someone who asked for less motion gets the library rebuilt at once.
+      // Returning false here is not a special case: it is the same answer
+      // `buildRearrangement` gives for a change that cannot be animated
+      // legally, and the caller already knows what to do with it. So reduced
+      // motion costs one condition and reuses a path that is already written
+      // and already tested, rather than adding a branch of its own.
+      //
+      // Before the flight, deliberately: the fly-home exists to set up the
+      // animation, so with no animation to set up there is no reason to move
+      // the camera - and moving it unasked is itself the thing being avoided.
+      if (prefersReducedMotion()) return false;
+
       // Hold the old arrangement on screen for the flight. `layout` and `order`
       // already describe the new one, and without this the map would show it,
       // fly to it, and only then slide it in from the arrangement it had
@@ -625,7 +637,15 @@ function Library({ manifest }) {
 
   return (
     <>
-      <canvas ref={canvasRef} />
+      {/*
+        Named rather than hidden, for now. Once the map grows its cursor and
+        live regions (accessibility-plan.md phase C) the canvas becomes
+        `aria-hidden` and the DOM carries everything - but until then this is
+        the entire application, and an unnamed graphic is the one thing it must
+        not be. `role="img"` is honest about what it currently offers: a picture
+        you cannot yet navigate.
+      */}
+      <canvas ref={canvasRef} role="img" aria-label="The library map — a pannable grid of shelved walls" />
       {/*
         The live search field, on the centre tile itself rather than in the
         panel. Always mounted - Playwright's `inputValue()` and React's
@@ -640,6 +660,7 @@ function Library({ manifest }) {
       <form ref={searchFormRef} onSubmit={runSearch} className="centre-search">
         <input
           type="search"
+          aria-label="search the library"
           placeholder="search the library…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -700,8 +721,17 @@ function Library({ manifest }) {
           <button onClick={() => flyTo(0, 0, config.camera.defaultZoom)}>centre</button>
         </div>
 
+        {/*
+          The hint and the status are two different things and must not share a
+          node. `role="status"` announces every change to its subtree, so a
+          single node that falls back to the hint would read the instructions
+          aloud again each time a status cleared. The hint is static and silent;
+          the region below it starts empty and only ever holds what the map just
+          did, which is exactly what a polite live region is for.
+        */}
         <div className="note">
-          {status || 'drag to pan, scroll to zoom. right-click a room.'}
+          {!status && 'drag to pan, scroll to zoom. right-click a room.'}
+          <span role="status">{status}</span>
         </div>
       </div>
       <div className="hud" id="hud" />
@@ -790,6 +820,33 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
     });
   }, [card]);
 
+  // Focus moves in on open and goes back where it came from on close.
+  //
+  // Two things make the restore conditional rather than unconditional. A card
+  // is dismissed by clicking *anywhere else*, and that click has usually
+  // already put focus somewhere the reader chose - stealing it back would
+  // undo their own action. And the card may be closed because the map is about
+  // to rearrange under it (`searchKeyword`), by which point the element that
+  // opened it may be gone. So: restore only if focus is still inside the card
+  // or has fallen to the body, which are exactly the cases where nobody else
+  // has claimed it.
+  useEffect(() => {
+    const opener = document.activeElement;
+    ref.current?.focus();
+    return () => {
+      // The body is not somewhere focus can be "put back" - it is where focus
+      // already is when nothing holds it, which is the ordinary case for a card
+      // opened by right-clicking the canvas. Nothing to restore.
+      if (!opener || opener === document.body || !opener.isConnected) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && !ref.current?.contains(active)) return;
+      opener.focus();
+    };
+    // Mount and unmount only: re-running this on a re-render would drag focus
+    // back to the card while someone is reading a chip inside it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     // `pointerdown` rather than `click`: the canvas would otherwise start a pan
@@ -805,10 +862,23 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
     };
   }, [onClose]);
 
+  // `aria-labelledby` on the id line rather than a hand-written label: the card
+  // is named by the room it describes, and "room" - which is what it used to
+  // announce - is the one fact a reader already knows.
+  //
+  // `tabIndex={-1}` makes it focusable without putting it in the tab order,
+  // which is what lets focus be moved here programmatically above.
   return (
-    <div className="card" ref={ref} style={pos} role="dialog" aria-label="room">
+    <div
+      className="card"
+      ref={ref}
+      style={pos}
+      role="dialog"
+      tabIndex={-1}
+      aria-labelledby={`card-id-${card.id}`}
+    >
       <div className="card-head">
-        <span className="card-id">
+        <span className="card-id" id={`card-id-${card.id}`}>
           room {card.id}
           {file ? ` · ${file}` : ''}
         </span>
