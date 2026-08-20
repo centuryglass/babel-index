@@ -60,6 +60,7 @@ stale instance.
 | `assets/base_variations/` | the inpainted wallpaper variants, one per file; the map picks between them per cell. Swap these for real inpainting output |
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
+| `docs/accessibility-plan.md` | the keyboard/screen-reader plan: what the mirror is, what it deliberately is not |
 
 ## Conventions
 
@@ -484,3 +485,11 @@ was learned into the relevant phase section, so the plan stays the thing you can
 read to know where the project is. `docs/design-history.md` records decisions
 that were reversed and alternatives that were rejected — consult it before
 re-treading one.
+
+Accessibility has its own plan, [`docs/accessibility-plan.md`](docs/accessibility-plan.md),
+because it cuts across every file rather than sitting in one phase. Two things
+from it to know before touching the web package: the map's DOM mirror is
+**windowed, never the whole board** (33k cells at 5000 rooms, and the
+accessibility tree is rebuilt on every reorder), and **alt text is never
+generated at runtime** — described rooms already ship keywords and a story, and
+anything more is an optional sidecar field produced offline in the corpus.
