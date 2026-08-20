@@ -52,18 +52,28 @@ this table is the summary.
 | Live-region announcements for centring and reordering | **Kept, narrowed.** Announce outcomes, not motion, and let native widget semantics carry what they already carry. §3.4 |
 | Cheap generated alt text for every grid image | **Settled.** Generated once, offline, with each room's story passed to the captioner as context so the two accounts cannot diverge. Never at runtime. §3.5 |
 | Completely invisible to sighted users | **Rejected as a goal, kept as a default.** Three tiers instead. §3.6 |
-| *(added)* An alternate linear mode, unique tiles, toggleable | **Kept, de-moded.** Both readings live at once — they answer different questions, so nothing forces a choice. And "unique tiles" is already `contentRatio: 1`. §3.7 |
+| *(added)* An alternate linear mode, unique tiles, toggleable | **Kept as a feature, deferred as a subproject.** A real toggle for everyone, not an accessibility path. "Unique tiles" is already `contentRatio: 1`. §3.7 |
+| *(added)* Arrows pan, PgUp/PgDn zoom, and still no 33,000 nodes | **Resolved.** A browsable DOM grid and arrow-key panning need opposite screen-reader modes, so the mirror goes and a single cursor replaces it. ~110 nodes. §4.1, §4.2 |
 
-And five things the proposal did not mention that have to be decided before any
-of it can be built: keyboard bindings at all, how focus and camera relate,
-what the mirror does when 1600 cells are on screen, what a rearrangement does
-to a focused cell, and how any of this gets tested. Those are §4.
+And the things the proposal did not mention that have to be decided before any
+of it can be built: keyboard bindings at all, how the camera and the announced
+position relate, what a rearrangement does to where you are standing, and how
+any of this gets tested. Those are §4 — where the three-way conflict between
+"arrows pan", "screen readers need clean room-to-room movement" and "not tens of
+thousands of nodes" turns out to have only two sides.
 
 ---
 
 ## 3. Alterations
 
-### 3.1 The grid: window it, and let the edge speak
+### 3.1 There is no DOM grid — the map is a cursor, not a mirror
+
+> **Revised.** This section first proposed a *windowed* `role="grid"` mirroring
+> the cells in view. That is withdrawn — see §4.1, which found that a browsable
+> DOM grid and arrow-key panning need opposite screen-reader modes and cannot
+> both exist. What follows is why the *full* mirror was never viable either,
+> since those reasons stand on their own and explain the shape of what replaced
+> it.
 
 **Why the whole grid cannot be in the DOM.** Three independent reasons, any one
 of which is enough:
@@ -86,45 +96,29 @@ of which is enough:
   consecutive in a spiral. A grid presented as a grid promises a relationship
   that is not there.
 
-**So: the mirror is windowed, and it has its own ladder.** The canvas drops
-*resolution* as the camera pulls back; the mirror drops *granularity* at the
-same kind of threshold, for the same reason — past a certain point, per-cell
-detail is cost without information.
+What replaced it is in §4.2: **one cursor, at the cell under the camera
+centre**, moved by the same arrow keys that pan. The node count stops being a
+budget to manage and becomes a consequence of the design — about 110 nodes in
+the worst case (§4.2b).
 
-```
-mounted cells = (cells in the viewport, if few enough) ∪ { the focused cell }
-```
+Two things this section originally proposed do survive the change, because they
+were never about the grid:
 
-Two rungs, with hysteresis so a zoom held near the boundary does not thrash the
-accessibility tree (the same problem `pickLevel()` already solves, and worth
-imitating rather than re-deriving):
-
-- **Close in** (viewport under ~150 cells): a real `role="grid"`, one row per
-  world row, `aria-rowindex`/`aria-colindex` carrying **absolute world
-  coordinates** and `aria-rowcount`/`aria-colcount` describing the whole board.
-  This is the sanctioned virtualized-grid pattern; the window is honest about
-  being a window.
-- **Far out**: the grid collapses to a summary — "1,664 walls in view, 38 of
-  them rooms; nothing is legible at this distance" — and the ranked results
-  list (§3.2) carries everything. Zooming in is a real navigation act, not a
-  cosmetic one, and it is fine for the mirror to say so.
-
-Two details that will bite:
-
-- **`aria-rowindex` is 1-based and positive.** World coordinates are signed and
-  centred on the origin. Offset by the board radius when writing the attribute
-  and keep world coordinates everywhere else; do not let the offset leak into
-  the layout module.
-- **Runs of wallpaper collapse.** Consecutive generic cells in a row become one
-  `role="gridcell"` with `aria-colspan`, named "12 blank walls". Legal ARIA,
-  roughly a 5× cut in nodes, and it reads the way the wall looks.
-
-**On excluding the border.** The proposal excludes the unreachable outer region.
-Do the opposite. Pan resistance (`resistanceAt`) is a *felt* affordance — the
-edge gets heavy under a dragging hand — and that feeling has no screen-reader
-analogue. An arrow key that silently does nothing reads as a broken app. The
-boundary should announce itself: *"edge of the library — beyond here every wall
-is blank."* `layout.boundaryRadius` already knows where that is.
+- **Semantic zoom on the announcement, not on the node count.** Close in, the
+  cursor announces a cell. Far out — where one cell is a few pixels and stepping
+  across a 157-cell board would take 157 presses — panning moves by screenfuls
+  and the announcement goes regional: *"the far field; nothing ranked within
+  four cells."* Same instinct as the pyramid, applied to what is said rather
+  than to what is drawn. The hysteresis that keeps `pickLevel()` from flickering
+  at a boundary applies here too, and for a sharper reason: a zoom held near the
+  threshold that alternates between two kinds of announcement is worse than
+  either.
+- **The edge speaks.** Pan resistance (`resistanceAt`) is a *felt* affordance —
+  the edge gets heavy under a dragging hand — and that feeling has no
+  screen-reader analogue. An arrow key that silently does nothing reads as a
+  broken app. The boundary announces itself instead: *"edge of the library —
+  beyond here every wall is blank."* `layout.boundaryRadius` already knows where
+  that is, and `?` (§4.2a) reports the distance to it.
 
 ### 3.2 The panel: landmarks, not nesting
 
@@ -139,19 +133,24 @@ What actually delivers the intent — *the controls are easy to get to* — is:
 - A skip link as the first tab stop: **skip to the map**, and from the map,
   **skip to controls**. Two tab stops, always available, no visual cost until
   focused.
-- One tab stop for the entire map (roving `tabindex`), so Tab does not walk
-  1,600 gridcells. Arrows move *within* the grid; Tab leaves it. Standard grid
-  keyboard pattern, and it is what makes the panel reachable in one keystroke
-  from anywhere on the map.
+- **One tab stop for the entire map**, so Tab never walks the library. Arrows
+  pan *within* it; Tab leaves it (§4.2b). That is what makes the panel reachable
+  in one keystroke from anywhere on the map, and it is the whole tab budget the
+  map spends.
 
-**And a ranked results list, which is the part the proposal is missing.** If
-cell position encodes rank and certainty (§3.1), then the ranked list is the
-*lossless* channel and the spatial grid is the lossy one. After a search, the
-panel gains a list — "37 rooms match *brass*" — each entry a link that focuses
-its cell and moves the camera there. Same objects, same handlers, same
-`describeCell` output as the grid uses; one DOM tree with two orderings over
-it, not two interfaces to keep in sync. That distinction matters: plan §8 item 5
-worried about a *parallel interface*, and this is deliberately not one.
+**And a ranked listbox, which is the part the proposal is missing.** If cell
+position encodes rank and certainty (§3.1), then the ranking is the *lossless*
+channel and the spatial reading is the lossy one. After a search, the panel
+gains a list — "37 rooms match *brass*" — each option moving the cursor and the
+camera to that room. Same objects, same handlers, same `describeCell` output the
+map's cursor uses; one DOM tree with two orderings over it, not two interfaces
+to keep in sync. That distinction matters: plan §8 item 5 worried about a
+*parallel interface*, and this is deliberately not one.
+
+It is also the half that survives every environment where arrows are not
+available — touch, VoiceOver, a reader that ignores `role="application"` — which
+is why Phase B builds it before the map's keyboard interface rather than after
+(§5).
 
 ### 3.3 Cells carry their content — with a split, and the centre first
 
@@ -178,7 +177,7 @@ Clicking one runs a search. Today they are painted pixels behind a hit-test.
 carrying a `term` or an `action`. The DOM is a `.map()` over state that already
 exists — 40 real `<button>`s, no new data, no new model. The moment that lands,
 the app's main control surface becomes keyboard-operable and readable, which is
-a larger win than the entire grid mirror.
+a larger win than anything else in this document.
 
 Positioning them, concretely, and the trap to avoid: do **not** write 40
 elements' geometry per frame from `bookScreenRects()`. The book rects are an
@@ -301,8 +300,16 @@ without it every room is announced twice.
 
 ### 3.7 The wallpaper problem: two orderings, not two modes
 
-The sharpest objection to the windowed grid is the one §3.1 raises and does not
-answer: at the default ratio, four in five arrow presses land on a blank wall.
+> **Deferred.** The dense/linear view is its own subproject — a real feature for
+> everyone, on an intentional toggle, not an accessibility accommodation and not
+> an automatic one. It is recorded here because the reasoning about *why* it is
+> not the accessibility answer still governs what is. Ctrl+arrow (§4.2a) is what
+> answers the wallpaper problem in the meantime, and it answers it without a
+> mode.
+
+The sharpest objection to a faithful reading of the map is the one §3.1 raises
+and does not answer: at the default ratio, four in five arrow presses land on a
+blank wall.
 Enumerating the map faithfully means enumerating mostly nothing.
 
 The proposal on the table is an alternate mode — the same corpus presented as a
@@ -346,11 +353,11 @@ actually settles it:
   against? What happens to focus when the mode flips under it? Every one of those
   is a bug that does not exist if there is no mode.
 - **The two readings are not duplicates, so nothing forces a choice.** This is
-  the crux. The grid is **windowed to the viewport** — *what is around you right
-  now*, a few dozen cells. The list is **the ranking** — *what matched*, all of
-  it. Different scopes, different questions, and neither answers the other's.
-  That is what defuses the "two landmarks holding the same rooms" objection to
-  having both.
+  the crux. The map is **where you are standing** — one cursor, the cell under
+  the camera centre (§4.2). The list is **the ranking** — *what matched*, all of
+  it. Different questions, and neither answers the other's. That is what defuses
+  the "two landmarks holding the same rooms" objection to having both, and it is
+  why the two tab stops in §4.2b are not redundant.
 
 So: both live in the DOM at all times, both are reachable by Tab, both are named
 for the question they answer ("Library map — what is in view" / "Search results —
@@ -364,13 +371,24 @@ paid down by naming them sharply, and by the far-out rung in §3.1 — zoomed ou
 the grid collapses to a summary, so at most zooms the two are not competing for
 attention at all.
 
-**Where the toggle idea does belong: the canvas, for everybody.** A dense view —
-*show me only the matches, packed* — is a good feature on its own merits, for
-sighted users too, and it is `contentRatio: 1` plus a button. If the ratio slider
-is becoming a dev-only control (§6.1), dense mode is arguably the production-
-facing thing that should replace it. Build it because it is worth building; do
-not build it as an accessibility accommodation, because then the accessible
-interface owns a map of its own and we are back to two things to keep in sync.
+**Where the toggle idea does belong: the canvas, for everybody. Settled.** A
+dense view — *show me only the matches, packed* — is a real feature on its own
+merits, fully functional for sighted users, on a deliberate toggle. It is
+`contentRatio: 1` plus a button, and if the ratio slider is becoming a dev-only
+control (§6.1) it is the production-facing thing that should replace it.
+
+It also earns its place thematically rather than merely technically, which is
+the strongest argument for it: the project is about what happens when you gain
+the capacity to sieve out the noise and keep only the iterations that hold
+meaning. A control that drops the wallpaper and leaves the corpus *is* that
+sieve, made operable. Deciding the grid is getting in the way of the content is
+a legitimate reading of the work, not an accommodation for people who cannot see
+it.
+
+Which is precisely why it must not be built as an accessibility feature. Ship it
+because it is worth shipping; the moment it exists to serve screen readers, the
+accessible interface owns a map of its own and there are two things to keep in
+sync again.
 
 ---
 
@@ -378,49 +396,143 @@ interface owns a map of its own and we are back to two things to keep in sync.
 
 ## 4. The decisions the proposal does not make
 
-### 4.1 Keyboard bindings
+### 4.1 The conflict, and why two of its three sides are the same side
 
-Nothing works until these exist. Proposed set, all overridable later:
+Three requirements that look like a triangle:
+
+1. Arrows pan and PgUp/PgDn zoom, as in any simulated 2D space.
+2. A screen reader user can move between rooms cleanly.
+3. No tens of thousands of DOM nodes.
+
+**1 and the grid mirror are not merely expensive together — they are mutually
+exclusive.** In browse mode (the default for NVDA and JAWS) the screen reader
+owns the arrow keys: they walk the virtual document and the page never sees
+them. A page gets raw arrows only when focus is in a form field, in a widget
+role that flips the reader into focus mode (`grid`, `listbox`, `tree`…), or
+inside `role="application"`. A browsable DOM grid needs browse mode; arrows that
+pan need focus mode. **No node budget buys both**, because the obstacle is not
+cost, it is that the two want opposite modes of the same reader.
+
+That resolves the triangle by collapsing it. §3.1's windowed `role="grid"` is
+**withdrawn** — not because 33,000 nodes is too many (it is), but because even
+33,000 free nodes would not deliver requirement 1. Once the map is an
+application region, the DOM's job changes completely: it is no longer a *map to
+explore*, it is a **readout of where you are** plus a **jump table for getting
+elsewhere**. And a readout needs one node, not one per cell.
+
+Requirement 3 stops being a constraint to manage and becomes a consequence.
+
+### 4.2 The cursor: the cell at the centre of the viewport
+
+**Panning *is* moving a cursor, if the cursor is what you are standing in front
+of.** When a sighted user pans, the thing that changed is which room is in the
+middle of the screen. That is exactly what a screen reader user needs announced
+— not "the camera moved 40 pixels" but "you are now at Room 42".
+
+So the cursor is the cell under the camera centre. It costs nothing to compute:
+camera `x`/`y` are already in world cells, so the cursor is
+`floor(cam.x), floor(cam.y)`, and `cameraAtCell`'s `+ 0.5` is the existing
+statement of the same convention. Three things fall out of it for free:
+
+- **The cursor is always on screen**, by construction. §4.2's old rule — *the
+  window must always contain the focused cell, or focus is stranded* — becomes
+  vacuous rather than something to enforce.
+- **A pointer pan and a keyboard pan produce the same cursor**, so a sighted
+  user and a screen reader user handing the laptop back and forth are looking at
+  the same place. There is no second notion of "where I am" to keep in step.
+- **One DOM node**, whose accessible name is `describeCell()` output and whose
+  contents are the current room's story and keyword chips. Move → update one
+  node's content and announce.
+
+**This inverts §4.2's original direction, deliberately.** The plan first had
+*focus authoritative, camera follows*, because focus was on a cell node among
+many. With one cursor, the camera leads and the cursor follows. The coupling
+requirement is unchanged — the camera and the announced position must never
+disagree — and the new direction is what makes arrows pan rather than step
+between grid cells.
+
+### 4.2a Bindings
 
 | key | in the map |
 | --- | --- |
-| arrows | move focus one cell; camera follows |
-| PgUp/PgDn, shift+arrows | move a screenful |
-| `+` / `-` | zoom, through `zoomBy` — the same fixed-point path the wheel uses |
-| Enter / Space | open the focused room's card |
-| Escape | close the card, restore focus to its cell |
-| Home | the centre room (the existing "centre" button's target) |
-| `/` | the search field, via the existing `goToSearch` — which already flies then focuses, and already handles the field being off screen |
+| arrows | pan one cell — the cursor moves with it, and is announced |
+| **ctrl/cmd + arrows** | jump to the **next room** in that direction, skipping wallpaper |
+| shift + arrows | pan a screenful |
+| PgUp / PgDn | zoom, through `zoomBy` — the same fixed-point path the wheel uses |
+| Home | the centre room; **ctrl + Home** the best match, via `cellOfRank(0)` |
+| Enter / Space | open the cursor's room card |
+| Escape | close the card, return to the map |
+| `/` | the search field, via the existing `goToSearch` |
+| `?` | what is near me — see below |
 
-`zoomBy` taking a factor is exactly right for this; do not grow a keyboard-
-specific zoom path beside it.
+**Ctrl+arrow is the answer to the wallpaper problem**, and it needs no
+explanation to anyone who has used a text editor: arrow is a character, ctrl +
+arrow is a word. Here arrow is a cell and ctrl + arrow is the next thing worth
+stopping at. It is a *movement*, not a mode, so nothing has to be toggled,
+remembered, or announced — and it is as useful to a sighted keyboard user
+skimming a sparse map as it is to a screen reader.
 
-### 4.2 Focus and camera: focus is authoritative
+`layout.rankOf(x, y)` makes finding it a walk of Map lookups along one axis,
+bounded by `boundaryRadius`. No new index.
 
-The hardest question here, and it must be settled before any code.
+**Announce briefly on move, in full on request.** Verbose-by-default is the
+classic mistake: "Room 42, rank 3 of 511" on arrival, and `?` for the
+surroundings — *"blank wall. Room 42 two east, Room 17 three north-west; the
+edge of the library is six west."* That is the screen-reader equivalent of
+peripheral vision, and without something like it, spatial navigation is blind
+groping. Cheap, for the same reason ctrl+arrow is: a bounded scan of
+`rankOf`.
 
-- **Keyboard focus moves the camera, instantly.** No `flyTo`. A 400 ms eased
-  flight between every arrow press is unusable, and it races: `cam.current` is
-  unchanged when `flyTo` returns, so a second arrow press mid-flight plans
-  against the old camera.
-- **A pointer pan does not move focus.** It re-windows the mirror and leaves
-  focus where it was.
-- **Therefore the window always includes the focused cell**, viewport or not.
-  A focused node that has been unmounted, or is inside an `aria-hidden` subtree,
-  is a real bug — focus lands nowhere and the reader is stranded. This is why
-  the windowing rule in §3.1 is a union rather than a viewport slice.
-- **The "centre" button moves focus too.** Anything that moves the camera
-  deliberately should move focus with it, or the two drift apart and the next
-  arrow press jumps the view back.
+### 4.2b What is actually in the DOM
+
+| | nodes |
+| --- | --- |
+| the map region (one tab stop, `role="application"`) | 1 |
+| the cursor: name, story, keyword chips | ~6 |
+| live regions (one polite, one assertive) | 2 |
+| the ranked listbox, windowed with `aria-setsize`/`aria-posinset` | ~50 |
+| the centre room's book buttons, only while the centre is on screen | 40 |
+| the panel | ~10 |
+| **worst case** | **~110** |
+
+Against roughly 33,000 for the mirrored board. The listbox is windowed for the
+same reason anything else is — 5,000 rooms is 5,000 options — and
+`aria-setsize` lets fifty mounted options still announce "3 of 5,000" honestly.
+
+**Two tab stops, and arrows mean whatever the focused one says they mean.**
+That is not a conflict to resolve; it is how every widget on the web already
+behaves. In the map, arrows pan. In the listbox, arrows move through the
+ranking. Choosing a room in the listbox moves the cursor and the camera, so the
+two readings stay coherent: the listbox is *jump to*, the map is *where I am*.
+
+**Scope `role="application"` to the map region and nowhere else.** Inside it,
+browse-mode reading is off and everything must arrive through focus and live
+regions — which is a real commitment, and the reason it must not creep onto the
+panel. The room card in particular has to open **outside** the application
+region, as an ordinary dialog, or its story cannot be read with the virtual
+cursor, which is the one thing a reader most wants to do with it.
+
+**And it must degrade to no arrows at all.** VoiceOver does not have the same
+browse/focus split, and a phone has no arrow keys whatsoever. Touch users get
+the DOM: the listbox, the cursor's contents, the centre books. That is the
+argument for the listbox being the load-bearing half and the spatial cursor
+being the part that makes the map *a map* — and for building them in that order
+(§5).
 
 ### 4.3 What a rearrangement does to focus
 
-Focus is on a **cell**, and a reorder changes which room is in that cell. Keep
-focus on the cell coordinate — it is stable, it is where the reader is standing
-— and announce the new occupant. Do not try to follow a room as it slides; the
-sliding-tile illusion moves whole lines and the room's identity travelling
-across the screen is precisely the fiction the animation maintains for the eye.
-Chasing it in the accessibility tree would be describing a fiction as fact.
+The cursor is a **cell**, and a reorder changes which room is in that cell. The
+cursor stays put — it is where the reader is standing, and the rearrangement
+parks the camera anyway — and the new occupant is announced. Do not try to
+follow a room as it slides; the sliding-tile illusion moves whole lines, and the
+room's identity travelling across the screen is precisely the fiction the
+animation maintains for the eye. Chasing it in the accessibility tree would be
+describing a fiction as fact.
+
+This is one place the cursor model is strictly simpler than the mirror would
+have been: there is no focused node to be unmounted, re-keyed or stranded when
+the board rebuilds under it. The camera did not move, so neither did the
+cursor.
 
 Also: under `prefers-reduced-motion`, skip the rearrangement entirely. **The
 code path already exists** — `board.js` returns null when a slide is impossible
@@ -448,27 +560,35 @@ worth having.
 architecture, and several are outright conformance failures today. Land first
 regardless of what follows.
 
-**Phase B — keyboard, and the centre books.** The bindings in §4.1, the focus
-rule in §4.2, the canvas focus ring, and the 40 centre books as real buttons
-(§3.3). This is the phase that converts the app from unusable-without-a-mouse to
-usable, and it delivers the main control surface. If only one phase ever lands,
-this is the one.
+**Phase B — `describeCell`, and the ranked listbox.** The pure naming module
+(§7), plus the windowed `listbox` (§3.2, §4.2b). This is now *before* the map's
+keyboard interface rather than after it, and the reason is §4.2b's last point:
+the listbox is the half that works with no arrow keys at all, which is every
+touch device and every VoiceOver user. It is also the half that needs no
+`role="application"` commitment, so it can ship and be lived with before
+anything riskier is built on top. Cheap — a list over data already in memory.
 
-**Phase C — `describeCell`, and the ranked reading.** The pure naming module
-(§7), plus the ranked `listbox` (§3.2, §3.7). Gives a screen reader the lossless
-channel — every room, in rank order, with keywords and story — before any grid
-mirror exists. Cheap, because it is a list over data already in memory, and it
-is the half of §3.7 that does not depend on the grid existing.
+**Phase C — the cursor, and the keyboard.** `role="application"` scoped to the
+map, the bindings in §4.2a, the cursor node, the live regions, ctrl+arrow's
+next-room walk, `?`, the boundary announcement, and the canvas focus ring. This
+is the phase that makes the map a map rather than a list, and the one to test
+with a real screen reader before believing any of it (§8 item 1).
 
-**Phase D — the windowed grid mirror.** §3.1: the two rungs, the hysteresis, the
-absolute row/column indices, the wallpaper runs, the boundary announcement. The
-largest and least certain piece, and deliberately last, because B and C between
-them already make the corpus reachable. If D turns out to be more machinery than
-it is worth, C is a complete answer and D is polish.
+**Phase D — the centre room's books.** The 40 spines as real buttons (§3.3).
+Independent of B and C — it is a control surface, not a navigation model — and
+placed last only because B and C are what make the corpus reachable at all. Move
+it earlier if the centre's controls matter more than the map's, which is a
+defensible reading.
 
 **Phase E — the sidecar's optional `alt`.** §3.5. Format change plus a fallback;
 depends on a corpus that carries the field, so it is gated on the generator
 rather than on anything here.
+
+The phase that used to be here and is gone: **the windowed grid mirror**. §4.1
+withdrew it. Most of its work was the machinery that no longer exists — the two
+rungs of node granularity, the absolute row/column indices, the wallpaper run
+collapsing, the "window must contain the focused cell" union. What it was *for*
+survives in Phase C at a fraction of the cost.
 
 ---
 
@@ -537,11 +657,14 @@ apply cleanly.
   one consumer (the grid, the results list, the card's label). This is the
   established split — `picking.js` and `centre.js` did the same thing for
   hit-testing.
-- The windowing function — `(bounds, focus, budget) → cells to mount` — is pure
-  arithmetic and carries the hysteresis. Assert that the focused cell is always
-  in the result, that the far-out rung engages before the node count runs away,
-  and that a zoom held near the threshold does not oscillate.
-- Wallpaper run-collapsing: a row of cells in, `aria-colspan` groups out.
+- The cursor arithmetic — `(cam) → cell`, and the granularity rung a zoom
+  selects. Both are pure. Assert that the cursor is the cell the renderer draws
+  at the centre of the frame (one statement of that fact, not two), and that a
+  zoom held near the rung threshold does not oscillate between announcement
+  kinds.
+- `nextRoom(layout, from, direction)` — ctrl+arrow's walk. Pure, bounded, and
+  the one piece of navigation with a right answer: it must skip wallpaper, stop
+  at the boundary, and never return the cell it started from.
 
 **In the browser, `smoke.e2e.mjs`:** tab order reaches the map in one stop and
 leaves it in one; arrows move focus and the camera follows; Enter opens the
@@ -553,7 +676,8 @@ each of these on purpose once and confirm it fails.
 §6 automatically, which matters precisely because tier-3 semantics are invisible
 and rot unwatched (§3.6). It is a devDependency used only by the browser suite,
 so `npm test` stays what it is — a second of `node --test` with no browser and no
-network. Lands with Phase A, since Phase A is what gives it something to assert.
+network. Lands with Phase A, since Phase A is what first gives it something to
+assert.
 
 **And e2e is a merge gate now**, which is what makes any of this load-bearing: a
 keyboard interface that CI never drives is a keyboard interface nobody knows is
@@ -577,29 +701,39 @@ follows it.
 
 ## 8. Still open
 
-1. **Is the grid mirror worth building at all?** Phase C's ranked reading is the
-   lossless channel; Phase D is the *experience*, and it is most of the work
-   here. §3.7 argues both should exist because they answer different questions —
-   but that argument is made from a chair, and the honest version of this
-   question needs a real screen reader user driving a real corpus.
-2. **What the far-out rung should say.** "1,664 walls, 38 rooms" is a
-   placeholder. The useful summary is probably about the gradient — how
-   concentrated the current search is — not about counts.
+1. **Does `role="application"` survive contact with a real screen reader?** The
+   whole cursor model rests on it: scoped to the map, arrows reach the page and
+   the cursor works; if a reader in the wild does not honour it, arrows never
+   arrive and Phase C is inert. This is the single highest-risk assumption in
+   this document and it cannot be settled by argument — it needs NVDA, JAWS and
+   VoiceOver, in that order of doubt. Phase B is ordered first precisely so
+   there is something usable if the answer is bad.
+2. **What the far-out announcement should say.** "the far field; nothing ranked
+   within four cells" is a placeholder. The useful summary is probably about the
+   gradient — how concentrated the current search is — not about counts.
 3. **Whether the boundary should be a hard stop for the keyboard.** Pan
-   resistance is analogue and a key press is not. Either arrows stop at the
-   boundary (crisp, but the map really is infinite) or they cross it and the
+   resistance is analogue and a key press is not. Either panning stops at the
+   boundary (crisp, but the map really is infinite) or it crosses and the
    announcement carries the change (honest, but nothing out there is worth
    arrowing through).
-4. **Focus during a rearrangement.** §4.3 keeps focus on the cell, but the cell
-   is being animated for a second-odd. Whether the announcement waits for the
-   animation to land or fires immediately is a real choice, and the answer is
-   probably "fires immediately, because the animation is not for this reader".
-5. **Does the ranked reading survive a 5,000-room corpus?** It is a listbox over
-   every ranked room. It will want its own windowing, which is the same problem
-   as §3.1 with none of the spatial complications — and `aria-setsize` lets a
-   windowed listbox still announce "3 of 5,000" honestly.
-6. **Does a dense view (`contentRatio: 1`) want to ship to everyone?** §3.7 says
-   it is a good feature on its own merits and a plausible production replacement
-   for the ratio slider, but that is a product call and not an accessibility
-   one. Worth keeping the two decisions apart so neither is made as a side
-   effect of the other.
+4. **When the rearrangement announcement fires.** §4.3 keeps the cursor still,
+   but the cell under it is animated for a second-odd. Whether the announcement
+   waits for the animation to land or fires immediately is a real choice, and
+   the answer is probably "fires immediately, because the animation is not for
+   this reader".
+5. **How far should ctrl+arrow look before giving up?** It walks `rankOf` along
+   an axis to the boundary, which is nothing at 27 rooms and a 200-cell walk at
+   the far edge of a full corpus. Bounded per keypress, almost certainly, but
+   the bound is a feel question: too short and the key does nothing in the far
+   field, too long and one press crosses half the library.
+6. **Does the cursor want a visible twin for sighted keyboard users?** §3.6
+   proposes drawing its ring on the canvas, which doubles as a desync detector.
+   But the cursor is *always* the centre cell, so a permanent reticle in the
+   middle of the screen is a strong visual choice to make on accessibility's
+   behalf. Perhaps it appears only once a key is pressed.
+7. **Whether the dense view and this plan should share any code.** §3.7 defers
+   the dense/linear view as its own subproject and argues it must not be built
+   as an accessibility feature. The thing to watch when it does get built is
+   `describeCell` — it is the one module both would want, and it is the one
+   module that is safe to share, because it names rooms rather than arranging
+   them.
