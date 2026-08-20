@@ -56,7 +56,10 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
    *   the slide renderer, which never pass it, exercise no text compositing.
    * @returns {object} what the frame did, for the HUD and for tests
    */
-  function draw({ ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null }) {
+  function draw({
+    ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
+    cursor = null,
+  }) {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -135,6 +138,20 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
       for (const id of visible) cache.prefetch(id, coarser);
 
     const cells = (bounds.x1 - bounds.x0 + 1) * (bounds.y1 - bounds.y0 + 1);
+    // The keyboard cursor's ring - drawn LAST, over everything, and only once
+    // the reader has actually used a keyboard (the caller gates `cursor` on
+    // that; a permanent reticle in the middle of a page nobody has touched
+    // would be a strong visual choice made on nobody's behalf). Doubles as a
+    // desync detector: if this ring is ever on the wrong cell, that is visible
+    // to every sighted reader, not only to the one it would otherwise mislead.
+    if (cursor && cursor.x >= bounds.x0 && cursor.x <= bounds.x1
+      && cursor.y >= bounds.y0 && cursor.y <= bounds.y1) {
+      const [sx, sy] = toScreen(cursor.x, cursor.y);
+      ctx.strokeStyle = '#e8e0d2';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(sx + 2, sy + 2, cellPx.x - 4, cellPx.y - 4);
+    }
+
     return { cells, drawn, substituted, blank, level, bounds, zoom };
   }
 

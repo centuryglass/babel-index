@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { createLayout, shuffledOrder, cellDistance } from '../../map/ordering.js';
 import { joinMetadata } from '../../map/metadata.js';
 import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
 import { describeCell } from '../../map/describe.js';
+import { nextRoom } from '../../map/nextRoom.js';
 import {
   assignTitles,
   pickTags,
@@ -18,7 +19,7 @@ import {
   HISTORY_SLOT_COUNT,
   CENTRE_OPENING_RECT,
 } from './centre.js';
-import { CELL_ASPECT, pxPerCell, fitZoom } from './camera.js';
+import { CELL_ASPECT, pxPerCell, fitZoom, cursorCell, pickGranularity } from './camera.js';
 import { createTileCache, CENTRE, variantId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
@@ -275,6 +276,13 @@ function Library({ manifest }) {
   // latest logic, since the handler closes over `search` and `centreSlots`,
   // which are redefined below and on every render.
   const tapRef = useRef(() => {});
+
+  // `/` (below) needs `goToSearch`, which is declared further down and closes
+  // over state that changes often - the same "stable identity over a ref that
+  // always holds the latest logic" as `tapRef`, and for the same reason: the
+  // map's keyboard handler must not itself be rebuilt every time `goToSearch`
+  // is.
+  const goToSearchRef = useRef(() => {});
   const onTap = useCallback((px, py, camera) => tapRef.current(px, py, camera), []);
 
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
@@ -308,7 +316,7 @@ function Library({ manifest }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cam, flyTo } = useMapCamera({
+  const { cam, flyTo, panCells, jumpToCell, zoomStep } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
@@ -332,6 +340,205 @@ function Library({ manifest }) {
       return { box, usable: onScreen && !anim.current && isSearchBoxUsable(cellRect) };
     },
     [cam]
+  );
+
+  // --- the keyboard cursor ---------------------------------------------------
+  //
+  // The cell under the camera centre (accessibility-plan.md §4.2): panning IS
+  // moving this cursor, so it costs nothing to compute and needs no separate
+  // notion of "where the reader is" to keep in step with the camera. It is
+  // React state (not just a ref) because it drives JSX - the canvas's
+  // `aria-label` and its nested, touch-reachable story/chips - but the render
+  // loop reads it through `cursorRef` rather than as a dependency, for the same
+  // reason `cam` is a ref: a re-render per keypress is fine, a torn-down and
+  // rebuilt render EFFECT per keypress is not (see that effect's own comment
+  // on why it must not depend on anything that changes this often).
+  const [cursor, setCursor] = useState(() => cursorCell(cam.current));
+  const cursorRef = useRef(cursor);
+  // Whether ANY keyboard action has happened yet. Gates the ring in `render.js`
+  // - a permanent reticle in the middle of a page nobody has touched would be a
+  // strong visual choice made on nobody's behalf (accessibility-plan.md §3.6,
+  // §8 item 6). A ref, not state: it only needs to be true by the time the next
+  // frame reads it, not to trigger a render of its own.
+  const keyboardUsed = useRef(false);
+  useEffect(() => {
+    cursorRef.current = cursor;
+    requestDraw();
+  }, [cursor, requestDraw]);
+
+  // Carries the announcement's granularity across cursor moves, so a zoom held
+  // near the threshold does not flicker between naming a cell and naming a
+  // region (the same hysteresis `pickLevel` uses for the pyramid, applied to
+  // what is SAID rather than to what is drawn - §3.1).
+  const granularityRef = useRef('cell');
+
+  // Whether the cursor is past the ranked content's edge, tracked so the
+  // boundary is announced on the move that CROSSES it rather than on every
+  // press once already outside - the room name would otherwise be drowned by
+  // "edge of the library" on every single step through the far field.
+  const wasBeyondBoundary = useRef(false);
+
+  /**
+   * Move the cursor to a specific cell, build what a reader should hear about
+   * arriving there, and push it into the existing polite live region (Phase
+   * A's `.note` status span) - not just the canvas's `aria-label`, because an
+   * attribute change on an already-focused element is not reliably announced
+   * across screen readers, and this is the one mechanism every AT actually
+   * supports.
+   */
+  const announceCursorMove = useCallback(
+    (cell) => {
+      setCursor(cell);
+
+      const canvas = canvasRef.current;
+      const cellPxWidth = canvas ? pxPerCell(cam.current).x * (window.devicePixelRatio || 1) : 0;
+      granularityRef.current = pickGranularity(cellPxWidth, granularityRef.current);
+
+      const base =
+        granularityRef.current === 'region'
+          ? `the far field near (${cell.x}, ${cell.y}) - too far out to name a single room`
+          : describeCell(cell.x, cell.y, { layout, order, metadata }).name;
+
+      const beyond = cellDistance(cell.x, cell.y, CELL_ASPECT) > layout.boundaryRadius;
+      const crossed = beyond !== wasBeyondBoundary.current;
+      wasBeyondBoundary.current = beyond;
+
+      setStatus(
+        crossed && beyond
+          ? `${base} - edge of the library; beyond here every wall is blank`
+          : crossed
+            ? `${base} - back within the library`
+            : base
+      );
+    },
+    [cam, layout, order, metadata]
+  );
+
+  /** `?` - the screen-reader equivalent of peripheral vision (§4.2a). */
+  const announceSurroundings = useCallback(() => {
+    setStatus(describeSurroundings(layout, order, metadata, cursor));
+  }, [layout, order, metadata, cursor]);
+
+  // The cursor's own story and keyword chips, nested inside the canvas as real
+  // fallback content (accessibility-plan.md §4.2b, §4.4): "touch users get the
+  // DOM... the cursor's contents", which a keyboard-only Enter would not give
+  // them, since touch has nothing that corresponds to Enter. `tabIndex={-1}`
+  // on the chips keeps them out of the desktop Tab sequence - the map is still
+  // exactly one tab stop - while leaving them real, interactive elements a
+  // touch screen reader's swipe navigation reaches regardless of tabindex.
+  const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
+  const cursorEntry = cursorRoom.centre || cursorRoom.generic ? null : metadata?.[cursorRoom.id] ?? null;
+
+  // The canvas's own accessible name - what a reader hears landing on it for
+  // the FIRST time, before any move has run `announceCursorMove` and pushed
+  // anything into the live region. Always the plain per-cell name, independent
+  // of the region/cell granularity split that only matters once movement is
+  // in progress.
+  const cursorLabel = useMemo(
+    () => describeCell(cursor.x, cursor.y, { layout, order, metadata }).name,
+    [cursor, layout, order, metadata]
+  );
+
+  const onMapKeyDown = useCallback(
+    (e) => {
+      const dir = {
+        ArrowLeft: { dx: -1, dy: 0 }, ArrowRight: { dx: 1, dy: 0 },
+        ArrowUp: { dx: 0, dy: -1 }, ArrowDown: { dx: 0, dy: 1 },
+      }[e.key];
+
+      if (dir) {
+        e.preventDefault();
+        keyboardUsed.current = true;
+
+        if (e.ctrlKey || e.metaKey) {
+          const found = nextRoom(layout, cursor, dir);
+          if (found) {
+            jumpToCell(found.x, found.y);
+            announceCursorMove(found);
+          } else {
+            setStatus('nothing further in that direction');
+          }
+          return;
+        }
+
+        let { dx, dy } = dir;
+        if (e.shiftKey) {
+          // A screenful: however many cells actually fit the canvas on that
+          // axis, so the jump matches what the reader would otherwise have
+          // panned across by hand.
+          const canvas = canvasRef.current;
+          const per = canvas ? pxPerCell(cam.current) : { x: 1, y: 1 };
+          const cellsX = canvas ? Math.max(1, Math.round(canvas.clientWidth / per.x)) : 1;
+          const cellsY = canvas ? Math.max(1, Math.round(canvas.clientHeight / per.y)) : 1;
+          dx *= cellsX;
+          dy *= cellsY;
+        }
+        panCells(dx, dy);
+        announceCursorMove({ x: cursor.x + dx, y: cursor.y + dy });
+        return;
+      }
+
+      if (e.key === 'PageUp' || e.key === 'PageDown') {
+        e.preventDefault();
+        keyboardUsed.current = true;
+        zoomStep(e.key === 'PageUp' ? 1.6 : 1 / 1.6);
+        // The cursor cell itself does not move - `zoomStep` anchors on the
+        // viewport centre for exactly that reason - but the granularity might,
+        // so re-announce.
+        announceCursorMove(cursor);
+        return;
+      }
+
+      if (e.key === 'Home') {
+        e.preventDefault();
+        keyboardUsed.current = true;
+        if (e.ctrlKey || e.metaKey) {
+          const best = layout.cellOfRank(0);
+          if (!best) {
+            setStatus('no ranked rooms to jump to');
+            return;
+          }
+          flyTo(best.x, best.y, config.camera.defaultZoom).then(
+            (landed) => landed && announceCursorMove(best)
+          );
+        } else {
+          flyTo(0, 0, config.camera.defaultZoom).then(
+            (landed) => landed && announceCursorMove({ x: 0, y: 0 })
+          );
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        // Opening a card over the wallpaper would make the gesture read as
+        // broken rather than as empty - the same rule `picking.js` states for
+        // a click, applied here to a keypress.
+        const at = layout.roomAt(cursor.x, cursor.y, order);
+        if (at.centre || at.generic) return;
+        e.preventDefault();
+        const canvas = canvasRef.current;
+        const at2 = canvas
+          ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
+          : { x: 0, y: 0 };
+        setCard({ id: at.id, rank: at.rank, x: cursor.x, y: cursor.y, at: at2 });
+        return;
+      }
+
+      if (e.key === '/') {
+        e.preventDefault();
+        goToSearchRef.current();
+        return;
+      }
+
+      if (e.key === '?') {
+        e.preventDefault();
+        announceSurroundings();
+      }
+    },
+    [
+      cursor, layout, order, panCells, jumpToCell, zoomStep, flyTo, config,
+      announceCursorMove, announceSurroundings, cam,
+    ]
   );
 
   // --- rendering -----------------------------------------------------------
@@ -396,6 +603,7 @@ function Library({ manifest }) {
           : renderer.draw({
               ctx, width: w, height: h, dpr, cam: cam.current,
               layout: showing.layout, order: showing.order, centreSlots,
+              cursor: keyboardUsed.current ? cursorRef.current : null,
             });
 
       const hud = document.getElementById('hud');
@@ -630,6 +838,7 @@ function Library({ manifest }) {
     const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
     if (landed) input.focus();
   }, [flyTo, opening, searchBoxState]);
+  goToSearchRef.current = goToSearch;
 
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
@@ -703,14 +912,38 @@ function Library({ manifest }) {
   return (
     <>
       {/*
-        Named rather than hidden, for now. Once the map grows its cursor and
-        live regions (accessibility-plan.md phase C) the canvas becomes
-        `aria-hidden` and the DOM carries everything - but until then this is
-        the entire application, and an unnamed graphic is the one thing it must
-        not be. `role="img"` is honest about what it currently offers: a picture
-        you cannot yet navigate.
+        `role="application"`, scoped to exactly this element and nowhere else
+        (accessibility-plan.md §4.2b): inside it, a screen reader's own browse-
+        mode reading turns off and arrow keys reach the page instead, which is
+        what lets them pan. That trade must not creep onto the panel, which is
+        why this is the only application region in the document.
+
+        One tab stop for the entire map: `tabIndex={0}` here and nothing else
+        keyboard-reachable at the top level of this subtree, so Tab always
+        leaves the map in one press. The chips nested below are `tabIndex={-1}`
+        for exactly that reason - real, touch-reachable elements that do not
+        lengthen the desktop tab sequence.
+
+        `aria-label` is the STATIC name - what a reader hears arriving here for
+        the first time. Everything after that arrives through the polite live
+        region `announceCursorMove` writes to (`status`, below), because an
+        attribute change on an already-focused element is not reliably
+        announced across screen readers on its own.
       */}
-      <canvas ref={canvasRef} role="img" aria-label="The library map — a pannable grid of shelved walls" />
+      <canvas
+        ref={canvasRef}
+        role="application"
+        tabIndex={0}
+        aria-label={cursorLabel}
+        onKeyDown={onMapKeyDown}
+      >
+        {cursorEntry?.story && <p>{cursorEntry.story}</p>}
+        {cursorEntry?.keywords?.map((k) => (
+          <button key={k.text} type="button" tabIndex={-1} onClick={() => searchKeyword(k.text)}>
+            {k.text}
+          </button>
+        ))}
+      </canvas>
       {/*
         The live search field, on the centre tile itself rather than in the
         panel. Always mounted - Playwright's `inputValue()` and React's
@@ -1030,6 +1263,46 @@ function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
  * were available - a corpus full of keywords that none of them matched should
  * not claim the ranking was keyword-driven.
  */
+/**
+ * `?` - the screen-reader equivalent of peripheral vision
+ * (accessibility-plan.md §4.2a): what a sighted reader gets for free by
+ * glancing at the screen, on request rather than on every move, because
+ * "verbose by default" is the classic live-region mistake.
+ *
+ * Sentence construction over already-tested primitives (`nextRoom`,
+ * `cellDistance`) rather than a new pure module of its own - the same kind of
+ * job `describeSignals` above does for a search. Simplified from the plan's
+ * own example on purpose: four cardinal directions via straight-line
+ * `nextRoom` walks, not eight - a true diagonal nearest-room search is more
+ * geometry than a `?` press needs to earn its keep.
+ */
+function describeSurroundings(layout, order, metadata, cursor) {
+  const here = describeCell(cursor.x, cursor.y, { layout, order, metadata }).name;
+
+  const nearby = [
+    ['east', { dx: 1, dy: 0 }],
+    ['west', { dx: -1, dy: 0 }],
+    ['south', { dx: 0, dy: 1 }],
+    ['north', { dx: 0, dy: -1 }],
+  ]
+    .map(([label, dir]) => {
+      const found = nextRoom(layout, cursor, dir);
+      if (!found) return null;
+      const steps = Math.abs(found.x - cursor.x) + Math.abs(found.y - cursor.y);
+      const id = layout.roomAt(found.x, found.y, order).id;
+      return `Room ${id} ${steps} ${label}`;
+    })
+    .filter(Boolean);
+
+  const edge = Math.max(0, layout.boundaryRadius - cellDistance(cursor.x, cursor.y, CELL_ASPECT));
+
+  return [
+    here,
+    nearby.length ? nearby.join('; ') : 'nothing else ranked nearby',
+    `the edge of the library is about ${Math.round(edge)} away`,
+  ].join('. ');
+}
+
 function describeSignals({ clip, keyword, story }, hasText) {
   const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
   // Nothing matched and no CLIP means every score is zero, so the sort falls

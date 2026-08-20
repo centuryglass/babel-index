@@ -14,15 +14,23 @@ import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.js';
 function fakeCtx() {
   const drawn = [];
   const fills = [];
+  const strokes = [];
   return {
     drawn,
     fills,
+    strokes,
     set fillStyle(v) { this._fill = v; },
     get fillStyle() { return this._fill; },
     strokeStyle: null, lineWidth: 0, font: null,
     drawImage: (img, x, y, w, h) => drawn.push({ img, x, y, w, h }),
     fillRect: (x, y, w, h) => fills.push({ x, y, w, h }),
-    strokeRect: () => {},
+    // A regular function, not an arrow: `this` has to bind to the ctx object
+    // itself (the caller `ctx.strokeRect(...)`) to read the strokeStyle that
+    // was set just before the call, and an arrow function here would close
+    // over the module's `this` instead and read `undefined` every time.
+    strokeRect(x, y, w, h) {
+      strokes.push({ x, y, w, h, colour: this.strokeStyle });
+    },
     fillText: () => {},
   };
 }
@@ -262,4 +270,36 @@ test('the renderer never assumes a square cell', () => {
     Math.abs(drawnAspect - BASE_TILE.h / BASE_TILE.w) < 0.25,
     `cells came out at aspect ${drawnAspect.toFixed(2)}, not ${(BASE_TILE.h / BASE_TILE.w).toFixed(2)}`
   );
+});
+
+test('the keyboard cursor draws a ring only when passed, and only on screen', () => {
+  // `chrome: false` isolates the cursor's ring from the centre room's own
+  // marker - at a 1600x900 screen and this zoom the origin is easily still in
+  // view of a room a couple of cells out, and chrome strokes it unconditionally.
+  const w = world();
+  const slot = w.layout.slots[0];
+  const cam = { x: slot.x + 0.5, y: slot.y + 0.5, zoom: 220 };
+
+  const ctx = fakeCtx();
+  w.renderer.draw({
+    ctx, width: 1600, height: 900, dpr: 1,
+    cam, layout: w.layout, order: w.order, chrome: false,
+    cursor: { x: slot.x, y: slot.y },
+  });
+  assert.equal(ctx.strokes.length, 1, 'a cursor on screen must draw exactly one ring');
+
+  const noCursor = fakeCtx();
+  w.renderer.draw({
+    ctx: noCursor, width: 1600, height: 900, dpr: 1,
+    cam, layout: w.layout, order: w.order, chrome: false,
+  });
+  assert.equal(noCursor.strokes.length, 0, 'no cursor argument must draw no ring at all');
+
+  const offscreen = fakeCtx();
+  w.renderer.draw({
+    ctx: offscreen, width: 1600, height: 900, dpr: 1,
+    cam, layout: w.layout, order: w.order, chrome: false,
+    cursor: { x: slot.x + 10000, y: slot.y + 10000 },
+  });
+  assert.equal(offscreen.strokes.length, 0, 'a cursor far off screen must not be drawn');
 });
