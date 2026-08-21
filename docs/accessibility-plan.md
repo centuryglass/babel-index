@@ -900,11 +900,13 @@ still fails when the tiles genuinely never arrive. Expect the keyboard tests to
 have the same shape of hazard: a focus move is asynchronous, and a camera
 follows it.
 
-**Phase C confirmed the prediction.** `zoomStep` is instant - no flight, no
-promise - but "instant" still means "on the next animation frame," not "before
-`page.keyboard.press` returns": a test reading the HUD immediately after
-PageUp raced that frame and read the stale zoom about one run in four. Fixed
-by polling for the change, same discipline as the pyramid fix. Not every new
+**Phase C confirmed the prediction.** Keyboard moves were instant at the time -
+no flight, no promise - but "instant" still meant "on the next animation
+frame," not "before `page.keyboard.press` returns": a test reading the HUD
+immediately after PageUp raced that frame and read the stale zoom about one
+run in four. Fixed by polling for the change, same discipline as the pyramid
+fix. (Those moves ease now, which only widens the window the poll was already
+needed for.) Not every new
 read had the same exposure - the live region's text comes from a React state
 commit, not a `requestAnimationFrame` callback, and empirically never raced
 across a dozen runs - but the HUD specifically, wherever a keyboard test

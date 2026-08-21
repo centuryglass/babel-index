@@ -1716,7 +1716,11 @@ corpus:
    The map now has a real keyboard interface: a cursor at the cell under the
    camera centre, arrow keys that pan it, ctrl+arrow that jumps room to room,
    Enter/Escape/Home/PgUp/PgDn/`/`/`?`, a live region that announces moves, and
-   a visible ring once a key has been pressed. **Not yet done**, and not to be
+   a visible ring once a key has been pressed. Keyboard moves ease rather than
+   snap (`camera.keyboardMoveMs`), are damped by the same pan resistance a drag
+   feels so a held key cannot outrun what a hand can reach, and land
+   cell-centred in bounds so a trip past the boundary cannot leave the map
+   permanently off-grid. **Not yet done**, and not to be
    read as finished: nobody has run this against a real screen reader (the
    plan's stated top risk, unchanged), and a rearrangement does not announce
    its new occupant at all (accessibility-plan.md §8 item 4 — written up in §4.3
