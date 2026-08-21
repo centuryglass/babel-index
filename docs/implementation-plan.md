@@ -1711,13 +1711,53 @@ corpus:
    Lands naturally alongside item 1 (base assets earn a pyramid); the opening cap
    at native width in `main.jsx` can then rise. Cosmetic backdrop polish — gate on
    whether the blur past 1x actually bothers a reader before investing.
-5. **Accessibility: a secondary, non-canvas interface to the corpus.** The whole
-   map is a single canvas — no DOM per room, book titles are painted pixels, and
-   picking resolves to a cell — which is a dead end for screen readers, keyboard
-   navigation, copy/paste and reduced-input use. Accommodating this well is not a
-   tweak to the canvas but likely a *parallel* interface over the same dataset (a
-   navigable list/search view of rooms, keywords and stories), reachable and
-   synchronised with the map. **Needs its own planning session** — it touches
-   data shape, routing and how the two interfaces share state — so this is a
-   placeholder to discuss, not a scoped task. Consult `docs/design-history.md`
-   before re-treading the "it's all one canvas" decision.
+5. **Accessibility: a keyboard interface and an accessible reading of the map.**
+   **Phases A, B and C landed — see [`accessibility-plan.md`](accessibility-plan.md).**
+   The map now has a real keyboard interface: a cursor at the cell under the
+   camera centre, arrow keys that pan it, ctrl+arrow that jumps room to room,
+   Enter/Escape/Home/PgUp/PgDn/`/`/`?`, a live region that announces moves, and
+   a visible ring once a key has been pressed. Keyboard moves ease rather than
+   snap (`camera.keyboardMoveMs`), are damped by the same pan resistance a drag
+   feels so a held key cannot outrun what a hand can reach, and land
+   cell-centred in bounds so a trip past the boundary cannot leave the map
+   permanently off-grid. **Not yet done**, and not to be
+   read as finished: nobody has run this against a real screen reader (the
+   plan's stated top risk, unchanged), and a rearrangement does not announce
+   its new occupant at all (accessibility-plan.md §8 item 4 — written up in §4.3
+   as settled design, but never wired). What it settled going in, in short:
+
+   - It is **not** a parallel interface. One DOM tree with two orderings over it
+     — the map's cursor and a ranked listbox — sharing the handlers and the
+     naming module, so there is no second view to keep in sync.
+   - **There is no DOM grid at all — the map is a cursor, not a mirror.** A
+     browsable DOM grid needs the screen reader in browse mode; arrow keys that
+     pan need focus mode. No node budget buys both, so a single cursor at the
+     cell under the camera centre replaces the mirror — about 110 nodes against
+     ~33,000 for the board. Arrows pan, the cursor rides along and is announced,
+     and ctrl+arrow jumps to the next room the way ctrl+arrow jumps a word.
+   - **The ranked listbox ships first, and has.** `describeCell` (in
+     `packages/map`) names both the search results list and the room card; the
+     list is a plain `<ul>` of buttons, not `role="listbox"` — arrow-key roving
+     needs the keyboard model phase C brings, and a listbox without it is a
+     broken widget. It is the half that works with no arrow keys at all —
+     every touch device, every VoiceOver user — and it needs no
+     `role="application"` commitment, so it can be lived with before anything
+     riskier is built on it. Whether that role survives contact with a real
+     screen reader is the plan's stated highest-risk assumption.
+   - **Alt text is not generated at runtime.** Every described room already
+     carries keywords and a story; a short description is an optional `alt` in
+     the sidecar, captioned once offline with the room's own story passed in as
+     context so the two accounts cannot diverge.
+   - **A dense/linear view is deferred as its own subproject** — a real toggle
+     for everyone rather than an accessibility path. Worth knowing before anyone
+     builds it: a wallpaper-free map is already `contentRatio: 1`, a runtime
+     parameter rather than a second layout.
+
+   Phase A of that plan is a set of existing conformance bugs — page zoom
+   disabled by the viewport meta, a card unreachable by keyboard and unmanaged
+   once open, reduced motion honoured for the camera flight but not for the
+   rearrangement — each small and isolated. (The unlabelled panel sliders are
+   already fixed; they are becoming a dev-only control, so that was tidiness
+   rather than an investment.) Consult `docs/design-history.md` before
+   re-treading the "it's all one canvas" decision, or the alternatives that plan
+   rejected.

@@ -5,6 +5,8 @@ import {
   clampZoom,
   flightAt,
   glideStep,
+  glideToRest,
+  panByCells,
   panByPixels,
   zoomAt,
   zoomBy,
@@ -66,8 +68,12 @@ const PRESS_SLOP_PX = 8;
  *
  * Read per flight rather than once: the setting can change while a page is
  * open, and this costs nothing next to the flight it is deciding about.
+ *
+ * Exported because the rearrangement asks the same question in `main.jsx`, and
+ * a second `matchMedia` call there would be a second statement of one fact -
+ * the two would drift the first time the query string needed changing.
  */
-const reducedMotion = () =>
+export const prefersReducedMotion = () =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
@@ -409,7 +415,14 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
         if (done) endFlight(true);
         onChange?.();
       } else if (!drag.current) {
-        const next = glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
+        // Reduced motion asks for the rest point without the frames it takes
+        // to ease there - `glideToRest` runs the same physics to convergence
+        // instead of inventing a different destination, so motion-on and
+        // motion-off agree on WHERE, differing only in whether the trip is
+        // seen.
+        const next = prefersReducedMotion()
+          ? glideToRest(cam.current, resistanceAt)
+          : glideStep(cam.current, resistanceAt(cam.current.x, cam.current.y));
         if (next !== cam.current) {
           cam.current = next;
           onChange?.();
@@ -438,6 +451,14 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * Reduced motion overrides it rather than being overridden by it: someone who
    * has asked for less motion is not asking about this map in particular.
    *
+   * `ms` overrides the configured duration for a single call, which is what
+   * lets the keyboard's short nudges (accessibility-plan.md §4.2a - one arrow
+   * press, a ctrl+arrow jump, a PgUp/PgDn zoom step) share every mechanic a
+   * "fly home" already has - the interrupt-on-a-new-flight below, the landing
+   * promise, `prefers-reduced-motion` collapsing it to zero - rather than a
+   * second, parallel implementation of "ease the camera." Omit it for the
+   * ordinary configured flight.
+   *
    * Returns a promise for the landing - true if it arrived, false if the reader
    * took the map first. Callers that only want the camera moved can ignore it;
    * the one that cannot is the rearrangement, which has to know both WHEN the
@@ -445,18 +466,77 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * WHETHER it stopped where it was aimed, because a reader who has grabbed the
    * map is not asking to watch the library rebuild itself.
    */
-  const flyTo = useCallback(
-    (x, y, zoom) => {
-      const to = cameraAtCell(cam.current, x, y, zoom);
-      const ms = reducedMotion() ? 0 : camera.flightMs;
+  /**
+   * Start an eased flight to a whole target camera - the shared half of
+   * `flyTo` and `nudgeBy`, so the reduced-motion collapse and the
+   * interrupt-the-previous-flight rule are stated once rather than twice.
+   *
+   * The flight begins at the LIVE camera (so a second flight during a first
+   * picks up smoothly from wherever it had got to) even when the caller
+   * computed `to` from `flightTarget()`; those are deliberately different
+   * questions - where the camera IS versus where it was last told to go.
+   */
+  const beginFlightTo = useCallback(
+    (to, ms) => {
+      const duration = prefersReducedMotion() ? 0 : ms ?? camera.flightMs;
       // A second flight replaces the first, and the first did not arrive.
       endFlight(false);
       return new Promise((settle) => {
-        flight.current = { ...beginFlight(cam.current, to, performance.now(), ms), settle };
+        flight.current = { ...beginFlight(cam.current, to, performance.now(), duration), settle };
       });
     },
     [camera.flightMs, endFlight]
   );
 
-  return { cam, flyTo };
+  const flyTo = useCallback(
+    (x, y, zoom, { ms } = {}) => beginFlightTo(cameraAtCell(cam.current, x, y, zoom), ms),
+    [beginFlightTo]
+  );
+
+  /**
+   * Move by a cell delta, damped by the map's resistance - the keyboard's
+   * equivalent of a pointer drag. Same resistance, deliberately DIFFERENT
+   * curve: see `panByCells` in `camera.js` for why a drag can afford a floor
+   * and a held key cannot.
+   *
+   * Without this the keyboard had no resistance at all: a held arrow key
+   * sailed off into the far field at full speed, somewhere a hand on the
+   * mouse cannot practically reach, and only snapped back on release. The
+   * glide alone could not fix that - it pulls back proportionally to distance
+   * but does nothing to the outbound step, so a fast enough key repeat simply
+   * outruns it.
+   *
+   * Damping reads the resistance at `flightTarget()`, not at `cam.current`:
+   * mid-flight the latter is the interpolated position, so a key repeat would
+   * sample a resistance from behind where it has already been told to go and
+   * damp too little. It is also what makes repeated presses compound rather
+   * than collapse, exactly as in `flyTo`'s callers.
+   */
+  const nudgeBy = useCallback(
+    (dx, dy, { ms } = {}) => {
+      const from = flight.current?.to ?? cam.current;
+      const to = panByCells(from, dx, dy, resistanceAt(from.x, from.y));
+      return beginFlightTo(to, ms);
+    },
+    [beginFlightTo, resistanceAt]
+  );
+
+  /**
+   * The camera a NEW keyboard move should chain off, rather than teleporting
+   * from wherever an in-progress flight currently is.
+   *
+   * `cam.current` is the INTERPOLATED position - correct for drawing a frame,
+   * wrong for planning the next flight. `flyTo` itself never mutates
+   * `cam.current` (only the rAF loop does, as a flight progresses), so a
+   * second keyboard press arriving before that loop has ticked even once - two
+   * PgDn presses back to back is the case that surfaced this - would compute
+   * ITS target from the same pre-flight zoom the first press already started
+   * leaving, and the two presses would collapse into one. The already-known,
+   * fully-resolved target of a flight in progress (`flight.current.to`) is
+   * what a chained press should build on instead; idle, this is just
+   * `cam.current`.
+   */
+  const flightTarget = useCallback(() => flight.current?.to ?? cam.current, []);
+
+  return { cam, flyTo, nudgeBy, flightTarget };
 }
