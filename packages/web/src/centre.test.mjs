@@ -15,6 +15,11 @@ import {
   bookAtPoint,
   assignTitles,
   pickTags,
+  bookNeighbour,
+  describeBook,
+  areSpinesLegible,
+  overlapsViewport,
+  BOOK_RECTS,
 } from './centre.js';
 import { CELL_ASPECT } from './camera.js';
 
@@ -198,4 +203,88 @@ test('pickTags is a deduped, stable, bounded selection of corpus keywords', () =
   assert.deepEqual([...a].sort(), ['art nouveau', 'collodion', 'copper']);
   assert.ok(a.length <= BOOK_COUNT);
   assert.deepEqual(pickTags(null, 1), []);
+});
+
+// --- the shelf as a keyboard surface ---------------------------------------
+
+/** A wall where every book carries a title - the ordinary case. */
+const FULL = assignTitles({ tags: ['a', 'b', 'c'] });
+
+test('BOOK_RECTS is the flat wall in cell fractions, one rect per slot', () => {
+  assert.equal(BOOK_RECTS.length, BOOK_COUNT);
+  // Same numbers `bookScreenRects` scales, so the DOM overlay and the canvas
+  // cannot describe two different walls.
+  const cell = { x: 0, y: 0, w: 1, h: 1 };
+  const scaled = bookScreenRects(cell);
+  for (let i = 0; i < BOOK_COUNT; i++) {
+    assert.ok(Math.abs(scaled[i].x - BOOK_RECTS[i].x) < 1e-12);
+    assert.ok(Math.abs(scaled[i].h - BOOK_RECTS[i].h) < 1e-12);
+  }
+});
+
+test('left and right run the wall as one flat queue, and stop at its ends', () => {
+  assert.equal(bookNeighbour(0, { dx: 1 }, FULL), 1);
+  assert.equal(bookNeighbour(1, { dx: -1 }, FULL), 0);
+  // The ends hold rather than wrap: a wall that wrapped would put the last
+  // book one press left of the first, which is not what it looks like.
+  assert.equal(bookNeighbour(0, { dx: -1 }, FULL), 0);
+  assert.equal(bookNeighbour(BOOK_COUNT - 1, { dx: 1 }, FULL), BOOK_COUNT - 1);
+});
+
+test('right crosses a shelf end, because the wall is one queue', () => {
+  const firstShelf = GEO.shelves[0].books.length;
+  assert.equal(bookNeighbour(firstShelf - 1, { dx: 1 }, FULL), firstShelf);
+});
+
+test('up and down move a shelf, holding the column', () => {
+  const shelf0 = GEO.shelves[0].books.length;
+  const shelf1 = GEO.shelves[1].books.length;
+  assert.equal(bookNeighbour(2, { dy: 1 }, FULL), shelf0 + 2);
+  assert.equal(bookNeighbour(shelf0 + 2, { dy: -1 }, FULL), 2);
+  // And hold at the top and bottom of the wall.
+  assert.equal(bookNeighbour(0, { dy: -1 }, FULL), 0);
+  const lastRowStart = BOOK_COUNT - GEO.shelves[GEO.shelves.length - 1].books.length;
+  assert.equal(bookNeighbour(lastRowStart, { dy: 1 }, FULL), lastRowStart);
+  assert.ok(shelf1 > 0);
+});
+
+test('Home and End are the same walk, started outside the wall', () => {
+  assert.equal(bookNeighbour(-1, { dx: 1 }, FULL), 0);
+  assert.equal(bookNeighbour(BOOK_COUNT, { dx: -1 }, FULL), BOOK_COUNT - 1);
+});
+
+test('an untitled book is stepped over, not landed on', () => {
+  // Two searches and no keyword corpus: the front of the wall is lettered and
+  // the rest is blank, which is the only way a blank book happens at all.
+  const sparse = assignTitles({ history: ['one', 'two'], tags: [] });
+  assert.equal(sparse[2].text, '');
+  assert.equal(bookNeighbour(1, { dx: 1 }, sparse), 1, 'no titled book to the right');
+  assert.equal(bookNeighbour(BOOK_COUNT, { dx: -1 }, sparse), 1, 'End is the last TITLED book');
+  // And a shelf below with nothing on it does not swallow the press.
+  assert.equal(bookNeighbour(0, { dy: 1 }, sparse), 0);
+});
+
+test('a book says what it is as well as what it says', () => {
+  const wall = assignTitles({ history: ['brass'], tags: ['spiral staircase'] });
+  assert.match(describeBook(wall[0]), /^brass\b/);
+  assert.match(describeBook(wall[0]), /repeat/, 'a history book repeats its search');
+  assert.match(describeBook(wall[1]), /^spiral staircase\b/);
+  assert.match(describeBook(wall[1]), /search/, 'a tag book runs a new search');
+  // An override is its own name - it does not search, so it must not claim to.
+  assert.equal(describeBook({ kind: 'override', text: 'artist statement' }), 'artist statement');
+  assert.equal(describeBook({ kind: 'empty', text: '' }), '');
+});
+
+test('the buttons exist exactly while the titles are legible', () => {
+  // The gate is the SPINE's on-screen width, not the cell's, so it tracks the
+  // trace rather than a number restated here.
+  const spine = BOOK_RECTS[0].w;
+  assert.equal(areSpinesLegible({ x: 0, y: 0, w: 4 / spine, h: 100 }), false);
+  assert.equal(areSpinesLegible({ x: 0, y: 0, w: 6 / spine, h: 100 }), true);
+});
+
+test('overlapsViewport is an overlap, not containment', () => {
+  assert.equal(overlapsViewport({ x: -10, y: -10, w: 20, h: 20 }, 100, 100), true);
+  assert.equal(overlapsViewport({ x: 100, y: 0, w: 20, h: 20 }, 100, 100), false);
+  assert.equal(overlapsViewport({ x: 0, y: -30, w: 20, h: 20 }, 100, 100), false);
 });

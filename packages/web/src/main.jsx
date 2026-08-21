@@ -6,16 +6,22 @@ import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
-import { describeCell } from '../../map/describe.js';
+import { describeCell, describeArrangement } from '../../map/describe.js';
 import { nextRoom } from '../../map/nextRoom.js';
 import {
   assignTitles,
   pickTags,
   bookAtPoint,
+  bookNeighbour,
+  describeBook,
   centreCellRect,
   searchBoxScreenRect,
   isSearchBoxUsable,
   searchBoxAtPoint,
+  areSpinesLegible,
+  overlapsViewport,
+  BOOK_COUNT,
+  BOOK_RECTS,
   HISTORY_SLOT_COUNT,
   CENTRE_OPENING_RECT,
 } from './centre.js';
@@ -49,6 +55,11 @@ function Library({ manifest }) {
   // position is driven imperatively from the render loop below, the same way
   // the canvas itself is - see `positionSearchBox`.
   const searchFormRef = useRef(null);
+  // The book buttons' container - one absolutely-positioned box matching the
+  // centre cell, positioned imperatively from the render loop exactly as the
+  // search field is. The forty buttons inside it are laid out in percentages,
+  // so this is the only per-frame geometry the shelf costs.
+  const booksRef = useRef(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -126,6 +137,16 @@ function Library({ manifest }) {
     () => assignTitles({ history, tags, overrides: CENTRE_OVERRIDES }),
     [history, tags]
   );
+
+  // Which book on the shelf holds the wall's single tab stop.
+  //
+  // Roving tabindex, the ordinary toolbar pattern: forty buttons each in the
+  // tab sequence would put forty presses between the map and the panel, which
+  // is a tax on every keyboard user for a wall that is mostly a browsable
+  // index of keywords. One stop in, arrows within, Tab straight out - the same
+  // shape the map itself has (accessibility-plan.md §4.2b's "arrows mean
+  // whatever the focused thing says they mean").
+  const [bookFocus, setBookFocus] = useState(0);
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -207,6 +228,12 @@ function Library({ manifest }) {
   // the effect below. Slider drags change the layout too, and must not animate.
   const animateNext = useRef(false);
   const arrangement = useRef(null);
+  // What brought the next rearrangement about, in the search's own voice -
+  // handed to the announcement below rather than pushed into the live region
+  // where it is decided. A search resolves, the map rearranges, and the reader
+  // hears ONE sentence about both; two writes a few hundred milliseconds apart
+  // would be two interruptions describing one event.
+  const pendingNote = useRef('');
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
 
@@ -327,17 +354,31 @@ function Library({ manifest }) {
     onDebug,
   });
 
-  // Whether the live search field (on the centre tile) is currently on screen
-  // and large enough to use, and where it sits if so - the one computation
-  // both the render loop (to position and show/hide it) and the panel's
-  // search trigger (to decide whether to fly home first) need, so neither
-  // restates the other's notion of "usable".
-  const searchBoxState = useCallback(
+  // Where the centre tile is on screen, and whether each of the two overlays it
+  // carries - the live search field and the book buttons - is currently usable
+  // there. One computation, because both the render loop (to position and
+  // show/hide them) and the panel's search trigger (to decide whether to fly
+  // home first) need it and neither should restate the other's notion of
+  // "usable".
+  //
+  // A rearrangement disqualifies both: mid-slide the centre tile is drawn from
+  // the animation's own board at a camera this function knows nothing about, so
+  // an overlay placed from the live camera would sit over the wrong pixels.
+  const centreOverlay = useCallback(
     (w, h) => {
       const cellRect = centreCellRect(cam.current, { width: w, height: h });
       const box = searchBoxScreenRect(cellRect);
-      const onScreen = box.x + box.w > 0 && box.x < w && box.y + box.h > 0 && box.y < h;
-      return { box, usable: onScreen && !anim.current && isSearchBoxUsable(cellRect) };
+      const settled = !anim.current;
+      return {
+        cellRect,
+        box,
+        usable: settled && overlapsViewport(box, w, h) && isSearchBoxUsable(cellRect),
+        // The buttons exist exactly while the titles are legible, so tabbing
+        // into the shelf never reaches a book nobody can see named. Off-screen
+        // is the other half: a focus ring somewhere past the edge of the
+        // display is not a focus ring.
+        books: settled && overlapsViewport(cellRect, w, h) && areSpinesLegible(cellRect),
+      };
     },
     [cam]
   );
@@ -407,9 +448,15 @@ function Library({ manifest }) {
    * attribute change on an already-focused element is not reliably announced
    * across screen readers, and this is the one mechanism every AT actually
    * supports.
+   *
+   * `lead` is anything that happened to bring the cursor here - a search's
+   * signals, a rearrangement's outcome. It goes in FRONT of the cell's own
+   * name and inside the same live-region write, because two writes a moment
+   * apart are two interruptions of whatever the reader was listening to, and
+   * a polite region queues them rather than merging them.
    */
   const announceCursorMove = useCallback(
-    (cell) => {
+    (cell, lead = '') => {
       setCursor(cell);
 
       const canvas = canvasRef.current;
@@ -425,16 +472,42 @@ function Library({ manifest }) {
       const crossed = beyond !== wasBeyondBoundary.current;
       wasBeyondBoundary.current = beyond;
 
-      setStatus(
+      const said =
         crossed && beyond
           ? `${base} - edge of the library; beyond here every wall is blank`
           : crossed
             ? `${base} - back within the library`
-            : base
-      );
+            : base;
+
+      setStatus(lead ? `${lead}. ${said}` : said);
     },
     [cam, layout, order, metadata]
   );
+
+  /**
+   * What a reader hears when the library rearranges under them
+   * (accessibility-plan.md §4.3, §8 item 4).
+   *
+   * Three clauses, and each is a different question: what decided the ranking
+   * (the search's own note, if a search is what caused this), what the map now
+   * looks like as a whole, and what is under the cursor NOW. The third is the
+   * one §4.3 promises and Phase C never wired up - standing still while the
+   * library reorders around you and hearing nothing about what arrived is not
+   * an accessible rearrangement, whatever the animation is doing.
+   *
+   * Read after the camera has settled rather than before, so the cursor it
+   * names is the one the reader actually ends up at: an animated rearrangement
+   * parks the camera on the centre first, and saying the cell they left would
+   * be describing somewhere they are no longer standing.
+   */
+  const announceArrangement = useCallback(() => {
+    const note = pendingNote.current;
+    pendingNote.current = '';
+    announceCursorMove(
+      cursorNow(),
+      [note, describeArrangement(layout)].filter(Boolean).join('. ')
+    );
+  }, [announceCursorMove, cursorNow, layout]);
 
   /** `?` - the screen-reader equivalent of peripheral vision (§4.2a). */
   const announceSurroundings = useCallback(() => {
@@ -625,14 +698,30 @@ function Library({ manifest }) {
       // reason the camera itself is a ref: it moves on every pan, zoom and
       // flight, and a re-render per frame is not the architecture here.
       const searchEl = searchFormRef.current;
-      if (searchEl) {
-        const { box, usable } = searchBoxState(w, h);
-        searchEl.style.display = usable ? 'block' : 'none';
-        if (usable) {
-          searchEl.style.left = `${box.x}px`;
-          searchEl.style.top = `${box.y}px`;
-          searchEl.style.width = `${box.w}px`;
-          searchEl.style.height = `${box.h}px`;
+      const booksEl = booksRef.current;
+      if (searchEl || booksEl) {
+        const { box, usable, cellRect, books } = centreOverlay(w, h);
+        if (searchEl) {
+          searchEl.style.display = usable ? 'block' : 'none';
+          if (usable) {
+            searchEl.style.left = `${box.x}px`;
+            searchEl.style.top = `${box.y}px`;
+            searchEl.style.width = `${box.w}px`;
+            searchEl.style.height = `${box.h}px`;
+          }
+        }
+        // The whole shelf in ONE style write, not forty: the books are an
+        // affine map of the cell rect, so they sit inside this box in
+        // percentages and need no per-frame work of their own
+        // (accessibility-plan.md §3.3).
+        if (booksEl) {
+          booksEl.style.display = books ? 'block' : 'none';
+          if (books) {
+            booksEl.style.left = `${cellRect.x}px`;
+            booksEl.style.top = `${cellRect.y}px`;
+            booksEl.style.width = `${cellRect.w}px`;
+            booksEl.style.height = `${cellRect.h}px`;
+          }
         }
       }
 
@@ -712,7 +801,7 @@ function Library({ manifest }) {
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
     };
-  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots, searchBoxState]);
+  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay]);
 
   // --- the rearrangement animation -----------------------------------------
 
@@ -822,8 +911,13 @@ function Library({ manifest }) {
     animateNext.current = false;
     startRearrangement(previous, current).then((started) => {
       if (!started) requestDraw();
+      // Announce the arrangement this effect was for, and only if it is still
+      // the one on the map: `startRearrangement` reports true for a run that
+      // was superseded mid-flight as well as for one that got going, and the
+      // effect for the newer arrangement will announce that one itself.
+      if (arrangement.current === current) announceArrangement();
     });
-  }, [layout, order, startRearrangement, requestDraw]);
+  }, [layout, order, startRearrangement, requestDraw, announceArrangement]);
 
   // --- search --------------------------------------------------------------
   const search = async (term) => {
@@ -832,7 +926,7 @@ function Library({ manifest }) {
     animateNext.current = true;
     if (!term.trim()) {
       setResult(null);
-      setStatus('');
+      pendingNote.current = '';
       return;
     }
     // A real search is a history entry, and the frontmost book from now on. Done
@@ -859,13 +953,13 @@ function Library({ manifest }) {
         index: searchIndex,
         clipCertainty: { low: config.search.density.clipLow, high: config.search.density.clipHigh },
       });
+      pendingNote.current = describeSignals(signals, Boolean(searchIndex));
       setResult({ order, certainty });
-      setStatus(describeSignals(signals, Boolean(searchIndex)));
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
+      pendingNote.current = 'stub ranking — no embeddings and no keywords in this corpus';
       setResult({ order: res.order, certainty: null });
-      setStatus('stub ranking — no embeddings and no keywords in this corpus');
     }
   };
 
@@ -883,7 +977,7 @@ function Library({ manifest }) {
     const canvas = canvasRef.current;
     const input = searchFormRef.current?.querySelector('input');
     if (!canvas || !input) return;
-    if (searchBoxState(canvas.clientWidth, canvas.clientHeight).usable) {
+    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).usable) {
       input.focus();
       return;
     }
@@ -894,7 +988,7 @@ function Library({ manifest }) {
     // be cancelled here or the flight lands half a cell short on each axis.
     const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
     if (landed) input.focus();
-  }, [flyTo, opening, searchBoxState]);
+  }, [flyTo, opening, centreOverlay]);
   goToSearchRef.current = goToSearch;
 
   // A chip on the card is a live search: reading a room becomes a way of moving
@@ -934,9 +1028,52 @@ function Library({ manifest }) {
     void slot; // e.g. switch (slot.action) { case 'statement': ... }
   };
 
+  /**
+   * What book `i` does. ONE implementation, two entry points: a sighted click
+   * arrives through `onTap` -> `bookAtPoint` below, a keyboard Enter (and a
+   * screen reader's activate) through the button's own click. Two copies of
+   * "what does book i do" would drift, which is the whole reason this is not
+   * written inline in either.
+   *
+   * A history or tag book repeats its search; an override book runs its
+   * function; an untitled book does nothing, and has no button.
+   */
+  const onBook = (i) => {
+    const slot = centreSlots[i];
+    if (!slot) return;
+    if (slot.term) {
+      setQuery(slot.term);
+      search(slot.term);
+    } else if (slot.action) {
+      onOverride(slot);
+    }
+  };
+
+  // Arrows move within the shelf; Tab leaves it. Left and right run along the
+  // wall's flat queue across shelf ends, up and down move a shelf holding the
+  // column - `bookNeighbour` owns both, so what a press does is asserted
+  // without a browser. Home and End reuse it from outside the wall rather than
+  // being a second way to say "first" and "last".
+  const onBooksKeyDown = (e) => {
+    const dir = {
+      ArrowLeft: { dx: -1 }, ArrowRight: { dx: 1 },
+      ArrowUp: { dy: -1 }, ArrowDown: { dy: 1 },
+    }[e.key];
+    const next = dir
+      ? bookNeighbour(bookFocus, dir, centreSlots)
+      : e.key === 'Home'
+        ? bookNeighbour(-1, { dx: 1 }, centreSlots)
+        : e.key === 'End'
+          ? bookNeighbour(BOOK_COUNT, { dx: -1 }, centreSlots)
+          : null;
+    if (next === null) return;
+    e.preventDefault();
+    setBookFocus(next);
+    booksRef.current?.querySelector(`[data-book="${next}"]`)?.focus();
+  };
+
   // Selecting a book on the centre room. Off the centre cell or on an empty
-  // book, nothing happens - the tap is not otherwise claimed. A history or tag
-  // book repeats its search; an override book runs its function.
+  // book, nothing happens - the tap is not otherwise claimed.
   tapRef.current = (px, py, camera) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -955,15 +1092,7 @@ function Library({ manifest }) {
     }
 
     const slotIndex = bookAtPoint(px, py, cell);
-    if (slotIndex == null) return;
-    const slot = centreSlots[slotIndex];
-    if (!slot) return;
-    if (slot.term) {
-      setQuery(slot.term);
-      search(slot.term);
-    } else if (slot.action) {
-      onOverride(slot);
-    }
+    if (slotIndex != null) onBook(slotIndex);
   };
 
   return (
@@ -994,6 +1123,7 @@ function Library({ manifest }) {
         aria-label={cursorLabel}
         onKeyDown={onMapKeyDown}
       >
+        {cursorEntry?.alt && <p>{cursorEntry.alt}</p>}
         {cursorEntry?.story && <p>{cursorEntry.story}</p>}
         {cursorEntry?.keywords?.map((k) => (
           <button key={k.text} type="button" tabIndex={-1} onClick={() => searchKeyword(k.text)}>
@@ -1021,6 +1151,49 @@ function Library({ manifest }) {
           onChange={(e) => setQuery(e.target.value)}
         />
       </form>
+      {/*
+        The shelf, as a real control surface (accessibility-plan.md §3.3).
+        Until now the centre room's forty spines were painted pixels behind a
+        hit-test: the application's PRIMARY interface - search history, and a
+        browsable index of corpus keywords - reachable only by mouse or finger.
+        These are the same forty slots `assignTitles` already returns and
+        `composeSpines` already draws, mounted as buttons over the same rects.
+
+        Positioned by the render loop above, in one style write on this
+        container; the buttons inside are in percentages of it (BOOK_STYLES),
+        so a pan costs one assignment rather than forty. `display: none` in the
+        stylesheet is the pre-first-frame default, and the render loop takes it
+        over from there - the same arrangement (and the same "no style prop
+        here") as `.centre-search` above.
+
+        `pointer-events: none`, from the stylesheet, and that is deliberate:
+        the canvas keeps every gesture, so a pan that crosses the shelf still
+        pans. Focus is not a pointer API, so a keyboard reaches these anyway,
+        and a sighted click keeps routing through `onTap` -> `bookAtPoint` ->
+        `onBook`, which is the same function this button calls.
+      */}
+      <div
+        ref={booksRef}
+        className="centre-books"
+        role="toolbar"
+        aria-label="the centre room's shelf"
+        onKeyDown={onBooksKeyDown}
+      >
+        {centreSlots.map((slot, i) =>
+          slot?.text ? (
+            <button
+              key={i}
+              type="button"
+              data-book={i}
+              tabIndex={i === bookFocus ? 0 : -1}
+              style={BOOK_STYLES[i]}
+              aria-label={describeBook(slot)}
+              onFocus={() => setBookFocus(i)}
+              onClick={() => onBook(i)}
+            />
+          ) : null
+        )}
+      </div>
       <div className="panel">
         <h1>The Indexing of Babel</h1>
         <p className="sub">
@@ -1152,6 +1325,22 @@ function Library({ manifest }) {
     </>
   );
 }
+
+/**
+ * Each book's position inside the shelf container, as percentages.
+ *
+ * Computed once at module scope because the fractions never change - the whole
+ * point of the container being the thing that moves. Per-axis, like everything
+ * that touches this tile: `x`/`w` against the cell's width, `y`/`h` against its
+ * height. One divisor for both would put every focus ring on the wrong book,
+ * silently, exactly as it would stretch the art.
+ */
+const BOOK_STYLES = BOOK_RECTS.map((b) => ({
+  left: `${b.x * 100}%`,
+  top: `${b.y * 100}%`,
+  width: `${b.w * 100}%`,
+  height: `${b.h * 100}%`,
+}));
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
@@ -1313,6 +1502,16 @@ function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
           ))}
         </div>
       )}
+
+      {/*
+        What the picture shows, above what the room is: the sidecar's optional
+        `alt` (accessibility-plan.md §3.5). VISIBLE rather than screen-reader
+        only, on §3.6's argument that an invisible layer rots - a caption
+        nobody sighted ever reads is one nobody notices has drifted from the
+        image it describes. Absent for almost every corpus, since producing it
+        is the generator's job upstream of this repo.
+      */}
+      {desc.picture && <p className="picture">{desc.picture}</p>}
 
       {desc.description && <p className="story">{desc.description}</p>}
 
