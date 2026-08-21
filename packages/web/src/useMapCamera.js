@@ -495,8 +495,9 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
 
   /**
    * Move by a cell delta, damped by the map's resistance - the keyboard's
-   * equivalent of a pointer drag, and damped by the SAME curve
-   * (`panScale`) for the same reason the drag is.
+   * equivalent of a pointer drag. Same resistance, deliberately DIFFERENT
+   * curve: see `panByCells` in `camera.js` for why a drag can afford a floor
+   * and a held key cannot.
    *
    * Without this the keyboard had no resistance at all: a held arrow key
    * sailed off into the far field at full speed, somewhere a hand on the

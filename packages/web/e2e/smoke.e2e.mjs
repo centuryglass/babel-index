@@ -918,12 +918,12 @@ describe('the library, in a browser', { concurrency: false }, () => {
   });
 
   test('PageUp/PageDown zoom without moving the cursor cell', async () => {
-    // `zoomStep` is instant (no flight - the whole point of a keyboard move),
-    // but "instant" still means "on the next animation frame", not "before
-    // `page.keyboard.press` returns". Reading the HUD immediately raced that
-    // frame and read the stale zoom about one run in four; poll for the
-    // change instead, the same discipline `settled()` uses elsewhere in this
-    // file for a different kind of asynchrony.
+    // A keyboard zoom eases over `camera.keyboardMoveMs`, so the HUD is not
+    // final the moment `page.keyboard.press` returns - poll for the change
+    // rather than reading once. This needed polling even back when the move
+    // was instant, because "instant" still meant "on the next animation
+    // frame"; it raced about one run in four then, and the easing only widens
+    // the window. Same discipline `settled()` uses for its own asynchrony.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Home');
