@@ -375,8 +375,15 @@ stale instance.
   climbing linearly. `panByCells` therefore scales straight from `damp` with
   no floor, so the step approaches zero as the resistance does and a hold
   settles about where a determined drag does. Inside the content region
-  `damp` is exactly 1, so one arrow press is still exactly one cell - that
-  part is the cursor's contract and must not become fractional.
+  `damp` is exactly 1, and there `panByCells` lands the camera CELL-CENTRED on
+  the destination rather than adding a raw delta - both move one cell from an
+  aligned camera, but only the snap recovers. A trip outside leaves the camera
+  off the grid (the damped steps out there are fractional by design, and the
+  glide stops wherever it happens to cross back in), and a raw delta carries
+  that offset forever: every press advancing one cell while the cell itself
+  sits visibly off-centre, part of it off-screen. Both axes snap, not just the
+  one being moved along - the offset a trip outward leaves is rarely
+  axis-aligned, so pressing Left has to fix the vertical drift too.
 - **The glide applies to the keyboard exactly as it does to a pointer, and
   must not be exempted for it.** The boundary's pushback is an affordance, not
   an obstacle: walking out past the last ranked room and feeling the library
