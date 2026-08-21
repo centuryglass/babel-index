@@ -965,10 +965,22 @@ directory, which is what the generator already writes:
       { "text": "art nouveau",      "type": "movement" },
       { "text": "wet collodion",    "type": "technique" }
     ],
-    "story": "The catalogue lists a room that has never been surveyed…"
+    "story": "The catalogue lists a room that has never been surveyed…",
+    "alt": "A tall shelved wall in green shadow, its brass rail catching one lamp."
   }
 }
 ```
+
+`alt` is optional and is the one field here that is *not* a retrieval signal:
+one sentence describing the picture, for a reader who cannot see it
+([`accessibility-plan.md`](accessibility-plan.md) §3.5). Written once, offline,
+by the generator, with the room's own story passed in as context so the two
+accounts of one image cannot diverge — never at runtime, which is what keeps
+the map free of a model dependency. It is optional in the strong sense: a room
+whose story is thin should carry no `alt` rather than a padded one, because
+"no description recorded" is a better answer than a confident sentence about a
+wall of books that could be any wall of books. Absent, everything reads the
+same without it.
 
 The filename key is a deliberate difference from `embeddings.bin`, which is
 row-major by room id and therefore only correct as long as nothing about the
@@ -1712,19 +1724,29 @@ corpus:
    at native width in `main.jsx` can then rise. Cosmetic backdrop polish — gate on
    whether the blur past 1x actually bothers a reader before investing.
 5. **Accessibility: a keyboard interface and an accessible reading of the map.**
-   **Phases A, B and C landed — see [`accessibility-plan.md`](accessibility-plan.md).**
-   The map now has a real keyboard interface: a cursor at the cell under the
+   **Every phase has landed — see [`accessibility-plan.md`](accessibility-plan.md).**
+   The map has a real keyboard interface: a cursor at the cell under the
    camera centre, arrow keys that pan it, ctrl+arrow that jumps room to room,
    Enter/Escape/Home/PgUp/PgDn/`/`/`?`, a live region that announces moves, and
    a visible ring once a key has been pressed. Keyboard moves ease rather than
    snap (`camera.keyboardMoveMs`), are damped by the same pan resistance a drag
    feels so a held key cannot outrun what a hand can reach, and land
    cell-centred in bounds so a trip past the boundary cannot leave the map
-   permanently off-grid. **Not yet done**, and not to be
-   read as finished: nobody has run this against a real screen reader (the
-   plan's stated top risk, unchanged), and a rearrangement does not announce
-   its new occupant at all (accessibility-plan.md §8 item 4 — written up in §4.3
-   as settled design, but never wired). What it settled going in, in short:
+   permanently off-grid. The centre room's forty book spines are real buttons
+   (one tab stop, arrows within), a rearrangement says what it did and what is
+   now under the cursor, and a room may carry an optional `alt` caption from
+   the sidecar.
+
+   **Not to be read as finished.** Nobody has run any of it against a real
+   screen reader — the plan's stated top risk, unchanged, and now carrying the
+   whole cursor model, the `role="application"` commitment and the shelf's
+   roving toolbar on top of it. Two smaller things stay open in that document's
+   §8: what the far-out announcement should actually say, and how far
+   ctrl+arrow should look before giving up. The wallpaper variants still have
+   no descriptions of their own, deliberately — the art is placeholder meant to
+   be swapped for real inpainting output.
+
+   What it settled going in, in short:
 
    - It is **not** a parallel interface. One DOM tree with two orderings over it
      — the map's cursor and a ranked listbox — sharing the handlers and the

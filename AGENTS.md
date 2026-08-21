@@ -51,8 +51,11 @@ stale instance.
 | `packages/map/illusion.js` | the sliding-tile planner: rows and columns rotate, swaps are legal only off camera. No DOM, no imports |
 | `packages/map/board.js` | cuts a finite board out of the infinite map for one rearrangement, and decides when a change cannot be animated |
 | `packages/map/scoring.js` | folding, tokenising, the two match rules, the three-signal blend, and how sure it is |
+| `packages/map/describe.js` | the words a reader hears: one cell (`describeCell`) and one whole arrangement (`describeArrangement`) — no DOM, no imports |
+| `packages/map/nextRoom.js` | the walk ctrl+arrow makes: the next ranked room along an axis, skipping wallpaper |
 | `packages/web/src/slide.js` | the second renderer, for a rearrangement only: a board, a parked camera, one line mid-slide |
 | `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
+| `packages/web/src/centre.js` | the centre room's shelf: book geometry, title assignment, the hit-test, the arrow-key walk, and the compositing — the pure half, like `picking.js` |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry (`lib/geometry.js`) and the SVG importer that generates `lib/measured.js` |
 | `assets/corpus-sample/` | 27 ranked rooms, with all five pyramid levels, so the demo needs no setup. The wallpaper is not here - it comes from `--base-dir` (below) |
@@ -60,7 +63,7 @@ stale instance.
 | `assets/base_variations/` | the inpainted wallpaper variants, one per file; the map picks between them per cell. Swap these for real inpainting output |
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
-| `docs/accessibility-plan.md` | the keyboard/screen-reader plan: what the mirror is, what it deliberately is not |
+| `docs/accessibility-plan.md` | the keyboard/screen-reader plan: every phase landed, and what is deliberately still open |
 
 ## Conventions
 
@@ -202,6 +205,22 @@ stale instance.
   nothing below a legible spine width — so far out it is free. `render.test.mjs`
   never passes `centreSlots`, which is why its recording `fakeCtx` needs no
   `save`/`rotate` and the byte-cost assertions are untouched. Keep it that way.
+- **The books are DOM buttons AND painted spines, and there is one `onBook`
+  for both.** `centre-books` is one absolutely-positioned container matching
+  the centre cell, written once per frame like `.centre-search`, with
+  `BOOK_COUNT` buttons inside it in per-axis PERCENTAGES - so a pan costs one
+  style assignment, not forty. Writing each button's geometry per frame from
+  `bookScreenRects()` is the trap the plan names; don't. The container is
+  `pointer-events: none` with no `:focus-within` escape hatch, so the canvas
+  keeps every gesture and a sighted click still routes `onTap` ->
+  `bookAtPoint` -> `onBook`; a second copy of "what does book i do" written
+  inline in either path will drift. The shelf is ONE tab stop (roving
+  tabindex, `role="toolbar"`), and where an arrow key goes lives in
+  `bookNeighbour` - rows there are SHELVES, not the hit-test's runs, because a
+  gap between two runs is somewhere a click can land and not somewhere focus
+  should stop. `areSpinesLegible` is the single zoom gate: the buttons exist
+  exactly while `composeSpines` draws a title, so a reader never tabs to a book
+  nobody can see named.
 - **`onTap` must lose to a pan and to a flight.** It fires only on a pointer-up
   that stayed within the slop and did not stop a flight, and a completed
   long-press clears the tap candidate so a press is never also a tap. History is
@@ -280,6 +299,17 @@ stale instance.
   rule. Worth being loud about: `matched: 0` against a non-zero `entries` means
   the keys have drifted, which from the map looks exactly like having no sidecar.
   Both numbers go in the manifest and `index.mjs` warns.
+- **A room's optional `alt` is a caption, not a story, and nothing generates
+  it here.** `normaliseEntry` carries it, `describeCell` returns it as
+  `picture`, and the card shows it above the story as a visibly different
+  thing - the story is fiction about the room, the caption is a report of the
+  image, and merging them lets a reader take one for the other. It never feeds
+  the search index. Absent normalises to null and every consumer must read the
+  same without it, which is every corpus that exists today; an entry carrying
+  only an `alt` still counts as an entry. Do not write one into
+  `assets/corpus-sample/`: that sidecar is placeholder text that describes
+  nothing about its images, and a placeholder caption is the padded sentence
+  the plan says to omit.
 
 ### The reorder animation
 
@@ -338,6 +368,18 @@ stale instance.
   application. So a swap emitted after a shift must attach to that shift's run at
   its completion, not to the next run's start, or the cascade applies the plan
   out of order.
+- **A rearrangement announces its outcome, and that moves the cursor without a
+  keypress.** One live-region write carries the search's signals note, the
+  arrangement summary (`describeArrangement`) and the cell the reader ends up
+  at - folded together because a polite region queues two writes as two
+  interruptions of one event. The note is stashed in `pendingNote` when the
+  search resolves rather than announced there. It is read after the camera
+  settles, never before: an animated rearrangement parks on the centre first,
+  so an earlier read names a cell the reader is about to be moved off. The
+  consequence to remember when writing tests: `cursor` is no longer "only
+  changes on a keypress", so anything asserting the canvas's `aria-label`
+  must establish its own camera rather than assume the page is still where it
+  loaded.
 - **Visible cost is the viewport's, not the corpus's.** Every move outside the
   region is an invisible swap, so the board can be as large as needed (157×209 at
   5000 rooms) without lengthening the animation. Slide count scaling with corpus
@@ -608,9 +650,14 @@ that were reversed and alternatives that were rejected — consult it before
 re-treading one.
 
 Accessibility has its own plan, [`docs/accessibility-plan.md`](docs/accessibility-plan.md),
-because it cuts across every file rather than sitting in one phase. Two things
-from it to know before touching the web package: the map's DOM mirror is
-**windowed, never the whole board** (33k cells at 5000 rooms, and the
-accessibility tree is rebuilt on every reorder), and **alt text is never
-generated at runtime** — described rooms already ship keywords and a story, and
-anything more is an optional sidecar field produced offline in the corpus.
+because it cuts across every file rather than sitting in one phase. Every phase
+in it has landed; what is left is in its §8, and the top item there is that
+**none of it has been run against a real screen reader**. Three things from it
+to know before touching the web package: there is **no DOM mirror of the board
+at all** — the map is one `role="application"` region with a single cursor at
+the cell under the camera centre (~110 nodes against 33k), **alt text is never
+generated at runtime** (described rooms already ship keywords and a story, and
+anything more is an optional sidecar field produced offline in the corpus), and
+`role="application"` is scoped to the canvas and **must not creep onto the
+panel or the card**, which are ordinary DOM a virtual cursor has to be able to
+read.

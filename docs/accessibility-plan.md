@@ -179,6 +179,12 @@ exists — 40 real `<button>`s, no new data, no new model. The moment that lands
 the app's main control surface becomes keyboard-operable and readable, which is
 a larger win than anything else in this document.
 
+> **Built** (phase D — see §5, which records the three decisions this section
+> does not make, chief among them that the shelf is ONE tab stop rather than
+> forty). "Today they are painted pixels behind a hit-test" above is the state
+> this section was written against, kept because the rest of it is the design
+> that got built and reads as one argument.
+
 Positioning them, concretely, and the trap to avoid: do **not** write 40
 elements' geometry per frame from `bookScreenRects()`. The book rects are an
 affine map of the cell rect, and `layout({width: 1, height: 1})` already returns
@@ -596,7 +602,7 @@ the camera arrives. This is the first real path into a room's content that
 does not require a pointer: right-click and long-press still cannot be reached
 without one.
 
-One thing the e2e work surfaced and is now §8 item 8: Chrome's CDP
+One thing the e2e work surfaced and is now §8 item 9: Chrome's CDP
 accessibility tree does not surface `aria-posinset`/`aria-setsize` for a
 native `<li>` at all, confirmed by dumping a node in full rather than trusting
 an empty read. The attributes are on the DOM and are spec-correct where they
@@ -658,7 +664,8 @@ appended to a page they did not ask to look different.
 occupant.** §4.3 states that as settled design; §8 item 4 is where the honest
 status lives. Standing still while the library reorders around you and
 hearing nothing about what arrived is not a finished accessible experience,
-and this document does not claim it is.
+and this document does not claim it is. *(Closed after Phase D — see §8 item
+4, which now records what was built rather than what was missing.)*
 
 **Update: the keyboard nudge eases, and the edge pushback stopped fighting
 it.** Landed after Phase C shipped, from user testing rather than from this
@@ -750,15 +757,66 @@ derived rather than tracked. Both bugs were found by hand, driving the app
 after Phase C shipped, not by any test - `camera.test.mjs`/e2e now cover the
 specific double-press cases that exposed them.
 
-**Phase D — the centre room's books.** The 40 spines as real buttons (§3.3).
-Independent of B and C — it is a control surface, not a navigation model — and
-placed last only because B and C are what make the corpus reachable at all. Move
-it earlier if the centre's controls matter more than the map's, which is a
-defensible reading.
+**Phase D — the centre room's books. Landed.** The 40 spines are real buttons
+over the same rects `composeSpines` already draws, from the same
+`assignTitles` slots — a control surface, not a navigation model, which is why
+it was always independent of B and C. §3.3's trap was avoided as written: one
+absolutely-positioned container matching the centre cell is written per frame
+(one style assignment, beside `.centre-search`'s), and the buttons sit inside
+it in per-axis percentages, so a pan costs nothing per book. `pointer-events:
+none` keeps every gesture on the canvas, and a sighted click still routes
+through `onTap` → `bookAtPoint`; both entry points call one `onBook`.
 
-**Phase E — the sidecar's optional `alt`.** §3.5. Format change plus a fallback;
-depends on a corpus that carries the field, so it is gated on the generator
-rather than on anything here.
+Three decisions made while building it that the plan text did not make:
+
+- **Roving tabindex, not forty tab stops.** §4.2b budgets 40 nodes for the
+  shelf and says nothing about the tab sequence; forty stops between the map
+  and the panel is a tax on every keyboard user for a wall that is mostly a
+  browsable index of keywords. The ordinary `role="toolbar"` pattern instead:
+  one stop in, arrows within, Tab straight out — the same shape §4.2b already
+  describes for the map and the listbox ("arrows mean whatever the focused one
+  says they mean"). Phase B's objection to a half-built widget applies here
+  too and is answered rather than dodged: roving is fully implemented, and
+  what a press does lives in `bookNeighbour`, which is pure and asserted
+  without a browser.
+- **The buttons exist exactly while the titles are legible.** `MIN_SPINE_PX`
+  was already the zoom gate on drawing a title; it is now one exported
+  predicate that gates the DOM overlay too, plus an on-screen test. So the
+  shelf is reachable precisely when a sighted reader can also see it named,
+  and a focus ring is never parked off the edge of the display. Reaching it
+  from elsewhere is what `/` and the panel's search trigger already do — both
+  fly to the opening view, where the shelf is at its largest.
+- **A book's accessible name carries its ACTION, not just its title.** Forty
+  buttons called `brass`, `art nouveau`, `spiral staircase` say nothing about
+  what pressing one is for, and the wall mixes two things that behave
+  differently — a past search to repeat and a keyword to try. The canvas draws
+  the title alone because the shelf around it says what it is; the name says
+  both (`describeBook`).
+
+**Phase E — the sidecar's optional `alt`. Landed, as far as this repo can take
+it.** §3.5's format change plus its fallback: `normaliseEntry` carries an
+`alt`, `describeCell` returns it as `picture`, and the card shows it above the
+story, visibly a different kind of thing (§3.6 — an invisible caption is one
+nobody notices has drifted from the image it describes). Absent normalises to
+null and every consumer reads the same without it, which is the case for every
+corpus that exists today.
+
+Producing the field is still the generator's job, upstream, and the sample
+corpus deliberately does not gain one: its metadata is placeholder text that
+describes nothing about the images, and a placeholder *caption* is exactly the
+padded, confident sentence §3.5's "it must be free to say nothing" rule exists
+to prevent. The browser test therefore hands the page a corpus that does carry
+the field rather than inventing one in the repository.
+
+**Still open from §3.5: the wallpaper's own sentences.** The handful of base
+variants covering ~80% of every screen still have no description, and this did
+not write them. `describeCell` says "a blank wall" for every generic cell
+regardless of which variant it draws. The reason to wait is that
+`assets/base_variations/` is placeholder art meant to be swapped for real
+inpainting output — a hand-written sentence per file would be written against
+art that is not the shipping art. It costs a few minutes whenever those become
+real, and it needs `describeCell` to see `layout.variantAt`, which it
+currently does not.
 
 The phase that used to be here and is gone: **the windowed grid mirror**. §4.1
 withdrew it. Most of its work was the machinery that no longer exists — the two
@@ -851,7 +909,8 @@ apply cleanly.
 **Pure, and tested with `node --test`:**
 
 - `packages/map/describe.js` — `describeCell(x, y, {layout, order, metadata})`
-  → `{name, description, kind}`. No DOM, no imports, in `packages/map` because
+  → `{kind, name, description, picture}`, plus `describeArrangement(layout)`
+  for what a rearrangement says. No DOM, no imports, in `packages/map` because
   it is the same kind of module as `metadata.js`: one implementation, more than
   one consumer (the grid, the results list, the card's label). This is the
   established split — `picking.js` and `centre.js` did the same thing for
@@ -868,8 +927,16 @@ apply cleanly.
 **In the browser, `smoke.e2e.mjs`:** tab order reaches the map in one stop and
 leaves it in one; arrows move focus and the camera follows; Enter opens the
 card, Escape closes it and focus returns to the cell it came from; the live
-region holds the expected text after a search. Per the repo's own rule, break
-each of these on purpose once and confirm it fails.
+region holds the expected text after a search. Phases D and E added: the shelf
+is one tab stop with arrows moving within it and a book running its own title
+as a search, a rearrangement announcing what it did and where the reader now
+stands, and a room's caption appearing when the corpus carries one and nothing
+being invented when it does not. Per the repo's own rule, break each of these
+on purpose once and confirm it fails — for these, that was removing the roving
+tabindex, stopping focus following an arrow, making `onBook` a no-op, naming a
+book by its title alone, dropping the announcement, blanking one button's name
+(caught by axe as `button-name`), and not rendering the caption. All seven
+failed as they should.
 
 **`@axe-core/playwright`, in.** It catches the whole class of regression in §6
 automatically, which matters precisely because tier-3 semantics are invisible and
@@ -949,6 +1016,28 @@ became two unrelated-looking failures in two others purely from that missing
 `finally`; sabotaging the fix (forcing the slow "opening view" flight path on
 every run) confirmed the cascade is gone.
 
+**Phases D and E found the same hazard's third form: a shared-page assumption
+that was true when it was written and quietly stopped being true.** Two tests
+asserted the canvas is named "the centre of the library" — correct while the
+cursor moved only on a keypress, and wrong the moment a rearrangement started
+announcing where the reader ends up, because a listbox jump earlier in the
+suite now leaves the cursor on that room. Neither test was about the centre;
+both were about the canvas being a named application region rather than an
+anonymous graphic. So one asserts the name is a real cell's, whichever cell
+that is, and the other establishes its own camera. The general shape, worth
+watching for: **a test that inherits state it does not set is asserting
+something it does not name**, and it fails when an unrelated feature makes
+that state move.
+
+The other mechanic phase E needed: **a corpus feature no corpus has can still
+be driven in the browser**, by handing the page one that does. The sidecar's
+optional `alt` is routed with `page.route('**/metadata.json')` and injected on
+the way through, which exercises fetch → join → `describeCell` → the card
+without putting a caption into `assets/corpus-sample/` that would describe
+nothing about its image. It reloads, so it is last in the file; and it sets
+its own camera and density rather than inheriting them, per the paragraph
+above.
+
 ---
 
 ## 8. Still open
@@ -974,16 +1063,34 @@ every run) confirmed the cascade is gone.
    past it. The map really is infinite, and a keyboard-only stop the pointer
    does not share would be a restriction that needs explaining rather than one
    that reads as obviously correct.
-4. **The rearrangement does not announce its new occupant at all yet.** Not a
-   timing question to weigh, as this item first framed it — Phase C simply
-   never wired it up. `announceCursorMove` fires only from the discrete
-   keyboard actions in §4.2a; nothing calls it when a reorder lands, so a
-   screen reader user hears whatever `describeSignals` already said about the
-   search (`"ranked by keywords"`) and nothing about what is now actually under
-   their cursor. §4.3's "the new occupant is announced" is written as settled
-   design; it is not built. Worth doing before this document claims the
-   rearrangement is accessible at all — the timing question (immediately vs.
-   after the animation lands) is real but secondary to simply existing.
+4. ~~**The rearrangement does not announce its new occupant at all yet.**~~
+   **Built.** One live-region write carries three clauses: what decided the
+   ranking (`describeSignals`, if a search caused it), what the map now looks
+   like as a whole (`describeArrangement` — the size, and whether the gradient
+   clustered anything), and the cell the reader ends up at. The search's note
+   used to go out on its own the moment the ranking resolved; it is stashed and
+   folded in instead, because two writes a few hundred milliseconds apart are
+   two interruptions describing one event, and a polite region queues them
+   rather than merging them.
+
+   The timing question this item called secondary resolved itself into
+   something simpler than "immediately vs. after the animation lands": the
+   announcement waits for the CAMERA, not for the animation. An animated
+   rearrangement parks on the centre before it starts, so reading the cursor
+   any earlier would name a cell the reader is about to be moved off. Under
+   reduced motion — or any change that cannot be animated — nothing moves and
+   the cursor's cell really does change occupant underneath them, which is
+   §4.3's case exactly. Both paths read the cursor at the same point and need
+   no branch.
+
+   One consequence worth knowing, because it looks like a bug and is not: the
+   cursor now moves without a keypress. Two browser tests had quietly relied on
+   "the cursor only changes when a key is pressed" to assume the canvas was
+   still named for the centre; they establish their own precondition now. The
+   interesting case is a listbox jump landing *during* a rearrangement's
+   fly-home: it interrupts the flight, the library rebuilds at once, and the
+   announcement names the room the reader chose. That is right, and it is the
+   first time choosing a result says anything at all.
 5. **How far should ctrl+arrow look before giving up?** It walks `rankOf` along
    an axis to the boundary, which is nothing at 27 rooms and a 200-cell walk at
    the far edge of a full corpus. Bounded per keypress, almost certainly, but
@@ -1000,7 +1107,16 @@ every run) confirmed the cascade is gone.
    `describeCell` — it is the one module both would want, and it is the one
    module that is safe to share, because it names rooms rather than arranging
    them.
-8. **Does a real screen reader receive `aria-posinset`/`aria-setsize` on a
+8. **Does `role="toolbar"` with roving tabindex read well on the shelf?**
+   Phase D chose it over forty tab stops, and the reasoning (§5) is about the
+   tab sequence, which is browser-observable. What is not: whether a reader
+   announces "toolbar, 40 items" usefully for what is really a 5×8 wall, and
+   whether up/down moving by shelf is discoverable without being told. `grid`
+   would model the shape honestly and costs a much larger widget; `list` would
+   model the queue honestly and gives back the forty stops. Folds into item 1 —
+   it is the same "nobody has run a screen reader over this" gap, narrowed to
+   one widget.
+9. **Does a real screen reader receive `aria-posinset`/`aria-setsize` on a
    native `<li>` at all?** The ranked listbox (phase B, landed) puts both on
    the `<li>` per spec — `listitem` is where they belong, a bare `button` does
    not support them — but Chrome's CDP `Accessibility.getFullAXTree` does not
