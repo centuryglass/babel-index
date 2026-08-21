@@ -62,6 +62,10 @@ rearranges around your query rather than splicing a few results to the front:
   most of the corpus for most queries.
 
 The first two come from a `metadata.json` beside the images, keyed on filename.
+An entry may also carry an optional `alt` — one sentence describing the picture,
+shown on a room's card and read by a screen reader. It is written once by the
+generator, never at runtime, and a room is better off with none than with a
+padded one; see [`docs/accessibility-plan.md`](docs/accessibility-plan.md) §3.5.
 CLIP comes from an embedding blob: `tools/embed` runs the image tower over the
 rooms once, offline; the demo server runs only the text tower per query and
 returns a vector, and the browser ranks against the blob, so a re-rank costs no
@@ -89,7 +93,8 @@ passing for "no metadata".
 
 > The `metadata.json` in `assets/corpus-sample/` is **placeholder text**, written
 > so the demo's search has something to find. It describes nothing about the
-> images it is attached to.
+> images it is attached to — which is also why it carries no `alt`: a caption
+> that describes nothing about its picture is worse than none.
 
 ## What a tile is
 

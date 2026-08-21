@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeCell } from './describe.js';
+import { describeCell, describeArrangement } from './describe.js';
 import { createLayout } from './ordering.js';
 
 const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1 });
@@ -79,4 +79,57 @@ test('a rank beyond the end of the order reads as generic, not a crash', () => {
   const slot = roomAt(30);
   const d = describeCell(slot.x, slot.y, { layout, order: order.slice(0, 10) });
   assert.equal(d.kind, 'generic');
+});
+
+test('a room carries the picture caption separately from its story', () => {
+  const slot = roomAt(2);
+  const id = order[2];
+  const metadata = [];
+  metadata[id] = {
+    keywords: [{ text: 'brass', type: 'material' }],
+    story: 'A fiction about the room.',
+    alt: 'A report of the image.',
+  };
+  const d = describeCell(slot.x, slot.y, { layout, order, metadata });
+  assert.equal(d.description, 'A fiction about the room.');
+  assert.equal(d.picture, 'A report of the image.');
+  // The two never merge: a reader has to be able to tell which they are being
+  // told, so the caption stays out of the name as well.
+  assert.doesNotMatch(d.name, /report of the image/);
+});
+
+test('no caption is null everywhere, and nothing invents one', () => {
+  const slot = roomAt(3);
+  const id = order[3];
+  const metadata = [];
+  metadata[id] = { keywords: [{ text: 'brass', type: 'material' }], story: 'A story.' };
+  assert.equal(describeCell(slot.x, slot.y, { layout, order, metadata }).picture, null);
+  assert.equal(describeCell(slot.x, slot.y, { layout, order }).picture, null);
+  assert.equal(describeCell(0, 0, { layout, order }).picture, null, 'the centre has no picture');
+});
+
+// --- the arrangement, for a reader who cannot watch it happen ---------------
+
+test('an arrangement says how big the map is and whether the search clustered', () => {
+  const uniform = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1 });
+  assert.equal(uniform.gradedCount, 0, 'no search, no cluster');
+  const said = describeArrangement(uniform);
+  assert.match(said, /40 rooms on the map/);
+  assert.match(said, /spread evenly/);
+
+  // A confident search lifts the leading ranks above the baseline, and that
+  // count IS the cluster the animation is drawing.
+  const certainty = Array.from({ length: 40 }, (_, i) => Math.max(0, 1 - i / 8));
+  const clustered = createLayout({
+    roomCount: 40, contentRatio: 0.3, seed: 1,
+    density: { certainty, peak: 1, floor: 0.05 },
+  });
+  assert.ok(clustered.gradedCount > 0);
+  assert.match(describeArrangement(clustered), new RegExp(`${clustered.gradedCount} clustered`));
+});
+
+test('the arrangement never mentions the animation, which is the optional half', () => {
+  const layoutNow = createLayout({ roomCount: 12, contentRatio: 0.5, seed: 3 });
+  const said = describeArrangement(layoutNow);
+  assert.doesNotMatch(said, /slid|sliding|animat|moving/i);
 });

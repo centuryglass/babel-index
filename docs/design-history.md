@@ -200,6 +200,30 @@ shapes considered and dropped, because each is the obvious first idea.
   not an accessibility feature, and building it as one would give the accessible
   interface a map of its own to keep in sync.
 
+- **Forty tab stops for the centre room's forty books.** The plan's own phase D
+  text says "40 real `<button>`s", and the literal reading is one tab stop each -
+  no widget pattern, no roving state, nothing to get wrong. What sinks it is
+  that the shelf sits between the map and the panel in the tab order, so every
+  keyboard user pays forty presses to get past a wall that is mostly a
+  browsable index of random corpus keywords. The ordinary `role="toolbar"`
+  roving-tabindex pattern instead: one stop in, arrows within, Tab straight
+  out. Recorded because the simpler shape is the one the plan appears to ask
+  for, and because the objection phase B raised against a half-built listbox
+  applies here and had to be answered rather than dodged - roving is fully
+  implemented, and what a press does lives in a pure `bookNeighbour` that is
+  asserted without a browser. What is *not* settled is whether "toolbar, 40
+  items" is how a real screen reader should hear a 5x8 wall; that is
+  `accessibility-plan.md` §8 item 8, and `grid` and `list` are both live
+  alternatives if it reads badly.
+
+- **Hand-written captions for the wallpaper variants, now.** §3.5 asks for one
+  sentence per base variant - a few minutes of work, and the only reason it was
+  not done alongside the sidecar's `alt` is that `assets/base_variations/` is
+  placeholder art explicitly meant to be swapped for real inpainting output. A
+  sentence written against art that is not the shipping art describes nothing,
+  which is the same failure the sample corpus's `metadata.json` is already
+  labelled for. Deferred until those files are real, not rejected.
+
 Also rejected as a *goal*: **"invisible to sighted users."** Kept as the default
 for semantics, but most people this work helps do not use a screen reader -
 keyboard-only, motor-impaired, low-vision and vestibular users all need changes

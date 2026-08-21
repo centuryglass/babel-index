@@ -68,6 +68,32 @@
       }
       .centre-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
 
+      /*
+       * The shelf's book buttons, over the centre tile's painted spines.
+       *
+       * Transparent by design: the title is already drawn on the canvas, so a
+       * button that painted its own would double it. What these add is
+       * everything the pixels cannot have - a name, a focus ring, an activate.
+       *
+       * pointer-events: none, and unlike `.centre-search` there is no
+       * `:focus-within` escape hatch: a click on a book already reaches the
+       * same `onBook` through the canvas's own tap handling, so opening these
+       * up to the pointer would only take gestures away from the map for no
+       * behaviour that is not already there.
+       *
+       * The `button` overrides are against the panel's button styling above,
+       * which is a filled, padded, flexed control - none of which belongs on a
+       * one-spine-wide sliver. The ring's offset comes in from 2px for the
+       * same reason: at a spine's width, 2px reaches across its neighbours.
+       */
+      .centre-books { position: absolute; display: none; pointer-events: none; }
+      .centre-books button {
+        position: absolute; flex: none; margin: 0; padding: 0;
+        background: none; border: none; border-radius: 2px;
+      }
+      .centre-books button:hover { background: none; }
+      .centre-books button:focus-visible { outline-offset: 1px; }
+
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
         background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
@@ -172,6 +198,15 @@
       .chip:hover { background: rgba(200,169,95,0.3); border-color: #c8a95f; }
       .story { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
       .story.dim { color: var(--dim); font-style: italic; }
+      /*
+       * The picture's own caption, above the room's story and visibly not the
+       * same kind of thing: one reports the image, the other is fiction about
+       * the room, and a reader must never mistake which they are being told.
+       */
+      .picture {
+        margin: 0 0 8px; padding-left: 8px; font-size: 11.5px; line-height: 1.5;
+        color: var(--dim); border-left: 2px solid var(--edge);
+      }
     </style>
   </head>
   <body>
