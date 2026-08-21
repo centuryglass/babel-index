@@ -9,10 +9,14 @@ import {
   beginFlight,
   cameraAtCell,
   clampZoom,
+  cursorCell,
   easeInOut,
   flightAt,
   glideStep,
+  glideToRest,
+  panByCells,
   panByPixels,
+  pickGranularity,
   pxPerCell,
   screenToWorld,
   worldToScreen,
@@ -271,6 +275,37 @@ test('repeated glide steps converge on the origin', () => {
   assert.ok(Math.hypot(c.x, c.y) < 1, `still at ${c.x}, ${c.y}`);
 });
 
+test('glideToRest reaches the same place repeated glideStep calls would', () => {
+  // A REALISTIC resistance function - full damp near the origin, easing to
+  // nothing further out - unlike the constant-damp cases above. That easing is
+  // exactly what makes real convergence fast: the pull shrinks as the camera
+  // approaches the origin AND resistance climbs back toward 1 at the same
+  // time, unlike the pathological constant-zero case those tests use.
+  const resistanceAt = (x, y) => {
+    const d = Math.hypot(x, y);
+    if (d <= 5) return 1;
+    return Math.max(0, 1 - (d - 5) / 12) ** 3;
+  };
+  const start = { x: 40, y: 0, zoom: 220 };
+
+  let iterated = start;
+  for (let i = 0; i < 5000; i++) iterated = glideStep(iterated, resistanceAt(iterated.x, iterated.y));
+
+  const rested = glideToRest(start, resistanceAt);
+  assert.ok(
+    Math.abs(rested.x - iterated.x) < 1e-3 && Math.abs(rested.y - iterated.y) < 1e-3,
+    `glideToRest landed at ${rested.x},${rested.y}, five thousand steps reached ${iterated.x},${iterated.y}`
+  );
+  assert.equal(rested.zoom, start.zoom);
+});
+
+test('glideToRest is a no-op, by identity, when already at rest', () => {
+  // The render loop skips a redraw on an unchanged reference - a fresh object
+  // with the same numbers would defeat that every frame.
+  const cam = { x: 3, y: 3, zoom: 220 };
+  assert.equal(glideToRest(cam, () => 1), cam);
+});
+
 test('flying to a cell aims at its middle and keeps zoom unless asked', () => {
   assert.deepEqual(cameraAtCell(cam, 0, 0), { x: 0.5, y: 0.5, zoom: 220 });
   assert.deepEqual(cameraAtCell(cam, -4, 9, 300), { x: -3.5, y: 9.5, zoom: 300 });
@@ -377,4 +412,142 @@ test('a flight interrupted by another picks up from where it had got to', () => 
     { x: second.cam.x, y: second.cam.y, zoom: second.cam.zoom },
     { x: midway.x, y: midway.y, zoom: midway.zoom }
   );
+});
+
+test('the cursor cell is the cell under the camera centre', () => {
+  // `cam.x`/`cam.y` are already world cells (the same convention
+  // `cameraAtCell`'s `+ 0.5` states the other way round), so this is a floor
+  // and nothing more - asserted so a future refactor cannot quietly swap in a
+  // round or a different rounding direction.
+  assert.deepEqual(cursorCell({ x: 3.9, y: -0.1, zoom: 220 }), { x: 3, y: -1 });
+  assert.deepEqual(cursorCell({ x: 0, y: 0, zoom: 220 }), { x: 0, y: 0 });
+});
+
+test('the cursor tracks a fractional camera position exactly at cell boundaries', () => {
+  // A camera sitting exactly on an integer is the edge case `Math.floor` gets
+  // right and a naive round would not: cell N owns its own lower corner.
+  assert.deepEqual(cursorCell({ x: 5, y: 5, zoom: 220 }), { x: 5, y: 5 });
+  assert.deepEqual(cursorCell({ x: 4.999999, y: 5, zoom: 220 }), { x: 4, y: 5 });
+});
+
+test('granularity picks region only once a cell is too small to be a specific place', () => {
+  assert.equal(pickGranularity(200), 'cell');
+  assert.equal(pickGranularity(5), 'region');
+});
+
+test('granularity has hysteresis, like the pyramid level it copies the shape from', () => {
+  // Held exactly at the ideal threshold with no prior state, pick fresh.
+  const atThreshold = pickGranularity(24, null);
+  assert.equal(atThreshold, 'cell');
+
+  // Once 'cell' is current, a small dip just under the threshold must not
+  // immediately flip to 'region' - that is the whole point of hysteresis.
+  const stillCell = pickGranularity(20, 'cell');
+  assert.equal(stillCell, 'cell', 'a small dip below threshold must not flicker');
+
+  // But a real drop, well past the biased threshold, does flip.
+  const dropsToRegion = pickGranularity(5, 'cell');
+  assert.equal(dropsToRegion, 'region');
+
+  // And the same holds coming back the other way.
+  const stillRegion = pickGranularity(26, 'region');
+  assert.equal(stillRegion, 'region', 'a small rise above threshold must not flicker');
+  const risesToCell = pickGranularity(60, 'region');
+  assert.equal(risesToCell, 'cell');
+});
+
+test('granularity never oscillates across a boundary held steady', () => {
+  // A zoom sitting exactly on the raw threshold, sampled every frame: without
+  // hysteresis this is the classic flicker case.
+  let g = null;
+  for (let i = 0; i < 20; i++) g = pickGranularity(24, g);
+  assert.equal(g, 'cell');
+});
+
+test('a keyboard nudge is exactly one cell inside the content region', () => {
+  // The cursor contract: one arrow press is one room. Damping must not touch
+  // that in the case that matters, which is everywhere a reader normally is.
+  const c = { x: 3.5, y: 3.5, zoom: 220 };
+  const moved = panByCells(c, 1, 0, 1);
+  assert.equal(moved.x, 4.5);
+  assert.equal(moved.y, 3.5);
+  // And a cell-centred camera stays cell-centred, so presses never drift the
+  // grid alignment while inside.
+  assert.equal(panByCells(moved, 0, -1, 1).y, 2.5);
+});
+
+test('a keyboard nudge has NO floor, unlike a pointer drag', () => {
+  // The asymmetry is the point, and it is about the INPUT, not the map. A drag
+  // is bounded by how far a hand travels, so `panByPixels` can afford a 0.12
+  // floor that keeps the map from feeling frozen. A held arrow key repeats
+  // about thirty times a second for as long as it is down, so the same floor
+  // is a constant outward velocity that never stops - measured, it let a
+  // six-second hold reach 31 cells past a boundary a mouse could barely push
+  // 11 past.
+  const c = { x: 40, y: 0, zoom: 220 };
+  assert.equal(panByCells(c, 1, 0, 0).x, 40, 'at zero resistance a nudge must not move at all');
+
+  // The pointer keeps its floor - asserted here so the two cannot be
+  // "unified" back together by someone tidying up.
+  const dragged = panByPixels(c, -220, 0, 0);
+  assert.ok(dragged.x > c.x, 'a fully resisted drag must still creep');
+});
+
+test('a keyboard nudge scales smoothly between the two', () => {
+  const c = { x: 10, y: 0, zoom: 220 };
+  const half = panByCells(c, 1, 0, 0.5);
+  assert.ok(Math.abs(half.x - 10.5) < 1e-9, `expected half a cell, got ${half.x - 10}`);
+  // Monotone in the resistance, which is what makes pushing outward feel
+  // progressively heavier rather than hitting a step.
+  let previous = 0;
+  for (const damp of [0, 0.25, 0.5, 0.75, 1]) {
+    const gained = panByCells(c, 1, 0, damp).x - c.x;
+    assert.ok(gained >= previous, `damp ${damp} moved less than the step below it`);
+    previous = gained;
+  }
+});
+
+test('the cell shape and limits survive a keyboard nudge', () => {
+  const limits = { min: 50, max: 300 };
+  const c = { x: 0, y: 0, zoom: 220, aspect: 720 / 1280, limits };
+  const moved = panByCells(c, 1, 1, 1);
+  assert.equal(moved.aspect, c.aspect);
+  assert.equal(moved.limits, limits);
+});
+
+test('a keyboard nudge re-centres an off-grid camera, on BOTH axes', () => {
+  // The bug this pins: a trip outside the region leaves the camera off the
+  // grid (damped steps out there are fractional by design, and the glide
+  // stops wherever it happens to cross back in). Adding a raw delta would
+  // carry that offset forever - the cursor's own cell sitting visibly
+  // off-centre, part of it hanging off the screen edge, with no way to
+  // correct it by arrowing.
+  const off = { x: 7.0, y: 0.3, zoom: 220 };
+  const moved = panByCells(off, -1, 0, 1);
+  assert.equal(moved.x, 6.5, 'the axis moved along must land cell-centred');
+  assert.equal(moved.y, 0.5, 'the OTHER axis must be re-centred too');
+});
+
+test('the offset does not survive repeated in-bounds presses', () => {
+  // The symptom as reported: "continuing to move with arrow keys leaves you
+  // stuck at that same offset". One press is enough to fix it, but assert
+  // across several so a fix that merely reduces the offset each time - rather
+  // than snapping - cannot pass.
+  let c = { x: 7.0, y: 0.3, zoom: 220 };
+  for (let i = 0; i < 4; i++) {
+    c = panByCells(c, -1, 0, 1);
+    assert.equal(c.x - Math.floor(c.x), 0.5, `x off-centre after press ${i + 1}`);
+    assert.equal(c.y - Math.floor(c.y), 0.5, `y off-centre after press ${i + 1}`);
+  }
+  // ...and it is still exactly one cell per press, not a bigger jump each time.
+  assert.equal(c.x, 3.5, 'four presses from cell 7 must land on cell 3');
+});
+
+test('re-centring happens only inside the region, never against the damping', () => {
+  // Snapping outside would defeat the resistance entirely - it would round a
+  // heavily damped fractional step back up to a whole cell.
+  const outside = { x: 20.0, y: 0.3, zoom: 220 };
+  const nudged = panByCells(outside, 1, 0, 0.1);
+  assert.ok(Math.abs(nudged.x - 20.1) < 1e-9, `expected a damped 0.1, got ${nudged.x - 20}`);
+  assert.equal(nudged.y, 0.3, 'the other axis must not snap while outside either');
 });

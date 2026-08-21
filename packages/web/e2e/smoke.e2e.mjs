@@ -14,7 +14,15 @@
  *   npx playwright install chromium   # once
  *   npm run test:e2e
  *
- * In CI it runs from .github/workflows/e2e.yml, which is manual-dispatch only.
+ * In CI it runs from .github/workflows/e2e.yml, which `ci.yml` now calls as a
+ * reusable workflow - so this suite is a MERGE GATE, and a test in here that is
+ * timing-dependent rather than state-dependent blocks everyone. Wait on a
+ * condition, never on a duration.
+ *
+ * The accessibility block asserts what only a browser can compute: an
+ * accessible name comes from labels, roles and content together, so checking
+ * the JSX would only restate the source. Those tests read the real tree back
+ * out - `axNodes` for Chromium's computed properties, axe for the broad sweep.
  *
  * If Playwright's bundled Chromium is not the one on the machine - a sandbox
  * with its own browsers, a distro package - point BABEL_E2E_CHROMIUM at the
@@ -28,6 +36,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const artifacts = resolve(repoRoot, 'packages/web/e2e/artifacts');
@@ -97,7 +106,16 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // `hasTouch` so the pinch test's CDP touch events become real pointer
     // events. It does not take the mouse away, so the drag and wheel tests are
     // unaffected - a desktop with a touchscreen is an ordinary machine.
-    page = await browser.newPage({ viewport: { width: 1280, height: 800 }, hasTouch: true });
+    //
+    // An explicit context rather than `browser.newPage()`, which makes one
+    // implicitly: axe refuses to run against a page whose context it did not
+    // see created, and the accessibility sweep below is the whole reason this
+    // suite can claim anything about the parts of the app nobody looks at.
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      hasTouch: true,
+    });
+    page = await context.newPage();
 
     // Anything the page complains about is a failure; the map is not supposed
     // to be noisy.
@@ -205,7 +223,16 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // it the whole pyramid could be selecting levels nothing ever fetches.
     await page.mouse.move(640, 400);
     for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 600);
-    const out = await settled(page);
+    // `settled()` waits out a rearrangement and two frames, which covers the
+    // camera but NOT a tile that has not finished decoding - so a far-out
+    // screen can be settled and still be a cell or two short for a frame or
+    // two. `blank === 0` is a condition, and waiting a fixed number of frames
+    // for it is what made this flake (~1 run in 5 on a slow machine). Poll it
+    // instead, bounded, so a cell that never arrives still fails the assertion
+    // below rather than hanging.
+    let out = await settled(page);
+    for (const until = Date.now() + 5000; out.blank > 0 && Date.now() < until; )
+      out = await settled(page);
 
     for (let i = 0; i < 12; i++) await page.mouse.wheel(0, -600);
     const inClose = await settled(page);
@@ -419,6 +446,914 @@ describe('the library, in a browser', { concurrency: false }, () => {
       'clicking a keyword chip never produced a ranking'
     );
     assert.match(await page.locator('.note').textContent(), /keywords/);
+  });
+
+  // --- accessibility (docs/accessibility-plan.md phase A/B) --------------------
+  //
+  // These are exactly the assertions no unit test can make: an accessible name
+  // is what the BROWSER computes from labels, roles and attributes together, so
+  // asserting on the JSX would only restate the source. Reading them back out
+  // of the real accessibility tree is the only way to know they landed.
+
+  test('axe finds no WCAG violations on the opening view', async () => {
+    // The broad net under the specific assertions below. Those say what this
+    // app in particular must do; this one catches the whole class of ordinary
+    // mistake - an unlabelled control, a bad contrast ratio, a role with a
+    // required attribute missing - in the parts of the page nobody is looking
+    // at, which is exactly where accessibility work rots.
+    //
+    // It is not a substitute for the named tests: axe cannot know that the
+    // rooms slider ought to say what its number counts, only that it has a
+    // name at all.
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+    assert.deepEqual(summary, [], `axe reported violations:\n  ${summary.join('\n  ')}`);
+  });
+
+  test('the ranked listbox is honestly counted, reachable with no arrow keys, and axe-clean', async () => {
+    // The "non-generic" slider was driven to 100% by an earlier test (so a
+    // right-click reliably lands on a room) and is still there. At 100% the
+    // density gradient CANNOT show a cluster - `gradedCount` counts ranks the
+    // gradient lifts ABOVE the baseline, and there is no "above" left when the
+    // baseline already is the maximum. That is not a bug in the listbox; it is
+    // what a maxed ratio means, and this test would otherwise time out waiting
+    // for a listbox a correct app is right not to show. Pull it back down so a
+    // cluster can exist at all.
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('Home');
+
+    // try/finally, not just a trailing restore at the end of the test: several
+    // tests after this one - long-press, pinch, capture-throw - rely on the
+    // map being dense, so an assertion failing partway through must not ALSO
+    // strand the ratio slider sparse for everything that runs afterward. That
+    // turns one failure into an unrelated-looking cascade, which is exactly
+    // what made a flake here harder to diagnose than it needed to be.
+    try {
+      // "brass" is a confirmed hit in the sample corpus's own metadata - see
+      // the keyword chips test above, which reads real keywords off a real
+      // card. Anything that finds zero matches would test the empty state
+      // instead of this one, so a query known to match is not a convenience,
+      // it is the point.
+      await page.locator('button.search-trigger').click();
+      await landed(page);
+      await page.locator('input[type=search]').fill('brass');
+      await page.locator('input[type=search]').press('Enter');
+
+      const results = page.locator('.results-list');
+      await results.waitFor({ timeout: SEARCH_TIMEOUT });
+
+      // The first search's ranking can change again shortly after it first
+      // appears - CLIP embeddings load asynchronously and can re-rank a
+      // keyword/story-only result (see SEARCH_TIMEOUT's own comment on why
+      // the first search is slow) - so `.results-list` existing is not the
+      // same claim as "the search is done." Poll for the mounted count to
+      // hold steady across two reads before trusting it; found by this test
+      // failing intermittently, once on a run that also happened to send the
+      // search-trigger flight to the far-zoomed opening view rather than
+      // simply focusing the field, which is circumstantial evidence for
+      // "still settling," not proof, but the poll costs nothing either way.
+      const options = results.locator('.result');
+      let previousCount = null;
+      let count;
+      // `previousCount` starts at `null`, which cannot equal a real count, so
+      // this always waits out at least one real 200ms gap (`waitFor`'s own
+      // poll interval) between two AGREEING reads before trusting one - not
+      // just two reads taken back to back with nothing between them, which
+      // would prove nothing about whether it had actually settled.
+      await waitFor(
+        async () => {
+          count = await options.count();
+          const stable = count === previousCount;
+          previousCount = count;
+          return stable;
+        },
+        SEARCH_TIMEOUT,
+        'the results list never stopped changing count'
+      );
+      assert.ok(count > 0, 'a query with a known match must produce at least one result');
+
+      const label = await page.locator('#results-label').textContent();
+      const first = results.locator('li').first();
+      const posinset = await first.getAttribute('aria-posinset');
+      const setsize = await first.getAttribute('aria-setsize');
+
+      // The label reports the TRUE match count, not just what got mounted -
+      // that is the whole point of windowing rather than silently truncating.
+      assert.match(label, /results\s+\d+/, `the results label must report a count, got ${JSON.stringify(label)}`);
+
+      // `aria-setsize`/`aria-posinset` go on the `<li>` rather than the button
+      // because only `listitem` supports them - a bare `button` does not, and
+      // axe's `aria-allowed-attr` rule would catch that placement mistake. But
+      // Chrome's CDP `Accessibility.getFullAXTree` does not surface either
+      // property for a native `<li>` at all - confirmed by dumping a node in
+      // full rather than guessing from an empty read - so this can only check
+      // that the DOM carries the values, not that a real screen reader's
+      // platform API receives them the way it receives the button's name
+      // checked below. Left as an open question in accessibility-plan.md
+      // rather than a claim this test does not back up.
+      assert.equal(posinset, '1');
+      assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
+
+      // The BUTTON is what carries the name a reader hears - `listitem` has
+      // no "name from contents" in the accessible-name algorithm, so the
+      // `<li>` wrapping it is correctly nameless in the tree; only its child
+      // speaks. Checked last, since it is the slow CDP round trip and nothing
+      // after it depends on the count/setsize/label read above staying in
+      // sync with it.
+      const nodes = await axNodes(page);
+      assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
+
+      // No arrow keys anywhere in this flow - Tab is the whole story, which
+      // is the reason this phase ships before the map's keyboard interface (§5).
+      await options.first().focus();
+      await page.keyboard.press('Enter');
+
+      const card = page.locator('.card');
+      await card.waitFor({ timeout: 5000 });
+      const cardText = await card.locator('.card-id').textContent();
+      const firstResultText = await options.first().textContent();
+      assert.ok(
+        firstResultText.startsWith(cardText.split(' · ')[0].replace(/^room/i, 'Room')),
+        `the opened card must be the room the result named: ${JSON.stringify({ firstResultText, cardText })}`
+      );
+
+      // And the whole thing - search active, listbox populated, card open -
+      // is still clean. The opening-view sweep above cannot see any of this;
+      // it ran before a search existed.
+      const { violations } = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+      assert.deepEqual(summary, [], `axe reported violations with a search active:\n  ${summary.join('\n  ')}`);
+
+      await page.keyboard.press('Escape');
+      await card.waitFor({ state: 'detached', timeout: 5000 });
+    } finally {
+      // Restores the RATIO and the CAMERA, not just the ratio. A search that
+      // finds the field off screen flies to the far-zoomed `opening` view
+      // (fitted tight on the centre tile) rather than simply focusing it; an
+      // assertion failing before this test flies anywhere else left the
+      // camera there once, and a right-click at a fixed screen point in a
+      // LATER test landed on the centre tile's own controls instead of a room
+      // - one test's failure taking down an unrelated one's precondition,
+      // which is worse than the original failure. Clicking "centre" is cheap
+      // and makes every subsequent test's assumption ("a dense map, framed
+      // normally") true regardless of how far this one got.
+      await ratio.press('End');
+      await page.getByRole('button', { name: 'centre' }).click();
+      await landed(page);
+    }
+  });
+
+  test('the panel controls carry accessible names, and the sliders say what they count', async () => {
+    const nodes = await axNodes(page);
+
+    // Both labels used to be SIBLINGS of their input with no `htmlFor`, so both
+    // sliders reached the reader as a bare number with no indication of what it
+    // measured.
+    const rooms = axFind(nodes, 'slider', /rooms on the map/i);
+    const ratio = axFind(nodes, 'slider', /non-generic/i);
+    assert.ok(rooms, 'the rooms slider must have an accessible name');
+    assert.ok(ratio, 'the ratio slider must have an accessible name');
+
+    // Having a name is only half of it: a range announces its raw number, which
+    // is the one thing about it nobody was wondering about. The units have to
+    // reach the reader THROUGH THE NAME, which is why this asserts on `name`
+    // and not on `aria-valuetext`: that attribute is honoured by chromium 1194
+    // and ignored by Chrome 151 on a native `input[type=range]`, so a test that
+    // reads it back is testing the browser. This still catches the bug the test
+    // was written for - a label with no `htmlFor` leaves no name to match at
+    // all - and now also catches a label that says only a bare number.
+    //
+    // Both sliders are checked before either is asserted, and the failure
+    // carries the whole node: "expected /%/, got 26" cost a CI round trip once
+    // because it could not distinguish a missing attribute from an ignored one.
+    const said = [
+      ['rooms', rooms, /\d+ of \d+/],
+      ['ratio', ratio, /\d+%/],
+    ];
+    const mute = said.filter(([, node, want]) => !want.test(node.name));
+    assert.equal(
+      mute.length, 0,
+      `${mute.map(([which]) => which).join(' and ')} must say what they count, not just a number:\n`
+        + JSON.stringify({ rooms, ratio }, null, 2)
+    );
+
+    assert.ok(axFind(nodes, 'button', /search the library/i), 'the search trigger must be named');
+  });
+
+  test('the page may be zoomed', async () => {
+    // Blocking page zoom is a WCAG 1.4.4 failure, and the attributes that did
+    // it here are easy to reintroduce by reflex the next time a touch gesture
+    // misbehaves on iOS. Asserted so that reflex fails loudly.
+    const viewport = await page.locator('meta[name=viewport]').getAttribute('content');
+    assert.doesNotMatch(viewport, /user-scalable\s*=\s*no/, 'page zoom must not be disabled');
+    assert.doesNotMatch(viewport, /maximum-scale/, 'page zoom must not be capped');
+  });
+
+  test('the canvas is a named application region, not an anonymous graphic', async () => {
+    // Superseded by phase C: the canvas WAS `role="img"` with a static label,
+    // a placeholder for the picture nobody could yet navigate. Now it is the
+    // cursor's own `role="application"` region, named by whatever cell is
+    // currently under the camera centre - "the centre of the library" at
+    // page load, since the opening view starts there.
+    await page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 5000 });
+  });
+
+  test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
+    const card = page.locator('.card');
+
+    await page.mouse.click(880, 300, { button: 'right' });
+    await card.waitFor({ timeout: 5000 });
+
+    // Focus moves in - otherwise a keyboard user is told a dialog opened and
+    // has no way to reach a word of it.
+    assert.ok(
+      await page.evaluate(() => document.activeElement?.classList.contains('card')),
+      'the card must take focus when it opens'
+    );
+
+    // And it is named by the room it describes. "room" - what it used to
+    // announce - is the one fact the reader already had.
+    //
+    // Matched case-insensitively on purpose: `.card-id` is styled
+    // `text-transform: uppercase`, and Chrome folds that INTO the computed
+    // accessible name, so the reader is handed "ROOM 21 · 022.JPG" rather than
+    // the DOM's own "room 21 · 022.jpg". Harmless for a word that is still
+    // pronounceable, worth knowing before naming anything after an acronym, and
+    // it goes away when the card takes its label from `describeCell` (phase B)
+    // rather than from a visually-transformed node.
+    const dialog = axFind(await axNodes(page), 'dialog', /^room \d+/i);
+    assert.ok(dialog, 'the card must be named by the room it describes');
+
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    // And focus is not stranded on the node that just left the document, which
+    // is the way this breaks: focus on a detached element belongs to nothing,
+    // Tab restarts from the top, and a screen reader is left describing a card
+    // that is no longer there.
+    //
+    // What is NOT asserted here, because it is not yet true: returning focus to
+    // whatever opened the card. Right-clicking the canvas blurs the focused
+    // control to the body before the card ever mounts, so a pointer-opened card
+    // has no opener to go back to. `RoomCard` restores when there is one, and
+    // the path that gives it one is Enter on the map cursor (phase C). Assert
+    // it there, where it can actually fail.
+    assert.ok(
+      await page.evaluate(() => document.activeElement?.isConnected ?? false),
+      'focus must not be left on a detached node'
+    );
+  });
+
+  test('what the map just did is announced politely', async () => {
+    // The status text already existed and already said the right thing; it
+    // simply updated a div nothing was listening to. The hint must stay OUT of
+    // the live region - a node that falls back to the instructions would read
+    // them aloud again every time a status cleared.
+    const live = page.locator('[role=status]');
+    await live.waitFor({ timeout: 5000 });
+    await waitFor(
+      async () => /ranked by/.test((await live.textContent()) ?? ''),
+      SEARCH_TIMEOUT,
+      'the live region never carried the result of the search'
+    );
+    assert.doesNotMatch(await live.textContent(), /drag to pan/, 'the hint must not be announced');
+  });
+
+  test('reduced motion rebuilds the library instead of sliding it', async () => {
+    // Asserted through the CAMERA rather than by watching for the absence of an
+    // animation, which would be a race dressed up as a test. A normal
+    // rearrangement parks the camera on the centre first, because the slide is
+    // planned against exactly the cells on screen. Reduced motion bails out
+    // before that flight - there is no animation to set up, and moving someone's
+    // camera unasked is the very thing they turned off - so the giveaway is a
+    // camera that did not move at all.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    try {
+      // Somewhere clearly not the centre, so "did not move" is unambiguous.
+      await page.mouse.move(700, 420);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(700 - i * 25, 420 - i * 15);
+      await page.mouse.up();
+      const before = await settled(page);
+      assert.ok(
+        Math.abs(before.x) > 0.2 || Math.abs(before.y) > 0.2,
+        `the drag must leave the centre, got (${before.x}, ${before.y})`
+      );
+
+      // "rescatter", not "reorder", and the difference is load-bearing: a
+      // search is still active by the time this runs, and `order` is then
+      // `result.order` - the same array by reference no matter how often
+      // `orderSeed` is bumped - so the render effect's deps never change and
+      // "reorder" rearranges nothing at all. Rescatter bumps the layout seed,
+      // which rebuilds `layout` and always triggers a rearrangement. Written
+      // down because this test passed against a deliberately broken app until
+      // the button was swapped.
+      await page.getByRole('button', { name: 'rescatter' }).click();
+      const after = await settled(page);
+
+      assert.ok(
+        Math.abs(after.x - before.x) < 1e-6 && Math.abs(after.y - before.y) < 1e-6,
+        `reduced motion must not fly the camera home: (${before.x}, ${before.y}) -> (${after.x}, ${after.y})`
+      );
+      assert.ok(
+        Math.abs(after.zoom - before.zoom) < 1e-6,
+        `reduced motion must not change the zoom: ${before.zoom} -> ${after.zoom}`
+      );
+    } finally {
+      await page.emulateMedia({ reducedMotion: null });
+    }
+
+    // Put the reader back on the centre for whatever runs next.
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('keyboard focus is visible', async () => {
+    // The search fields used to say `outline: none` and lean on a border-colour
+    // shift. Reading the computed outline back is the only way to catch that
+    // returning, since it looks perfectly reasonable in the stylesheet.
+    // Focus has to arrive by KEYBOARD. `:focus-visible` follows the most recent
+    // input modality, so an `el.focus()` from the test inherits the mouse click
+    // that came before it and correctly shows no ring - which would fail this
+    // test for a reason that has nothing to do with the stylesheet. Click
+    // something unfocusable to park focus on the body, then Tab.
+    await page.locator('.panel h1').click();
+    await page.keyboard.press('Tab');
+
+    const ring = await page.evaluate(() => {
+      const el = document.activeElement;
+      const { outlineStyle, outlineWidth } = getComputedStyle(el);
+      return { tag: el.tagName, cls: el.className, outlineStyle, outlineWidth };
+    });
+    assert.notEqual(ring.tag, 'BODY', 'Tab must reach a control');
+    assert.notEqual(ring.outlineStyle, 'none', `a keyboard-focused ${ring.tag} must show an outline`);
+    assert.ok(parseFloat(ring.outlineWidth) >= 2, `the focus ring must be visible, got ${ring.outlineWidth}`);
+  });
+
+  // --- the keyboard cursor (docs/accessibility-plan.md phase C) --------------
+  //
+  // The map's own keyboard interface: `role="application"` on the canvas turns
+  // off a screen reader's browse-mode reading for exactly this element, which
+  // is what lets arrow keys reach the page at all rather than being consumed
+  // by the reader's own navigation. None of that can be asserted from JSX -
+  // only a real browser resolves whether a role actually changes what a key
+  // press does.
+
+  test('the map is reachable, and the sample corpus is small enough to have a real edge', async () => {
+    // The 26-room sample corpus gives a `boundaryRadius` of only a few cells
+    // even fully dense - discovered while driving this by hand, not designed
+    // in - which is what makes the boundary-crossing test below reachable in
+    // a handful of presses rather than needing a huge synthetic corpus.
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('End');
+
+    await page.locator('canvas').focus();
+    await assert.doesNotReject(
+      page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 2000 })
+    );
+  });
+
+  test('arrows pan the cursor and announce it; ctrl+arrow always lands on a room', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const home = await hud(page);
+
+    await page.keyboard.press('ArrowRight');
+    await waitFor(
+      async () => (await hud(page)).x !== home.x,
+      2000,
+      'an arrow press must move the camera by exactly one cell'
+    );
+    const afterOneStep = await hud(page);
+    assert.ok(
+      Math.abs(afterOneStep.x - home.x - 1) < 1e-6,
+      `one arrow press must move exactly one cell: ${home.x} -> ${afterOneStep.x}`
+    );
+    await waitFor(
+      async () => /Room \d+|blank wall/.test((await live.textContent()) ?? ''),
+      2000,
+      'an arrow press must announce something about the new cursor cell'
+    );
+
+    // Ctrl+arrow's whole point: whatever it lands on, if it finds anything at
+    // all, is a real room - never the wallpaper a plain arrow could have just
+    // as easily landed on. That is the one thing worth asserting without
+    // hard-coding a room id or a step count from the sample corpus, both of
+    // which would be pinning an art/layout fact this test does not own.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    await page.keyboard.press('Control+ArrowRight');
+    await waitFor(
+      async () => /^Room \d+|^nothing further/.test((await live.textContent()) ?? ''),
+      2000,
+      'ctrl+arrow must announce a room or say it found nothing'
+    );
+    const ctrlArrowText = await live.textContent();
+    if (!/^nothing further/.test(ctrlArrowText)) {
+      assert.match(ctrlArrowText, /^Room \d+/, 'ctrl+arrow must never land announcing a blank wall');
+      // And it must actually have MOVED the camera - a room announcement
+      // without a matching jump would mean the text and the map disagree.
+      await waitFor(async () => (await hud(page)).x !== home.x, 2000, 'ctrl+arrow never moved the camera');
+    }
+  });
+
+  test('the boundary is announced once on crossing, not on every step past it', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    // Walk outward until the crossing message appears, or give up - the exact
+    // step count depends on which direction the corpus's slots happen to
+    // extend, so this does not hard-code one.
+    let crossedAt = -1;
+    for (let i = 1; i <= 30; i++) {
+      await page.keyboard.press('ArrowRight');
+      const text = (await live.textContent()) ?? '';
+      if (/edge of the library/.test(text)) {
+        crossedAt = i;
+        break;
+      }
+    }
+    assert.ok(crossedAt > 0, 'walking outward must eventually cross the boundary and say so');
+
+    // One more step past it must NOT repeat the boundary sentence - only the
+    // crossing itself is announced, or the room name would be drowned every
+    // single press through the far field.
+    await page.keyboard.press('ArrowRight');
+    const next = (await live.textContent()) ?? '';
+    assert.doesNotMatch(next, /edge of the library/, 'the boundary sentence must not repeat on every step');
+  });
+
+  test('Home and ctrl+Home fly the cursor, and Enter opens what it lands on', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    await canvas.focus();
+
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+    await waitFor(
+      async () => /^Room \d+, rank 1 of/.test((await live.textContent()) ?? ''),
+      2000,
+      'ctrl+Home must land on the best-ranked room (rank 1)'
+    );
+
+    // Standing on a real room, Enter opens its card - the keyboard path into
+    // a room's content that right-click and long-press never gave a keyboard
+    // user.
+    await page.keyboard.press('Enter');
+    const card = page.locator('.card');
+    await card.waitFor({ timeout: 5000 });
+    assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
+
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.tagName),
+      'CANVAS',
+      'closing a card opened by the map keyboard must return focus to the map'
+    );
+
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    await waitFor(
+      async () => (await live.textContent()) === 'the centre of the library',
+      2000,
+      'Home must return to the centre and announce it'
+    );
+  });
+
+  test('PageUp/PageDown zoom without moving the cursor cell', async () => {
+    // A keyboard zoom eases over `camera.keyboardMoveMs`, so the HUD is not
+    // final the moment `page.keyboard.press` returns - poll for the change
+    // rather than reading once. This needed polling even back when the move
+    // was instant, because "instant" still meant "on the next animation
+    // frame"; it raced about one run in four then, and the easing only widens
+    // the window. Same discipline `settled()` uses for its own asynchrony.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const before = await hud(page);
+
+    await page.keyboard.press('PageUp');
+    await waitFor(async () => (await hud(page)).zoom !== before.zoom, 2000, 'PageUp never changed the zoom');
+    const zoomedIn = await hud(page);
+    assert.ok(zoomedIn.zoom > before.zoom, `PageUp must zoom in: ${before.zoom} -> ${zoomedIn.zoom}`);
+    assert.ok(Math.abs(zoomedIn.x - before.x) < 1e-6, 'PageUp must not pan the cursor');
+    assert.ok(Math.abs(zoomedIn.y - before.y) < 1e-6, 'PageUp must not pan the cursor');
+
+    await page.keyboard.press('PageDown');
+    await page.keyboard.press('PageDown');
+    await waitFor(
+      async () => (await hud(page)).zoom < before.zoom,
+      2000,
+      'PageDown never brought the zoom back below where it started'
+    );
+    const zoomedOut = await hud(page);
+    assert.ok(zoomedOut.zoom < before.zoom, `PageDown must zoom out: ${before.zoom} -> ${zoomedOut.zoom}`);
+  });
+
+  test('a keyboard nudge eases under normal motion and arrives at once under reduced motion', async () => {
+    // The keyboard used to write the camera directly - instant, no animation
+    // at all, which read as jarring against a search or a click that always
+    // eases. `keyboardMoveMs` (config) gives a short flight instead; this is
+    // the only layer that can see whether one is actually happening, since
+    // `flyTo`'s timing lives in a rAF loop no unit test drives.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const before = await hud(page);
+
+    await page.keyboard.press('ArrowRight');
+    const samples = [];
+    for (let i = 0; i < 8; i++) {
+      samples.push((await hud(page)).x);
+      await page.waitForTimeout(20);
+    }
+    // Three, not merely more-than-one: an "instant" arrival still spans two
+    // distinct values in a sampling window this wide, because the flight
+    // machinery takes exactly one rAF tick even at 0ms duration to notice it
+    // is already done - `before.x` on the sample that lands before that tick,
+    // `before.x + 1` on every one after. That two-value pattern is what a
+    // broken "always instant" sabotage produces and this test failed to catch
+    // the first time it was written; three or more values is only reachable
+    // by genuinely easing across several frames of `keyboardMoveMs`.
+    const distinctValues = new Set(samples.map((x) => x.toFixed(3))).size;
+    assert.ok(
+      distinctValues >= 3,
+      `an arrow press under normal motion must ease across several frames, saw ${JSON.stringify(samples)}`
+    );
+    await waitFor(async () => (await hud(page)).x === before.x + 1, 1000, 'the arrow press never finished arriving');
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    try {
+      await canvas.focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(50);
+      const rmBefore = await hud(page);
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(30); // well under keyboardMoveMs - nothing to ease if this is instant
+      const rmAfter = await hud(page);
+      assert.equal(
+        rmAfter.x, rmBefore.x + 1,
+        `reduced motion must arrive at once, not ease: ${rmBefore.x} -> ${rmAfter.x} after 30ms`
+      );
+    } finally {
+      await page.emulateMedia({ reducedMotion: null });
+    }
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('rapid keyboard presses compound instead of collapsing into one', async () => {
+    // A real regression, found driving this by hand: two PageDown presses back
+    // to back both read the camera's pre-flight zoom (nothing had eased yet,
+    // even one frame in) and computed the SAME target, so the second press
+    // silently cancelled the first instead of zooming out twice. Fixed by
+    // chaining off the in-flight target rather than the interpolated one;
+    // this is the test that would have caught it.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const before = await hud(page);
+
+    await page.keyboard.press('PageUp');
+    await waitFor(async () => (await hud(page)).zoom !== before.zoom, 1000, 'PageUp never took effect');
+    const zoomedIn = await hud(page);
+
+    await page.keyboard.press('PageDown');
+    await page.keyboard.press('PageDown');
+    await waitFor(
+      async () => (await hud(page)).zoom < before.zoom,
+      2000,
+      'two PageDown presses must bring the zoom back below the starting point, not just to it'
+    );
+    const zoomedOut = await hud(page);
+    assert.ok(
+      zoomedOut.zoom < before.zoom * 0.9,
+      `two PageDown presses must compound: started ${before.zoom}, zoomed in to ${zoomedIn.zoom}, ` +
+        `two steps back landed at ${zoomedOut.zoom} - a single collapsed step would land back near ${before.zoom}`
+    );
+
+    // Same check the other direction, cheaply: two rapid arrow presses must
+    // move two cells, not one.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const beforeArrows = await hud(page);
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await waitFor(
+      async () => (await hud(page)).x === beforeArrows.x + 2,
+      1000,
+      'two rapid arrow presses must move two cells, not collapse into one'
+    );
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('arrows re-centre the map after a trip outside the boundary', async () => {
+    // Reported from real use: after pushing past the border the camera settles
+    // off-centre from the cursor's own cell - part of it hanging off the screen
+    // edge - and arrowing around in bounds never fixes it, while a zoom or a
+    // ctrl+arrow does. The cause is that a trip outside leaves the camera off
+    // the grid (damped steps out there are fractional by design, and the glide
+    // stops wherever it happens to cross back in), and a raw per-press delta
+    // carries that offset forever.
+    //
+    // Only a browser reaches this: it needs the real damping, the real glide,
+    // and the real settling between them.
+    const canvas = page.locator('canvas');
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+    await canvas.focus();
+
+    // Push out past the edge, then let the glide carry the camera back in.
+    await page.keyboard.down('ArrowRight');
+    for (let i = 0; i < 45; i++) {
+      await page.waitForTimeout(33);
+      await page.keyboard.down('ArrowRight');
+    }
+    await page.keyboard.up('ArrowRight');
+
+    const settled = await hud(page);
+    assert.ok(settled.x > settled.edge, `the hold must end outside: x=${settled.x}, edge=${settled.edge}`);
+
+    // Walk back in. Once inside, a press must land the camera cell-centred on
+    // BOTH axes - the offset a trip outward leaves is rarely axis-aligned, so
+    // an implementation that only fixed the axis being moved along would leave
+    // the other one crooked forever.
+    const offCentre = (v) => Math.abs(v - Math.floor(v) - 0.5);
+    await waitFor(
+      async () => {
+        await page.keyboard.press('ArrowLeft');
+        await page.waitForTimeout(250);
+        const c = await hud(page);
+        // The HUD rounds to one decimal, so "centred" is .5 within that.
+        return c.x < c.edge && offCentre(c.x) < 0.05 && offCentre(c.y) < 0.05;
+      },
+      15000,
+      'arrowing back in bounds never re-centred the camera on its cell'
+    );
+
+    // And it stays centred, one clean cell per press, rather than re-acquiring
+    // an offset as it goes.
+    for (let i = 0; i < 3; i++) {
+      const before = await hud(page);
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForTimeout(300);
+      const after = await hud(page);
+      assert.ok(
+        offCentre(after.x) < 0.05 && offCentre(after.y) < 0.05,
+        `press ${i + 1} left the camera off-centre: x=${after.x}, y=${after.y}`
+      );
+      assert.ok(
+        Math.abs(after.x - before.x + 1) < 0.05,
+        `press ${i + 1} must move exactly one cell: ${before.x} -> ${after.x}`
+      );
+    }
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('a held arrow key cannot outrun what a hand can drag to', async () => {
+    // Parity, and the only place it can be observed: holding a key is a real
+    // browser behaviour (the OS repeats `keydown` ~30x a second for as long as
+    // it is down, each flagged `repeat: true`) that no unit test produces and
+    // no single `press()` reproduces.
+    //
+    // The bug this pins: damping the keyboard with the POINTER's curve looks
+    // right and is not. `panByPixels` floors its scale at 0.12 so a drag never
+    // feels frozen, which costs nothing because a hand runs out of screen -
+    // but for a key that repeats indefinitely, any non-zero floor is a
+    // constant outward velocity. Measured with the shared curve, a six-second
+    // hold reached 31 cells past a boundary eight full-width drags could only
+    // push 15 past, and it was still climbing linearly.
+    const canvas = page.locator('canvas');
+    const recentre = async () => {
+      await page.getByRole('button', { name: 'centre' }).click();
+      await landed(page);
+    };
+
+    /** Hold ArrowRight for real: `down()` again while held sends repeat keydowns. */
+    const hold = async (repeats) => {
+      await canvas.focus();
+      await page.keyboard.down('ArrowRight');
+      for (let i = 0; i < repeats; i++) {
+        await page.waitForTimeout(33);
+        await page.keyboard.down('ArrowRight');
+      }
+      await page.keyboard.up('ArrowRight');
+      return (await hud(page)).x;
+    };
+
+    await recentre();
+    const brief = await hold(30);
+
+    await recentre();
+    const long = await hold(180);
+
+    // Six times the input must not buy anything like six times the distance -
+    // the step has to approach zero as the resistance does. A floored curve
+    // grows linearly and would sail past this.
+    assert.ok(
+      long < brief * 2,
+      `a six-times-longer hold must not travel proportionally further: ` +
+        `30 repeats reached ${brief}, 180 reached ${long}`
+    );
+
+    // And the absolute reach stays in the same neighbourhood a determined
+    // drag gets to, which is what "parity" actually means here. Generous
+    // bound: this is asserting an order of magnitude, not a tuned constant.
+    const { edge } = await hud(page);
+    assert.ok(
+      long < edge + 40,
+      `a held key must not sail off into the far field: reached ${long}, edge at ${edge}`
+    );
+
+    await recentre();
+  });
+
+  test('the edge pushes back on a keyboard cursor too, and respects reduced motion', async () => {
+    // The boundary's pan resistance is a REAL affordance, not an obstacle for
+    // the keyboard to be exempted from: walking out past the last ranked room
+    // and feeling the library pull you home is the same thing a pointer drag
+    // gets on release (accessibility-plan.md §3.1's "the edge speaks").
+    //
+    // Written after shipping the opposite. An earlier fix exempted every
+    // landed flight from the glide, on the theory that correcting a
+    // keyboard-placed camera would fight the cursor's announced position -
+    // which got the causality backwards (the cursor is DERIVED from the
+    // camera, so it simply moves with it) and, because the exemption was set
+    // on every landing and only cleared by a pointerdown, silently disabled
+    // the pushback for the entire keyboard session. This is the test that
+    // would have caught that.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    let crossedX = null;
+    for (let i = 0; i < 15; i++) {
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(200);
+      const text = (await page.locator('[role=status]').textContent()) ?? '';
+      if (/edge of the library/.test(text)) {
+        crossedX = (await hud(page)).x;
+        break;
+      }
+    }
+    assert.ok(crossedX !== null, 'walking outward must cross the boundary within a bounded number of presses');
+
+    // Walk a few cells clear of the boundary so the pull is unambiguous, then
+    // stop touching anything. The drift back must happen on its own - no
+    // pointer, no further keys. A mouse pan producing a sudden correction that
+    // idling does not is precisely the "snaps back when I try to pan" symptom.
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(200);
+    }
+    const far = await hud(page);
+    assert.ok(far.x > far.edge, `the walk must end outside the content region: x=${far.x}, edge=${far.edge}`);
+
+    await waitFor(
+      async () => (await hud(page)).x < far.x - 0.5,
+      5000,
+      'the edge must pull a keyboard-placed camera back on its own, with no pointer involved'
+    );
+
+    // And it keeps pulling toward the region rather than stalling partway.
+    const settling = await hud(page);
+    await waitFor(
+      async () => (await hud(page)).x < settling.x,
+      5000,
+      'the pull must continue, not stop after one frame'
+    );
+
+    // Reduced motion gets the same correction without the frames it takes to
+    // ease there - the glide had never checked the setting at all, an ambient
+    // gap older than any of the keyboard work.
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    try {
+      await page.mouse.move(900, 400);
+      await page.mouse.down();
+      await page.mouse.move(0, 400, { steps: 5 });
+      await page.mouse.up();
+      const justReleased = (await hud(page)).x;
+      await page.waitForTimeout(80);
+      const afterOneFrame = (await hud(page)).x;
+      await page.waitForTimeout(1200);
+      const later = (await hud(page)).x;
+      assert.notEqual(justReleased, afterOneFrame, 'a release outside the region must still correct SOMETHING');
+      assert.equal(
+        afterOneFrame, later,
+        `reduced motion must settle the glide near-instantly, not ease it over seconds: ${afterOneFrame} -> ${later}`
+      );
+    } finally {
+      await page.emulateMedia({ reducedMotion: null });
+    }
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
+  test('/ reaches the search field from the map keyboard', async () => {
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    await page.keyboard.press('/');
+    await waitFor(
+      async () => (await page.evaluate(() => document.activeElement?.tagName)) === 'INPUT',
+      2000,
+      '/ must move focus to the search field'
+    );
+  });
+
+  test('? announces the surroundings, on request rather than on every move', async () => {
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    await page.keyboard.press('?');
+    await waitFor(
+      async () => /edge of the library is about/.test((await live.textContent()) ?? ''),
+      2000,
+      '? must report the distance to the edge'
+    );
+  });
+
+  test("the cursor's own story and chips are real, touch-reachable elements - not gated on Enter", async () => {
+    // `role="application"` plus a keyboard IS the desktop story, but VoiceOver
+    // and TalkBack have nothing that corresponds to "press Enter" - accessibility-
+    // plan.md §4.2b/§4.4 requires the cursor's content to be reachable without
+    // it. Canvas fallback content is never PAINTED (that is the whole point -
+    // it does not duplicate what is already on screen for sighted users), so a
+    // real pointer click cannot reach it; `dispatchEvent` is the stand-in here
+    // for how an assistive technology's own activation lands on an element
+    // regardless of visibility.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    const chips = canvas.locator('button');
+    await waitFor(async () => (await chips.count()) > 0, 2000, 'the best-ranked room must have keyword chips');
+    const term = await chips.first().textContent();
+
+    await chips.first().dispatchEvent('click');
+    await waitFor(
+      async () => (await page.locator('input[type=search]').inputValue()) === term,
+      SEARCH_TIMEOUT,
+      'activating a cursor chip must run the same search a card chip does'
+    );
+  });
+
+  test('axe finds no WCAG violations with the keyboard cursor active', async () => {
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+    assert.deepEqual(summary, [], `axe reported violations with the cursor active:\n  ${summary.join('\n  ')}`);
+
+    // Restore the centre for whatever runs next, and the ratio slider this
+    // block's first test set - the long-press and pinch tests after this rely
+    // on a dense map to reliably land on a room at a fixed screen point.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('End');
   });
 
   test('a long press opens the card, and a drag cancels it', async () => {
@@ -645,18 +1580,25 @@ async function hud(page) {
  */
 function parseHud(text) {
   // `over` is only printed when a screen needs more than the level's cache
-  // budget, so it is optional here - but it is parsed rather than skipped,
-  // because it is the number that says the view is over its memory budget.
+  // budget, and `clustered` only when a search's density gradient actually
+  // lifted some ranks above the baseline (`layout.gradedCount > 0` - main.jsx)
+  // - both optional here, but parsed rather than skipped, because both are
+  // numbers a test might need. `clustered` went unexercised until a test ran a
+  // search at a non-maxed "non-generic" ratio: every earlier test in this file
+  // left that slider at 100%, where a cluster is structurally impossible (see
+  // the ranked-listbox test), so the suffix never appeared and this regex
+  // never had to parse it.
   const m = text.match(
-    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)$/
+    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?$/
   );
   assert.ok(m, `could not read the hud: ${JSON.stringify(text)}`);
-  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge] = m;
+  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered] = m;
   return {
     cells: +cells, drawn: +drawn, level: +level, tilePx: +tilePx,
     substituted: +substituted, blank: +blank, cached: +cached,
     over: over === undefined ? 0 : +over,
     zoom: +zoom, x: +x, y: +y, edge: +edge,
+    clustered: clustered === undefined ? 0 : +clustered,
   };
 }
 
@@ -759,6 +1701,41 @@ function sampleCamera(page, ms) {
     ms
   );
 }
+
+/**
+ * The accessibility tree as the browser actually computed it.
+ *
+ * Not `page.accessibility` - that API is gone as of Playwright 1.51 - and not
+ * the attributes themselves, which would only restate the source. An accessible
+ * name is computed from labels, roles, `aria-labelledby` and content together,
+ * so the only way to know it landed is to read it back out of the tree the
+ * screen reader would be handed. CDP is the one route that exposes the computed
+ * properties alongside the name; `locator.ariaSnapshot()` reports a slider's
+ * raw value and not the text that replaces it.
+ *
+ * Chromium-only, which is what this suite runs.
+ */
+async function axNodes(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  await cdp.detach();
+  return nodes.map((n) => ({
+    role: n.role?.value,
+    name: n.name?.value ?? '',
+    // Carried for the failure dumps rather than for any assertion: a control's
+    // value reaches CDP through both the node's own `value` and a `valuetext`
+    // property, and knowing which one held what is how the Chrome 151
+    // `aria-valuetext` difference got diagnosed.
+    value: n.value?.value,
+    props: Object.fromEntries((n.properties ?? []).map((x) => [x.name, x.value?.value])),
+  }));
+}
+
+
+/** The one node with this role whose accessible name matches, or undefined. */
+const axFind = (nodes, role, name) =>
+  nodes.find((n) => n.role === role && name.test(n.name));
 
 async function waitFor(predicate, timeoutMs, message) {
   const deadline = Date.now() + timeoutMs;

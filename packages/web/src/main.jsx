@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { createLayout, shuffledOrder, cellDistance } from '../../map/ordering.js';
 import { joinMetadata } from '../../map/metadata.js';
 import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
+import { describeCell } from '../../map/describe.js';
+import { nextRoom } from '../../map/nextRoom.js';
 import {
   assignTitles,
   pickTags,
@@ -17,13 +19,13 @@ import {
   HISTORY_SLOT_COUNT,
   CENTRE_OPENING_RECT,
 } from './centre.js';
-import { CELL_ASPECT, pxPerCell, fitZoom } from './camera.js';
+import { CELL_ASPECT, pxPerCell, fitZoom, cursorCell, pickGranularity } from './camera.js';
 import { createTileCache, CENTRE, variantId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
 import { createSlideshow, createSlideRenderer } from './slide.js';
 import { sizeOf as pyramidSizeOf, BASE_TILE } from './pyramid.js';
-import { useMapCamera } from './useMapCamera.js';
+import { useMapCamera, prefersReducedMotion } from './useMapCamera.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -224,11 +226,63 @@ function Library({ manifest }) {
     [layout, order]
   );
 
+  // The card's accessible name and its story text, from the one function that
+  // also names a listbox option: `describeCell`. Computed here rather than
+  // inside `RoomCard`, because this is where `layout`/`order`/`metadata` are
+  // already in scope - the card itself only knows the cell it was opened for.
+  const cardDescription = useMemo(
+    () => (card ? describeCell(card.x, card.y, { layout, order, metadata }) : null),
+    [card, layout, order, metadata]
+  );
+
+  // The ranked listbox: every rank the search's gradient actually lifted above
+  // the baseline (`gradedCount` - "the size of the cluster", 0 for a uniform
+  // map), each named by the same `describeCell` the card uses. This is the
+  // LOSSLESS channel accessibility-plan.md §3.2 argues for - position on the
+  // map is lossy (rank and certainty, not adjacency), the ranking is not.
+  //
+  // Windowed to `RESULTS_WINDOW`: `gradedCount` is normally tens of rooms, not
+  // thousands, but nothing bounds it against a corpus where it could be. Capped
+  // a second way too - only ranks that actually landed a cell (`cellOfRank`)
+  // are listed, because there is nowhere to fly a reader to otherwise. Pulling
+  // the "rooms on the map" slider down can make that the tighter of the two
+  // bounds; either way `total` still reports the true match count via
+  // `aria-setsize`, so the list stays honest about what it is not showing.
+  //
+  // Worth knowing before "fixing" an empty list that looks wrong: at
+  // `contentRatio: 1` (the "non-generic" slider maxed) `gradedCount` is ALWAYS
+  // 0. It counts ranks the gradient lifts above the baseline, and there is no
+  // "above" left once the baseline already is the maximum - every cell already
+  // holds a room regardless of match quality, so there is nothing left for a
+  // search to cluster. That is the ratio slider's own logic working as
+  // designed, not a bug in this list.
+  const searchResults = useMemo(() => {
+    if (!result) return null;
+    const total = Math.min(layout.gradedCount, RESULTS_WINDOW);
+    const rooms = [];
+    for (let rank = 0; rank < total; rank++) {
+      const cell = layout.cellOfRank(rank);
+      if (!cell) continue;
+      rooms.push({
+        id: order[rank], rank, x: cell.x, y: cell.y,
+        name: describeCell(cell.x, cell.y, { layout, order, metadata }).name,
+      });
+    }
+    return { rooms, total: layout.gradedCount };
+  }, [result, layout, order, metadata]);
+
   // A tap selects a book on the centre room. Stable identity - so the pointer
   // listeners are not re-bound every render - over a ref that always holds the
   // latest logic, since the handler closes over `search` and `centreSlots`,
   // which are redefined below and on every render.
   const tapRef = useRef(() => {});
+
+  // `/` (below) needs `goToSearch`, which is declared further down and closes
+  // over state that changes often - the same "stable identity over a ref that
+  // always holds the latest logic" as `tapRef`, and for the same reason: the
+  // map's keyboard handler must not itself be rebuilt every time `goToSearch`
+  // is.
+  const goToSearchRef = useRef(() => {});
   const onTap = useCallback((px, py, camera) => tapRef.current(px, py, camera), []);
 
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
@@ -262,7 +316,7 @@ function Library({ manifest }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cam, flyTo } = useMapCamera({
+  const { cam, flyTo, nudgeBy, flightTarget } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
@@ -286,6 +340,262 @@ function Library({ manifest }) {
       return { box, usable: onScreen && !anim.current && isSearchBoxUsable(cellRect) };
     },
     [cam]
+  );
+
+  // --- the keyboard cursor ---------------------------------------------------
+  //
+  // The cell under the camera centre (accessibility-plan.md §4.2), and
+  // DERIVED rather than separately tracked - that definition is the whole
+  // design, so anything that moves the camera moves the cursor with it and
+  // there is no second copy that can drift out of step. That includes the
+  // edge's own glide easing back after a keyboard press crosses the boundary:
+  // the camera moves, so the cursor does too, which is correct rather than a
+  // conflict. (An earlier version kept a hand-maintained ref and exempted
+  // keyboard landings from the glide to protect it - that got the causality
+  // backwards, and disabled the boundary pushback for the whole session.)
+  //
+  // `cursor` is React state only because JSX needs it - the canvas's
+  // `aria-label` and its nested, touch-reachable story/chips. The render loop
+  // does NOT read it (see `cursorNow` below), for the same reason `cam` is a
+  // ref: a re-render per keypress is fine, a torn-down and rebuilt render
+  // EFFECT per keypress is not.
+  const [cursor, setCursor] = useState(() => cursorCell(cam.current));
+
+  /**
+   * Where the cursor is RIGHT NOW, for the keyboard's own next move.
+   *
+   * `flightTarget()` rather than `cam.current`: mid-flight the latter is the
+   * interpolated position, so a second key press arriving in the same tick as
+   * the first would compute its move from a camera that has not gone anywhere
+   * yet, and the two presses would collapse into one. The flight's resolved
+   * target is where the previous press actually put the cursor. Idle - which
+   * includes while the glide is easing back from outside the region - it is
+   * just the live camera, so the next press builds on where the reader has
+   * actually drifted to rather than on where they last aimed.
+   */
+  const cursorNow = useCallback(() => cursorCell(flightTarget()), [flightTarget]);
+  // Whether ANY keyboard action has happened yet. Gates the ring in `render.js`
+  // - a permanent reticle in the middle of a page nobody has touched would be a
+  // strong visual choice made on nobody's behalf (accessibility-plan.md §3.6,
+  // §8 item 6). A ref, not state: it only needs to be true by the time the next
+  // frame reads it, not to trigger a render of its own.
+  const keyboardUsed = useRef(false);
+  // The ring itself is derived from the live camera in the render loop, and
+  // every camera change already requests a draw - so this covers the one case
+  // that is not a camera move: the FIRST keypress flipping `keyboardUsed`,
+  // which makes the ring appear.
+  useEffect(() => {
+    requestDraw();
+  }, [cursor, requestDraw]);
+
+  // Carries the announcement's granularity across cursor moves, so a zoom held
+  // near the threshold does not flicker between naming a cell and naming a
+  // region (the same hysteresis `pickLevel` uses for the pyramid, applied to
+  // what is SAID rather than to what is drawn - §3.1).
+  const granularityRef = useRef('cell');
+
+  // Whether the cursor is past the ranked content's edge, tracked so the
+  // boundary is announced on the move that CROSSES it rather than on every
+  // press once already outside - the room name would otherwise be drowned by
+  // "edge of the library" on every single step through the far field.
+  const wasBeyondBoundary = useRef(false);
+
+  /**
+   * Move the cursor to a specific cell, build what a reader should hear about
+   * arriving there, and push it into the existing polite live region (Phase
+   * A's `.note` status span) - not just the canvas's `aria-label`, because an
+   * attribute change on an already-focused element is not reliably announced
+   * across screen readers, and this is the one mechanism every AT actually
+   * supports.
+   */
+  const announceCursorMove = useCallback(
+    (cell) => {
+      setCursor(cell);
+
+      const canvas = canvasRef.current;
+      const cellPxWidth = canvas ? pxPerCell(cam.current).x * (window.devicePixelRatio || 1) : 0;
+      granularityRef.current = pickGranularity(cellPxWidth, granularityRef.current);
+
+      const base =
+        granularityRef.current === 'region'
+          ? `the far field near (${cell.x}, ${cell.y}) - too far out to name a single room`
+          : describeCell(cell.x, cell.y, { layout, order, metadata }).name;
+
+      const beyond = cellDistance(cell.x, cell.y, CELL_ASPECT) > layout.boundaryRadius;
+      const crossed = beyond !== wasBeyondBoundary.current;
+      wasBeyondBoundary.current = beyond;
+
+      setStatus(
+        crossed && beyond
+          ? `${base} - edge of the library; beyond here every wall is blank`
+          : crossed
+            ? `${base} - back within the library`
+            : base
+      );
+    },
+    [cam, layout, order, metadata]
+  );
+
+  /** `?` - the screen-reader equivalent of peripheral vision (§4.2a). */
+  const announceSurroundings = useCallback(() => {
+    setStatus(describeSurroundings(layout, order, metadata, cursor));
+  }, [layout, order, metadata, cursor]);
+
+  // The cursor's own story and keyword chips, nested inside the canvas as real
+  // fallback content (accessibility-plan.md §4.2b, §4.4): "touch users get the
+  // DOM... the cursor's contents", which a keyboard-only Enter would not give
+  // them, since touch has nothing that corresponds to Enter. `tabIndex={-1}`
+  // on the chips keeps them out of the desktop Tab sequence - the map is still
+  // exactly one tab stop - while leaving them real, interactive elements a
+  // touch screen reader's swipe navigation reaches regardless of tabindex.
+  const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
+  const cursorEntry = cursorRoom.centre || cursorRoom.generic ? null : metadata?.[cursorRoom.id] ?? null;
+
+  // The canvas's own accessible name - what a reader hears landing on it for
+  // the FIRST time, before any move has run `announceCursorMove` and pushed
+  // anything into the live region. Always the plain per-cell name, independent
+  // of the region/cell granularity split that only matters once movement is
+  // in progress.
+  const cursorLabel = useMemo(
+    () => describeCell(cursor.x, cursor.y, { layout, order, metadata }).name,
+    [cursor, layout, order, metadata]
+  );
+
+  const onMapKeyDown = useCallback(
+    (e) => {
+      const dir = {
+        ArrowLeft: { dx: -1, dy: 0 }, ArrowRight: { dx: 1, dy: 0 },
+        ArrowUp: { dx: 0, dy: -1 }, ArrowDown: { dx: 0, dy: 1 },
+      }[e.key];
+
+      if (dir) {
+        e.preventDefault();
+        keyboardUsed.current = true;
+
+        if (e.ctrlKey || e.metaKey) {
+          const found = nextRoom(layout, cursorNow(), dir);
+          if (found) {
+            flyTo(found.x, found.y, undefined, { ms: config.camera.keyboardMoveMs });
+            announceCursorMove(found);
+          } else {
+            setStatus('nothing further in that direction');
+          }
+          return;
+        }
+
+        let { dx, dy } = dir;
+        if (e.shiftKey) {
+          // A screenful: however many cells actually fit the canvas on that
+          // axis, so the jump matches what the reader would otherwise have
+          // panned across by hand.
+          const canvas = canvasRef.current;
+          const per = canvas ? pxPerCell(cam.current) : { x: 1, y: 1 };
+          const cellsX = canvas ? Math.max(1, Math.round(canvas.clientWidth / per.x)) : 1;
+          const cellsY = canvas ? Math.max(1, Math.round(canvas.clientHeight / per.y)) : 1;
+          dx *= cellsX;
+          dy *= cellsY;
+        }
+        // `nudgeBy`, not `flyTo`: this is a PAN, and pans are damped by the
+        // map's resistance so pushing outward gets heavier - the same curve a
+        // pointer drag gets, for parity. Inside the content region the damping
+        // is 1, so this is still exactly one cell per press.
+        //
+        // The announcement therefore has to come from where the move actually
+        // LANDED (`cursorNow()` re-read after the nudge, which sees the new
+        // flight's target) rather than from a target computed here: far
+        // outside, a press may not advance the cursor a whole cell at all, and
+        // announcing the cell the reader aimed at would be describing a room
+        // they are not going to reach. When the cell is unchanged the string is
+        // identical, React does not re-render, and no live-region update fires
+        // - silence being the honest answer to a press that went nowhere.
+        //
+        // Announced synchronously rather than on the flight landing: the
+        // cursor's cell is settled the instant the key is processed, and
+        // `keyboardMoveMs` exists to make that motion visible to sighted
+        // readers, not to gate anything else. A rapid run of presses each
+        // interrupts the previous flight - the same "a second flight replaces
+        // the first" `flyTo` already gives Home - so key-repeat chases
+        // smoothly rather than queuing animations.
+        nudgeBy(dx, dy, { ms: config.camera.keyboardMoveMs });
+        announceCursorMove(cursorNow());
+        return;
+      }
+
+      if (e.key === 'PageUp' || e.key === 'PageDown') {
+        e.preventDefault();
+        keyboardUsed.current = true;
+        // Flies to the CURSOR's own cell at a new zoom, which keeps the
+        // cursor fixed across the zoom the way the old pixel-anchored
+        // `zoomBy` did, and lands the camera exactly cell-centred.
+        //
+        // The zoom is built off `flightTarget()`, not `cam.current.zoom` -
+        // `cam.current` is the INTERPOLATED value, which a flight in progress
+        // has not necessarily moved from its start at all yet. Two PageDown
+        // presses back to back both reading `cam.current.zoom` would compute
+        // the SAME target and the second would silently cancel the first's
+        // effect rather than compounding it - `flightTarget()` chains off the
+        // fully-resolved target of whatever is already in flight instead.
+        const factor = e.key === 'PageUp' ? 1.6 : 1 / 1.6;
+        const zoom = flightTarget().zoom * factor;
+        const here = cursorNow();
+        flyTo(here.x, here.y, zoom, { ms: config.camera.keyboardMoveMs });
+        // The cursor cell itself does not move, but the granularity might, so
+        // re-announce.
+        announceCursorMove(here);
+        return;
+      }
+
+      if (e.key === 'Home') {
+        e.preventDefault();
+        keyboardUsed.current = true;
+        if (e.ctrlKey || e.metaKey) {
+          const best = layout.cellOfRank(0);
+          if (!best) {
+            setStatus('no ranked rooms to jump to');
+            return;
+          }
+          flyTo(best.x, best.y, config.camera.defaultZoom).then(
+            (landed) => landed && announceCursorMove(best)
+          );
+        } else {
+          flyTo(0, 0, config.camera.defaultZoom).then(
+            (landed) => landed && announceCursorMove({ x: 0, y: 0 })
+          );
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        // Opening a card over the wallpaper would make the gesture read as
+        // broken rather than as empty - the same rule `picking.js` states for
+        // a click, applied here to a keypress.
+        const here = cursorNow();
+        const at = layout.roomAt(here.x, here.y, order);
+        if (at.centre || at.generic) return;
+        e.preventDefault();
+        const canvas = canvasRef.current;
+        const at2 = canvas
+          ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
+          : { x: 0, y: 0 };
+        setCard({ id: at.id, rank: at.rank, x: here.x, y: here.y, at: at2 });
+        return;
+      }
+
+      if (e.key === '/') {
+        e.preventDefault();
+        goToSearchRef.current();
+        return;
+      }
+
+      if (e.key === '?') {
+        e.preventDefault();
+        announceSurroundings();
+      }
+    },
+    [
+      layout, order, flyTo, nudgeBy, flightTarget, cursorNow, config,
+      announceCursorMove, announceSurroundings, cam,
+    ]
   );
 
   // --- rendering -----------------------------------------------------------
@@ -350,6 +660,7 @@ function Library({ manifest }) {
           : renderer.draw({
               ctx, width: w, height: h, dpr, cam: cam.current,
               layout: showing.layout, order: showing.order, centreSlots,
+              cursor: keyboardUsed.current ? cursorCell(cam.current) : null,
             });
 
       const hud = document.getElementById('hud');
@@ -418,6 +729,18 @@ function Library({ manifest }) {
     async (before, after) => {
       const canvas = canvasRef.current;
       if (!canvas) return false;
+
+      // Someone who asked for less motion gets the library rebuilt at once.
+      // Returning false here is not a special case: it is the same answer
+      // `buildRearrangement` gives for a change that cannot be animated
+      // legally, and the caller already knows what to do with it. So reduced
+      // motion costs one condition and reuses a path that is already written
+      // and already tested, rather than adding a branch of its own.
+      //
+      // Before the flight, deliberately: the fly-home exists to set up the
+      // animation, so with no animation to set up there is no reason to move
+      // the camera - and moving it unasked is itself the thing being avoided.
+      if (prefersReducedMotion()) return false;
 
       // Hold the old arrangement on screen for the flight. `layout` and `order`
       // already describe the new one, and without this the map would show it,
@@ -572,6 +895,7 @@ function Library({ manifest }) {
     const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
     if (landed) input.focus();
   }, [flyTo, opening, searchBoxState]);
+  goToSearchRef.current = goToSearch;
 
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
@@ -582,6 +906,25 @@ function Library({ manifest }) {
     setCard(null);
     search(text);
   };
+
+  // Choosing a result in the ranked list (below) moves the camera AND opens
+  // the room's card, in that order but not waiting on one another. The card is
+  // an independent DOM dialog with its own position, so its content is
+  // reachable the instant this runs regardless of whether - or how fast - the
+  // camera arrives; the flight is for the sighted reader's continuity, not a
+  // precondition for anyone else's access. This is the touch/VoiceOver path
+  // into a room's content that right-click and long-press never gave them.
+  const openRoom = useCallback(
+    (x, y, id, rank) => {
+      const canvas = canvasRef.current;
+      const at = canvas
+        ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
+        : { x: 0, y: 0 };
+      setCard({ id, rank, x, y, at });
+      flyTo(x, y, config.camera.defaultZoom);
+    },
+    [flyTo, config]
+  );
 
   // A future override book does something other than search - an artist's
   // statement, say. Nothing reserves a slot yet (CENTRE_OVERRIDES is empty), so
@@ -625,7 +968,39 @@ function Library({ manifest }) {
 
   return (
     <>
-      <canvas ref={canvasRef} />
+      {/*
+        `role="application"`, scoped to exactly this element and nowhere else
+        (accessibility-plan.md §4.2b): inside it, a screen reader's own browse-
+        mode reading turns off and arrow keys reach the page instead, which is
+        what lets them pan. That trade must not creep onto the panel, which is
+        why this is the only application region in the document.
+
+        One tab stop for the entire map: `tabIndex={0}` here and nothing else
+        keyboard-reachable at the top level of this subtree, so Tab always
+        leaves the map in one press. The chips nested below are `tabIndex={-1}`
+        for exactly that reason - real, touch-reachable elements that do not
+        lengthen the desktop tab sequence.
+
+        `aria-label` is the STATIC name - what a reader hears arriving here for
+        the first time. Everything after that arrives through the polite live
+        region `announceCursorMove` writes to (`status`, below), because an
+        attribute change on an already-focused element is not reliably
+        announced across screen readers on its own.
+      */}
+      <canvas
+        ref={canvasRef}
+        role="application"
+        tabIndex={0}
+        aria-label={cursorLabel}
+        onKeyDown={onMapKeyDown}
+      >
+        {cursorEntry?.story && <p>{cursorEntry.story}</p>}
+        {cursorEntry?.keywords?.map((k) => (
+          <button key={k.text} type="button" tabIndex={-1} onClick={() => searchKeyword(k.text)}>
+            {k.text}
+          </button>
+        ))}
+      </canvas>
       {/*
         The live search field, on the centre tile itself rather than in the
         panel. Always mounted - Playwright's `inputValue()` and React's
@@ -640,6 +1015,7 @@ function Library({ manifest }) {
       <form ref={searchFormRef} onSubmit={runSearch} className="centre-search">
         <input
           type="search"
+          aria-label="search the library"
           placeholder="search the library…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -658,22 +1034,82 @@ function Library({ manifest }) {
           </button>
         </div>
 
+        {/*
+          The ranked listbox: the lossless reading of a search, next to the map's
+          lossy spatial one (accessibility-plan.md §3.2). A plain list of buttons
+          rather than `role="listbox"` with arrow-key roving on purpose - that
+          widget pattern needs the keyboard model phase C brings, and a listbox
+          that does not implement roving is a broken widget, worse than none.
+          Every button here is independently reachable by Tab today, which is
+          what makes this the phase that ships before the map's keyboard
+          interface (§5): it works with no arrow keys at all.
+
+          Absent entirely when there is no search, or when one ran and matched
+          nothing worth clustering (`gradedCount === 0`) - the empty state IS the
+          uniform map, and a list with nothing ranked in it would be noise.
+        */}
+        {searchResults && searchResults.total > 0 && (
+          <div className="row results" role="region" aria-labelledby="results-label">
+            <label id="results-label">
+              results <b>{searchResults.total}</b>
+              {searchResults.total > searchResults.rooms.length &&
+                ` (showing ${searchResults.rooms.length})`}
+            </label>
+            {/*
+              `aria-setsize`/`aria-posinset` go on the `<li>`, not the button
+              inside it: those two are valid on the `listitem` role (a `<li>`'s
+              implicit role inside a `<ul>`) and are not valid on a bare
+              `button` - axe's `aria-allowed-attr` rule would flag the wrong
+              placement.
+            */}
+            <ul className="results-list">
+              {searchResults.rooms.map((r) => (
+                <li key={r.id} aria-setsize={searchResults.total} aria-posinset={r.rank + 1}>
+                  <button className="result" onClick={() => openRoom(r.x, r.y, r.id, r.rank)}>
+                    {r.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/*
+          Both sliders carry an explicit `htmlFor`/`id` pair: the label is a
+          SIBLING of its input rather than wrapping it, so without the
+          association neither slider has an accessible name and both announce
+          as a bare number.
+
+          The LABEL is what has to carry the units, not `aria-valuetext` alone.
+          A range reports "42" on its own, which is the one thing about it that
+          was never in question - but Chrome 151 ignores `aria-valuetext` on a
+          native `input[type=range]` (chromium 1194 honours it; the e2e caught
+          the difference the first time CI ran a newer browser than the one it
+          was written against). An accessible name is computed the same way
+          everywhere, so "of 26" lives in the label and is safe. `aria-valuetext`
+          stays for the browsers that do honour it, where it is what a DRAG
+          announces - a value change re-reads the value, never the name.
+        */}
         <div className="row">
-          <label>
-            rooms on the map <b>{Math.min(roomCount, total)}</b>
+          <label htmlFor="rooms-on-map">
+            rooms on the map <b>{Math.min(roomCount, total)} of {total}</b>
           </label>
           <input
+            id="rooms-on-map"
             type="range" min="1" max={total} value={Math.min(roomCount, total)}
+            aria-valuetext={`${Math.min(roomCount, total)} of ${total} rooms`}
             onChange={(e) => setRoomCount(Number(e.target.value))}
           />
         </div>
 
         <div className="row">
-          <label>
+          <label htmlFor="non-generic">
             non-generic <b>{Math.round(contentRatio * 100)}%</b>
           </label>
           <input
+            id="non-generic"
             type="range" min="2" max="100" value={Math.round(contentRatio * 100)}
+            aria-valuetext={`${Math.round(contentRatio * 100)}% of cells hold a corpus room`}
             onChange={(e) => setContentRatio(Number(e.target.value) / 100)}
           />
         </div>
@@ -688,15 +1124,25 @@ function Library({ manifest }) {
           <button onClick={() => flyTo(0, 0, config.camera.defaultZoom)}>centre</button>
         </div>
 
+        {/*
+          The hint and the status are two different things and must not share a
+          node. `role="status"` announces every change to its subtree, so a
+          single node that falls back to the hint would read the instructions
+          aloud again each time a status cleared. The hint is static and silent;
+          the region below it starts empty and only ever holds what the map just
+          did, which is exactly what a polite live region is for.
+        */}
         <div className="note">
-          {status || 'drag to pan, scroll to zoom. right-click a room.'}
+          {!status && 'drag to pan, scroll to zoom. right-click a room.'}
+          <span role="status">{status}</span>
         </div>
       </div>
       <div className="hud" id="hud" />
       {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
-      {card && (
+      {card && cardDescription && (
         <RoomCard
           card={card}
+          desc={cardDescription}
           entry={metadata?.[card.id] ?? null}
           file={manifest.rooms[card.id]?.file}
           onClose={() => setCard(null)}
@@ -709,6 +1155,13 @@ function Library({ manifest }) {
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
+
+/**
+ * The most options the ranked listbox mounts at once - the DOM budget from
+ * accessibility-plan.md §4.2b. `gradedCount` is normally tens of rooms, not
+ * thousands, so this rarely bites; it exists for the corpus where it would.
+ */
+const RESULTS_WINDOW = 50;
 
 /**
  * How much of the binding axis the opening view fills - a hair under 1 so the
@@ -760,7 +1213,7 @@ function appendTouchLog(line) {
  * pick near an edge does not open a card half off screen. Escape and a click
  * anywhere outside close it, which are the two things anyone tries first.
  */
-function RoomCard({ card, entry, file, onClose, onKeyword }) {
+function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
 
@@ -778,6 +1231,33 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
     });
   }, [card]);
 
+  // Focus moves in on open and goes back where it came from on close.
+  //
+  // Two things make the restore conditional rather than unconditional. A card
+  // is dismissed by clicking *anywhere else*, and that click has usually
+  // already put focus somewhere the reader chose - stealing it back would
+  // undo their own action. And the card may be closed because the map is about
+  // to rearrange under it (`searchKeyword`), by which point the element that
+  // opened it may be gone. So: restore only if focus is still inside the card
+  // or has fallen to the body, which are exactly the cases where nobody else
+  // has claimed it.
+  useEffect(() => {
+    const opener = document.activeElement;
+    ref.current?.focus();
+    return () => {
+      // The body is not somewhere focus can be "put back" - it is where focus
+      // already is when nothing holds it, which is the ordinary case for a card
+      // opened by right-clicking the canvas. Nothing to restore.
+      if (!opener || opener === document.body || !opener.isConnected) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && !ref.current?.contains(active)) return;
+      opener.focus();
+    };
+    // Mount and unmount only: re-running this on a re-render would drag focus
+    // back to the card while someone is reading a chip inside it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     // `pointerdown` rather than `click`: the canvas would otherwise start a pan
@@ -793,8 +1273,22 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
     };
   }, [onClose]);
 
+  // Named by `desc.name` - the same string a listbox option and (once the
+  // cursor lands, phase C) the map itself would say for this cell. "room" -
+  // which is what this used to announce on its own - is the one fact a reader
+  // already had; the rank and the keywords are the reason to have opened it.
+  //
+  // `tabIndex={-1}` makes it focusable without putting it in the tab order,
+  // which is what lets focus be moved here programmatically above.
   return (
-    <div className="card" ref={ref} style={pos} role="dialog" aria-label="room">
+    <div
+      className="card"
+      ref={ref}
+      style={pos}
+      role="dialog"
+      tabIndex={-1}
+      aria-label={desc.name}
+    >
       <div className="card-head">
         <span className="card-id">
           room {card.id}
@@ -820,7 +1314,7 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
         </div>
       )}
 
-      {entry?.story && <p className="story">{entry.story}</p>}
+      {desc.description && <p className="story">{desc.description}</p>}
 
       {!entry && <p className="story dim">No keywords recorded for this room.</p>}
     </div>
@@ -834,6 +1328,46 @@ function RoomCard({ card, entry, file, onClose, onKeyword }) {
  * were available - a corpus full of keywords that none of them matched should
  * not claim the ranking was keyword-driven.
  */
+/**
+ * `?` - the screen-reader equivalent of peripheral vision
+ * (accessibility-plan.md §4.2a): what a sighted reader gets for free by
+ * glancing at the screen, on request rather than on every move, because
+ * "verbose by default" is the classic live-region mistake.
+ *
+ * Sentence construction over already-tested primitives (`nextRoom`,
+ * `cellDistance`) rather than a new pure module of its own - the same kind of
+ * job `describeSignals` above does for a search. Simplified from the plan's
+ * own example on purpose: four cardinal directions via straight-line
+ * `nextRoom` walks, not eight - a true diagonal nearest-room search is more
+ * geometry than a `?` press needs to earn its keep.
+ */
+function describeSurroundings(layout, order, metadata, cursor) {
+  const here = describeCell(cursor.x, cursor.y, { layout, order, metadata }).name;
+
+  const nearby = [
+    ['east', { dx: 1, dy: 0 }],
+    ['west', { dx: -1, dy: 0 }],
+    ['south', { dx: 0, dy: 1 }],
+    ['north', { dx: 0, dy: -1 }],
+  ]
+    .map(([label, dir]) => {
+      const found = nextRoom(layout, cursor, dir);
+      if (!found) return null;
+      const steps = Math.abs(found.x - cursor.x) + Math.abs(found.y - cursor.y);
+      const id = layout.roomAt(found.x, found.y, order).id;
+      return `Room ${id} ${steps} ${label}`;
+    })
+    .filter(Boolean);
+
+  const edge = Math.max(0, layout.boundaryRadius - cellDistance(cursor.x, cursor.y, CELL_ASPECT));
+
+  return [
+    here,
+    nearby.length ? nearby.join('; ') : 'nothing else ranked nearby',
+    `the edge of the library is about ${Math.round(edge)} away`,
+  ].join('. ');
+}
+
 function describeSignals({ clip, keyword, story }, hasText) {
   const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
   // Nothing matched and no CLIP means every score is zero, so the sort falls

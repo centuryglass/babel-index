@@ -46,16 +46,27 @@ jobs:
       - name: npm test
         run: npm test
 
+  # The browser smoke test, called rather than duplicated so `e2e.yml` stays the
+  # one definition of how it runs and keeps its own manual dispatch. One Node
+  # version is enough here: this job is about the browser, and the arithmetic
+  # that actually varies by runtime is covered by the matrix above.
+  e2e:
+    name: browser smoke test
+    uses: ./.github/workflows/e2e.yml
+    with:
+      node: '22'
+
   # A single check to require for merging, so branch protection does not need
-  # updating every time the matrix changes.
+  # updating every time the matrix changes - or every time a job is added.
   ci:
     name: ci
     if: always()
-    needs: [test]
+    needs: [test, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: All checks passed
-        if: needs.test.result != 'success'
+        if: needs.test.result != 'success' || needs.e2e.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
+          echo "e2e result: ${{ needs.e2e.result }}"
           exit 1

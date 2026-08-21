@@ -60,6 +60,7 @@ stale instance.
 | `assets/base_variations/` | the inpainted wallpaper variants, one per file; the map picks between them per cell. Swap these for real inpainting output |
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
+| `docs/accessibility-plan.md` | the keyboard/screen-reader plan: what the mirror is, what it deliberately is not |
 
 ## Conventions
 
@@ -350,6 +351,60 @@ stale instance.
   says WHETHER it landed — false means a hand hit the map — and an interrupted
   flight must fall back to the instant rebuild rather than rearranging under
   someone who has just grabbed it.
+- **`flyTo`'s third-argument `{ ms }` overrides the configured duration for one
+  call**, which is what lets the keyboard's short nudges (arrow, ctrl+arrow,
+  PgUp/PgDn — `camera.keyboardMoveMs`, 140ms) share every mechanic a "fly home"
+  already has — interrupt-on-a-new-flight, the landing promise, reduced motion
+  collapsing it to zero — rather than a second, parallel "ease the camera"
+  implementation. A keyboard handler chaining a SECOND move off the first must
+  not read `cam.current` for the target — that is the flight's INTERPOLATED
+  position, not where it is headed, and two key-repeat presses landing in the
+  same rAF tick will both read a value that has not moved yet and compute the
+  same target. Read `flightTarget()` (`flight.current?.to ?? cam.current`)
+  instead; found by two `PageDown` presses back to back silently cancelling
+  each other rather than compounding.
+- **The keyboard and the pointer are damped by the same resistance but
+  DIFFERENT curves, and merging them is a real bug.** `panByPixels` floors its
+  scale at 0.12 so a drag never feels frozen solid; that floor is free for a
+  pointer because a hand runs out of screen long before it runs out of map.
+  A held arrow key has no such bound - the browser repeats `keydown` about
+  thirty times a second for as long as it is down (each flagged
+  `event.repeat`), so any non-zero floor is a constant outward velocity that
+  never stops. Measured with the shared curve, a six-second hold reached 31
+  cells past a boundary eight full-width drags could only push 15 past, still
+  climbing linearly. `panByCells` therefore scales straight from `damp` with
+  no floor, so the step approaches zero as the resistance does and a hold
+  settles about where a determined drag does. Inside the content region
+  `damp` is exactly 1, and there `panByCells` lands the camera CELL-CENTRED on
+  the destination rather than adding a raw delta - both move one cell from an
+  aligned camera, but only the snap recovers. A trip outside leaves the camera
+  off the grid (the damped steps out there are fractional by design, and the
+  glide stops wherever it happens to cross back in), and a raw delta carries
+  that offset forever: every press advancing one cell while the cell itself
+  sits visibly off-centre, part of it off-screen. Both axes snap, not just the
+  one being moved along - the offset a trip outward leaves is rarely
+  axis-aligned, so pressing Left has to fix the vertical drift too.
+- **The glide applies to the keyboard exactly as it does to a pointer, and
+  must not be exempted for it.** The boundary's pushback is an affordance, not
+  an obstacle: walking out past the last ranked room and feeling the library
+  pull you home is the point, and arrow keys get it for the same reason a
+  released drag does. This was briefly broken by a `glideExempt` ref that
+  skipped the glide after any landed flight — reasoned from "the glide would
+  fight the cursor's announced position", which has the causality backwards
+  (the cursor is DERIVED from the camera, so it moves WITH the glide, and only
+  a separately-tracked copy could disagree). Because the flag was set on every
+  landing and cleared only by a pointerdown, it disabled the pushback for the
+  whole keyboard session: pan out forever, then get yanked back the moment a
+  mouse touched the map. `smoke.e2e.mjs` now asserts the drift happens with no
+  pointer involved.
+- **The glide respects `prefers-reduced-motion` too, via `glideToRest` rather
+  than skipping the correction.** There is no closed form for where `glideStep`
+  would eventually settle — the pull shrinks as resistance climbs back toward
+  1, which is what makes the eased version smooth — so `glideToRest` runs the
+  same step function to convergence (bounded at 20,000 iterations; every one
+  is arithmetic, not a frame) instead of inventing a different endpoint.
+  Motion-on and motion-off settle in the same place, differing only in whether
+  the trip is visible.
 - **While flying home to start a rearrangement, the map draws the OLD
   arrangement.** `layout` and `order` update the moment a search resolves, before
   the camera has moved, so without the hold in `anim.current.before` the map
@@ -464,11 +519,78 @@ stale instance.
 
 ### Testing and CI
 
-- **e2e is not a merge gate.** `ci.yml` runs `npm test` on every push and PR to
-  `main` and is the single required check; `e2e.yml` is manual dispatch only. Run
-  the smoke test yourself when the map itself changed.
+- **e2e IS a merge gate now.** `ci.yml` runs `npm test` across the Node matrix
+  *and* calls `e2e.yml` as a reusable workflow; the aggregate `ci` job needs both,
+  so it stays the single required check. `e2e.yml` keeps its `workflow_dispatch`
+  for ad-hoc runs against a chosen Node version. The consequence to respect: a
+  flaky browser test now blocks merges for everyone, so a smoke test that is
+  timing-dependent rather than state-dependent is no longer merely annoying.
+  Wait on a condition, never on a duration.
+- **`settled()` does not mean the tiles have arrived.** It waits out a
+  rearrangement and two frames - the camera and the animation, not the network.
+  A far-out screen can be settled and still be a cell or two short while a level
+  decodes, which is how the pyramid test flaked about one run in five. Anything
+  asserting on `blank` must poll for it, bounded, rather than trust the first
+  reading.
+- **The HUD updates on the next animation frame, not before `page.keyboard.press`
+  returns.** A keyboard test reading `hud(page)` immediately after a PageUp/
+  PageDown raced that frame and read the stale zoom about one run in four -
+  even a keyboard move with `keyboardMoveMs: 0` (reduced motion) still takes
+  one rAF tick to notice the flight is already done, so "instant" never means
+  synchronous. Poll for the change, same as `blank` above. The live region's
+  text is a different story: it comes from a React state commit, not a
+  `requestAnimationFrame` callback, and has not been observed to race across
+  many runs - but if that ever changes, it gets the same treatment.
+- **A rapid second keyboard press can read the same stale value the first one
+  did.** `cam.current` is the flight's INTERPOLATED position, not its target -
+  two `PageDown` presses back to back both computed their zoom from a value
+  that had not moved a single frame yet, so the second press cancelled the
+  first's effect instead of compounding it. The fix pattern generalises:
+  anything a keyboard handler chains off (the camera's target zoom, the
+  cursor's next cell) needs a source that is synchronously correct across two
+  same-tick calls. `flightTarget()` (`flight.current?.to ?? cam.current`) is
+  that source, and DERIVING from it beats tracking a second copy: the cursor
+  is `cursorCell(flightTarget())`, so it is synchronously correct for a
+  chained press AND cannot drift from the camera when something else (the
+  edge's glide) moves it. A hand-maintained ref was the first fix and it went
+  stale exactly where it mattered. Note a `useEffect` syncing a ref from state
+  is NOT synchronously faster than the state itself; both lag the same render,
+  so that is never the answer either.
+- **Two reads of the same UI, separated by a slow call, can describe two
+  different renders.** A test read a search's result count, then - after a
+  CDP `Accessibility.getFullAXTree` round trip - read an attribute off what it
+  assumed was the same list. The ranking can still change shortly after
+  results first appear (CLIP arrives after an initial keyword/story rank), and
+  the gap was wide enough to land on that window once the suite had grown
+  long enough to shift timing. Read values that must agree back to back, not
+  separated by the slowest call in the test; where genuine settling is needed,
+  poll for two AGREEING reads with a real gap between them, not two reads
+  taken one after another with nothing elapsed - that proves nothing.
+- **A test's own cleanup belongs in `finally`, not at the end of the function
+  body.** The fix above still let one assertion failing mid-test skip the
+  cleanup after it - stranding the ratio slider and the camera in a state only
+  that test expected, for every test that shares this suite's one `page`
+  afterward. One flake became two unrelated-looking failures in two other
+  tests. Sabotage-test the cleanup itself, not just the assertion it is
+  guarding: force the slow path the original flake depended on and confirm
+  the cascade is actually gone, not just less likely.
 - **A green e2e test that cannot fail is worse than none.** If you change it,
   break the app on purpose and confirm it fails.
+- **Assert on the accessible NAME, not on `aria-valuetext`.** A test that reads
+  an ARIA attribute back out of the tree is testing the browser: chromium 1194
+  honours `aria-valuetext` on a native `input[type=range]` and Chrome 151
+  ignores it, reporting the raw value instead. CI installs whatever Chromium the
+  pinned Playwright wants (1234 = Chrome for Testing 151) while a sandbox may
+  only have an older one, so this reached CI green-locally and red-there. A name
+  is computed by the accname algorithm the same way everywhere, so anything a
+  reader MUST hear belongs in the label; keep `aria-valuetext` for browsers that
+  honour it, where it is what a drag announces. `BABEL_E2E_CHROMIUM` points the
+  suite at a specific binary when the pinned one cannot be downloaded.
+- **An accessibility assertion must dump the node it failed on.** "expected
+  /%/, got 26" cannot distinguish a missing attribute from an ignored one, and
+  the difference cost a CI round trip. Check every case before asserting any of
+  them, and put the whole computed node in the message - the failing run is
+  usually on a machine you cannot open a browser on.
 - **CDP touch injection bypasses the browser's gesture arbitration**, so
   `smoke.e2e.mjs` cannot see anything involving `touch-action`, `pointercancel`,
   or the real capture lifecycle — it dispatches straight to the page. Treat it as
@@ -484,3 +606,11 @@ was learned into the relevant phase section, so the plan stays the thing you can
 read to know where the project is. `docs/design-history.md` records decisions
 that were reversed and alternatives that were rejected — consult it before
 re-treading one.
+
+Accessibility has its own plan, [`docs/accessibility-plan.md`](docs/accessibility-plan.md),
+because it cuts across every file rather than sitting in one phase. Two things
+from it to know before touching the web package: the map's DOM mirror is
+**windowed, never the whole board** (33k cells at 5000 rooms, and the
+accessibility tree is rebuilt on every reorder), and **alt text is never
+generated at runtime** — described rooms already ship keywords and a story, and
+anything more is an optional sidecar field produced offline in the corpus.

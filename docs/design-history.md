@@ -124,6 +124,90 @@ on. `HISTORY_SHELF` and the shelf-scoped `HISTORY_SLOTS` are gone;
 role tags always played is unchanged - it is what still shows on every book
 history has not yet reached.
 
+## Accessibility: three rejected shapes
+
+Planned in [`accessibility-plan.md`](accessibility-plan.md); these are the
+shapes considered and dropped, because each is the obvious first idea.
+
+- **The whole grid in the DOM.** Mirroring every cell as a node is the intuitive
+  reading of "make the map accessible", and it fails three ways at once: the
+  board is corpus-sized rather than screen-sized (157x209 at 5000 rooms, and the
+  accessibility tree is rebuilt on every reorder and every frame of a slider
+  drag); ~80% of cells are identical wallpaper, so a row reads as "blank wall"
+  four times per room; and cell position encodes rank and certainty, not
+  adjacency, so a grid presented as a grid promises a relationship that is not
+  there. The mirror is windowed instead, with its own two-rung granularity
+  ladder - the same instinct as the pyramid, applied to detail rather than
+  resolution.
+
+- **A separate accessible view of the corpus.** The earlier placeholder in the
+  plan proposed a *parallel* interface over the same dataset. Two interfaces are
+  two things to keep in sync, and the one nobody looks at is the one that rots.
+  What replaced it is one DOM tree with two orderings over it - a spatial grid
+  and a ranked list - sharing handlers and one naming module (`describeCell`),
+  the same "one implementation, two consumers" rule `metadata.js` already
+  follows.
+
+- **Alt text generated at runtime from the images.** The demo's data layer is a
+  directory of images and two text sidecars, and `npm test` needs no network; a
+  per-view model call would put latency, cost and non-determinism on the path to
+  a first frame. Captioning happens once, offline, alongside the stories, as an
+  optional `alt` in the filename-keyed sidecar - so nothing in `packages/` grows
+  a model dependency. The near-miss worth recording: the first objection to a
+  generated caption at all was that it could contradict the room's story, since
+  both describe an image the reader cannot see. That objection dissolved rather
+  than being weighed, because the captioner is given the story as context - the
+  two accounts cannot diverge if one is written from the other. The wallpaper is
+  separate again: a handful of hand-written sentences, because the same generated
+  one repeated hundreds of times per screen is noise, not access.
+
+- **A windowed DOM grid mirroring the cells in view**, with focus authoritative
+  and the camera following it. This was the accessibility plan's own first
+  answer to "the whole grid cannot be in the DOM" - keep the grid, make it a
+  window. It survived until the keyboard bindings were specified, and then died
+  on a constraint that has nothing to do with cost: in browse mode a screen
+  reader owns the arrow keys and the page never sees them, so a browsable DOM
+  grid needs browse mode while arrow-key panning needs focus mode. **No node
+  budget buys both.** Recorded because "just mirror fewer cells" is the obvious
+  fix to try, and it does not address the actual obstacle.
+
+  What replaced it inverts the coupling: the map is one `role="application"`
+  region with a single **cursor** at the cell under the camera centre
+  (`floor(cam.x), floor(cam.y)` - the camera is already in world cells). Arrows
+  pan, the cursor rides along and is announced, and ctrl+arrow jumps to the next
+  room the way ctrl+arrow jumps a word. The camera leads and the cursor follows,
+  where the mirror had focus leading and the camera following. Three things fall
+  out for free: the cursor cannot be scrolled off screen or stranded by a
+  rebuild, a pointer pan and a keyboard pan produce the same "where am I", and
+  the node count drops from ~33,000 to ~110. The rule that survives unchanged is
+  that the camera and the announced position must never disagree; only the
+  direction of the arrow changed.
+
+- **An accessible mode toggle** - the map for sighted users, an alternate linear
+  list of unique tiles for everyone else - was the natural answer to "four in five
+  arrow presses land on blank wall", and it is one toggle away from being right.
+  Three things sank it as a *mode*: an accessible path that is opt-in is one most
+  people never take; routing screen readers away from the map is the paternalism
+  this work exists to avoid; and a mode carries state that can desync (which mode
+  is a reorder announced against?). What replaced it costs nothing extra, because
+  the two readings are not duplicates: the grid is **windowed to the viewport**
+  (what is around you now) and the ranked listbox is **the whole ranking** (what
+  matched). Different questions, so both can be present at once and nothing forces
+  a choice. Also recorded so it is not rediscovered as new machinery: "100% unique
+  tiles" is already `contentRatio: 1` - `isContentSlot` is `cellHash < contentRatio`
+  and `createLayout` validates the range on `(0, 1]`. A dense map is a runtime
+  parameter, not a second layout. It is a fine feature to ship to everyone; it is
+  not an accessibility feature, and building it as one would give the accessible
+  interface a map of its own to keep in sync.
+
+Also rejected as a *goal*: **"invisible to sighted users."** Kept as the default
+for semantics, but most people this work helps do not use a screen reader -
+keyboard-only, motor-impaired, low-vision and vestibular users all need changes
+that are visible by definition (focus rings, reduced motion, page zoom). And an
+invisible layer nobody can see breaking desyncs from the canvas silently. Hence
+drawing the focused cell's ring on the canvas: it is the keyboard affordance and
+it makes a desync visible to everyone rather than only to the person it breaks.
+
 ## Rejected in passing
 
 - **Tiering the search** (an exact-match bucket sorted ahead of a CLIP bucket)

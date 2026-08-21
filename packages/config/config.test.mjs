@@ -200,6 +200,29 @@ test('a duration in seconds is honoured but flagged', () => {
   assert.match(c.notes.join('\n'), /seconds/);
 });
 
+// --- the keyboard nudge duration --------------------------------------------
+
+test('the keyboard move duration comes through, distinct from the flight one', () => {
+  const c = resolveConfig({ camera: { keyboardMoveMs: 90 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.keyboardMoveMs, 90);
+  assert.notEqual(c.camera.keyboardMoveMs, c.camera.flightMs, 'a keyboard nudge is not a fly-home');
+  assert.deepEqual(c.notes, []);
+});
+
+test('zero is a keyboard move duration too, not an error', () => {
+  // Same escape hatch as flightMs, same reason: prefers-reduced-motion asks
+  // for arrival at once, and this is how a config turns THIS animation off.
+  const c = resolveConfig({ camera: { keyboardMoveMs: 0 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.keyboardMoveMs, 0);
+  assert.deepEqual(c.notes, []);
+});
+
+test('a negative keyboard move duration is corrected and reported', () => {
+  const back = resolveConfig({ camera: { keyboardMoveMs: -50 } }, { zoomLimits: LIMITS });
+  assert.equal(back.camera.keyboardMoveMs, DEFAULTS.camera.keyboardMoveMs);
+  assert.match(back.notes.join('\n'), /keyboardMoveMs/);
+});
+
 // --- the search density gradient -------------------------------------------
 
 test('the density block comes through, and a partial one keeps its neighbours', () => {
