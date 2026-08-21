@@ -1053,6 +1053,64 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await landed(page);
   });
 
+  test('a held arrow key cannot outrun what a hand can drag to', async () => {
+    // Parity, and the only place it can be observed: holding a key is a real
+    // browser behaviour (the OS repeats `keydown` ~30x a second for as long as
+    // it is down, each flagged `repeat: true`) that no unit test produces and
+    // no single `press()` reproduces.
+    //
+    // The bug this pins: damping the keyboard with the POINTER's curve looks
+    // right and is not. `panByPixels` floors its scale at 0.12 so a drag never
+    // feels frozen, which costs nothing because a hand runs out of screen -
+    // but for a key that repeats indefinitely, any non-zero floor is a
+    // constant outward velocity. Measured with the shared curve, a six-second
+    // hold reached 31 cells past a boundary eight full-width drags could only
+    // push 15 past, and it was still climbing linearly.
+    const canvas = page.locator('canvas');
+    const recentre = async () => {
+      await page.getByRole('button', { name: 'centre' }).click();
+      await landed(page);
+    };
+
+    /** Hold ArrowRight for real: `down()` again while held sends repeat keydowns. */
+    const hold = async (repeats) => {
+      await canvas.focus();
+      await page.keyboard.down('ArrowRight');
+      for (let i = 0; i < repeats; i++) {
+        await page.waitForTimeout(33);
+        await page.keyboard.down('ArrowRight');
+      }
+      await page.keyboard.up('ArrowRight');
+      return (await hud(page)).x;
+    };
+
+    await recentre();
+    const brief = await hold(30);
+
+    await recentre();
+    const long = await hold(180);
+
+    // Six times the input must not buy anything like six times the distance -
+    // the step has to approach zero as the resistance does. A floored curve
+    // grows linearly and would sail past this.
+    assert.ok(
+      long < brief * 2,
+      `a six-times-longer hold must not travel proportionally further: ` +
+        `30 repeats reached ${brief}, 180 reached ${long}`
+    );
+
+    // And the absolute reach stays in the same neighbourhood a determined
+    // drag gets to, which is what "parity" actually means here. Generous
+    // bound: this is asserting an order of magnitude, not a tuned constant.
+    const { edge } = await hud(page);
+    assert.ok(
+      long < edge + 40,
+      `a held key must not sail off into the far field: reached ${long}, edge at ${edge}`
+    );
+
+    await recentre();
+  });
+
   test('the edge pushes back on a keyboard cursor too, and respects reduced motion', async () => {
     // The boundary's pan resistance is a REAL affordance, not an obstacle for
     // the keyboard to be exempted from: walking out past the last ranked room
