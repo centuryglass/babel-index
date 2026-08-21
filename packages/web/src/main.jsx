@@ -1078,13 +1078,21 @@ function Library({ manifest }) {
           Both sliders carry an explicit `htmlFor`/`id` pair: the label is a
           SIBLING of its input rather than wrapping it, so without the
           association neither slider has an accessible name and both announce
-          as a bare number. `aria-valuetext` then says what the number counts -
-          a range reports "42" on its own, which is the one thing about it that
-          was never in question.
+          as a bare number.
+
+          The LABEL is what has to carry the units, not `aria-valuetext` alone.
+          A range reports "42" on its own, which is the one thing about it that
+          was never in question - but Chrome 151 ignores `aria-valuetext` on a
+          native `input[type=range]` (chromium 1194 honours it; the e2e caught
+          the difference the first time CI ran a newer browser than the one it
+          was written against). An accessible name is computed the same way
+          everywhere, so "of 26" lives in the label and is safe. `aria-valuetext`
+          stays for the browsers that do honour it, where it is what a DRAG
+          announces - a value change re-reads the value, never the name.
         */}
         <div className="row">
           <label htmlFor="rooms-on-map">
-            rooms on the map <b>{Math.min(roomCount, total)}</b>
+            rooms on the map <b>{Math.min(roomCount, total)} of {total}</b>
           </label>
           <input
             id="rooms-on-map"
