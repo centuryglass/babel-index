@@ -22,6 +22,32 @@ test('a full entry normalises to keywords and a story', () => {
   assert.match(e.story, /never been surveyed/);
 });
 
+test('the optional alt is carried, trimmed, and null when absent', () => {
+  const withAlt = normaliseEntry({
+    story: 'The catalogue lists a room that has never been surveyed.',
+    alt: '  A tall shelved wall in green shadow, its brass rail catching one lamp.  ',
+  });
+  assert.match(withAlt.alt, /^A tall shelved wall/);
+  assert.doesNotMatch(withAlt.alt, /\s$/);
+
+  // Absent, blank, or the wrong type all read the same: no caption, rather
+  // than an empty one a consumer would render as a blank line.
+  for (const raw of [{ story: 'x' }, { story: 'x', alt: '   ' }, { story: 'x', alt: 42 }])
+    assert.equal(normaliseEntry(raw).alt, null, JSON.stringify(raw));
+});
+
+test('an entry carrying only an alt still counts as an entry', () => {
+  // It describes the room, which is the question "has metadata" is asking -
+  // and a caption is the one description some rooms will ever have.
+  const e = normaliseEntry({ alt: 'A shelved wall lit from the left.' });
+  assert.ok(e);
+  assert.deepEqual(e.keywords, []);
+  assert.equal(e.story, null);
+  assert.match(e.alt, /shelved wall/);
+
+  assert.equal(metadataCoverage(rooms, { '001.jpg': { alt: 'A shelved wall.' } }).matched, 1);
+});
+
 test('plain-string keywords are accepted, with no type', () => {
   // The generator may not record which category a keyword came from, and losing
   // the keyword because of that would be the wrong trade.

@@ -659,9 +659,21 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // Superseded by phase C: the canvas WAS `role="img"` with a static label,
     // a placeholder for the picture nobody could yet navigate. Now it is the
     // cursor's own `role="application"` region, named by whatever cell is
-    // currently under the camera centre - "the centre of the library" at
-    // page load, since the opening view starts there.
-    await page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 5000 });
+    // currently under the camera centre.
+    //
+    // Named by WHICHEVER cell that is, and this test deliberately does not
+    // move the camera to make it a known one. The rearrangement announcement
+    // (§8 item 4) means a search moves the cursor as well as the map, so a
+    // listbox jump earlier in this suite can leave it on a room rather than
+    // the centre - and flying home to pin the name down would wipe the live
+    // region the announcement test after this one reads. What must hold here
+    // is the role and that the name is a real cell's, which is exactly what
+    // an unlabelled graphic or a static placeholder would fail.
+    const named = page.getByRole('application', {
+      name: /the centre of the library|Room \d+, rank \d+ of \d+|a blank wall|the far field/i,
+    });
+    await named.waitFor({ timeout: 5000 });
+    assert.equal(await named.count(), 1, 'exactly one application region, and it is the map');
   });
 
   test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
@@ -815,6 +827,11 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await ratio.press('End');
 
     await page.locator('canvas').focus();
+    // Home for the same reason as the application-region test above: the
+    // cursor follows a rearrangement now, not only a keypress, so where the
+    // previous tests left it is not a precondition to lean on.
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
     await assert.doesNotReject(
       page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 2000 })
     );
@@ -1356,6 +1373,155 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await ratio.press('End');
   });
 
+  // --- the centre room's shelf (accessibility-plan.md phase D) ---------------
+
+  test('the shelf is a real control surface: one tab stop in, arrows within, a book searches', async () => {
+    // The centre room's forty spines were painted pixels behind a hit-test -
+    // the application's PRIMARY interface reachable only by mouse or finger.
+    // Everything here is what a keyboard can now do with them.
+    //
+    // Fly to the opening view first: the buttons exist exactly while the
+    // titles are legible, so this is also the state a sighted reader would be
+    // looking at when they reached for the shelf.
+    await page.locator('button.search-trigger').click();
+    await landed(page);
+
+    try {
+      const shelf = page.locator('.centre-books');
+      await shelf.waitFor({ state: 'visible', timeout: 5000 });
+      const books = shelf.locator('button');
+      await waitFor(async () => (await books.count()) > 0, 5000, 'the shelf mounted no books');
+
+      // ONE tab stop for forty controls. Forty would put forty presses between
+      // the map and the panel for every keyboard user, on a wall that is
+      // mostly a browsable index of keywords.
+      assert.equal(
+        await shelf.locator('button[tabindex="0"]').count(),
+        1,
+        'the shelf must be one tab stop, not one per book'
+      );
+
+      // Reached from the search field, which is the element before it.
+      await page.locator('input[type=search]').focus();
+      await page.keyboard.press('Tab');
+      const inShelf = () =>
+        page.evaluate(() => {
+          const el = document.activeElement;
+          return el?.closest('.centre-books') ? el.dataset.book : null;
+        });
+      const first = await inShelf();
+      assert.ok(first !== null, 'Tab from the search field must reach the shelf');
+
+      // Arrows move WITHIN the shelf: right along the wall's flat queue, down
+      // by a shelf. Both are `bookNeighbour`, which is asserted exactly in
+      // centre.test.mjs - what only a browser can say is that the key actually
+      // reaches it and focus actually follows.
+      await page.keyboard.press('ArrowRight');
+      const right = await inShelf();
+      assert.equal(Number(right), Number(first) + 1, 'right must be the next book');
+
+      await page.keyboard.press('ArrowDown');
+      const down = await inShelf();
+      assert.ok(Number(down) > Number(right), 'down must reach a lower shelf');
+      await page.keyboard.press('ArrowUp');
+      assert.equal(await inShelf(), right, 'up must come back to the book down left');
+
+      // And Tab leaves in one press, from the middle of the wall.
+      await page.keyboard.press('Tab');
+      assert.equal(await inShelf(), null, 'Tab must leave the shelf, not walk it');
+
+      // The names carry what the button DOES, not just what the spine says -
+      // forty buttons called `brass` and `art nouveau` would say nothing about
+      // what pressing one is for.
+      const nodes = await axNodes(page);
+      const toolbar = axFind(nodes, 'toolbar', /shelf/);
+      assert.ok(toolbar, `no named toolbar for the shelf; roles seen: ${
+        [...new Set(nodes.map((n) => n.role))].join(', ')}`);
+      const book = nodes.find((n) => n.role === 'button' && / - (search|repeat)/.test(n.name));
+      assert.ok(
+        book,
+        `no book button naming its action; buttons seen: ${
+          nodes.filter((n) => n.role === 'button').map((n) => JSON.stringify(n.name)).join(', ')}`
+      );
+
+      // Activating one runs its search - the same `onBook` a sighted click
+      // reaches through the canvas, which is the point of there being one.
+      const term = book.name.split(' - ')[0];
+      await page.evaluate((want) => {
+        const el = [...document.querySelectorAll('.centre-books button')].find(
+          (b) => b.getAttribute('aria-label')?.startsWith(want)
+        );
+        el.focus();
+      }, term);
+      await page.keyboard.press('Enter');
+      await waitFor(
+        async () => (await page.locator('input[type=search]').inputValue()) === term,
+        SEARCH_TIMEOUT,
+        `pressing a book must run its own title as a search (wanted "${term}")`
+      );
+    } finally {
+      // Back to the centre at the ordinary zoom, which is where the block
+      // above leaves things and what the pointer tests after this expect - a
+      // viewport filled by the centre room would put every one of their fixed
+      // screen points on the same tile.
+      await page.locator('canvas').focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(flightMs + 200);
+      await settled(page);
+    }
+  });
+
+  test('axe finds no WCAG violations with the shelf on screen', async () => {
+    await page.locator('button.search-trigger').click();
+    await landed(page);
+    try {
+      await page.locator('.centre-books').waitFor({ state: 'visible', timeout: 5000 });
+      const { violations } = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
+      assert.deepEqual(summary, [], `axe reported violations with the shelf up:\n  ${summary.join('\n  ')}`);
+    } finally {
+      await page.locator('canvas').focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(flightMs + 200);
+      await settled(page);
+    }
+  });
+
+  test('a rearrangement says what it did and what is now under the cursor', async () => {
+    // accessibility-plan.md §4.3 has said since it was written that "the new
+    // occupant is announced"; §8 item 4 recorded that phase C never wired it
+    // up. Standing still while the library reorders around you and hearing
+    // nothing is not an accessible rearrangement, whatever the animation does.
+    const live = page.locator('[role=status]');
+    await page.locator('button.search-trigger').click();
+    await landed(page);
+    await page.locator('input[type=search]').fill('brass');
+    await page.locator('input[type=search]').press('Enter');
+
+    await waitFor(
+      async () => /rearranged/.test((await live.textContent()) ?? ''),
+      SEARCH_TIMEOUT,
+      'a search must announce the arrangement it produced'
+    );
+    const said = (await live.textContent()) ?? '';
+    assert.match(said, /\d+ rooms on the map/, `no size in the announcement: ${said}`);
+    // And where the reader now stands - the clause §4.3 asks for. An animated
+    // rearrangement parks the camera on the centre, so that is the honest
+    // answer here rather than the cell the search was typed from.
+    assert.match(
+      said,
+      /the centre of the library|Room \d+|a blank wall|the far field/,
+      `the announcement never names a cell: ${said}`
+    );
+
+    await page.locator('canvas').focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(flightMs + 200);
+    await settled(page);
+  });
+
   test('a long press opens the card, and a drag cancels it', async () => {
     // The interaction that decides whether the map is usable on a phone: a
     // press that becomes a pan must NOT also open a card.
@@ -1483,6 +1649,72 @@ describe('the library, in a browser', { concurrency: false }, () => {
         HTMLCanvasElement.prototype.setPointerCapture = window.__capture.set;
         HTMLCanvasElement.prototype.releasePointerCapture = window.__capture.release;
       });
+    }
+  });
+
+  // --- the sidecar's optional alt (accessibility-plan.md phase E) ------------
+
+  test("a room's picture caption is shown when the corpus carries one, and nothing is invented when it does not", async () => {
+    // Phase E is a format change plus a fallback, and producing the field is
+    // the corpus generator's job upstream of this repo - so no corpus here
+    // ships one, and the placeholder sidecar in `assets/corpus-sample/`
+    // deliberately never will: a caption that describes nothing about the
+    // image it is attached to is exactly the padded, confident sentence §3.5
+    // says to write no caption instead of. Handing the PAGE a corpus that does
+    // carry one is the only honest way to see the whole path - fetch, join,
+    // describeCell, card - actually reach the screen.
+    //
+    // Last in the file because it reloads: everything above shares one page.
+    //
+    // Sets its own camera and density rather than inheriting them: a reload
+    // resets both, and at the opening view the centre room fills the screen so
+    // a fixed screen point would land on the one cell that is never a corpus
+    // room.
+    const openCard = async () => {
+      const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+      await ratio.focus();
+      await ratio.press('End');
+      await page.locator('canvas').focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(flightMs + 200);
+      const card = page.locator('.card');
+      await page.mouse.click(880, 300, { button: 'right' });
+      await card.waitFor({ timeout: 5000 });
+      return card;
+    };
+
+    // Nothing invented, with the corpus exactly as it ships.
+    let card = await openCard();
+    assert.equal(await card.locator('.picture').count(), 0, 'no sidecar alt, no caption');
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    const caption = 'A shelved wall in green shadow, one brass rail catching the lamp.';
+    await page.route('**/metadata.json', async (route) => {
+      const sidecar = await (await route.fetch()).json();
+      for (const key of Object.keys(sidecar)) sidecar[key] = { ...sidecar[key], alt: caption };
+      await route.fulfill({ json: sidecar });
+    });
+    try {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(
+        () => /[1-9]\d* drawn/.test(document.getElementById('hud')?.textContent ?? ''),
+        null,
+        { timeout: 30_000 }
+      );
+
+      card = await openCard();
+      await card.locator('.picture').waitFor({ timeout: 5000 });
+      assert.equal(await card.locator('.picture').textContent(), caption);
+      // And it stays a different thing from the story. The story is fiction
+      // about the room and the caption is a report of the image; a reader has
+      // to be able to tell which they are being told, so they are two nodes.
+      const story = await card.locator('.story').textContent();
+      assert.notEqual(story, caption, 'the caption must not have replaced the story');
+      await page.keyboard.press('Escape');
+      await card.waitFor({ state: 'detached', timeout: 5000 });
+    } finally {
+      await page.unroute('**/metadata.json');
     }
   });
 
