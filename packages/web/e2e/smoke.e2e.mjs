@@ -620,10 +620,28 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.ok(rooms, 'the rooms slider must have an accessible name');
     assert.ok(ratio, 'the ratio slider must have an accessible name');
 
-    // The name is only half of it: a range announces its raw number, which is
-    // the one thing about it nobody was wondering about.
-    assert.match(rooms.props.valuetext ?? '', /\d+ of \d+ rooms/, 'the rooms slider must say what it counts');
-    assert.match(ratio.props.valuetext ?? '', /%/, 'the ratio slider must say what its percentage is of');
+    // Having a name is only half of it: a range announces its raw number, which
+    // is the one thing about it nobody was wondering about. The units have to
+    // reach the reader THROUGH THE NAME, which is why this asserts on `name`
+    // and not on `aria-valuetext`: that attribute is honoured by chromium 1194
+    // and ignored by Chrome 151 on a native `input[type=range]`, so a test that
+    // reads it back is testing the browser. This still catches the bug the test
+    // was written for - a label with no `htmlFor` leaves no name to match at
+    // all - and now also catches a label that says only a bare number.
+    //
+    // Both sliders are checked before either is asserted, and the failure
+    // carries the whole node: "expected /%/, got 26" cost a CI round trip once
+    // because it could not distinguish a missing attribute from an ignored one.
+    const said = [
+      ['rooms', rooms, /\d+ of \d+/],
+      ['ratio', ratio, /\d+%/],
+    ];
+    const mute = said.filter(([, node, want]) => !want.test(node.name));
+    assert.equal(
+      mute.length, 0,
+      `${mute.map(([which]) => which).join(' and ')} must say what they count, not just a number:\n`
+        + JSON.stringify({ rooms, ratio }, null, 2)
+    );
 
     assert.ok(axFind(nodes, 'button', /search the library/i), 'the search trigger must be named');
   });
@@ -1691,9 +1709,9 @@ function sampleCamera(page, ms) {
  * the attributes themselves, which would only restate the source. An accessible
  * name is computed from labels, roles, `aria-labelledby` and content together,
  * so the only way to know it landed is to read it back out of the tree the
- * screen reader would be handed. CDP is the one route to it that still exposes
- * computed properties like `valuetext`; `locator.ariaSnapshot()` reports a
- * slider's raw value and not the text that replaces it.
+ * screen reader would be handed. CDP is the one route that exposes the computed
+ * properties alongside the name; `locator.ariaSnapshot()` reports a slider's
+ * raw value and not the text that replaces it.
  *
  * Chromium-only, which is what this suite runs.
  */
@@ -1705,9 +1723,15 @@ async function axNodes(page) {
   return nodes.map((n) => ({
     role: n.role?.value,
     name: n.name?.value ?? '',
+    // Carried for the failure dumps rather than for any assertion: a control's
+    // value reaches CDP through both the node's own `value` and a `valuetext`
+    // property, and knowing which one held what is how the Chrome 151
+    // `aria-valuetext` difference got diagnosed.
+    value: n.value?.value,
     props: Object.fromEntries((n.properties ?? []).map((x) => [x.name, x.value?.value])),
   }));
 }
+
 
 /** The one node with this role whose accessible name matches, or undefined. */
 const axFind = (nodes, role, name) =>

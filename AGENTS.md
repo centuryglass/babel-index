@@ -576,6 +576,21 @@ stale instance.
   the cascade is actually gone, not just less likely.
 - **A green e2e test that cannot fail is worse than none.** If you change it,
   break the app on purpose and confirm it fails.
+- **Assert on the accessible NAME, not on `aria-valuetext`.** A test that reads
+  an ARIA attribute back out of the tree is testing the browser: chromium 1194
+  honours `aria-valuetext` on a native `input[type=range]` and Chrome 151
+  ignores it, reporting the raw value instead. CI installs whatever Chromium the
+  pinned Playwright wants (1234 = Chrome for Testing 151) while a sandbox may
+  only have an older one, so this reached CI green-locally and red-there. A name
+  is computed by the accname algorithm the same way everywhere, so anything a
+  reader MUST hear belongs in the label; keep `aria-valuetext` for browsers that
+  honour it, where it is what a drag announces. `BABEL_E2E_CHROMIUM` points the
+  suite at a specific binary when the pinned one cannot be downloaded.
+- **An accessibility assertion must dump the node it failed on.** "expected
+  /%/, got 26" cannot distinguish a missing attribute from an ignored one, and
+  the difference cost a CI round trip. Check every case before asserting any of
+  them, and put the whole computed node in the message - the failing run is
+  usually on a machine you cannot open a browser on.
 - **CDP touch injection bypasses the browser's gesture arbitration**, so
   `smoke.e2e.mjs` cannot see anything involving `touch-action`, `pointercancel`,
   or the real capture lifecycle — it dispatches straight to the page. Treat it as

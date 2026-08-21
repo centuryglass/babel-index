@@ -210,9 +210,12 @@ Right instinct, three disciplines on it.
   matches; rooms are spread evenly" is a read of state that already exists.
 - **One polite region, and let native semantics do their own work.** A single
   `aria-live="polite"` for state changes; `assertive` reserved for errors.
-  Slider values go in `aria-valuetext` ("42 of 511 rooms"), which AT announces
-  natively — routing a drag through a live region would fire on every frame of
-  the drag and drown everything else.
+  Slider units go in the *label* and `aria-valuetext` carries them again for the
+  drag ("42 of 511 rooms"), both announced natively — routing a drag through a
+  live region would fire on every frame of the drag and drown everything else.
+  The label is the half that has to be there: **Chrome 151 ignores
+  `aria-valuetext` on a native `input[type=range]`** (chromium 1194 honours it),
+  so anything a reader must hear at all cannot live only in that attribute.
 - **Do not announce panning.** Announce *arrival*, which is free: if focus moves
   with the camera (§4.2), the focused cell is announced by the AT with no live
   region at all. Live regions are for changes nothing is focused on.
@@ -778,8 +781,10 @@ Found by audit, in rough order of severity. All are Phase A.
 1. ~~**The panel's sliders have no accessible name.**~~ **Fixed.**
    `<label>rooms on the map</label>` was a *sibling* of its
    `<input type="range">`, with no `htmlFor` and no wrapping, so both sliders
-   announced as bare numbers. Both now carry an explicit `htmlFor`/`id` pair and
-   an `aria-valuetext` that says what the number counts. Noted for whoever
+   announced as bare numbers. Both now carry an explicit `htmlFor`/`id` pair, a
+   label that says what the number counts, and an `aria-valuetext` repeating it
+   for the drag — see §3.4 for why the label is the half that has to be there.
+   Noted for whoever
    touches the panel next: **the sliders are headed for dev-only**, so this was
    tidiness rather than an investment — do not build further on them, and see
    §3.7 for the production-facing control that could replace the ratio one.
@@ -877,7 +882,12 @@ network. The opening view reports zero violations across `wcag2a`/`wcag2aa`/
 Two mechanics worth knowing before adding to it. **`page.accessibility` is gone**
 as of Playwright 1.51, so computed properties are read over CDP
 (`Accessibility.getFullAXTree`, wrapped as `axNodes`); `locator.ariaSnapshot()`
-reports a slider's raw value and not the `valuetext` that replaces it. And **axe
+reports a slider's raw value and not the `valuetext` that replaces it. **Assert
+on the computed name, not on an ARIA attribute read back** — the attribute check
+is a test of the browser, and it failed exactly that way the first time CI ran a
+newer Chromium than the sandbox had (the `aria-valuetext` difference above; CI
+takes whatever the pinned Playwright installs, and `BABEL_E2E_CHROMIUM` points
+the suite at a specific binary when that one cannot be downloaded). And **axe
 refuses a page whose context it did not see created**, which is why the suite now
 makes an explicit `browser.newContext()` rather than letting `newPage()` make one
 implicitly.
