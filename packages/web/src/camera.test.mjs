@@ -14,6 +14,7 @@ import {
   flightAt,
   glideStep,
   glideToRest,
+  panByCells,
   panByPixels,
   pickGranularity,
   pxPerCell,
@@ -461,4 +462,55 @@ test('granularity never oscillates across a boundary held steady', () => {
   let g = null;
   for (let i = 0; i < 20; i++) g = pickGranularity(24, g);
   assert.equal(g, 'cell');
+});
+
+test('a keyboard nudge is exactly one cell inside the content region', () => {
+  // The cursor contract: one arrow press is one room. Damping must not touch
+  // that in the case that matters, which is everywhere a reader normally is.
+  const c = { x: 3.5, y: 3.5, zoom: 220 };
+  const moved = panByCells(c, 1, 0, 1);
+  assert.equal(moved.x, 4.5);
+  assert.equal(moved.y, 3.5);
+  // And a cell-centred camera stays cell-centred, so presses never drift the
+  // grid alignment while inside.
+  assert.equal(panByCells(moved, 0, -1, 1).y, 2.5);
+});
+
+test('a keyboard nudge has NO floor, unlike a pointer drag', () => {
+  // The asymmetry is the point, and it is about the INPUT, not the map. A drag
+  // is bounded by how far a hand travels, so `panByPixels` can afford a 0.12
+  // floor that keeps the map from feeling frozen. A held arrow key repeats
+  // about thirty times a second for as long as it is down, so the same floor
+  // is a constant outward velocity that never stops - measured, it let a
+  // six-second hold reach 31 cells past a boundary a mouse could barely push
+  // 11 past.
+  const c = { x: 40, y: 0, zoom: 220 };
+  assert.equal(panByCells(c, 1, 0, 0).x, 40, 'at zero resistance a nudge must not move at all');
+
+  // The pointer keeps its floor - asserted here so the two cannot be
+  // "unified" back together by someone tidying up.
+  const dragged = panByPixels(c, -220, 0, 0);
+  assert.ok(dragged.x > c.x, 'a fully resisted drag must still creep');
+});
+
+test('a keyboard nudge scales smoothly between the two', () => {
+  const c = { x: 10, y: 0, zoom: 220 };
+  const half = panByCells(c, 1, 0, 0.5);
+  assert.ok(Math.abs(half.x - 10.5) < 1e-9, `expected half a cell, got ${half.x - 10}`);
+  // Monotone in the resistance, which is what makes pushing outward feel
+  // progressively heavier rather than hitting a step.
+  let previous = 0;
+  for (const damp of [0, 0.25, 0.5, 0.75, 1]) {
+    const gained = panByCells(c, 1, 0, damp).x - c.x;
+    assert.ok(gained >= previous, `damp ${damp} moved less than the step below it`);
+    previous = gained;
+  }
+});
+
+test('the cell shape and limits survive a keyboard nudge', () => {
+  const limits = { min: 50, max: 300 };
+  const c = { x: 0, y: 0, zoom: 220, aspect: 720 / 1280, limits };
+  const moved = panByCells(c, 1, 1, 1);
+  assert.equal(moved.aspect, c.aspect);
+  assert.equal(moved.limits, limits);
 });

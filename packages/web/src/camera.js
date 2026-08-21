@@ -175,7 +175,10 @@ export function zoomAt(cam, px, py, deltaY, rect) {
  *
  * `damp` is 1 inside the content region and falls toward 0 outside it, so
  * pushing outward gets progressively heavier instead of stopping at a wall.
- * A floor of 0.12 keeps the map from freezing solid however far out you drag.
+ * A floor of 0.12 keeps the map from freezing solid however far out you drag:
+ * a drag that produced no movement at all would read as a broken map rather
+ * than a heavy one, and a hand can only travel so far in one go anyway, so
+ * the floor costs nothing in reach.
  *
  * @param {{x: number, y: number, zoom: number}} cam
  * @param {number} dxPx pointer movement in pixels
@@ -190,6 +193,43 @@ export function panByPixels(cam, dxPx, dyPx, damp) {
     x: cam.x - (dxPx / perCell.x) * scale,
     y: cam.y - (dyPx / perCell.y) * scale,
   };
+}
+
+/**
+ * Pan by a whole-cell delta, damped by the same resistance a drag feels - the
+ * keyboard's half of `panByPixels`.
+ *
+ * Two deliberate differences from the pointer, both about the input rather
+ * than the map:
+ *
+ * **The sign is opposite.** A drag delta is where the HAND went (drag right,
+ * the map goes left); `dx`/`dy` here are where the READER asked to go, so
+ * they add.
+ *
+ * **There is no floor**, and that is the whole point of a separate function.
+ * A drag is bounded by how far a hand can physically travel in one stroke, so
+ * `panByPixels`'s 0.12 floor costs nothing - you run out of screen long before
+ * you run out of map. A HELD arrow key is bounded only by patience: the
+ * browser repeats `keydown` about thirty times a second for as long as it is
+ * down, so any non-zero floor is a constant outward velocity that never stops.
+ * Measured, a 0.12 floor let a six-second hold reach thirty-one cells past a
+ * boundary a mouse could barely push eleven past. Scaling straight from
+ * `damp` makes the step approach zero as the resistance does, so a hold
+ * settles a screen or so out - which is where the pointer lands too.
+ *
+ * Inside the content region `damp` is exactly 1, so this moves exactly `dx`
+ * cells: a camera that started cell-centred stays cell-centred, and one arrow
+ * press remains exactly one room. Only outside does the camera come off the
+ * grid, and every press still advances the cursor a full cell once back
+ * inside, because a scale of 1 preserves whatever offset it picked up.
+ *
+ * @param {{x: number, y: number, zoom: number}} cam
+ * @param {number} dx cells, signed - the direction the reader asked to move
+ * @param {number} dy
+ * @param {number} damp resistance at the camera, in [0, 1]
+ */
+export function panByCells(cam, dx, dy, damp) {
+  return { ...cam, x: cam.x + dx * damp, y: cam.y + dy * damp };
 }
 
 /** Resistance this close to 1 counts as inside the region. */

@@ -6,6 +6,7 @@ import {
   flightAt,
   glideStep,
   glideToRest,
+  panByCells,
   panByPixels,
   zoomAt,
   zoomBy,
@@ -465,9 +466,18 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * WHETHER it stopped where it was aimed, because a reader who has grabbed the
    * map is not asking to watch the library rebuild itself.
    */
-  const flyTo = useCallback(
-    (x, y, zoom, { ms } = {}) => {
-      const to = cameraAtCell(cam.current, x, y, zoom);
+  /**
+   * Start an eased flight to a whole target camera - the shared half of
+   * `flyTo` and `nudgeBy`, so the reduced-motion collapse and the
+   * interrupt-the-previous-flight rule are stated once rather than twice.
+   *
+   * The flight begins at the LIVE camera (so a second flight during a first
+   * picks up smoothly from wherever it had got to) even when the caller
+   * computed `to` from `flightTarget()`; those are deliberately different
+   * questions - where the camera IS versus where it was last told to go.
+   */
+  const beginFlightTo = useCallback(
+    (to, ms) => {
       const duration = prefersReducedMotion() ? 0 : ms ?? camera.flightMs;
       // A second flight replaces the first, and the first did not arrive.
       endFlight(false);
@@ -476,6 +486,38 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
       });
     },
     [camera.flightMs, endFlight]
+  );
+
+  const flyTo = useCallback(
+    (x, y, zoom, { ms } = {}) => beginFlightTo(cameraAtCell(cam.current, x, y, zoom), ms),
+    [beginFlightTo]
+  );
+
+  /**
+   * Move by a cell delta, damped by the map's resistance - the keyboard's
+   * equivalent of a pointer drag, and damped by the SAME curve
+   * (`panScale`) for the same reason the drag is.
+   *
+   * Without this the keyboard had no resistance at all: a held arrow key
+   * sailed off into the far field at full speed, somewhere a hand on the
+   * mouse cannot practically reach, and only snapped back on release. The
+   * glide alone could not fix that - it pulls back proportionally to distance
+   * but does nothing to the outbound step, so a fast enough key repeat simply
+   * outruns it.
+   *
+   * Damping reads the resistance at `flightTarget()`, not at `cam.current`:
+   * mid-flight the latter is the interpolated position, so a key repeat would
+   * sample a resistance from behind where it has already been told to go and
+   * damp too little. It is also what makes repeated presses compound rather
+   * than collapse, exactly as in `flyTo`'s callers.
+   */
+  const nudgeBy = useCallback(
+    (dx, dy, { ms } = {}) => {
+      const from = flight.current?.to ?? cam.current;
+      const to = panByCells(from, dx, dy, resistanceAt(from.x, from.y));
+      return beginFlightTo(to, ms);
+    },
+    [beginFlightTo, resistanceAt]
   );
 
   /**
@@ -495,5 +537,5 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    */
   const flightTarget = useCallback(() => flight.current?.to ?? cam.current, []);
 
-  return { cam, flyTo, flightTarget };
+  return { cam, flyTo, nudgeBy, flightTarget };
 }

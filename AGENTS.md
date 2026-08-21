@@ -363,6 +363,20 @@ stale instance.
   same target. Read `flightTarget()` (`flight.current?.to ?? cam.current`)
   instead; found by two `PageDown` presses back to back silently cancelling
   each other rather than compounding.
+- **The keyboard and the pointer are damped by the same resistance but
+  DIFFERENT curves, and merging them is a real bug.** `panByPixels` floors its
+  scale at 0.12 so a drag never feels frozen solid; that floor is free for a
+  pointer because a hand runs out of screen long before it runs out of map.
+  A held arrow key has no such bound - the browser repeats `keydown` about
+  thirty times a second for as long as it is down (each flagged
+  `event.repeat`), so any non-zero floor is a constant outward velocity that
+  never stops. Measured with the shared curve, a six-second hold reached 31
+  cells past a boundary eight full-width drags could only push 15 past, still
+  climbing linearly. `panByCells` therefore scales straight from `damp` with
+  no floor, so the step approaches zero as the resistance does and a hold
+  settles about where a determined drag does. Inside the content region
+  `damp` is exactly 1, so one arrow press is still exactly one cell - that
+  part is the cursor's contract and must not become fractional.
 - **The glide applies to the keyboard exactly as it does to a pointer, and
   must not be exempted for it.** The boundary's pushback is an affordance, not
   an obstacle: walking out past the last ranked room and feeling the library

@@ -316,7 +316,7 @@ function Library({ manifest }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cam, flyTo, flightTarget } = useMapCamera({
+  const { cam, flyTo, nudgeBy, flightTarget } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
@@ -495,22 +495,29 @@ function Library({ manifest }) {
           dx *= cellsX;
           dy *= cellsY;
         }
-        // The target is built from `cursorNow()`, not the `cursor` closure
-        // variable - two presses landing in the same tick (rapid key-repeat,
-        // or simply faster than React has re-rendered) would otherwise both
-        // read the SAME pre-move value and collapse into one step.
+        // `nudgeBy`, not `flyTo`: this is a PAN, and pans are damped by the
+        // map's resistance so pushing outward gets heavier - the same curve a
+        // pointer drag gets, for parity. Inside the content region the damping
+        // is 1, so this is still exactly one cell per press.
         //
-        // Announced synchronously, not awaited on the flight landing: the
-        // cursor's cell is a logical fact settled the instant the key is
-        // processed, and `keyboardMoveMs` exists to make that motion visible
-        // to sighted readers, not to gate anything else. A rapid run of arrow
-        // presses each interrupts the previous flight - the same "a second
-        // flight replaces the first" `flyTo` already gives Home - so
-        // key-repeat chases smoothly rather than queuing animations.
-        const from = cursorNow();
-        const target = { x: from.x + dx, y: from.y + dy };
-        flyTo(target.x, target.y, undefined, { ms: config.camera.keyboardMoveMs });
-        announceCursorMove(target);
+        // The announcement therefore has to come from where the move actually
+        // LANDED (`cursorNow()` re-read after the nudge, which sees the new
+        // flight's target) rather than from a target computed here: far
+        // outside, a press may not advance the cursor a whole cell at all, and
+        // announcing the cell the reader aimed at would be describing a room
+        // they are not going to reach. When the cell is unchanged the string is
+        // identical, React does not re-render, and no live-region update fires
+        // - silence being the honest answer to a press that went nowhere.
+        //
+        // Announced synchronously rather than on the flight landing: the
+        // cursor's cell is settled the instant the key is processed, and
+        // `keyboardMoveMs` exists to make that motion visible to sighted
+        // readers, not to gate anything else. A rapid run of presses each
+        // interrupts the previous flight - the same "a second flight replaces
+        // the first" `flyTo` already gives Home - so key-repeat chases
+        // smoothly rather than queuing animations.
+        nudgeBy(dx, dy, { ms: config.camera.keyboardMoveMs });
+        announceCursorMove(cursorNow());
         return;
       }
 
@@ -586,7 +593,7 @@ function Library({ manifest }) {
       }
     },
     [
-      layout, order, flyTo, flightTarget, cursorNow, config,
+      layout, order, flyTo, nudgeBy, flightTarget, cursorNow, config,
       announceCursorMove, announceSurroundings, cam,
     ]
   );

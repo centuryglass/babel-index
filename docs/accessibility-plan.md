@@ -692,6 +692,28 @@ plan's own foresight. Two things were true at once and neither was intended:
   released drag does. `glideExempt` is gone; the glide is unconditional again,
   and `cursorNow()` derives the cursor from `flightTarget()` so it tracks the
   camera through the drift rather than needing protection from it.
+
+- **Keyboard movement is damped by resistance, on its own curve.** Restoring
+  the glide was necessary and not sufficient: the glide pulls back in
+  proportion to distance, but it does nothing to the outbound step and is
+  suspended while a flight is running, so a *held* arrow key simply outran it.
+  A held key is not a stream of taps - the browser repeats `keydown` about
+  thirty times a second for as long as it is down - so with no damping on the
+  step itself a reader could sail into the far field at full speed and only
+  snap back on release. `panByCells` now scales the step by the same
+  `resistanceAt` a drag feels.
+
+  The curve is deliberately NOT shared with `panByPixels`, and that is the
+  interesting part. The pointer floors its scale at 0.12 so a drag never feels
+  frozen; that floor is free for a hand, which runs out of screen long before
+  it runs out of map. For a key repeating indefinitely, any non-zero floor is
+  a constant outward velocity that never stops - measured with the shared
+  curve, a six-second hold reached 31 cells past a boundary eight full-width
+  drags could only push 15 past, and it was still climbing linearly. Scaling
+  straight from `damp` makes the step approach zero as the resistance does:
+  1s of holding now reaches ~11, 3s ~15, 6s ~16, against the pointer's ~15.
+  Inside the content region `damp` is exactly 1, so one press is still exactly
+  one cell - the cursor's contract is untouched where it matters.
 - **And the glide itself had never checked `prefers-reduced-motion` at
   all** - an ambient gap older than the keyboard work, surfaced by looking
   for it. `camera.js` gained `glideToRest`, which runs `glideStep`'s own
