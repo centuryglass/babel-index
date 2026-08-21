@@ -712,8 +712,17 @@ plan's own foresight. Two things were true at once and neither was intended:
   drags could only push 15 past, and it was still climbing linearly. Scaling
   straight from `damp` makes the step approach zero as the resistance does:
   1s of holding now reaches ~11, 3s ~15, 6s ~16, against the pointer's ~15.
-  Inside the content region `damp` is exactly 1, so one press is still exactly
-  one cell - the cursor's contract is untouched where it matters.
+
+  Inside the content region `damp` is exactly 1, and there the step lands
+  **cell-centred** on the destination rather than adding a raw delta. That
+  second half was missed on the first pass and reported from real use: a trip
+  outside leaves the camera off the grid, and a raw delta carried the offset
+  forever, so the cursor's own cell sat visibly off-centre with part of it off
+  the screen - correctable only by a zoom or a ctrl+arrow, both of which route
+  through `cameraAtCell`. Snapping applies to both axes, since the offset a
+  trip outward leaves is rarely axis-aligned and an axis nothing happens to
+  move along would otherwise stay crooked through every press a reader can
+  make.
 - **And the glide itself had never checked `prefers-reduced-motion` at
   all** - an ambient gap older than the keyboard work, surfaced by looking
   for it. `camera.js` gained `glideToRest`, which runs `glideStep`'s own

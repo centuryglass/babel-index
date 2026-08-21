@@ -1053,6 +1053,71 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await landed(page);
   });
 
+  test('arrows re-centre the map after a trip outside the boundary', async () => {
+    // Reported from real use: after pushing past the border the camera settles
+    // off-centre from the cursor's own cell - part of it hanging off the screen
+    // edge - and arrowing around in bounds never fixes it, while a zoom or a
+    // ctrl+arrow does. The cause is that a trip outside leaves the camera off
+    // the grid (damped steps out there are fractional by design, and the glide
+    // stops wherever it happens to cross back in), and a raw per-press delta
+    // carries that offset forever.
+    //
+    // Only a browser reaches this: it needs the real damping, the real glide,
+    // and the real settling between them.
+    const canvas = page.locator('canvas');
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+    await canvas.focus();
+
+    // Push out past the edge, then let the glide carry the camera back in.
+    await page.keyboard.down('ArrowRight');
+    for (let i = 0; i < 45; i++) {
+      await page.waitForTimeout(33);
+      await page.keyboard.down('ArrowRight');
+    }
+    await page.keyboard.up('ArrowRight');
+
+    const settled = await hud(page);
+    assert.ok(settled.x > settled.edge, `the hold must end outside: x=${settled.x}, edge=${settled.edge}`);
+
+    // Walk back in. Once inside, a press must land the camera cell-centred on
+    // BOTH axes - the offset a trip outward leaves is rarely axis-aligned, so
+    // an implementation that only fixed the axis being moved along would leave
+    // the other one crooked forever.
+    const offCentre = (v) => Math.abs(v - Math.floor(v) - 0.5);
+    await waitFor(
+      async () => {
+        await page.keyboard.press('ArrowLeft');
+        await page.waitForTimeout(250);
+        const c = await hud(page);
+        // The HUD rounds to one decimal, so "centred" is .5 within that.
+        return c.x < c.edge && offCentre(c.x) < 0.05 && offCentre(c.y) < 0.05;
+      },
+      15000,
+      'arrowing back in bounds never re-centred the camera on its cell'
+    );
+
+    // And it stays centred, one clean cell per press, rather than re-acquiring
+    // an offset as it goes.
+    for (let i = 0; i < 3; i++) {
+      const before = await hud(page);
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForTimeout(300);
+      const after = await hud(page);
+      assert.ok(
+        offCentre(after.x) < 0.05 && offCentre(after.y) < 0.05,
+        `press ${i + 1} left the camera off-centre: x=${after.x}, y=${after.y}`
+      );
+      assert.ok(
+        Math.abs(after.x - before.x + 1) < 0.05,
+        `press ${i + 1} must move exactly one cell: ${before.x} -> ${after.x}`
+      );
+    }
+
+    await page.getByRole('button', { name: 'centre' }).click();
+    await landed(page);
+  });
+
   test('a held arrow key cannot outrun what a hand can drag to', async () => {
     // Parity, and the only place it can be observed: holding a key is a real
     // browser behaviour (the OS repeats `keydown` ~30x a second for as long as

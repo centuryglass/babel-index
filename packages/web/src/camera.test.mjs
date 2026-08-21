@@ -514,3 +514,40 @@ test('the cell shape and limits survive a keyboard nudge', () => {
   assert.equal(moved.aspect, c.aspect);
   assert.equal(moved.limits, limits);
 });
+
+test('a keyboard nudge re-centres an off-grid camera, on BOTH axes', () => {
+  // The bug this pins: a trip outside the region leaves the camera off the
+  // grid (damped steps out there are fractional by design, and the glide
+  // stops wherever it happens to cross back in). Adding a raw delta would
+  // carry that offset forever - the cursor's own cell sitting visibly
+  // off-centre, part of it hanging off the screen edge, with no way to
+  // correct it by arrowing.
+  const off = { x: 7.0, y: 0.3, zoom: 220 };
+  const moved = panByCells(off, -1, 0, 1);
+  assert.equal(moved.x, 6.5, 'the axis moved along must land cell-centred');
+  assert.equal(moved.y, 0.5, 'the OTHER axis must be re-centred too');
+});
+
+test('the offset does not survive repeated in-bounds presses', () => {
+  // The symptom as reported: "continuing to move with arrow keys leaves you
+  // stuck at that same offset". One press is enough to fix it, but assert
+  // across several so a fix that merely reduces the offset each time - rather
+  // than snapping - cannot pass.
+  let c = { x: 7.0, y: 0.3, zoom: 220 };
+  for (let i = 0; i < 4; i++) {
+    c = panByCells(c, -1, 0, 1);
+    assert.equal(c.x - Math.floor(c.x), 0.5, `x off-centre after press ${i + 1}`);
+    assert.equal(c.y - Math.floor(c.y), 0.5, `y off-centre after press ${i + 1}`);
+  }
+  // ...and it is still exactly one cell per press, not a bigger jump each time.
+  assert.equal(c.x, 3.5, 'four presses from cell 7 must land on cell 3');
+});
+
+test('re-centring happens only inside the region, never against the damping', () => {
+  // Snapping outside would defeat the resistance entirely - it would round a
+  // heavily damped fractional step back up to a whole cell.
+  const outside = { x: 20.0, y: 0.3, zoom: 220 };
+  const nudged = panByCells(outside, 1, 0, 0.1);
+  assert.ok(Math.abs(nudged.x - 20.1) < 1e-9, `expected a damped 0.1, got ${nudged.x - 20}`);
+  assert.equal(nudged.y, 0.3, 'the other axis must not snap while outside either');
+});

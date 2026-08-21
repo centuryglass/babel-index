@@ -171,6 +171,16 @@ export function zoomAt(cam, px, py, deltaY, rect) {
 }
 
 /**
+ * Resistance this close to 1 counts as being inside the content region.
+ *
+ * Shared by the two things that need to know: the glide (which has nothing to
+ * correct inside) and a keyboard nudge (which lands cell-centred inside, and
+ * damped continuously outside). One threshold, so the two can never disagree
+ * about where "inside" ends.
+ */
+const INSIDE_EPSILON = 0.999;
+
+/**
  * Pan by a pointer movement, damped by the map's resistance at the camera.
  *
  * `damp` is 1 inside the content region and falls toward 0 outside it, so
@@ -229,11 +239,23 @@ export function panByPixels(cam, dxPx, dyPx, damp) {
  * @param {number} damp resistance at the camera, in [0, 1]
  */
 export function panByCells(cam, dx, dy, damp) {
+  // Inside the region, land CENTRED on the destination cell rather than adding
+  // a raw delta. Both do move exactly one cell from a cell-centred camera, but
+  // only this one recovers: a trip outside leaves the camera off the grid (the
+  // damped steps out there are fractional by design, and the glide stops
+  // wherever it happens to cross back in), and a raw delta would carry that
+  // offset forever - every press advancing one cell while the cell itself sat
+  // visibly off-centre, part of it hanging off the screen edge.
+  //
+  // Snapping both axes is deliberate, not incidental: the offset a trip
+  // outward leaves is rarely axis-aligned, so pressing Left has to fix the
+  // vertical drift too, or an offset nothing happens to move along survives
+  // every press a reader can make.
+  if (damp >= INSIDE_EPSILON) {
+    return { ...cam, x: Math.floor(cam.x) + dx + 0.5, y: Math.floor(cam.y) + dy + 0.5 };
+  }
   return { ...cam, x: cam.x + dx * damp, y: cam.y + dy * damp };
 }
-
-/** Resistance this close to 1 counts as inside the region. */
-const GLIDE_EPSILON = 0.999;
 
 /**
  * One frame of the glide back toward the content region, for when the camera
@@ -242,7 +264,7 @@ const GLIDE_EPSILON = 0.999;
  * identity, so the caller can skip a redraw.
  */
 export function glideStep(cam, damp) {
-  if (damp >= GLIDE_EPSILON) return cam;
+  if (damp >= INSIDE_EPSILON) return cam;
   const pull = (1 - damp) * 0.06 * 0.08;
   return { ...cam, x: cam.x * (1 - pull), y: cam.y * (1 - pull) };
 }
@@ -267,7 +289,7 @@ const GLIDE_REST_MAX_STEPS = 20_000;
  * motion-off end up in the same place, one visibly and one not.
  *
  * Bounded rather than run to exact convergence: the pull can shrink for a long
- * time before crossing `GLIDE_EPSILON`, and every step here is arithmetic, not
+ * time before crossing `INSIDE_EPSILON`, and every step here is arithmetic, not
  * a frame, so five hundred of them cost nothing next to getting the reader
  * stranded on a value that never quite settles.
  *
