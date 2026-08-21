@@ -27,6 +27,20 @@
  * the corpus is generated, not a constraint the map needs, and rejecting a room
  * with two would lose real data to a rule nothing here depends on.
  *
+ * ### `alt`, and why it is optional in the strong sense
+ *
+ * A room may carry an `alt`: one sentence describing the PICTURE, for a reader
+ * who cannot see it (accessibility-plan.md §3.5, phase E). It is written once,
+ * offline, by the same generator that wrote the story and WITH the story as
+ * context - never at runtime, and never by anything in this repository, which
+ * is the whole reason the map has no model dependency.
+ *
+ * Optional in the strong sense: a room whose story is thin should carry no
+ * `alt` at all rather than a padded one. `describeCell`'s honesty rule ("no
+ * description recorded") is a better answer than a confident sentence about a
+ * wall of books that could be any wall of books, so absence normalises to null
+ * and every consumer falls back to what the room already has.
+ *
  * No DOM and no imports, like everything else in this package: it is joined by
  * `scan.mjs` in Node and by the client in the browser, and one implementation
  * with two consumers is what keeps those two from drifting.
@@ -36,7 +50,8 @@
  * Normalise one sidecar entry.
  *
  * @param {unknown} raw
- * @returns {{keywords: {text: string, type: string|null}[], story: string|null}|null}
+ * @returns {{keywords: {text: string, type: string|null}[], story: string|null,
+ *   alt: string|null}|null}
  *   null when there is nothing usable, so "has metadata" stays a real question
  */
 export function normaliseEntry(raw) {
@@ -51,8 +66,12 @@ export function normaliseEntry(raw) {
     }
 
   const story = typeof raw.story === 'string' && raw.story.trim() ? raw.story.trim() : null;
+  const alt = typeof raw.alt === 'string' && raw.alt.trim() ? raw.alt.trim() : null;
 
-  return keywords.length || story ? { keywords, story } : null;
+  // An entry carrying only an `alt` is still an entry: it describes the room,
+  // which is the question "has metadata" is actually asking. Nothing at all -
+  // an empty object, a string, a number - is what null is for.
+  return keywords.length || story || alt ? { keywords, story, alt } : null;
 }
 
 /**

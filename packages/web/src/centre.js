@@ -87,8 +87,43 @@ const BOOKS = GEOMETRY.shelves.flatMap((s) => s.books.map(({ x, y, w, h }) => ({
 /** How many books the wall has in total. */
 export const BOOK_COUNT = BOOKS.length;
 
+/**
+ * Every book's rect as raw cell fractions, in the same flat order as the slot
+ * ids - what the DOM overlay lays its buttons out in.
+ *
+ * Exported rather than kept private because the buttons are positioned in
+ * PERCENTAGES of the centre cell's screen rect, not in pixels: one container
+ * is written per frame and the forty children inside it then need no per-frame
+ * work at all (accessibility-plan.md §3.3). `bookScreenRects` is the same
+ * numbers already scaled, for the canvas, which has no percentages.
+ *
+ * That the fractions are per-axis is load-bearing here for the same reason it
+ * is in `render.js`: `x`/`w` are against the cell's width and `y`/`h` against
+ * its height, and one divisor for both axes would put the focus ring on the
+ * wrong book.
+ */
+export const BOOK_RECTS = BOOKS;
+
 /** How many searches the history queue can show at once - the whole wall. */
 export const HISTORY_SLOT_COUNT = BOOK_COUNT;
+
+/**
+ * The wall's books grouped by SHELF, as flat-index bands.
+ *
+ * Rows, not runs: a shelf broken into more than one run by art is still one
+ * row to a reader moving up and down it, and the gap between two runs is not
+ * somewhere the keyboard should stop. Runs exist for the hit-test, where a
+ * point really can land in the gap; rows exist for the arrow keys, which move
+ * between books and never between the spaces around them.
+ */
+const ROWS = (() => {
+  let flat = 0;
+  return GEOMETRY.shelves.map((s) => {
+    const row = { start: flat, count: s.books.length };
+    flat += row.count;
+    return row;
+  });
+})();
 
 // Per-run bands, in fractions: a run is a CONTIGUOUS group of books on one
 // shelf, and a shelf may hold more than one - the trace is free to leave a gap
@@ -153,6 +188,80 @@ export function centreCellRect(cam, canvasRect) {
   const tl = worldToScreen(0, 0, cam, canvasRect);
   const per = pxPerCell(cam);
   return { x: tl.x, y: tl.y, w: per.x, h: per.y };
+}
+
+/**
+ * Whether a screen rect overlaps the viewport at all.
+ *
+ * The centre cell is one cell of an infinite map, so at most zooms it is
+ * nowhere near the screen. Both overlays it carries - the live search field
+ * and the book buttons - are mounted permanently and shown only while it is,
+ * so this is the half of "usable" that is about WHERE the cell is rather than
+ * how big it is.
+ */
+export function overlapsViewport(rect, width, height) {
+  return rect.x + rect.w > 0 && rect.x < width && rect.y + rect.h > 0 && rect.y < height;
+}
+
+/**
+ * Whether the spines are wide enough on screen to carry a title.
+ *
+ * One statement of the zoom gate, read by the compositing below AND by the DOM
+ * overlay in `main.jsx`: the buttons exist exactly while the titles do, so a
+ * reader tabbing into the shelf is reaching books they can also see named.
+ */
+export function areSpinesLegible(cellRect) {
+  return BOOKS.length > 0 && BOOKS[0].w * cellRect.w >= MIN_SPINE_PX;
+}
+
+/**
+ * The book an arrow key moves to from `from`, or `from` itself at the wall's
+ * edge.
+ *
+ * The wall is one flat queue, so left and right are just the next and previous
+ * book across shelf ends - the same order the titles are assigned in and the
+ * same order a reader's eye travels. Up and down move by SHELF, holding the
+ * column, because that is what the geometry looks like.
+ *
+ * Books with no title are stepped over rather than landed on: an untitled book
+ * is a blank spine with nothing to search for, and a focus ring on one would be
+ * a stop that does nothing. (It only happens at all on a corpus with no
+ * keywords, where `assignTitles` has nothing to letter the far end of the wall
+ * with.) Pure, so the whole walk is assertable without a browser.
+ *
+ * `from` may be outside the wall on purpose: -1 with `dx: 1` is "the first
+ * titled book", `BOOK_COUNT` with `dx: -1` is the last, which is what Home and
+ * End want and saves them a second entry point.
+ *
+ * @param {number} from flat slot id
+ * @param {{dx?: number, dy?: number}} dir one step, as the keyboard handler has it
+ * @param {Array<{text?:string}|null>} slots `assignTitles` output
+ */
+export function bookNeighbour(from, { dx = 0, dy = 0 }, slots) {
+  const titled = (i) => i >= 0 && i < BOOK_COUNT && Boolean(slots?.[i]?.text);
+
+  if (dx) {
+    for (let i = from + Math.sign(dx); i >= 0 && i < BOOK_COUNT; i += Math.sign(dx))
+      if (titled(i)) return i;
+    return from;
+  }
+  if (!dy) return from;
+
+  const r = ROWS.findIndex((row) => from < row.start + row.count);
+  if (r < 0) return from;
+  const col = from - ROWS[r].start;
+  for (let n = r + Math.sign(dy); n >= 0 && n < ROWS.length; n += Math.sign(dy)) {
+    const row = ROWS[n];
+    // Aim at the same column, then take the nearest titled book on that shelf
+    // either side of it - a shorter shelf, or one whose far end is untitled,
+    // should still catch the press rather than pass it through to the next.
+    const aim = row.start + Math.min(col, row.count - 1);
+    for (let d = 0; d < row.count; d++) {
+      if (aim + d < row.start + row.count && titled(aim + d)) return aim + d;
+      if (aim - d >= row.start && titled(aim - d)) return aim - d;
+    }
+  }
+  return from;
 }
 
 /** Every book rect in screen pixels, scaled onto a centre-cell rect. */
@@ -276,6 +385,25 @@ export function assignTitles({ history = [], tags = [], overrides = {} } = {}) {
 }
 
 /**
+ * What one book's button is called, for a reader who cannot see the spine.
+ *
+ * The title alone is not enough: forty buttons named `art nouveau`, `brass`,
+ * `spiral staircase` say nothing about what pressing one does, and the wall
+ * mixes two things that do different things - a past search to repeat and a
+ * keyword to try. The canvas draws the title alone because the shelf around it
+ * already says it is a shelf; the accessible name has to carry both halves.
+ *
+ * Naming, so it lives beside `describeCell` in spirit and here in fact - pure,
+ * and assertable without a browser.
+ */
+export function describeBook(slot) {
+  if (!slot?.text) return '';
+  if (slot.kind === 'history') return `${slot.text} - repeat this search`;
+  if (slot.kind === 'override') return slot.text;
+  return `${slot.text} - search the library for this`;
+}
+
+/**
  * A stable random selection of keyword texts from the corpus, enough to letter
  * the whole wall.
  *
@@ -314,8 +442,8 @@ export function pickTags(metadata, seed = 1) {
  * gilt reads on any spine tone. Draws nothing for an `empty` book.
  */
 export function composeSpines(ctx, cellRect, slots) {
+  if (!areSpinesLegible(cellRect)) return;
   const rects = bookScreenRects(cellRect);
-  if (rects.length === 0 || rects[0].w < MIN_SPINE_PX) return;
 
   ctx.save();
   ctx.textAlign = 'left';
