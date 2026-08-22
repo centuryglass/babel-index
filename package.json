@@ -19,7 +19,8 @@
     "@huggingface/transformers": "^4.2.0",
     "express": "^5.2.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "stemmer": "^2.0.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

@@ -11,6 +11,7 @@ import {
   storyScore,
   tokenise,
 } from './scoring.js';
+import { stemmer } from 'stemmer';
 import { CERTAINTY_FLOOR } from './ordering.js';
 import { DEFAULTS } from '../config/config.mjs';
 
@@ -89,7 +90,7 @@ test('a room with no keywords scores zero rather than throwing', () => {
 
 // --- story scoring ----------------------------------------------------------
 
-const story = (text) => new Set(tokenise(text));
+const story = (text) => new Set(tokenise(text).map(stemmer));
 
 test('story scoring is normalised by the query, not by the text', () => {
   // The property that matters: the same hit in a longer story scores the same.
@@ -111,10 +112,17 @@ test('longer query tokens carry more weight than short ones', () => {
   assert.equal(storyScore(['cartographer', 'oil'], story('An oil lamp.')), 3 / 15);
 });
 
-test('a token matches a story word it prefixes, as a stand-in for stemming', () => {
+test('a token matches a story word by stem, both directions', () => {
   assert.equal(storyScore(['room'], story('The rooms are numbered.')), 1);
   assert.equal(storyScore(['survey'], story('It was surveyed once.')), 1);
-  assert.equal(storyScore(['surveyed'], story('A survey.')), 0, 'prefixing is one-way');
+  // Stemming is symmetric, where the old prefix rule was one-way.
+  assert.equal(storyScore(['surveyed'], story('A survey.')), 1, 'stemming is two-way');
+});
+
+test('a stem match is a word match, not a prefix match', () => {
+  // The motivating case: "cat" must not be dragged in by "catalogue".
+  assert.equal(storyScore(['cat'], story('The cats slept on the shelf.')), 1);
+  assert.equal(storyScore(['cat'], story('An intricate catalogue of rooms.')), 0);
 });
 
 test('an empty story or query scores zero', () => {
