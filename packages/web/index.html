@@ -197,6 +197,41 @@
       }
       .chip:hover { background: rgba(200,169,95,0.3); border-color: #c8a95f; }
       .story { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
+      /*
+        A match, marked where it matched. Deliberately a wash of the accent
+        rather than a block fill: a story with six hits in it should still read
+        as prose, and a solid highlight turns it into a ransom note. `<mark>`'s
+        UA default is a yellow block on black text, which is unreadable on this
+        palette, so both colours are restated.
+      */
+      mark {
+        background: rgba(200,169,95,0.26); color: var(--ink);
+        border-radius: 2px; padding: 0 1px;
+        box-shadow: 0 0 0 1px rgba(200,169,95,0.35);
+      }
+      .chip mark { background: rgba(200,169,95,0.45); box-shadow: none; }
+
+      /* Why a room ranked where it did - see RoomDetails' ScoreBreakdown. */
+      .score { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--edge); }
+      .score table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      .score caption {
+        text-align: left; color: var(--dim); font-size: 10px;
+        letter-spacing: 0.06em; text-transform: uppercase; padding-bottom: 5px;
+      }
+      .score th { text-align: left; font-weight: 400; color: var(--dim); padding: 2px 0; }
+      .score td { text-align: right; font-variant-numeric: tabular-nums; padding: 2px 0; }
+      .score .num { color: var(--ink); }
+      .score .raw { color: var(--dim); width: 4.5em; }
+      .score .total th, .score .total td {
+        border-top: 1px solid var(--edge); padding-top: 4px; color: var(--ink);
+      }
+      /*
+        Set apart from the sum above it on purpose: every row in that sum is
+        relative to this query's corpus, and this one is measured against
+        absolute bounds. Reading it as another term would be reading it wrong.
+      */
+      .score .sure th, .score .sure td { color: var(--dim); font-style: italic; }
+      .forget { width: 100%; }
       .story.dim { color: var(--dim); font-style: italic; }
       /*
        * The picture's own caption, above the room's story and visibly not the
