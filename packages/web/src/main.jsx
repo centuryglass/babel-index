@@ -2,11 +2,20 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder, cellDistance } from '../../map/ordering.js';
 import { joinMetadata } from '../../map/metadata.js';
-import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
+import {
+  buildSearchIndex,
+  rankHybrid,
+  fold,
+  tokenise,
+  keywordMatchRanges,
+  storyMatchRanges,
+} from '../../map/scoring.js';
+import { RoomDetails } from './RoomDetails.jsx';
+import { load, save, clear, KEYS } from './persist.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
-import { describeCell, describeArrangement } from '../../map/describe.js';
+import { describeCell, describeRoom, describeArrangement } from '../../map/describe.js';
 import { nextRoom } from '../../map/nextRoom.js';
 import {
   assignTitles,
@@ -78,13 +87,31 @@ function Library({ manifest }) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [metadata, setMetadata] = useState(null);
-  // Session-only search history, newest first, one book per entry. Kept in
-  // React state like every other runtime value - it does not survive a reload,
-  // which matches the camera and the current ranking.
-  const [history, setHistory] = useState([]);
+  // Search history, newest first, one book per entry - and one of the two
+  // things in this app that survives a reload (see `persist.js` for why so few
+  // do). It is not only a convenience: this is what titles the centre room's
+  // shelf, so persisting it makes the wall of books a record of what this
+  // reader has asked the library rather than something that resets to keyword
+  // tags every session.
+  //
+  // Read once at mount, through a validator - storage is hand-editable and
+  // outlives any given version of this code, so "it parsed" is not the same as
+  // "it is a list of search terms". Capped at the wall's size, because the wall
+  // is the only place it is ever shown.
+  const [history, setHistory] = useState(() =>
+    load(KEYS.history, [], {
+      validate: (v) => Array.isArray(v) && v.every((term) => typeof term === 'string'),
+    }).slice(0, HISTORY_SLOT_COUNT)
+  );
   const pushHistory = useCallback((term) => {
     setHistory((prev) => [term, ...prev.filter((t) => t !== term)].slice(0, HISTORY_SLOT_COUNT));
   }, []);
+  // Cleared rather than stored empty, so forgetting really does leave nothing
+  // behind rather than an empty key that reads the same but looks different.
+  useEffect(() => {
+    if (history.length) save(KEYS.history, history);
+    else clear(KEYS.history);
+  }, [history]);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
@@ -297,6 +324,28 @@ function Library({ manifest }) {
     }
     return { rooms, total: layout.gradedCount };
   }, [result, layout, order, metadata]);
+
+  // The two range finders, bound to the query the CURRENT ranking is for.
+  //
+  // Bound rather than called with the query at each site: every consumer would
+  // otherwise have to remember which of the two rules applies to the text it is
+  // holding, and the whole point of `scoring.js` owning them is that the answer
+  // is decided once. A keyword matches by substring, a story word by prefix;
+  // handing out two functions named for the thing they mark keeps that from
+  // being a decision anyone makes twice.
+  //
+  // Null with no search, which every consumer reads as "mark nothing".
+  const highlight = useMemo(() => {
+    const term = result?.term?.trim();
+    if (!term) return null;
+    const foldedQuery = fold(term);
+    const tokens = tokenise(term, { minLength: config.search.minTokenLength });
+    if (!foldedQuery && !tokens.length) return null;
+    return {
+      keyword: (text) => keywordMatchRanges(text, foldedQuery, tokens),
+      story: (text) => storyMatchRanges(text, tokens),
+    };
+  }, [result, config]);
 
   // A tap selects a book on the centre room. Stable identity - so the pointer
   // listeners are not re-bound every render - over a ref that always holds the
@@ -942,7 +991,7 @@ function Library({ manifest }) {
     // than implying more than the corpus can support.
     const blob = res.vector ? embeddings.current : null;
     if (blob || searchIndex) {
-      const { order, certainty, signals } = rankHybrid({
+      const { order, certainty, breakdown, signals } = rankHybrid({
         query: term,
         count: total,
         weights: config.search.weights,
@@ -954,12 +1003,18 @@ function Library({ manifest }) {
         clipCertainty: { low: config.search.density.clipLow, high: config.search.density.clipHigh },
       });
       pendingNote.current = describeSignals(signals, Boolean(searchIndex));
-      setResult({ order, certainty });
+      // `term`, not the live `query`: the box changes on every keystroke and
+      // the ranking does not, so anything derived from "what was searched for"
+      // - the highlight ranges especially - has to read the submitted term or
+      // it would mark text against a query nobody has run yet.
+      setResult({ order, certainty, breakdown, signals, term });
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
       pendingNote.current = 'stub ranking — no embeddings and no keywords in this corpus';
-      setResult({ order: res.order, certainty: null });
+      // No breakdown: a hash-ordered stub has no signals to explain, and an
+      // explanation of a ranking nothing decided would be an invented one.
+      setResult({ order: res.order, certainty: null, breakdown: null, signals: null, term });
     }
   };
 
@@ -1123,13 +1178,30 @@ function Library({ manifest }) {
         aria-label={cursorLabel}
         onKeyDown={onMapKeyDown}
       >
-        {cursorEntry?.alt && <p>{cursorEntry.alt}</p>}
-        {cursorEntry?.story && <p>{cursorEntry.story}</p>}
-        {cursorEntry?.keywords?.map((k) => (
-          <button key={k.text} type="button" tabIndex={-1} onClick={() => searchKeyword(k.text)}>
-            {k.text}
-          </button>
-        ))}
+        {/*
+          The same component the card and the catalog render, not a second copy
+          of the markup - `chipTabIndex={-1}` is the only difference, and it is
+          what keeps the map exactly one tab stop while leaving the chips real
+          elements a touch screen reader's swipe navigation still reaches.
+          No score breakdown here: this is the cursor's contents, and a table
+          of numbers read out on every arrow press is not peripheral vision.
+
+          Guarded on `cursorEntry` rather than letting the component render its
+          own empty state: the card's "No keywords recorded for this room" is
+          right for something a reader deliberately opened, and wrong for a
+          cursor that is sitting on wallpaper - which is four cells in five. The
+          canvas's own aria-label already says "a blank wall"; saying it again
+          in different words is noise on every arrow press.
+        */}
+        {cursorEntry && (
+          <RoomDetails
+            entry={cursorEntry}
+            desc={describeRoom(cursorRoom.id, cursorRoom.rank, order.length, cursorEntry)}
+            onKeyword={searchKeyword}
+            chipTabIndex={-1}
+            highlight={highlight}
+          />
+        )}
       </canvas>
       {/*
         The live search field, on the centre tile itself rather than in the
@@ -1298,6 +1370,25 @@ function Library({ manifest }) {
         </div>
 
         {/*
+          Search history now outlives the session, so there has to be a way to
+          end it. Persisting someone's typed input without giving them a way to
+          clear it is not a thing to ship - and the shelf is where that input is
+          on display, so "forget" is a visible act rather than a settings page.
+          Absent when there is nothing to forget.
+        */}
+        {history.length > 0 && (
+          <div className="buttons">
+            <button
+              className="forget"
+              onClick={() => setHistory([])}
+              aria-label={`forget ${history.length} remembered ${history.length === 1 ? 'search' : 'searches'}`}
+            >
+              forget searches ({history.length})
+            </button>
+          </div>
+        )}
+
+        {/*
           The hint and the status are two different things and must not share a
           node. `role="status"` announces every change to its subtree, so a
           single node that falls back to the hint would read the instructions
@@ -1320,6 +1411,9 @@ function Library({ manifest }) {
           file={manifest.rooms[card.id]?.file}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
+          highlight={highlight}
+          result={result}
+          weights={config.search.weights}
         />
       )}
     </>
@@ -1402,7 +1496,7 @@ function appendTouchLog(line) {
  * pick near an edge does not open a card half off screen. Escape and a click
  * anywhere outside close it, which are the two things anyone tries first.
  */
-function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
+function RoomCard({ card, desc, entry, file, onClose, onKeyword, highlight, result, weights }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
 
@@ -1488,34 +1582,15 @@ function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
         </button>
       </div>
 
-      {entry?.keywords?.length > 0 && (
-        <div className="chips">
-          {entry.keywords.map((k) => (
-            <button
-              key={k.text}
-              className="chip"
-              title={k.type ? `${k.type} — search for this` : 'search for this'}
-              onClick={() => onKeyword(k.text)}
-            >
-              {k.text}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/*
-        What the picture shows, above what the room is: the sidecar's optional
-        `alt` (accessibility-plan.md §3.5). VISIBLE rather than screen-reader
-        only, on §3.6's argument that an invisible layer rots - a caption
-        nobody sighted ever reads is one nobody notices has drifted from the
-        image it describes. Absent for almost every corpus, since producing it
-        is the generator's job upstream of this repo.
-      */}
-      {desc.picture && <p className="picture">{desc.picture}</p>}
-
-      {desc.description && <p className="story">{desc.description}</p>}
-
-      {!entry && <p className="story dim">No keywords recorded for this room.</p>}
+      <RoomDetails
+        entry={entry}
+        desc={desc}
+        onKeyword={onKeyword}
+        highlight={highlight}
+        rank={card.rank}
+        result={result}
+        weights={weights}
+      />
     </div>
   );
 }
