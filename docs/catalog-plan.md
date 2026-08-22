@@ -506,6 +506,14 @@ sabotaging a test rather than by reading:
    paging arithmetic, and its measured height became the scroll conversion's
    lead offset.
 
+5. **The transition scaled by 1 and nobody could tell.** `getBoundingClientRect()`
+   returns `width`/`height`; every rect in this app says `w`/`h`. Passing the
+   DOMRect straight into `flipTransform` does not throw - `to.w` is `undefined`,
+   `undefined > 0` is false, and the zero-size guard returns a scale of 1. The
+   tile still translated into place, so the animation looked finished. Found by
+   logging the numbers, and now converted at the boundary by `rectOf`, with the
+   trap itself asserted so the guard cannot swallow the wrong shape again.
+
 And one thing the plan called for that turned out to matter more than it
 sounded: **the e2e assertion that the camera survives a mode switch is not
 enough on its own.** Sabotaging the design by remounting the map (`key={mode}`)

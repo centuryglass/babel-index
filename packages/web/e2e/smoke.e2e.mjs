@@ -1834,6 +1834,53 @@ describe('the library, in a browser', { concurrency: false }, () => {
     }
   });
 
+  test('the catalog folds out of the centre tile rather than appearing', async () => {
+    // The FLIP, which is the whole transition: the first row's thumbnail starts
+    // ON the map's centre tile and eases to its resting place. Worth an
+    // assertion of its own because the bug this had was silent - a DOMRect says
+    // `width` where the rest of the app says `w`, so the scale fell through a
+    // zero-size guard to 1 and the tile translated into place without ever
+    // growing. It looked like a working transition.
+    //
+    // A CONDITION, not a duration: this waits for the scale to have been
+    // meaningfully above 1 at some point, which is true for the whole 380ms and
+    // never true at all when the scale is being dropped.
+    //
+    // The camera has to be established first. How big the tile starts depends
+    // entirely on how large the centre cell is on screen, and this suite shares
+    // one page - at the return-to-centre zoom (220) the cell is SMALLER than
+    // the thumbnail and the tile would legitimately shrink into place, while
+    // from far enough out the centre is off screen and there is deliberately no
+    // flip at all. The search trigger flies to the opening view, which frames
+    // the centre tile near its native width.
+    await page.locator('button.search-trigger').click();
+    await landed(page);
+
+    try {
+      await page.locator('.panel .mode-toggle').click();
+      await page.waitForFunction(
+        () => {
+          const el = document.querySelector('.catalog-tile');
+          if (!el) return false;
+          return new DOMMatrixReadOnly(getComputedStyle(el).transform).a > 1.5;
+        },
+        null,
+        { timeout: 5000 }
+      );
+      // And it lands: the transform is released rather than left pinned.
+      await page.waitForFunction(
+        () => getComputedStyle(document.querySelector('.catalog-tile')).transform === 'none',
+        null,
+        { timeout: 5000 }
+      );
+    } finally {
+      // In `finally`, not after the assertions: this suite shares one page, and
+      // a failure here that left the catalog open would fail every test after
+      // it for a reason none of them are about.
+      if (await page.locator('.catalog').count()) await closeCatalog();
+    }
+  });
+
   test('the map is where it was left when the catalog closes', async () => {
     // THE assertion the whole design rests on. The map is hidden rather than
     // unmounted, so a trip through the catalog carries no state and rebuilds
