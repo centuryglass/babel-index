@@ -232,6 +232,169 @@
       */
       .score .sure th, .score .sure td { color: var(--dim); font-style: italic; }
       .forget { width: 100%; }
+
+      /*
+        The map's wrapper. `display: contents` generates no box at all, so the
+        canvas and the two centre-tile overlays keep positioning against #root
+        exactly as they did before there was a wrapper - wrapping must cost
+        nothing, or every imperative rect in the render loop shifts. `[hidden]`
+        has to be restated because the class would otherwise win on specificity
+        over the UA's `[hidden] { display: none }`.
+      */
+      .map-view { display: contents; }
+      .map-view[hidden] { display: none; }
+
+      /* One live region for the whole app, visually hidden, never unmounted. */
+      .live {
+        position: absolute; width: 1px; height: 1px; overflow: hidden;
+        clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+      }
+
+      /* --- the catalog ------------------------------------------------- */
+
+      .catalog {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        background: #0a0908; touch-action: auto;
+        animation: catalog-in 240ms ease both;
+      }
+      /*
+        The cross-fade half of the transition. The FLIP on the first row's
+        thumbnail is driven from main.jsx; this is what the REST of the list
+        does, and it is what the whole transition degrades to when the centre
+        tile was off screen.
+      */
+      @keyframes catalog-in { from { opacity: 0; } to { opacity: 1; } }
+      .catalog.leaving { animation: catalog-out var(--catalog-out, 380ms) ease both; }
+      @keyframes catalog-out { from { opacity: 1; } to { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .catalog, .catalog.leaving { animation: none; }
+      }
+
+      .catalog-bar {
+        flex: 0 0 auto; padding: 10px 16px; background: var(--panel);
+        border-bottom: 1px solid var(--edge); backdrop-filter: blur(6px);
+      }
+      .catalog-bar-row { display: flex; gap: 10px; align-items: center; }
+      .catalog-bar-row.sub { margin-top: 8px; }
+      .catalog-search { flex: 1; margin: 0; }
+      .catalog-search input[type="search"] {
+        width: 100%; padding: 7px 10px; font: inherit; color: var(--ink);
+        background: rgba(10,8,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
+      }
+      .catalog-search input[type="search"]:focus { border-color: #c8a95f; outline: none; }
+      .catalog-count { margin: 0; flex: 1; color: var(--dim); font-size: 11px; }
+      .catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
+      .catalog-note { color: var(--dim); }
+
+      .paging { display: flex; gap: 4px; }
+      .paging button, .mode-toggle, .catalog-show, .pager button {
+        font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
+        background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
+        border-radius: 4px; padding: 4px 9px;
+      }
+      .paging button.on { color: var(--ink); background: rgba(200,169,95,0.24); border-color: #c8a95f; }
+      .mode-toggle { color: var(--ink); }
+
+      .catalog-scroll { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+      .catalog-list { list-style: none; margin: 0; padding: 0; }
+
+      /*
+        Every row is exactly `--catalog-row` tall, and that is load-bearing
+        rather than cosmetic: the spacers standing in for unmounted pages are
+        computed from it, so a row that grew with its story would make them a
+        guess and the scroll position would jump on every recycle. The story is
+        clamped to fit; the whole of it is in the room card.
+      */
+      /*
+        Namespaced, and that is not tidiness: the dev panel has had a `.row`
+        class since before this file did, and an unprefixed rule here reached
+        into it and turned every slider row into a flex box of fixed height.
+        Shared classes are the ones that are shared ON PURPOSE - `.chips`,
+        `.story`, `.score` all come from RoomDetails and must look the same in a
+        card and in a row.
+      */
+      .catalog-row {
+        display: flex; gap: 14px; align-items: flex-start;
+        height: var(--catalog-row); padding: 11px 16px;
+        border-bottom: 1px solid var(--edge); overflow: hidden;
+      }
+      .catalog-tile {
+        flex: 0 0 auto; width: var(--catalog-thumb); height: auto;
+        border-radius: 2px; background: #14110d; transform-origin: 0 0;
+      }
+      .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+      .catalog-name {
+        margin: 0 0 5px; font-size: 12px; font-weight: 500; color: var(--ink);
+        display: flex; align-items: baseline; gap: 8px;
+      }
+      .catalog-rank {
+        color: #c8a95f; font-variant-numeric: tabular-nums; font-size: 11px;
+        min-width: 2.2em;
+      }
+      .catalog-file { color: var(--dim); font-size: 10px; font-weight: 400; }
+      .catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
+      .catalog-row .story {
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; margin-bottom: 5px;
+      }
+      .catalog-row .chips { margin-bottom: 5px; }
+      /*
+        The score, as one line rather than a table. Never wraps and scrolls
+        sideways in its own box if the query found more than fits, so every row
+        is exactly as tall as every other whatever each room matched on - which
+        is what the sliding window's spacers are computed from.
+      */
+      .score-strip {
+        display: flex; gap: 12px; align-items: center; margin: 6px 0 0; padding: 6px 0 0;
+        list-style: none; white-space: nowrap; overflow-x: auto;
+        border-top: 1px solid var(--edge); font-size: 10px; color: var(--dim);
+      }
+      .score-strip li { flex: 0 0 auto; }
+      .score-strip b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+      .score-strip span { color: #8a7c66; font-variant-numeric: tabular-nums; }
+      .score-strip .total b { color: #c8a95f; }
+      .score-strip .sure { font-style: italic; }
+      .catalog-show { margin-top: 4px; }
+      .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
+
+      /* The centre room's row: the shelf, as links. */
+      /*
+        The one row that sizes itself. Forty shelf titles wrap to as many lines
+        as the width needs, and cropping them to a tile's height would hide the
+        newest searches - which are the whole reason the wall is a record. Safe
+        because this row is not a PAGED one: the spacers stand in for those, and
+        the scroll arithmetic takes this row's measured height as its lead.
+      */
+      .catalog-centre {
+        background: rgba(200,169,95,0.04);
+        height: auto; min-height: var(--catalog-row); align-items: flex-start;
+      }
+      /*
+        `align-content: flex-start` matters here: a wrapped flex container
+        defaults to stretching its LINES to fill the cross axis, which made the
+        last row of shelf titles visibly taller than the rest and read as a
+        clipping bug.
+      */
+      .shelf-links {
+        display: flex; flex-wrap: wrap; align-content: flex-start;
+        gap: 4px; overflow: hidden;
+      }
+      .shelf-link {
+        font: inherit; font-size: 10px; cursor: pointer; padding: 2px 6px;
+        border-radius: 3px; border: 1px solid transparent;
+        background: rgba(200,169,95,0.08); color: var(--dim);
+      }
+      .shelf-link.history { color: var(--ink); border-color: var(--edge); }
+      .shelf-link.override { color: #c8a95f; border-color: #c8a95f; }
+      .shelf-link:hover { background: rgba(200,169,95,0.22); }
+
+      .catalog-spacer { padding: 0; border: none; }
+      .pager {
+        display: flex; gap: 12px; align-items: center; justify-content: center;
+        padding: 14px; color: var(--dim); font-size: 11px;
+      }
+      .pager b { color: var(--ink); font-variant-numeric: tabular-nums; }
+      .pager button[disabled] { opacity: 0.35; cursor: default; }
       .story.dim { color: var(--dim); font-style: italic; }
       /*
        * The picture's own caption, above the room's story and visibly not the

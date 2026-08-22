@@ -11,11 +11,14 @@ import {
   storyMatchRanges,
 } from '../../map/scoring.js';
 import { RoomDetails } from './RoomDetails.jsx';
+import { SearchForm } from './SearchForm.jsx';
+import { CatalogView } from './CatalogView.jsx';
+import { flipTransform, flipCss } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
-import { describeCell, describeRoom, describeArrangement } from '../../map/describe.js';
+import { describeCell, describeRoom, describeArrangement, describeCatalog } from '../../map/describe.js';
 import { nextRoom } from '../../map/nextRoom.js';
 import {
   assignTitles,
@@ -75,6 +78,26 @@ function Library({ manifest }) {
   // than from a literal here - see packages/config. The sliders still move
   // freely afterwards; config decides where they start.
   const config = manifest.config;
+
+  // Which reading of the corpus is on screen. The map is never unmounted - it
+  // is hidden and its render loop stops - so switching carries no state and
+  // nothing has to be rebuilt on the way back. See `docs/catalog-plan.md` §2.
+  const [mode, setMode] = useState(INITIAL_MODE);
+  // Mounted through the exit animation, so the catalog can fold back into the
+  // centre tile rather than vanishing. Cleared when the animation lands.
+  const [leaving, setLeaving] = useState(false);
+
+  // How the catalog advances, and one of the two things that survive a reload.
+  // Config supplies the DEFAULT for a reader who has never chosen; a stored
+  // choice wins over it.
+  const [paging, setPaging] = useState(() =>
+    load(KEYS.paging, manifest.config.catalog.paging, {
+      validate: (v) => v === 'scroll' || v === 'pages',
+    })
+  );
+  useEffect(() => {
+    save(KEYS.paging, paging);
+  }, [paging]);
 
   const [roomCount, setRoomCount] = useState(total);
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
@@ -223,9 +246,15 @@ function Library({ manifest }) {
   // The cache asks `urlFor` where a level of a room lives; the manifest is the
   // only thing that knows, because it is the scan that discovered which levels
   // the corpus actually has.
+  // Where a room's tile lives, at a level. The canvas cache asks it for tiles
+  // to draw; the catalog puts the same answer in an `<img src>`. One resolver,
+  // because the manifest is the only thing that knows which levels the corpus
+  // actually has and two readings of that would be two chances to be wrong.
+  const urlFor = useMemo(() => createUrlFor(manifest), [manifest]);
+
   const cache = useMemo(() => {
     const tiles = createTileCache({
-      urlFor: createUrlFor(manifest),
+      urlFor,
       onLoad: () => requestDraw(),
     });
     // The base tiles are rule 1's floor: pinned and preloaded so every cell has
@@ -238,7 +267,7 @@ function Library({ manifest }) {
       tiles.request(id, 0);
     }
     return tiles;
-  }, [manifest, requestDraw]);
+  }, [manifest, requestDraw, urlFor]);
 
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
   const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
@@ -733,6 +762,13 @@ function Library({ manifest }) {
 
     const render = () => {
       pending = 0;
+      // Hidden, so there is nothing to draw and nothing to measure. Not merely
+      // an optimisation: with `display: none` up the tree every clientWidth is
+      // 0, and a frame drawn against that would size the canvas to nothing and
+      // place both centre-tile overlays at the origin. The camera, the cache
+      // and the pyramid's LRU are all untouched meanwhile, which is what makes
+      // coming back free.
+      if (mode !== 'map') return;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -850,7 +886,7 @@ function Library({ manifest }) {
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
     };
-  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay]);
+  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode]);
 
   // --- the rearrangement animation -----------------------------------------
 
@@ -953,6 +989,24 @@ function Library({ manifest }) {
     const current = { layout, order };
     const previous = arrangement.current;
     arrangement.current = current;
+
+    // In the catalog there is no map on screen to rearrange, and flying a
+    // hidden camera to set up a slide nobody can see would be a second of
+    // nothing. The map's `layout` and `order` still updated, so returning to it
+    // simply shows the new arrangement at once - which is not a new path but
+    // the one `buildRearrangement` already takes when a change cannot be
+    // animated legally.
+    //
+    // The catalog says what happened in its own voice instead: the arrangement
+    // sentence talks about clustering near a centre this reading does not have.
+    if (mode !== 'map') {
+      animateNext.current = false;
+      const note = pendingNote.current;
+      pendingNote.current = '';
+      setStatus(describeCatalog({ total: order.length, query: result?.term ?? '', note }));
+      return;
+    }
+
     if (!animateNext.current || !previous) {
       requestDraw();
       return;
@@ -966,7 +1020,7 @@ function Library({ manifest }) {
       // effect for the newer arrangement will announce that one itself.
       if (arrangement.current === current) announceArrangement();
     });
-  }, [layout, order, startRearrangement, requestDraw, announceArrangement]);
+  }, [layout, order, startRearrangement, requestDraw, announceArrangement, mode, result]);
 
   // --- search --------------------------------------------------------------
   const search = async (term) => {
@@ -1075,12 +1129,126 @@ function Library({ manifest }) {
     [flyTo, config]
   );
 
-  // A future override book does something other than search - an artist's
-  // statement, say. Nothing reserves a slot yet (CENTRE_OVERRIDES is empty), so
-  // this is the seam, not a live feature; it is wired so adding an override is
-  // the only change needed.
+  // --- switching between the two readings ----------------------------------
+  //
+  // The map is hidden rather than unmounted, so neither direction rebuilds
+  // anything: the camera is exactly where it was left, the tile cache is warm,
+  // and `useMapCamera`'s pointer listeners - bound once against a ref object
+  // rather than an element - are still attached to a canvas that never went
+  // away.
+  //
+  // The animation is a FLIP on ONE element. The centre tile is what the map is
+  // framed on and what the catalog's first row shows, so folding one into the
+  // other is a transform on that row's thumbnail while the map cross-fades,
+  // rather than anything the renderer has to know about.
+  const catalogScrollRef = useRef(null);
+  const firstTileRef = useRef(null);
+  // Where the centre tile was on the map when the switch began, or null if it
+  // was off screen - a reader who panned away has nothing to fold from, and the
+  // transition degrades to a cross-fade rather than flying in from a corner.
+  const flipFrom = useRef(null);
+
+  /** The centre cell's screen rect, or null if none of it is in view. */
+  const centreRectNow = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const rect = centreCellRect(cam.current, { width: w, height: h });
+    return overlapsViewport(rect, w, h) ? rect : null;
+  }, [cam]);
+
+  const animatedSwitch = () =>
+    !prefersReducedMotion() && config.catalog.transitionMs > 0;
+
+  const enterCatalog = useCallback(() => {
+    flipFrom.current = animatedSwitch() ? centreRectNow() : null;
+    setCard(null);
+    setMode('catalog');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centreRectNow, config]);
+
+  const exitCatalog = useCallback(() => {
+    if (!animatedSwitch()) {
+      setMode('map');
+      return;
+    }
+    // The map is already at the camera it will land on, so the tile's
+    // destination is knowable before anything moves.
+    flipFrom.current = centreRectNow();
+    setLeaving(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centreRectNow, config]);
+
+  /**
+   * Run the FLIP, in whichever direction the mode just moved.
+   *
+   * `useLayoutEffect` because the invert transform has to be applied before the
+   * browser paints the catalog in its resting position - one frame of the list
+   * at full size, then a jump onto the tile, is exactly the flash this is meant
+   * to replace.
+   */
+  useLayoutEffect(() => {
+    const entering = mode === 'catalog' && !leaving;
+    if (!entering && !leaving) return;
+
+    const tile = firstTileRef.current;
+    const anchor = flipFrom.current;
+    const ms = config.catalog.transitionMs;
+    let timer = 0;
+
+    // Nothing to fold from or to: cross-fade, which the stylesheet does on its
+    // own, and just land.
+    if (!tile || !anchor || !animatedSwitch()) {
+      if (leaving) timer = setTimeout(() => { setMode('map'); setLeaving(false); }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    const rest = tile.getBoundingClientRect();
+    const onto = flipCss(flipTransform(anchor, rest));
+
+    if (entering) {
+      // Start on the tile, then release to nothing.
+      tile.style.transition = 'none';
+      tile.style.transform = onto;
+      // Read back, so the two writes cannot be coalesced into no animation.
+      void tile.offsetWidth;
+      tile.style.transition = `transform ${ms}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
+      tile.style.transform = '';
+      timer = setTimeout(() => {
+        tile.style.transition = '';
+      }, ms);
+    } else {
+      // Leaving: from nothing back onto the tile, and land when it arrives.
+      tile.style.transition = `transform ${ms}ms cubic-bezier(0.55, 0.06, 0.68, 0.19)`;
+      tile.style.transform = onto;
+      timer = setTimeout(() => {
+        tile.style.transition = '';
+        tile.style.transform = '';
+        setMode('map');
+        setLeaving(false);
+      }, ms);
+    }
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, leaving, config]);
+
+  /** A row's "show on the map" - aim the camera, then go and look. */
+  const showOnMap = useCallback(
+    (x, y) => {
+      flyTo(x, y, config.camera.defaultZoom);
+      exitCatalog();
+    },
+    [flyTo, config, exitCatalog]
+  );
+
+  /**
+   * What an override book does. The seam this file has carried empty since the
+   * shelf was built; the catalog is the first thing to claim a slot.
+   */
   const onOverride = (slot) => {
-    void slot; // e.g. switch (slot.action) { case 'statement': ... }
+    if (slot.action === 'catalog') enterCatalog();
   };
 
   /**
@@ -1153,6 +1321,21 @@ function Library({ manifest }) {
   return (
     <>
       {/*
+        The map, and everything that belongs to it. `display: contents` when
+        shown, so wrapping changes no layout at all - the canvas and both
+        centre-tile overlays keep positioning against `#root` exactly as before
+        - and `display: none` when hidden, which takes the whole subtree out of
+        the accessibility tree along with the pixels.
+
+        HIDDEN, never unmounted. The camera ref, the tile cache and the
+        pyramid's per-level LRU all survive a trip through the catalog, so
+        coming back is a repaint rather than a rebuild - and `useMapCamera`
+        binds its pointer listeners once, against the ref OBJECT rather than the
+        element, so a canvas that unmounted would come back with nothing bound
+        at all. See `docs/catalog-plan.md` §2.
+      */}
+      <div className="map-view" hidden={mode !== 'map'}>
+      {/*
         `role="application"`, scoped to exactly this element and nowhere else
         (accessibility-plan.md §4.2b): inside it, a screen reader's own browse-
         mode reading turns off and arrow keys reach the page instead, which is
@@ -1214,15 +1397,13 @@ function Library({ manifest }) {
         whatever style this component declared and fight the imperative
         positioning every frame.
       */}
-      <form ref={searchFormRef} onSubmit={runSearch} className="centre-search">
-        <input
-          type="search"
-          aria-label="search the library"
-          placeholder="search the library…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </form>
+      <SearchForm
+        formRef={searchFormRef}
+        className="centre-search"
+        query={query}
+        setQuery={setQuery}
+        onSubmit={runSearch}
+      />
       {/*
         The shelf, as a real control surface (accessibility-plan.md §3.3).
         Until now the centre room's forty spines were painted pixels behind a
@@ -1370,6 +1551,19 @@ function Library({ manifest }) {
         </div>
 
         {/*
+          The second way in. The primary one is the first book on the centre
+          shelf, but a book only exists while the spines are legible - zoomed in
+          on the centre - so a reader out in the far field, or one who never
+          uses a pointer, would otherwise have to fly home before they could
+          reach the catalog at all.
+        */}
+        <div className="buttons">
+          <button className="mode-toggle" onClick={enterCatalog}>
+            the catalog →
+          </button>
+        </div>
+
+        {/*
           Search history now outlives the session, so there has to be a way to
           end it. Persisting someone's typed input without giving them a way to
           clear it is not a thing to ship - and the shelf is where that input is
@@ -1398,11 +1592,55 @@ function Library({ manifest }) {
         */}
         <div className="note">
           {!status && 'drag to pan, scroll to zoom. right-click a room.'}
-          <span role="status">{status}</span>
         </div>
       </div>
       <div className="hud" id="hud" />
       {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
+      </div>
+
+      {(mode === 'catalog' || leaving) && (
+        <CatalogView
+          manifest={manifest}
+          config={config}
+          urlFor={urlFor}
+          order={order}
+          metadata={metadata}
+          result={result}
+          highlight={highlight}
+          query={query}
+          setQuery={setQuery}
+          onSearch={runSearch}
+          paging={paging}
+          setPaging={setPaging}
+          onExit={exitCatalog}
+          onShowOnMap={showOnMap}
+          onKeyword={searchKeyword}
+          centreSlots={centreSlots}
+          onBook={onBook}
+          cellOfRank={(rank) => layout.cellOfRank(rank)}
+          note={result ? describeSignals(result.signals ?? {}, Boolean(searchIndex)) : ''}
+          scrollRef={catalogScrollRef}
+          firstTileRef={firstTileRef}
+          leaving={leaving}
+        />
+      )}
+
+      {/*
+        ONE live region for the whole app, and it lives out here rather than in
+        the panel for a structural reason: the panel is part of the map, so a
+        region inside it would be unmounted and remounted on every mode switch,
+        and a screen reader loses a live region that goes away. What it says
+        differs by mode - a cursor move, or what the catalog is showing - but
+        the node a reader is listening to never changes.
+
+        `role="status"` announces every change to its subtree, so nothing else
+        may share it; the map's static hint stays in the panel where it cannot
+        be read aloud on every update.
+      */}
+      <div className="live">
+        <span role="status">{status}</span>
+      </div>
+
       {card && cardDescription && (
         <RoomCard
           card={card}
@@ -1459,12 +1697,19 @@ const OPENING_MARGIN = 0.94;
  *
  * The seam the concept asks for - "certain books will have distinct functions,
  * e.g. displaying an artist's statement" - built so history can never overwrite
- * them. It ships empty; the shape a future entry takes is
- *   { 0: { text: 'artist’s statement', action: 'statement' } }
- * where `action` is dispatched by `onOverride` below. Add nothing here until the
- * function it names exists, so an override always does something.
+ * them. `action` is dispatched by `onOverride` in `Library`; add nothing here
+ * until the function it names exists, so an override always does something.
+ *
+ * Slot 0 is the top-left book, reserved before history fills the wall, and it
+ * opens the catalog - the corpus read as a list rather than as a map. That it
+ * is a BOOK is the point: the way out of the map is an object in the room,
+ * which is the same argument that put the search field on the centre tile.
+ * `assignTitles` displaces history past a reserved slot rather than writing
+ * over it, so the shelf simply starts one book later.
  */
-const CENTRE_OVERRIDES = {};
+const CENTRE_OVERRIDES = {
+  0: { text: 'the catalog', action: 'catalog' },
+};
 
 /**
  * `?touchdebug` prints the raw pointer stream on screen.
@@ -1476,6 +1721,20 @@ const CENTRE_OVERRIDES = {};
  * gesture arbitration - so a real device reporting for itself is the only way
  * some of these questions get answered.
  */
+/**
+ * Which reading the page opens on.
+ *
+ * `?catalog` in the url opens straight into the list, read once at module scope
+ * exactly as `?touchdebug` is. Read-only on purpose: the toggle does not write
+ * the url back, so there is no history-entry behaviour to design and no way for
+ * the address bar and the page to disagree. It makes the mode linkable, and it
+ * lets a test land in the catalog without a click.
+ */
+const INITIAL_MODE =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('catalog')
+    ? 'catalog'
+    : 'map';
+
 const TOUCH_DEBUG =
   typeof location !== 'undefined' && new URLSearchParams(location.search).has('touchdebug');
 

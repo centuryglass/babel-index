@@ -264,3 +264,34 @@ test('the default gradient bounds bracket a real CLIP cosine', () => {
   assert.ok(clipHigh > clipLow, `${clipLow}-${clipHigh}`);
   assert.ok(clipLow > 0 && clipHigh < 1, 'a cosine, not a normalised score');
 });
+
+// --- the catalog's block ---------------------------------------------------
+
+test('the catalog block defaults, and a stored paging choice is not its business', () => {
+  const { catalog } = resolveConfig({});
+  assert.deepEqual(catalog, DEFAULTS.catalog);
+  // `windowPages: 0` is legal and meaningful - it is what pagination passes.
+  assert.equal(resolveConfig({ catalog: { windowPages: 0 } }).catalog.windowPages, 0);
+});
+
+test('nonsense in the catalog block is adjusted with a note, never thrown', () => {
+  const { catalog, notes } = resolveConfig({
+    catalog: { perPage: 0, windowPages: -3, paging: 'sideways', transitionMs: -5 },
+  });
+
+  // A page of zero rows renders nothing at all, which is the one thing a list
+  // must not do; a negative window is the same bug spelled differently.
+  assert.equal(catalog.perPage, 1);
+  assert.equal(catalog.windowPages, 0);
+  assert.equal(catalog.paging, DEFAULTS.catalog.paging);
+  assert.equal(catalog.transitionMs, DEFAULTS.catalog.transitionMs);
+
+  for (const key of ['catalog.perPage', 'catalog.windowPages', 'catalog.paging', 'catalog.transitionMs'])
+    assert.ok(notes.some((n) => n.startsWith(key)), `a note for ${key}`);
+});
+
+test('a catalog transition of zero means swap at once, and is not an error', () => {
+  const { catalog, notes } = resolveConfig({ catalog: { transitionMs: 0 } });
+  assert.equal(catalog.transitionMs, 0);
+  assert.ok(!notes.some((n) => n.startsWith('catalog.transitionMs')));
+});

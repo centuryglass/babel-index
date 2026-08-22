@@ -54,7 +54,7 @@ export function Highlight({ text, ranges }) {
  * tell a reader the library was certain about a wall it has nothing to say
  * about. See `explainScore`.
  */
-function ScoreBreakdown({ rank, result, weights }) {
+function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
   if (!result?.breakdown || rank == null || rank < 0) return null;
   const { rows, total, certainty } = explainScore(rank, {
     breakdown: result.breakdown,
@@ -62,6 +62,34 @@ function ScoreBreakdown({ rank, result, weights }) {
     weights,
   });
   if (!rows.length) return null;
+
+  // Two presentations of ONE computation. A card has the room to itself and can
+  // afford a table; a catalog row is one line in a list of hundreds, and the
+  // table there was 108px tall in a 202px row and clipped its own last line.
+  // The numbers still come from a single `explainScore`, so the two layouts can
+  // disagree about shape and never about the score.
+  //
+  // The strip is one line high whatever the query found: it never wraps, and
+  // scrolls sideways in its own box if it has to, so every row in the catalog
+  // stays exactly as tall as every other. That uniformity is what the sliding
+  // window's spacer arithmetic rests on.
+  if (layout === 'strip') {
+    return (
+      <ul className="score-strip">
+        {rows.map((r) => (
+          <li key={r.key} title={r.note ?? undefined}>
+            {r.label} <b>{r.weighted.toFixed(3)}</b> <span>{r.raw.toFixed(2)}</span>
+          </li>
+        ))}
+        <li className="total">
+          total <b>{total.toFixed(3)}</b>
+        </li>
+        <li className="sure">
+          certainty <b>{certainty.toFixed(2)}</b>
+        </li>
+      </ul>
+    );
+  }
 
   return (
     <div className="score">
@@ -109,6 +137,8 @@ function ScoreBreakdown({ rank, result, weights }) {
  * @param {number|null} [props.rank] for the score breakdown
  * @param {object|null} [props.result] the current search, for the breakdown
  * @param {object} [props.weights]
+ * @param {'table'|'strip'} [props.scoreLayout] a card has room for the table; a
+ *   catalog row needs the one-line strip, or it clips
  */
 export function RoomDetails({
   entry,
@@ -119,6 +149,7 @@ export function RoomDetails({
   rank = null,
   result = null,
   weights = null,
+  scoreLayout = 'table',
 }) {
   return (
     <>
@@ -158,7 +189,9 @@ export function RoomDetails({
 
       {!entry && <p className="story dim">No keywords recorded for this room.</p>}
 
-      {weights && <ScoreBreakdown rank={rank} result={result} weights={weights} />}
+      {weights && (
+        <ScoreBreakdown rank={rank} result={result} weights={weights} layout={scoreLayout} />
+      )}
     </>
   );
 }
