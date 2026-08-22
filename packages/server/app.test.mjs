@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
-import { createApp, stubRanking } from './app.mjs';
+import { createApp, stubRanking, hasTextModel } from './app.mjs';
 import { scanDirectory } from './scan.mjs';
 import { DEFAULTS, resolveConfig } from '../config/config.mjs';
 import * as fixture from './image-fixtures.mjs';
@@ -355,5 +355,42 @@ test('/ serves the page, re-read each request so edits need no restart', async (
 test('the favicon is answered rather than logged as a 404 on every load', async () => {
   await serving(async ({ get }) => {
     assert.equal((await get('/favicon.ico')).status, 204);
+  });
+});
+
+test('the optional CLIP model is reported, not assumed', () => {
+  // `@huggingface/transformers` is an OPTIONAL dependency: `onnxruntime-node`
+  // publishes for win32/darwin/linux only, and as a required dependency it
+  // fails the whole `npm install` on anything else (Android under Termux was
+  // the case that found this). Optional, it is skipped and everything else
+  // installs - so the server has to be able to say whether it is there.
+  //
+  // Resolution only: this must not LOAD the package, or the check costs as much
+  // as the thing it is checking for.
+  assert.equal(typeof hasTextModel(), 'boolean');
+
+  // And it must agree with reality on whichever machine is running the suite,
+  // rather than being a constant that happens to look right here.
+  let resolvable = true;
+  try {
+    import.meta.resolve('@huggingface/transformers');
+  } catch {
+    resolvable = false;
+  }
+  assert.equal(hasTextModel(), resolvable);
+});
+
+test('a search still ranks when the text model cannot be loaded', async () => {
+  // The degradation the optional dependency rests on. With no model the server
+  // returns a stub order rather than a 500, and the browser still ranks by
+  // keywords and story - so the mechanic (type a term, watch the library
+  // rearrange) survives on a platform onnxruntime does not publish for.
+  await serving(async ({ get }) => {
+    const res = await (await get('/api/search?q=gilt')).json();
+    assert.equal(res.stub, true);
+    assert.deepEqual([...res.order].sort((a, b) => a - b), [0, 1, 2]);
+    // Whatever the note says, it must not paste a module resolution error - it
+    // reaches the browser, and local filesystem paths have no business there.
+    if (res.note) assert.ok(!/imported from|node_modules|ERR_MODULE_NOT_FOUND/.test(res.note), res.note);
   });
 });

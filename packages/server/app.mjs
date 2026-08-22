@@ -76,7 +76,14 @@ export function createApp({ manifest, imagesDir, baseDir = imagesDir, rescan, co
       const vector = await embedQuery(q);
       res.json({ stub: false, query: q, vector });
     } catch (err) {
-      res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q), note: String(err) });
+      // The note reaches the browser, so it says what happened rather than
+      // pasting a module resolution error with local paths in it. The two cases
+      // are worth telling apart: no model installed at all is a permanent fact
+      // about this machine, and anything else is a load that may yet succeed.
+      const note = hasTextModel()
+        ? `the CLIP text model failed to load: ${err?.message ?? err}`
+        : 'no CLIP text model installed - ranking by keywords and story only';
+      res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q), note });
     }
   });
 
@@ -116,6 +123,33 @@ export function createApp({ manifest, imagesDir, baseDir = imagesDir, rescan, co
  * stays free of it. The promise is memoised, so concurrent first requests share
  * one load rather than racing two model downloads.
  */
+/**
+ * Whether the CLIP text tower could be loaded at all.
+ *
+ * `import.meta.resolve` asks the resolver where the package IS without
+ * executing a byte of it, so this costs nothing and can be answered at startup
+ * - which the lazy `textTower()` below deliberately cannot, since loading the
+ * model is the expensive thing it exists to defer.
+ *
+ * It matters because the package is OPTIONAL. `onnxruntime-node`, which
+ * transformers.js needs, publishes for win32/darwin/linux only; on anything
+ * else (Android under Termux, say) npm refuses it, and as a required dependency
+ * that takes the whole install down with it. As an optional one it is skipped,
+ * everything else installs, and the demo runs - ranking by keywords and story
+ * instead of by CLIP. This is how the server says so out loud rather than
+ * leaving it to be discovered on the first search.
+ *
+ * @returns {boolean}
+ */
+export function hasTextModel() {
+  try {
+    import.meta.resolve('@huggingface/transformers');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let textTowerPromise = null;
 function textTower() {
   if (!textTowerPromise)

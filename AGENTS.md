@@ -78,6 +78,17 @@ stale instance.
 - **Node 20 is the floor** (`engines`), and CI runs 20/22/24. No TypeScript, and
   no dependency should be added without a reason that survives the question "can
   this be twenty lines instead?" — the dependency list is deliberately short.
+- **`@huggingface/transformers` is OPTIONAL, and `esbuild` is a runtime
+  dependency.** `onnxruntime-node` declares `os: ["win32","darwin","linux"]`, and
+  npm fails a *required* dependency on any other platform with `EBADPLATFORM` —
+  which took the whole install down on Android/Termux. Optional, it is skipped
+  and everything else installs. Nothing may import it statically: the server's
+  text tower and `tools/embed` both `await import()` it, the search route falls
+  back to `stubRanking`, and the browser still ranks by keywords and story. Check
+  availability with `hasTextModel()` (resolution only, never a load). `esbuild`
+  is in `dependencies` rather than `devDependencies` because `packages/server/
+  index.mjs` bundles the client at startup — it is what the demo runs on, not
+  tooling.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so a new file needs no
   wiring. The e2e file is `*.e2e.mjs` precisely so it stays outside that pattern.

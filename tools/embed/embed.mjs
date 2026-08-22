@@ -25,7 +25,6 @@
  */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { AutoProcessor, CLIPVisionModelWithProjection, RawImage } from '@huggingface/transformers';
 import { scanDirectory } from '../../packages/server/scan.mjs';
 
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
@@ -54,6 +53,38 @@ function quantiseInto(row, out, base) {
   }
 }
 
+/**
+ * The vision tower, imported only once there is work for it.
+ *
+ * Dynamically, and with the failure explained rather than re-thrown as a module
+ * resolution stack: transformers.js is an OPTIONAL dependency of this repo,
+ * because `onnxruntime-node` publishes for win32/darwin/linux only and as a
+ * required dependency it fails the whole `npm install` on anything else. So a
+ * machine that can run the demo perfectly well can be missing this, and the
+ * useful thing to say is which machine can do the job instead - not that a
+ * specifier could not be resolved.
+ */
+async function loadVisionTower() {
+  try {
+    return await import('@huggingface/transformers');
+  } catch (err) {
+    if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
+    // Tagged, so the top-level handler can print this as a message rather than
+    // as a stack. Sniffing the shape of the error there instead would swallow
+    // the stack of every real bug that happens to look similar.
+    throw Object.assign(new Error(
+      'This tool needs @huggingface/transformers, which is an optional dependency and is ' +
+        'not installed here.\n' +
+        'It pulls in onnxruntime-node, which publishes binaries for Windows, macOS and Linux ' +
+        'only - so on Android/Termux, or any other platform it does not build for, npm skips ' +
+        'it and the rest of the install still succeeds.\n' +
+        'Generate embeddings.bin on a supported machine and copy it into the corpus directory; ' +
+        'the demo server reads the blob and does not need this package. Search still works ' +
+        'without it, ranking by keywords and story rather than by CLIP.'
+    ), { expected: true });
+  }
+}
+
 async function main() {
   const argv = parseArgs(process.argv.slice(2));
   const imagesDir = argv.images ?? 'assets/corpus-sample';
@@ -62,6 +93,8 @@ async function main() {
   // and the room set the server ranks against drift - and the blob is keyed by
   // row order, so a drift ranks the wrong rooms. Same default as index.mjs.
   const baseDir = argv['base-dir'] ?? 'assets';
+
+  const { AutoProcessor, CLIPVisionModelWithProjection, RawImage } = await loadVisionTower();
 
   // One source of truth for which files are rooms and in what id order.
   const manifest = await scanDirectory(imagesDir, { base: argv.base, baseDir });
@@ -115,6 +148,8 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // A missing optional dependency is a message, not a stack: the reader has not
+  // hit a bug, they are on a platform onnxruntime does not publish for.
+  console.error(err?.expected ? err.message : err);
   process.exit(1);
 });
