@@ -13,7 +13,7 @@ import {
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import { CatalogView } from './CatalogView.jsx';
-import { flipTransform, flipCss } from './catalog.js';
+import { flipTransform, flipCss, rectOf } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
@@ -1204,7 +1204,9 @@ function Library({ manifest }) {
       return () => clearTimeout(timer);
     }
 
-    const rest = tile.getBoundingClientRect();
+    // `rectOf`, not the DOMRect itself - see its comment. Passing the DOMRect
+    // straight in does not throw; it silently drops the scale.
+    const rest = rectOf(tile.getBoundingClientRect());
     const onto = flipCss(flipTransform(anchor, rest));
 
     if (entering) {

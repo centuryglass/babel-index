@@ -11,6 +11,7 @@ import {
   pageAtScroll,
   windowFor,
   flipTransform,
+  rectOf,
 } from './catalog.js';
 import { BASE_TILE, LEVELS, sizeOf } from './pyramid.js';
 
@@ -204,6 +205,19 @@ test('the flip is its own inverse, so entering and leaving cannot disagree', () 
   const back = flipTransform(b, a);
   assert.equal(there.scaleX * back.scaleX, 1);
   assert.equal(there.x, -back.x);
+});
+
+test('a DOMRect has to be converted, and the conversion is what makes the scale right', () => {
+  // A DOMRect says width/height; every rect inside this module says w/h. The
+  // mismatch does not throw - `to.w` is undefined, so the zero-size guard below
+  // returns a scale of 1 and the animation translates without scaling, which
+  // reads as a working transition rather than as a bug.
+  const anchor = { x: 128, y: 144, w: 1024, h: 768 };
+  const domRect = { x: 16, y: 102, width: 240, height: 180 };
+
+  assert.equal(flipTransform(anchor, domRect).scaleX, 1, 'the trap this guards');
+  assert.equal(flipTransform(anchor, rectOf(domRect)).scaleX, 1024 / 240);
+  assert.deepEqual(rectOf(domRect), { x: 16, y: 102, w: 240, h: 180 });
 });
 
 test('a zero-sized destination does not produce a divide by zero', () => {

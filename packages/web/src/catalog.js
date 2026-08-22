@@ -190,6 +190,22 @@ export function windowFor(configured, { viewportPx, perPage, rowPx }) {
 }
 
 /**
+ * A DOMRect in the shape the rest of this app uses.
+ *
+ * `getBoundingClientRect()` returns `width`/`height`; `centreCellRect` and
+ * everything else here says `w`/`h`. Converting at the boundary rather than
+ * teaching `flipTransform` two shapes is what keeps ONE rect shape inside the
+ * module - and this function exists at all because the mismatch does not throw:
+ * `to.w` on a DOMRect is `undefined`, `undefined > 0` is false, and the
+ * zero-size guard below then returns a scale of 1. The animation still ran, and
+ * still translated correctly, so it looked like a working transition that had
+ * simply forgotten to scale. Found by logging the numbers, not by watching it.
+ */
+export function rectOf(domRect) {
+  return { x: domRect.x, y: domRect.y, w: domRect.width, h: domRect.height };
+}
+
+/**
  * The transform that puts `to` exactly where `from` is - the invert half of a
  * FLIP.
  *
