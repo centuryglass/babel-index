@@ -13,3 +13,6 @@ assets/blender/textures
 
 # Local tuning overlay (packages/config). Optional and never committed.
 config.json
+
+# The dependency atlas (tools/depgraph). A build product, regenerated on demand.
+depgraph.html

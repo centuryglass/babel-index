@@ -24,6 +24,7 @@ npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
 npm run generate:figures                  # regenerate docs/figures/
+npm run generate:depgraph                 # write depgraph.html, the dependency atlas
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
 
@@ -58,6 +59,7 @@ stale instance.
 | `packages/web/src/centre.js` | the centre room's shelf: book geometry, title assignment, the hit-test, the arrow-key walk, and the compositing — the pure half, like `picking.js` |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry (`lib/geometry.js`) and the SVG importer that generates `lib/measured.js` |
+| `tools/depgraph/` | the dependency atlas: `scan-npm.mjs` walks the install, `scan-internal.mjs` scans the repo's own imports, `graph.mjs` is the shared maths, `page/` is the canvas client |
 | `assets/corpus-sample/` | 27 ranked rooms, with all five pyramid levels, so the demo needs no setup. The wallpaper is not here - it comes from `--base-dir` (below) |
 | `assets/base.tile.png` | the blank base tile, served at cell (0, 0); `mask.png` is its inpainting mask. This is the demo's `--base-dir` default |
 | `assets/base_variations/` | the inpainted wallpaper variants, one per file; the map picks between them per cell. Swap these for real inpainting output |
@@ -491,6 +493,39 @@ stale instance.
   past the slop radius cancels, and the slop exists because a finger never holds
   still. Break that and the map is unusable on a phone — `smoke.e2e.mjs` covers
   it, no unit test can.
+
+### The dependency atlas
+
+- **It is measured, not declared, and that is the whole point.** `scan-npm.mjs`
+  reads what is on disk under `node_modules` and resolves each dependency the
+  way Node does - climbing the `node_modules` chain from the importing package
+  upward. A nested copy is therefore its own node, which is the only way the
+  graph can show that `@img/sharp-libvips-linux-x64` is installed twice at two
+  versions. Reading the declared ranges out of `package.json` instead would
+  collapse those to one node and describe a tree that was never installed.
+- **A package's size excludes what it nests.** Otherwise a shared dependency is
+  counted once per dependent and the total comes out larger than the directory
+  it was measured from. Asserted.
+- **`scan-internal.mjs` scans text rather than parsing it**, because the
+  alternative is a parser dependency. The cost is one real hazard, guarded by
+  tests that were checked by breaking the scanner on purpose: the match must
+  REQUIRE `from` and must not cross an `=`, or an `export const X = { ... }`
+  whose prose happens to contain `from "camera.js"` is read as a re-export, and
+  an exported function returning a string is read as an import. Both bugs were
+  live before the guard existed. The same limitation is why this file's own test
+  fixtures split the word `import` - a dynamic import inside a string is
+  indistinguishable from a real one to a scanner.
+- **The page is a build product and is gitignored.** `page/page.html` is a body
+  FRAGMENT, not a document: the default run wraps it in a minimal skeleton so
+  the file opens from disk, and `--fragment` emits it bare for a publishing host
+  that supplies its own `<head>`. Nesting a second `<head>` inside a host's
+  `<body>` is what that split exists to prevent.
+- **Node colour is sequential, never categorical.** Depth on the npm side,
+  fan-in on the repo side - one hue, light to dark. The only second hue is the
+  orange used for selection and dev-only marks; test files and outside imports
+  are told apart by FORM (hollow, square), not by a ninth colour, because a
+  node-link graph puts arbitrary pairs of nodes side by side and no eight-hue
+  palette survives that colourblind-safely.
 
 ### Config and the pyramid
 
