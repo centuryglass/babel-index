@@ -42,12 +42,30 @@ export function describeCell(x, y, { layout, order, metadata = null }) {
     return { kind: 'centre', name: 'the centre of the library', description: null, picture: null };
   if (at.generic) return { kind: 'generic', name: 'a blank wall', description: null, picture: null };
 
-  const entry = metadata?.[at.id] ?? null;
+  return describeRoom(at.id, at.rank, order.length, metadata?.[at.id] ?? null);
+}
+
+/**
+ * The same naming, for a caller that already knows which room it is holding.
+ *
+ * `describeCell` resolves a cell and then calls this; the catalog, which has no
+ * cells at all, calls it directly. Splitting it out is what keeps "what a room
+ * is called" a single implementation across a spatial reading and a linear one
+ * - the premise this whole file rests on. Nothing about a cell, a layout or a
+ * board reaches in here.
+ *
+ * @param {number} id room id
+ * @param {number} rank position in the ranking, 0-based
+ * @param {number} total how many rooms are ranked
+ * @param {object|null} entry the room's metadata, as `joinMetadata()` returns
+ * @returns {{kind: 'room', name: string, description: string|null, picture: string|null}}
+ */
+export function describeRoom(id, rank, total, entry = null) {
   const keywords = entry?.keywords?.length ? entry.keywords.map((k) => k.text).join(', ') : null;
 
   return {
     kind: 'room',
-    name: `Room ${at.id}, rank ${at.rank + 1} of ${order.length} — ${keywords ?? 'no description recorded'}`,
+    name: `Room ${id}, rank ${rank + 1} of ${total} — ${keywords ?? 'no description recorded'}`,
     description: entry?.story ?? null,
     // What the PICTURE shows, as against what the room is - the sidecar's
     // optional `alt` (accessibility-plan.md §3.5, phase E). Separate from
@@ -85,4 +103,27 @@ export function describeArrangement(layout) {
   return layout.gradedCount
     ? `rearranged - ${rooms}, ${layout.gradedCount} clustered near the centre`
     : `rearranged - ${rooms}, spread evenly`;
+}
+
+/**
+ * What the catalog is showing, for the live region a mode switch or a search
+ * writes to.
+ *
+ * A sibling of `describeArrangement` rather than a reuse of it, because that
+ * one talks about clustering near the centre and there is no centre here. The
+ * catalog answers a different question - the map is where you are standing, the
+ * catalog is the ranking - so it gets its own sentence rather than a borrowed
+ * one that would be subtly false.
+ *
+ * @param {object} opts
+ * @param {number} opts.total rooms in the list
+ * @param {string} [opts.query] the search the list is ordered by, if any
+ * @param {string} [opts.note] `describeSignals`' account of what ranked it
+ * @returns {string}
+ */
+export function describeCatalog({ total, query = '', note = '' }) {
+  const head = query.trim()
+    ? `the catalog, ${total} rooms ranked for “${query.trim()}”`
+    : `the catalog, ${total} rooms in the order the map is showing`;
+  return [head, note].filter(Boolean).join('. ');
 }
