@@ -1787,8 +1787,7 @@ corpus:
 
 6. **The catalog — the map's other reading. Landed.** Built to
    [`catalog-plan.md`](catalog-plan.md), whose §12 records what changed on the
-   way; what remains of it is one unpaid refactor (extracting `MapView` out of a
-   `main.jsx` that is still long). The same corpus as
+   way. The same corpus as
    one scrolling list in search order, every tile unique, story and tags beside
    each row, and the full score breakdown under each one while a search is
    running — on a toggle the reader controls, so they decide how much they care

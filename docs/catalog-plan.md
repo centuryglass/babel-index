@@ -7,8 +7,7 @@ reader, so they decide how much they care to *explore* against how much they
 care to *query*.
 
 **Built.** This document is the plan it was built from; where the two differ,
-what landed is recorded in §12. The one preparatory step it names and did not
-need in full - extracting `MapView` out of `main.jsx` - is the open item there.
+what landed is recorded in §12.
 
 Two documents govern what follows and are not restated here:
 [`implementation-plan.md`](implementation-plan.md) for the map itself, and
@@ -475,15 +474,23 @@ what keeps the UI commit small enough to read.
 Four things the plan got wrong or under-specified, all found by measuring or by
 sabotaging a test rather than by reading:
 
-1. **The step-0 extraction was only half needed.** `RoomDetails`, `SearchForm`
-   and `RoomCard` came out as planned and each earned it - `RoomDetails` has
-   three consumers, and the canvas's fallback content turned out to be a second
-   copy of the card's markup nobody had noticed. `MapView` did not come out:
-   once the map was going to be HIDDEN rather than unmounted, the canvas, its
-   two overlays and the render effect stayed where they were behind one
-   `display: contents` wrapper, and moving them would have been churn without a
-   reader. `main.jsx` is still long. That remains worth doing and is now the
-   only unpaid part of this plan.
+1. **The step-0 extraction happened last, not first.** `RoomDetails`,
+   `SearchForm` and `RoomCard` came out as planned and each earned it -
+   `RoomDetails` has three consumers, and the canvas's fallback content turned
+   out to be a second copy of the card's markup nobody had noticed.
+
+   `MapView` did not come out with them. Once the map was going to be HIDDEN
+   rather than unmounted, the catalog's whole footprint in `main.jsx` was a
+   wrapper, two early returns and the mode handlers - a readable diff on its
+   own - so the extraction's stated purpose, keeping the feature commit
+   reviewable, had already been served another way. It came out afterwards, as
+   its own commit, because the OTHER reason to do it never went away: `main.jsx`
+   had grown to 1,917 lines and every future reader pays for that.
+
+   Done separately it also got a proof the mixed version could not have had.
+   The rendered DOM was captured before and after, through a search, and
+   compared: byte for byte identical. A refactor that claims to change nothing
+   should be made to demonstrate it.
 
 2. **The row height needed the text column, not just the tile.** §3.5 assumed
    the thumbnail sets the height. On a narrow display it does not - the tile
@@ -513,6 +520,21 @@ sabotaging a test rather than by reading:
    tile still translated into place, so the animation looked finished. Found by
    logging the numbers, and now converted at the boundary by `rectOf`, with the
    trap itself asserted so the guard cannot swallow the wrong shape again.
+
+6. **The split that fell out is not the one the plan named.** "Extract
+   `MapView`" turned into four files, because the pieces have different kinds:
+   `MapView.jsx` is markup with no logic, `useMapRenderer.js` is a frame loop
+   that owns listeners and a cancellable animation frame (so it is a hook, next
+   to `useMapCamera.js`), `RoomCard.jsx` is a dialog, and `touchDebug.js` is a
+   pair of module-scope values both halves of the split needed - importing one
+   from the other would have been a cycle. What stayed in `main.jsx` is what
+   both readings share: state, search, the ranking, the rearrangement, and the
+   camera the catalog aims when a row says "show on the map".
+
+   The frame loop does NOT own the frame request. `draw` is a ref passed into
+   it, because the tile cache is built with `onLoad: requestDraw` and the hook
+   takes that cache as an argument - a hook that also returned the request
+   function would have to exist before the thing it depends on.
 
 And one thing the plan called for that turned out to matter more than it
 sounded: **the e2e assertion that the camera survives a mode switch is not
