@@ -44,7 +44,7 @@ stale instance.
 | | |
 | --- | --- |
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
-| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
+| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `useMapRenderer.js` the frame loop, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
 | `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, the search density gradient, ranking, pan resistance — no DOM, no imports |
 | `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
@@ -57,6 +57,7 @@ stale instance.
 | `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
 | `packages/web/src/catalog.js` | the catalog's arithmetic: paging, the mounted window, spacer heights, row geometry, the thumbnail's level, the mode transition's FLIP - pure, like `picking.js` |
 | `packages/web/src/CatalogView.jsx` | the list itself; `RoomDetails.jsx` is the per-room block it shares with the card and the canvas fallback, `SearchForm.jsx` the box it shares with the centre tile |
+| `packages/web/src/MapView.jsx` | the map's markup and its panel - a presenter over state `main.jsx` owns, because the catalog reads the same state; `RoomCard.jsx` is the dialog, `main.jsx` what is left: state, search, the ranking, the rearrangement, the two modes |
 | `packages/web/src/persist.js` | the two things that survive a reload - the paging choice and the search history - and the try/catch around every storage call |
 | `packages/web/src/centre.js` | the centre room's shelf: book geometry, title assignment, the hit-test, the arrow-key walk, and the compositing — the pure half, like `picking.js` |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
