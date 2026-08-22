@@ -622,6 +622,24 @@ stale instance.
   unprefixed rule reached in and turned every slider row into a fixed-height
   flex box. `.chips`, `.story`, `.picture` and `.score` ARE shared on purpose -
   they come from `RoomDetails` and must look the same in a card and in a row.
+  The trap runs the other way too: a global `button { flex: 1 }`, written for
+  the panel's button rows, stretched the pager's buttons across half the window
+  each. The catalog's controls opt out explicitly rather than that rule being
+  narrowed under the panel it was written for.
+- **A fixed row cannot show everything, so the overlay is not optional.**
+  `RoomOverlay` is how a reader sees the tile at full size and the whole story
+  without going back to the map, reached from the thumbnail and from the "read
+  the rest" a clipped story ends with. Expanding a story IN PLACE was the
+  alternative and it breaks the windowing: row heights would vary, and then the
+  spacers are estimates. The clamp itself is derived (`storyLines`), not a flat
+  two lines - and `STORY_RESERVED_PX` must account for the expand button on
+  EVERY row, including the ones that do not show one, or the button is clipped
+  out of existence on exactly the narrow displays that need it.
+- **The query has a length cap and `search()` is where it is enforced.** The
+  input's `maxLength` only covers typing; a keyword chip, a book on the shelf
+  and a restored history entry all reach `search()` without passing through a
+  box. Scoring is O(tokens x keywords) per room, so a pasted tag list does not
+  degrade, it stops.
 
 ### Testing and CI
 

@@ -56,6 +56,7 @@ export function MapView({
   setQuery,
   onSearch,
   onGoToSearch,
+  maxQueryLength,
   cursorLabel,
   cursorEntry,
   cursorDesc,
@@ -165,6 +166,7 @@ export function MapView({
         query={query}
         setQuery={setQuery}
         onSubmit={onSearch}
+        maxLength={maxQueryLength}
       />
       {/*
         The shelf, as a real control surface (accessibility-plan.md §3.3).

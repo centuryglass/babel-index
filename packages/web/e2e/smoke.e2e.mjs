@@ -1881,6 +1881,104 @@ describe('the library, in a browser', { concurrency: false }, () => {
     }
   });
 
+  test('a room opens in full from the catalog, by its tile and by its story', async () => {
+    // The rows are a fixed height and their thumbnails are thumbnails - that is
+    // what lets the spacers be arithmetic. Neither is a reason to send a reader
+    // back to the map to find out what a room says, so both the tile and a
+    // clipped story open the same overlay.
+    await openCatalog();
+    try {
+      await page.locator('.catalog-tile-button').nth(1).click();
+      const overlay = page.locator('.overlay');
+      await overlay.waitFor({ timeout: 5000 });
+
+      // Nothing clipped in here: this is the whole point of it.
+      assert.equal(
+        await overlay.locator('.story').evaluate((el) => el.scrollHeight > el.clientHeight + 1),
+        false,
+        'the overlay clipped the story it exists to show in full'
+      );
+      // And the tile is the full-resolution one, not the row's thumbnail.
+      assert.match(await overlay.locator('.overlay-tile').getAttribute('src'), /^\/images\/[^/]+$/);
+
+      await page.keyboard.press('Escape');
+      await overlay.waitFor({ state: 'detached', timeout: 5000 });
+
+      // A story the clamp cut ends in a way out. Which rows have one depends on
+      // the display, so this drives whichever row actually reports being cut
+      // rather than assuming one does.
+      const more = page.locator('.catalog-more').first();
+      if (await more.count()) {
+        await more.click();
+        await overlay.waitFor({ timeout: 5000 });
+        assert.equal(
+          await overlay.locator('.story').evaluate((el) => el.scrollHeight > el.clientHeight + 1),
+          false
+        );
+        await page.keyboard.press('Escape');
+        await overlay.waitFor({ state: 'detached', timeout: 5000 });
+      }
+    } finally {
+      if (await page.locator('.overlay').count()) {
+        await page.keyboard.press('Escape');
+        await page.locator('.overlay').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      }
+      await closeCatalog();
+    }
+  });
+
+  test('paginated, the pager sits under the rows rather than a screenful of nothing', async () => {
+    // Spacers stand in for pages a reader can SCROLL to. Paginated there are
+    // none - the other pages are behind a button - and standing in for them put
+    // a page-sized hole between the last row and the pager.
+    await openCatalog();
+    try {
+      await page.locator('.paging button', { hasText: 'pages' }).click();
+      await page.locator('.pager').waitFor({ timeout: 5000 });
+
+      assert.equal(await page.locator('.catalog-spacer').count(), 0, 'a spacer in paginated mode');
+
+      const gap = await page.evaluate(() => {
+        const rows = document.querySelectorAll('.catalog-row');
+        const last = rows[rows.length - 1].getBoundingClientRect().bottom;
+        return Math.round(document.querySelector('.pager').getBoundingClientRect().top - last);
+      });
+      assert.ok(gap >= 0 && gap < 80, `the pager is ${gap}px below the last row`);
+    } finally {
+      await page.locator('.paging button', { hasText: 'scroll' }).click();
+      await closeCatalog();
+    }
+  });
+
+  test('an over-long query is cut to the cap instead of taking the page down', async () => {
+    // Scoring is O(tokens x keywords) per room. A pasted tag list is tens of
+    // millions of substring tests on the main thread, which does not degrade -
+    // it stops. The cap is enforced in `search()`, because a chip, a book and a
+    // restored history entry all reach it without passing through the box.
+    const { config } = await (await fetch(`${origin}/api/manifest`)).json();
+    const cap = config.search.maxQueryLength;
+    assert.equal(typeof cap, 'number', 'the manifest must carry the resolved query cap');
+
+    await openCatalog();
+    try {
+      const box = page.locator('.catalog-search input');
+      await box.fill('oak '.repeat(2000));
+      assert.equal((await box.inputValue()).length, cap, 'the box took more than the cap');
+
+      await box.press('Enter');
+      // Still alive: the count updates, which means a frame ran after the sort.
+      await waitFor(
+        async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
+        SEARCH_TIMEOUT,
+        'the page stopped responding after a very long query'
+      );
+    } finally {
+      await page.locator('.catalog-search input').fill('');
+      await page.locator('.catalog-search input').press('Enter');
+      await closeCatalog();
+    }
+  });
+
   test('the map is where it was left when the catalog closes', async () => {
     // THE assertion the whole design rests on. The map is hidden rather than
     // unmounted, so a trip through the catalog carries no state and rebuilds
