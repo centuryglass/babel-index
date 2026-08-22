@@ -1773,7 +1773,8 @@ corpus:
    - **A dense/linear view is deferred as its own subproject** — a real toggle
      for everyone rather than an accessibility path. Worth knowing before anyone
      builds it: a wallpaper-free map is already `contentRatio: 1`, a runtime
-     parameter rather than a second layout.
+     parameter rather than a second layout. **That subproject now has a plan of
+     its own — [`catalog-plan.md`](catalog-plan.md), item 6 below.**
 
    Phase A of that plan is a set of existing conformance bugs — page zoom
    disabled by the viewport meta, a card unreachable by keyboard and unmanaged
@@ -1783,3 +1784,29 @@ corpus:
    rather than an investment.) Consult `docs/design-history.md` before
    re-treading the "it's all one canvas" decision, or the alternatives that plan
    rejected.
+
+6. **The catalog — the map's other reading.** Planned in
+   [`catalog-plan.md`](catalog-plan.md); nothing built yet. The same corpus as
+   one scrolling list in search order, every tile unique, story and tags beside
+   each row, and the full score breakdown under each one while a search is
+   running — on a toggle the reader controls, so they decide how much they care
+   to explore against how much they care to query.
+
+   Not a dependency of anything above, and it does not block them. It sits here
+   because it is the first feature since the pyramid to touch more than one
+   package: a `describeRoom` primitive under `describeCell`, per-signal
+   components out of `rankHybrid` (which is what makes the score breakdown
+   possible at all, and what finally makes the *certainty is absolute, ranking
+   is relative* rule visible to a reader rather than only written down), and a
+   preparatory extraction of `MapView` out of a `main.jsx` that is 1581 lines.
+
+   Two things the plan settles that are worth knowing without reading it. **The
+   map is never unmounted** — catalog mode hides it and stops its render loop,
+   so the camera, the tile cache and the pyramid's LRU are exactly as they were
+   left, which is what dissolves design-history's "modes carry state, and state
+   desyncs" objection structurally rather than by discipline. And **this is not
+   the accessibility mode**: nothing detects a screen reader, nothing defaults
+   into it, the panel's ranked listbox stays where it is, and
+   `role="application"` stays scoped to the canvas. `accessibility-plan.md`
+   §3.7 rejected a linear list as an accommodation and left it open as a control
+   for everyone; that distinction is the plan's §7 and is not negotiable.

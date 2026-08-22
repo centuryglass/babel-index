@@ -64,6 +64,7 @@ stale instance.
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
 | `docs/accessibility-plan.md` | the keyboard/screen-reader plan: every phase landed, and what is deliberately still open |
+| `docs/catalog-plan.md` | the catalog: an alternate linear reading of the corpus, on a reader-facing toggle. Planned, not built |
 
 ## Conventions
 
