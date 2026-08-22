@@ -91,11 +91,56 @@ export const STOPWORDS = new Set([
  * terms borrowed from French and German.
  */
 export function fold(text) {
-  return String(text ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')  // combining marks, after NFD
-    .toLowerCase()
-    .trim();
+  return foldWithMap(text).folded.trim();
+}
+
+/** Combining marks, stripped after NFD has exposed them. */
+const COMBINING = /[\u0300-\u036f]/g;
+
+/**
+ * `fold`, but keeping track of where every folded character came from.
+ *
+ * Highlighting needs this and nothing else does. Matching happens on folded
+ * text; the `<mark>` has to land on the ORIGINAL, and a folded index is not an
+ * original index - every step of folding can change length. Decomposed
+ * `cafe\u0301` is five characters and folds to four; `\u0130` lowercases to two
+ * from one. Use one as the other and every highlight on a corpus with an accent
+ * in it lands slightly wrong, which is the kind of bug nobody reports because it
+ * looks like sloppy rendering rather than a defect.
+ *
+ * So this folds one CODE POINT at a time and records, for each UTF-16 unit of
+ * the output, the index of the source unit that produced it. `map.length` is
+ * always `folded.length`, and `map[i] <= map[i + 1]`, which is what lets a range
+ * in folded space be read straight back as a range in the original.
+ *
+ * Per code point rather than over the whole string is a small, deliberate change
+ * of meaning that `fold` inherits: whole-string lowercasing is context
+ * sensitive in a couple of places (Greek sigma takes its final form at the end
+ * of a word), and an index wants folding to be position independent, so the
+ * same word folds the same way wherever it appears. Canonical reordering across
+ * a combining sequence is likewise moot here, because every combining mark is
+ * stripped a line later.
+ *
+ * Deliberately does NOT trim: `fold` trims its own result, and trimming inside
+ * this would shift every recorded index off the text it describes.
+ *
+ * @param {string} text
+ * @returns {{folded: string, map: number[]}}
+ */
+export function foldWithMap(text) {
+  const src = String(text ?? '');
+  const map = [];
+  let folded = '';
+
+  for (let i = 0; i < src.length; ) {
+    const cp = String.fromCodePoint(src.codePointAt(i));
+    const out = cp.normalize('NFD').replace(COMBINING, '').toLowerCase();
+    for (let k = 0; k < out.length; k++) map.push(i);
+    folded += out;
+    i += cp.length;
+  }
+
+  return { folded, map };
 }
 
 /**
@@ -220,6 +265,141 @@ export function storyScore(queryTokens, storyTokens) {
 }
 
 /**
+ * ## Where the query matched, for highlighting
+ *
+ * Two functions, one per match rule, sitting under the two scorers they shadow
+ * so that a change to either is visibly a change to a pair.
+ *
+ * They exist here rather than in a component for one reason: a view that
+ * re-derives "what matched" will drift from the thing that ranked, and it will
+ * drift silently - marked text that scored nothing, or a room in the cluster
+ * with nothing marked at all. Both take the SAME `foldedQuery` and `queryTokens`
+ * the ranking was computed from, so a token dropped for being a stopword or for
+ * being under `minTokenLength` cannot highlight. It did not score, so it does
+ * not mark.
+ *
+ * The asymmetry between them is the asymmetry between the scorers, and it is
+ * not incidental: a keyword matches by SUBSTRING (`k.includes(token)`), a story
+ * word by PREFIX (`word.startsWith(token)`, the cheap stand-in for stemming).
+ * One highlighter over both would mark text `keywordScore` never looked at and
+ * miss text `storyScore` credited.
+ *
+ * Both return ranges into the ORIGINAL string - sorted, merged, non-overlapping
+ * - which is what `<Highlight>` renders and what makes them assertable without
+ * a DOM.
+ */
+
+/**
+ * Merge sorted-by-start ranges, dropping empties and collapsing overlaps.
+ *
+ * Two query tokens routinely hit the same span (`art` and `artist` against
+ * `artists`), and nested or duplicated `<mark>` elements are not what anyone
+ * wants to render or to read out.
+ *
+ * @param {{start: number, end: number}[]} ranges
+ * @returns {{start: number, end: number}[]}
+ */
+function mergeRanges(ranges) {
+  const sorted = ranges.filter((r) => r.end > r.start).sort((a, b) => a.start - b.start);
+  const out = [];
+  for (const r of sorted) {
+    const last = out[out.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else out.push({ ...r });
+  }
+  return out;
+}
+
+/**
+ * Turn a [start, end) span of FOLDED text into one of the original.
+ *
+ * The end is exclusive, so it is the source index of the character *after* the
+ * span - `map[end]` when there is one, and the string's length when the span
+ * runs to the end.
+ */
+function toSource(map, srcLength, start, end) {
+  return {
+    start: map[start] ?? srcLength,
+    end: end < map.length ? map[end] : srcLength,
+  };
+}
+
+/** Every occurrence of `needle` in `hay`, as folded-space ranges. */
+function occurrences(hay, needle) {
+  const found = [];
+  if (!needle) return found;
+  for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + 1))
+    found.push({ start: i, end: i + needle.length });
+  return found;
+}
+
+/**
+ * Where a query matched one keyword, mirroring `keywordScore`'s substring rule.
+ *
+ * The union of both of that function's readings - the whole query as a
+ * substring, and each query token as a substring - rather than only whichever
+ * of the two won the score. They almost always overlap into one range anyway,
+ * since a query contains its own tokens, and the union is the honest answer to
+ * the question the reader is asking ("why is this chip here?") rather than to
+ * the narrower "which arithmetic produced the number".
+ *
+ * @param {string} text the keyword as written, unfolded
+ * @param {string} foldedQuery
+ * @param {string[]} queryTokens
+ * @returns {{start: number, end: number}[]} ranges into `text`
+ */
+export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
+  const src = String(text ?? '');
+  if (!src) return [];
+  const { folded, map } = foldWithMap(src);
+  if (!folded) return [];
+
+  const hits = occurrences(folded, foldedQuery);
+  for (const token of queryTokens) hits.push(...occurrences(folded, token));
+
+  return mergeRanges(hits.map((h) => toSource(map, src.length, h.start, h.end)));
+}
+
+/**
+ * Where a query matched a story, mirroring `storyScore`'s prefix rule.
+ *
+ * Walks the text on the same word boundary `tokenise` splits on, and marks a
+ * word when any query token is a prefix of it. Two details keep it faithful to
+ * what actually scored:
+ *
+ *   - words `tokenise` would have dropped are skipped, so a query token that is
+ *     a prefix of a stopword (`wit` against `with`) marks nothing - `storyScore`
+ *     tests against the tokenised story, where that word is not present.
+ *   - the WHOLE matched word is marked, not just the prefix that scored.
+ *     `survey` marks all of `surveyed`. Marking three quarters of a word reads
+ *     as a rendering bug; marking the word reads as "this is why this room is
+ *     here", which is the question being asked.
+ *
+ * @param {string} text the story as written, unfolded
+ * @param {string[]} queryTokens
+ * @param {object} [opts]
+ * @param {number} [opts.minLength] must match what built the story index
+ * @returns {{start: number, end: number}[]} ranges into `text`
+ */
+export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {}) {
+  const src = String(text ?? '');
+  if (!src || !queryTokens.length) return [];
+  const { folded, map } = foldWithMap(src);
+  if (!folded) return [];
+
+  const hits = [];
+  // The complement of `tokenise`'s split, so the two agree on what a word is.
+  for (const m of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
+    const word = m[0];
+    if (word.length < minLength || STOPWORDS.has(word)) continue;
+    if (!queryTokens.some((token) => word.startsWith(token))) continue;
+    hits.push(toSource(map, src.length, m.index, m.index + word.length));
+  }
+
+  return mergeRanges(hits);
+}
+
+/**
  * Min-max a score array onto [0, 1].
  *
  * A flat array carries no information, so it normalises to all-zero rather than
@@ -296,9 +476,20 @@ const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
  * @param {{low: number, high: number}} [opts.clipCertainty] raw-cosine bounds
  *   for CLIP's share of certainty
  * @returns {{order: number[], certainty: Float32Array,
+ *            breakdown: {score: Float32Array, keyword: Float32Array,
+ *                        story: Float32Array, clip: Float32Array,
+ *                        cosine: Float32Array},
  *            signals: {clip: boolean, keyword: boolean, story: boolean}}}
  *   `certainty` is parallel to `order`, i.e. by rank, which is how the map's
- *   density gradient wants it.
+ *   density gradient wants it - and `breakdown` follows the same convention,
+ *   every array indexed by rank rather than by room id.
+ *
+ *   `breakdown` is what the catalog shows under a room and what `explainScore`
+ *   formats. It is returned always rather than behind a flag: a second pass
+ *   that recomputed these for display could disagree with the one that sorted,
+ *   and a scoring explanation that does not match the scoring is worse than
+ *   none. Five arrays of `count` floats - 100 KB at 5,000 rooms, allocated in a
+ *   loop that already runs.
  */
 export function rankHybrid({
   query,
@@ -349,6 +540,12 @@ export function rankHybrid({
     scored[id] = {
       id,
       score,
+      keyword: k,
+      story: s,
+      // Both CLIP numbers are kept, because they answer different questions and
+      // the breakdown has to show both - see `explainScore`.
+      clip: clip ? (clip[id] ?? 0) : 0,
+      cosine: cosines ? (cosines[id] ?? NaN) : NaN,
       certainty: matchCertainty(
         { keyword: k, story: s, cosine: cosines ? (cosines[id] ?? null) : null },
         clipCertainty
@@ -361,11 +558,95 @@ export function rankHybrid({
   scored.sort((a, b) => b.score - a.score);
 
   const certainty = new Float32Array(count);
-  for (let rank = 0; rank < count; rank++) certainty[rank] = scored[rank].certainty;
+  const breakdown = {
+    score: new Float32Array(count),
+    keyword: new Float32Array(count),
+    story: new Float32Array(count),
+    clip: new Float32Array(count),
+    cosine: new Float32Array(count),
+  };
+  for (let rank = 0; rank < count; rank++) {
+    const row = scored[rank];
+    certainty[rank] = row.certainty;
+    breakdown.score[rank] = row.score;
+    breakdown.keyword[rank] = row.keyword;
+    breakdown.story[rank] = row.story;
+    breakdown.clip[rank] = row.clip;
+    breakdown.cosine[rank] = row.cosine;
+  }
 
   return {
     order: scored.map((s) => s.id),
     certainty,
+    breakdown,
     signals: { clip: Boolean(clip), keyword: sawKeyword, story: sawStory },
   };
+}
+
+/**
+ * One room's ranking, as rows a reader can check the sort against.
+ *
+ * The catalog shows this under every room while a search is running, and the
+ * room card shows the same rows. It is the first place the distinction this
+ * file's header spends a section on becomes something a reader can SEE rather
+ * than something written down:
+ *
+ * > Ranking is relative; certainty is not.
+ *
+ * `breakdown.clip` is min-maxed across the corpus for this query, so SOME room
+ * scores 1.00 for `art nouveau` and some room scores 1.00 for `cghjj`. Printing
+ * that number alone would tell a reader the library was certain about a room it
+ * has nothing to say about. So the CLIP row carries its RAW cosine alongside,
+ * and `certainty` is its own row rather than being folded into the total - it
+ * is the only number here computed against absolute bounds.
+ *
+ * A signal that contributed nothing is omitted rather than shown as zero: three
+ * rows of 0.00 tell a reader less than their absence does, and the ranking of a
+ * room no text touched genuinely is "CLIP alone".
+ *
+ * @param {number} rank position in `order`
+ * @param {object} opts
+ * @param {object} opts.breakdown from `rankHybrid`
+ * @param {Float32Array} opts.certainty from `rankHybrid`
+ * @param {{keyword: number, story: number, clip: number}} opts.weights
+ * @returns {{rows: Array<{key: string, label: string, weighted: number,
+ *            raw: number, note: string|null}>, total: number, certainty: number}}
+ */
+export function explainScore(rank, { breakdown, certainty, weights }) {
+  const at = (arr) => (arr && rank < arr.length ? arr[rank] : 0);
+  const rows = [];
+
+  const keyword = at(breakdown?.keyword);
+  if (keyword > 0)
+    rows.push({
+      key: 'keyword',
+      label: 'keyword',
+      weighted: weights.keyword * keyword,
+      raw: keyword,
+      // Which way the ratio divides is the thing most likely to be misread off
+      // a bare number, and the two signals divide opposite ways on purpose.
+      note: 'share of the matched keyword',
+    });
+
+  const story = at(breakdown?.story);
+  if (story > 0)
+    rows.push({
+      key: 'story',
+      label: 'story',
+      weighted: weights.story * story,
+      raw: story,
+      note: 'share of the query found',
+    });
+
+  const cosine = at(breakdown?.cosine);
+  if (Number.isFinite(cosine))
+    rows.push({
+      key: 'clip',
+      label: 'CLIP',
+      weighted: weights.clip * at(breakdown?.clip),
+      raw: cosine,
+      note: 'relative to this query’s best and worst; the raw cosine is absolute',
+    });
+
+  return { rows, total: at(breakdown?.score), certainty: at(certainty) };
 }
