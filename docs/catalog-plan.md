@@ -28,7 +28,10 @@ what that distinction obliges.
   every signal, weighted and raw, plus its certainty.
 - A pinned top bar: the search field, the mode toggle, and the choice between
   pagination and infinite scroll.
+- Under a search, the matched text is highlighted where it matched — in stories
+  and in keyword chips, **in both modes**.
 - Entering and leaving is animated, unless the reader asked for less motion.
+- The paging choice and the search history survive a reload.
 
 ## 2. The shape that keeps it from being a second app
 
@@ -70,6 +73,7 @@ already has an implementation, or should have exactly one after this:
 | the toggle's affordance | `CENTRE_OVERRIDES` / `onOverride` | fill in the seam that ships empty |
 | "less motion, please" | `prefersReducedMotion()` | none |
 | what a search found | `describeSignals` | none — it becomes visible instead of only spoken |
+| where the query matched | `fold` / `tokenise` | add `foldWithMap` and two range finders beside the two scorers |
 
 **Pure logic lives outside the component.** `packages/web/src/catalog.js` is the
 pure half — paging, the mounted window, spacer heights, thumbnail level — with
@@ -89,8 +93,12 @@ it inert:
   effect, the map's `onKeyDown`, the HUD.
 - `RoomCard.jsx` — moved as-is.
 - `RoomDetails.jsx` — new. The caption, the story, the keyword chips, and (when
-  passed one) the score breakdown. `RoomCard` renders it; so does every catalog
-  row.
+  passed one) the score breakdown and the highlight ranges. **Three** consumers,
+  not two: `RoomCard`, every catalog row, and the canvas's own nested fallback
+  content — which is the same story-and-chips markup written a second time
+  today, and is where a touch screen reader reads a room. A `chipTabIndex` prop
+  covers the one difference (the fallback's chips are `-1` so the map stays one
+  tab stop).
 - `SearchForm.jsx` — new. The controlled input and its submit. The centre tile's
   field and the catalog's top bar are then the same component in two boxes,
   which is what stops "what does Enter do" being written twice.
@@ -170,7 +178,93 @@ which already exists, already manages focus, and already shows exactly this
 content via `RoomDetails`. No in-place expansion — that reintroduces the
 variable height the fixed row exists to remove.
 
-### 3.6 Images are DOM, not the tile cache
+### 3.6 Highlighting — the view must not invent its own idea of a match
+
+Under a search, the matched text is marked where it matched: in every story and
+every keyword chip, in the catalog's rows **and** in the map's room card. Two
+things make this harder than a substring search, and both are reasons it belongs
+in `scoring.js` next to the scorers rather than in a component.
+
+**It must mirror the two match rules exactly, including their asymmetry.** The
+codebase's sharpest scoring rule is that keyword partials divide by the
+*keyword* while story matches divide by the *query* — opposite on purpose. The
+rules they come from differ in kind too: a keyword matches by **substring**
+(`k.includes(token)`), a story word matches by **prefix** (`word.startsWith(token)`,
+a cheap stand-in for stemming). A single highlighter applied to both would mark
+text that did not score and miss text that did, and it would do so silently.
+So there are two, named for the scorers they shadow and sitting directly beneath
+them:
+
+```js
+keywordMatchRanges(text, foldedQuery, queryTokens)  // substring, mirrors keywordScore
+storyMatchRanges(text, queryTokens)                 // prefix-of-word, mirrors storyScore
+```
+
+Both take the *same* `foldedQuery` and `queryTokens` the ranking was computed
+from, so a token dropped for being a stopword or under `minTokenLength` cannot
+highlight — it did not score, so it does not mark. That falls out of reusing the
+inputs rather than re-deriving them, which is the point.
+
+**Folded offsets do not survive back to the original text.** `fold` is NFD,
+strip combining marks, lowercase, trim — and each of those can change length.
+Decomposed `cafe\u0301` (5) folds to `cafe` (4); `İ` lowercases to two code
+points from one. Matching happens on folded text, but the `<mark>` has to land
+on the *original*, so a folded index is not an original index and using one as
+the other misplaces every highlight on any corpus with an accent in it.
+
+So `foldWithMap(text)` returns `{ folded, map }`, where `map[i]` is the original
+index that produced folded character `i`, built one code point at a time. `fold`
+stays exactly as it is and becomes a one-line caller of it, so there is still one
+definition of what folding means.
+
+Two smaller decisions, both recorded because they are choices:
+
+- A story highlight marks the **whole matched word**, not just the prefix that
+  scored. `survey` marks all of `surveyed`. Marking three-quarters of a word
+  reads as a rendering bug; marking the word reads as "this is why it is here",
+  which is what the reader is asking.
+- Ranges are merged and sorted before rendering, because two query tokens can
+  overlap on the same span and nested `<mark>` elements are not what anyone
+  wants.
+
+Rendering is `<Highlight text ranges />` — splits into text nodes and `<mark>`s
+and nothing else. The ranges are pure and tested; the component is four lines
+and has nothing to get wrong.
+
+### 3.7 What persists, and what deliberately does not
+
+`packages/web/src/persist.js` — `load(key, fallback)` and `save(key, value)`
+over `localStorage`, both wrapped in try/catch. That is not defensive padding:
+Safari's private mode throws on `setItem`, and a storage exception on a search
+would otherwise take the whole search down with it. A read that throws returns
+the fallback, and the app behaves exactly as it did before this file existed.
+
+Two things persist, under `babel:` keys:
+
+- **The paging choice.** The one preference a returning reader would resent
+  re-picking, and §11 already flagged it.
+- **The search history.** This is the bigger change, and it is not only a
+  convenience: history is what titles the centre room's shelf, so persisting it
+  means **the wall of books now survives a reload** instead of resetting to
+  keyword tags each session. The shelf becomes a record of what this reader has
+  asked the library, which is closer to what the concept describes than a wall
+  that forgets. Still bounded by `HISTORY_SLOT_COUNT` — the wall's size is the
+  cap, as it already is.
+
+  Two consequences to accept deliberately. A reader's past searches now sit on
+  their machine and on their screen, so the panel gains a **"forget searches"**
+  control — persisting someone's typed input without giving them a way to clear
+  it is not a thing to ship. And the shelf is no longer identical on every
+  first load, which matters to screenshots and to anyone reasoning about the
+  opening view.
+
+What stays session-only, and why it is not an oversight: the camera, the current
+ranking, the mode, and the two dev sliders. Restoring a reader to a camera
+position they cannot remember choosing is disorienting, and the opening view is
+derived from the display precisely so it is right on the device in front of
+them.
+
+### 3.8 Images are DOM, not the tile cache
 
 `<img loading="lazy" decoding="async">` with `width`/`height` set from
 `BASE_TILE`'s aspect so the browser reserves the space before the bytes arrive.
@@ -185,14 +279,14 @@ whose invariants are all about frames.
 The honest cost: a room seen in both modes may be downloaded at two levels.
 Bounded, and cheaper than the alternative.
 
-### 3.7 The top bar
+### 3.9 The top bar
 
 `SearchForm`, the mode toggle, the paging-mode control, and — visible for the
 first time — the result count and `describeSignals`'s note. That note already
 exists and is currently only ever *spoken*; a mode built for querying is where
 it earns a place on screen.
 
-### 3.8 Row 0 — the centre room
+### 3.10 Row 0 — the centre room
 
 The tile on the left; on the right, the shelf as real links. The forty slots
 `assignTitles` already returns: search history newest-first, then keyword tags,
@@ -296,8 +390,14 @@ catalog: {
   perPage: 20,        // rows per page; the unit both paging modes slice by
   windowPages: 1,     // pages kept mounted either side of the active one
   transitionMs: 380,  // 0, or reduced motion, means swap at once
+  paging: 'scroll',   // the DEFAULT only - a stored choice wins over it
 }
 ```
+
+`paging` is the default for a reader who has never chosen, not the setting
+itself. A stored choice overrides it, which is the ordinary relationship between
+config and a preference and is worth stating because every other value in this
+block is the live number.
 
 ## 9. Tests
 
@@ -312,6 +412,18 @@ assertion gets broken on purpose before it is believed.
   `clipLow` must render as uncertain.
 - `describe.test.mjs` — `describeRoom` names the same room `describeCell` does,
   and `describeCatalog`.
+- `scoring.test.mjs` again, for the ranges, and the cases are the ones that
+  actually break: a decomposed accent (`cafe\u0301`) marking the right span in
+  the ORIGINAL text; a stopword and an under-length token marking nothing,
+  because they scored nothing; `survey` marking the whole of `surveyed` in a
+  story but a keyword matching by substring rather than prefix; and two
+  overlapping tokens producing one merged range rather than two nested ones.
+  The invariant worth asserting directly: **anything marked scored, and anything
+  that scored is marked** — run the scorer and the range finder over the same
+  inputs and assert they agree on whether there was a match at all.
+- `persist.test.mjs` — a throwing `localStorage` (private mode) leaves `load`
+  returning the fallback and `save` silent, and stored junk does not crash a
+  load. Injected, not mocked globally.
 - `smoke.e2e.mjs` — toggle in from the panel; row 0 is the centre room; a search
   makes a breakdown appear; switching to pagination and paging forward changes
   the rows; and **the camera has not moved when the map comes back**, read off
@@ -321,9 +433,14 @@ assertion gets broken on purpose before it is believed.
 ## 10. Order of work
 
 1. Step 0 — the extraction. No behaviour change; the suite is the proof.
-2. `describeRoom` / `describeCatalog`, and `rankHybrid`'s breakdown +
-   `explainScore`. All pure, all testable, no UI yet.
-3. `catalog.js` and its tests. Still no UI.
+2. `describeRoom` / `describeCatalog`, `rankHybrid`'s breakdown + `explainScore`,
+   and `foldWithMap` + the two range finders. All pure, all testable, no UI yet.
+3. `catalog.js` and `persist.js`, and their tests. Still no UI.
+3a. Highlighting and persistence reach the MAP first — `RoomDetails` with
+   `<Highlight>` in the room card and the canvas fallback, history and the
+   "forget searches" control in the panel. Both features ship and are visible
+   before the catalog exists, which means neither is entangled with it and the
+   catalog inherits them already working.
 4. `CatalogView` with pagination only, reached from the panel button.
 5. Infinite scroll — the second mount rule over the same `pageOf`.
 6. The override book, and `?catalog`.
@@ -339,9 +456,10 @@ what keeps the UI commit small enough to read.
    whole corpus in `order`. That slider is a dev control over *placement*, and a
    catalog that hid rooms because of it would misreport the corpus size. Worth
    revisiting only if the slider ever becomes a reader-facing control.
-2. **Whether the paging choice should persist.** Session-only React state for
-   now, like the camera and the history — but this is the one preference a
-   returning reader might resent re-picking.
+2. **Whether a stored history should expire.** It is capped by the wall's size,
+   not by age, so a search from months ago can still be titling a book. Cheap to
+   add a timestamp; not obviously wanted, since the shelf reading as a long
+   record is arguably the point.
 3. **What the catalog does at `contentRatio: 1`.** Nothing, today: it never
    reads `layout`. Worth stating because a dense map and the catalog look like
    the same feature from a distance and are not — see design-history.
