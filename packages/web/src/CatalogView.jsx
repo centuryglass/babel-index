@@ -32,6 +32,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { describeRoom } from '../../map/describe.js';
+import { describeBook } from './centre.js';
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import {
@@ -44,6 +45,7 @@ import {
   thumbLevel,
   pageAtScroll,
   windowFor,
+  storyLines,
 } from './catalog.js';
 import { CENTRE } from './tiles.js';
 
@@ -71,6 +73,42 @@ const ROW_PAD = 22;
 const TEXT_MIN = 132;
 const SCORE_STRIP_PX = 30;
 
+/**
+ * What sits above and below the story inside a row, and how tall one line of it
+ * is - the two numbers `storyLines` needs to work out the clamp.
+ *
+ * By-feel, and kept next to `TEXT_MIN` because they describe the same layout
+ * from the other direction: that one says what the text column needs at
+ * minimum, these say what is left for the story once it has it.
+ *
+ * The reserve covers the name row, up to two lines of chips, and the "read the
+ * rest" button - INCLUDING on rows that do not show one. Reserving only where
+ * the button appears would need the clamp to vary per row, and it is uniform by
+ * design; reserving nowhere is what made the button invisible on a phone, which
+ * is the display it matters most on. A row without one carries a little slack
+ * instead, which is the cheaper mistake.
+ */
+const STORY_RESERVED_PX = 98;
+const STORY_LINE_PX = 19;
+
+/**
+ * How wide a shelf link is, in characters.
+ *
+ * The shelf is a GRID of equal cells rather than a wrapped row of pill-shaped
+ * buttons sized to their own text: forty tags of forty different lengths read
+ * as rubble, and the wall they stand for is a grid of identical spines. So one
+ * width, taken from the longest title actually on the wall so nothing is
+ * clipped that does not have to be, and bounded - one very long search term
+ * should not set the column width for the other thirty-nine.
+ */
+const SHELF_MIN_CH = 9;
+const SHELF_MAX_CH = 18;
+const shelfColumnCh = (slots) =>
+  Math.min(
+    SHELF_MAX_CH,
+    Math.max(SHELF_MIN_CH, ...slots.map((s) => (s?.text ? s.text.length : 0)))
+  );
+
 export function CatalogView({
   manifest,
   config,
@@ -87,6 +125,7 @@ export function CatalogView({
   onExit,
   onShowOnMap,
   onKeyword,
+  onExpand,
   centreSlots,
   onBook,
   cellOfRank,
@@ -146,6 +185,15 @@ export function CatalogView({
   });
   const { first, last } = mountedPages(active, pages, window_);
 
+  // How much of each story fits, derived rather than fixed at two lines. The
+  // score strip takes a line's worth when a search is running, so this shrinks
+  // with it rather than leaving the story to be cut by `overflow: hidden`.
+  const lines = storyLines(
+    rowPx,
+    STORY_RESERVED_PX + (result?.breakdown ? SCORE_STRIP_PX : 0),
+    STORY_LINE_PX
+  );
+
   const onScroll = useCallback(
     (e) => {
       if (paging === 'pages') return;
@@ -168,8 +216,12 @@ export function CatalogView({
     return out;
   }, [order, first, last, perPage]);
 
-  const above = spacerHeight(0, first - 1, total, perPage, rowPx);
-  const below = spacerHeight(last + 1, pages - 1, total, perPage, rowPx);
+  // Spacers stand in for pages the reader can SCROLL to. Paginated, there is
+  // nowhere to scroll - the other pages are behind a button - so standing in
+  // for them leaves a screenful of nothing between the last row and the pager.
+  const scrolls = paging !== 'pages';
+  const above = scrolls ? spacerHeight(0, first - 1, total, perPage, rowPx) : 0;
+  const below = scrolls ? spacerHeight(last + 1, pages - 1, total, perPage, rowPx) : 0;
 
   return (
     <div
@@ -178,6 +230,9 @@ export function CatalogView({
       style={{
         '--catalog-thumb': `${thumbPx}px`,
         '--catalog-row': `${rowPx}px`,
+        '--catalog-lines': lines,
+        '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
+        '--catalog-line': `${STORY_LINE_PX}px`,
         '--catalog-out': `${config.catalog.transitionMs}ms`,
       }}
     >
@@ -188,6 +243,7 @@ export function CatalogView({
             setQuery={setQuery}
             onSubmit={onSearch}
             className="catalog-search"
+            maxLength={config.search.maxQueryLength}
           />
           <button className="mode-toggle" onClick={onExit}>
             ← the map
@@ -263,7 +319,12 @@ export function CatalogView({
                       key={i}
                       className={`shelf-link ${slot.kind}`}
                       onClick={() => onBook(i)}
-                      title={slot.kind === 'history' ? 'repeat this search' : undefined}
+                      // The visible text is ellipsised to the column's width, so
+                      // the full term has to survive somewhere: the accessible
+                      // name carries it (the same `describeBook` the painted
+                      // spines use), and the tooltip shows it on hover.
+                      aria-label={describeBook(slot)}
+                      title={slot.text}
                     >
                       {slot.text}
                     </button>
@@ -275,64 +336,25 @@ export function CatalogView({
 
           {above > 0 && <li className="catalog-spacer" style={{ height: above }} aria-hidden="true" />}
 
-          {rows.map(({ id, rank }) => {
-            const entry = metadata?.[id] ?? null;
-            const desc = describeRoom(id, rank, total, entry);
-            const cell = cellOfRank(rank);
-            return (
-              <li
-                key={id}
-                className="catalog-row"
-                aria-setsize={total}
-                aria-posinset={rank + 1}
-              >
-                <img
-                  className="catalog-tile"
-                  src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
-                  alt=""
-                  width={thumbPx}
-                  height={tileHeight(thumbPx)}
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div className="catalog-body">
-                  <h2 className="catalog-name">
-                    <span className="catalog-rank">{rank + 1}</span>
-                    Room {id}
-                    {manifest.rooms[id]?.file && (
-                      <span className="catalog-file">{manifest.rooms[id].file}</span>
-                    )}
-                  </h2>
-
-                  <RoomDetails
-                    entry={entry}
-                    desc={desc}
-                    onKeyword={onKeyword}
-                    highlight={highlight}
-                    rank={rank}
-                    result={result}
-                    weights={config.search.weights}
-                    scoreLayout="strip"
-                  />
-
-                  {/*
-                    The bridge back to the map: find it in the list, then go
-                    look at it. A room past the "rooms on the map" slider has no
-                    cell to fly to, and saying so is more honest than a dead
-                    control - it is also the only place that slider's effect is
-                    visible as something other than a thinner map.
-                  */}
-                  {cell ? (
-                    <button className="catalog-show" onClick={() => onShowOnMap(cell.x, cell.y)}>
-                      show on the map
-                    </button>
-                  ) : (
-                    <p className="catalog-show dim">not placed on the map at this density</p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
+          {rows.map(({ id, rank }) => (
+            <CatalogRow
+              key={id}
+              id={id}
+              rank={rank}
+              total={total}
+              file={manifest.rooms[id]?.file}
+              entry={metadata?.[id] ?? null}
+              src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
+              thumbPx={thumbPx}
+              cell={cellOfRank(rank)}
+              onShowOnMap={onShowOnMap}
+              onKeyword={onKeyword}
+              onExpand={onExpand}
+              highlight={highlight}
+              result={result}
+              weights={config.search.weights}
+            />
+          ))}
 
           {below > 0 && <li className="catalog-spacer" style={{ height: below }} aria-hidden="true" />}
         </ul>
@@ -355,5 +377,117 @@ export function CatalogView({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * One room in the list.
+ *
+ * Its own component for one reason: it has to know whether its own story got
+ * clipped, and that is a measurement, not something the parent can work out.
+ * The clamp is uniform across the page but the stories are not - so "is there
+ * more to read" is per row, and a "read the rest" button on a story that is
+ * already whole would be a lie forty times a screen.
+ *
+ * Measured rather than estimated from the character count. Where the text
+ * actually breaks depends on the font, the column width and the words; counting
+ * characters would be wrong exactly at the boundary, which is the only place the
+ * answer matters.
+ */
+function CatalogRow({
+  id, rank, total, file, entry, src, thumbPx, cell,
+  onShowOnMap, onKeyword, onExpand, highlight, result, weights,
+}) {
+  const storyRef = useRef(null);
+  const [clipped, setClipped] = useState(false);
+  const desc = describeRoom(id, rank, total, entry);
+
+  // After layout, and again whenever what is in the row changes: the clamp moves
+  // with the row height, so a resize can uncover the rest of a story or bury it.
+  useLayoutEffect(() => {
+    const el = storyRef.current?.querySelector('.story');
+    if (!el) {
+      setClipped(false);
+      return;
+    }
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [desc.description, result, thumbPx]);
+
+  return (
+    <li className="catalog-row" aria-setsize={total} aria-posinset={rank + 1}>
+      {/*
+        The tile is a button, because pressing it does something - it opens the
+        room at whatever size the display allows. A bare `<img>` with a click
+        handler is not reachable by keyboard and announces as an image, not as a
+        control.
+      */}
+      <button
+        className="catalog-tile-button"
+        onClick={() => onExpand(id, rank)}
+        aria-label={`enlarge room ${id}`}
+      >
+        <img
+          className="catalog-tile"
+          src={src}
+          alt=""
+          width={thumbPx}
+          height={tileHeight(thumbPx)}
+          loading="lazy"
+          decoding="async"
+        />
+      </button>
+
+      <div className="catalog-body">
+        {/*
+          The room's identity on the left, the way out to the map on the right of
+          the SAME row. It used to sit under the chips, which put a link and a
+          row of tags within a thumb's width of each other - on a phone that is a
+          coin toss between running a search and flying the camera.
+        */}
+        <div className="catalog-head">
+          <h2 className="catalog-name">
+            <span className="catalog-rank">{rank + 1}</span>
+            Room {id}
+            {file && <span className="catalog-file">{file}</span>}
+          </h2>
+          {/*
+            A room past the "rooms on the map" slider has no cell to fly to, and
+            saying so is more honest than a dead control - it is also the only
+            place that slider's effect is visible as something other than a
+            thinner map.
+          */}
+          {cell ? (
+            <button className="catalog-show" onClick={() => onShowOnMap(cell.x, cell.y)}>
+              show on the map
+            </button>
+          ) : (
+            <span className="catalog-show dim">not on the map</span>
+          )}
+        </div>
+
+        <div ref={storyRef}>
+          <RoomDetails
+            entry={entry}
+            desc={desc}
+            onKeyword={onKeyword}
+            highlight={highlight}
+            rank={rank}
+            result={result}
+            weights={weights}
+            scoreLayout="strip"
+          />
+        </div>
+
+        {clipped && (
+          <button className="catalog-more" onClick={() => onExpand(id, rank)}>
+            read the rest →
+          </button>
+        )}
+      </div>
+    </li>
   );
 }

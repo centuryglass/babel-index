@@ -453,18 +453,30 @@ what keeps the UI commit small enough to read.
 
 ## 11. Still open
 
-1. **Does the catalog respect "rooms on the map"?** Decided: no. It lists the
+1. **How the score should be reported to a reader who does not know what CLIP
+   is.** Deferred pending a design discussion, deliberately rather than by
+   neglect. What ships today is honest and cryptic: `keyword 1.000 1.00` names
+   neither what the two numbers are nor what range they live in, "CLIP" is
+   jargon, and the significance of a cosine is not something a viewer should be
+   expected to bring with them. The DATA is right — `explainScore` already keeps
+   the raw cosine beside the min-maxed one, which is the part that was hard —
+   so this is a presentation question, and worth answering with a few formats
+   side by side rather than by picking one in passing. Both the card's table and
+   the row's strip render from that one function, so whatever is chosen lands in
+   both.
+
+2. **Does the catalog respect "rooms on the map"?** Decided: no. It lists the
    whole corpus in `order`. That slider is a dev control over *placement*, and a
    catalog that hid rooms because of it would misreport the corpus size. Worth
    revisiting only if the slider ever becomes a reader-facing control.
-2. **Whether a stored history should expire.** It is capped by the wall's size,
+3. **Whether a stored history should expire.** It is capped by the wall's size,
    not by age, so a search from months ago can still be titling a book. Cheap to
    add a timestamp; not obviously wanted, since the shelf reading as a long
    record is arguably the point.
-3. **What the catalog does at `contentRatio: 1`.** Nothing, today: it never
+4. **What the catalog does at `contentRatio: 1`.** Nothing, today: it never
    reads `layout`. Worth stating because a dense map and the catalog look like
    the same feature from a distance and are not — see design-history.
-4. **Spelling.** New code says `catalog`, US. The existing `centre` spellings are
+5. **Spelling.** New code says `catalog`, US. The existing `centre` spellings are
    untouched and inconsistent with it; that reconciliation is its own pass.
 
 ---
@@ -544,3 +556,46 @@ lives in `Library` and never moved - and the map silently stopped panning,
 because `useMapCamera` binds its listeners once against the ref object. The test
 now drags after switching back. Every assertion cheaper than that one passed
 under the bug.
+
+---
+
+## 13. The first round of notes
+
+Eight critiques after living with it. Seven are in; the eighth - how the score
+should read to someone who does not know what CLIP is - is §11 item 1, deferred
+for a design discussion rather than answered in passing.
+
+- **A fixed row cannot show everything, and that is not the reader's problem.**
+  `RoomOverlay` shows the tile at full size and the whole story, reached from
+  the thumbnail and from the "read the rest" a clipped story ends with. In-place
+  expansion was the other option and it breaks the windowing: varying row
+  heights make the spacers estimates, and the scroll position starts moving
+  under the reader's hands. One press instead of zero is the trade.
+- **The story clamp was two lines flat**, which cut stories off with visible
+  empty space under them. It is `storyLines` now - derived from the row's height
+  less what sits around the story, so it grows with the display and shrinks when
+  the score strip appears.
+- **Paginated, the spacers were still standing in for pages nobody could scroll
+  to**, which put a screenful of nothing between the last row and the pager.
+- **"show on the map" shared a row with the keyword chips**, which on a phone is
+  a coin toss between running a search and flying the camera. It is in the head
+  row now, opposite the room's name, with real space under it.
+- **The shelf was a wrapped row of pills at forty different widths.** It is a
+  grid of equal cells, the column width taken from the longest title actually on
+  the wall. Capped in height and scrollable, because a phone was getting one
+  column of forty rows before the first room.
+- **An override book looked exactly like a keyword.** Underlined, on the painted
+  spine and on the catalog's copy - placeholder styling for the font pass, but
+  the distinction has to be visible before then.
+- **A query could be any length.** `search.maxQueryLength` (256) caps it, and
+  `search()` is where it is enforced rather than the input, because a chip, a
+  book and a restored history entry all reach it without passing through a box.
+  The shelf link that repeats a search is ellipsised to its column; the top bar
+  names the query in full.
+
+One thing worth recording about the testing. The overlay's "nothing is clipped
+here" assertion passed under two separate sabotages before it failed under the
+third: the clamp being scoped to `.catalog-row` and the overlay's own override
+are independent, and either alone holds the property. That is belt and braces
+rather than a redundant rule, and it is why the override stays - the test only
+fails when BOTH are gone, which is the case worth catching.

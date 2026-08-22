@@ -152,6 +152,13 @@
       .result:hover { background: rgba(200,169,95,0.2); }
 
       .buttons { display: flex; gap: 7px; }
+      /*
+        `flex: 1` here is for the dev panel's button ROWS, where the buttons
+        share the width evenly - but this selector is every button in the
+        document, so anything else that puts buttons in a flex container gets it
+        too. That is the same trap `.row` was; the catalog opts out explicitly
+        below rather than this being narrowed under the panel it was written for.
+      */
       button {
         flex: 1; padding: 6px 8px; background: rgba(200,169,95,0.12); color: var(--ink);
         border: 1px solid var(--edge); border-radius: 5px; font: inherit; cursor: pointer;
@@ -275,6 +282,14 @@
         border-bottom: 1px solid var(--edge); backdrop-filter: blur(6px);
       }
       .catalog-bar-row { display: flex; gap: 10px; align-items: center; }
+      /*
+        The bar names the query IN FULL - the shelf link that repeats it is
+        ellipsised to a column, so this is where a reader confirms what was
+        actually searched for. Bounded by `search.maxQueryLength`, and allowed
+        to wrap rather than to push the paging control off the edge.
+      */
+      .catalog-bar-row.sub { flex-wrap: wrap; align-items: flex-start; }
+      .catalog-count { overflow-wrap: anywhere; }
       .catalog-bar-row.sub { margin-top: 8px; }
       .catalog-search { flex: 1; margin: 0; }
       .catalog-search input[type="search"] {
@@ -282,11 +297,17 @@
         background: rgba(10,8,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
       }
       .catalog-search input[type="search"]:focus { border-color: #c8a95f; outline: none; }
-      .catalog-count { margin: 0; flex: 1; color: var(--dim); font-size: 11px; }
+      .catalog-count { margin: 0; flex: 1 1 16em; color: var(--dim); font-size: 11px; }
       .catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
       .catalog-note { color: var(--dim); }
 
       .paging { display: flex; gap: 4px; }
+      /*
+        Sized to their own text, against the global `button { flex: 1 }` above -
+        which stretched the pager's two buttons across half the window each and
+        the top bar's toggle across everything the search box left.
+      */
+      .catalog .mode-toggle, .paging button, .pager button { flex: 0 0 auto; }
       .paging button, .mode-toggle, .catalog-show, .pager button {
         font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
         background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
@@ -318,26 +339,99 @@
         height: var(--catalog-row); padding: 11px 16px;
         border-bottom: 1px solid var(--edge); overflow: hidden;
       }
+      /*
+        The tile is a BUTTON - pressing it enlarges the room. A bare <img> with a
+        click handler is unreachable by keyboard and announces as an image
+        rather than as a control.
+      */
+      .catalog-tile-button {
+        flex: 0 0 auto; padding: 0; border: none; background: none;
+        cursor: zoom-in; line-height: 0; border-radius: 2px;
+      }
+      .catalog-tile-button:focus-visible { outline: 2px solid #c8a95f; outline-offset: 2px; }
       .catalog-tile {
-        flex: 0 0 auto; width: var(--catalog-thumb); height: auto;
+        display: block; width: var(--catalog-thumb); height: auto;
         border-radius: 2px; background: #14110d; transform-origin: 0 0;
       }
-      .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-      .catalog-name {
-        margin: 0 0 5px; font-size: 12px; font-weight: 500; color: var(--ink);
-        display: flex; align-items: baseline; gap: 8px;
+      /* Shown only on a story the clamp actually cut - see CatalogRow. */
+      .catalog-more {
+        font: inherit; font-size: 10px; color: #c8a95f; cursor: pointer;
+        background: none; border: none; padding: 2px 0; text-decoration: underline;
       }
+
+      /* --- one room, as large as the display allows -------------------- */
+
+      .overlay-scrim {
+        position: fixed; inset: 0; z-index: 20; display: flex;
+        align-items: center; justify-content: center; padding: 24px;
+        background: rgba(6,5,4,0.82); overflow-y: auto; touch-action: auto;
+      }
+      .overlay {
+        width: min(900px, 100%); max-height: 100%; overflow-y: auto;
+        background: var(--panel); border: 1px solid var(--edge); border-radius: 6px;
+        padding: 14px 16px 16px;
+      }
+      .overlay:focus { outline: none; }
+      /*
+        Capped at the tile's own width so it is never upscaled past its pixels -
+        the same rule the map's opening view follows.
+      */
+      .overlay-tile {
+        display: block; width: 100%; max-width: 1024px; height: auto;
+        margin: 4px auto 14px; border-radius: 3px; background: #14110d;
+      }
+      /*
+        Nothing clipped here: this is where the whole story lives. Redundant
+        today, because the clamp is scoped to `.catalog-row` - and kept because
+        it is the second of two independent things holding that property, and
+        the e2e assertion only fails when BOTH are gone. Losing one silently is
+        exactly what this is for.
+      */
+      .overlay-body .story { display: block; overflow: visible; }
+      .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+      /*
+        The room's identity and the way out to the map share one row, with real
+        space under it. They used to be at opposite ends of the row with the
+        keyword chips in between, which put a link and a row of tags a thumb's
+        width apart.
+      */
+      .catalog-head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: 12px; margin-bottom: 9px;
+      }
+      .catalog-name {
+        margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
+        display: flex; align-items: baseline; gap: 8px; min-width: 0;
+        /* One line: "Room 25" breaking in two pushed the whole row down. */
+        white-space: nowrap; overflow: hidden;
+      }
+      .catalog-file { overflow: hidden; text-overflow: ellipsis; }
+      .catalog-show { flex: 0 0 auto; }
       .catalog-rank {
         color: #c8a95f; font-variant-numeric: tabular-nums; font-size: 11px;
         min-width: 2.2em;
       }
       .catalog-file { color: var(--dim); font-size: 10px; font-weight: 400; }
       .catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
+      /*
+        The clamp is a variable, not a literal: how many lines fit depends on
+        the row's height, which depends on the thumbnail's width, which depends
+        on the display. Two lines flat cut stories off with visible empty space
+        under them on anything wide. See `storyLines`.
+      */
       .catalog-row .story {
-        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        display: -webkit-box; -webkit-line-clamp: var(--catalog-lines, 2);
+        -webkit-box-orient: vertical; line-height: var(--catalog-line, 19px);
         overflow: hidden; margin-bottom: 5px;
       }
-      .catalog-row .chips { margin-bottom: 5px; }
+      /*
+        Two lines at most, matching what STORY_RESERVED_PX sets aside. A room
+        with six keywords on a narrow display would otherwise push the story out
+        of a row that cannot grow.
+      */
+      .catalog-row .chips {
+        margin-bottom: 5px; max-height: 48px; overflow: hidden; align-content: flex-start;
+      }
       /*
         The score, as one line rather than a table. Never wraps and scrolls
         sideways in its own box if the query found more than fits, so every row
@@ -354,7 +448,6 @@
       .score-strip span { color: #8a7c66; font-variant-numeric: tabular-nums; }
       .score-strip .total b { color: #c8a95f; }
       .score-strip .sure { font-style: italic; }
-      .catalog-show { margin-top: 4px; }
       .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
       /* The centre room's row: the shelf, as links. */
@@ -370,22 +463,44 @@
         height: auto; min-height: var(--catalog-row); align-items: flex-start;
       }
       /*
-        `align-content: flex-start` matters here: a wrapped flex container
-        defaults to stretching its LINES to fill the cross axis, which made the
-        last row of shelf titles visibly taller than the rest and read as a
-        clipping bug.
+        A GRID of equal cells, not a wrapped row of pills sized to their own
+        text. Forty tags at forty different widths read as rubble; the wall this
+        stands for is a grid of identical spines, and the column width comes
+        from the longest title actually on it (`shelfColumnCh`) so the shape is
+        the dataset's rather than a guess.
       */
       .shelf-links {
-        display: flex; flex-wrap: wrap; align-content: flex-start;
-        gap: 4px; overflow: hidden;
+        display: grid; align-content: start; gap: 4px;
+        /*
+          `min(..., 48%)` guarantees at least two columns however narrow the
+          display: without it a phone gets one column of forty rows, which is a
+          thousand pixels of shelf before the first room. The titles ellipsise,
+          so a narrow column costs some text, not the layout.
+        */
+        grid-template-columns: repeat(auto-fill, minmax(min(var(--shelf-col, 12ch), 48%), 1fr));
+        /*
+          And the wall is capped rather than allowed to set the row's height.
+          On anything wide this is well under the cap and never scrolls; on a
+          phone it is what keeps the centre room from being the whole page.
+        */
+        max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
       }
       .shelf-link {
-        font: inherit; font-size: 10px; cursor: pointer; padding: 2px 6px;
+        font: inherit; font-size: 10px; cursor: pointer; padding: 3px 6px;
         border-radius: 3px; border: 1px solid transparent;
         background: rgba(200,169,95,0.08); color: var(--dim);
+        /* One line, ellipsised - a long search term must not set the row's height. */
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        text-align: left;
       }
       .shelf-link.history { color: var(--ink); border-color: var(--edge); }
-      .shelf-link.override { color: #c8a95f; border-color: #c8a95f; }
+      /*
+        An override does something other than search, so it must not look like
+        the tags around it. Underlined for now - a placeholder for whatever the
+        font/text pass decides, but the distinction has to be visible before
+        then, not only in the colour.
+      */
+      .shelf-link.override { color: #c8a95f; border-color: #c8a95f; text-decoration: underline; }
       .shelf-link:hover { background: rgba(200,169,95,0.22); }
 
       .catalog-spacer { padding: 0; border: none; }

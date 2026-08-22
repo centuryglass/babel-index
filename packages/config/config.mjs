@@ -245,6 +245,22 @@ export const DEFAULTS = {
     minTokenLength: 3,
 
     /**
+     * The longest query the box will take, in characters.
+     *
+     * Not a guard against abuse - this is an offline demo - but against a
+     * plausible accident: pasting a tag list into the search field. Scoring is
+     * O(tokens x keywords) per room, so a two-thousand-token query against a
+     * five-thousand-room corpus is tens of millions of substring tests on the
+     * main thread, and the page simply stops. It also has to be BOUNDED for the
+     * things that display a query to stay sane - the top bar names it in full,
+     * and history titles a book with it.
+     *
+     * Large enough that no real query reaches it: a sentence-long natural
+     * language search is well under 200 characters.
+     */
+    maxQueryLength: 256,
+
+    /**
      * How a search's certainty becomes map density - see the gradient section
      * of `packages/map/ordering.js`. `map.contentRatio` above is the baseline
      * these numbers lift the middle of the map away from.
@@ -363,6 +379,10 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
       },
       minTokenLength: tokenLength(
         searchIn.minTokenLength, DEFAULTS.search.minTokenLength, 'search.minTokenLength', notes
+      ),
+      maxQueryLength: atLeast(
+        integer(searchIn.maxQueryLength, DEFAULTS.search.maxQueryLength, 'search.maxQueryLength', notes),
+        1, 'search.maxQueryLength', notes
       ),
       density: density(densityIn, notes),
     },

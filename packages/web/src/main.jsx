@@ -15,6 +15,7 @@ import { RoomCard } from './RoomCard.jsx';
 import { MapView } from './MapView.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import { CatalogView } from './CatalogView.jsx';
+import { RoomOverlay } from './RoomOverlay.jsx';
 import { flipTransform, flipCss, rectOf } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
@@ -294,6 +295,12 @@ function Library({ manifest }) {
   const pendingNote = useRef('');
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
+
+  // The catalog's expanded room: the tile at full size and the whole story.
+  // A row is a fixed height and its thumbnail is a thumbnail, so this is how a
+  // reader sees either without going back to the map - see `RoomOverlay`.
+  const [overlay, setOverlay] = useState(null);
+  const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
 
   // Right-click or long press opens the room's card. The pick is anchored to
   // where it happened rather than tracking the tile: the card names its room,
@@ -902,7 +909,16 @@ function Library({ manifest }) {
   }, [layout, order, startRearrangement, requestDraw, announceArrangement, mode, result]);
 
   // --- search --------------------------------------------------------------
-  const search = async (term) => {
+  //
+  // Every query passes through here, whether it came from the box, a keyword
+  // chip, a book on the shelf or a catalog row - so this is the one place the
+  // length cap has to hold. Scoring is O(tokens x keywords) per room, and a
+  // pasted tag list against a full corpus is tens of millions of substring
+  // tests on the main thread, which does not degrade, it stops. The input has a
+  // `maxLength` too, but that only covers typing: a chip, a book and a restored
+  // history entry all reach this without touching the box.
+  const search = async (rawTerm) => {
+    const term = String(rawTerm ?? '').slice(0, config.search.maxQueryLength);
     // Both branches rearrange the library - clearing the box restores the
     // uniform map, which is as much a rearrangement as finding something is.
     animateNext.current = true;
@@ -986,6 +1002,9 @@ function Library({ manifest }) {
   const searchKeyword = (text) => {
     setQuery(text);
     setCard(null);
+    // The overlay names a rank, and a search rebuilds the ranking - leaving it
+    // open would have it describing a position that now holds another room.
+    setOverlay(null);
     search(text);
   };
 
@@ -1232,6 +1251,7 @@ function Library({ manifest }) {
         setQuery={setQuery}
         onSearch={runSearch}
         onGoToSearch={goToSearch}
+        maxQueryLength={config.search.maxQueryLength}
         cursorLabel={cursorLabel}
         cursorEntry={cursorEntry}
         cursorDesc={cursorDesc}
@@ -1274,6 +1294,7 @@ function Library({ manifest }) {
           onExit={exitCatalog}
           onShowOnMap={showOnMap}
           onKeyword={searchKeyword}
+          onExpand={expandRoom}
           centreSlots={centreSlots}
           onBook={onBook}
           cellOfRank={(rank) => layout.cellOfRank(rank)}
@@ -1299,6 +1320,26 @@ function Library({ manifest }) {
       <div className="live">
         <span role="status">{status}</span>
       </div>
+
+      {overlay && mode === 'catalog' && (
+        <RoomOverlay
+          room={overlay}
+          desc={describeRoom(
+            overlay.id,
+            overlay.rank,
+            order.length,
+            metadata?.[overlay.id] ?? null
+          )}
+          entry={metadata?.[overlay.id] ?? null}
+          file={manifest.rooms[overlay.id]?.file}
+          src={urlFor(overlay.id, 0)}
+          onClose={() => setOverlay(null)}
+          onKeyword={searchKeyword}
+          highlight={highlight}
+          result={result}
+          weights={config.search.weights}
+        />
+      )}
 
       {card && cardDescription && (
         <RoomCard

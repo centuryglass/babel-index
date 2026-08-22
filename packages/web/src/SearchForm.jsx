@@ -18,6 +18,7 @@ export function SearchForm({
   className,
   formRef = null,
   label = 'search the library',
+  maxLength,
 }) {
   return (
     <form ref={formRef} onSubmit={onSubmit} className={className} role="search">
@@ -26,6 +27,11 @@ export function SearchForm({
         aria-label={label}
         placeholder="search the library…"
         value={query}
+        // Stops typing and pasting past the cap. It is not the enforcement -
+        // `search()` clamps, because a chip, a book and a restored history
+        // entry all reach it without passing through this box - but it is what
+        // makes the limit visible at the moment someone hits it.
+        maxLength={maxLength}
         onChange={(e) => setQuery(e.target.value)}
       />
     </form>

@@ -237,3 +237,29 @@ export function flipTransform(from, to) {
 export function flipCss(t) {
   return `translate(${t.x}px, ${t.y}px) scale(${t.scaleX}, ${t.scaleY})`;
 }
+
+/**
+ * How many lines of story a row has room for.
+ *
+ * The clamp was two lines flat, which on a wide display cut a story off with
+ * forty visible pixels of nothing under it - the tile is the tall column and
+ * the text rarely fills it. So the clamp is derived from what is actually
+ * left: the row's height, less everything above and below the story, divided
+ * by a line.
+ *
+ * At least one line, because a clamp of zero hides the story completely rather
+ * than shortening it - and on a display narrow enough to leave no room, one
+ * clipped line is still the honest answer.
+ *
+ * @param {number} rowPx        the row's height
+ * @param {number} reservedPx   the name row, chips, score strip and padding
+ * @param {number} lineHeightPx
+ */
+export function storyLines(rowPx, reservedPx, lineHeightPx) {
+  // A line height of zero means nothing has been measured yet, and dividing by
+  // the 1px floor a `Math.max` would give returns a clamp of a hundred lines -
+  // which is not "unclamped", it is a wrong number that happens to look
+  // harmless. One line is the honest answer to "I cannot tell yet".
+  if (!(lineHeightPx > 0)) return 1;
+  return Math.max(1, Math.floor((rowPx - reservedPx) / lineHeightPx));
+}

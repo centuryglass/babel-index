@@ -12,6 +12,7 @@ import {
   windowFor,
   flipTransform,
   rectOf,
+  storyLines,
 } from './catalog.js';
 import { BASE_TILE, LEVELS, sizeOf } from './pyramid.js';
 
@@ -226,4 +227,20 @@ test('a zero-sized destination does not produce a divide by zero', () => {
   const t = flipTransform({ x: 0, y: 0, w: 10, h: 10 }, { x: 0, y: 0, w: 0, h: 0 });
   assert.equal(t.scaleX, 1);
   assert.equal(t.scaleY, 1);
+});
+
+test('the story clamp is derived from the room the row actually has', () => {
+  // A tall row fits more of the story; the old flat two-line clamp cut a story
+  // off with visible empty space under it.
+  assert.equal(storyLines(202, 96, 19), 5);
+  assert.equal(storyLines(120, 96, 19), 1);
+
+  // Never zero: a clamp of 0 hides the story rather than shortening it, so a
+  // display too narrow to fit a line still shows one, clipped.
+  assert.equal(storyLines(96, 96, 19), 1);
+  assert.equal(storyLines(40, 96, 19), 1);
+  assert.equal(storyLines(202, 96, 0), 1);
+
+  // More reserved space (the score strip appearing) means fewer lines.
+  assert.ok(storyLines(232, 126, 19) <= storyLines(232, 96, 19));
 });
