@@ -6,7 +6,9 @@ running — the full score breakdown under it. Toggled deliberately, by the
 reader, so they decide how much they care to *explore* against how much they
 care to *query*.
 
-This document is the plan. Nothing in it is built yet.
+**Built.** This document is the plan it was built from; where the two differ,
+what landed is recorded in §12. The one preparatory step it names and did not
+need in full - extracting `MapView` out of `main.jsx` - is the open item there.
 
 Two documents govern what follows and are not restated here:
 [`implementation-plan.md`](implementation-plan.md) for the map itself, and
@@ -465,3 +467,50 @@ what keeps the UI commit small enough to read.
    the same feature from a distance and are not — see design-history.
 4. **Spelling.** New code says `catalog`, US. The existing `centre` spellings are
    untouched and inconsistent with it; that reconciliation is its own pass.
+
+---
+
+## 12. What changed on the way
+
+Four things the plan got wrong or under-specified, all found by measuring or by
+sabotaging a test rather than by reading:
+
+1. **The step-0 extraction was only half needed.** `RoomDetails`, `SearchForm`
+   and `RoomCard` came out as planned and each earned it - `RoomDetails` has
+   three consumers, and the canvas's fallback content turned out to be a second
+   copy of the card's markup nobody had noticed. `MapView` did not come out:
+   once the map was going to be HIDDEN rather than unmounted, the canvas, its
+   two overlays and the render effect stayed where they were behind one
+   `display: contents` wrapper, and moving them would have been churn without a
+   reader. `main.jsx` is still long. That remains worth doing and is now the
+   only unpaid part of this plan.
+
+2. **The row height needed the text column, not just the tile.** §3.5 assumed
+   the thumbnail sets the height. On a narrow display it does not - the tile
+   shrinks and the story, chips and score do not - so `rowHeight` takes the max
+   of the two. Found by comparing a row's `offsetHeight` against its own
+   `scrollHeight`, which is the only way this shows up: the clipped content is
+   simply invisible.
+
+3. **The score breakdown needed a second LAYOUT, not a second computation.** The
+   card's table is 108px in a 202px row and clipped its own last line. So
+   `explainScore` still runs once and `ScoreBreakdown` renders it either as that
+   table or as a one-line strip that never wraps. The two can disagree about
+   shape and never about the score. The strip being exactly one line whatever
+   the query matched is what keeps rows uniform, which the spacers depend on.
+
+4. **The centre row cannot be a fixed height.** It holds forty shelf titles,
+   which wrap to as many lines as the width needs, and cropping them to a tile's
+   height hides the newest searches - the whole point of the wall being a
+   record. It is allowed to size itself precisely because it sits outside the
+   paging arithmetic, and its measured height became the scroll conversion's
+   lead offset.
+
+And one thing the plan called for that turned out to matter more than it
+sounded: **the e2e assertion that the camera survives a mode switch is not
+enough on its own.** Sabotaging the design by remounting the map (`key={mode}`)
+left the camera, the zoom and the tile cache all correct, because that state
+lives in `Library` and never moved - and the map silently stopped panning,
+because `useMapCamera` binds its listeners once against the ref object. The test
+now drags after switching back. Every assertion cheaper than that one passed
+under the bug.

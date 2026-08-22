@@ -1785,8 +1785,10 @@ corpus:
    re-treading the "it's all one canvas" decision, or the alternatives that plan
    rejected.
 
-6. **The catalog — the map's other reading.** Planned in
-   [`catalog-plan.md`](catalog-plan.md); nothing built yet. The same corpus as
+6. **The catalog — the map's other reading. Landed.** Built to
+   [`catalog-plan.md`](catalog-plan.md), whose §12 records what changed on the
+   way; what remains of it is one unpaid refactor (extracting `MapView` out of a
+   `main.jsx` that is still long). The same corpus as
    one scrolling list in search order, every tile unique, story and tags beside
    each row, and the full score breakdown under each one while a search is
    running — on a toggle the reader controls, so they decide how much they care
@@ -1810,3 +1812,10 @@ corpus:
    `role="application"` stays scoped to the canvas. `accessibility-plan.md`
    §3.7 rejected a linear list as an accommodation and left it open as a control
    for everyone; that distinction is the plan's §7 and is not negotiable.
+
+   Two features it carried in reached the MAP as well, and were built there
+   first so neither is entangled with the mode: **match highlighting** (stories
+   and keyword chips, in the room card and the canvas's fallback content as well
+   as in every catalog row) and **persistence** — the paging choice, and the
+   search history that titles the centre room's shelf, which now survives a
+   reload and can be cleared from the panel.

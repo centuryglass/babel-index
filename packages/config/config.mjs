@@ -173,6 +173,47 @@ export const DEFAULTS = {
     cascade: 45,
   },
 
+  catalog: {
+    /**
+     * Rows per page - the unit BOTH paging modes slice by. Pagination shows one
+     * page; infinite scroll keeps a window of them mounted and replaces the
+     * rest with spacers. They are one primitive with a different window (see
+     * `packages/web/src/catalog.js`), so this number sets the granularity of
+     * both and there is deliberately no second one for scrolling.
+     */
+    perPage: 20,
+
+    /**
+     * How many pages stay mounted either side of the one being read.
+     *
+     * The DOM budget in one number. A whole corpus of rows would be about
+     * thirty nodes each; one either side is enough that a fast scroll never
+     * outruns the mount, and small enough that the list stays a few hundred
+     * nodes rather than a hundred thousand. Zero is what pagination passes, so
+     * this is also the knob that makes the two modes the same code.
+     */
+    windowPages: 1,
+
+    /**
+     * How long the map folds into the list, and back, in milliseconds.
+     *
+     * By-feel, like the slide durations and for the same reason: nothing
+     * derives from it and no test pins its value. Zero means swap at once, and
+     * `prefers-reduced-motion` still wins over whatever is set here.
+     */
+    transitionMs: 380,
+
+    /**
+     * How the catalog advances for a reader who has never chosen - 'scroll' or
+     * 'pages'.
+     *
+     * The DEFAULT, not the setting. A stored choice overrides it, which is the
+     * ordinary relationship between config and a preference and is worth saying
+     * out loud because every other value in this block is the live number.
+     */
+    paging: 'scroll',
+  },
+
   search: {
     /**
      * Relative priority of the three retrieval signals. Every signal is
@@ -306,6 +347,7 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
       ),
     },
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
+    catalog: catalog(asSection(src.catalog, 'catalog', notes), notes),
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
@@ -326,6 +368,47 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
     },
     notes,
   };
+}
+
+/**
+ * The catalog's block.
+ *
+ * `perPage` and `windowPages` are floored rather than rejected: a page of zero
+ * rows is a list that renders nothing at all and a negative window is the same
+ * bug spelled differently, and neither is worth failing a whole config over
+ * when the honest reading is obvious. `windowPages` of 0 is legal and
+ * meaningful - it is exactly what pagination passes.
+ */
+function catalog(src, notes) {
+  const d = DEFAULTS.catalog;
+
+  const perPage = atLeast(
+    integer(src.perPage, d.perPage, 'catalog.perPage', notes), 1, 'catalog.perPage', notes
+  );
+  const windowPages = atLeast(
+    integer(src.windowPages, d.windowPages, 'catalog.windowPages', notes),
+    0, 'catalog.windowPages', notes
+  );
+
+  let paging = src.paging ?? d.paging;
+  if (paging !== 'scroll' && paging !== 'pages') {
+    notes.push(`catalog.paging should be 'scroll' or 'pages'; using ${d.paging}`);
+    paging = d.paging;
+  }
+
+  return {
+    perPage,
+    windowPages,
+    transitionMs: duration(src.transitionMs, d.transitionMs, 'catalog.transitionMs', notes),
+    paging,
+  };
+}
+
+/** Floor a value with a note, for the two counts above. */
+function atLeast(n, min, path, notes) {
+  if (n >= min) return n;
+  notes.push(`${path} must be at least ${min}; using ${min}`);
+  return min;
 }
 
 /**

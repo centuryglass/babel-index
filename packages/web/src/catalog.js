@@ -99,17 +99,36 @@ export function spacerHeight(from, to, total, perPage, rowPx) {
 }
 
 /**
- * A row's height, from the width its thumbnail is given.
+ * How tall a thumbnail of this width is.
  *
  * Derived from `BASE_TILE`'s aspect rather than stated, for the same reason
  * every other size in this app is: the tile is 1024x768 today and the shape is
  * not settled, and a literal here would silently stop matching the art.
+ */
+export function tileHeight(thumbWidth) {
+  return Math.round(thumbWidth * (BASE_TILE.h / BASE_TILE.w));
+}
+
+/**
+ * A row's height: whichever of its two columns needs more, plus padding.
+ *
+ * The tile is usually the tall one, which is why this looks like it could just
+ * be the tile's height - but on a narrow display the thumbnail shrinks while
+ * the story, the chips and the score strip beside it do not, and a row sized to
+ * the tile alone clips them. Found by measuring a row against its own
+ * scrollHeight rather than by looking at it, which is the only way this kind of
+ * thing gets found.
+ *
+ * Uniform across a page either way, which is all the spacer arithmetic needs -
+ * `textMin` changes when a search starts and ends, and every row changes with
+ * it together.
  *
  * @param {number} thumbWidth css pixels
  * @param {number} [padding] the row's vertical padding, both halves
+ * @param {number} [textMin] what the text column needs at minimum
  */
-export function rowHeight(thumbWidth, padding = 0) {
-  return Math.round(thumbWidth * (BASE_TILE.h / BASE_TILE.w)) + padding;
+export function rowHeight(thumbWidth, padding = 0, textMin = 0) {
+  return Math.max(tileHeight(thumbWidth), Math.round(textMin)) + padding;
 }
 
 /**
@@ -131,4 +150,74 @@ export function rowHeight(thumbWidth, padding = 0) {
 export function thumbLevel(cssWidth, dpr = 1) {
   const drawn = Math.max(1, cssWidth) * Math.min(2, Math.max(1, dpr));
   return idealLevel({ w: drawn, h: drawn * (BASE_TILE.h / BASE_TILE.w) });
+}
+
+/**
+ * Which page the reader is at, from how far they have scrolled.
+ *
+ * Fixed-height rows mean this is arithmetic rather than a set of observers
+ * watching sentinels go by: the page under the top of the viewport is exactly
+ * `scrollTop / (perPage * rowPx)`, once the lead - the centre room's row, which
+ * sits outside the paging - is taken off.
+ *
+ * @param {number} scrollTop
+ * @param {object} opts
+ * @param {number} opts.perPage
+ * @param {number} opts.rowPx
+ * @param {number} [opts.leadPx] height of anything above the paged rows
+ */
+export function pageAtScroll(scrollTop, { perPage, rowPx, leadPx = 0 }) {
+  const per = Math.max(1, perPage * rowPx);
+  return Math.max(0, Math.floor((scrollTop - leadPx) / per));
+}
+
+/**
+ * How wide a window has to be for the rows on screen to all be mounted.
+ *
+ * The configured `windowPages` is a DOM budget, not a correctness guarantee: on
+ * a tall display with a small `perPage`, a screenful can span more pages than
+ * the window keeps live, and the reader would scroll into a spacer. So the view
+ * takes whichever is larger. This is the one place that comparison is made, so
+ * it cannot be made differently in two paging modes.
+ *
+ * Pagination passes `viewportPx: 0`, which leaves its window at 0 - one page,
+ * as it must be, whatever the display is doing.
+ */
+export function windowFor(configured, { viewportPx, perPage, rowPx }) {
+  if (!viewportPx) return configured;
+  const needed = Math.ceil(viewportPx / Math.max(1, perPage * rowPx));
+  return Math.max(configured, needed);
+}
+
+/**
+ * The transform that puts `to` exactly where `from` is - the invert half of a
+ * FLIP.
+ *
+ * Entering the catalog, `from` is the centre tile's rect on the map and `to` is
+ * where the first row's thumbnail has landed; the row starts transformed onto
+ * the tile and animates to nothing, so the map appears to fold into the list.
+ * Leaving, the two swap.
+ *
+ * Pure because the arithmetic is the part worth being sure about: a sign error
+ * here throws the animation off screen, and that is not something to discover
+ * by watching it.
+ *
+ * Assumes `transform-origin: 0 0`, so the scale does not also move the corner.
+ *
+ * @param {{x: number, y: number, w: number, h: number}} from
+ * @param {{x: number, y: number, w: number, h: number}} to
+ * @returns {{x: number, y: number, scaleX: number, scaleY: number}}
+ */
+export function flipTransform(from, to) {
+  return {
+    x: from.x - to.x,
+    y: from.y - to.y,
+    scaleX: to.w > 0 ? from.w / to.w : 1,
+    scaleY: to.h > 0 ? from.h / to.h : 1,
+  };
+}
+
+/** `flipTransform` as a css transform string. */
+export function flipCss(t) {
+  return `translate(${t.x}px, ${t.y}px) scale(${t.scaleX}, ${t.scaleY})`;
 }
