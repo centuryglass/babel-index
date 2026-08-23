@@ -11,6 +11,7 @@
     "generate:figures": "node tools/base-image/hexagon-plan.mjs",
     "generate:mips": "node packages/pipeline/index.mjs",
     "generate:embeddings": "node tools/embed/embed.mjs",
+    "analyze:cosine-range": "node tools/embed/cosine-range.mjs",
     "test": "node --test",
     "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
     "demo": "node packages/server/index.mjs"

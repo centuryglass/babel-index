@@ -24,6 +24,7 @@ npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
 npm run generate:figures                  # regenerate docs/figures/
+npm run analyze:cosine-range -- --embeddings <dir> --keywords <file>   # measure clipLow/clipHigh against a real corpus
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
 ```
 
