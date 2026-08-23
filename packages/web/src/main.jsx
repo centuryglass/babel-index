@@ -10,10 +10,8 @@ import {
   keywordMatchRanges,
   storyMatchRanges,
 } from '../../map/scoring.js';
-import { RoomDetails } from './RoomDetails.jsx';
 import { RoomCard } from './RoomCard.jsx';
 import { MapView } from './MapView.jsx';
-import { SearchForm } from './SearchForm.jsx';
 import { CatalogView } from './CatalogView.jsx';
 import { RoomOverlay } from './RoomOverlay.jsx';
 import { flipTransform, flipCss, rectOf } from './catalog.js';

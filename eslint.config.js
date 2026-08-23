@@ -25,6 +25,18 @@ export default [
     },
   },
   {
+    rules: {
+      'no-unused-vars': [
+        'error',
+        {
+          'argsIgnorePattern': '^_',
+          'varsIgnorePattern': '^_',
+          'caughtErrorsIgnorePattern': '^_',
+        }
+      ]
+    }
+  },
+  {
     files: ['packages/web/src/**/*.{js,jsx}'],
     plugins: { 'react-hooks': reactHooks },
     languageOptions: {
