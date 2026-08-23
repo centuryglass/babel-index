@@ -66,6 +66,7 @@ const SEARCH_TIMEOUT = 60_000;
  * camera teleported.
  */
 let flightMs;
+let roomCount = 0;
 
 describe('the library, in a browser', { concurrency: false }, () => {
   let server;
@@ -96,8 +97,11 @@ describe('the library, in a browser', { concurrency: false }, () => {
       () => `the demo server never came up:\n${log}`
     );
 
-    const { config } = await (await fetch(`${origin}/api/manifest`)).json();
+    const { config, count } = await (await fetch(`${origin}/api/manifest`)).json();
     flightMs = config.camera.flightMs;
+    // Read off the manifest rather than pinned, so the catalog's "every room
+    // once" assertion survives someone adding an image to the sample corpus.
+    roomCount = count;
     assert.equal(typeof flightMs, 'number', 'the manifest must carry the resolved flight duration');
 
     browser = await chromium.launch({
@@ -440,12 +444,20 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await card.waitFor({ state: 'detached', timeout: 5000 });
 
     assert.equal(await page.locator('input[type=search]').inputValue(), term);
+    // Two things at once here.
+    //
     // Wait for the note that reflects THIS search, not just any "ranked by":
     // the previous test's note lingers in the live region, and a keyword chip
     // is the one query guaranteed to name "keywords" (it searches a keyword the
     // room actually has), so a looser wait can pass on the stale note first.
+    //
+    // And read the LIVE REGION rather than `.note`. There is now one region for
+    // the whole app and it lives outside both views - the panel is part of the
+    // MAP, and a region inside it would be unmounted on every switch to the
+    // catalog, which is how a screen reader loses one. `.note` keeps only the
+    // static hint, so the text this waits on is no longer in it.
     await waitFor(
-      async () => /keywords/.test(await page.locator('.note').textContent()),
+      async () => /keywords/.test(await page.locator('[role=status]').textContent()),
       SEARCH_TIMEOUT,
       'clicking a keyword chip never produced a keyword-driven ranking'
     );
@@ -1719,6 +1731,305 @@ describe('the library, in a browser', { concurrency: false }, () => {
     } finally {
       await page.unroute('**/metadata.json');
     }
+  });
+
+  // --- the catalog (docs/catalog-plan.md) -------------------------------------
+
+  /** Into the catalog from the panel, and settled. */
+  async function openCatalog() {
+    await page.locator('.panel .mode-toggle').click();
+    await page.locator('.catalog').waitFor({ timeout: 5000 });
+    await page.locator('.catalog-row').first().waitFor({ timeout: 5000 });
+    return page.locator('.catalog');
+  }
+
+  async function closeCatalog() {
+    await page.locator('.catalog .mode-toggle').click();
+    await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
+    await settled(page);
+  }
+
+  test('the catalog lists every room once, starting with the centre', async () => {
+    await openCatalog();
+    try {
+      const rows = page.locator('.catalog-row');
+      // One row per room, plus the centre's - "always 100% unique tiles", so
+      // nothing here is wallpaper and nothing repeats.
+      assert.equal(await rows.count(), roomCount + 1);
+      assert.equal(await rows.first().getAttribute('class'), 'catalog-row catalog-centre');
+
+      // The centre's row carries the shelf as real links rather than as paint,
+      // and the first of them is the override that got us here.
+      assert.ok((await page.locator('.shelf-link').count()) > 0, 'the shelf is not in the centre row');
+      assert.equal(await page.locator('.shelf-link').first().textContent(), 'the catalog');
+
+      // Every room row names its rank and points at a real tile.
+      const first = rows.nth(1);
+      assert.match(await first.locator('.catalog-rank').textContent(), /^1$/);
+      assert.match(await first.locator('.catalog-tile').getAttribute('src'), /^\/images\//);
+    } finally {
+      await closeCatalog();
+    }
+  });
+
+  test('a search from the catalog ranks it, explains it, and marks what matched', async () => {
+    await openCatalog();
+    try {
+      const term = await page.locator('.catalog-row:not(.catalog-centre) .chip').first().textContent();
+
+      await page.locator('.catalog-search input').fill(term);
+      await page.locator('.catalog-search input').press('Enter');
+      await waitFor(
+        async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
+        SEARCH_TIMEOUT,
+        'a search from the catalog never re-ranked it'
+      );
+
+      const top = page.locator('.catalog-row:not(.catalog-centre)').first();
+
+      // The match is MARKED where it matched. Not a decoration: it is the only
+      // thing on the row that says WHY these words put this room first.
+      const marks = await top.locator('mark').allTextContents();
+      assert.ok(marks.length > 0, `nothing was marked for ${JSON.stringify(term)}`);
+      for (const m of marks)
+        assert.match(m.toLowerCase(), new RegExp(term.toLowerCase().slice(0, 4)), 'a mark that is not the match');
+
+      // And the score is broken out, including certainty - which is measured
+      // against absolute bounds rather than against this query's corpus, and is
+      // the number that keeps a min-maxed 1.00 from reading as confidence.
+      const strip = await top.locator('.score-strip').textContent();
+      assert.match(strip, /total/);
+      assert.match(strip, /certainty/);
+    } finally {
+      await page.locator('.catalog-search input').fill('');
+      await page.locator('.catalog-search input').press('Enter');
+      await closeCatalog();
+    }
+  });
+
+  test('pagination and scrolling are the same list, and the choice is remembered', async () => {
+    await openCatalog();
+    try {
+      await page.locator('.paging button', { hasText: 'pages' }).click();
+      await page.locator('.pager').waitFor({ timeout: 5000 });
+
+      const namesOn = async () =>
+        page.locator('.catalog-row:not(.catalog-centre) .catalog-name').allTextContents();
+
+      const firstPage = await namesOn();
+      assert.ok(firstPage.length > 0, 'pagination mounted nothing');
+
+      await page.locator('.pager button', { hasText: 'next' }).click();
+      await waitFor(
+        async () => (await namesOn())[0] !== firstPage[0],
+        5000,
+        'paging forward did not change the rows'
+      );
+      const secondPage = await namesOn();
+      // Disjoint: a room may not appear on two pages.
+      for (const name of secondPage)
+        assert.ok(!firstPage.includes(name), `${name} is on two pages at once`);
+
+      // The choice outlives the session - one of the two things that do.
+      assert.equal(
+        await page.evaluate(() => localStorage.getItem('babel:paging')),
+        '"pages"'
+      );
+    } finally {
+      await page.locator('.paging button', { hasText: 'scroll' }).click();
+      await closeCatalog();
+    }
+  });
+
+  test('the catalog folds out of the centre tile rather than appearing', async () => {
+    // The FLIP, which is the whole transition: the first row's thumbnail starts
+    // ON the map's centre tile and eases to its resting place. Worth an
+    // assertion of its own because the bug this had was silent - a DOMRect says
+    // `width` where the rest of the app says `w`, so the scale fell through a
+    // zero-size guard to 1 and the tile translated into place without ever
+    // growing. It looked like a working transition.
+    //
+    // A CONDITION, not a duration: this waits for the scale to have been
+    // meaningfully above 1 at some point, which is true for the whole 380ms and
+    // never true at all when the scale is being dropped.
+    //
+    // The camera has to be established first. How big the tile starts depends
+    // entirely on how large the centre cell is on screen, and this suite shares
+    // one page - at the return-to-centre zoom (220) the cell is SMALLER than
+    // the thumbnail and the tile would legitimately shrink into place, while
+    // from far enough out the centre is off screen and there is deliberately no
+    // flip at all. The search trigger flies to the opening view, which frames
+    // the centre tile near its native width.
+    await page.locator('button.search-trigger').click();
+    await landed(page);
+
+    try {
+      await page.locator('.panel .mode-toggle').click();
+      await page.waitForFunction(
+        () => {
+          const el = document.querySelector('.catalog-tile');
+          if (!el) return false;
+          return new DOMMatrixReadOnly(getComputedStyle(el).transform).a > 1.5;
+        },
+        null,
+        { timeout: 5000 }
+      );
+      // And it lands: the transform is released rather than left pinned.
+      await page.waitForFunction(
+        () => getComputedStyle(document.querySelector('.catalog-tile')).transform === 'none',
+        null,
+        { timeout: 5000 }
+      );
+    } finally {
+      // In `finally`, not after the assertions: this suite shares one page, and
+      // a failure here that left the catalog open would fail every test after
+      // it for a reason none of them are about.
+      if (await page.locator('.catalog').count()) await closeCatalog();
+    }
+  });
+
+  test('a room opens in full from the catalog, by its tile and by its story', async () => {
+    // The rows are a fixed height and their thumbnails are thumbnails - that is
+    // what lets the spacers be arithmetic. Neither is a reason to send a reader
+    // back to the map to find out what a room says, so both the tile and a
+    // clipped story open the same overlay.
+    await openCatalog();
+    try {
+      await page.locator('.catalog-tile-button').nth(1).click();
+      const overlay = page.locator('.overlay');
+      await overlay.waitFor({ timeout: 5000 });
+
+      // Nothing clipped in here: this is the whole point of it.
+      assert.equal(
+        await overlay.locator('.story').evaluate((el) => el.scrollHeight > el.clientHeight + 1),
+        false,
+        'the overlay clipped the story it exists to show in full'
+      );
+      // And the tile is the full-resolution one, not the row's thumbnail.
+      assert.match(await overlay.locator('.overlay-tile').getAttribute('src'), /^\/images\/[^/]+$/);
+
+      await page.keyboard.press('Escape');
+      await overlay.waitFor({ state: 'detached', timeout: 5000 });
+
+      // A story the clamp cut ends in a way out. Which rows have one depends on
+      // the display, so this drives whichever row actually reports being cut
+      // rather than assuming one does.
+      const more = page.locator('.catalog-more').first();
+      if (await more.count()) {
+        await more.click();
+        await overlay.waitFor({ timeout: 5000 });
+        assert.equal(
+          await overlay.locator('.story').evaluate((el) => el.scrollHeight > el.clientHeight + 1),
+          false
+        );
+        await page.keyboard.press('Escape');
+        await overlay.waitFor({ state: 'detached', timeout: 5000 });
+      }
+    } finally {
+      if (await page.locator('.overlay').count()) {
+        await page.keyboard.press('Escape');
+        await page.locator('.overlay').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      }
+      await closeCatalog();
+    }
+  });
+
+  test('paginated, the pager sits under the rows rather than a screenful of nothing', async () => {
+    // Spacers stand in for pages a reader can SCROLL to. Paginated there are
+    // none - the other pages are behind a button - and standing in for them put
+    // a page-sized hole between the last row and the pager.
+    await openCatalog();
+    try {
+      await page.locator('.paging button', { hasText: 'pages' }).click();
+      await page.locator('.pager').waitFor({ timeout: 5000 });
+
+      assert.equal(await page.locator('.catalog-spacer').count(), 0, 'a spacer in paginated mode');
+
+      const gap = await page.evaluate(() => {
+        const rows = document.querySelectorAll('.catalog-row');
+        const last = rows[rows.length - 1].getBoundingClientRect().bottom;
+        return Math.round(document.querySelector('.pager').getBoundingClientRect().top - last);
+      });
+      assert.ok(gap >= 0 && gap < 80, `the pager is ${gap}px below the last row`);
+    } finally {
+      await page.locator('.paging button', { hasText: 'scroll' }).click();
+      await closeCatalog();
+    }
+  });
+
+  test('an over-long query is cut to the cap instead of taking the page down', async () => {
+    // Scoring is O(tokens x keywords) per room. A pasted tag list is tens of
+    // millions of substring tests on the main thread, which does not degrade -
+    // it stops. The cap is enforced in `search()`, because a chip, a book and a
+    // restored history entry all reach it without passing through the box.
+    const { config } = await (await fetch(`${origin}/api/manifest`)).json();
+    const cap = config.search.maxQueryLength;
+    assert.equal(typeof cap, 'number', 'the manifest must carry the resolved query cap');
+
+    await openCatalog();
+    try {
+      const box = page.locator('.catalog-search input');
+      await box.fill('oak '.repeat(2000));
+      assert.equal((await box.inputValue()).length, cap, 'the box took more than the cap');
+
+      await box.press('Enter');
+      // Still alive: the count updates, which means a frame ran after the sort.
+      await waitFor(
+        async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
+        SEARCH_TIMEOUT,
+        'the page stopped responding after a very long query'
+      );
+    } finally {
+      await page.locator('.catalog-search input').fill('');
+      await page.locator('.catalog-search input').press('Enter');
+      await closeCatalog();
+    }
+  });
+
+  test('the map is where it was left when the catalog closes', async () => {
+    // THE assertion the whole design rests on. The map is hidden rather than
+    // unmounted, so a trip through the catalog carries no state and rebuilds
+    // nothing - if this fails, the mode has become the thing design-history
+    // rejected ("modes carry state, and state desyncs").
+    await page.locator('canvas').focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowDown');
+    await page.waitForTimeout(flightMs + 200);
+    await settled(page);
+
+    const before = await hud(page);
+
+    await openCatalog();
+    await closeCatalog();
+
+    const after = await hud(page);
+    assert.deepEqual(
+      { x: after.x, y: after.y, zoom: after.zoom },
+      { x: before.x, y: before.y, zoom: before.zoom },
+      'the camera moved across a mode switch'
+    );
+    // And the tiles are still resident. A cache rebuilt on the way back would
+    // be near-empty here, which is the other half of "nothing was torn down".
+    assert.ok(after.cached > 1, `the tile cache was rebuilt: ${after.cached} cached`);
+
+    // The canvas is still LIVE, which is a different claim from the state
+    // having survived and the one a remount actually breaks. `useMapCamera`
+    // binds its pointer listeners once, in an effect that depends on the ref
+    // OBJECT rather than on the element - so a canvas that unmounted and came
+    // back would look perfectly correct here, hold the right camera, and
+    // silently never pan again. A drag is the only thing that can tell.
+    await page.mouse.move(700, 400);
+    await page.mouse.down();
+    await page.mouse.move(560, 400, { steps: 8 });
+    await page.mouse.up();
+    await settled(page);
+
+    const dragged = await hud(page);
+    assert.notEqual(
+      dragged.x,
+      after.x,
+      'the map stopped responding to a drag after a mode switch - the canvas was remounted'
+    );
   });
 
   test('nothing was logged to the console', () => {

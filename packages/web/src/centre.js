@@ -440,6 +440,11 @@ export function pickTags(metadata, seed = 1) {
  * Each title reads TOP-TO-BOTTOM down the spine, the way a shelved book is
  * printed, truncated to the spine's length with an ellipsis, over a dark halo so
  * gilt reads on any spine tone. Draws nothing for an `empty` book.
+ *
+ * An OVERRIDE book is underlined. It does something other than run a search,
+ * and nothing about a title says so - "the catalog" reads exactly like a
+ * keyword until it is pressed. Placeholder styling for the font/text pass; the
+ * requirement it meets is only that the difference is visible.
  */
 export function composeSpines(ctx, cellRect, slots) {
   if (!areSpinesLegible(cellRect)) return;
@@ -470,6 +475,29 @@ export function composeSpines(ctx, cellRect, slots) {
     ctx.strokeText(text, inset, 0);
     ctx.fillStyle = INK;
     ctx.fillText(text, inset, 0);
+
+    // An override book does something other than search, and a reader has no
+    // way to tell that from a title alone - "the catalog" reads exactly like a
+    // keyword until you press it. Underlined, in the ink it is already drawn
+    // in, because the rotation makes this the one decoration that survives
+    // reading down a spine. A placeholder for the font/text pass; what matters
+    // is that the distinction is visible at all.
+    if (slot.kind === 'override') {
+      const width = ctx.measureText(text).width;
+      const drop = fontPx * 0.62;
+      ctx.lineWidth = Math.max(1, fontPx / 11);
+      ctx.strokeStyle = HALO;
+      ctx.beginPath();
+      ctx.moveTo(inset, drop);
+      ctx.lineTo(inset + width, drop);
+      ctx.stroke();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = Math.max(0.75, fontPx / 16);
+      ctx.beginPath();
+      ctx.moveTo(inset, drop);
+      ctx.lineTo(inset + width, drop);
+      ctx.stroke();
+    }
     ctx.restore();
   }
   ctx.restore();

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeCell, describeArrangement } from './describe.js';
+import { describeCell, describeRoom, describeArrangement, describeCatalog } from './describe.js';
 import { createLayout } from './ordering.js';
 
 const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1 });
@@ -132,4 +132,37 @@ test('the arrangement never mentions the animation, which is the optional half',
   const layoutNow = createLayout({ roomCount: 12, contentRatio: 0.5, seed: 3 });
   const said = describeArrangement(layoutNow);
   assert.doesNotMatch(said, /slid|sliding|animat|moving/i);
+});
+
+// --- the naming primitive under describeCell, and the catalog's sentence ----
+
+test('describeRoom names a room exactly as describeCell does for the same room', () => {
+  const metadata = [];
+  metadata[order[3]] = { keywords: [{ text: 'gilt' }, { text: 'oak' }], story: 'A hall.', alt: null };
+
+  const cell = roomAt(3);
+  const viaCell = describeCell(cell.x, cell.y, { layout, order, metadata });
+  const direct = describeRoom(order[3], 3, order.length, metadata[order[3]]);
+
+  // The whole reason the split exists: one implementation, two ways in.
+  assert.deepEqual(direct, viaCell);
+  assert.match(direct.name, /rank 4 of 40 — gilt, oak/);
+});
+
+test('describeRoom reads as well with no metadata at all', () => {
+  const d = describeRoom(7, 0, 12);
+  assert.equal(d.description, null);
+  assert.equal(d.picture, null);
+  assert.match(d.name, /Room 7, rank 1 of 12 — no description recorded/);
+});
+
+test('the catalog says what it is ordered by, and folds in the signals note', () => {
+  assert.match(describeCatalog({ total: 27 }), /27 rooms in the order the map is showing/);
+
+  const searched = describeCatalog({ total: 27, query: '  gilt ', note: 'ranked by keywords + CLIP' });
+  assert.match(searched, /27 rooms ranked for “gilt”/);
+  assert.match(searched, /ranked by keywords \+ CLIP/);
+
+  // No note is not an empty clause.
+  assert.ok(!describeCatalog({ total: 3, query: 'oak' }).endsWith('. '));
 });

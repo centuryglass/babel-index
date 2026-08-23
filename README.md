@@ -23,6 +23,31 @@ at a bigger corpus with:
 npm run demo -- --images /path/to/rooms [--base base.jpg] [--port 5173]
 ```
 
+### On a platform CLIP does not build for
+
+`@huggingface/transformers` is an **optional** dependency. It needs
+`onnxruntime-node`, which publishes binaries for Windows, macOS and Linux only —
+so on Android under Termux, and anywhere else it has no build for, npm skips it
+and the rest of the install still succeeds. As a *required* dependency it failed
+the whole install instead, which is what this arrangement is for.
+
+Without it the demo runs and search still works: a query is ranked by keywords
+and by story, just not by CLIP. The server says so at startup and the search
+response says so again, so it is never a silent downgrade. To skip the heavier
+tooling as well — `sharp` for the pyramid generator and Playwright for the
+browser tests, neither of which the demo needs:
+
+```sh
+npm install --omit=dev --omit=optional
+npm run demo
+```
+
+That leaves four runtime packages, all of which publish for Android. `npm test`
+needs the dev ones; `npm run generate:embeddings` needs the optional one and
+says so plainly if it is missing — generate `embeddings.bin` on a machine that
+has it and copy it into the corpus directory, since the server only reads the
+blob.
+
 Offline mode is just a directory of images — no database, no bucket, no upload
 step. Drag to pan, scroll or pinch to zoom, and the edge of the content region
 resists. **Right-click a room** (long press on a touchscreen) to open its card:

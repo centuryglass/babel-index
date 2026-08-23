@@ -309,12 +309,22 @@ without it every room is announced twice.
 
 ### 3.7 The wallpaper problem: two orderings, not two modes
 
-> **Deferred.** The dense/linear view is its own subproject — a real feature for
-> everyone, on an intentional toggle, not an accessibility accommodation and not
-> an automatic one. It is recorded here because the reasoning about *why* it is
-> not the accessibility answer still governs what is. Ctrl+arrow (§4.2a) is what
-> answers the wallpaper problem in the meantime, and it answers it without a
-> mode.
+> **Deferred, and now planned elsewhere.** The dense/linear view is its own
+> subproject — a real feature for everyone, on an intentional toggle, not an
+> accessibility accommodation and not an automatic one. It is recorded here
+> because the reasoning about *why* it is not the accessibility answer still
+> governs what is. Ctrl+arrow (§4.2a) is what answers the wallpaper problem in
+> the meantime, and it answers it without a mode.
+>
+> That subproject is now specified as **the catalog**, in
+> [`catalog-plan.md`](catalog-plan.md). It takes three obligations from this
+> section and states them as non-negotiable (its §7): nothing detects a screen
+> reader or defaults into the catalog, the ranked listbox below stays exactly
+> where it is, and `role="application"` stays scoped to the canvas. One thing
+> here it deliberately reverses: the argument below that the linear reading
+> should be a `listbox` is about *this* ranked list, and does not carry to the
+> catalog's rows, because a listbox option cannot contain the keyword chips
+> every row has.
 
 The sharpest objection to a faithful reading of the map is the one §3.1 raises
 and does not answer: at the default ratio, four in five arrow presses land on a
