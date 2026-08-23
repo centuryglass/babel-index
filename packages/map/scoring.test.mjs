@@ -604,3 +604,58 @@ test('a CLIP row shows the raw cosine beside the relative one, so a certain-look
   assert.ok(clip.raw < CLIP_CERTAINTY.low, 'which is below the floor');
   assert.equal(sure, 0, 'and certainty, computed absolutely, says so');
 });
+
+test('the CLIP percentile is self-contextualising: highest cosine beats everyone, lowest beats no one', () => {
+  const cosines = [0.3, 0.1, 0.2];
+  const { breakdown, certainty } = rankHybrid({
+    query: 'cghjj',
+    count: 3,
+    weights: WEIGHTS,
+    dim: 2,
+    vector: CLIP_QUERY,
+    embeddings: atCosines(...cosines),
+  });
+
+  // Indexed by rank; room 0 (cosine 0.3) sorts to rank 0 on CLIP alone here.
+  const { rows: best } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
+  const { rows: worst } = explainScore(2, { breakdown, certainty, weights: WEIGHTS });
+  assert.equal(best.find((r) => r.key === 'clip').percentile, 1, 'the best cosine beats the whole field');
+  assert.equal(worst.find((r) => r.key === 'clip').percentile, 0, 'the worst cosine beats nothing');
+});
+
+test('a tied CLIP field percentiles everyone to the middle, not an arbitrary order', () => {
+  const { breakdown } = rankHybrid({
+    query: 'cghjj',
+    count: 3,
+    weights: WEIGHTS,
+    dim: 2,
+    vector: CLIP_QUERY,
+    embeddings: atCosines(0.2, 0.2, 0.2),
+  });
+  for (const p of breakdown.clipPercentile) assert.equal(p, 0.5);
+});
+
+test('with no embeddings, the CLIP row is omitted and so is its percentile', () => {
+  const { breakdown, certainty } = rankHybrid({
+    query: 'oak',
+    count: 2,
+    weights: WEIGHTS,
+    index: indexOf([['oak'], null], null),
+  });
+  const { rows } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
+  assert.equal(rows.find((r) => r.key === 'clip'), undefined);
+  assert.ok(breakdown.clipPercentile.every((p) => Number.isNaN(p)));
+});
+
+test('totalPercentile mirrors rank: best of the field beats everyone, worst beats no one', () => {
+  const { breakdown, certainty } = rankHybrid({
+    query: 'oak',
+    count: 4,
+    weights: WEIGHTS,
+    index: indexOf([['oak'], null], [['oak'], null], null, null),
+  });
+  const first = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
+  const last = explainScore(3, { breakdown, certainty, weights: WEIGHTS });
+  assert.equal(first.totalPercentile, 1);
+  assert.equal(last.totalPercentile, 0);
+});

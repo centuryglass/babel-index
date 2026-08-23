@@ -45,23 +45,47 @@ export function Highlight({ text, ranges }) {
 }
 
 /**
+ * A row's raw number, in the form a reader who has never seen a cosine can
+ * still use.
+ *
+ * Keyword and story are already ratios of something real - "67%" needs no
+ * further context, it just wants the percent sign a bare `0.67` doesn't give
+ * it. The picture row is different: a raw cosine's scale means nothing on its
+ * own (see `scoring.js`'s header), so alongside it this appends `percentile`
+ * - "beats 91% of this search's rooms" - which is self-contextualising by
+ * construction, no comparison to the rest of the list required. One function
+ * so the table and the strip can't format the same row two different ways.
+ */
+function formatRaw({ key, raw, percentile }) {
+  if (key === 'clip') {
+    const beats = percentile != null ? `, beats ${Math.round(percentile * 100)}%` : '';
+    return `${raw.toFixed(3)}${beats}`;
+  }
+  return `${Math.round(raw * 100)}%`;
+}
+
+const formatTotalPercentile = (totalPercentile) =>
+  totalPercentile != null ? `beats ${Math.round(totalPercentile * 100)}%` : null;
+
+/**
  * Why this room ranked where it did.
  *
  * Shown only under a search, and only for a room the search actually ranked.
- * The CLIP row prints its raw cosine beside the relative score, and certainty
- * gets its own line, because `breakdown.clip` is min-maxed across the corpus
- * for this query - some room scores 1.00 for `cghjj` too, and a bare 1.00 would
- * tell a reader the library was certain about a wall it has nothing to say
- * about. See `explainScore`.
+ * The picture row prints its raw cosine beside the relative score, and
+ * certainty gets its own line, because `breakdown.clip` is min-maxed across
+ * the corpus for this query - some room scores 1.00 for `cghjj` too, and a
+ * bare 1.00 would tell a reader the library was certain about a wall it has
+ * nothing to say about. See `explainScore`.
  */
 function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
   if (!result?.breakdown || rank == null || rank < 0) return null;
-  const { rows, total, certainty } = explainScore(rank, {
+  const { rows, total, totalPercentile, certainty } = explainScore(rank, {
     breakdown: result.breakdown,
     certainty: result.certainty,
     weights,
   });
   if (!rows.length) return null;
+  const totalBeats = formatTotalPercentile(totalPercentile);
 
   // Two presentations of ONE computation. A card has the room to itself and can
   // afford a table; a catalog row is one line in a list of hundreds, and the
@@ -78,11 +102,11 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
       <ul className="score-strip">
         {rows.map((r) => (
           <li key={r.key} title={r.note ?? undefined}>
-            {r.label} <b>{r.weighted.toFixed(3)}</b> <span>{r.raw.toFixed(2)}</span>
+            {r.label} <b>{r.weighted.toFixed(3)}</b> <span>{formatRaw(r)}</span>
           </li>
         ))}
         <li className="total">
-          total <b>{total.toFixed(3)}</b>
+          total <b>{total.toFixed(3)}</b> {totalBeats && <span>{totalBeats}</span>}
         </li>
         <li className="sure">
           certainty <b>{certainty.toFixed(2)}</b>
@@ -101,14 +125,14 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
               <th scope="row">{r.label}</th>
               <td className="num">{r.weighted.toFixed(3)}</td>
               <td className="raw" title={r.note ?? undefined}>
-                {r.raw.toFixed(2)}
+                {formatRaw(r)}
               </td>
             </tr>
           ))}
           <tr className="total">
             <th scope="row">total</th>
             <td className="num">{total.toFixed(3)}</td>
-            <td className="raw" />
+            <td className="raw">{totalBeats}</td>
           </tr>
           <tr className="sure">
             {/*

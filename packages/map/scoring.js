@@ -410,6 +410,39 @@ export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {})
 }
 
 /**
+ * Where each value falls among its peers, in [0, 1] - 1 for the highest, 0 for
+ * the lowest, ties sharing the average of the ranks they span.
+ *
+ * This is what makes a raw cosine self-contextualising for a reader. `0.243`
+ * means nothing without the rest of the list to hold it against; "beats 91% of
+ * this search's rooms" carries that comparison inside the number itself, so a
+ * reader never has to scroll to the top and bottom of the results to place it.
+ * Unlike `normaliseScores`, this is rank-based rather than value-based - two
+ * cosines 0.001 apart land at very different percentiles if the corpus is
+ * dense there, which is the point: it answers "how many rooms did this beat",
+ * not "how close to the best score".
+ *
+ * @param {ArrayLike<number>} values
+ * @returns {Float32Array}
+ */
+function percentileRanks(values) {
+  const n = values.length;
+  const out = new Float32Array(n);
+  if (n <= 1) return out;
+
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => values[a] - values[b]);
+  let i = 0;
+  while (i < n) {
+    let j = i;
+    while (j + 1 < n && values[order[j + 1]] === values[order[i]]) j++;
+    const rank = (i + j) / (2 * (n - 1));
+    for (let k = i; k <= j; k++) out[order[k]] = rank;
+    i = j + 1;
+  }
+  return out;
+}
+
+/**
  * Min-max a score array onto [0, 1].
  *
  * A flat array carries no information, so it normalises to all-zero rather than
@@ -488,7 +521,7 @@ const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
  * @returns {{order: number[], certainty: Float32Array,
  *            breakdown: {score: Float32Array, keyword: Float32Array,
  *                        story: Float32Array, clip: Float32Array,
- *                        cosine: Float32Array},
+ *                        cosine: Float32Array, clipPercentile: Float32Array},
  *            signals: {clip: boolean, keyword: boolean, story: boolean}}}
  *   `certainty` is parallel to `order`, i.e. by rank, which is how the map's
  *   density gradient wants it - and `breakdown` follows the same convention,
@@ -498,8 +531,15 @@ const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
  *   formats. It is returned always rather than behind a flag: a second pass
  *   that recomputed these for display could disagree with the one that sorted,
  *   and a scoring explanation that does not match the scoring is worse than
- *   none. Five arrays of `count` floats - 100 KB at 5,000 rooms, allocated in a
+ *   none. Six arrays of `count` floats - 120 KB at 5,000 rooms, allocated in a
  *   loop that already runs.
+ *
+ *   `clipPercentile` is NaN wherever `cosine` is - it is `percentileRanks` over
+ *   the raw cosines, not the min-maxed `clip` column, because the point is a
+ *   number a reader can read alone: "beats 91% of this search" needs no top or
+ *   bottom of the list to hold it against, where the min-maxed value still
+ *   invites the "is 1.00 actually good here?" question `explainScore`'s header
+ *   warns about.
  */
 export function rankHybrid({
   query,
@@ -520,9 +560,12 @@ export function rankHybrid({
   // see the header.
   let cosines = null;
   let clip = null;
+  let clipPercentile = null;
   if (embeddings && dim > 0 && vector) {
     cosines = embeddingScores(embeddings, dim, Float32Array.from(vector));
     clip = normaliseScores(cosines);
+    // By id, not by rank - the loop below re-indexes it like every other column.
+    clipPercentile = percentileRanks(cosines);
   }
 
   const hasText = Boolean(index?.some(Boolean)) && (foldedQuery.length > 0 || queryTokens.length > 0);
@@ -556,6 +599,7 @@ export function rankHybrid({
       // the breakdown has to show both - see `explainScore`.
       clip: clip ? (clip[id] ?? 0) : 0,
       cosine: cosines ? (cosines[id] ?? NaN) : NaN,
+      clipPercentile: clipPercentile ? (clipPercentile[id] ?? NaN) : NaN,
       certainty: matchCertainty(
         { keyword: k, story: s, cosine: cosines ? (cosines[id] ?? null) : null },
         clipCertainty
@@ -574,6 +618,7 @@ export function rankHybrid({
     story: new Float32Array(count),
     clip: new Float32Array(count),
     cosine: new Float32Array(count),
+    clipPercentile: new Float32Array(count),
   };
   for (let rank = 0; rank < count; rank++) {
     const row = scored[rank];
@@ -583,6 +628,7 @@ export function rankHybrid({
     breakdown.story[rank] = row.story;
     breakdown.clip[rank] = row.clip;
     breakdown.cosine[rank] = row.cosine;
+    breakdown.clipPercentile[rank] = row.clipPercentile;
   }
 
   return {
@@ -614,13 +660,22 @@ export function rankHybrid({
  * rows of 0.00 tell a reader less than their absence does, and the ranking of a
  * room no text touched genuinely is "CLIP alone".
  *
+ * Two of the returned numbers are self-contextualising on purpose. A raw
+ * cosine or a weighted total means nothing without the rest of the list held
+ * up against it - that comparison is exactly what a `percentile` bakes in, so
+ * "beats 91% of this search" needs nothing else on screen to make sense of.
+ * `clipPercentile` comes from `rankHybrid` (rank-based, over the raw cosines);
+ * `totalPercentile` is cheaper - the blend is already sorted, so a room's
+ * percentile in the total is just its position in `order`.
+ *
  * @param {number} rank position in `order`
  * @param {object} opts
  * @param {object} opts.breakdown from `rankHybrid`
  * @param {Float32Array} opts.certainty from `rankHybrid`
  * @param {{keyword: number, story: number, clip: number}} opts.weights
  * @returns {{rows: Array<{key: string, label: string, weighted: number,
- *            raw: number, note: string|null}>, total: number, certainty: number}}
+ *            raw: number, percentile: number|null, note: string|null}>,
+ *            total: number, totalPercentile: number|null, certainty: number}}
  */
 export function explainScore(rank, { breakdown, certainty, weights }) {
   const at = (arr) => (arr && rank < arr.length ? arr[rank] : 0);
@@ -633,6 +688,7 @@ export function explainScore(rank, { breakdown, certainty, weights }) {
       label: 'keyword',
       weighted: weights.keyword * keyword,
       raw: keyword,
+      percentile: null,
       // Which way the ratio divides is the thing most likely to be misread off
       // a bare number, and the two signals divide opposite ways on purpose.
       note: 'share of the matched keyword',
@@ -645,18 +701,27 @@ export function explainScore(rank, { breakdown, certainty, weights }) {
       label: 'story',
       weighted: weights.story * story,
       raw: story,
+      percentile: null,
       note: 'share of the query found',
     });
 
   const cosine = at(breakdown?.cosine);
-  if (Number.isFinite(cosine))
+  if (Number.isFinite(cosine)) {
+    const clipPercentile = at(breakdown?.clipPercentile);
     rows.push({
       key: 'clip',
-      label: 'CLIP',
+      label: 'picture',
       weighted: weights.clip * at(breakdown?.clip),
       raw: cosine,
-      note: 'relative to this query’s best and worst; the raw cosine is absolute',
+      percentile: Number.isFinite(clipPercentile) ? clipPercentile : null,
+      note: "CLIP's raw cosine, absolute; the percentile is where it lands among this search's rooms",
     });
+  }
 
-  return { rows, total: at(breakdown?.score), certainty: at(certainty) };
+  // `order`'s length, not a magic count passed in separately - one fewer thing
+  // that could disagree with what actually got sorted.
+  const count = breakdown?.score?.length ?? 0;
+  const totalPercentile = count > 1 ? (count - 1 - rank) / (count - 1) : null;
+
+  return { rows, total: at(breakdown?.score), totalPercentile, certainty: at(certainty) };
 }
