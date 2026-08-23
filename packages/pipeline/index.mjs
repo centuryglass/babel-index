@@ -8,7 +8,9 @@
  * Writes every level below 0 as <out>/<width>/<file>. With no --out it works in
  * place, leaving the source files where they are as level 0 - so running it on
  * a corpus directory adds the smaller levels and changes nothing that was
- * already there.
+ * already there. Levels already current for their source (see mips.mjs's
+ * content-hash caching) are left alone, so a rerun after touching a handful of
+ * images only re-resizes those.
  *
  * The ladder comes from packages/web/src/pyramid.js, so what this writes and
  * what the client asks for cannot drift apart. Resizing is the whole of the
@@ -70,16 +72,18 @@ for (const step of plan)
 console.log(inPlace ? '\n  writing in place ...\n' : `\n  writing to ${outDir} ...\n`);
 
 let written = 0;
+let cached = 0;
 let done = 0;
 for (const file of files) {
   const result = await writeMips({ file: join(imagesDir, file), outDir, inPlace, quality });
   written += result.written;
+  cached += result.cached;
   done++;
   if (done % 25 === 0 || done === files.length)
-    process.stdout.write(`  ${done}/${files.length} rooms, ${written} files written\r`);
+    process.stdout.write(`  ${done}/${files.length} rooms, ${written} files written, ${cached} unchanged\r`);
 }
 
-console.log(`\n\n  done: ${written} files across ${plan.length} levels\n`);
+console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across ${plan.length} levels\n`);
 
 function parseArgs(args) {
   const out = {};

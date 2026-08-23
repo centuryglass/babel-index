@@ -26,9 +26,19 @@
  * Widths name the directories because width is the axis the client's ladder is
  * expressed in; a non-square tile keeps its aspect at every level, so the width
  * identifies the level unambiguously.
+ *
+ * ### Re-runs are incremental
+ *
+ * Every scaled level is written with the source file's content hash embedded
+ * in its JPEG EXIF (`ImageDescription`). A rerun hashes the source again and
+ * skips any level whose file already carries that hash - so touching a few
+ * images in a large corpus costs a few resizes, not the whole pyramid.
+ * Level 0 is untouched by this: in place it is never rewritten anyway, and to
+ * a separate `--out` it is copied byte for byte, which is already cheap.
  */
-import { mkdir, copyFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, copyFile, readdir, stat, readFile } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
+import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/pyramid.js';
 import { mipPlan } from './layout.mjs';
@@ -38,6 +48,32 @@ import { mipPlan } from './layout.mjs';
 export { mipPlan } from './layout.mjs';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+// Prefixes the hash inside the EXIF ImageDescription so it reads unambiguously
+// against whatever else might land in that tag, and so a plain string search of
+// the raw EXIF bytes finds it without a TIFF parser.
+const HASH_PREFIX = 'babel-index:sha256:';
+const HASH_PATTERN = new RegExp(`${HASH_PREFIX}([0-9a-f]{64})`);
+
+/** A hash of the source file's bytes, embedded in every level scaled from it. */
+export async function contentHash(file) {
+  return createHash('sha256').update(await readFile(file)).digest('hex');
+}
+
+/**
+ * The content hash embedded in a previously-written level, or null if the file
+ * is missing, unreadable, or was never stamped by this tool - any of which
+ * means it must be (re)written rather than trusted.
+ */
+async function embeddedHash(file) {
+  try {
+    const { exif } = await sharp(file).metadata();
+    if (!exif) return null;
+    return exif.toString('latin1').match(HASH_PATTERN)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Resize one image into every level below 0.
@@ -53,15 +89,17 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * @param {boolean} [opts.inPlace]  outDir is the source's own directory
  * @param {number} [opts.quality]   JPEG/WebP quality for the generated levels
  * @param {{level: number, divisor: number}[]} [opts.levels]
- * @returns {Promise<{plan: object[], written: number, skipped: number}>}
+ * @returns {Promise<{plan: object[], written: number, skipped: number, cached: number}>}
  */
 export async function writeMips({ file, outDir, inPlace = false, quality = 82, levels = LEVELS }) {
   const meta = await sharp(file).metadata();
   const plan = mipPlan({ w: meta.width, h: meta.height }, levels);
   const name = basename(file);
+  const hash = await contentHash(file);
 
   let written = 0;
   let skipped = 0;
+  let cached = 0;
   for (const step of plan) {
     const dir = join(outDir, step.dir);
     const target = join(dir, name);
@@ -74,16 +112,24 @@ export async function writeMips({ file, outDir, inPlace = false, quality = 82, l
     await mkdir(dir, { recursive: true });
     if (step.level === 0) {
       await copyFile(file, target); // no requantisation of the source art
-    } else {
-      await sharp(file)
-        .resize(step.w, step.h, { kernel: 'lanczos3' })
-        .jpeg({ quality, mozjpeg: true })
-        .toFile(target);
+      written++;
+      continue;
     }
+
+    if ((await embeddedHash(target)) === hash) {
+      cached++; // already current - the source hasn't changed since this was written
+      continue;
+    }
+
+    await sharp(file)
+      .resize(step.w, step.h, { kernel: 'lanczos3' })
+      .jpeg({ quality, mozjpeg: true })
+      .withExif({ IFD0: { ImageDescription: HASH_PREFIX + hash } })
+      .toFile(target);
     written++;
   }
 
-  return { plan, written, skipped, source: { w: meta.width, h: meta.height } };
+  return { plan, written, skipped, cached, source: { w: meta.width, h: meta.height } };
 }
 
 /**
