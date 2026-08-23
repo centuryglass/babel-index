@@ -22,6 +22,7 @@ npm run demo                       # http://localhost:5173, against assets/corpu
 npm run demo -- --images <dir> [--base base.jpg] [--base-dir assets] [--port 5173] [--config config.json]
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
+npm run lint                       # eslint, flat config in eslint.config.js
 npm run generate:mips -- --images <dir>    # write the resolution pyramid, in place
 npm run generate:figures                  # regenerate docs/figures/
 node tools/base-image/import-shelf-svg.mjs tools/base-image/shelf_geometry.svg
@@ -33,11 +34,22 @@ because `sharp`, `express` and `esbuild` are missing. Most of the suite passes
 regardless, so this reads as damage from your change rather than a missing
 install. If those three are the only failures, install rather than debug.
 
-There is no build step, bundler config or linter. The demo server bundles the
-client with esbuild in-process at startup (`packages/server/index.mjs`), so
-editing web sources means restarting `npm run demo` — except `index.html`, read
-per request. The server refuses a busy port rather than binding silently over a
+There is no build step or bundler config. The demo server bundles the client
+with esbuild in-process at startup (`packages/server/index.mjs`), so editing
+web sources means restarting `npm run demo` — except `index.html`, read per
+request. The server refuses a busy port rather than binding silently over a
 stale instance.
+
+**Linting is `eslint`, config in `eslint.config.js`, gated in CI (`lint` job in
+`ci.yml`, required by the `ci` aggregate job).** Deliberately small: recommended
+JS rules, browser globals scoped to `packages/web/src/**/*.{js,jsx}` (plus JSX
+parsing there), Node globals everywhere else via `**/*.mjs`, and only the two
+classic correctness rules from `eslint-plugin-react-hooks`
+(`rules-of-hooks`, `exhaustive-deps`) — not the rest of what `recommended`
+bundles as of v7 (`immutability`, `refs`, `purity`, ...), which are React
+Compiler rules that flag this codebase's deliberate mutable-ref patterns (see
+`useMapRenderer.js`) as errors. Existing findings are unfixed as of the lint's
+introduction; that's tracked outside this file, not a reason to loosen a rule.
 
 ## Layout
 
