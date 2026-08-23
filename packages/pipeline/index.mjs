@@ -21,7 +21,7 @@ import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/pyramid.js';
-import { mipPlan, writeMips, sourceImages, checkAspects } from './mips.mjs';
+import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes } from './mips.mjs';
 
 const argv = parseArgs(process.argv.slice(2));
 const imagesDir = resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
@@ -74,16 +74,24 @@ console.log(inPlace ? '\n  writing in place ...\n' : `\n  writing to ${outDir} .
 let written = 0;
 let cached = 0;
 let done = 0;
+const hashes = new Map();
 for (const file of files) {
   const result = await writeMips({ file: join(imagesDir, file), outDir, inPlace, quality });
   written += result.written;
   cached += result.cached;
+  hashes.set(file, result.hash);
   done++;
   if (done % 25 === 0 || done === files.length)
     process.stdout.write(`  ${done}/${files.length} rooms, ${written} files written, ${cached} unchanged\r`);
 }
 
 console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across ${plan.length} levels\n`);
+
+// Recorded alongside the keyword/story sidecar so that once the corpus is
+// hosted, a local regeneration's metadata.json can be diffed against the last
+// uploaded one to name exactly which source images changed.
+await updateMetadataHashes(imagesDir, hashes);
+console.log(`  metadata.json: ${hashes.size} content hash(es) recorded\n`);
 
 function parseArgs(args) {
   const out = {};
