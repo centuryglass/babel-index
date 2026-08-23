@@ -444,16 +444,23 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await card.waitFor({ state: 'detached', timeout: 5000 });
 
     assert.equal(await page.locator('input[type=search]').inputValue(), term);
-    // The live region, not `.note`. There is now one region for the whole app
-    // and it lives outside both views - the panel is part of the MAP, and a
-    // region inside it would be unmounted on every switch to the catalog, which
-    // is how a screen reader loses one. `.note` keeps only the static hint.
+    // Two things at once here.
+    //
+    // Wait for the note that reflects THIS search, not just any "ranked by":
+    // the previous test's note lingers in the live region, and a keyword chip
+    // is the one query guaranteed to name "keywords" (it searches a keyword the
+    // room actually has), so a looser wait can pass on the stale note first.
+    //
+    // And read the LIVE REGION rather than `.note`. There is now one region for
+    // the whole app and it lives outside both views - the panel is part of the
+    // MAP, and a region inside it would be unmounted on every switch to the
+    // catalog, which is how a screen reader loses one. `.note` keeps only the
+    // static hint, so the text this waits on is no longer in it.
     await waitFor(
-      async () => /ranked by/.test(await page.locator('[role=status]').textContent()),
+      async () => /keywords/.test(await page.locator('[role=status]').textContent()),
       SEARCH_TIMEOUT,
-      'clicking a keyword chip never produced a ranking'
+      'clicking a keyword chip never produced a keyword-driven ranking'
     );
-    assert.match(await page.locator('[role=status]').textContent(), /keywords/);
   });
 
   // --- accessibility (docs/accessibility-plan.md phase A/B) --------------------

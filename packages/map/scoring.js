@@ -52,8 +52,11 @@
  * The thresholds are the one part of this that genuinely wants calibrating
  * against a real corpus, which is the argument for them living in config.
  *
- * No DOM. One import, for the dot products it would otherwise duplicate.
+ * No DOM. Two imports: the dot products it would otherwise duplicate, and a
+ * Porter stemmer - stemming free text is exactly the kind of thing that is
+ * unwise to reimplement, and `stemmer` is a zero-dependency ~13KB module.
  */
+import { stemmer } from 'stemmer';
 import { embeddingScores } from './ordering.js';
 
 /**
@@ -177,7 +180,9 @@ export function buildSearchIndex(joined) {
       // token, so that a query of "art nouveau" scores 1 against the keyword
       // "art nouveau" rather than the 0.45 its two tokens would average to.
       keywords: (entry.keywords ?? []).map((k) => fold(k.text)),
-      story: new Set(tokenise(entry.story ?? '')),
+      // Stemmed, not just tokenised: a search matches a story word by stem, so
+      // `cats` finds `cat` but `catalogue` does not. See `storyScore`.
+      story: new Set(tokenise(entry.story ?? '').map(stemmer)),
     };
   });
 }
@@ -241,25 +246,24 @@ export function keywordScore(foldedQuery, queryTokens, keywords) {
  * asked is "how much of what you asked for is in here".
  *
  * Each token is weighted by its own length, so `cartographer` counts for more
- * than `oil`. A token matches a story word it is a prefix of, which is a cheap
- * stand-in for stemming: `room` finds `rooms`, `survey` finds `surveyed`.
+ * than `oil`. Matching is by Porter stem, so `room` finds `rooms` and `survey`
+ * finds `surveyed` - and, unlike the prefix rule it replaces, the reverse too -
+ * while `cat` no longer matches `catalogue` the way a prefix test would. The
+ * story index is stemmed once at build time (`buildSearchIndex`); the query's
+ * few tokens are stemmed here, and weighting stays keyed to the ORIGINAL token
+ * length so the query-normalisation above still holds.
+ *
+ * @param {string[]} queryTokens raw (folded, untokenised-past-splitting) tokens
+ * @param {Set<string>} storyStems the room's story, stemmed
  */
-export function storyScore(queryTokens, storyTokens) {
-  if (!storyTokens?.size || !queryTokens.length) return 0;
+export function storyScore(queryTokens, storyStems) {
+  if (!storyStems?.size || !queryTokens.length) return 0;
 
   let matched = 0;
   let total = 0;
   for (const token of queryTokens) {
     total += token.length;
-    if (storyTokens.has(token)) {
-      matched += token.length;
-      continue;
-    }
-    for (const word of storyTokens)
-      if (word.startsWith(token)) {
-        matched += token.length;
-        break;
-      }
+    if (storyStems.has(stemmer(token))) matched += token.length;
   }
   return total ? matched / total : 0;
 }
@@ -361,19 +365,24 @@ export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
 }
 
 /**
- * Where a query matched a story, mirroring `storyScore`'s prefix rule.
+ * Where a query matched a story, mirroring `storyScore`'s STEM rule.
  *
  * Walks the text on the same word boundary `tokenise` splits on, and marks a
- * word when any query token is a prefix of it. Two details keep it faithful to
- * what actually scored:
+ * word whose Porter stem is one of the query's. That is the same test
+ * `storyScore` makes against the pre-stemmed index `buildSearchIndex` holds -
+ * stemming here rather than reusing that set because this needs to know WHICH
+ * word in the original text matched, and the index has thrown the positions
+ * away.
  *
- *   - words `tokenise` would have dropped are skipped, so a query token that is
- *     a prefix of a stopword (`wit` against `with`) marks nothing - `storyScore`
- *     tests against the tokenised story, where that word is not present.
- *   - the WHOLE matched word is marked, not just the prefix that scored.
- *     `survey` marks all of `surveyed`. Marking three quarters of a word reads
- *     as a rendering bug; marking the word reads as "this is why this room is
- *     here", which is the question being asked.
+ * Two details keep it faithful to what actually scored:
+ *
+ *   - words `tokenise` would have dropped are skipped, so a query token that
+ *     stems onto a stopword marks nothing - `storyScore` tests against the
+ *     tokenised story, where that word is not present.
+ *   - the WHOLE matched word is marked, not the stem. `survey` marks all of
+ *     `surveyed`. Marking three quarters of a word reads as a rendering bug;
+ *     marking the word reads as "this is why this room is here", which is the
+ *     question being asked.
  *
  * @param {string} text the story as written, unfolded
  * @param {string[]} queryTokens
@@ -387,12 +396,13 @@ export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {})
   const { folded, map } = foldWithMap(src);
   if (!folded) return [];
 
+  const stems = new Set(queryTokens.map(stemmer));
   const hits = [];
   // The complement of `tokenise`'s split, so the two agree on what a word is.
   for (const m of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
     const word = m[0];
     if (word.length < minLength || STOPWORDS.has(word)) continue;
-    if (!queryTokens.some((token) => word.startsWith(token))) continue;
+    if (!stems.has(stemmer(word))) continue;
     hits.push(toSource(map, src.length, m.index, m.index + word.length));
   }
 
