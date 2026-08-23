@@ -13,6 +13,7 @@
     "generate:embeddings": "node tools/embed/embed.mjs",
     "test": "node --test",
     "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
+    "lint": "eslint .",
     "demo": "node packages/server/index.mjs"
   },
   "dependencies": {
@@ -27,6 +28,10 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
     "playwright": "^1.62.1",
     "sharp": "^0.35.3"
   }

@@ -56,17 +56,38 @@ jobs:
     with:
       node: '22'
 
+  # Lint doesn't vary by Node version, so it runs once rather than across the
+  # test matrix.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: npm run lint
+        run: npm run lint
+
   # A single check to require for merging, so branch protection does not need
   # updating every time the matrix changes - or every time a job is added.
   ci:
     name: ci
     if: always()
-    needs: [test, e2e]
+    needs: [test, e2e, lint]
     runs-on: ubuntu-latest
     steps:
       - name: All checks passed
-        if: needs.test.result != 'success' || needs.e2e.result != 'success'
+        if: needs.test.result != 'success' || needs.e2e.result != 'success' || needs.lint.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
           echo "e2e result: ${{ needs.e2e.result }}"
+          echo "lint result: ${{ needs.lint.result }}"
           exit 1
