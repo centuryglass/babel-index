@@ -26,9 +26,26 @@
  * Widths name the directories because width is the axis the client's ladder is
  * expressed in; a non-square tile keeps its aspect at every level, so the width
  * identifies the level unambiguously.
+ *
+ * ### Re-runs are incremental
+ *
+ * Every scaled level is written with the source file's content hash embedded
+ * in its JPEG EXIF (`ImageDescription`). A rerun hashes the source again and
+ * skips any level whose file already carries that hash - so touching a few
+ * images in a large corpus costs a few resizes, not the whole pyramid.
+ * Level 0 is untouched by this: in place it is never rewritten anyway, and to
+ * a separate `--out` it is copied byte for byte, which is already cheap.
+ *
+ * The same hash also lands in `metadata.json` - the keyword/story sidecar
+ * (packages/map/metadata.js), keyed by filename like everything else there -
+ * via `updateMetadataHashes`. That copy is not for gating a rewrite; it is so
+ * that once a corpus is hosted somewhere, a local regeneration's hashes can be
+ * diffed against the last uploaded metadata.json to name exactly which source
+ * images changed, without fetching the images themselves to check.
  */
-import { mkdir, copyFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, copyFile, readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
+import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/pyramid.js';
 import { mipPlan } from './layout.mjs';
@@ -38,6 +55,37 @@ import { mipPlan } from './layout.mjs';
 export { mipPlan } from './layout.mjs';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+// Mirrors packages/server/scan.mjs's METADATA_FILE constant. Not imported from
+// there - that module pulls in the server's directory-scan machinery, and this
+// is a name, not behaviour, so restating it is cheaper than the coupling.
+const METADATA_FILE = 'metadata.json';
+
+// Prefixes the hash inside the EXIF ImageDescription so it reads unambiguously
+// against whatever else might land in that tag, and so a plain string search of
+// the raw EXIF bytes finds it without a TIFF parser.
+const HASH_PREFIX = 'babel-index:sha256:';
+const HASH_PATTERN = new RegExp(`${HASH_PREFIX}([0-9a-f]{64})`);
+
+/** A hash of the source file's bytes, embedded in every level scaled from it. */
+export async function contentHash(file) {
+  return createHash('sha256').update(await readFile(file)).digest('hex');
+}
+
+/**
+ * The content hash embedded in a previously-written level, or null if the file
+ * is missing, unreadable, or was never stamped by this tool - any of which
+ * means it must be (re)written rather than trusted.
+ */
+async function embeddedHash(file) {
+  try {
+    const { exif } = await sharp(file).metadata();
+    if (!exif) return null;
+    return exif.toString('latin1').match(HASH_PATTERN)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Resize one image into every level below 0.
@@ -53,15 +101,17 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * @param {boolean} [opts.inPlace]  outDir is the source's own directory
  * @param {number} [opts.quality]   JPEG/WebP quality for the generated levels
  * @param {{level: number, divisor: number}[]} [opts.levels]
- * @returns {Promise<{plan: object[], written: number, skipped: number}>}
+ * @returns {Promise<{plan: object[], written: number, skipped: number, cached: number, hash: string}>}
  */
 export async function writeMips({ file, outDir, inPlace = false, quality = 82, levels = LEVELS }) {
   const meta = await sharp(file).metadata();
   const plan = mipPlan({ w: meta.width, h: meta.height }, levels);
   const name = basename(file);
+  const hash = await contentHash(file);
 
   let written = 0;
   let skipped = 0;
+  let cached = 0;
   for (const step of plan) {
     const dir = join(outDir, step.dir);
     const target = join(dir, name);
@@ -74,16 +124,57 @@ export async function writeMips({ file, outDir, inPlace = false, quality = 82, l
     await mkdir(dir, { recursive: true });
     if (step.level === 0) {
       await copyFile(file, target); // no requantisation of the source art
-    } else {
-      await sharp(file)
-        .resize(step.w, step.h, { kernel: 'lanczos3' })
-        .jpeg({ quality, mozjpeg: true })
-        .toFile(target);
+      written++;
+      continue;
     }
+
+    if ((await embeddedHash(target)) === hash) {
+      cached++; // already current - the source hasn't changed since this was written
+      continue;
+    }
+
+    await sharp(file)
+      .resize(step.w, step.h, { kernel: 'lanczos3' })
+      .jpeg({ quality, mozjpeg: true })
+      .withExif({ IFD0: { ImageDescription: HASH_PREFIX + hash } })
+      .toFile(target);
     written++;
   }
 
-  return { plan, written, skipped, source: { w: meta.width, h: meta.height } };
+  return { plan, written, skipped, cached, hash, source: { w: meta.width, h: meta.height } };
+}
+
+/**
+ * Merge a content hash onto each file's entry in the corpus's `metadata.json`
+ * sidecar, keyed by filename like every other field there (packages/map/
+ * metadata.js). Existing `keywords`/`story`/`alt` are left exactly as they
+ * are - this only adds or refreshes `hash`; `normaliseEntry` ignores fields it
+ * doesn't know, so an entry that is otherwise empty stays "no metadata" to the
+ * map while still carrying a hash for sync tooling to read.
+ *
+ * A missing or unreadable sidecar is started fresh rather than failing the
+ * run - a corpus with no keyword/story data yet still gets one with hashes.
+ *
+ * @param {string} dir the corpus directory `metadata.json` lives in
+ * @param {Map<string,string>} hashes filename -> content hash
+ */
+export async function updateMetadataHashes(dir, hashes) {
+  const path = join(dir, METADATA_FILE);
+  let sidecar = {};
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) sidecar = parsed;
+  } catch {
+    // no sidecar yet, or unreadable - start fresh rather than fail the run
+  }
+
+  for (const [file, hash] of hashes) {
+    const existing = sidecar[file];
+    sidecar[file] =
+      existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...existing, hash } : { hash };
+  }
+
+  await writeFile(path, JSON.stringify(sidecar, null, 2) + '\n');
 }
 
 /**
