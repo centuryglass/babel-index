@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import {
   buildSearchIndex,
   CLIP_CERTAINTY,
+  explainScore,
   fold,
+  foldWithMap,
+  keywordMatchRanges,
   keywordScore,
   matchCertainty,
   normaliseScores,
   rankHybrid,
+  storyMatchRanges,
   storyScore,
   tokenise,
 } from './scoring.js';
@@ -459,4 +463,144 @@ test('no blob means no CLIP certainty, rather than a certainty of zero cosines',
     index: indexOf([['oak'], null], null, null),
   });
   assert.equal(certainty[0], 1);
+});
+
+// --- folding with an index map, and the highlight ranges over it ------------
+
+const marked = (text, ranges) => ranges.map((r) => text.slice(r.start, r.end));
+
+test('foldWithMap agrees with fold, and maps every folded unit to its source', () => {
+  for (const s of ['Art Nouveau', 'CAFE\u0301', 'caf\u00e9', '  padded  ', '', 'Ren\u00e9 & Co.']) {
+    const { folded, map } = foldWithMap(s);
+    assert.equal(folded.trim(), fold(s), `folded form of ${JSON.stringify(s)}`);
+    assert.equal(map.length, folded.length, `map length for ${JSON.stringify(s)}`);
+    // Non-decreasing, and always pointing inside the source.
+    for (let i = 0; i < map.length; i++) {
+      assert.ok(map[i] >= 0 && map[i] < s.length);
+      if (i) assert.ok(map[i] >= map[i - 1]);
+    }
+  }
+});
+
+test('a range lands on the original text even when folding changed its length', () => {
+  // Decomposed: five UTF-16 units for four folded ones. A folded index used as
+  // a source index would slice one character short of the accent.
+  const story = 'the cafe\u0301 was surveyed';
+  assert.equal(story.length, 22);
+  assert.deepEqual(marked(story, storyMatchRanges(story, ['cafe'])), ['cafe\u0301']);
+});
+
+test('a story marks the whole matched word, by stem, and only real tokens', () => {
+  // `with` is the only place `wit` occurs, and `with` is a stopword.
+  const story = 'They surveyed the room with care.';
+
+  // Stems agree, and the WHOLE word is marked rather than the stem - `survei`
+  // is not a thing a reader should be shown.
+  assert.deepEqual(marked(story, storyMatchRanges(story, ['survey'])), ['surveyed']);
+
+  // `wit` shares no stem with anything here, and `with` - the only word it
+  // could have reached under the old prefix rule - is a stopword the story
+  // index drops, so storyScore never credited it and nothing may be marked.
+  assert.equal(storyScore(['wit'], new Set(tokenise(story))), 0);
+  assert.deepEqual(storyMatchRanges(story, ['wit']), []);
+
+  // Two tokens overlapping one word produce ONE range, not two nested ones.
+  assert.deepEqual(marked(story, storyMatchRanges(story, ['survey', 'surveyed'])), ['surveyed']);
+});
+
+test('a keyword marks by substring, where a story would have needed a stem', () => {
+  // `nouveau` is neither the stem nor the start of `art nouveau`, but
+  // keywordScore matches it by substring - so it must mark, and the story rule
+  // must not be used here. The asymmetry between the two is the point.
+  assert.ok(keywordScore(fold('nouveau'), ['nouveau'], ['art nouveau']) > 0);
+  assert.deepEqual(marked('Art Nouveau', keywordMatchRanges('Art Nouveau', fold('nouveau'), ['nouveau'])), ['Nouveau']);
+
+  // The whole query and its tokens, unioned into one range where they overlap.
+  assert.deepEqual(
+    marked('Art Nouveau', keywordMatchRanges('Art Nouveau', fold('art nouveau'), ['art', 'nouveau'])),
+    ['Art Nouveau']
+  );
+});
+
+test('anything marked scored, and anything that scored is marked', () => {
+  const keywords = ['art nouveau', 'gilt', 'oak panelling'];
+  const story = 'A surveyed hall of gilded oak, catalogued by an unnamed cartographer.';
+  // Built by `buildSearchIndex`, not by hand. The index is stemmed, and a
+  // hand-rolled `new Set(tokenise(story))` silently stopped matching what the
+  // scorer expects the moment story matching moved from prefixes to stems -
+  // which made this test fail for a reason that was about the FIXTURE rather
+  // than about the agreement it exists to check.
+  const { keywords: indexed, story: storyStems } = buildSearchIndex([{ keywords: keywords.map((text) => ({ text })), story }])[0];
+
+  for (const query of ['art', 'nouveau', 'gilt', 'oak', 'cartographer', 'survey', 'catalogue', 'the', 'a', 'zzz', 'art nouveau']) {
+    const folded = fold(query);
+    const tokens = tokenise(query);
+
+    const kScored = keywordScore(folded, tokens, indexed) > 0;
+    const kMarked = keywords.some((k) => keywordMatchRanges(k, folded, tokens).length > 0);
+    assert.equal(kMarked, kScored, `keyword agreement for ${JSON.stringify(query)}`);
+
+    const sScored = storyScore(tokens, storyStems) > 0;
+    const sMarked = storyMatchRanges(story, tokens).length > 0;
+    assert.equal(sMarked, sScored, `story agreement for ${JSON.stringify(query)}`);
+  }
+});
+
+// --- the score breakdown, and the rule it has to keep honest ---------------
+
+test('rankHybrid reports the components it sorted on, by rank', () => {
+  const { order, breakdown } = rankHybrid({
+    query: 'oak',
+    count: 3,
+    weights: WEIGHTS,
+    index: indexOf([['oak'], null, ['gilt']], null, null),
+  });
+
+  // Parallel to `order`, i.e. by RANK - the same convention `certainty` uses.
+  assert.equal(order[0], 0);
+  assert.equal(breakdown.keyword[0], 1);
+  assert.equal(breakdown.score[0], WEIGHTS.keyword * 1);
+  // Ranks nothing matched carry zeroes rather than being absent.
+  assert.equal(breakdown.keyword[1], 0);
+  assert.equal(breakdown.score[1], 0);
+  for (const arr of Object.values(breakdown)) assert.equal(arr.length, 3);
+});
+
+test('explainScore omits a silent signal rather than printing it as zero', () => {
+  const { breakdown, certainty } = rankHybrid({
+    query: 'oak',
+    count: 2,
+    weights: WEIGHTS,
+    index: indexOf([['oak'], null], null, null),
+  });
+
+  const { rows, total } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
+  assert.deepEqual(rows.map((r) => r.key), ['keyword']);
+  assert.equal(rows[0].weighted, WEIGHTS.keyword);
+  assert.equal(total, WEIGHTS.keyword);
+});
+
+test('a CLIP row shows the raw cosine beside the relative one, so a certain-looking 1.00 reads as uncertain', () => {
+  // Every cosine is below `clipLow`: CLIP is saying nothing about any of these
+  // rooms. Min-maxing still puts the best of them at exactly 1.00, which is the
+  // trap - a breakdown printing that alone would claim a confident match.
+  const cosines = [0.12, 0.08, 0.05];
+  assert.ok(cosines.every((c) => c < CLIP_CERTAINTY.low));
+
+  const { breakdown, certainty } = rankHybrid({
+    query: 'cghjj',
+    count: 3,
+    weights: WEIGHTS,
+    dim: 2,
+    vector: CLIP_QUERY,
+    embeddings: atCosines(...cosines),
+  });
+
+  const { rows, certainty: sure } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
+  const clip = rows.find((r) => r.key === 'clip');
+
+  assert.equal(breakdown.clip[0], 1, 'relative score is the top of the range');
+  assert.ok(Math.abs(clip.raw - cosines[0]) < 0.01, 'the row carries the RAW cosine');
+  assert.ok(clip.raw < CLIP_CERTAINTY.low, 'which is below the floor');
+  assert.equal(sure, 0, 'and certainty, computed absolutely, says so');
 });

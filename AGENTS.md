@@ -44,7 +44,7 @@ stale instance.
 | | |
 | --- | --- |
 | `packages/server/` | demo server: `index.mjs` is the CLI, `app.mjs` the four routes, `scan.mjs` the directory scan |
-| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
+| `packages/web/` | React + canvas map; `camera.js` is pure maths, `useMapCamera.js` the pointer plumbing, `useMapRenderer.js` the frame loop, `render.js` one frame, `tiles.js` the image cache, `rooms.js` url composition, `pyramid.js` the resolution policy |
 | `packages/config/` | the by-feel numbers: `config.mjs` is defaults + validation (no fs), `load.mjs` reads the optional `config.json` overlay |
 | `packages/map/ordering.js` | slot placement, the search density gradient, ranking, pan resistance — no DOM, no imports |
 | `packages/map/metadata.js` | normalising and joining the keyword/story sidecar — one implementation, used by `scan.mjs` and by the browser |
@@ -55,6 +55,10 @@ stale instance.
 | `packages/map/nextRoom.js` | the walk ctrl+arrow makes: the next ranked room along an axis, skipping wallpaper |
 | `packages/web/src/slide.js` | the second renderer, for a rearrangement only: a board, a parked camera, one line mid-slide |
 | `packages/web/src/picking.js` | which room is under a screen point — pure, so the overlay's logic is testable without a browser |
+| `packages/web/src/catalog.js` | the catalog's arithmetic: paging, the mounted window, spacer heights, row geometry, the thumbnail's level, the mode transition's FLIP - pure, like `picking.js` |
+| `packages/web/src/CatalogView.jsx` | the list itself; `RoomDetails.jsx` is the per-room block it shares with the card and the canvas fallback, `SearchForm.jsx` the box it shares with the centre tile |
+| `packages/web/src/MapView.jsx` | the map's markup and its panel - a presenter over state `main.jsx` owns, because the catalog reads the same state; `RoomCard.jsx` is the dialog, `main.jsx` what is left: state, search, the ranking, the rearrangement, the two modes |
+| `packages/web/src/persist.js` | the two things that survive a reload - the paging choice and the search history - and the try/catch around every storage call |
 | `packages/web/src/centre.js` | the centre room's shelf: book geometry, title assignment, the hit-test, the arrow-key walk, and the compositing — the pure half, like `picking.js` |
 | `packages/pipeline/` | the pyramid generator: `index.mjs` is the CLI, `mips.mjs` the resizing, `layout.mjs` the on-disk level layout (sharp-free, so `scan.mjs` can read it) |
 | `tools/base-image/` | tile geometry (`lib/geometry.js`) and the SVG importer that generates `lib/measured.js` |
@@ -64,6 +68,7 @@ stale instance.
 | `assets/blender/` | the base render source; nothing reads it |
 | `docs/borges-parameters.md` | every number from the story, with the passage it comes from |
 | `docs/accessibility-plan.md` | the keyboard/screen-reader plan: every phase landed, and what is deliberately still open |
+| `docs/catalog-plan.md` | the catalog: an alternate linear reading of the corpus, on a reader-facing toggle. Built - see it for the reasoning |
 
 ## Conventions
 
@@ -73,6 +78,17 @@ stale instance.
 - **Node 20 is the floor** (`engines`), and CI runs 20/22/24. No TypeScript, and
   no dependency should be added without a reason that survives the question "can
   this be twenty lines instead?" — the dependency list is deliberately short.
+- **`@huggingface/transformers` is OPTIONAL, and `esbuild` is a runtime
+  dependency.** `onnxruntime-node` declares `os: ["win32","darwin","linux"]`, and
+  npm fails a *required* dependency on any other platform with `EBADPLATFORM` —
+  which took the whole install down on Android/Termux. Optional, it is skipped
+  and everything else installs. Nothing may import it statically: the server's
+  text tower and `tools/embed` both `await import()` it, the search route falls
+  back to `stubRanking`, and the browser still ranks by keywords and story. Check
+  availability with `hasTextModel()` (resolution only, never a load). `esbuild`
+  is in `dependencies` rather than `devDependencies` because `packages/server/
+  index.mjs` bundles the client at startup — it is what the demo runs on, not
+  tooling.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so a new file needs no
   wiring. The e2e file is `*.e2e.mjs` precisely so it stays outside that pattern.
@@ -558,6 +574,83 @@ stale instance.
   will not evict anything from the current or previous frame; the render loop
   must call `beginFrame()` once per frame for that to mean anything. When a screen
   exceeds the budget the cache holds it and reports `overBudget()`.
+
+### The catalog, and the two modes
+
+- **The map is HIDDEN, never unmounted, and that is load-bearing twice over.**
+  `.map-view` is `display: contents` shown and `display: none` hidden, and the
+  render loop returns early when `mode !== 'map'`. Unmounting it instead looks
+  like it would work and does not: `useMapCamera`'s listener effect reads
+  `canvasRef.current` once and depends on the ref OBJECT, so a canvas that
+  remounts comes back with no pointer listeners bound at all - the camera still
+  holds the right numbers, the HUD still reads correctly, and the map silently
+  never pans again. The e2e test drags after a mode switch precisely because
+  every cheaper assertion passes under that bug. Hiding also keeps the tile
+  cache and the pyramid's LRU warm, so returning is a repaint, not a rebuild.
+- **The catalog is not the accessibility mode.** `accessibility-plan.md` §3.7
+  rejected a linear list as an accommodation and left it open as a control for
+  everyone. So: nothing detects a screen reader, nothing defaults into it, the
+  panel's ranked listbox stays exactly where it is, and `role="application"`
+  stays scoped to the canvas. The catalog is a `<ul>` - §3.7's argument for a
+  `listbox` is about the panel's bare-name results and does not carry to rows
+  containing keyword chips.
+- **One live region for the whole app, and it lives outside both views.** It
+  used to sit in the panel, which is part of the map; a region that unmounts on
+  a mode switch is one a screen reader loses. `.note` keeps only the static
+  hint, which must never share a node with `role="status"`.
+- **Rows are a FIXED height and the spacers are arithmetic, not estimates.**
+  `spacerHeight` stands in for unmounted pages exactly, so a recycled page
+  cannot move the scroll position under a reader's hands. That is why the story
+  is line-clamped, why the score breakdown in a row is the one-line `strip`
+  layout rather than the card's `table` (the table was 108px in a 202px row and
+  clipped itself), and why `rowHeight` takes the max of the tile and the text
+  column - on a narrow display the thumbnail shrinks and the story does not. The
+  centre room's row is the one exception, allowed to size itself because it sits
+  outside the paging arithmetic; its measured height is the scroll conversion's
+  `leadPx`.
+- **Pagination and infinite scroll are one primitive with a different window.**
+  Both slice `pageOf`; pagination passes `windowPages: 0`. Writing them as two
+  features would let a room sit at a different position depending on how the
+  reader pages. `windowFor` widens the window when a screenful spans more pages
+  than the budget mounts, so a tall display cannot scroll into a spacer.
+- **Highlighting mirrors the two match rules, including their asymmetry.** A
+  keyword matches by SUBSTRING and a story word by PREFIX, so there are two
+  range finders in `scoring.js` beside the two scorers, taking the same folded
+  query and tokens the ranking used - a token dropped as a stopword or for being
+  too short cannot mark, because it did not score. Do not re-derive "what
+  matched" in a component; the drift would be silent.
+- **`foldWithMap` exists because folded offsets are not source offsets.** NFD,
+  mark-stripping and lowercasing each change length, so a folded index used
+  against the original text misplaces every mark on any corpus with an accent in
+  it. `fold` is a one-line caller of it; folding is per code point and therefore
+  position-independent, which is what an index wants.
+- **`rankHybrid` returns the components it sorted on, and the CLIP row must show
+  its raw cosine.** `breakdown.clip` is min-maxed for the query, so some room
+  scores 1.00 for `cghjj` too. `explainScore` keeps the raw cosine beside it and
+  certainty on its own line; printing the relative number alone claims a
+  confidence the library does not have. Asserted.
+- **Namespace catalog CSS.** `.row` already belonged to the dev panel, and an
+  unprefixed rule reached in and turned every slider row into a fixed-height
+  flex box. `.chips`, `.story`, `.picture` and `.score` ARE shared on purpose -
+  they come from `RoomDetails` and must look the same in a card and in a row.
+  The trap runs the other way too: a global `button { flex: 1 }`, written for
+  the panel's button rows, stretched the pager's buttons across half the window
+  each. The catalog's controls opt out explicitly rather than that rule being
+  narrowed under the panel it was written for.
+- **A fixed row cannot show everything, so the overlay is not optional.**
+  `RoomOverlay` is how a reader sees the tile at full size and the whole story
+  without going back to the map, reached from the thumbnail and from the "read
+  the rest" a clipped story ends with. Expanding a story IN PLACE was the
+  alternative and it breaks the windowing: row heights would vary, and then the
+  spacers are estimates. The clamp itself is derived (`storyLines`), not a flat
+  two lines - and `STORY_RESERVED_PX` must account for the expand button on
+  EVERY row, including the ones that do not show one, or the button is clipped
+  out of existence on exactly the narrow displays that need it.
+- **The query has a length cap and `search()` is where it is enforced.** The
+  input's `maxLength` only covers typing; a keyword chip, a book on the shelf
+  and a restored history entry all reach `search()` without passing through a
+  box. Scoring is O(tokens x keywords) per room, so a pasted tag list does not
+  degrade, it stops.
 
 ### Testing and CI
 

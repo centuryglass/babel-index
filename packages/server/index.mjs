@@ -22,7 +22,7 @@ import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { scanDirectory } from './scan.mjs';
-import { createApp } from './app.mjs';
+import { createApp, hasTextModel } from './app.mjs';
 import { loadConfig } from '../config/load.mjs';
 import { portInUse } from './port.mjs';
 
@@ -85,6 +85,14 @@ if (manifest.metadata) {
   if (matched === 0)
     console.warn('  none of them matched a room - are the sidecar keys the image filenames?');
 }
+
+// The CLIP text tower is an OPTIONAL dependency, because `onnxruntime-node`
+// publishes for win32/darwin/linux only and as a required one it takes the
+// whole install down on anything else. Without it a search still ranks - by
+// keywords and story - so this is a note, not a warning, and it is said at
+// startup rather than left to be discovered on the first query.
+if (!hasTextModel())
+  console.log('  no CLIP text model installed - search will rank by keywords and story only');
 
 console.log('bundling client ...');
 const bundle = await build({

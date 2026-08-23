@@ -2,18 +2,33 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder, cellDistance } from '../../map/ordering.js';
 import { joinMetadata } from '../../map/metadata.js';
-import { buildSearchIndex, rankHybrid } from '../../map/scoring.js';
+import {
+  buildSearchIndex,
+  rankHybrid,
+  fold,
+  tokenise,
+  keywordMatchRanges,
+  storyMatchRanges,
+} from '../../map/scoring.js';
+import { RoomDetails } from './RoomDetails.jsx';
+import { RoomCard } from './RoomCard.jsx';
+import { MapView } from './MapView.jsx';
+import { SearchForm } from './SearchForm.jsx';
+import { CatalogView } from './CatalogView.jsx';
+import { RoomOverlay } from './RoomOverlay.jsx';
+import { flipTransform, flipCss, rectOf } from './catalog.js';
+import { load, save, clear, KEYS } from './persist.js';
+import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
 import { buildRearrangement } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
-import { describeCell, describeArrangement } from '../../map/describe.js';
+import { describeCell, describeRoom, describeArrangement, describeCatalog } from '../../map/describe.js';
 import { nextRoom } from '../../map/nextRoom.js';
 import {
   assignTitles,
   pickTags,
   bookAtPoint,
   bookNeighbour,
-  describeBook,
   centreCellRect,
   searchBoxScreenRect,
   isSearchBoxUsable,
@@ -21,7 +36,6 @@ import {
   areSpinesLegible,
   overlapsViewport,
   BOOK_COUNT,
-  BOOK_RECTS,
   HISTORY_SLOT_COUNT,
   CENTRE_OPENING_RECT,
 } from './centre.js';
@@ -30,8 +44,9 @@ import { createTileCache, CENTRE, variantId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
 import { createSlideshow, createSlideRenderer } from './slide.js';
-import { sizeOf as pyramidSizeOf, BASE_TILE } from './pyramid.js';
+import { BASE_TILE } from './pyramid.js';
 import { useMapCamera, prefersReducedMotion } from './useMapCamera.js';
+import { useMapRenderer } from './useMapRenderer.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -67,6 +82,26 @@ function Library({ manifest }) {
   // freely afterwards; config decides where they start.
   const config = manifest.config;
 
+  // Which reading of the corpus is on screen. The map is never unmounted - it
+  // is hidden and its render loop stops - so switching carries no state and
+  // nothing has to be rebuilt on the way back. See `docs/catalog-plan.md` §2.
+  const [mode, setMode] = useState(INITIAL_MODE);
+  // Mounted through the exit animation, so the catalog can fold back into the
+  // centre tile rather than vanishing. Cleared when the animation lands.
+  const [leaving, setLeaving] = useState(false);
+
+  // How the catalog advances, and one of the two things that survive a reload.
+  // Config supplies the DEFAULT for a reader who has never chosen; a stored
+  // choice wins over it.
+  const [paging, setPaging] = useState(() =>
+    load(KEYS.paging, manifest.config.catalog.paging, {
+      validate: (v) => v === 'scroll' || v === 'pages',
+    })
+  );
+  useEffect(() => {
+    save(KEYS.paging, paging);
+  }, [paging]);
+
   const [roomCount, setRoomCount] = useState(total);
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
   const [seed, setSeed] = useState(config.map.slotSeed);
@@ -78,13 +113,31 @@ function Library({ manifest }) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [metadata, setMetadata] = useState(null);
-  // Session-only search history, newest first, one book per entry. Kept in
-  // React state like every other runtime value - it does not survive a reload,
-  // which matches the camera and the current ranking.
-  const [history, setHistory] = useState([]);
+  // Search history, newest first, one book per entry - and one of the two
+  // things in this app that survives a reload (see `persist.js` for why so few
+  // do). It is not only a convenience: this is what titles the centre room's
+  // shelf, so persisting it makes the wall of books a record of what this
+  // reader has asked the library rather than something that resets to keyword
+  // tags every session.
+  //
+  // Read once at mount, through a validator - storage is hand-editable and
+  // outlives any given version of this code, so "it parsed" is not the same as
+  // "it is a list of search terms". Capped at the wall's size, because the wall
+  // is the only place it is ever shown.
+  const [history, setHistory] = useState(() =>
+    load(KEYS.history, [], {
+      validate: (v) => Array.isArray(v) && v.every((term) => typeof term === 'string'),
+    }).slice(0, HISTORY_SLOT_COUNT)
+  );
   const pushHistory = useCallback((term) => {
     setHistory((prev) => [term, ...prev.filter((t) => t !== term)].slice(0, HISTORY_SLOT_COUNT));
   }, []);
+  // Cleared rather than stored empty, so forgetting really does leave nothing
+  // behind rather than an empty key that reads the same but looks different.
+  useEffect(() => {
+    if (history.length) save(KEYS.history, history);
+    else clear(KEYS.history);
+  }, [history]);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
@@ -196,9 +249,15 @@ function Library({ manifest }) {
   // The cache asks `urlFor` where a level of a room lives; the manifest is the
   // only thing that knows, because it is the scan that discovered which levels
   // the corpus actually has.
+  // Where a room's tile lives, at a level. The canvas cache asks it for tiles
+  // to draw; the catalog puts the same answer in an `<img src>`. One resolver,
+  // because the manifest is the only thing that knows which levels the corpus
+  // actually has and two readings of that would be two chances to be wrong.
+  const urlFor = useMemo(() => createUrlFor(manifest), [manifest]);
+
   const cache = useMemo(() => {
     const tiles = createTileCache({
-      urlFor: createUrlFor(manifest),
+      urlFor,
       onLoad: () => requestDraw(),
     });
     // The base tiles are rule 1's floor: pinned and preloaded so every cell has
@@ -211,7 +270,7 @@ function Library({ manifest }) {
       tiles.request(id, 0);
     }
     return tiles;
-  }, [manifest, requestDraw]);
+  }, [manifest, requestDraw, urlFor]);
 
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
   const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
@@ -236,6 +295,12 @@ function Library({ manifest }) {
   const pendingNote = useRef('');
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
+
+  // The catalog's expanded room: the tile at full size and the whole story.
+  // A row is a fixed height and its thumbnail is a thumbnail, so this is how a
+  // reader sees either without going back to the map - see `RoomOverlay`.
+  const [overlay, setOverlay] = useState(null);
+  const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
 
   // Right-click or long press opens the room's card. The pick is anchored to
   // where it happened rather than tracking the tile: the card names its room,
@@ -297,6 +362,28 @@ function Library({ manifest }) {
     }
     return { rooms, total: layout.gradedCount };
   }, [result, layout, order, metadata]);
+
+  // The two range finders, bound to the query the CURRENT ranking is for.
+  //
+  // Bound rather than called with the query at each site: every consumer would
+  // otherwise have to remember which of the two rules applies to the text it is
+  // holding, and the whole point of `scoring.js` owning them is that the answer
+  // is decided once. A keyword matches by substring, a story word by prefix;
+  // handing out two functions named for the thing they mark keeps that from
+  // being a decision anyone makes twice.
+  //
+  // Null with no search, which every consumer reads as "mark nothing".
+  const highlight = useMemo(() => {
+    const term = result?.term?.trim();
+    if (!term) return null;
+    const foldedQuery = fold(term);
+    const tokens = tokenise(term, { minLength: config.search.minTokenLength });
+    if (!foldedQuery && !tokens.length) return null;
+    return {
+      keyword: (text) => keywordMatchRanges(text, foldedQuery, tokens),
+      story: (text) => storyMatchRanges(text, tokens),
+    };
+  }, [result, config]);
 
   // A tap selects a book on the centre room. Stable identity - so the pointer
   // listeners are not re-bound every render - over a ref that always holds the
@@ -523,6 +610,12 @@ function Library({ manifest }) {
   // touch screen reader's swipe navigation reaches regardless of tabindex.
   const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
   const cursorEntry = cursorRoom.centre || cursorRoom.generic ? null : metadata?.[cursorRoom.id] ?? null;
+  // Named here rather than in the view, so `describeRoom` has exactly one
+  // caller per reading of the corpus and the map cannot drift from the catalog
+  // about what a room is called.
+  const cursorDesc = cursorEntry
+    ? describeRoom(cursorRoom.id, cursorRoom.rank, order.length, cursorEntry)
+    : null;
 
   // The canvas's own accessible name - what a reader hears landing on it for
   // the FIRST time, before any move has run `announceCursorMove` and pushed
@@ -672,136 +765,14 @@ function Library({ manifest }) {
   );
 
   // --- rendering -----------------------------------------------------------
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    // The pending frame's id, so it can be cancelled - not just a flag. This
-    // closure captures `layout` and `order`, so a frame scheduled through it
-    // and left to fire after the effect has been rebuilt repaints the state
-    // this render pass replaced. That is a real frame of the old map, arriving
-    // after the new one and winning, which is what a stale draw looks like.
-    let pending = 0;
-
-    const render = () => {
-      pending = 0;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-      }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      // The centre tile's live search field, positioned every frame like the
-      // canvas content it sits over - it is not React state, for the same
-      // reason the camera itself is a ref: it moves on every pan, zoom and
-      // flight, and a re-render per frame is not the architecture here.
-      const searchEl = searchFormRef.current;
-      const booksEl = booksRef.current;
-      if (searchEl || booksEl) {
-        const { box, usable, cellRect, books } = centreOverlay(w, h);
-        if (searchEl) {
-          searchEl.style.display = usable ? 'block' : 'none';
-          if (usable) {
-            searchEl.style.left = `${box.x}px`;
-            searchEl.style.top = `${box.y}px`;
-            searchEl.style.width = `${box.w}px`;
-            searchEl.style.height = `${box.h}px`;
-          }
-        }
-        // The whole shelf in ONE style write, not forty: the books are an
-        // affine map of the cell rect, so they sit inside this box in
-        // percentages and need no per-frame work of their own
-        // (accessibility-plan.md §3.3).
-        if (booksEl) {
-          booksEl.style.display = books ? 'block' : 'none';
-          if (books) {
-            booksEl.style.left = `${cellRect.x}px`;
-            booksEl.style.top = `${cellRect.y}px`;
-            booksEl.style.width = `${cellRect.w}px`;
-            booksEl.style.height = `${cellRect.h}px`;
-          }
-        }
-      }
-
-      // Three states, and the middle one is why this is not an `if`.
-      //
-      // While SLIDING, the rearrangement draws itself from its own board at the
-      // camera it was planned for; the live camera is not consulted, because
-      // the board is a finite window and panning off it would show the wrap
-      // that makes the whole illusion affordable.
-      //
-      // While FLYING home to start one, the ordinary renderer draws - but the
-      // arrangement it draws is the one being flown away from, not the one just
-      // computed. `layout` and `order` update the moment a search resolves,
-      // which is before the camera has moved, so drawing them here would show
-      // the new library, fly to it, and then slide it in from the old one.
-      const running = anim.current;
-      const showing = running?.before ?? { layout, order };
-      const stats =
-        running?.board
-          ? slideRenderer.draw({
-              ctx, width: w, height: h, dpr, cam: running.cam,
-              board: running.board, origin: running.origin, motions: running.motions,
-              variantAt: layout.variantAt,
-            })
-          : renderer.draw({
-              ctx, width: w, height: h, dpr, cam: cam.current,
-              layout: showing.layout, order: showing.order, centreSlots,
-              cursor: keyboardUsed.current ? cursorCell(cam.current) : null,
-            });
-
-      const hud = document.getElementById('hud');
-      if (running?.board && hud) {
-        const pct = Math.round((100 * Math.min(running.show.totalMs, performance.now() - running.t0)) / running.show.totalMs);
-        hud.textContent =
-          `rearranging · ${pct}% · ${running.motions.length} lines moving · ` +
-          `level ${stats.level} · ${stats.blank} blank · ${cache.size()} cached`;
-      } else if (hud) {
-        const size = pyramidSizeOf(stats.level);
-        const over = cache.overBudget();
-        hud.textContent =
-          `${stats.cells} cells · ${stats.drawn} drawn · ` +
-          `level ${stats.level} (${size.w}px) · ${stats.substituted} substituted · ` +
-          `${stats.blank} blank · ` +
-          `${cache.size()} cached${over ? ` (+${over} over budget)` : ''} · ` +
-          `zoom ${Math.round(stats.zoom)} · ` +
-          `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
-          `edge at r=${layout.boundaryRadius.toFixed(1)}` +
-          (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '');
-      }
-    };
-
-    draw.current = () => {
-      if (pending) return;
-      pending = requestAnimationFrame(render);
-    };
-
-    render();
-    const onResize = () => draw.current();
-    // Touching the map ends a rearrangement rather than fighting it: the
-    // remaining moves land at once, which is exactly the instant rebuild this
-    // animation replaced. A map you cannot interrupt is not a map.
-    const onDown = () => {
-      const running = anim.current;
-      if (!running) return;
-      // Mid-slide, the remaining moves land at once - which is the instant
-      // rebuild this replaced. Still flying home, there is no slideshow yet and
-      // nothing to finish; dropping the hold is enough, and the next draw shows
-      // the new arrangement. `useMapCamera` cancels the flight itself.
-      running.show?.advanceTo(running.show.totalMs);
-      anim.current = null;
-      draw.current();
-    };
-    window.addEventListener('resize', onResize);
-    canvas.addEventListener('pointerdown', onDown);
-    return () => {
-      if (pending) cancelAnimationFrame(pending);
-      window.removeEventListener('resize', onResize);
-      canvas.removeEventListener('pointerdown', onDown);
-    };
-  }, [layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay]);
+  //
+  // The frame loop itself is `useMapRenderer.js`. `draw` stays here because the
+  // tile cache above is built with `onLoad: requestDraw`, so the request has to
+  // exist before the hook that fulfils it - one ref, and the cycle is broken.
+  useMapRenderer({
+    canvasRef, searchFormRef, booksRef, draw, anim, keyboardUsed, cam, mode,
+    layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay,
+  });
 
   // --- the rearrangement animation -----------------------------------------
 
@@ -904,6 +875,24 @@ function Library({ manifest }) {
     const current = { layout, order };
     const previous = arrangement.current;
     arrangement.current = current;
+
+    // In the catalog there is no map on screen to rearrange, and flying a
+    // hidden camera to set up a slide nobody can see would be a second of
+    // nothing. The map's `layout` and `order` still updated, so returning to it
+    // simply shows the new arrangement at once - which is not a new path but
+    // the one `buildRearrangement` already takes when a change cannot be
+    // animated legally.
+    //
+    // The catalog says what happened in its own voice instead: the arrangement
+    // sentence talks about clustering near a centre this reading does not have.
+    if (mode !== 'map') {
+      animateNext.current = false;
+      const note = pendingNote.current;
+      pendingNote.current = '';
+      setStatus(describeCatalog({ total: order.length, query: result?.term ?? '', note }));
+      return;
+    }
+
     if (!animateNext.current || !previous) {
       requestDraw();
       return;
@@ -917,10 +906,19 @@ function Library({ manifest }) {
       // effect for the newer arrangement will announce that one itself.
       if (arrangement.current === current) announceArrangement();
     });
-  }, [layout, order, startRearrangement, requestDraw, announceArrangement]);
+  }, [layout, order, startRearrangement, requestDraw, announceArrangement, mode, result]);
 
   // --- search --------------------------------------------------------------
-  const search = async (term) => {
+  //
+  // Every query passes through here, whether it came from the box, a keyword
+  // chip, a book on the shelf or a catalog row - so this is the one place the
+  // length cap has to hold. Scoring is O(tokens x keywords) per room, and a
+  // pasted tag list against a full corpus is tens of millions of substring
+  // tests on the main thread, which does not degrade, it stops. The input has a
+  // `maxLength` too, but that only covers typing: a chip, a book and a restored
+  // history entry all reach this without touching the box.
+  const search = async (rawTerm) => {
+    const term = String(rawTerm ?? '').slice(0, config.search.maxQueryLength);
     // Both branches rearrange the library - clearing the box restores the
     // uniform map, which is as much a rearrangement as finding something is.
     animateNext.current = true;
@@ -942,7 +940,7 @@ function Library({ manifest }) {
     // than implying more than the corpus can support.
     const blob = res.vector ? embeddings.current : null;
     if (blob || searchIndex) {
-      const { order, certainty, signals } = rankHybrid({
+      const { order, certainty, breakdown, signals } = rankHybrid({
         query: term,
         count: total,
         weights: config.search.weights,
@@ -954,12 +952,18 @@ function Library({ manifest }) {
         clipCertainty: { low: config.search.density.clipLow, high: config.search.density.clipHigh },
       });
       pendingNote.current = describeSignals(signals, Boolean(searchIndex));
-      setResult({ order, certainty });
+      // `term`, not the live `query`: the box changes on every keystroke and
+      // the ranking does not, so anything derived from "what was searched for"
+      // - the highlight ranges especially - has to read the submitted term or
+      // it would mark text against a query nobody has run yet.
+      setResult({ order, certainty, breakdown, signals, term });
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
       pendingNote.current = 'stub ranking — no embeddings and no keywords in this corpus';
-      setResult({ order: res.order, certainty: null });
+      // No breakdown: a hash-ordered stub has no signals to explain, and an
+      // explanation of a ranking nothing decided would be an invented one.
+      setResult({ order: res.order, certainty: null, breakdown: null, signals: null, term });
     }
   };
 
@@ -998,6 +1002,9 @@ function Library({ manifest }) {
   const searchKeyword = (text) => {
     setQuery(text);
     setCard(null);
+    // The overlay names a rank, and a search rebuilds the ranking - leaving it
+    // open would have it describing a position that now holds another room.
+    setOverlay(null);
     search(text);
   };
 
@@ -1020,12 +1027,146 @@ function Library({ manifest }) {
     [flyTo, config]
   );
 
-  // A future override book does something other than search - an artist's
-  // statement, say. Nothing reserves a slot yet (CENTRE_OVERRIDES is empty), so
-  // this is the seam, not a live feature; it is wired so adding an override is
-  // the only change needed.
+  // --- switching between the two readings ----------------------------------
+  //
+  // The map is hidden rather than unmounted, so neither direction rebuilds
+  // anything: the camera is exactly where it was left, the tile cache is warm,
+  // and `useMapCamera`'s pointer listeners - bound once against a ref object
+  // rather than an element - are still attached to a canvas that never went
+  // away.
+  //
+  // The animation is a FLIP on ONE element. The centre tile is what the map is
+  // framed on and what the catalog's first row shows, so folding one into the
+  // other is a transform on that row's thumbnail while the map cross-fades,
+  // rather than anything the renderer has to know about.
+  const catalogScrollRef = useRef(null);
+  const firstTileRef = useRef(null);
+  // Where the centre tile was on the map when the switch began, or null if it
+  // was off screen - a reader who panned away has nothing to fold from, and the
+  // transition degrades to a cross-fade rather than flying in from a corner.
+  const flipFrom = useRef(null);
+
+  /** The centre cell's screen rect, or null if none of it is in view. */
+  const centreRectNow = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const rect = centreCellRect(cam.current, { width: w, height: h });
+    return overlapsViewport(rect, w, h) ? rect : null;
+  }, [cam]);
+
+  const animatedSwitch = () =>
+    !prefersReducedMotion() && config.catalog.transitionMs > 0;
+
+  const enterCatalog = useCallback(() => {
+    flipFrom.current = animatedSwitch() ? centreRectNow() : null;
+    setCard(null);
+    setMode('catalog');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centreRectNow, config]);
+
+  const exitCatalog = useCallback(() => {
+    if (!animatedSwitch()) {
+      setMode('map');
+      return;
+    }
+    // The map is already at the camera it will land on, so the tile's
+    // destination is knowable before anything moves.
+    flipFrom.current = centreRectNow();
+    setLeaving(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centreRectNow, config]);
+
+  /**
+   * Run the FLIP, in whichever direction the mode just moved.
+   *
+   * `useLayoutEffect` because the invert transform has to be applied before the
+   * browser paints the catalog in its resting position - one frame of the list
+   * at full size, then a jump onto the tile, is exactly the flash this is meant
+   * to replace.
+   */
+  useLayoutEffect(() => {
+    const entering = mode === 'catalog' && !leaving;
+    if (!entering && !leaving) return;
+
+    const tile = firstTileRef.current;
+    const anchor = flipFrom.current;
+    const ms = config.catalog.transitionMs;
+    let timer = 0;
+
+    // Nothing to fold from or to: cross-fade, which the stylesheet does on its
+    // own, and just land.
+    if (!tile || !anchor || !animatedSwitch()) {
+      if (leaving) timer = setTimeout(() => { setMode('map'); setLeaving(false); }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    // `rectOf`, not the DOMRect itself - see its comment. Passing the DOMRect
+    // straight in does not throw; it silently drops the scale.
+    const rest = rectOf(tile.getBoundingClientRect());
+    const onto = flipCss(flipTransform(anchor, rest));
+
+    if (entering) {
+      // Start on the tile, then release to nothing.
+      tile.style.transition = 'none';
+      tile.style.transform = onto;
+      // Read back, so the two writes cannot be coalesced into no animation.
+      void tile.offsetWidth;
+      tile.style.transition = `transform ${ms}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
+      tile.style.transform = '';
+      timer = setTimeout(() => {
+        tile.style.transition = '';
+      }, ms);
+    } else {
+      // Leaving: from nothing back onto the tile, and land when it arrives.
+      tile.style.transition = `transform ${ms}ms cubic-bezier(0.55, 0.06, 0.68, 0.19)`;
+      tile.style.transform = onto;
+      timer = setTimeout(() => {
+        tile.style.transition = '';
+        tile.style.transform = '';
+        setMode('map');
+        setLeaving(false);
+      }, ms);
+    }
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, leaving, config]);
+
+  /** A row's "show on the map" - aim the camera, then go and look. */
+  const showOnMap = useCallback(
+    (x, y) => {
+      flyTo(x, y, config.camera.defaultZoom);
+      exitCatalog();
+    },
+    [flyTo, config, exitCatalog]
+  );
+
+  // The panel's three map controls, as handlers rather than as inline bodies in
+  // the markup: "a reorder" is bumping a seed AND asking for the next layout
+  // change to animate, which is a fact about this file's machinery and not
+  // something a presenter should have to know.
+  const reorder = useCallback(() => {
+    animateNext.current = true;
+    setOrderSeed((s) => s + 1);
+  }, []);
+  const rescatter = useCallback(() => {
+    animateNext.current = true;
+    setSeed((s) => s + 1);
+  }, []);
+  const recentre = useCallback(
+    () => flyTo(0, 0, config.camera.defaultZoom),
+    [flyTo, config]
+  );
+  const forgetSearches = useCallback(() => setHistory([]), []);
+
+  /**
+   * What an override book does. The seam this file has carried empty since the
+   * shelf was built; the catalog is the first thing to claim a slot.
+   */
   const onOverride = (slot) => {
-    void slot; // e.g. switch (slot.action) { case 'statement': ... }
+    if (slot.action === 'catalog') enterCatalog();
   };
 
   /**
@@ -1097,221 +1238,109 @@ function Library({ manifest }) {
 
   return (
     <>
-      {/*
-        `role="application"`, scoped to exactly this element and nowhere else
-        (accessibility-plan.md §4.2b): inside it, a screen reader's own browse-
-        mode reading turns off and arrow keys reach the page instead, which is
-        what lets them pan. That trade must not creep onto the panel, which is
-        why this is the only application region in the document.
+      <MapView
+        mode={mode}
+        canvasRef={canvasRef}
+        searchFormRef={searchFormRef}
+        booksRef={booksRef}
+        manifest={manifest}
+        total={total}
+        described={described}
+        status={status}
+        query={query}
+        setQuery={setQuery}
+        onSearch={runSearch}
+        onGoToSearch={goToSearch}
+        maxQueryLength={config.search.maxQueryLength}
+        cursorLabel={cursorLabel}
+        cursorEntry={cursorEntry}
+        cursorDesc={cursorDesc}
+        highlight={highlight}
+        onMapKeyDown={onMapKeyDown}
+        onKeyword={searchKeyword}
+        centreSlots={centreSlots}
+        bookFocus={bookFocus}
+        setBookFocus={setBookFocus}
+        onBook={onBook}
+        onBooksKeyDown={onBooksKeyDown}
+        searchResults={searchResults}
+        onOpenRoom={openRoom}
+        roomCount={roomCount}
+        setRoomCount={setRoomCount}
+        contentRatio={contentRatio}
+        setContentRatio={setContentRatio}
+        onReorder={reorder}
+        onRescatter={rescatter}
+        onRecentre={recentre}
+        history={history}
+        onForgetSearches={forgetSearches}
+        onEnterCatalog={enterCatalog}
+      />
 
-        One tab stop for the entire map: `tabIndex={0}` here and nothing else
-        keyboard-reachable at the top level of this subtree, so Tab always
-        leaves the map in one press. The chips nested below are `tabIndex={-1}`
-        for exactly that reason - real, touch-reachable elements that do not
-        lengthen the desktop tab sequence.
-
-        `aria-label` is the STATIC name - what a reader hears arriving here for
-        the first time. Everything after that arrives through the polite live
-        region `announceCursorMove` writes to (`status`, below), because an
-        attribute change on an already-focused element is not reliably
-        announced across screen readers on its own.
-      */}
-      <canvas
-        ref={canvasRef}
-        role="application"
-        tabIndex={0}
-        aria-label={cursorLabel}
-        onKeyDown={onMapKeyDown}
-      >
-        {cursorEntry?.alt && <p>{cursorEntry.alt}</p>}
-        {cursorEntry?.story && <p>{cursorEntry.story}</p>}
-        {cursorEntry?.keywords?.map((k) => (
-          <button key={k.text} type="button" tabIndex={-1} onClick={() => searchKeyword(k.text)}>
-            {k.text}
-          </button>
-        ))}
-      </canvas>
-      {/*
-        The live search field, on the centre tile itself rather than in the
-        panel. Always mounted - Playwright's `inputValue()` and React's
-        controlled `value` both need it attached - but hidden by the
-        stylesheet (`.centre-search { display: none }`) until the render loop
-        above finds it on screen and legible, at which point it takes over
-        `display`/position directly. No `style` prop here on purpose: a React
-        re-render (every keystroke touches `query`) would otherwise reapply
-        whatever style this component declared and fight the imperative
-        positioning every frame.
-      */}
-      <form ref={searchFormRef} onSubmit={runSearch} className="centre-search">
-        <input
-          type="search"
-          aria-label="search the library"
-          placeholder="search the library…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+      {(mode === 'catalog' || leaving) && (
+        <CatalogView
+          manifest={manifest}
+          config={config}
+          urlFor={urlFor}
+          order={order}
+          metadata={metadata}
+          result={result}
+          highlight={highlight}
+          query={query}
+          setQuery={setQuery}
+          onSearch={runSearch}
+          paging={paging}
+          setPaging={setPaging}
+          onExit={exitCatalog}
+          onShowOnMap={showOnMap}
+          onKeyword={searchKeyword}
+          onExpand={expandRoom}
+          centreSlots={centreSlots}
+          onBook={onBook}
+          cellOfRank={(rank) => layout.cellOfRank(rank)}
+          note={result ? describeSignals(result.signals ?? {}, Boolean(searchIndex)) : ''}
+          scrollRef={catalogScrollRef}
+          firstTileRef={firstTileRef}
+          leaving={leaving}
         />
-      </form>
+      )}
+
       {/*
-        The shelf, as a real control surface (accessibility-plan.md §3.3).
-        Until now the centre room's forty spines were painted pixels behind a
-        hit-test: the application's PRIMARY interface - search history, and a
-        browsable index of corpus keywords - reachable only by mouse or finger.
-        These are the same forty slots `assignTitles` already returns and
-        `composeSpines` already draws, mounted as buttons over the same rects.
+        ONE live region for the whole app, and it lives out here rather than in
+        the panel for a structural reason: the panel is part of the map, so a
+        region inside it would be unmounted and remounted on every mode switch,
+        and a screen reader loses a live region that goes away. What it says
+        differs by mode - a cursor move, or what the catalog is showing - but
+        the node a reader is listening to never changes.
 
-        Positioned by the render loop above, in one style write on this
-        container; the buttons inside are in percentages of it (BOOK_STYLES),
-        so a pan costs one assignment rather than forty. `display: none` in the
-        stylesheet is the pre-first-frame default, and the render loop takes it
-        over from there - the same arrangement (and the same "no style prop
-        here") as `.centre-search` above.
-
-        `pointer-events: none`, from the stylesheet, and that is deliberate:
-        the canvas keeps every gesture, so a pan that crosses the shelf still
-        pans. Focus is not a pointer API, so a keyboard reaches these anyway,
-        and a sighted click keeps routing through `onTap` -> `bookAtPoint` ->
-        `onBook`, which is the same function this button calls.
+        `role="status"` announces every change to its subtree, so nothing else
+        may share it; the map's static hint stays in the panel where it cannot
+        be read aloud on every update.
       */}
-      <div
-        ref={booksRef}
-        className="centre-books"
-        role="toolbar"
-        aria-label="the centre room's shelf"
-        onKeyDown={onBooksKeyDown}
-      >
-        {centreSlots.map((slot, i) =>
-          slot?.text ? (
-            <button
-              key={i}
-              type="button"
-              data-book={i}
-              tabIndex={i === bookFocus ? 0 : -1}
-              style={BOOK_STYLES[i]}
-              aria-label={describeBook(slot)}
-              onFocus={() => setBookFocus(i)}
-              onClick={() => onBook(i)}
-            />
-          ) : null
-        )}
+      <div className="live">
+        <span role="status">{status}</span>
       </div>
-      <div className="panel">
-        <h1>The Indexing of Babel</h1>
-        <p className="sub">
-          offline · {total} rooms in {manifest.directory.split('/').slice(-1)[0]}
-          {described > 0 && <> · {described} described</>}
-        </p>
 
-        <div className="row">
-          <button className="search-trigger" onClick={goToSearch} aria-label="search the library">
-            🔍 search
-          </button>
-        </div>
+      {overlay && mode === 'catalog' && (
+        <RoomOverlay
+          room={overlay}
+          desc={describeRoom(
+            overlay.id,
+            overlay.rank,
+            order.length,
+            metadata?.[overlay.id] ?? null
+          )}
+          entry={metadata?.[overlay.id] ?? null}
+          file={manifest.rooms[overlay.id]?.file}
+          src={urlFor(overlay.id, 0)}
+          onClose={() => setOverlay(null)}
+          onKeyword={searchKeyword}
+          highlight={highlight}
+          result={result}
+          weights={config.search.weights}
+        />
+      )}
 
-        {/*
-          The ranked listbox: the lossless reading of a search, next to the map's
-          lossy spatial one (accessibility-plan.md §3.2). A plain list of buttons
-          rather than `role="listbox"` with arrow-key roving on purpose - that
-          widget pattern needs the keyboard model phase C brings, and a listbox
-          that does not implement roving is a broken widget, worse than none.
-          Every button here is independently reachable by Tab today, which is
-          what makes this the phase that ships before the map's keyboard
-          interface (§5): it works with no arrow keys at all.
-
-          Absent entirely when there is no search, or when one ran and matched
-          nothing worth clustering (`gradedCount === 0`) - the empty state IS the
-          uniform map, and a list with nothing ranked in it would be noise.
-        */}
-        {searchResults && searchResults.total > 0 && (
-          <div className="row results" role="region" aria-labelledby="results-label">
-            <label id="results-label">
-              results <b>{searchResults.total}</b>
-              {searchResults.total > searchResults.rooms.length &&
-                ` (showing ${searchResults.rooms.length})`}
-            </label>
-            {/*
-              `aria-setsize`/`aria-posinset` go on the `<li>`, not the button
-              inside it: those two are valid on the `listitem` role (a `<li>`'s
-              implicit role inside a `<ul>`) and are not valid on a bare
-              `button` - axe's `aria-allowed-attr` rule would flag the wrong
-              placement.
-            */}
-            <ul className="results-list">
-              {searchResults.rooms.map((r) => (
-                <li key={r.id} aria-setsize={searchResults.total} aria-posinset={r.rank + 1}>
-                  <button className="result" onClick={() => openRoom(r.x, r.y, r.id, r.rank)}>
-                    {r.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/*
-          Both sliders carry an explicit `htmlFor`/`id` pair: the label is a
-          SIBLING of its input rather than wrapping it, so without the
-          association neither slider has an accessible name and both announce
-          as a bare number.
-
-          The LABEL is what has to carry the units, not `aria-valuetext` alone.
-          A range reports "42" on its own, which is the one thing about it that
-          was never in question - but Chrome 151 ignores `aria-valuetext` on a
-          native `input[type=range]` (chromium 1194 honours it; the e2e caught
-          the difference the first time CI ran a newer browser than the one it
-          was written against). An accessible name is computed the same way
-          everywhere, so "of 26" lives in the label and is safe. `aria-valuetext`
-          stays for the browsers that do honour it, where it is what a DRAG
-          announces - a value change re-reads the value, never the name.
-        */}
-        <div className="row">
-          <label htmlFor="rooms-on-map">
-            rooms on the map <b>{Math.min(roomCount, total)} of {total}</b>
-          </label>
-          <input
-            id="rooms-on-map"
-            type="range" min="1" max={total} value={Math.min(roomCount, total)}
-            aria-valuetext={`${Math.min(roomCount, total)} of ${total} rooms`}
-            onChange={(e) => setRoomCount(Number(e.target.value))}
-          />
-        </div>
-
-        <div className="row">
-          <label htmlFor="non-generic">
-            non-generic <b>{Math.round(contentRatio * 100)}%</b>
-          </label>
-          <input
-            id="non-generic"
-            type="range" min="2" max="100" value={Math.round(contentRatio * 100)}
-            aria-valuetext={`${Math.round(contentRatio * 100)}% of cells hold a corpus room`}
-            onChange={(e) => setContentRatio(Number(e.target.value) / 100)}
-          />
-        </div>
-
-        <div className="buttons">
-          <button onClick={() => { animateNext.current = true; setOrderSeed((s) => s + 1); }}>
-            reorder
-          </button>
-          <button onClick={() => { animateNext.current = true; setSeed((s) => s + 1); }}>
-            rescatter
-          </button>
-          <button onClick={() => flyTo(0, 0, config.camera.defaultZoom)}>centre</button>
-        </div>
-
-        {/*
-          The hint and the status are two different things and must not share a
-          node. `role="status"` announces every change to its subtree, so a
-          single node that falls back to the hint would read the instructions
-          aloud again each time a status cleared. The hint is static and silent;
-          the region below it starts empty and only ever holds what the map just
-          did, which is exactly what a polite live region is for.
-        */}
-        <div className="note">
-          {!status && 'drag to pan, scroll to zoom. right-click a room.'}
-          <span role="status">{status}</span>
-        </div>
-      </div>
-      <div className="hud" id="hud" />
-      {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
       {card && cardDescription && (
         <RoomCard
           card={card}
@@ -1320,30 +1349,14 @@ function Library({ manifest }) {
           file={manifest.rooms[card.id]?.file}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
+          highlight={highlight}
+          result={result}
+          weights={config.search.weights}
         />
       )}
     </>
   );
 }
-
-/**
- * Each book's position inside the shelf container, as percentages.
- *
- * Computed once at module scope because the fractions never change - the whole
- * point of the container being the thing that moves. Per-axis, like everything
- * that touches this tile: `x`/`w` against the cell's width, `y`/`h` against its
- * height. One divisor for both would put every focus ring on the wrong book,
- * silently, exactly as it would stretch the art.
- */
-const BOOK_STYLES = BOOK_RECTS.map((b) => ({
-  left: `${b.x * 100}%`,
-  top: `${b.y * 100}%`,
-  width: `${b.w * 100}%`,
-  height: `${b.h * 100}%`,
-}));
-
-/** How far the card sits from the pick, and from the edge it is clamped against. */
-const CARD_GAP = 12;
 
 /**
  * The most options the ranked listbox mounts at once - the DOM budget from
@@ -1365,160 +1378,34 @@ const OPENING_MARGIN = 0.94;
  *
  * The seam the concept asks for - "certain books will have distinct functions,
  * e.g. displaying an artist's statement" - built so history can never overwrite
- * them. It ships empty; the shape a future entry takes is
- *   { 0: { text: 'artist’s statement', action: 'statement' } }
- * where `action` is dispatched by `onOverride` below. Add nothing here until the
- * function it names exists, so an override always does something.
+ * them. `action` is dispatched by `onOverride` in `Library`; add nothing here
+ * until the function it names exists, so an override always does something.
+ *
+ * Slot 0 is the top-left book, reserved before history fills the wall, and it
+ * opens the catalog - the corpus read as a list rather than as a map. That it
+ * is a BOOK is the point: the way out of the map is an object in the room,
+ * which is the same argument that put the search field on the centre tile.
+ * `assignTitles` displaces history past a reserved slot rather than writing
+ * over it, so the shelf simply starts one book later.
  */
-const CENTRE_OVERRIDES = {};
+const CENTRE_OVERRIDES = {
+  0: { text: 'the catalog', action: 'catalog' },
+};
 
 /**
- * `?touchdebug` prints the raw pointer stream on screen.
+ * Which reading the page opens on.
  *
- * Read at module scope so the whole feature compiles out of a normal session:
- * nothing renders, and the hook is handed no callback at all rather than one
- * that discards. Touch is the one layer that cannot be judged from a desktop,
- * and the CDP touch injection the e2e test uses bypasses the browser's own
- * gesture arbitration - so a real device reporting for itself is the only way
- * some of these questions get answered.
+ * `?catalog` in the url opens straight into the list, read once at module scope
+ * exactly as `?touchdebug` is. Read-only on purpose: the toggle does not write
+ * the url back, so there is no history-entry behaviour to design and no way for
+ * the address bar and the page to disagree. It makes the mode linkable, and it
+ * lets a test land in the catalog without a click.
  */
-const TOUCH_DEBUG =
-  typeof location !== 'undefined' && new URLSearchParams(location.search).has('touchdebug');
+const INITIAL_MODE =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('catalog')
+    ? 'catalog'
+    : 'map';
 
-const TOUCH_LOG_LINES = 14;
-const touchLog = [];
-
-function appendTouchLog(line) {
-  touchLog.push(line);
-  if (touchLog.length > TOUCH_LOG_LINES) touchLog.shift();
-  const el = document.getElementById('touchlog');
-  if (el) el.textContent = touchLog.join('\n');
-}
-
-/**
- * One room's keywords and story, opened by right-click or long press.
- *
- * Placed where the gesture happened and clamped back inside the viewport, so a
- * pick near an edge does not open a card half off screen. Escape and a click
- * anywhere outside close it, which are the two things anyone tries first.
- */
-function RoomCard({ card, desc, entry, file, onClose, onKeyword }) {
-  const ref = useRef(null);
-  const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
-
-  // Clamp against the card's REAL height, not an assumed one: it grows with the
-  // story, so a guess is wrong for exactly the long entries most likely to run
-  // off the bottom of a short viewport. useLayoutEffect so the correction lands
-  // before the browser paints rather than as a visible jump.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    setPos({
-      left: Math.max(CARD_GAP, Math.min(card.at.x + CARD_GAP, window.innerWidth - width - CARD_GAP)),
-      top: Math.max(CARD_GAP, Math.min(card.at.y + CARD_GAP, window.innerHeight - height - CARD_GAP)),
-    });
-  }, [card]);
-
-  // Focus moves in on open and goes back where it came from on close.
-  //
-  // Two things make the restore conditional rather than unconditional. A card
-  // is dismissed by clicking *anywhere else*, and that click has usually
-  // already put focus somewhere the reader chose - stealing it back would
-  // undo their own action. And the card may be closed because the map is about
-  // to rearrange under it (`searchKeyword`), by which point the element that
-  // opened it may be gone. So: restore only if focus is still inside the card
-  // or has fallen to the body, which are exactly the cases where nobody else
-  // has claimed it.
-  useEffect(() => {
-    const opener = document.activeElement;
-    ref.current?.focus();
-    return () => {
-      // The body is not somewhere focus can be "put back" - it is where focus
-      // already is when nothing holds it, which is the ordinary case for a card
-      // opened by right-clicking the canvas. Nothing to restore.
-      if (!opener || opener === document.body || !opener.isConnected) return;
-      const active = document.activeElement;
-      if (active && active !== document.body && !ref.current?.contains(active)) return;
-      opener.focus();
-    };
-    // Mount and unmount only: re-running this on a re-render would drag focus
-    // back to the card while someone is reading a chip inside it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    // `pointerdown` rather than `click`: the canvas would otherwise start a pan
-    // under a dismissing click, and the map would lurch as the card vanished.
-    const onDown = (e) => {
-      if (!ref.current?.contains(e.target)) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('pointerdown', onDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('pointerdown', onDown, true);
-    };
-  }, [onClose]);
-
-  // Named by `desc.name` - the same string a listbox option and (once the
-  // cursor lands, phase C) the map itself would say for this cell. "room" -
-  // which is what this used to announce on its own - is the one fact a reader
-  // already had; the rank and the keywords are the reason to have opened it.
-  //
-  // `tabIndex={-1}` makes it focusable without putting it in the tab order,
-  // which is what lets focus be moved here programmatically above.
-  return (
-    <div
-      className="card"
-      ref={ref}
-      style={pos}
-      role="dialog"
-      tabIndex={-1}
-      aria-label={desc.name}
-    >
-      <div className="card-head">
-        <span className="card-id">
-          room {card.id}
-          {file ? ` · ${file}` : ''}
-        </span>
-        <button className="card-close" onClick={onClose} aria-label="close">
-          ×
-        </button>
-      </div>
-
-      {entry?.keywords?.length > 0 && (
-        <div className="chips">
-          {entry.keywords.map((k) => (
-            <button
-              key={k.text}
-              className="chip"
-              title={k.type ? `${k.type} — search for this` : 'search for this'}
-              onClick={() => onKeyword(k.text)}
-            >
-              {k.text}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/*
-        What the picture shows, above what the room is: the sidecar's optional
-        `alt` (accessibility-plan.md §3.5). VISIBLE rather than screen-reader
-        only, on §3.6's argument that an invisible layer rots - a caption
-        nobody sighted ever reads is one nobody notices has drifted from the
-        image it describes. Absent for almost every corpus, since producing it
-        is the generator's job upstream of this repo.
-      */}
-      {desc.picture && <p className="picture">{desc.picture}</p>}
-
-      {desc.description && <p className="story">{desc.description}</p>}
-
-      {!entry && <p className="story dim">No keywords recorded for this room.</p>}
-    </div>
-  );
-}
 
 /**
  * What actually decided this ranking, in the panel's own voice.
