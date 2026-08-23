@@ -289,7 +289,7 @@ test('prefetches are capped in flight, so they cannot crowd out a visible tile',
 test('a queued prefetch is dropped when the frame it was queued for ends', () => {
   // It was queued for a viewport that has since moved. Working through the
   // backlog would spend the whole budget on where the camera used to be.
-  const { images, cache } = build({ concurrency: 1 });
+  const { cache } = build({ concurrency: 1 });
   cache.beginFrame();
   for (let id = 0; id < 20; id++) cache.prefetch(id, 1);
   assert.ok(cache.pendingPrefetch() > 0);
