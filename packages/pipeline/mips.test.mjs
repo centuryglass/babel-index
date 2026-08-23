@@ -1,11 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/pyramid.js';
-import { mipPlan, writeMips, sourceImages, checkAspects, contentHash } from './mips.mjs';
+import {
+  mipPlan,
+  writeMips,
+  sourceImages,
+  checkAspects,
+  contentHash,
+  updateMetadataHashes,
+} from './mips.mjs';
 
 /** A JPEG of the given size, synthesised - nothing here reads the sample corpus. */
 async function makeImage(path, w, h, background = { r: 40, g: 34, b: 28 }) {
@@ -192,6 +199,69 @@ test('the embedded hash matches a plain hash of the source bytes', async () => {
     const hash = await contentHash(file);
 
     assert.ok(meta.exif.toString('latin1').includes(hash));
+  });
+});
+
+// --- metadata.json hashes ----------------------------------------------------
+
+test('a fresh metadata.json is created with just the hashes', async () => {
+  await withTempDir(async (dir) => {
+    await updateMetadataHashes(
+      dir,
+      new Map([
+        ['001.jpg', 'a'.repeat(64)],
+        ['002.jpg', 'b'.repeat(64)],
+      ])
+    );
+
+    const sidecar = JSON.parse(await readFile(join(dir, 'metadata.json'), 'utf8'));
+    assert.deepEqual(sidecar, {
+      '001.jpg': { hash: 'a'.repeat(64) },
+      '002.jpg': { hash: 'b'.repeat(64) },
+    });
+  });
+});
+
+test('existing keywords and story survive - only hash is added', async () => {
+  await withTempDir(async (dir) => {
+    const before = {
+      '001.jpg': { keywords: [{ text: 'magma', type: 'material' }], story: 'A private study.' },
+    };
+    await writeFile(join(dir, 'metadata.json'), JSON.stringify(before));
+
+    await updateMetadataHashes(dir, new Map([['001.jpg', 'c'.repeat(64)]]));
+
+    const sidecar = JSON.parse(await readFile(join(dir, 'metadata.json'), 'utf8'));
+    assert.deepEqual(sidecar['001.jpg'], { ...before['001.jpg'], hash: 'c'.repeat(64) });
+  });
+});
+
+test('a hash-only entry updates in place on the next run, without disturbing others', async () => {
+  await withTempDir(async (dir) => {
+    await updateMetadataHashes(dir, new Map([['001.jpg', 'a'.repeat(64)]]));
+    await updateMetadataHashes(dir, new Map([['001.jpg', 'd'.repeat(64)]]));
+
+    const sidecar = JSON.parse(await readFile(join(dir, 'metadata.json'), 'utf8'));
+    assert.deepEqual(sidecar, { '001.jpg': { hash: 'd'.repeat(64) } });
+  });
+});
+
+test('a malformed metadata.json is not fatal - it is started fresh', async () => {
+  await withTempDir(async (dir) => {
+    await writeFile(join(dir, 'metadata.json'), 'not json');
+    await updateMetadataHashes(dir, new Map([['001.jpg', 'a'.repeat(64)]]));
+
+    const sidecar = JSON.parse(await readFile(join(dir, 'metadata.json'), 'utf8'));
+    assert.deepEqual(sidecar, { '001.jpg': { hash: 'a'.repeat(64) } });
+  });
+});
+
+test('writeMips reports the hash it embedded, for the caller to record', async () => {
+  await withTempDir(async (dir) => {
+    const file = join(dir, '000.jpg');
+    await makeImage(file, 64, 64);
+    const { hash } = await writeMips({ file, outDir: dir, inPlace: true });
+    assert.equal(hash, await contentHash(file));
   });
 });
 

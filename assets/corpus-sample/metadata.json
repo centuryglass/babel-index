@@ -14,7 +14,8 @@
         "type": "setting"
       }
     ],
-    "story": "A private study in a building that survived whatever happened to the city outside. The mural of the volcanic mountains isn't decoration\u2014it's a window, or used to be, before someone painted over the glass to match what's still visible through the actual gaps. The clock keeps a time that stopped mattering. Someone still dusts the books."
+    "story": "A private study in a building that survived whatever happened to the city outside. The mural of the volcanic mountains isn't decoration—it's a window, or used to be, before someone painted over the glass to match what's still visible through the actual gaps. The clock keeps a time that stopped mattering. Someone still dusts the books.",
+    "hash": "572f99c36b15a98d496e304ca7c2ac0d08274f63d704da91bd51edfd93415266"
   },
   "002.jpg": {
     "keywords": [
@@ -31,7 +32,8 @@
         "type": "artist"
       }
     ],
-    "story": "A private study in a townhouse owned by a collector of Surrealist ephemera. The shelf holds a complete run of exhibition catalogues, bound in matching leather by color and year rather than by artist or movement\u2014a private taxonomy known only to the owner. The small brass orb mounted above is a telescope lens repurposed as a doorbell, salvaged from a demolished observatory. Visitors are asked not to touch the spines; the color-coding indicates a lending history that no longer exists."
+    "story": "A private study in a townhouse owned by a collector of Surrealist ephemera. The shelf holds a complete run of exhibition catalogues, bound in matching leather by color and year rather than by artist or movement—a private taxonomy known only to the owner. The small brass orb mounted above is a telescope lens repurposed as a doorbell, salvaged from a demolished observatory. Visitors are asked not to touch the spines; the color-coding indicates a lending history that no longer exists.",
+    "hash": "9c6e45f3fcd16f6830740f9efa74f9635c1b7a030d4ffa9ce076b1f6d1190093"
   },
   "003.jpg": {
     "keywords": [
@@ -40,7 +42,7 @@
         "type": "artist"
       },
       {
-        "text": "Joan Mir\u00f3",
+        "text": "Joan Miró",
         "type": "artist"
       },
       {
@@ -48,7 +50,8 @@
         "type": "setting"
       }
     ],
-    "story": "A private study in a house built over reclaimed sinkhole ground. The owner catalogs geological survey reports alongside art monographs, the two red volumes on the middle shelf marking where the property line documents begin. The painting was left by the previous tenant, who departed before the last inspection."
+    "story": "A private study in a house built over reclaimed sinkhole ground. The owner catalogs geological survey reports alongside art monographs, the two red volumes on the middle shelf marking where the property line documents begin. The painting was left by the previous tenant, who departed before the last inspection.",
+    "hash": "f3d6a411eb255462ea86fcb0792db5b1b4e9278951031d0e35d5c85c6504cc64"
   },
   "004.jpg": {
     "keywords": [
@@ -65,7 +68,8 @@
         "type": "medium"
       }
     ],
-    "story": "The Archivist's Wing houses restricted texts behind decorative gearwork that isn't decorative at all\u2014each wheel a lock, each panel keyed to a different clearance level. The overhead mechanism tracks which shelf was last opened and by whom. Librarians here don't recommend books; they authorize retrieval requests, and denials are common."
+    "story": "The Archivist's Wing houses restricted texts behind decorative gearwork that isn't decorative at all—each wheel a lock, each panel keyed to a different clearance level. The overhead mechanism tracks which shelf was last opened and by whom. Librarians here don't recommend books; they authorize retrieval requests, and denials are common.",
+    "hash": "aa183f12bdb0a1d1ec28840ab41e770b7b16711665d71fa163c4f1864a508a89"
   },
   "005.jpg": {
     "keywords": [
@@ -82,12 +86,13 @@
         "type": "LoRA model"
       }
     ],
-    "story": "A study in a building that shifts floor plans depending on who's counting the doors. The scrolls flanking the shelf are transcripts of arguments the previous owner had with people who no longer visit. The orb above the books is warm to the touch year-round, source unknown. Nobody has successfully removed a book from the third shelf and put it back in the same place twice."
+    "story": "A study in a building that shifts floor plans depending on who's counting the doors. The scrolls flanking the shelf are transcripts of arguments the previous owner had with people who no longer visit. The orb above the books is warm to the touch year-round, source unknown. Nobody has successfully removed a book from the third shelf and put it back in the same place twice.",
+    "hash": "c666fd6114c6d24244dc35f04a81c1bc22ae1d386298502d5c6a5a8e27317645"
   },
   "006.jpg": {
     "keywords": [
       {
-        "text": "Antoni Gaud\u00ed",
+        "text": "Antoni Gaudí",
         "type": "artist"
       },
       {
@@ -99,7 +104,8 @@
         "type": "material"
       }
     ],
-    "story": "A private study in an old Barcelona apartment building, converted decades ago by a tenant obsessed with mosaic work who never explained why bread crumbs kept appearing between the tiles of the side panels. The books on the shelf are ledgers, not literature\u2014unmarked spines, numbered by hand. Neighbors say the lamp never goes out, even during power failures."
+    "story": "A private study in an old Barcelona apartment building, converted decades ago by a tenant obsessed with mosaic work who never explained why bread crumbs kept appearing between the tiles of the side panels. The books on the shelf are ledgers, not literature—unmarked spines, numbered by hand. Neighbors say the lamp never goes out, even during power failures.",
+    "hash": "6a656979e5067f899aa8924fa2051450ddf04dbe0aef2a71ef6939bf41e8a627"
   },
   "007.jpg": {
     "keywords": [
@@ -116,7 +122,8 @@
         "type": "artist"
       }
     ],
-    "story": "A private archive room in a shuttered gallery, the shelves holding uniform spines with no visible titles\u2014provenance records for works that were pulled from circulation decades ago. The target symbol above marks which section responds to a specific key card, though the wallpaper's pattern was chosen to make the door behind it harder to locate on a cursory glance."
+    "story": "A private archive room in a shuttered gallery, the shelves holding uniform spines with no visible titles—provenance records for works that were pulled from circulation decades ago. The target symbol above marks which section responds to a specific key card, though the wallpaper's pattern was chosen to make the door behind it harder to locate on a cursory glance.",
+    "hash": "d60de0890b85933b0db3e599409cf9222d230b897490af2de07115a188d3263f"
   },
   "008.jpg": {
     "keywords": [
@@ -133,7 +140,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "A back-room archive in an arcade that shouldn't exist anymore\u2014cabinets flanking a shelf of unmarked spine-cases, labels glitched into unreadable neon glyphs. The machines still run, looping demo attract-modes for games no one remembers installing. Staff logs mention restocking the shelf but never touching it."
+    "story": "A back-room archive in an arcade that shouldn't exist anymore—cabinets flanking a shelf of unmarked spine-cases, labels glitched into unreadable neon glyphs. The machines still run, looping demo attract-modes for games no one remembers installing. Staff logs mention restocking the shelf but never touching it.",
+    "hash": "a74e473f7e69b069dbe8b3b11afe83a6a6c389e531bbe3dcbcf6ba09d0a710cd"
   },
   "009.jpg": {
     "keywords": [
@@ -142,7 +150,7 @@
         "type": "technique"
       },
       {
-        "text": "Antoni Gaud\u00ed",
+        "text": "Antoni Gaudí",
         "type": "artist"
       },
       {
@@ -150,7 +158,8 @@
         "type": "medium"
       }
     ],
-    "story": "A private archive in a converted chapel, catalogued by a librarian who insisted every spine face outward in perfect symmetry. The shelving was custom-built by a craftsman who normally worked on cathedral facades\u2014hence the ornamental panels flanking the books, more suited to a reliquary than a reading room. No labels indicate subject matter. Staff who worked there described the middle shelf as \"the one you don't reorganize.\""
+    "story": "A private archive in a converted chapel, catalogued by a librarian who insisted every spine face outward in perfect symmetry. The shelving was custom-built by a craftsman who normally worked on cathedral facades—hence the ornamental panels flanking the books, more suited to a reliquary than a reading room. No labels indicate subject matter. Staff who worked there described the middle shelf as \"the one you don't reorganize.\"",
+    "hash": "461f282248dfb276a7045194d6ed5a95bcb51170deac09c93eaba6b534212f75"
   },
   "010.jpg": {
     "keywords": [
@@ -167,7 +176,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "A private archive in a building that shouldn't have basements but does. The shelf catalogs recordings, not books\u2014reel labels facing out, color-coded by a system only the previous archivist understood. The single hanging lens above tracks whoever stands here too long. Nobody remembers commissioning the murals."
+    "story": "A private archive in a building that shouldn't have basements but does. The shelf catalogs recordings, not books—reel labels facing out, color-coded by a system only the previous archivist understood. The single hanging lens above tracks whoever stands here too long. Nobody remembers commissioning the murals.",
+    "hash": "acd706d18f38c8e2dd8cb376bfbbd5ceae69acee4341457e1b92718b15dc2271"
   },
   "011.jpg": {
     "keywords": [
@@ -184,7 +194,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "A curator's private chamber in a building that no longer exists on any map. The shelf holds five rows of identical spines\u2014no titles, no author names, just uniform gilt bindings that have never been opened. The bonsai on top grows from a pot that's slightly too small for its root system, yet it hasn't died in three hundred years. The two flanking trees are older than the wallpaper, which has been replaced eleven times without disturbing them. Someone dusts this room daily. No one remembers being assigned the task."
+    "story": "A curator's private chamber in a building that no longer exists on any map. The shelf holds five rows of identical spines—no titles, no author names, just uniform gilt bindings that have never been opened. The bonsai on top grows from a pot that's slightly too small for its root system, yet it hasn't died in three hundred years. The two flanking trees are older than the wallpaper, which has been replaced eleven times without disturbing them. Someone dusts this room daily. No one remembers being assigned the task.",
+    "hash": "f33e651b118478ef33ddefa9b80732456b36f5d8bd13ccb511c9843771c542fc"
   },
   "012.jpg": {
     "keywords": [
@@ -201,7 +212,8 @@
         "type": "material"
       }
     ],
-    "story": "The study belonged to a man who catalogued botanical specimens for a museum that closed decades ago. He kept coming in anyway, cataloguing plants that no longer existed except in his index cards. The wall behind the shelf still bears the outline of a mural he painted over one winter\u2014leaves and thorns, copied from a book he never let anyone else read. The single bulb above the shelf burns at all hours; nobody remembers installing a switch for it."
+    "story": "The study belonged to a man who catalogued botanical specimens for a museum that closed decades ago. He kept coming in anyway, cataloguing plants that no longer existed except in his index cards. The wall behind the shelf still bears the outline of a mural he painted over one winter—leaves and thorns, copied from a book he never let anyone else read. The single bulb above the shelf burns at all hours; nobody remembers installing a switch for it.",
+    "hash": "9449bcad23589e48a9e69acc1f1a32b505b386eaeaaccef97e11d2307e5552ab"
   },
   "013.jpg": {
     "keywords": [
@@ -218,7 +230,8 @@
         "type": "material"
       }
     ],
-    "story": "The archive room of a distillery that never legally existed. Every book on these shelves is a fake spine\u2014hollow, holding bottles instead of pages. The crystals growing at the top and scattered mid-shelf aren't decoration; they're byproduct, some reaction between spilled proof and old varnish that nobody's bothered to explain. Whoever ran this place had a sense of humor about hiding things in plain sight, labeling the fake bindings after children's poems."
+    "story": "The archive room of a distillery that never legally existed. Every book on these shelves is a fake spine—hollow, holding bottles instead of pages. The crystals growing at the top and scattered mid-shelf aren't decoration; they're byproduct, some reaction between spilled proof and old varnish that nobody's bothered to explain. Whoever ran this place had a sense of humor about hiding things in plain sight, labeling the fake bindings after children's poems.",
+    "hash": "68fcbc72cdbe32cf263ba4a0224a71ade54eb4aaba5089768bd19268c63e1132"
   },
   "014.jpg": {
     "keywords": [
@@ -235,7 +248,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "The archive room aboard the derelict cataloged specimens by shelf rather than species\u2014five rows, five clearance levels. The two mounted arthropoids flanking the shelf weren't decorative; they were the last curators, preserved mid-climb by whatever stopped the ship's systems. The books themselves are sealed logs, spines uniform because the binding material is grown, not manufactured. Someone lit this room recently. The circular fixture above the shelf isn't a light\u2014it's a lens, still watching for who comes to read."
+    "story": "The archive room aboard the derelict cataloged specimens by shelf rather than species—five rows, five clearance levels. The two mounted arthropoids flanking the shelf weren't decorative; they were the last curators, preserved mid-climb by whatever stopped the ship's systems. The books themselves are sealed logs, spines uniform because the binding material is grown, not manufactured. Someone lit this room recently. The circular fixture above the shelf isn't a light—it's a lens, still watching for who comes to read.",
+    "hash": "a28453455c402baafee314dfecd2cc6c33f0f0b0c0baca8cbf09fabafe667ff0"
   },
   "015.jpg": {
     "keywords": [
@@ -252,7 +266,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "A private archive kept by someone who catalogs dreams instead of books. Each spine's color corresponds to a specific recurring dream state, ordered by frequency of occurrence rather than title. The circular light above isn't decorative\u2014it's a monitoring device, always on, always recording who visits and what they touch."
+    "story": "A private archive kept by someone who catalogs dreams instead of books. Each spine's color corresponds to a specific recurring dream state, ordered by frequency of occurrence rather than title. The circular light above isn't decorative—it's a monitoring device, always on, always recording who visits and what they touch.",
+    "hash": "87f1cefdf552389cb3906da33942ece7ece365c5d29fa4acc33699c916fb9745"
   },
   "016.jpg": {
     "keywords": [
@@ -269,7 +284,8 @@
         "type": "artist"
       }
     ],
-    "story": "The library belongs to a private society that catalogs marriages between mismatched things\u2014East and West, flesh and ornament, symmetry and its violation. The twin carved forms flanking the shelves are said to be a matched pair, though no one who tends the room remembers if they were made together or found separately and forced into correspondence. The books between them are uniform in spine but not in language; borrowing one requires leaving something of equal weight behind. The lamp above has never been changed, though the building has been rebuilt twice."
+    "story": "The library belongs to a private society that catalogs marriages between mismatched things—East and West, flesh and ornament, symmetry and its violation. The twin carved forms flanking the shelves are said to be a matched pair, though no one who tends the room remembers if they were made together or found separately and forced into correspondence. The books between them are uniform in spine but not in language; borrowing one requires leaving something of equal weight behind. The lamp above has never been changed, though the building has been rebuilt twice.",
+    "hash": "e5ff24af7727a494306d2703086d760d30983ab396d3c5b3f16c28abc1628be9"
   },
   "017.jpg": {
     "keywords": [
@@ -286,12 +302,13 @@
         "type": "artist"
       }
     ],
-    "story": "A private archive room in a building that shouldn't have one\u2014the panels flanking the shelf carry carved script no cataloguer has translated, and the single overhead light never flickers or dims, on a timer no one set. The shelf itself holds five rows of identical spines, unmarked, in a language of stitching rather than letters. Visitors report the room is always the same temperature, regardless of season."
+    "story": "A private archive room in a building that shouldn't have one—the panels flanking the shelf carry carved script no cataloguer has translated, and the single overhead light never flickers or dims, on a timer no one set. The shelf itself holds five rows of identical spines, unmarked, in a language of stitching rather than letters. Visitors report the room is always the same temperature, regardless of season.",
+    "hash": "327c100166f62f06810ec46921a90cce97519253004b0f9187539b2ac462515c"
   },
   "018.jpg": {
     "keywords": [
       {
-        "text": "Joan Mir\u00f3",
+        "text": "Joan Miró",
         "type": "artist"
       },
       {
@@ -303,7 +320,8 @@
         "type": "artist"
       }
     ],
-    "story": "A private reading room in a building that shouldn't have one\u2014an archive kept by whoever maintains the two watching figures on either wall. The books are uniform enough to suggest they were never meant to be read individually, only as a set. The lamp stays on regardless of whether anyone's there."
+    "story": "A private reading room in a building that shouldn't have one—an archive kept by whoever maintains the two watching figures on either wall. The books are uniform enough to suggest they were never meant to be read individually, only as a set. The lamp stays on regardless of whether anyone's there.",
+    "hash": "606b1967bad05491447eebfa31458829166d4752e1ad42cba7a1afeca6d69a2a"
   },
   "019.jpg": {
     "keywords": [
@@ -320,7 +338,8 @@
         "type": "setting"
       }
     ],
-    "story": "The archive room beneath the village hall, built after the reactor incident. Every book on these five shelves documents radiation readings from a single well, recorded daily by whoever drew the shift. The wallpaper's pattern was chosen to mimic the isotope decay charts once pinned to these walls\u2014someone found it easier to live with the data as decoration than to look at it directly. The pendant lamp burns continuously; nobody remembers deciding that, but nobody's turned it off in years either."
+    "story": "The archive room beneath the village hall, built after the reactor incident. Every book on these five shelves documents radiation readings from a single well, recorded daily by whoever drew the shift. The wallpaper's pattern was chosen to mimic the isotope decay charts once pinned to these walls—someone found it easier to live with the data as decoration than to look at it directly. The pendant lamp burns continuously; nobody remembers deciding that, but nobody's turned it off in years either.",
+    "hash": "5825b42d32c3a60768eff4270b3af04f16c543442601e527bb8a9b6d027eecfe"
   },
   "020.jpg": {
     "keywords": [
@@ -337,7 +356,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "The archive room beneath the gallery, where restorers store the pigment ledgers nobody wants upstairs. Each spine logs a formula\u2014linseed ratios, drying times, the smell of a particular varnish that made three conservators quit that decade. The single lamp runs on a timer tied to the building's original wiring, not the renovation. Nobody remembers who catalogued them by scent rather than date."
+    "story": "The archive room beneath the gallery, where restorers store the pigment ledgers nobody wants upstairs. Each spine logs a formula—linseed ratios, drying times, the smell of a particular varnish that made three conservators quit that decade. The single lamp runs on a timer tied to the building's original wiring, not the renovation. Nobody remembers who catalogued them by scent rather than date.",
+    "hash": "7f0873a9d4fff91e1b04ad1db79bab0df54690ab17f41d2232d42646600706c9"
   },
   "021.jpg": {
     "keywords": [
@@ -354,7 +374,8 @@
         "type": "descriptive"
       }
     ],
-    "story": "A private archive maintained by a collector who trades exclusively in symmetry\u2014texts, masks, and light fixtures acquired only when they come in matched pairs. The bookshelf itself was rejected twice before being accepted into the collection, on grounds no one else was permitted to examine."
+    "story": "A private archive maintained by a collector who trades exclusively in symmetry—texts, masks, and light fixtures acquired only when they come in matched pairs. The bookshelf itself was rejected twice before being accepted into the collection, on grounds no one else was permitted to examine.",
+    "hash": "5929aef0fa00486686f8dc203636849cf3a89f0c6a5e8d522ed2e76851668881"
   },
   "022.jpg": {
     "keywords": [
@@ -371,7 +392,8 @@
         "type": "artist"
       }
     ],
-    "story": "A hidden archive behind a condemned wall, sealed after the town's disappearance. The circular device above the shelf hums faintly when someone reads the spines aloud in order. The mural beneath the paint was here first\u2014someone painted over it, badly, then built the shelf to hide what remained. No one currently living knows what the blue light does when all the books are removed at once."
+    "story": "A hidden archive behind a condemned wall, sealed after the town's disappearance. The circular device above the shelf hums faintly when someone reads the spines aloud in order. The mural beneath the paint was here first—someone painted over it, badly, then built the shelf to hide what remained. No one currently living knows what the blue light does when all the books are removed at once.",
+    "hash": "a1cccce4ee18c87ac17a948de0948713a08da60521a9e0504e8a8cedb7017567"
   },
   "023.jpg": {
     "keywords": [
@@ -384,11 +406,12 @@
         "type": "descriptive"
       },
       {
-        "text": "Joan Mir\u00f3",
+        "text": "Joan Miró",
         "type": "artist"
       }
     ],
-    "story": "A private study in a research station built into a reef wall. The wallpaper's molecular diagrams mark abandoned attempts to classify something that resists classification\u2014a specimen, rendered crudely above the shelf, that keeps changing shape between observations. The books are the station's log, decades of entries by researchers who stopped agreeing on what they were looking at. The lamp stays on because the last person to leave didn't plan on being gone long."
+    "story": "A private study in a research station built into a reef wall. The wallpaper's molecular diagrams mark abandoned attempts to classify something that resists classification—a specimen, rendered crudely above the shelf, that keeps changing shape between observations. The books are the station's log, decades of entries by researchers who stopped agreeing on what they were looking at. The lamp stays on because the last person to leave didn't plan on being gone long.",
+    "hash": "ec5285b7c734ff2b6175f2dff56c6e791b2d959f288d5024e4236389f4aa8333"
   },
   "024.jpg": {
     "keywords": [
@@ -405,7 +428,8 @@
         "type": "movement/genre/style"
       }
     ],
-    "story": "A private archive maintained by a defunct design house, cataloging every silhouette ever approved for production. The pendant lamp overhead is the only fixture still wired\u2014everything else in the room runs on battery or memory. One volume on the second shelf sits slightly forward, pulled and never fully replaced, marking the last entry anyone bothered to check."
+    "story": "A private archive maintained by a defunct design house, cataloging every silhouette ever approved for production. The pendant lamp overhead is the only fixture still wired—everything else in the room runs on battery or memory. One volume on the second shelf sits slightly forward, pulled and never fully replaced, marking the last entry anyone bothered to check.",
+    "hash": "a82c0858762a872b8f48d3209b18387afde335bc36a1fa1ef79802bae6ef7b57"
   },
   "025.jpg": {
     "keywords": [
@@ -422,7 +446,8 @@
         "type": "movement/genre/style"
       }
     ],
-    "story": "A private study in an institute that catalogs impossible organisms. The circular device above the shelf records the reading habits of whoever stands before it, cross-referenced against radiolarian symmetry patterns etched into the walls\u2014patterns that shift slightly whenever a book is removed. The librarian insists this is coincidental."
+    "story": "A private study in an institute that catalogs impossible organisms. The circular device above the shelf records the reading habits of whoever stands before it, cross-referenced against radiolarian symmetry patterns etched into the walls—patterns that shift slightly whenever a book is removed. The librarian insists this is coincidental.",
+    "hash": "771281c34fb847cc244a005e53f9855121b5fc16e472947c67fe902f3cabaebf"
   },
   "026.jpg": {
     "keywords": [
@@ -439,6 +464,7 @@
         "type": "artist"
       }
     ],
-    "story": "A private study built into a cliffside archive, where the shelves themselves were grown rather than carved\u2014wood trained over decades to hold books without nails or glue. The murals flanking the case aren't decoration; they're windows into the two valleys the archive once served before the mountain split them apart. The lamp above marks where a third door used to be."
+    "story": "A private study built into a cliffside archive, where the shelves themselves were grown rather than carved—wood trained over decades to hold books without nails or glue. The murals flanking the case aren't decoration; they're windows into the two valleys the archive once served before the mountain split them apart. The lamp above marks where a third door used to be.",
+    "hash": "b03619ada9cf47fecdecfb5352516ecb24444076d3938b82a8fd91b0ff26f3ff"
   }
 }
