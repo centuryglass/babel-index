@@ -11,6 +11,7 @@
     "generate:figures": "node tools/center-placement/hexagon-plan.mjs",
     "generate:mips": "node packages/pipeline/index.mjs",
     "generate:embeddings": "node tools/embed/embed.mjs",
+    "upload:r2": "node tools/upload/upload-r2.mjs",
     "test": "node --test",
     "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
     "lint": "eslint .",
@@ -27,6 +28,7 @@
     "@huggingface/transformers": "^4.2.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1116.0",
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.0",
