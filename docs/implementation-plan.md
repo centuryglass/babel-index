@@ -4,13 +4,6 @@ Pending task list. Remove tasks as they are completed, the code and git logs wil
 serve as completed task history.
 
 ## Map interface:
- - Replace the "search" button with a simple icon, orbited by an arrow that
-   points to the center. Put it in the same corner, deliberately *not* part
-   of the panel.
- - The left-side panel must go as a default. Add a "debug" parameter that
-   enables it, along with the cache statistics at the bottom. Everything
-   remaining in it will become either fully diegetic, or should only be
-   configured at launch.
  - Add one of those circled "x" icons to the right side of the search bar.
    Clicking it clears the current search, returning room order to random.
  - Inpaint the "Catalog" volume in the center tile to give it a more
@@ -43,6 +36,9 @@ serve as completed task history.
 - No actual screen reader testing has happened yet. Learn orca and test
   manually. See accessibility-plan.md for more details on what to check, and
   other lingering questions.
+- The ranked results listbox (accessibility-plan.md §3.2) now lives in the
+  dev panel, which is `?debug`-only. Give it a non-debug home before this
+  matters for anyone relying on the lossless reading of a search.
 
 ## Hosting:
 - I really need to get the real dataset up on Cloudflare R2. Build a pipeline

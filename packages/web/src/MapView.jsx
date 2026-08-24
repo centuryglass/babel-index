@@ -26,6 +26,8 @@ import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import { describeBook, BOOK_RECTS } from './center.js';
 import { TOUCH_DEBUG } from './touchDebug.js';
+import { DEBUG } from './debug.js';
+import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.jsx';
 
 /**
  * Each book's position inside the shelf container, as percentages.
@@ -48,6 +50,7 @@ export function MapView({
   canvasRef,
   searchFormRef,
   booksRef,
+  searchArrowRef,
   manifest,
   total,
   described,
@@ -211,18 +214,29 @@ export function MapView({
           ) : null
         )}
       </div>
+      {/*
+        The search affordance - not part of the dev panel below (it has to
+        survive `?debug` being off, since the panel does not) and not
+        diegetic either; see `SearchIcon.jsx`. The arrow is a separate layer
+        so `useMapRenderer` can rotate it every frame to point at wherever the
+        center tile actually is on screen, which is why it needs its own ref.
+      */}
+      <button
+        type="button"
+        className="search-trigger search-icon-button"
+        onClick={onGoToSearch}
+        aria-label="search the library"
+      >
+        <SearchGlyph className="search-icon-glyph" />
+        <SearchOrbitArrow ref={searchArrowRef} className="search-icon-arrow" />
+      </button>
+      {DEBUG && (
       <div className="panel">
         <h1>The Indexing of Babel</h1>
         <p className="sub">
           offline · {total} rooms in {manifest.directory.split('/').slice(-1)[0]}
           {described > 0 && <> · {described} described</>}
         </p>
-
-        <div className="row">
-          <button className="search-trigger" onClick={onGoToSearch} aria-label="search the library">
-            🔍 search
-          </button>
-        </div>
 
         {/*
           The ranked listbox: the lossless reading of a search, next to the map's
@@ -354,7 +368,8 @@ export function MapView({
           {!status && 'drag to pan, scroll to zoom. right-click a room.'}
         </div>
       </div>
-      <div className="hud" id="hud" />
+      )}
+      {DEBUG && <div className="hud" id="hud" />}
       {TOUCH_DEBUG && <div className="touchlog" id="touchlog" />}
       </div>
     </>
