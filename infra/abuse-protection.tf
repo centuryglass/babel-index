@@ -19,18 +19,19 @@ resource "cloudflare_ruleset" "rate_limit_assets" {
   kind        = "zone"
   phase       = "http_ratelimit"
 
-  rules {
+  rules = [{
     ref         = "rl_assets_by_ip"
     description = "Rate limit corpus asset requests by IP"
     expression  = "(http.host eq \"${var.assets_hostname}\")"
     action      = "block"
-    ratelimit {
+    ratelimit = {
       characteristics     = ["cf.colo.id", "ip.src"]
       period              = var.rate_limit_period_seconds
       requests_per_period = var.rate_limit_requests_per_period
       mitigation_timeout  = var.rate_limit_mitigation_timeout_seconds
+      counting_expression = "(http.host eq \"${var.assets_hostname}\" and not cf.cache_status in {\"HIT\" \"REVALIDATED\"})"
     }
-  }
+  }]
 }
 
 resource "cloudflare_ruleset" "cache_assets" {
@@ -41,26 +42,35 @@ resource "cloudflare_ruleset" "cache_assets" {
   kind        = "zone"
   phase       = "http_request_cache_settings"
 
-  rules {
+  rules = [{
     ref         = "cache_assets_hostname"
     description = "Cache everything served from the corpus hostname"
     expression  = "(http.host eq \"${var.assets_hostname}\")"
     action      = "set_cache_settings"
-    action_parameters {
+    action_parameters = {
       cache = true
-      edge_ttl {
+      edge_ttl = {
         mode    = "override_origin"
         default = var.cache_edge_ttl_seconds
       }
     }
-  }
+  }]
 }
 
-# TODO(verify before enabling): `alert_type` has shifted between provider
-# versions - confirm "billing_usage_alert" is still current against the
-# cloudflare/cloudflare docs for the pinned version in versions.tf before
-# applying. If it's wrong, `terraform plan` will fail loudly rather than
-# apply something silently different.
+# `alert_type` has shifted between provider versions before - confirm
+# "billing_usage_alert" is still current against the cloudflare/cloudflare
+# docs for the pinned version in versions.tf before applying. If it's wrong,
+# `terraform plan` will fail loudly rather than apply something silently
+# different.
+#
+# `filters.product` has no documented list of valid values, and the API
+# rejects guesses ("R2", "R2 Storage") with error 17106 "Invalid product
+# selection" - Cloudflare community reports suggest the products list is
+# only populated for accounts already metered on that product. Left disabled
+# (billing_alert_email_integration_id unset in terraform.tfvars) in favor of
+# a manually-configured account-wide alert. Find the real product string
+# before turning this back on - check the dashboard's notification-creation
+# form's network request, or retry once R2 usage is nonzero.
 resource "cloudflare_notification_policy" "r2_spend_alert" {
   count       = var.billing_alert_email_integration_id != null ? 1 : 0
   account_id  = var.cloudflare_account_id
@@ -69,7 +79,14 @@ resource "cloudflare_notification_policy" "r2_spend_alert" {
   enabled     = true
   alert_type  = "billing_usage_alert"
 
-  email_integration {
-    id = var.billing_alert_email_integration_id
+  filters = {
+    product = ["R2 Storage"]
+    limit   = [tostring(var.billing_alert_limit_usd)]
+  }
+
+  mechanisms = {
+    email = [{
+      id = var.billing_alert_email_integration_id
+    }]
   }
 }
