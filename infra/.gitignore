@@ -1,0 +1,23 @@
+# Real credentials and per-environment values. Copy terraform.tfvars.example
+# instead of editing this into existence.
+terraform.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Local Terraform state - this stack is applied locally, not from CI, so
+# state lives on the machine that ran `terraform apply`, not in git.
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+crash.log
+crash.*.log
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+.terraformrc
+terraform.rc
