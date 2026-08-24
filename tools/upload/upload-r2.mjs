@@ -23,17 +23,19 @@
  * A previous run's manifest - key -> sha256 of what was uploaded under that
  * key - is stored in the bucket at `<prefix>/upload-manifest.json`. Every
  * local file this corpus touches (room images at every level, metadata.json,
- * the embeddings blob and sidecar, the shared tiles) is hashed fresh; a file
- * whose hash matches the manifest's record for its key is skipped. Nothing
- * is deleted from R2, and no other tool reads the manifest - it exists only
- * so a rerun after touching a handful of images costs a handful of PUTs, not
- * the whole corpus. See tools/upload/lib.mjs for the pure decision logic.
+ * the embeddings blob and sidecar, the shared tiles) is hashed fresh, with
+ * the same `contentHash()` the pyramid generator uses (packages/pipeline/
+ * mips.mjs) rather than a second sha256-of-bytes implementation; a file whose
+ * hash matches the manifest's record for its key is skipped. Nothing is
+ * deleted from R2, and no other tool reads the manifest - it exists only so a
+ * rerun after touching a handful of images costs a handful of PUTs, not the
+ * whole corpus. See tools/upload/lib.mjs for the pure decision logic.
  */
 import { readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
-import { createHash } from 'node:crypto';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { scanDirectory } from '../../packages/server/scan.mjs';
+import { contentHash } from '../../packages/pipeline/mips.mjs';
 import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.mjs';
 
 const MANIFEST_NAME = 'upload-manifest.json';
@@ -68,10 +70,6 @@ function makeClient() {
       secretAccessKey: requireEnv('R2_SECRET_ACCESS_KEY'),
     },
   });
-}
-
-async function contentHash(path) {
-  return createHash('sha256').update(await readFile(path)).digest('hex');
 }
 
 /** The previous run's manifest, or {} if there isn't one yet (first run). */
