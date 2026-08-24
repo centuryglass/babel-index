@@ -5,7 +5,7 @@ import {
   cellHash,
   createLayout,
   embeddingScores,
-  genericVariantAt,
+  genericIndexAt,
   isContentSlot,
   rankByEmbedding,
   shuffledOrder,
@@ -25,7 +25,7 @@ test('slot density tracks contentRatio', () => {
   }
 });
 
-test('layout places every room and orders by distance from centre', () => {
+test('layout places every room and orders by distance from center', () => {
   const L = createLayout({ roomCount: 512, contentRatio: 0.2, seed: 3 });
   assert.equal(L.slots.length, 512);
   for (let i = 1; i < L.slots.length; i++)
@@ -40,11 +40,11 @@ test('layout places every room and orders by distance from centre', () => {
   assert.equal(L.slots[0].d, best);
 });
 
-test('the origin is the centre room, never a corpus slot', () => {
+test('the origin is the center room, never a corpus slot', () => {
   const L = createLayout({ roomCount: 512, contentRatio: 0.9, seed: 3 });
   assert.equal(isContentSlot(0, 0, { seed: 3, contentRatio: 0.9 }), false);
   assert.ok(!L.slots.some((s) => s.x === 0 && s.y === 0));
-  assert.deepEqual(L.roomAt(0, 0, shuffledOrder(512, 1)), { centre: true });
+  assert.deepEqual(L.roomAt(0, 0, shuffledOrder(512, 1)), { center: true });
   assert.equal(L.rankOf(0, 0), -1);
 });
 
@@ -89,38 +89,38 @@ test('cells outside the corpus are generic', () => {
   let generic = 0;
   for (let y = -6; y <= 6; y++)
     for (let x = -6; x <= 6; x++) if (L.roomAt(x, y, order).generic) generic++;
-  assert.ok(generic > 0, 'most of the map is the base room');
+  assert.ok(generic > 0, 'most of the map is the generic room');
   const far = L.roomAt(9999, 9999, order);
   assert.equal(far.generic, true);
 });
 
-// --- wallpaper variants -----------------------------------------------------
+// --- generic tiles -----------------------------------------------------
 
-test('a variant is a stable index in range, and -1 when there are none', () => {
+test('a generic index is a stable value in range, and -1 when there are none', () => {
   for (const count of [1, 3, 9]) {
     for (let y = -20; y <= 20; y++)
       for (let x = -20; x <= 20; x++) {
-        const v = genericVariantAt(x, y, { seed: 1, count });
+        const v = genericIndexAt(x, y, { seed: 1, count });
         assert.ok(Number.isInteger(v) && v >= 0 && v < count, `${x},${y} count ${count} -> ${v}`);
-        assert.equal(genericVariantAt(x, y, { seed: 1, count }), v, 'and it is stable');
+        assert.equal(genericIndexAt(x, y, { seed: 1, count }), v, 'and it is stable');
       }
   }
-  assert.equal(genericVariantAt(3, 4, { seed: 1, count: 0 }), -1, 'no variants -> fall back to the base tile');
+  assert.equal(genericIndexAt(3, 4, { seed: 1, count: 0 }), -1, 'no generic tiles -> fall back to the center tile');
 });
 
-test('the variant a cell shows does not depend on the search order', () => {
+test('the generic tile a cell shows does not depend on the search order', () => {
   // This is the property the rearrangement animation leans on: a reorder never
   // changes a generic cell's face, so the board can treat every generic as one
   // interchangeable value.
-  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, variantCount: 6, variantSeed: 3 });
+  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, genericCount: 6, genericSeed: 3 });
   for (let y = -8; y <= 8; y++)
     for (let x = -8; x <= 8; x++)
-      assert.equal(L.variantAt(x, y), genericVariantAt(x, y, { seed: 3, count: 6 }));
+      assert.equal(L.genericIndexAt(x, y), genericIndexAt(x, y, { seed: 3, count: 6 }));
 });
 
-test('the variant seed is independent of the slot seed', () => {
-  // Sharing them would correlate which cells are slots with which wallpaper they
-  // wear, and the two patterns would show through each other.
+test('the generic seed is independent of the slot seed', () => {
+  // Sharing them would correlate which cells are slots with which generic tile
+  // they wear, and the two patterns would show through each other.
   const span = 60;
   let sameAsSlotHash = 0;
   let total = 0;
@@ -128,26 +128,26 @@ test('the variant seed is independent of the slot seed', () => {
     for (let x = -span; x <= span; x++) {
       if (x === 0 && y === 0) continue;
       total++;
-      // A cell's variant (seed A) vs. whether the slot hash (seed B) is in its
-      // low band: if the two seeds moved together these would be locked.
-      const variant = genericVariantAt(x, y, { seed: 5, count: 4 });
+      // A cell's generic index (seed A) vs. whether the slot hash (seed B) is in
+      // its low band: if the two seeds moved together these would be locked.
+      const generic = genericIndexAt(x, y, { seed: 5, count: 4 });
       const slotBand = Math.floor(cellHash(x, y, 5) * 4); // same seed, to contrast
-      if (variant === slotBand) sameAsSlotHash++;
+      if (generic === slotBand) sameAsSlotHash++;
     }
   // Same seed and same bucketing is of course identical; the point of the assert
-  // is the opposite direction - a DIFFERENT variant seed decorrelates.
+  // is the opposite direction - a DIFFERENT generic seed decorrelates.
   assert.equal(sameAsSlotHash, total, 'same seed and bucketing is identical, as a control');
   let matches = 0;
   for (let y = -span; y <= span; y++)
     for (let x = -span; x <= span; x++) {
       if (x === 0 && y === 0) continue;
-      const variant = genericVariantAt(x, y, { seed: 5, count: 4 });
-      const other = genericVariantAt(x, y, { seed: 6, count: 4 });
-      if (variant === other) matches++;
+      const generic = genericIndexAt(x, y, { seed: 5, count: 4 });
+      const other = genericIndexAt(x, y, { seed: 6, count: 4 });
+      if (generic === other) matches++;
     }
   // Two independent seeds agree about a quarter of the time by chance, nowhere
   // near the lockstep above.
-  assert.ok(matches / total < 0.4, `variant seeds are not independent: ${(matches / total).toFixed(2)}`);
+  assert.ok(matches / total < 0.4, `generic seeds are not independent: ${(matches / total).toFixed(2)}`);
 });
 
 test('resistance is flat inside the region and falls off outside', () => {
@@ -276,7 +276,7 @@ test('no certainty is the uniform map, cell for cell', () => {
   assert.equal(graded(hunch).gradedCount, 0);
 });
 
-test('certain ranks take the cells nearest the centre', () => {
+test('certain ranks take the cells nearest the center', () => {
   // Five exact matches, at peak density: they should land in the five nearest
   // cells there are, not the five nearest cells the hash allows.
   const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 5 ? 1 : 0));

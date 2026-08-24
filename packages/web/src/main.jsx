@@ -27,7 +27,7 @@ import {
   pickTags,
   bookAtPoint,
   bookNeighbour,
-  centreCellRect,
+  centerCellRect,
   searchBoxScreenRect,
   isSearchBoxUsable,
   searchBoxAtPoint,
@@ -35,10 +35,10 @@ import {
   overlapsViewport,
   BOOK_COUNT,
   HISTORY_SLOT_COUNT,
-  CENTRE_OPENING_RECT,
-} from './centre.js';
+  CENTER_OPENING_RECT,
+} from './center.js';
 import { CELL_ASPECT, pxPerCell, fitZoom, cursorCell, pickGranularity } from './camera.js';
-import { createTileCache, CENTRE, variantId } from './tiles.js';
+import { createTileCache, CENTER, genericId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
 import { createSlideshow, createSlideRenderer } from './slide.js';
@@ -64,12 +64,12 @@ function App() {
 
 function Library({ manifest }) {
   const canvasRef = useRef(null);
-  // The live search field lives on the centre tile, not in the panel; its
+  // The live search field lives on the center tile, not in the panel; its
   // position is driven imperatively from the render loop below, the same way
   // the canvas itself is - see `positionSearchBox`.
   const searchFormRef = useRef(null);
   // The book buttons' container - one absolutely-positioned box matching the
-  // centre cell, positioned imperatively from the render loop exactly as the
+  // center cell, positioned imperatively from the render loop exactly as the
   // search field is. The forty buttons inside it are laid out in percentages,
   // so this is the only per-frame geometry the shelf costs.
   const booksRef = useRef(null);
@@ -85,7 +85,7 @@ function Library({ manifest }) {
   // nothing has to be rebuilt on the way back. See `docs/catalog-plan.md` §2.
   const [mode, setMode] = useState(INITIAL_MODE);
   // Mounted through the exit animation, so the catalog can fold back into the
-  // centre tile rather than vanishing. Cleared when the animation lands.
+  // center tile rather than vanishing. Cleared when the animation lands.
   const [leaving, setLeaving] = useState(false);
 
   // How the catalog advances, and one of the two things that survive a reload.
@@ -113,7 +113,7 @@ function Library({ manifest }) {
   const [metadata, setMetadata] = useState(null);
   // Search history, newest first, one book per entry - and one of the two
   // things in this app that survives a reload (see `persist.js` for why so few
-  // do). It is not only a convenience: this is what titles the centre room's
+  // do). It is not only a convenience: this is what titles the center room's
   // shelf, so persisting it makes the wall of books a record of what this
   // reader has asked the library rather than something that resets to keyword
   // tags every session.
@@ -179,13 +179,13 @@ function Library({ manifest }) {
   // megabyte of string work.
   const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
-  // The centre room's book titles. Every book shows a stable random corpus
+  // The center room's book titles. Every book shows a stable random corpus
   // keyword until history reaches it: past searches fill the wall newest first,
   // top left to bottom right. Reserved override books are never overwritten.
   // `assignTitles` is pure, so this is a memo, not per-frame work.
   const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
   const centreSlots = useMemo(
-    () => assignTitles({ history, tags, overrides: CENTRE_OVERRIDES }),
+    () => assignTitles({ history, tags, overrides: CENTER_OVERRIDES }),
     [history, tags]
   );
 
@@ -207,15 +207,15 @@ function Library({ manifest }) {
   // drag, and with a non-square cell those are not the same thing.
   //
   // The search's certainty profile rides in as `density`, which is what makes
-  // the matches cluster toward the centre rather than scatter at the slider's
+  // the matches cluster toward the center rather than scatter at the slider's
   // ratio. No search means no profile, and no profile means the uniform map -
   // so clearing the box restores it exactly, without a second code path.
-  // How many wallpaper variants the corpus shipped, and the seed that scatters
+  // How many generic tiles the corpus shipped, and the seed that scatters
   // them. Both are positional and order-independent, so they never change under
   // a search or a reorder - which is why the rearrangement can treat every
   // generic cell as one interchangeable value.
-  const variantCount = manifest.base?.variants?.length ?? 0;
-  const variantSeed = config.map.genericVariantSeed;
+  const genericCount = manifest.shared?.generic?.length ?? 0;
+  const genericSeed = config.map.genericSeed;
 
   const layout = useMemo(
     () =>
@@ -224,13 +224,13 @@ function Library({ manifest }) {
         contentRatio,
         seed,
         aspect: CELL_ASPECT,
-        variantCount,
-        variantSeed,
+        genericCount,
+        genericSeed,
         density: result?.certainty
           ? { ...config.search.density, certainty: result.certainty }
           : null,
       }),
-    [roomCount, contentRatio, seed, total, result, config, variantCount, variantSeed]
+    [roomCount, contentRatio, seed, total, result, config, genericCount, genericSeed]
   );
 
   const order = useMemo(() => {
@@ -258,12 +258,12 @@ function Library({ manifest }) {
       urlFor,
       onLoad: () => requestDraw(),
     });
-    // The base tiles are rule 1's floor: pinned and preloaded so every cell has
+    // The shared tiles are rule 1's floor: pinned and preloaded so every cell has
     // something to draw however little of its own room has arrived. That is now
-    // the blank centre plus one entry per wallpaper variant - a bounded handful,
+    // the blank center plus one entry per generic tile - a bounded handful,
     // so pinning them all still fits under the level's budget. They are served
     // flat (level 0), so preload and pin there rather than at the coarsest rung.
-    for (const id of [CENTRE, ...(manifest.base?.variants ?? []).map((_, i) => variantId(i))]) {
+    for (const id of [CENTER, ...(manifest.shared?.generic ?? []).map((_, i) => genericId(i))]) {
       tiles.pin(id);
       tiles.request(id, 0);
     }
@@ -383,7 +383,7 @@ function Library({ manifest }) {
     };
   }, [result, config]);
 
-  // A tap selects a book on the centre room. Stable identity - so the pointer
+  // A tap selects a book on the center room. Stable identity - so the pointer
   // listeners are not re-bound every render - over a ref that always holds the
   // latest logic, since the handler closes over `search` and `centreSlots`,
   // which are redefined below and on every render.
@@ -403,15 +403,15 @@ function Library({ manifest }) {
   // stays answerable without a USB cable.
   const onDebug = useMemo(() => (TOUCH_DEBUG ? appendTouchLog : undefined), []);
 
-  // Where the map opens: centred on the centre room's bookshelf and zoomed so it
+  // Where the map opens: centered on the center room's bookshelf and zoomed so it
   // fills the display, rather than at a fixed zoom that is too far out on a phone
   // and too far in on a wide monitor. Capped at the tile's NATIVE width so a page
   // never loads already upscaled - a reader can still zoom to the 2x ceiling by
-  // hand, and this cap rises once the centre tile earns a finer pyramid rung.
+  // hand, and this cap rises once the center tile earns a finer pyramid rung.
   // Computed once at mount from the viewport; a resize afterwards is the reader's
   // camera to move, not ours, so this deliberately does not track window size.
   const opening = useMemo(() => {
-    const rect = CENTRE_OPENING_RECT;
+    const rect = CENTER_OPENING_RECT;
     const zoom = Math.min(
       BASE_TILE.w,
       fitZoom({
@@ -439,19 +439,19 @@ function Library({ manifest }) {
     onDebug,
   });
 
-  // Where the centre tile is on screen, and whether each of the two overlays it
+  // Where the center tile is on screen, and whether each of the two overlays it
   // carries - the live search field and the book buttons - is currently usable
   // there. One computation, because both the render loop (to position and
   // show/hide them) and the panel's search trigger (to decide whether to fly
   // home first) need it and neither should restate the other's notion of
   // "usable".
   //
-  // A rearrangement disqualifies both: mid-slide the centre tile is drawn from
+  // A rearrangement disqualifies both: mid-slide the center tile is drawn from
   // the animation's own board at a camera this function knows nothing about, so
   // an overlay placed from the live camera would sit over the wrong pixels.
   const centreOverlay = useCallback(
     (w, h) => {
-      const cellRect = centreCellRect(cam.current, { width: w, height: h });
+      const cellRect = centerCellRect(cam.current, { width: w, height: h });
       const box = searchBoxScreenRect(cellRect);
       const settled = !anim.current;
       return {
@@ -470,7 +470,7 @@ function Library({ manifest }) {
 
   // --- the keyboard cursor ---------------------------------------------------
   //
-  // The cell under the camera centre (accessibility-plan.md §4.2), and
+  // The cell under the camera center (accessibility-plan.md §4.2), and
   // DERIVED rather than separately tracked - that definition is the whole
   // design, so anything that moves the camera moves the cursor with it and
   // there is no second copy that can drift out of step. That includes the
@@ -582,7 +582,7 @@ function Library({ manifest }) {
    *
    * Read after the camera has settled rather than before, so the cursor it
    * names is the one the reader actually ends up at: an animated rearrangement
-   * parks the camera on the centre first, and saying the cell they left would
+   * parks the camera on the center first, and saying the cell they left would
    * be describing somewhere they are no longer standing.
    */
   const announceArrangement = useCallback(() => {
@@ -607,7 +607,7 @@ function Library({ manifest }) {
   // exactly one tab stop - while leaving them real, interactive elements a
   // touch screen reader's swipe navigation reaches regardless of tabindex.
   const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
-  const cursorEntry = cursorRoom.centre || cursorRoom.generic ? null : metadata?.[cursorRoom.id] ?? null;
+  const cursorEntry = cursorRoom.center || cursorRoom.generic ? null : metadata?.[cursorRoom.id] ?? null;
   // Named here rather than in the view, so `describeRoom` has exactly one
   // caller per reading of the corpus and the map cannot drift from the catalog
   // about what a room is called.
@@ -690,7 +690,7 @@ function Library({ manifest }) {
         keyboardUsed.current = true;
         // Flies to the CURSOR's own cell at a new zoom, which keeps the
         // cursor fixed across the zoom the way the old pixel-anchored
-        // `zoomBy` did, and lands the camera exactly cell-centred.
+        // `zoomBy` did, and lands the camera exactly cell-centered.
         //
         // The zoom is built off `flightTarget()`, not `cam.current.zoom` -
         // `cam.current` is the INTERPOLATED value, which a flight in progress
@@ -735,7 +735,7 @@ function Library({ manifest }) {
         // a click, applied here to a keypress.
         const here = cursorNow();
         const at = layout.roomAt(here.x, here.y, order);
-        if (at.centre || at.generic) return;
+        if (at.center || at.generic) return;
         e.preventDefault();
         const canvas = canvasRef.current;
         const at2 = canvas
@@ -777,7 +777,7 @@ function Library({ manifest }) {
   /**
    * Slide the library from one arrangement into another.
    *
-   * The camera is parked on the centre at the opening zoom first, and stays
+   * The camera is parked on the center at the opening zoom first, and stays
    * there: the plan is made against exactly the cells that are on screen, and
    * the guarantee it offers - that nothing is ever seen to teleport - is a
    * guarantee about that rectangle. Returns false when the change cannot be
@@ -882,7 +882,7 @@ function Library({ manifest }) {
     // animated legally.
     //
     // The catalog says what happened in its own voice instead: the arrangement
-    // sentence talks about clustering near a centre this reading does not have.
+    // sentence talks about clustering near a center this reading does not have.
     if (mode !== 'map') {
       animateNext.current = false;
       const note = pendingNote.current;
@@ -971,7 +971,7 @@ function Library({ manifest }) {
   };
 
   // The panel's one remaining search affordance: reach the live field on the
-  // centre tile. If it is already on screen and legible, just focus it -
+  // center tile. If it is already on screen and legible, just focus it -
   // otherwise fly home to the opening view first, the same framing the map
   // loads on, and focus once landed. A dropped flight (the reader grabbed the
   // map mid-flight) leaves the field alone rather than fighting for focus.
@@ -1033,24 +1033,24 @@ function Library({ manifest }) {
   // rather than an element - are still attached to a canvas that never went
   // away.
   //
-  // The animation is a FLIP on ONE element. The centre tile is what the map is
+  // The animation is a FLIP on ONE element. The center tile is what the map is
   // framed on and what the catalog's first row shows, so folding one into the
   // other is a transform on that row's thumbnail while the map cross-fades,
   // rather than anything the renderer has to know about.
   const catalogScrollRef = useRef(null);
   const firstTileRef = useRef(null);
-  // Where the centre tile was on the map when the switch began, or null if it
+  // Where the center tile was on the map when the switch began, or null if it
   // was off screen - a reader who panned away has nothing to fold from, and the
   // transition degrades to a cross-fade rather than flying in from a corner.
   const flipFrom = useRef(null);
 
-  /** The centre cell's screen rect, or null if none of it is in view. */
+  /** The center cell's screen rect, or null if none of it is in view. */
   const centreRectNow = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    const rect = centreCellRect(cam.current, { width: w, height: h });
+    const rect = centerCellRect(cam.current, { width: w, height: h });
     return overlapsViewport(rect, w, h) ? rect : null;
   }, [cam]);
 
@@ -1211,13 +1211,13 @@ function Library({ manifest }) {
     booksRef.current?.querySelector(`[data-book="${next}"]`)?.focus();
   };
 
-  // Selecting a book on the centre room. Off the centre cell or on an empty
+  // Selecting a book on the center room. Off the center cell or on an empty
   // book, nothing happens - the tap is not otherwise claimed.
   tapRef.current = (px, py, camera) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
-    const cell = centreCellRect(camera, rect);
+    const cell = centerCellRect(camera, rect);
 
     // A tap on the live search field focuses it - checked before the books,
     // since the box sits above the shelf and never overlaps one. Routing
@@ -1372,7 +1372,7 @@ const RESULTS_WINDOW = 50;
 const OPENING_MARGIN = 0.94;
 
 /**
- * Books on the centre shelf with a distinct function, reserved by slot index.
+ * Books on the center shelf with a distinct function, reserved by slot index.
  *
  * The seam the concept asks for - "certain books will have distinct functions,
  * e.g. displaying an artist's statement" - built so history can never overwrite
@@ -1382,11 +1382,11 @@ const OPENING_MARGIN = 0.94;
  * Slot 0 is the top-left book, reserved before history fills the wall, and it
  * opens the catalog - the corpus read as a list rather than as a map. That it
  * is a BOOK is the point: the way out of the map is an object in the room,
- * which is the same argument that put the search field on the centre tile.
+ * which is the same argument that put the search field on the center tile.
  * `assignTitles` displaces history past a reserved slot rather than writing
  * over it, so the shelf simply starts one book later.
  */
-const CENTRE_OVERRIDES = {
+const CENTER_OVERRIDES = {
   0: { text: 'the catalog', action: 'catalog' },
 };
 

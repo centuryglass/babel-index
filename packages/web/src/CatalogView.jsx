@@ -32,7 +32,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { describeRoom } from '../../map/describe.js';
-import { describeBook } from './centre.js';
+import { describeBook } from './center.js';
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import {
@@ -47,7 +47,7 @@ import {
   windowFor,
   storyLines,
 } from './catalog.js';
-import { CENTRE } from './tiles.js';
+import { CENTER } from './tiles.js';
 
 /**
  * How wide a thumbnail is, from the width the list has to spend.
@@ -138,7 +138,7 @@ export function CatalogView({
   const centreRowRef = useRef(null);
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
-  // The centre row's real height. It is the ONE row allowed to size itself -
+  // The center row's real height. It is the ONE row allowed to size itself -
   // it holds the whole shelf, forty titles that wrap to as many lines as the
   // width needs, and clipping them to a tile's height would hide the newest
   // searches. It can be variable precisely because it sits outside the paging
@@ -291,24 +291,24 @@ export function CatalogView({
       <div className="catalog-scroll" ref={scrollRef} onScroll={onScroll}>
         <ul className="catalog-list">
           {/*
-            Row 0 is the centre room, and its right-hand column is the shelf -
+            Row 0 is the center room, and its right-hand column is the shelf -
             the same forty slots `assignTitles` returns, as ordinary links. This
             is the one view where the whole wall is legible at once, and it is
             the same `onBook` a painted spine runs, so there is no second idea
             of what a book does.
           */}
-          <li className="catalog-row catalog-centre" ref={centreRowRef}>
+          <li className="catalog-row catalog-center" ref={centreRowRef}>
             <img
               ref={firstTileRef}
               className="catalog-tile"
-              src={urlFor(CENTRE, 0) ?? ''}
+              src={urlFor(CENTER, 0) ?? ''}
               alt=""
               width={thumbPx}
               height={tileHeight(thumbPx)}
               decoding="async"
             />
             <div className="catalog-body">
-              <h2 className="catalog-name">the centre of the library</h2>
+              <h2 className="catalog-name">the center of the library</h2>
               <p className="catalog-sub">
                 the shelf, as it is painted on the wall — newest search first
               </p>

@@ -10,7 +10,7 @@
  * ### Why a finite board is honest here
  *
  * The map has no edges and the planner's rotations wrap around. Those are only
- * compatible because the camera is parked on the centre for the duration of a
+ * compatible because the camera is parked on the center for the duration of a
  * rearrangement: the wrap happens far off camera, where nothing is drawn from
  * the board at all. Let the camera move during the animation and this stops
  * being true - which is why the board is built per rearrangement and thrown
@@ -20,7 +20,7 @@
  *
  *   - It has to hold every slot of BOTH layouts, because a room the new order
  *     wants on camera has to be findable somewhere. A search reranks the whole
- *     corpus, so the room that lands beside the centre may have been at the far
+ *     corpus, so the room that lands beside the center may have been at the far
  *     edge a moment ago.
  *   - It has to be at least four times the on-camera rectangle, which is the
  *     planner's precondition - the cells outside the region are where values are
@@ -53,8 +53,8 @@
  * else, which is the one thing this whole approach exists to avoid.
  */
 
-/** The centre room's value. Distinct from the wallpaper so the board is self-describing. */
-export const CENTRE = 'centre';
+/** The center room's value. Distinct from the wallpaper so the board is self-describing. */
+export const CENTER = 'center';
 
 /** Every generic room. One value, repeated across most of the board, on purpose. */
 export const GENERIC = 'generic';
@@ -76,7 +76,7 @@ export const GENERIC = 'generic';
  * @returns {object|null} `{width, height, start, end, bounds, fixed, origin}`,
  *   or null when the rearrangement cannot be animated legally
  */
-export function buildRearrangement({ before, after, view, aspect = 1, margin = 1 }) {
+export function buildRearrangement({ before, after, view, aspect, margin = 1 }) {
   if (!(margin >= 1)) throw new RangeError('margin must be at least 1 - see the doc comment');
 
   // The on-camera rectangle, in map coordinates.
@@ -132,7 +132,7 @@ export function buildRearrangement({ before, after, view, aspect = 1, margin = 1
     start: { width, height, cells: start },
     end: { width, height, cells: end },
     bounds: { xmin: rx0 + halfW, xmax: rx1 + halfW, ymin: ry0 + halfH, ymax: ry1 + halfH },
-    // The centre room, which never moves. It is cell (0, 0) on the map and is
+    // The center room, which never moves. It is cell (0, 0) on the map and is
     // reserved by `ordering.js`, so it holds the same value in both boards for
     // free - the planner's precondition is satisfied by the map's own design.
     fixed: { x: halfW, y: halfH },
@@ -143,7 +143,7 @@ export function buildRearrangement({ before, after, view, aspect = 1, margin = 1
 /** What one arrangement puts at a map cell. */
 function valueAt({ layout, order }, mx, my) {
   const cell = layout.roomAt(mx, my, order);
-  if (cell.centre) return CENTRE;
+  if (cell.center) return CENTER;
   return cell.generic ? GENERIC : cell.id;
 }
 

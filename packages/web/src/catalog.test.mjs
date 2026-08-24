@@ -137,7 +137,7 @@ test('a smaller thumbnail asks for a coarser level, and dpr counts', () => {
 });
 
 test('the page under the viewport comes from arithmetic, not from sentinels', () => {
-  const geom = { perPage: 10, rowPx: 100, leadPx: 100 }; // a 1000px page, after the centre row
+  const geom = { perPage: 10, rowPx: 100, leadPx: 100 }; // a 1000px page, after the center row
 
   assert.equal(pageAtScroll(0, geom), 0);
   assert.equal(pageAtScroll(99, geom), 0, 'still inside the lead row');

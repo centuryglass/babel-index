@@ -11,15 +11,16 @@
  * never been through the pipeline - behave exactly as it did before the pyramid
  * existed: only level 0 resolves, so every lookup falls back to it.
  *
- * The base tiles - the centre and every wallpaper variant - live OUTSIDE the
- * corpus pyramid (`manifest.base`, served from `--base-dir`), so they are looked
- * up here by their own ids and served flat: level 0 only, and every coarser
- * request falls back to it through the cache's `servableLevel`. There are only a
- * handful of distinct base images and the cache keys on id, not on cell, so a
- * far-out screen of thousands of generic cells still holds just those few in
- * memory. (Giving the base assets their own resolution pyramid is a later step.)
+ * The shared tiles - the center and every generic tile - live OUTSIDE the
+ * corpus pyramid (`manifest.shared`, served from `--shared-dir`), so they are
+ * looked up here by their own ids and served flat: level 0 only, and every
+ * coarser request falls back to it through the cache's `servableLevel`. There
+ * are only a handful of distinct shared images and the cache keys on id, not
+ * on cell, so a far-out screen of thousands of generic cells still holds just
+ * those few in memory. (Giving the shared assets their own resolution pyramid
+ * is a later step.)
  */
-import { CENTRE, variantId } from './tiles.js';
+import { CENTER, genericId } from './tiles.js';
 
 /**
  * @param {object} manifest  as served by /api/manifest
@@ -29,15 +30,15 @@ export function createUrlFor(manifest) {
   // Older manifests have no `levels`; a flat level 0 is the honest reading.
   const dirs = new Map((manifest.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l.dir]));
 
-  // Every base-tile id to its (flat) url, so resolving one is a lookup rather
+  // Every shared-tile id to its (flat) url, so resolving one is a lookup rather
   // than string-parsing an index back out of the id.
-  const base = manifest.base ?? {};
-  const baseUrls = new Map();
-  if (base.centre?.url) baseUrls.set(CENTRE, base.centre.url);
-  (base.variants ?? []).forEach((v, i) => baseUrls.set(variantId(i), v.url));
+  const shared = manifest.shared ?? {};
+  const sharedUrls = new Map();
+  if (shared.center?.url) sharedUrls.set(CENTER, shared.center.url);
+  (shared.generic ?? []).forEach((v, i) => sharedUrls.set(genericId(i), v.url));
 
   return (id, level) => {
-    if (baseUrls.has(id)) return level === 0 ? baseUrls.get(id) : null;
+    if (sharedUrls.has(id)) return level === 0 ? sharedUrls.get(id) : null;
 
     if (!dirs.has(level)) return null;
     const file = manifest.rooms[id]?.file;

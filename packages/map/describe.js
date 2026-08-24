@@ -4,7 +4,7 @@
  * This is what a screen reader announces on arrival at a cell, and it is the
  * label the room card and the ranked listbox both reuse - one implementation,
  * more than one consumer (accessibility-plan.md phase B), the same split
- * `picking.js` and `centre.js` already make for hit-testing. Pure, no DOM, no
+ * `picking.js` and `center.js` already make for hit-testing. Pure, no DOM, no
  * imports, so the words a reader hears can be asserted without a browser.
  *
  * Two things get named here: a cell (`describeCell`) and a whole arrangement
@@ -32,14 +32,14 @@
  * @param {number[]} opts.order room ids, best first - the ranking on the map
  * @param {(object|null)[]} [opts.metadata] indexed by room id, as
  *   `joinMetadata()` returns; omitted or a miss both read as "no metadata"
- * @returns {{kind: 'centre'|'generic'|'room', name: string, description: string|null,
+ * @returns {{kind: 'center'|'generic'|'room', name: string, description: string|null,
  *   picture: string|null}}
  */
 export function describeCell(x, y, { layout, order, metadata = null }) {
   const at = layout.roomAt(x, y, order);
 
-  if (at.centre)
-    return { kind: 'centre', name: 'the centre of the library', description: null, picture: null };
+  if (at.center)
+    return { kind: 'center', name: 'the center of the library', description: null, picture: null };
   if (at.generic) return { kind: 'generic', name: 'a blank wall', description: null, picture: null };
 
   return describeRoom(at.id, at.rank, order.length, metadata?.[at.id] ?? null);
@@ -86,7 +86,7 @@ export function describeRoom(id, rank, total, entry = null) {
  * information a non-sighted reader can use; what it is FOR is the search made
  * spatial, and that is a fact the layout already knows. `gradedCount` is the
  * size of the cluster the density gradient lifted above the baseline - so
- * "9 clustered near the centre" versus "spread evenly" is the difference
+ * "9 clustered near the center" versus "spread evenly" is the difference
  * between a query the corpus could answer and one it could not, said in one
  * clause rather than shown in one second of motion.
  *
@@ -101,7 +101,7 @@ export function describeRoom(id, rank, total, entry = null) {
 export function describeArrangement(layout) {
   const rooms = `${layout.roomCount} rooms on the map`;
   return layout.gradedCount
-    ? `rearranged - ${rooms}, ${layout.gradedCount} clustered near the centre`
+    ? `rearranged - ${rooms}, ${layout.gradedCount} clustered near the center`
     : `rearranged - ${rooms}, spread evenly`;
 }
 
@@ -110,7 +110,7 @@ export function describeArrangement(layout) {
  * writes to.
  *
  * A sibling of `describeArrangement` rather than a reuse of it, because that
- * one talks about clustering near the centre and there is no centre here. The
+ * one talks about clustering near the center and there is no center here. The
  * catalog answers a different question - the map is where you are standing, the
  * catalog is the ranking - so it gets its own sentence rather than a borrowed
  * one that would be subtly false.

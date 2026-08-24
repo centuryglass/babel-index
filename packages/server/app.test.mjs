@@ -16,7 +16,7 @@ import * as fixture from './image-fixtures.mjs';
 async function serving(run, { files, ...opts } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-api-'));
   const contents = files ?? {
-    'base.png': fixture.png(1024, 1024),
+    'center.png': fixture.png(1024, 1024),
     '001.jpg': fixture.jpeg(512, 512),
     '002.jpg': fixture.jpeg(512, 512),
     '003.png': fixture.png(256, 256),
@@ -73,7 +73,7 @@ test('/api/manifest serves the scan', async () => {
     assert.equal(m.mode, 'offline');
     assert.equal(m.count, 3);
     assert.equal(m.rooms.length, 3);
-    assert.equal(m.base.centre.file, 'base.png');
+    assert.equal(m.shared.center.file, 'center.png');
     // The client indexes `manifest.rooms` by the id the layout hands it, so
     // ids must be exactly the array positions.
     m.rooms.forEach((room, i) => {
@@ -122,7 +122,7 @@ test('a narrowed config reaches the client narrowed', async () => {
 test('every url in the manifest actually serves', async () => {
   await serving(async ({ get }) => {
     const m = await (await get('/api/manifest')).json();
-    for (const { url } of [...m.rooms, m.base.centre, ...m.base.variants]) {
+    for (const { url } of [...m.rooms, m.shared.center, ...m.shared.generic]) {
       const res = await get(url);
       assert.equal(res.status, 200, url);
       assert.ok((await res.arrayBuffer()).byteLength > 0, url);
@@ -130,15 +130,15 @@ test('every url in the manifest actually serves', async () => {
   });
 });
 
-test('base tiles are served from a base directory outside the corpus', async () => {
-  // The demo shape: the rooms are one directory, the shared base tiles another.
+test('shared tiles are served from a shared directory outside the corpus', async () => {
+  // The demo shape: the rooms are one directory, the shared tiles another.
   const rootFiles = {
     'rooms/001.jpg': fixture.jpeg(512, 512),
     'rooms/002.jpg': fixture.jpeg(512, 512),
-    'base.tile.png': fixture.png(1024, 768),
-    'base_variations/v1.webp': fixture.webpVp8(1024, 768),
+    'center_tile.png': fixture.png(1024, 768),
+    'generic/v1.webp': fixture.webpVp8(1024, 768),
   };
-  const root = await mkdtemp(join(tmpdir(), 'babel-basedir-'));
+  const root = await mkdtemp(join(tmpdir(), 'babel-shareddir-'));
   try {
     for (const [name, body] of Object.entries(rootFiles)) {
       const path = join(root, name);
@@ -147,20 +147,20 @@ test('base tiles are served from a base directory outside the corpus', async () 
     }
     const imagesDir = join(root, 'rooms');
     const app = createApp({
-      manifest: await scanDirectory(imagesDir, { baseDir: root }),
+      manifest: await scanDirectory(imagesDir, { sharedDir: root }),
       imagesDir,
-      baseDir: root,
-      rescan: () => scanDirectory(imagesDir, { baseDir: root }),
+      sharedDir: root,
+      rescan: () => scanDirectory(imagesDir, { sharedDir: root }),
     });
     const server = app.listen(0);
     await new Promise((r) => server.once('listening', r));
     const origin = `http://127.0.0.1:${server.address().port}`;
     try {
       const m = await (await fetch(`${origin}/api/manifest`)).json();
-      assert.equal(m.count, 2, 'the base tiles are not corpus rooms');
-      assert.equal(m.base.centre.url, '/base/base.tile.png');
-      assert.deepEqual(m.base.variants.map((v) => v.url), ['/base/base_variations/v1.webp']);
-      for (const { url } of [m.base.centre, ...m.base.variants]) {
+      assert.equal(m.count, 2, 'the shared tiles are not corpus rooms');
+      assert.equal(m.shared.center.url, '/shared/center_tile.png');
+      assert.deepEqual(m.shared.generic.map((v) => v.url), ['/shared/generic/v1.webp']);
+      for (const { url } of [m.shared.center, ...m.shared.generic]) {
         const res = await fetch(origin + url);
         assert.equal(res.status, 200, url);
         assert.ok((await res.arrayBuffer()).byteLength > 0, url);
@@ -188,7 +188,7 @@ test('the metadata sidecar is advertised and actually serves', async () => {
     },
     {
       files: {
-        'base.png': fixture.png(64, 64),
+        'center.png': fixture.png(64, 64),
         '001.jpg': fixture.jpeg(64, 64),
         '002.jpg': fixture.jpeg(64, 64),
         'metadata.json': JSON.stringify(sidecar),
@@ -314,7 +314,7 @@ test('/images will not serve anything outside the images directory', async () =>
         await rm(join(parent, name), { force: true });
       }
     },
-    { files: { 'base.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) } }
+    { files: { 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) } }
   );
 });
 

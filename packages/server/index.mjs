@@ -2,8 +2,8 @@
 /**
  * The offline demo server.
  *
- *   npm run demo -- --images /path/to/rooms [--base base.png] [--port 5173]
- *                    [--config config.json] [--base-dir assets]
+ *   npm run demo -- --images /path/to/rooms [--center center.png] [--port 5173]
+ *                    [--config config.json] [--shared-dir assets]
  *
  * Point it at a directory of images and it serves a browsable library. No
  * database, no bucket, no upload step - the directory *is* the corpus. That is
@@ -37,10 +37,10 @@ if (!existsSync(imagesDir)) {
   console.error(`no such directory: ${imagesDir}`);
   process.exit(1);
 }
-// The base tiles (centre + wallpaper variants) live outside the corpus, in the
-// repo's assets by default, so the base render can be shared across corpora and
-// changed without touching --images. See scan.mjs.
-const baseDir = resolve(process.cwd(), argv['base-dir'] ?? 'assets');
+// The shared tiles (center + generic tiles) live outside the corpus, in the
+// repo's assets by default, so the center render can be shared across corpora
+// and changed without touching --images. See scan.mjs.
+const sharedDir = resolve(process.cwd(), argv['shared-dir'] ?? 'assets');
 const port = Number(argv.port ?? 5173);
 
 // Checked before anything is scanned or bundled, because the failure mode
@@ -59,23 +59,22 @@ if (await portInUse(port)) {
   process.exit(1);
 }
 
-// Loud about anything it could not honour: a tuning value that silently did not
-// take effect is the one failure mode a config file really has.
+// Load optional JSON config if provided, announcing invalid data:
 const config = await loadConfig({ path: argv.config });
 if (config.source) console.log(`config: ${config.source}`);
 for (const note of config.notes) console.warn(`config: ${note}`);
 
 console.log(`scanning ${imagesDir} ...`);
-const manifest = await scanDirectory(imagesDir, { base: argv.base, baseDir });
-const centre = manifest.base.centre?.file ?? '(none)';
+const manifest = await scanDirectory(imagesDir, { center: argv.center, sharedDir });
+const centerFile = manifest.shared.center?.file ?? '(none)';
 console.log(
-  `  ${manifest.count} rooms, base tile: ${centre}, ${manifest.base.variants.length} wallpaper variant(s)`
+  `  ${manifest.count} rooms, center tile: ${centerFile}, ${manifest.shared.generic.length} generic tile(s)`
 );
-// A base directory with no centre means the map has no blank tile to draw at
+// A shared directory with no center means the map has no blank tile to draw at
 // the origin or to fall back on - worth saying, since it reads on the map as a
 // hole rather than an error.
-if (!manifest.base.centre)
-  console.warn(`  no base tile found in ${baseDir} - expected base.tile.* (or pass --base)`);
+if (!manifest.shared.center)
+  console.warn(`  no center tile found in ${sharedDir} - expected center_tile.* (or pass --center)`);
 
 if (manifest.metadata) {
   const { matched, entries } = manifest.metadata;
@@ -110,9 +109,9 @@ const bundle = await build({
 const app = createApp({
   manifest,
   imagesDir,
-  baseDir,
+  sharedDir,
   config,
-  rescan: () => scanDirectory(imagesDir, { base: argv.base, baseDir }),
+  rescan: () => scanDirectory(imagesDir, { center: argv.center, sharedDir }),
   bundleJs: bundle.outputFiles[0].text,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
 });

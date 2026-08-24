@@ -3,7 +3,7 @@
  * not a map.
  *
  * `render.js` draws an infinite world under a camera the reader controls. This
- * draws a finite board under a camera parked on the centre, with one row or
+ * draws a finite board under a camera parked on the center, with one row or
  * column part-way through a slide. Those are different enough jobs that sharing
  * a loop would mean threading "is something sliding" through every decision the
  * other one makes, so they stay separate and `main.jsx` picks which is drawing.
@@ -30,7 +30,7 @@
  * The planner marks the stages whose lines are independent - it parks a whole
  * batch of values before feeding any of them, so no column's ride can disturb
  * another's. Those play concurrently, one lane per line, set off a stagger
- * apart and ordered outward from the centre. That is most of the animation: a
+ * apart and ordered outward from the center. That is most of the animation: a
  * batch of columns sweeps across together rather than queuing one after another.
  * Stages that are not marked stay strictly ordered, because a parking stage's
  * extraction rotates a line and the swap after it depends on that rotation.
@@ -58,29 +58,29 @@
  */
 import { PYRAMID } from './pyramid.js';
 import { pxPerCell } from './camera.js';
-import { CENTRE, variantId } from './tiles.js';
-import { CENTRE as BOARD_CENTRE, GENERIC as BOARD_GENERIC } from '../../map/board.js';
+import { CENTER, genericId } from './tiles.js';
+import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../map/board.js';
 
 /**
  * The cache id for a board value at its HOME map cell.
  *
- * The board carries one interchangeable `GENERIC` value everywhere the wallpaper
- * sits - `board.js` and `illusion.js` never need to know one variant from
- * another - so the actual variant is resolved here, positionally, from the cell
- * the value lives at. A generic tile therefore carries its own face as its line
- * slides: `variantAt` is read at the value's board home, not at wherever the
- * slide has pushed it to, so nothing flips variant mid-ride.
+ * The board carries one interchangeable `GENERIC` value everywhere a generic
+ * tile sits - `board.js` and `illusion.js` never need to know one generic tile
+ * from another - so the actual tile is resolved here, positionally, from the
+ * cell the value lives at. A generic tile therefore carries its own face as
+ * its line slides: `genericIndexAt` is read at the value's board home, not at
+ * wherever the slide has pushed it to, so nothing flips face mid-ride.
  *
- * @param {*} value board value: CENTRE, GENERIC, or a numeric room id
+ * @param {*} value board value: CENTER, GENERIC, or a numeric room id
  * @param {number} homeMx home map x of the board cell holding it
  * @param {number} homeMy home map y
- * @param {(x: number, y: number) => number} variantAt positional variant chooser
+ * @param {(x: number, y: number) => number} genericIndexAt positional generic tile chooser
  */
-const idFor = (value, homeMx, homeMy, variantAt) =>
-  value === BOARD_CENTRE
-    ? CENTRE
+const idFor = (value, homeMx, homeMy, genericIndexAt) =>
+  value === BOARD_CENTER
+    ? CENTER
     : value === BOARD_GENERIC
-      ? variantId(variantAt(homeMx, homeMy))
+      ? genericId(genericIndexAt(homeMx, homeMy))
       : value;
 
 /**
@@ -290,18 +290,18 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {number} opts.width  css pixels
    * @param {number} opts.height css pixels
    * @param {number} opts.dpr
-   * @param {{x: number, y: number, zoom: number}} opts.cam parked on the centre
+   * @param {{x: number, y: number, zoom: number}} opts.cam parked on the center
    * @param {{width: number, height: number, cells: Array}} opts.board
    * @param {{x: number, y: number}} opts.origin board index of map cell (0, 0)
    * @param {Array<object>} opts.motions from `advanceTo` - several at once
    *   during a wave. They can never overlap on screen: a wave stage's lines are
    *   all rows or all columns, and two rows share no cell
-   * @param {(x: number, y: number) => number} [opts.variantAt] which wallpaper
-   *   variant a generic cell shows, by map coordinate (the same positional
-   *   chooser the main renderer uses, so the wallpaper matches across the handoff)
-   * @param {boolean} [opts.chrome] the centre-room marker
+   * @param {(x: number, y: number) => number} [opts.genericIndexAt] which generic
+   *   tile a generic cell shows, by map coordinate (the same positional chooser
+   *   the main renderer uses, so the tile matches across the handoff)
+   * @param {boolean} [opts.chrome] the center-room marker
    */
-  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motions = [], variantAt = () => -1, chrome = true }) {
+  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true }) {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -328,13 +328,13 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
     let blank = 0;
     const wanted = [];
 
-    // A value's variant is read at its HOME map cell, which is not always where
+    // A value's generic tile is read at its HOME map cell, which is not always where
     // it is drawn: a sliding line reads its board home but paints at the shifted
     // position, so the tile carries its own face across the ride.
     const paint = (value, homeMx, homeMy, drawMx, drawMy) => {
       const sx = (drawMx - cam.x) * cellPx.x + w / 2;
       const sy = (drawMy - cam.y) * cellPx.y + h / 2;
-      const id = idFor(value, homeMx, homeMy, variantAt);
+      const id = idFor(value, homeMx, homeMy, genericIndexAt);
       const hit = cache.get(id, level);
       if (hit) {
         ctx.drawImage(hit.img, sx, sy, cw, ch);
@@ -379,10 +379,10 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
     for (let my = y0 - 2; my <= y1 + 2; my++)
       for (let mx = x0 - 2; mx <= x1 + 2; mx++)
         if (my < y0 || my > y1 || mx < x0 || mx > x1)
-          cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, variantAt), level);
+          cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, genericIndexAt), level);
 
     if (chrome) {
-      // The centre room, which by construction has not moved.
+      // The center room, which by construction has not moved.
       const sx = (0 - cam.x) * cellPx.x + w / 2;
       const sy = (0 - cam.y) * cellPx.y + h / 2;
       ctx.strokeStyle = 'rgba(200,169,95,0.9)';

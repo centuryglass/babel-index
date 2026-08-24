@@ -1,17 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layout } from '../../../tools/base-image/lib/geometry.js';
+import { layout } from '../../../tools/center-placement/lib/geometry.js';
 import {
   BOOK_COUNT,
   HISTORY_SLOT_COUNT,
-  CENTRE_SHELF_RECT,
-  CENTRE_SEARCH_RECT,
-  CENTRE_OPENING_RECT,
+  CENTER_SHELF_RECT,
+  CENTER_SEARCH_RECT,
+  CENTER_OPENING_RECT,
   bookScreenRects,
   searchBoxScreenRect,
   isSearchBoxUsable,
   searchBoxAtPoint,
-  centreCellRect,
+  centerCellRect,
   bookAtPoint,
   assignTitles,
   pickTags,
@@ -20,7 +20,7 @@ import {
   areSpinesLegible,
   overlapsViewport,
   BOOK_RECTS,
-} from './centre.js';
+} from './center.js';
 import { CELL_ASPECT } from './camera.js';
 
 const GEO = layout({ width: 1, height: 1 });
@@ -47,10 +47,10 @@ test('book rects scale onto a cell rect, each inside its shelf', () => {
   }
 });
 
-test('CENTRE_OPENING_RECT is the tight bounding union of the shelf and the search box', () => {
-  const a = CENTRE_SHELF_RECT;
-  const b = CENTRE_SEARCH_RECT;
-  const u = CENTRE_OPENING_RECT;
+test('CENTER_OPENING_RECT is the tight bounding union of the shelf and the search box', () => {
+  const a = CENTER_SHELF_RECT;
+  const b = CENTER_SEARCH_RECT;
+  const u = CENTER_OPENING_RECT;
   // Both source rects are fully contained.
   assert.ok(u.x <= a.x && u.y <= a.y && u.x + u.w >= a.x + a.w && u.y + u.h >= a.y + a.h);
   assert.ok(u.x <= b.x && u.y <= b.y && u.x + u.w >= b.x + b.w && u.y + u.h >= b.y + b.h);
@@ -64,7 +64,7 @@ test('CENTRE_OPENING_RECT is the tight bounding union of the shelf and the searc
 test('searchBoxScreenRect scales the search box onto a cell rect, per axis', () => {
   const cell = { x: 100, y: 50, w: 800, h: 600 };
   const r = searchBoxScreenRect(cell);
-  const b = CENTRE_SEARCH_RECT;
+  const b = CENTER_SEARCH_RECT;
   assert.ok(Math.abs((r.x - cell.x) / cell.w - b.x) < 1e-9);
   assert.ok(Math.abs((r.y - cell.y) / cell.h - b.y) < 1e-9);
   assert.ok(Math.abs(r.w / cell.w - b.w) < 1e-9);
@@ -92,17 +92,17 @@ test('searchBoxAtPoint hits the box only when it is usable, and misses outside i
   assert.equal(searchBoxAtPoint(tinyBox.x + tinyBox.w / 2, tinyBox.y + tinyBox.h / 2, tiny), false);
 });
 
-test('centreCellRect places cell (0,0) and sizes it one cell each axis', () => {
+test('centerCellRect places cell (0,0) and sizes it one cell each axis', () => {
   const cam = { x: 0, y: 0, zoom: 900, aspect: CELL_ASPECT };
   const canvasRect = { width: 1200, height: 800 };
-  const cell = centreCellRect(cam, canvasRect);
+  const cell = centerCellRect(cam, canvasRect);
   assert.equal(cell.x, 600);
   assert.equal(cell.y, 400);
   assert.equal(cell.w, 900);
   assert.equal(cell.h, 900 * CELL_ASPECT);
 });
 
-test('bookAtPoint resolves the centre of every book, and rejects points off the wall', () => {
+test('bookAtPoint resolves the center of every book, and rejects points off the wall', () => {
   const cell = { x: 0, y: 0, w: 1000, h: 1000 };
   const rects = bookScreenRects(cell);
 
@@ -122,7 +122,7 @@ test('bookAtPoint resolves the centre of every book, and rejects points off the 
 test('a point in the gap between two spines resolves to a book, not null', () => {
   const cell = { x: 0, y: 0, w: 1000, h: 1000 };
   const rects = bookScreenRects(cell);
-  // Just past the right edge of book 0, still left of book 1's centre.
+  // Just past the right edge of book 0, still left of book 1's center.
   const gapX = rects[0].x + rects[0].w + 0.5;
   const midY = rects[0].y + rects[0].h / 2;
   const hit = bookAtPoint(gapX, midY, cell);
