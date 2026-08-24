@@ -165,6 +165,29 @@
       }
       button:hover { background: rgba(200,169,95,0.24); }
       .search-trigger { width: 100%; }
+      /*
+        The map's own search affordance - not part of the panel, so it has to
+        exist and be positioned without one. Same corner the panel used to put
+        its trigger in (top-left), but a standalone circular badge rather than
+        a full-width panel row, which is why this comes after `.search-trigger`
+        and overrides its `width: 100%`.
+      */
+      .search-icon-button {
+        position: absolute; top: 16px; left: 16px; width: 56px; height: 56px; z-index: 1;
+        padding: 0; border: none; background: none; border-radius: 50%; cursor: pointer;
+      }
+      .search-icon-button:hover .search-icon-glyph { filter: brightness(1.15); }
+      .search-icon-glyph, .search-icon-arrow {
+        position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+      }
+      /*
+        The arrow is a separate layer over the same badge, rotated around the
+        badge's own center rather than baked into a single traced shape - see
+        `SearchIcon.jsx`. `useMapRenderer` writes its `transform` every frame
+        from the live camera, so it always points at wherever the center tile
+        currently is on screen; no default rotation here to fight that.
+      */
+      .search-icon-arrow { transform-origin: 50% 50%; }
       .note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--edge); color: var(--dim); font-size: 11px; }
       .hud {
         position: absolute; bottom: 14px; left: 16px; color: var(--dim); font-size: 11px;
