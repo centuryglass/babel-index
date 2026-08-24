@@ -1,5 +1,8 @@
 /**
- * The catalog: the same corpus as one list, in the order the map is showing.
+ * The catalog: the same corpus as one list, alphabetical by default and
+ * ranked exactly like the map whenever a search is running - the two views'
+ * idle orders are deliberately not the same array, since a shuffle is not a
+ * list order anyone can read by eye (see `alphabeticalOrder` in catalog.js).
  *
  * The map is where you are STANDING - one cursor, whatever is around it. The
  * catalog is the RANKING - what matched, all of it, every tile unique and
@@ -129,7 +132,7 @@ export function CatalogView({
   onExpand,
   centreSlots,
   onBook,
-  cellOfRank,
+  cellOfId,
   note,
   scrollRef,
   firstTileRef,
@@ -260,7 +263,7 @@ export function CatalogView({
               </>
             ) : (
               <>
-                <b>{total}</b> rooms, in the order the map is showing
+                <b>{total}</b> rooms, in alphabetical order
               </>
             )}
             {note && <span className="catalog-note"> · {note}</span>}
@@ -348,7 +351,7 @@ export function CatalogView({
               entry={metadata?.[id] ?? null}
               src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
               thumbPx={thumbPx}
-              cell={cellOfRank(rank)}
+              cell={cellOfId(id)}
               onShowOnMap={onShowOnMap}
               onKeyword={onKeyword}
               onExpand={onExpand}

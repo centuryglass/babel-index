@@ -13,6 +13,7 @@ import {
   flipTransform,
   rectOf,
   storyLines,
+  alphabeticalOrder,
 } from './catalog.js';
 import { BASE_TILE, LEVELS, sizeOf } from './pyramid.js';
 
@@ -243,4 +244,16 @@ test('the story clamp is derived from the room the row actually has', () => {
 
   // More reserved space (the score strip appearing) means fewer lines.
   assert.ok(storyLines(232, 126, 19) <= storyLines(232, 96, 19));
+});
+
+test('the catalog\'s idle order is every room by filename, not by id', () => {
+  const rooms = [{ file: 'c.jpg' }, { file: 'a.jpg' }, { file: 'b.jpg' }];
+  assert.deepEqual(alphabeticalOrder(rooms), [1, 2, 0]);
+});
+
+test('the alphabetical order is plain string comparison, matching scan.mjs', () => {
+  // Not localeCompare: "Z" < "a" under plain comparison, which is what
+  // scan.mjs's own `.sort()` of the same filenames already produces.
+  const rooms = [{ file: 'a.jpg' }, { file: 'Z.jpg' }];
+  assert.deepEqual(alphabeticalOrder(rooms), [1, 0]);
 });
