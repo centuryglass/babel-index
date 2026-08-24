@@ -975,6 +975,14 @@ function Library({ manifest }) {
     search(query);
   };
 
+  // The clear-x: not just an empty submit, because setQuery is async state -
+  // calling search('') directly rather than search(query) after setQuery('')
+  // means it does not race the render that clears the box.
+  const clearSearch = () => {
+    setQuery('');
+    search('');
+  };
+
   // The panel's one remaining search affordance: reach the live field on the
   // center tile. If it is already on screen and legible, just focus it -
   // otherwise fly home to the opening view first, the same framing the map
@@ -1254,6 +1262,7 @@ function Library({ manifest }) {
         query={query}
         setQuery={setQuery}
         onSearch={runSearch}
+        onClearSearch={clearSearch}
         onGoToSearch={goToSearch}
         maxQueryLength={config.search.maxQueryLength}
         cursorLabel={cursorLabel}
@@ -1293,6 +1302,7 @@ function Library({ manifest }) {
           query={query}
           setQuery={setQuery}
           onSearch={runSearch}
+          onClearSearch={clearSearch}
           paging={paging}
           setPaging={setPaging}
           onExit={exitCatalog}

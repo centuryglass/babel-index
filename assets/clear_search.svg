@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Circled-x clear-search glyph, palette matched to search_button.svg
+     (gold #ffcc00 fill, dark #1a1a1a stroke, translucent dark backing disc). -->
+<svg
+   width="48"
+   height="48"
+   viewBox="0 0 48 48"
+   version="1.1"
+   xmlns="http://www.w3.org/2000/svg">
+  <circle
+     cx="24"
+     cy="24"
+     r="23.6"
+     style="opacity:0.47;fill:#1a1a1a;stroke:none" />
+  <circle
+     cx="24"
+     cy="24"
+     r="22.7"
+     style="fill:#ffcc00;fill-rule:evenodd;stroke:#1a1a1a;stroke-width:0.7" />
+  <path
+     d="M 16,16 L 32,32 M 32,16 L 16,32"
+     style="fill:none;stroke:#1a1a1a;stroke-width:4;stroke-linecap:round" />
+</svg>

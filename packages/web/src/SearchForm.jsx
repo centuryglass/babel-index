@@ -1,3 +1,5 @@
+import clearSvg from '../../../assets/clear_search.svg';
+
 /**
  * The search box, in whichever of its two homes is on screen.
  *
@@ -15,6 +17,7 @@ export function SearchForm({
   query,
   setQuery,
   onSubmit,
+  onClear,
   className,
   formRef = null,
   label = 'search the library',
@@ -34,6 +37,20 @@ export function SearchForm({
         maxLength={maxLength}
         onChange={(e) => setQuery(e.target.value)}
       />
+      {/*
+        Only mounted once there is something to clear - unlike the input
+        itself, nothing imperative depends on this node existing before the
+        first keystroke, so there is no reason to hide-via-CSS instead.
+      */}
+      {query && (
+        <button
+          type="button"
+          className="search-clear"
+          aria-label="clear search"
+          onClick={onClear}
+          dangerouslySetInnerHTML={{ __html: clearSvg }}
+        />
+      )}
     </form>
   );
 }
