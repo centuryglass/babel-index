@@ -53,11 +53,37 @@
  * against a real corpus, which is the argument for them living in config.
  *
  * No DOM. Two imports: the dot products it would otherwise duplicate, and a
- * Porter stemmer - stemming free text is exactly the kind of thing that is
- * unwise to reimplement, and `stemmer` is a zero-dependency ~13KB module.
+ * lemmatizer - reducing free text to a base form is exactly the kind of thing
+ * that is unwise to reimplement. A Porter stemmer (`stemmer`, the previous
+ * choice) collapses purely by suffix stripping and doesn't know a noun from a
+ * verb, which is how `animation` and `animal` end up sharing the stem `anim` -
+ * a real false positive, not a hypothetical one. `wink-lemmatizer` looks a
+ * word up (falling back to suffix rules only for the unknown) separately per
+ * part of speech, so `lemmatise` below tries noun, then verb, then adjective
+ * and keeps the first one that actually changed the word - the cheap stand-in
+ * for POS tagging the header above already accepts for story matching.
  */
-import { stemmer } from 'stemmer';
+// Default import only: wink-lemmatizer is CommonJS, and Node's ESM interop
+// does not statically discover its named exports.
+import winkLemmatizer from 'wink-lemmatizer';
 import { embeddingScores } from './ordering.js';
+
+const { noun, verb, adjective } = winkLemmatizer;
+
+/**
+ * A word's base form, trying noun then verb then adjective rules and keeping
+ * the first that changes it. Unknown words come back unchanged - matching
+ * still falls through to whole-word equality, it just doesn't stem.
+ */
+export function lemmatise(word) {
+  const n = noun(word);
+  if (n !== word) return n;
+  const v = verb(word);
+  if (v !== word) return v;
+  const a = adjective(word);
+  if (a !== word) return a;
+  return word;
+}
 
 /**
  * Raw-cosine bounds for CLIP's share of certainty: at or below `low` it is
@@ -180,9 +206,9 @@ export function buildSearchIndex(joined) {
       // token, so that a query of "art nouveau" scores 1 against the keyword
       // "art nouveau" rather than the 0.45 its two tokens would average to.
       keywords: (entry.keywords ?? []).map((k) => fold(k.text)),
-      // Stemmed, not just tokenised: a search matches a story word by stem, so
-      // `cats` finds `cat` but `catalogue` does not. See `storyScore`.
-      story: new Set(tokenise(entry.story ?? '').map(stemmer)),
+      // Lemmatised, not just tokenised: a search matches a story word by base
+      // form, so `cats` finds `cat` but `catalogue` does not. See `storyScore`.
+      story: new Set(tokenise(entry.story ?? '').map(lemmatise)),
     };
   });
 }
@@ -246,15 +272,16 @@ export function keywordScore(foldedQuery, queryTokens, keywords) {
  * asked is "how much of what you asked for is in here".
  *
  * Each token is weighted by its own length, so `cartographer` counts for more
- * than `oil`. Matching is by Porter stem, so `room` finds `rooms` and `survey`
- * finds `surveyed` - and, unlike the prefix rule it replaces, the reverse too -
- * while `cat` no longer matches `catalogue` the way a prefix test would. The
- * story index is stemmed once at build time (`buildSearchIndex`); the query's
- * few tokens are stemmed here, and weighting stays keyed to the ORIGINAL token
+ * than `oil`. Matching is by lemma, so `room` finds `rooms` and `survey` finds
+ * `surveyed` - and, unlike the prefix rule it replaces, the reverse too -
+ * while `cat` no longer matches `catalogue` the way a prefix test would, and
+ * `animation` no longer matches `animal` the way a Porter stem did. The story
+ * index is lemmatised once at build time (`buildSearchIndex`); the query's few
+ * tokens are lemmatised here, and weighting stays keyed to the ORIGINAL token
  * length so the query-normalisation above still holds.
  *
  * @param {string[]} queryTokens raw (folded, untokenised-past-splitting) tokens
- * @param {Set<string>} storyStems the room's story, stemmed
+ * @param {Set<string>} storyStems the room's story, lemmatised
  */
 export function storyScore(queryTokens, storyStems) {
   if (!storyStems?.size || !queryTokens.length) return 0;
@@ -263,7 +290,7 @@ export function storyScore(queryTokens, storyStems) {
   let total = 0;
   for (const token of queryTokens) {
     total += token.length;
-    if (storyStems.has(stemmer(token))) matched += token.length;
+    if (storyStems.has(lemmatise(token))) matched += token.length;
   }
   return total ? matched / total : 0;
 }
@@ -368,18 +395,17 @@ export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
  * Where a query matched a story, mirroring `storyScore`'s STEM rule.
  *
  * Walks the text on the same word boundary `tokenise` splits on, and marks a
- * word whose Porter stem is one of the query's. That is the same test
- * `storyScore` makes against the pre-stemmed index `buildSearchIndex` holds -
- * stemming here rather than reusing that set because this needs to know WHICH
- * word in the original text matched, and the index has thrown the positions
- * away.
+ * word whose lemma is one of the query's. That is the same test `storyScore`
+ * makes against the pre-lemmatised index `buildSearchIndex` holds - lemmatising
+ * here rather than reusing that set because this needs to know WHICH word in
+ * the original text matched, and the index has thrown the positions away.
  *
  * Two details keep it faithful to what actually scored:
  *
  *   - words `tokenise` would have dropped are skipped, so a query token that
- *     stems onto a stopword marks nothing - `storyScore` tests against the
- *     tokenised story, where that word is not present.
- *   - the WHOLE matched word is marked, not the stem. `survey` marks all of
+ *     lemmatises onto a stopword marks nothing - `storyScore` tests against
+ *     the tokenised story, where that word is not present.
+ *   - the WHOLE matched word is marked, not the lemma. `survey` marks all of
  *     `surveyed`. Marking three quarters of a word reads as a rendering bug;
  *     marking the word reads as "this is why this room is here", which is the
  *     question being asked.
@@ -396,13 +422,13 @@ export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {})
   const { folded, map } = foldWithMap(src);
   if (!folded) return [];
 
-  const stems = new Set(queryTokens.map(stemmer));
+  const lemmas = new Set(queryTokens.map(lemmatise));
   const hits = [];
   // The complement of `tokenise`'s split, so the two agree on what a word is.
   for (const m of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
     const word = m[0];
     if (word.length < minLength || STOPWORDS.has(word)) continue;
-    if (!stems.has(stemmer(word))) continue;
+    if (!lemmas.has(lemmatise(word))) continue;
     hits.push(toSource(map, src.length, m.index, m.index + word.length));
   }
 

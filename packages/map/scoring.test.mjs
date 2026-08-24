@@ -8,6 +8,7 @@ import {
   foldWithMap,
   keywordMatchRanges,
   keywordScore,
+  lemmatise,
   matchCertainty,
   normaliseScores,
   rankHybrid,
@@ -15,7 +16,6 @@ import {
   storyScore,
   tokenise,
 } from './scoring.js';
-import { stemmer } from 'stemmer';
 import { CERTAINTY_FLOOR } from './ordering.js';
 import { DEFAULTS } from '../config/config.mjs';
 
@@ -94,7 +94,7 @@ test('a room with no keywords scores zero rather than throwing', () => {
 
 // --- story scoring ----------------------------------------------------------
 
-const story = (text) => new Set(tokenise(text).map(stemmer));
+const story = (text) => new Set(tokenise(text).map(lemmatise));
 
 test('story scoring is normalised by the query, not by the text', () => {
   // The property that matters: the same hit in a longer story scores the same.
@@ -116,17 +116,26 @@ test('longer query tokens carry more weight than short ones', () => {
   assert.equal(storyScore(['cartographer', 'oil'], story('An oil lamp.')), 3 / 15);
 });
 
-test('a token matches a story word by stem, both directions', () => {
+test('a token matches a story word by lemma, both directions', () => {
   assert.equal(storyScore(['room'], story('The rooms are numbered.')), 1);
   assert.equal(storyScore(['survey'], story('It was surveyed once.')), 1);
-  // Stemming is symmetric, where the old prefix rule was one-way.
-  assert.equal(storyScore(['surveyed'], story('A survey.')), 1, 'stemming is two-way');
+  // Lemmatising is symmetric, where the old prefix rule was one-way.
+  assert.equal(storyScore(['surveyed'], story('A survey.')), 1, 'lemmatising is two-way');
 });
 
-test('a stem match is a word match, not a prefix match', () => {
+test('a lemma match is a word match, not a prefix match', () => {
   // The motivating case: "cat" must not be dragged in by "catalogue".
   assert.equal(storyScore(['cat'], story('The cats slept on the shelf.')), 1);
   assert.equal(storyScore(['cat'], story('An intricate catalogue of rooms.')), 0);
+});
+
+test('a lemma match does not collide across unrelated word families', () => {
+  // The bug this replaced the Porter stemmer for: "animation" and "animal"
+  // both stemmed to "anim", so a search for one surfaced the other.
+  assert.equal(storyScore(['animation'], story('A short animation played on loop.')), 1);
+  assert.equal(storyScore(['animation'], story('Stone animals lined the hall.')), 0);
+  assert.equal(storyScore(['animal'], story('Stone animals lined the hall.')), 1);
+  assert.equal(storyScore(['animal'], story('A short animation played on loop.')), 0);
 });
 
 test('an empty story or query scores zero', () => {
@@ -490,15 +499,15 @@ test('a range lands on the original text even when folding changed its length', 
   assert.deepEqual(marked(story, storyMatchRanges(story, ['cafe'])), ['cafe\u0301']);
 });
 
-test('a story marks the whole matched word, by stem, and only real tokens', () => {
+test('a story marks the whole matched word, by lemma, and only real tokens', () => {
   // `with` is the only place `wit` occurs, and `with` is a stopword.
   const story = 'They surveyed the room with care.';
 
-  // Stems agree, and the WHOLE word is marked rather than the stem - `survei`
-  // is not a thing a reader should be shown.
+  // Lemmas agree, and the WHOLE word is marked rather than the lemma - `survey`
+  // alone is not a thing a reader should be shown in place of `surveyed`.
   assert.deepEqual(marked(story, storyMatchRanges(story, ['survey'])), ['surveyed']);
 
-  // `wit` shares no stem with anything here, and `with` - the only word it
+  // `wit` shares no lemma with anything here, and `with` - the only word it
   // could have reached under the old prefix rule - is a stopword the story
   // index drops, so storyScore never credited it and nothing may be marked.
   assert.equal(storyScore(['wit'], new Set(tokenise(story))), 0);
@@ -508,8 +517,8 @@ test('a story marks the whole matched word, by stem, and only real tokens', () =
   assert.deepEqual(marked(story, storyMatchRanges(story, ['survey', 'surveyed'])), ['surveyed']);
 });
 
-test('a keyword marks by substring, where a story would have needed a stem', () => {
-  // `nouveau` is neither the stem nor the start of `art nouveau`, but
+test('a keyword marks by substring, where a story would have needed a lemma', () => {
+  // `nouveau` is neither the lemma nor the start of `art nouveau`, but
   // keywordScore matches it by substring - so it must mark, and the story rule
   // must not be used here. The asymmetry between the two is the point.
   assert.ok(keywordScore(fold('nouveau'), ['nouveau'], ['art nouveau']) > 0);
@@ -525,7 +534,7 @@ test('a keyword marks by substring, where a story would have needed a stem', () 
 test('anything marked scored, and anything that scored is marked', () => {
   const keywords = ['art nouveau', 'gilt', 'oak panelling'];
   const story = 'A surveyed hall of gilded oak, catalogued by an unnamed cartographer.';
-  // Built by `buildSearchIndex`, not by hand. The index is stemmed, and a
+  // Built by `buildSearchIndex`, not by hand. The index is lemmatised, and a
   // hand-rolled `new Set(tokenise(story))` silently stopped matching what the
   // scorer expects the moment story matching moved from prefixes to stems -
   // which made this test fail for a reason that was about the FIXTURE rather
