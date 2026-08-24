@@ -13,7 +13,7 @@
  *
  * Emits, next to the images by default:
  *   embeddings.bin   int8, row-major, one row per room, `count * dim` bytes
- *   embeddings.json  the sidecar: model, dim, count, scale, and the file order
+ *   embeddings.json  the sidecar: model, dim, count, scale, file order, and hashes
  *
  * Row order is the contract. It comes from scanDirectory() - the exact same
  * scan the server assigns room ids from - so row i is always room id i. We do
@@ -22,10 +22,23 @@
  * Vectors are L2-normalised (so an int8 dot product approximates cosine) and
  * quantised symmetrically at scale 127 (the int8 half-range). Dequantise as
  * v / 127.
+ *
+ * ### Re-runs are incremental
+ *
+ * `embeddings.json` carries a `hashes` map (filename -> content hash) alongside
+ * `order`. A rerun hashes every source file, and any file whose hash and model
+ * both match the previous run's has its row COPIED from the old blob rather
+ * than run back through the vision tower - so touching a few images in a large
+ * corpus costs a few inferences, not the whole corpus. A model change (the
+ * whole point of which is that old vectors are no longer comparable to new
+ * ones) invalidates every cached row, same as no cache existing at all. This
+ * mirrors packages/pipeline/mips.mjs's content-hash cache; contentHash() is
+ * shared with it rather than reimplemented.
  */
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanDirectory } from '../../packages/server/scan.mjs';
+import { contentHash } from '../../packages/pipeline/mips.mjs';
 
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 const QUANT_SCALE = 127; // int8 half-range; see file header
@@ -85,6 +98,36 @@ async function loadVisionTower() {
   }
 }
 
+/**
+ * The previous run's blob and sidecar, keyed by filename, or null if there
+ * isn't one, it's unreadable, or its model doesn't match MODEL_ID (in which
+ * case every row it holds is incomparable to what this run produces).
+ */
+async function loadCache(binPath, jsonPath) {
+  let sidecar;
+  try {
+    sidecar = JSON.parse(await readFile(jsonPath, 'utf8'));
+  } catch {
+    return null;
+  }
+  if (sidecar?.model !== MODEL_ID || sidecar?.dtype !== 'int8' || !Array.isArray(sidecar.order)) return null;
+
+  let bin;
+  try {
+    bin = await readFile(binPath);
+  } catch {
+    return null;
+  }
+  if (bin.byteLength !== sidecar.order.length * sidecar.dim) return null;
+
+  const rows = new Map();
+  sidecar.order.forEach((file, i) => {
+    const hash = sidecar.hashes?.[file];
+    if (hash) rows.set(file, { hash, offset: i * sidecar.dim });
+  });
+  return { dim: sidecar.dim, bin, rows };
+}
+
 async function main() {
   const argv = parseArgs(process.argv.slice(2));
   const imagesDir = argv.images ?? 'assets/corpus-sample';
@@ -94,49 +137,76 @@ async function main() {
   // row order, so a drift ranks the wrong rooms. Same default as index.mjs.
   const sharedDir = argv['shared-dir'] ?? 'assets';
 
-  const { AutoProcessor, CLIPVisionModelWithProjection, RawImage } = await loadVisionTower();
-
   // One source of truth for which files are rooms and in what id order.
   const manifest = await scanDirectory(imagesDir, { center: argv.center, sharedDir });
   const files = manifest.rooms.map((r) => r.file);
   if (!files.length) throw new Error(`no corpus rooms in ${imagesDir}`);
   console.log(`${files.length} rooms (center tile: ${manifest.shared.center?.file ?? '(none)'}), model ${MODEL_ID}`);
 
-  const processor = await AutoProcessor.from_pretrained(MODEL_ID);
-  const model = await CLIPVisionModelWithProjection.from_pretrained(MODEL_ID, { dtype: 'fp32' });
-
-  let dim = 0;
-  let quant = null; // Int8Array, sized once we know dim
-
-  for (let start = 0; start < files.length; start += BATCH) {
-    const chunk = files.slice(start, start + BATCH);
-    const images = await Promise.all(chunk.map((f) => RawImage.read(join(imagesDir, f))));
-    const inputs = await processor(images);
-    const { image_embeds } = await model(inputs);
-    const rows = image_embeds.tolist(); // [chunk.length][dim]
-
-    if (!quant) {
-      dim = rows[0].length;
-      quant = new Int8Array(files.length * dim);
-    }
-    rows.forEach((row, i) => quantiseInto(row, quant, (start + i) * dim));
-    console.log(`  ${Math.min(start + BATCH, files.length)}/${files.length}`);
-  }
-
   const binPath = join(outDir, 'embeddings.bin');
   const jsonPath = join(outDir, 'embeddings.json');
+  const cache = await loadCache(binPath, jsonPath);
+
+  const indexOf = new Map(files.map((f, i) => [f, i]));
+  const hashes = new Map(); // filename -> content hash, for this run's sidecar
+  const stale = []; // filenames needing a fresh inference
+  for (const file of files) {
+    const hash = await contentHash(join(imagesDir, file));
+    hashes.set(file, hash);
+    if (!cache || cache.rows.get(file)?.hash !== hash) stale.push(file);
+  }
+  const staleSet = new Set(stale);
+
+  const dim = cache?.dim ?? 0;
+  let quant = dim ? new Int8Array(files.length * dim) : null; // sized once dim is known
+
+  // Rows carried over untouched: copy the bytes, no re-inference.
+  let cached = 0;
+  if (quant) {
+    for (const file of files) {
+      if (staleSet.has(file)) continue;
+      const row = cache.rows.get(file);
+      quant.set(cache.bin.subarray(row.offset, row.offset + dim), indexOf.get(file) * dim);
+      cached++;
+    }
+  }
+
+  if (stale.length) {
+    console.log(`${stale.length} new/changed, ${files.length - stale.length} cached`);
+    const { AutoProcessor, CLIPVisionModelWithProjection, RawImage } = await loadVisionTower();
+    const processor = await AutoProcessor.from_pretrained(MODEL_ID);
+    const model = await CLIPVisionModelWithProjection.from_pretrained(MODEL_ID, { dtype: 'fp32' });
+
+    for (let start = 0; start < stale.length; start += BATCH) {
+      const chunk = stale.slice(start, start + BATCH);
+      const images = await Promise.all(chunk.map((f) => RawImage.read(join(imagesDir, f))));
+      const inputs = await processor(images);
+      const { image_embeds } = await model(inputs);
+      const rows = image_embeds.tolist(); // [chunk.length][dim]
+
+      if (!quant) quant = new Int8Array(files.length * rows[0].length);
+      const rowDim = quant.byteLength / files.length;
+      rows.forEach((row, i) => quantiseInto(row, quant, indexOf.get(chunk[i]) * rowDim));
+      console.log(`  ${Math.min(start + BATCH, stale.length)}/${stale.length}`);
+    }
+  } else {
+    console.log(`all ${files.length} rows unchanged, nothing to embed`);
+  }
+
+  const finalDim = quant.byteLength / files.length;
   await writeFile(binPath, Buffer.from(quant.buffer, quant.byteOffset, quant.byteLength));
   await writeFile(
     jsonPath,
     JSON.stringify(
       {
         model: MODEL_ID,
-        dim,
+        dim: finalDim,
         count: files.length,
         dtype: 'int8',
         scale: QUANT_SCALE,
         layout: 'row-major',
         order: files,
+        hashes: Object.fromEntries(hashes),
       },
       null,
       2
@@ -144,7 +214,7 @@ async function main() {
   );
 
   const kb = (quant.byteLength / 1024).toFixed(1);
-  console.log(`wrote ${binPath} (${kb} KB) and ${jsonPath}`);
+  console.log(`wrote ${binPath} (${kb} KB) and ${jsonPath} (${cached} cached, ${stale.length} embedded)`);
 }
 
 main().catch((err) => {
