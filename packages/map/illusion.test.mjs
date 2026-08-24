@@ -220,7 +220,7 @@ test('a board that is mostly one value is the easy case, not a special one', () 
  * time rather than all parked in advance.
  *
  * It is also the shape of a real search: the density gradient packs distinct
- * rooms against the centre, which is precisely the viewport.
+ * rooms against the center, which is precisely the viewport.
  */
 function trappedCase(W, H, bounds, fixed, permuteWithinRegion, r) {
   const cells = new Array(W * H).fill('generic');
@@ -250,7 +250,7 @@ function trappedCase(W, H, bounds, fixed, permuteWithinRegion, r) {
 
 test('every distinct value trapped on camera at the start', () => {
   const bounds = { xmin: 10, xmax: 19, ymin: 9, ymax: 14 };
-  // The centre room's cell, which is what the map pins: inside the region, so
+  // The center room's cell, which is what the map pins: inside the region, so
   // phase 1 runs for its column and skips only its own row.
   const fixed = { x: 14, y: 11 };
   for (const within of [true, false])

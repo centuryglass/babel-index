@@ -15,7 +15,7 @@
  * Three things it is responsible for beyond drawing, all of which have to share
  * the effect's lifetime:
  *
- *   - positioning the centre tile's two overlays, which move every frame with
+ *   - positioning the center tile's two overlays, which move every frame with
  *     the camera and so cannot be React state;
  *   - writing the HUD, which is the app's own account of what it just drew and
  *     is what the e2e suite reads the camera out of;
@@ -29,8 +29,8 @@ import { sizeOf as pyramidSizeOf } from './pyramid.js';
 /**
  * @param {object} opts
  * @param {object} opts.canvasRef      the one canvas, mounted for the session
- * @param {object} opts.searchFormRef  the centre tile's search field
- * @param {object} opts.booksRef       the centre tile's shelf of buttons
+ * @param {object} opts.searchFormRef  the center tile's search field
+ * @param {object} opts.booksRef       the center tile's shelf of buttons
  * @param {object} opts.draw           assigned by this hook; called by `requestDraw`
  * @param {object} opts.anim           the running rearrangement, or null
  * @param {object} opts.keyboardUsed   gates the cursor ring - see render.js
@@ -69,7 +69,7 @@ export function useMapRenderer({
       // Hidden, so there is nothing to draw and nothing to measure. Not merely
       // an optimisation: with `display: none` up the tree every clientWidth is
       // 0, and a frame drawn against that would size the canvas to nothing and
-      // place both centre-tile overlays at the origin. The camera, the cache
+      // place both center-tile overlays at the origin. The camera, the cache
       // and the pyramid's LRU are all untouched meanwhile, which is what makes
       // coming back free.
       if (mode !== 'map') return;
@@ -82,7 +82,7 @@ export function useMapRenderer({
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // The centre tile's live search field, positioned every frame like the
+      // The center tile's live search field, positioned every frame like the
       // canvas content it sits over - it is not React state, for the same
       // reason the camera itself is a ref: it moves on every pan, zoom and
       // flight, and a re-render per frame is not the architecture here.
@@ -133,7 +133,7 @@ export function useMapRenderer({
           ? slideRenderer.draw({
               ctx, width: w, height: h, dpr, cam: running.cam,
               board: running.board, origin: running.origin, motions: running.motions,
-              variantAt: layout.variantAt,
+              genericIndexAt: layout.genericIndexAt,
             })
           : renderer.draw({
               ctx, width: w, height: h, dpr, cam: cam.current,

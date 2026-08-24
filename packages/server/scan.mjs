@@ -9,12 +9,12 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 export const METADATA_FILE = 'metadata.json';
 
 /**
- * The subdirectory of the base directory that holds the wallpaper variants. It
- * is a folder rather than a `base*` glob so the base tile can sit in the repo's
- * `assets/` root without every stray image beside it (masks, canny maps) being
- * mistaken for wallpaper.
+ * The subdirectory of the shared directory that holds the generic tiles. It is
+ * a folder rather than a `generic*` glob so the center tile can sit in the
+ * repo's `assets/` root without every stray image beside it (masks, canny
+ * maps) being mistaken for a generic tile.
  */
-export const VARIATIONS_DIR = 'base_variations';
+export const GENERIC_DIR = 'generic';
 
 /**
  * Read pixel dimensions from a file header, without decoding the image.
@@ -107,45 +107,46 @@ async function listImages(dir) {
   return entries.filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort();
 }
 
-/** One base asset: its file, a `/base/`-rooted url, and its size if readable. */
-async function describeBase(baseDir, sub, file) {
-  const size = await imageSize(join(baseDir, sub, file)).catch(() => null);
-  return { file, url: `/base/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
+/** One shared asset: its file, a `/shared/`-rooted url, and its size if readable. */
+async function describeShared(sharedDir, sub, file) {
+  const size = await imageSize(join(sharedDir, sub, file)).catch(() => null);
+  return { file, url: `/shared/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
 }
 
 /**
- * Discover the base tiles: the blank centre and the wallpaper variants.
+ * Discover the shared tiles: the blank center and the generic tiles.
  *
- * The centre is served at cell (0, 0) and reserved for the search box and
- * controls, so it is always the plain base render - `--base`, else `base.tile.*`,
- * else `base.*`. `allowFirst` keeps the old single-directory behaviour working:
- * when the base assets live in the corpus directory itself and nothing named
- * base is present, the first image stands in as the centre.
+ * The center is served at cell (0, 0) and reserved for the search box and
+ * controls, so it is always the plain center render - `--center`, else
+ * `center_tile.*`, else `center.*`. `allowFirst` keeps the old single-directory
+ * behaviour working: when the shared assets live in the corpus directory
+ * itself and nothing named center is present, the first image stands in as
+ * the center.
  *
- * The variants are every image in the `base_variations/` subdirectory, sorted.
- * There may be none (an empty or absent folder), which is the "only the base
- * tile" case the renderers fall back to.
+ * The generic tiles are every image in the `generic/` subdirectory, sorted.
+ * There may be none (an empty or absent folder), which is the "only the
+ * center tile" case the renderers fall back to.
  *
- * @param {string} baseDir
- * @param {{base?: string, allowFirst?: boolean}} opts
- * @returns {Promise<{centre: object|null, variants: object[]}>}
+ * @param {string} sharedDir
+ * @param {{center?: string, allowFirst?: boolean}} opts
+ * @returns {Promise<{center: object|null, generic: object[]}>}
  */
-async function scanBase(baseDir, { base, allowFirst = false } = {}) {
-  const files = await listImages(baseDir).catch(() => []);
-  const centreFile =
-    (base && files.find((f) => f === base || basename(f, extname(f)) === base)) ??
-    files.find((f) => basename(f, extname(f)).toLowerCase() === 'base.tile') ??
-    files.find((f) => basename(f, extname(f)).toLowerCase() === 'base') ??
+async function scanShared(sharedDir, { center, allowFirst = false } = {}) {
+  const files = await listImages(sharedDir).catch(() => []);
+  const centerFile =
+    (center && files.find((f) => f === center || basename(f, extname(f)) === center)) ??
+    files.find((f) => basename(f, extname(f)).toLowerCase() === 'center_tile') ??
+    files.find((f) => basename(f, extname(f)).toLowerCase() === 'center') ??
     (allowFirst ? files[0] : null);
 
-  const centre = centreFile ? await describeBase(baseDir, '', centreFile) : null;
+  const centerAsset = centerFile ? await describeShared(sharedDir, '', centerFile) : null;
 
-  const variantFiles = await listImages(join(baseDir, VARIATIONS_DIR)).catch(() => []);
-  const variants = await Promise.all(
-    variantFiles.map((f) => describeBase(baseDir, VARIATIONS_DIR, f))
+  const genericFiles = await listImages(join(sharedDir, GENERIC_DIR)).catch(() => []);
+  const generic = await Promise.all(
+    genericFiles.map((f) => describeShared(sharedDir, GENERIC_DIR, f))
   );
 
-  return { centre, variants };
+  return { center: centerAsset, generic };
 }
 
 /**
@@ -156,30 +157,31 @@ async function scanBase(baseDir, { base, allowFirst = false } = {}) {
  * stable across restarts, which matters because the map's slot assignment is
  * keyed on them.
  *
- * The base tiles - the blank centre and the wallpaper variants - live in
- * `baseDir`, which defaults to the corpus directory (the old behaviour, where a
- * `base.*` in the images folder is the wallpaper) but is usually pointed at the
- * repo's `assets/` so the base render can be shared across corpora and reached
- * from outside `--images`.
+ * The shared tiles - the blank center and the generic tiles - live in
+ * `sharedDir`, which defaults to the corpus directory (the old behaviour,
+ * where a `center.*` in the images folder is the generic wallpaper) but is
+ * usually pointed at the repo's `assets/` so the center render can be shared
+ * across corpora and reached from outside `--images`.
  *
  * @param {string} dir
- * @param {{base?: string, baseDir?: string}} [opts] base names the centre tile;
- *   baseDir is where the base tiles live (default: the corpus directory)
+ * @param {{center?: string, sharedDir?: string}} [opts] center names the
+ *   center tile; sharedDir is where the shared tiles live (default: the
+ *   corpus directory)
  */
-export async function scanDirectory(dir, { base, baseDir = dir } = {}) {
+export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   const files = await listImages(dir);
 
   if (!files.length) throw new Error(`no images found in ${dir}`);
 
-  // When the base tiles are the corpus directory itself, the centre may be one
-  // of these files and the first image can stand in for a missing base.
-  const sameDir = resolve(baseDir) === resolve(dir);
-  const baseAssets = await scanBase(baseDir, { base, allowFirst: sameDir });
+  // When the shared tiles are the corpus directory itself, the center may be
+  // one of these files and the first image can stand in for a missing center.
+  const sameDir = resolve(sharedDir) === resolve(dir);
+  const sharedAssets = await scanShared(sharedDir, { center, allowFirst: sameDir });
 
-  // A centre living in the corpus directory is not also a ranked room - being
-  // both the wallpaper and a search result would put it everywhere and in the
-  // ranking too. A centre living elsewhere excludes nothing.
-  const excluded = sameDir && baseAssets.centre ? baseAssets.centre.file : null;
+  // A center living in the corpus directory is not also a ranked room - being
+  // both the generic wallpaper and a search result would put it everywhere and
+  // in the ranking too. A center living elsewhere excludes nothing.
+  const excluded = sameDir && sharedAssets.center ? sharedAssets.center.file : null;
   const corpus = files.filter((f) => f !== excluded);
 
   const rooms = await Promise.all(
@@ -190,12 +192,12 @@ export async function scanDirectory(dir, { base, baseDir = dir } = {}) {
     })
   );
 
-  // The ladder is measured off the corpus, not the base tiles: a base tile is
-  // one file and may be any shape, while the rooms are what the map is mostly
-  // made of. Fall back to a base tile only when no room reported a size.
+  // The ladder is measured off the corpus, not the shared tiles: a shared tile
+  // is one file and may be any shape, while the rooms are what the map is
+  // mostly made of. Fall back to a shared tile only when no room reported a size.
   const source =
     rooms.find((r) => r.w && r.h) ??
-    [baseAssets.centre, ...baseAssets.variants].find((b) => b?.w && b?.h) ??
+    [sharedAssets.center, ...sharedAssets.generic].find((b) => b?.w && b?.h) ??
     null;
   const levels = await discoverLevels(dir, source && source.w ? { w: source.w, h: source.h } : null);
 
@@ -231,11 +233,11 @@ export async function scanDirectory(dir, { base, baseDir = dir } = {}) {
     mode: 'offline',
     directory: dir,
     /**
-     * The base tiles: the blank `centre` (or null if none was found) and the
-     * `variants` array that the wallpaper is drawn from. Served from `/base/`,
-     * which the demo points at `--base-dir`.
+     * The shared tiles: the blank `center` (or null if none was found) and the
+     * `generic` array the generic tiles are drawn from. Served from `/shared/`,
+     * which the demo points at `--shared-dir`.
      */
-    base: baseAssets,
+    shared: sharedAssets,
     rooms,
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */

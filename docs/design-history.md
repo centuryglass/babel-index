@@ -79,20 +79,20 @@ so the worst-case screen went 5700 → 7500 cells and its budget 7000 → 8200.
 Whether 4:3 is final is an art call; nothing downstream assumes it. Treat any
 "1024²" still in prose as a stale bug, not a fact.
 
-## The centre trace: story-exact 5×32 → a UI-sized wall, and the lamp dropped
+## The center trace: story-exact 5×32 → a UI-sized wall, and the lamp dropped
 
-The centre tile's book grid was traced to match Borges exactly - 5 shelves of 32
+The center tile's book grid was traced to match Borges exactly - 5 shelves of 32
 books, 160 total - and `checkAgainstStory()` failed loudly if a re-trace drifted
 from those numbers. That premise broke on contact with the feature it was for:
 at story-accurate spine width, a composited search-history title is a handful of
-illegible pixels. Usable text needs fewer, wider books, so the centre's own book
+illegible pixels. Usable text needs fewer, wider books, so the center's own book
 count is now a UI choice sized for legibility, not a restatement of the story's
 shelf - 3 shelves, 40 books at the time of writing, with the middle shelf split
 into two runs around a baked-in "Index of Babel" nameplate that occupies no book
 slot at all. `checkAgainstStory` and the STORY coupling in `geometry.js` are
 gone; what is still asserted is the trace's own internal consistency (books
 inside the opening, no overlap, one baseline per shelf), not any particular
-count. `centre.js`'s hit-test walks per-shelf *runs* rather than per-shelf
+count. `center.js`'s hit-test walks per-shelf *runs* rather than per-shelf
 *bands* for exactly this reason - a shelf split by art must not resolve a click
 over the gap to a phantom book.
 
@@ -172,7 +172,7 @@ shapes considered and dropped, because each is the obvious first idea.
   fix to try, and it does not address the actual obstacle.
 
   What replaced it inverts the coupling: the map is one `role="application"`
-  region with a single **cursor** at the cell under the camera centre
+  region with a single **cursor** at the cell under the camera center
   (`floor(cam.x), floor(cam.y)` - the camera is already in world cells). Arrows
   pan, the cursor rides along and is announced, and ctrl+arrow jumps to the next
   room the way ctrl+arrow jumps a word. The camera leads and the cursor follows,
@@ -200,7 +200,7 @@ shapes considered and dropped, because each is the obvious first idea.
   not an accessibility feature, and building it as one would give the accessible
   interface a map of its own to keep in sync.
 
-- **Forty tab stops for the centre room's forty books.** The plan's own phase D
+- **Forty tab stops for the center room's forty books.** The plan's own phase D
   text says "40 real `<button>`s", and the literal reading is one tab stop each -
   no widget pattern, no roving state, nothing to get wrong. What sinks it is
   that the shelf sits between the map and the panel in the tab order, so every
@@ -216,9 +216,9 @@ shapes considered and dropped, because each is the obvious first idea.
   `accessibility-plan.md` §8 item 8, and `grid` and `list` are both live
   alternatives if it reads badly.
 
-- **Hand-written captions for the wallpaper variants, now.** §3.5 asks for one
-  sentence per base variant - a few minutes of work, and the only reason it was
-  not done alongside the sidecar's `alt` is that `assets/base_variations/` is
+- **Hand-written captions for the generic tiles, now.** §3.5 asks for one
+  sentence per generic tile - a few minutes of work, and the only reason it was
+  not done alongside the sidecar's `alt` is that `assets/generic/` is
   placeholder art explicitly meant to be swapped for real inpainting output. A
   sentence written against art that is not the shipping art describes nothing,
   which is the same failure the sample corpus's `metadata.json` is already

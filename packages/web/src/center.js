@@ -1,5 +1,5 @@
 /**
- * The centre room's interactive book spines - the first piece of phase 5.
+ * The center room's interactive book spines - the first piece of phase 5.
  *
  * Cell (0, 0) is the one room whose art we control, so it is the one room where
  * per-book hit-testing is meaningful (inpainting does not preserve shelf counts,
@@ -25,49 +25,49 @@
  * assignment, the hit-test and the compositing; the hook decides WHEN a tap
  * happened and `main.jsx` owns the history state.
  *
- * The geometry comes from the SINGLE SOURCE - `tools/base-image/lib/geometry.js`,
+ * The geometry comes from the SINGLE SOURCE - `tools/center-placement/lib/geometry.js`,
  * the same pure module the tile trace is imported into. `layout({ width: 1,
  * height: 1 })` returns every rect as raw per-axis fractions (x, w against width;
- * y, h against height), which is exactly the space the map draws the centre tile
+ * y, h against height), which is exactly the space the map draws the center tile
  * in: `render.js` stretches the tile image width -> cellPx.x and height ->
  * cellPx.y independently, so a fraction scaled by each axis lands on the art it
  * was traced against.
  *
  * No DOM (the compositing takes a 2d context but reads nothing back).
  */
-import { layout } from '../../../tools/base-image/lib/geometry.js';
-import { prng, seedFrom } from '../../../tools/base-image/lib/prng.js';
+import { layout } from '../../../tools/center-placement/lib/geometry.js';
+import { prng, seedFrom } from '../../../tools/center-placement/lib/prng.js';
 import { pxPerCell, worldToScreen } from './camera.js';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
 /**
- * The bookshelf's bounding box within the centre cell, in cell fractions
+ * The bookshelf's bounding box within the center cell, in cell fractions
  * (`{x, y, w, h}` against width and height). It is the union of every shelf's
- * books - the thing a reader comes to the centre to read - and it sits LOW in
+ * books - the thing a reader comes to the center to read - and it sits LOW in
  * the tile, below the cornice and above the floor. The opening view frames
  * itself on this rect rather than on the cell so the shelf fills the display;
- * `main.jsx` fits and centres on it. Sourced from the one geometry module, so
+ * `main.jsx` fits and centers on it. Sourced from the one geometry module, so
  * it tracks any re-trace of the tile.
  */
-export const CENTRE_SHELF_RECT = GEOMETRY.opening;
+export const CENTER_SHELF_RECT = GEOMETRY.opening;
 
 /**
- * Where the live search field belongs on the centre tile, in the same cell
- * fractions as `CENTRE_SHELF_RECT`. Traced from the SVG's `search_box` rect.
+ * Where the live search field belongs on the center tile, in the same cell
+ * fractions as `CENTER_SHELF_RECT`. Traced from the SVG's `search_box` rect.
  */
-export const CENTRE_SEARCH_RECT = GEOMETRY.searchBox;
+export const CENTER_SEARCH_RECT = GEOMETRY.searchBox;
 
 /**
  * The opening view's real framing target: the bounding-box union of the
  * bookshelf and the search box. The search box sits above the shelf, outside
- * `CENTRE_SHELF_RECT`, so fitting to the shelf alone risks leaving the live
+ * `CENTER_SHELF_RECT`, so fitting to the shelf alone risks leaving the live
  * field off the top edge depending on viewport aspect. `main.jsx` fits and
- * centres the opening camera on this rect instead.
+ * centers the opening camera on this rect instead.
  */
-export const CENTRE_OPENING_RECT = (() => {
-  const a = CENTRE_SHELF_RECT;
-  const b = CENTRE_SEARCH_RECT;
+export const CENTER_OPENING_RECT = (() => {
+  const a = CENTER_SHELF_RECT;
+  const b = CENTER_SEARCH_RECT;
   const x0 = Math.min(a.x, b.x);
   const y0 = Math.min(a.y, b.y);
   const x1 = Math.max(a.x + a.w, b.x + b.w);
@@ -92,7 +92,7 @@ export const BOOK_COUNT = BOOKS.length;
  * ids - what the DOM overlay lays its buttons out in.
  *
  * Exported rather than kept private because the buttons are positioned in
- * PERCENTAGES of the centre cell's screen rect, not in pixels: one container
+ * PERCENTAGES of the center cell's screen rect, not in pixels: one container
  * is written per frame and the forty children inside it then need no per-frame
  * work at all (accessibility-plan.md §3.3). `bookScreenRects` is the same
  * numbers already scaled, for the canvas, which has no percentages.
@@ -175,7 +175,7 @@ const INK = 'rgba(238,230,214,0.92)';
 const HALO = 'rgba(12,9,6,0.85)';
 
 /**
- * The centre cell's on-screen rectangle, for a given camera.
+ * The center cell's on-screen rectangle, for a given camera.
  *
  * The cell is addressed by its lower corner and spans one unit, so it runs from
  * world (0, 0) to (1, 1); its screen position is `worldToScreen(0, 0)` and its
@@ -184,7 +184,7 @@ const HALO = 'rgba(12,9,6,0.85)';
  * @param {{x:number,y:number,zoom:number,aspect?:number}} cam
  * @param {{width:number,height:number}} canvasRect
  */
-export function centreCellRect(cam, canvasRect) {
+export function centerCellRect(cam, canvasRect) {
   const tl = worldToScreen(0, 0, cam, canvasRect);
   const per = pxPerCell(cam);
   return { x: tl.x, y: tl.y, w: per.x, h: per.y };
@@ -193,7 +193,7 @@ export function centreCellRect(cam, canvasRect) {
 /**
  * Whether a screen rect overlaps the viewport at all.
  *
- * The centre cell is one cell of an infinite map, so at most zooms it is
+ * The center cell is one cell of an infinite map, so at most zooms it is
  * nowhere near the screen. Both overlays it carries - the live search field
  * and the book buttons - are mounted permanently and shown only while it is,
  * so this is the half of "usable" that is about WHERE the cell is rather than
@@ -264,7 +264,7 @@ export function bookNeighbour(from, { dx = 0, dy = 0 }, slots) {
   return from;
 }
 
-/** Every book rect in screen pixels, scaled onto a centre-cell rect. */
+/** Every book rect in screen pixels, scaled onto a center-cell rect. */
 export function bookScreenRects(cellRect) {
   return BOOKS.map((b) => ({
     x: cellRect.x + b.x * cellRect.w,
@@ -274,9 +274,9 @@ export function bookScreenRects(cellRect) {
   }));
 }
 
-/** The live search field's rect in screen pixels, scaled onto a centre-cell rect. */
+/** The live search field's rect in screen pixels, scaled onto a center-cell rect. */
 export function searchBoxScreenRect(cellRect) {
-  const b = CENTRE_SEARCH_RECT;
+  const b = CENTER_SEARCH_RECT;
   return {
     x: cellRect.x + b.x * cellRect.w,
     y: cellRect.y + b.y * cellRect.h,
@@ -430,12 +430,12 @@ export function pickTags(metadata, seed = 1) {
 }
 
 /**
- * Composite the titles onto the centre tile's books.
+ * Composite the titles onto the center tile's books.
  *
  * ZOOM-GATED: a spine narrower than MIN_SPINE_PX carries no legible text, so it
  * carries none at all rather than a smear of sub-pixels. This is the "faithful
  * zoom-in reward" - a title is only readable once the reader has zoomed into
- * the centre, which the map now opens having done.
+ * the center, which the map now opens having done.
  *
  * Each title reads TOP-TO-BOTTOM down the spine, the way a shelved book is
  * printed, truncated to the spine's length with an ellipsis, over a dark halo so

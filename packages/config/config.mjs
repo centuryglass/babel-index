@@ -49,14 +49,14 @@ export const DEFAULTS = {
     maxZoom: null,
 
     /**
-     * Where the camera returns: the "centre" button, and the zoom a search flies
+     * Where the camera returns: the "center" button, and the zoom a search flies
      * home to before rearranging. 220 px per cell shows a handful of rooms whole
      * - enough that the map reads as a wall of rooms rather than one image, and
      * enough that the reorder animation has cells to slide. Clamped into the
      * range above.
      *
      * There is deliberately no companion `initialZoom` here: the PAGE-LOAD view
-     * is not a by-feel number but a derived one - `main.jsx` fits the centre
+     * is not a by-feel number but a derived one - `main.jsx` fits the center
      * room's bookshelf to the display (`fitZoom` in camera.js), which is too far
      * out on a phone and too far in on a wide monitor to state as one value. What
      * belongs in config is what nothing derives; this now derives, so it left.
@@ -64,7 +64,7 @@ export const DEFAULTS = {
     defaultZoom: 220,
 
     /**
-     * How long a camera flight takes - "centre", and the fly home after a
+     * How long a camera flight takes - "center", and the fly home after a
      * search - in milliseconds.
      *
      * 450 is a starting point rather than a measurement, which is the same
@@ -108,12 +108,12 @@ export const DEFAULTS = {
     slotSeed: 1,
 
     /**
-     * Seed for choosing between alternate generic rooms. Separate from
+     * Seed for choosing between alternate generic tiles. Separate from
      * `slotSeed` on purpose: sharing one would correlate the choice of
-     * wallpaper with which cells are content slots, and the two patterns would
-     * be visible in each other.
+     * generic tile with which cells are content slots, and the two patterns
+     * would be visible in each other.
      */
-    genericVariantSeed: 1,
+    genericSeed: 1,
   },
 
   slide: {
@@ -158,7 +158,7 @@ export const DEFAULTS = {
      * feeding any of it - so they need not queue. Starting them together would
      * read as the whole field scrolling, which is a pan rather than a
      * rearrangement; starting them a beat apart turns the conveyor into a sweep
-     * that leaves from the centre. This, not `perCell`, is what sets how long
+     * that leaves from the center. This, not `perCell`, is what sets how long
      * the sweep takes to cross the screen.
      */
     stagger: 65,
@@ -269,7 +269,7 @@ export const DEFAULTS = {
       /**
        * Density offered to a rank the search is certain about. 1 packs perfect
        * matches into every cell they meet, so a handful of exact hits reads as
-       * a solid block against the centre - which is the whole effect. Lower it
+       * a solid block against the center - which is the whole effect. Lower it
        * to keep some wallpaper showing through even the surest cluster.
        */
       peak: 1,
@@ -277,7 +277,7 @@ export const DEFAULTS = {
       /**
        * Certainty under this clusters nothing at all. A query the corpus cannot
        * answer still ranks *something* first, and without a floor the faintest
-       * hunch would pull it to the centre and claim a find. Defaults to
+       * hunch would pull it to the center and claim a find. Defaults to
        * `CERTAINTY_FLOOR`, which is where the reasoning is written down.
        */
       floor: CERTAINTY_FLOOR,
@@ -367,8 +367,8 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
-      genericVariantSeed: integer(
-        mapIn.genericVariantSeed, DEFAULTS.map.genericVariantSeed, 'map.genericVariantSeed', notes
+      genericSeed: integer(
+        mapIn.genericSeed, DEFAULTS.map.genericSeed, 'map.genericSeed', notes
       ),
     },
     search: {

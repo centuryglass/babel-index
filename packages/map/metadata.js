@@ -13,7 +13,7 @@
  * images and every surviving entry still lands on its own room. So the rule here
  * is deliberately weaker than the blob's: join per file, tolerate a miss, and
  * report how many matched. A room with no entry simply has no keywords - which
- * is what the centre room and the generic alternates want anyway.
+ * is what the center room and the generic alternates want anyway.
  *
  * The one thing worth being loud about is a sidecar that matches *nothing*: that
  * is not "no metadata", it is metadata whose filenames have drifted, and it

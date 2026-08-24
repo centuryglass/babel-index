@@ -11,7 +11,7 @@
  * Two things earn an exception, both of them the reader's own choices rather
  * than the map's state: which way they page the catalog, and what they have
  * searched for. The second is the consequential one - the search history titles
- * the centre room's shelf, so persisting it means the wall of books becomes a
+ * the center room's shelf, so persisting it means the wall of books becomes a
  * record of what this reader has asked the library instead of resetting to
  * keyword tags every session.
  *
@@ -33,7 +33,7 @@
 const PREFIX = 'babel:';
 
 export const KEYS = {
-  /** Past searches, newest first - the centre shelf's book titles. */
+  /** Past searches, newest first - the center shelf's book titles. */
   history: `${PREFIX}history`,
   /** 'scroll' or 'pages' - how the catalog advances. */
   paging: `${PREFIX}paging`,

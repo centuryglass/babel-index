@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTileCache, CENTRE } from './tiles.js';
+import { createTileCache, CENTER } from './tiles.js';
 import { createPyramid } from './pyramid.js';
 
 /**
@@ -254,16 +254,16 @@ test('a pinned room survives any amount of pressure, at every level', () => {
   // A base tile is what every other cell falls back to, so evicting it to make
   // room for one more cell would break the fallback for all of them.
   const { images, cache } = build();
-  cache.pin(CENTRE);
-  cache.get(CENTRE, 2);
+  cache.pin(CENTER);
+  cache.get(CENTER, 2);
   images.settleAll();
 
   for (let id = 0; id < 40; id++) cache.get(id, 2);
   images.settleAll();
   for (let id = 40; id < 60; id++) cache.get(id, 2);
 
-  assert.equal(cache.get(CENTRE, 2).level, 2, 'the pinned base tile was evicted');
-  assert.equal(images.count(`/l2/${CENTRE}.jpg`), 1, 'and it must be fetched exactly once');
+  assert.equal(cache.get(CENTER, 2).level, 2, 'the pinned base tile was evicted');
+  assert.equal(images.count(`/l2/${CENTER}.jpg`), 1, 'and it must be fetched exactly once');
 });
 
 test('overBudget reports the pressure rather than hiding it', () => {
