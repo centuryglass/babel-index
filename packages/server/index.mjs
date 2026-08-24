@@ -104,6 +104,10 @@ const bundle = await build({
   sourcemap: 'inline',
   write: false,
   define: { 'process.env.NODE_ENV': '"development"' },
+  // Chrome art (the search icon's badge and arrow) gets imported as raw
+  // markup rather than traced into JSX by hand, so the source SVGs in
+  // assets/ stay the one copy of that path data - see SearchIcon.jsx.
+  loader: { '.svg': 'text' },
 });
 
 const app = createApp({
