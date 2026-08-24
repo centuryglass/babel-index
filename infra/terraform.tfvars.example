@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars (gitignored - see infra/.gitignore)
+# and fill in real values. Never commit terraform.tfvars.
+
+cloudflare_api_token   = "paste-a-scoped-api-token-here"
+cloudflare_account_id  = "paste-your-cloudflare-account-id-here"
+r2_bucket_name         = "babel-index-corpus"
+
+# Leave zone protections off for the first apply - it only needs the token
+# and account id above to create the bucket. Come back and fill these in,
+# per infra/README.md, once the assets hostname's zone exists and you've
+# checked it for conflicting rate-limit/cache rules.
+# enable_zone_protections            = true
+# cloudflare_zone_id                 = "paste-zone-id-here"
+# assets_hostname                    = "assets.example.com"
+# billing_alert_email_integration_id = "paste-email-integration-id-here"
