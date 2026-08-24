@@ -77,3 +77,9 @@ variable "billing_alert_email_integration_id" {
   type        = string
   default     = null
 }
+
+variable "billing_alert_limit_usd" {
+  description = "Dollar threshold that triggers the R2 billing_usage_alert notification policy."
+  type        = number
+  default     = 5
+}
