@@ -22,7 +22,16 @@ First run downloads the model (cached under `~/.cache/huggingface` afterwards).
 Writes two files, next to the images by default:
 
 - `embeddings.bin` — int8, row-major, `count × dim` bytes.
-- `embeddings.json` — model, dim, count, scale, and the file order.
+- `embeddings.json` — model, dim, count, scale, the file order, and a
+  filename -> content-hash map.
+
+Reruns are incremental: each source file is hashed, and any file whose hash
+matches `embeddings.json`'s record from the previous run has its row copied
+from the old blob instead of being run back through the vision tower — so
+touching a few images in a large corpus costs a few inferences, not the whole
+corpus. If nothing changed, the tool doesn't even need
+`@huggingface/transformers` installed. Changing `MODEL_ID` invalidates every
+cached row, since vectors from different models aren't comparable.
 
 ## The one contract that matters
 
