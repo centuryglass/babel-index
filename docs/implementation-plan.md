@@ -4,8 +4,6 @@ Pending task list. Remove tasks as they are completed, the code and git logs wil
 serve as completed task history.
 
 ## Map interface:
- - Add one of those circled "x" icons to the right side of the search bar.
-   Clicking it clears the current search, returning room order to random.
  - Inpaint the "Catalog" volume in the center tile to give it a more
    distinctive appearance.
  - Generic rooms should probably display some sort of bare minimum RoomDetails,

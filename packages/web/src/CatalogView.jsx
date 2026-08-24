@@ -120,6 +120,7 @@ export function CatalogView({
   query,
   setQuery,
   onSearch,
+  onClearSearch,
   paging,
   setPaging,
   onExit,
@@ -242,6 +243,7 @@ export function CatalogView({
             query={query}
             setQuery={setQuery}
             onSubmit={onSearch}
+            onClear={onClearSearch}
             className="catalog-search"
             maxLength={config.search.maxQueryLength}
           />

@@ -62,11 +62,26 @@
       .center-search { position: absolute; display: none; margin: 0; padding: 0; border: none; background: none; pointer-events: none; }
       .center-search:focus-within { pointer-events: auto; }
       .center-search input[type="search"] {
-        width: 100%; height: 100%; padding: 0 10px; text-align: center;
+        width: 100%; height: 100%; padding: 0 26px 0 10px; text-align: center;
         background: rgba(10,8,6,0.55); color: var(--ink);
         border: 1px solid rgba(200,169,95,0.45); border-radius: 4px; font: inherit;
       }
       .center-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
+
+      /*
+       * The clear-x, shared markup between both search homes (SearchForm.jsx)
+       * but sized per home here, same as the input itself. Only mounted while
+       * there is something to clear, so no `display` toggle is needed.
+       */
+      .search-clear {
+        position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+        width: 18px; height: 18px; padding: 0; margin: 0; border: none;
+        background: none; cursor: pointer; line-height: 0;
+      }
+      .search-clear svg { width: 100%; height: 100%; display: block; }
+      /* The native WebKit clear-x would sit on top of ours and only clear
+         the text, not the ranking - suppressed everywhere in favor of it. */
+      input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
       /*
        * The shelf's book buttons, over the center tile's painted spines.
@@ -323,12 +338,13 @@
       .catalog-bar-row.sub { flex-wrap: wrap; align-items: flex-start; }
       .catalog-count { overflow-wrap: anywhere; }
       .catalog-bar-row.sub { margin-top: 8px; }
-      .catalog-search { flex: 1; margin: 0; }
+      .catalog-search { position: relative; flex: 1; margin: 0; }
       .catalog-search input[type="search"] {
-        width: 100%; padding: 7px 10px; font: inherit; color: var(--ink);
+        width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--ink);
         background: rgba(10,8,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
       }
       .catalog-search input[type="search"]:focus { border-color: #c8a95f; outline: none; }
+      .catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
       .catalog-count { margin: 0; flex: 1 1 16em; color: var(--dim); font-size: 11px; }
       .catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
       .catalog-note { color: var(--dim); }
