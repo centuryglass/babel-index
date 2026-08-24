@@ -31,6 +31,7 @@ import { sizeOf as pyramidSizeOf } from './pyramid.js';
  * @param {object} opts.canvasRef      the one canvas, mounted for the session
  * @param {object} opts.searchFormRef  the center tile's search field
  * @param {object} opts.booksRef       the center tile's shelf of buttons
+ * @param {object} opts.searchArrowRef the search badge's orbiting arrow
  * @param {object} opts.draw           assigned by this hook; called by `requestDraw`
  * @param {object} opts.anim           the running rearrangement, or null
  * @param {object} opts.keyboardUsed   gates the cursor ring - see render.js
@@ -41,6 +42,7 @@ export function useMapRenderer({
   canvasRef,
   searchFormRef,
   booksRef,
+  searchArrowRef,
   draw,
   anim,
   keyboardUsed,
@@ -88,7 +90,8 @@ export function useMapRenderer({
       // flight, and a re-render per frame is not the architecture here.
       const searchEl = searchFormRef.current;
       const booksEl = booksRef.current;
-      if (searchEl || booksEl) {
+      const arrowEl = searchArrowRef?.current;
+      if (searchEl || booksEl || arrowEl) {
         const { box, usable, cellRect, books } = centreOverlay(w, h);
         if (searchEl) {
           searchEl.style.display = usable ? 'block' : 'none';
@@ -111,6 +114,29 @@ export function useMapRenderer({
             booksEl.style.width = `${cellRect.w}px`;
             booksEl.style.height = `${cellRect.h}px`;
           }
+        }
+        // The arrow, pointed at the center tile's screen position rather
+        // than any fixed direction - `cellRect` is in the same coordinate
+        // space the badge is positioned in (both absolute against #root), so
+        // no separate conversion is needed. It has to work when the center
+        // tile is off screen too (`cellRect` can be arbitrarily far outside
+        // the viewport), since that is when knowing *which way* to fly there
+        // matters most - the badge's own `getBoundingClientRect` is read
+        // fresh each frame rather than assumed, so a CSS change to its
+        // position or size cannot leave this pointing at a stale spot.
+        if (arrowEl) {
+          const badge = arrowEl.getBoundingClientRect();
+          const root = canvas.getBoundingClientRect();
+          const fromX = badge.left - root.left + badge.width / 2;
+          const fromY = badge.top - root.top + badge.height / 2;
+          const toX = cellRect.x + cellRect.w / 2;
+          const toY = cellRect.y + cellRect.h / 2;
+          // The traced arrow points up by default (`assets/search_arrow.svg`
+          // sits at the top of the badge's circle), which is -90° from the
+          // atan2 convention's zero (pointing right) - so the rotation that
+          // lands it on the target's bearing is the bearing plus 90°.
+          const deg = (Math.atan2(toY - fromY, toX - fromX) * 180) / Math.PI + 90;
+          arrowEl.style.transform = `rotate(${deg}deg)`;
         }
       }
 
@@ -191,7 +217,7 @@ export function useMapRenderer({
       canvas.removeEventListener('pointerdown', onDown);
     };
   }, [
-    canvasRef, searchFormRef, booksRef, draw, anim, keyboardUsed,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, draw, anim, keyboardUsed,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode,
   ]);
 }

@@ -73,6 +73,11 @@ function Library({ manifest }) {
   // search field is. The forty buttons inside it are laid out in percentages,
   // so this is the only per-frame geometry the shelf costs.
   const booksRef = useRef(null);
+  // The search badge's orbiting arrow - not diegetic content, but it still
+  // moves every frame with the camera (it points at wherever the center tile
+  // currently is on screen), so it gets the same imperative-ref treatment as
+  // the two center-tile overlays above rather than being React state.
+  const searchArrowRef = useRef(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -768,7 +773,7 @@ function Library({ manifest }) {
   // tile cache above is built with `onLoad: requestDraw`, so the request has to
   // exist before the hook that fulfils it - one ref, and the cycle is broken.
   useMapRenderer({
-    canvasRef, searchFormRef, booksRef, draw, anim, keyboardUsed, cam, mode,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, draw, anim, keyboardUsed, cam, mode,
     layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay,
   });
 
@@ -1241,6 +1246,7 @@ function Library({ manifest }) {
         canvasRef={canvasRef}
         searchFormRef={searchFormRef}
         booksRef={booksRef}
+        searchArrowRef={searchArrowRef}
         manifest={manifest}
         total={total}
         described={described}

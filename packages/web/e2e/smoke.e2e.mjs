@@ -126,7 +126,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
     page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()));
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-    await page.goto(origin, { waitUntil: 'domcontentloaded' });
+    // `?debug` mounts the dev panel and the cache/rearrangement HUD - both now
+    // gated off by default (see `debug.js`), and this suite leans on them
+    // throughout as its settling signal and its window into cache/level state.
+    await page.goto(`${origin}?debug`, { waitUntil: 'domcontentloaded' });
     // Rooms have to be decoded and drawn before any of this means anything.
     await page.waitForFunction(
       () => /[1-9]\d* drawn/.test(document.getElementById('hud')?.textContent ?? ''),
