@@ -119,6 +119,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `upload-r2.mjs`: CLI, credentials from env.
   * `lib.mjs`: Pure upload-list/diff logic, no filesystem or network.
 
+### Infra:
+- `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the
+           corpus into, plus abuse-protection (rate limiting, edge caching,
+           a billing alert). Applied locally by hand, never from CI -
+           credentials live in a gitignored `terraform.tfvars`. See
+           `infra/README.md`.
+
 ### Assets:
 - `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
                           search controls.
