@@ -177,9 +177,18 @@
         padding: 0; border: none; background: none; border-radius: 50%; cursor: pointer;
       }
       .search-icon-button:hover .search-icon-glyph { filter: brightness(1.15); }
+      /*
+        These are `<span>`s wrapping raw, injected SVG markup (see
+        SearchIcon.jsx) rather than `<svg>` elements themselves, so the size
+        has to be asserted twice: on the span, positioning it over the badge,
+        and on the nested `svg` the traced file declares, overriding its own
+        `width`/`height` (Inkscape writes those in mm) which would otherwise
+        win over a span sized around it.
+      */
       .search-icon-glyph, .search-icon-arrow {
         position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
       }
+      .search-icon-glyph svg, .search-icon-arrow svg { display: block; width: 100%; height: 100%; }
       /*
         The arrow is a separate layer over the same badge, rotated around the
         badge's own center rather than baked into a single traced shape - see
