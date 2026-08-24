@@ -2,9 +2,9 @@
  * Camera maths for the map, as pure functions.
  *
  * World units are CELLS, and a cell is not assumed to be square. The cell at
- * integer (x, y) spans (x, y) to (x+1, y+1) in cell space, and the centre room
+ * integer (x, y) spans (x, y) to (x+1, y+1) in cell space, and the center room
  * sits at (0, 0); how many pixels that is on each axis depends on the tile's
- * shape. A camera is `{x, y, zoom}` where x/y are the world point at the centre
+ * shape. A camera is `{x, y, zoom}` where x/y are the world point at the center
  * of the viewport and `zoom` is pixels per cell WIDTH. Cell height follows from
  * the aspect, so one number still drives the whole scale. Two optional fields
  * may ride along - `aspect` and `limits` - and every function here preserves
@@ -46,7 +46,7 @@ export function pxPerCell(cam) {
  * upscaled and softens, so 2x is the practical ceiling - enough to turn a ~32px
  * spine into a comfortable ~64px to read, before the blur outruns the benefit.
  *
- * Raise this only once the centre tile earns a finer-than-level-0 pyramid rung
+ * Raise this only once the center tile earns a finer-than-level-0 pyramid rung
  * (the LOD step in the plan); until then the OPENING view is separately capped
  * at 1x in main.jsx, so a page never loads already upscaled, while a reader may
  * still zoom in to the 2x ceiling by hand.
@@ -174,7 +174,7 @@ export function zoomAt(cam, px, py, deltaY, rect) {
  * Resistance this close to 1 counts as being inside the content region.
  *
  * Shared by the two things that need to know: the glide (which has nothing to
- * correct inside) and a keyboard nudge (which lands cell-centred inside, and
+ * correct inside) and a keyboard nudge (which lands cell-centered inside, and
  * damped continuously outside). One threshold, so the two can never disagree
  * about where "inside" ends.
  */
@@ -228,7 +228,7 @@ export function panByPixels(cam, dxPx, dyPx, damp) {
  * settles a screen or so out - which is where the pointer lands too.
  *
  * Inside the content region `damp` is exactly 1, so this moves exactly `dx`
- * cells: a camera that started cell-centred stays cell-centred, and one arrow
+ * cells: a camera that started cell-centered stays cell-centered, and one arrow
  * press remains exactly one room. Only outside does the camera come off the
  * grid, and every press still advances the cursor a full cell once back
  * inside, because a scale of 1 preserves whatever offset it picked up.
@@ -239,13 +239,13 @@ export function panByPixels(cam, dxPx, dyPx, damp) {
  * @param {number} damp resistance at the camera, in [0, 1]
  */
 export function panByCells(cam, dx, dy, damp) {
-  // Inside the region, land CENTRED on the destination cell rather than adding
-  // a raw delta. Both do move exactly one cell from a cell-centred camera, but
+  // Inside the region, land CENTERED on the destination cell rather than adding
+  // a raw delta. Both do move exactly one cell from a cell-centered camera, but
   // only this one recovers: a trip outside leaves the camera off the grid (the
   // damped steps out there are fractional by design, and the glide stops
   // wherever it happens to cross back in), and a raw delta would carry that
   // offset forever - every press advancing one cell while the cell itself sat
-  // visibly off-centre, part of it hanging off the screen edge.
+  // visibly off-center, part of it hanging off the screen edge.
   //
   // Snapping both axes is deliberate, not incidental: the offset a trip
   // outward leaves is rarely axis-aligned, so pressing Left has to fix the
@@ -309,14 +309,14 @@ export function glideToRest(cam, resistanceAt) {
   return next;
 }
 
-/** Centre the camera on a cell - cells are addressed by corner, so aim at the middle. */
+/** Center the camera on a cell - cells are addressed by corner, so aim at the middle. */
 export function cameraAtCell(cam, x, y, zoom) {
   return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom, cam.limits) : cam.zoom };
 }
 
 /**
  * The cell a screen reader's cursor stands on: whatever is under the camera
- * centre (accessibility-plan.md §4.2). Costs nothing - `cam.x`/`cam.y` are
+ * center (accessibility-plan.md §4.2). Costs nothing - `cam.x`/`cam.y` are
  * already world cells, and `cameraAtCell`'s `+ 0.5` above is the same
  * convention stated the other way round. Panning IS moving this cursor, which
  * is what lets a pointer pan and a keyboard pan agree on "where am I" without
@@ -380,7 +380,7 @@ export const FLIGHT_MS = 450;
  * Smoothstep: slow at both ends, quickest in the middle, no magic numbers.
  *
  * Zero velocity on arrival is the half that matters - a flight that stops at
- * full speed reads as a jerk, and "centre" is a button people press repeatedly.
+ * full speed reads as a jerk, and "center" is a button people press repeatedly.
  */
 export const easeInOut = (t) => t * t * (3 - 2 * t);
 

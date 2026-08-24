@@ -380,7 +380,7 @@ export function planMoves(start, end, bounds, fixed) {
     for (let r = ymin; r <= ymax; r++)
       if (r !== fy && board[at(fx, r)] !== target[at(fx, r)]) rows.push(r);
 
-    // Outward from the centre, so the wave leaves from where the reader is
+    // Outward from the center, so the wave leaves from where the reader is
     // standing rather than sweeping in from an edge. Within a batch the order
     // is only the order the animation staggers by; correctness does not depend
     // on it, which is the whole point of parking a batch before feeding it.

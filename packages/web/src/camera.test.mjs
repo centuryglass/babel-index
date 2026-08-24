@@ -52,7 +52,7 @@ test('screen and world coordinates round-trip, at every cell shape', () => {
   }
 });
 
-test('the camera centre lands at the middle of the viewport', () => {
+test('the camera center lands at the middle of the viewport', () => {
   for (const { name, aspect } of SHAPES) {
     const s = worldToScreen(cam.x, cam.y, shaped(aspect), rect);
     assert.deepEqual(s, { x: rect.width / 2, y: rect.height / 2 }, name);
@@ -324,8 +324,8 @@ test('a flight starts where it started and lands exactly on its target', () => {
   assert.equal(at(0).done, false);
 
   // Identity, not "within an epsilon of": a flight that lands a rounding error
-  // short leaves the camera somewhere nobody asked for, and "centre" is a
-  // button whose whole promise is that it centres.
+  // short leaves the camera somewhere nobody asked for, and "center" is a
+  // button whose whole promise is that it centers.
   assert.equal(at(1).cam, home, 'landing must return the target itself');
   assert.equal(at(1).done, true);
   assert.equal(at(3).done, true, 'an overshot clock stays landed');
@@ -404,7 +404,7 @@ test('a flight of no duration arrives at once', () => {
 });
 
 test('a flight interrupted by another picks up from where it had got to', () => {
-  // The reason `beginFlight` takes the LIVE camera: pressing "centre" twice, or
+  // The reason `beginFlight` takes the LIVE camera: pressing "center" twice, or
   // searching mid-flight, must not restart from the original position.
   const midway = at(0.4).cam;
   const second = flightAt(beginFlight(midway, far, 2000), 2000);
@@ -414,7 +414,7 @@ test('a flight interrupted by another picks up from where it had got to', () => 
   );
 });
 
-test('the cursor cell is the cell under the camera centre', () => {
+test('the cursor cell is the cell under the camera center', () => {
   // `cam.x`/`cam.y` are already world cells (the same convention
   // `cameraAtCell`'s `+ 0.5` states the other way round), so this is a floor
   // and nothing more - asserted so a future refactor cannot quietly swap in a
@@ -471,7 +471,7 @@ test('a keyboard nudge is exactly one cell inside the content region', () => {
   const moved = panByCells(c, 1, 0, 1);
   assert.equal(moved.x, 4.5);
   assert.equal(moved.y, 3.5);
-  // And a cell-centred camera stays cell-centred, so presses never drift the
+  // And a cell-centered camera stays cell-centered, so presses never drift the
   // grid alignment while inside.
   assert.equal(panByCells(moved, 0, -1, 1).y, 2.5);
 });
@@ -515,17 +515,17 @@ test('the cell shape and limits survive a keyboard nudge', () => {
   assert.equal(moved.limits, limits);
 });
 
-test('a keyboard nudge re-centres an off-grid camera, on BOTH axes', () => {
+test('a keyboard nudge re-centers an off-grid camera, on BOTH axes', () => {
   // The bug this pins: a trip outside the region leaves the camera off the
   // grid (damped steps out there are fractional by design, and the glide
   // stops wherever it happens to cross back in). Adding a raw delta would
   // carry that offset forever - the cursor's own cell sitting visibly
-  // off-centre, part of it hanging off the screen edge, with no way to
+  // off-center, part of it hanging off the screen edge, with no way to
   // correct it by arrowing.
   const off = { x: 7.0, y: 0.3, zoom: 220 };
   const moved = panByCells(off, -1, 0, 1);
-  assert.equal(moved.x, 6.5, 'the axis moved along must land cell-centred');
-  assert.equal(moved.y, 0.5, 'the OTHER axis must be re-centred too');
+  assert.equal(moved.x, 6.5, 'the axis moved along must land cell-centered');
+  assert.equal(moved.y, 0.5, 'the OTHER axis must be re-centered too');
 });
 
 test('the offset does not survive repeated in-bounds presses', () => {
@@ -536,14 +536,14 @@ test('the offset does not survive repeated in-bounds presses', () => {
   let c = { x: 7.0, y: 0.3, zoom: 220 };
   for (let i = 0; i < 4; i++) {
     c = panByCells(c, -1, 0, 1);
-    assert.equal(c.x - Math.floor(c.x), 0.5, `x off-centre after press ${i + 1}`);
-    assert.equal(c.y - Math.floor(c.y), 0.5, `y off-centre after press ${i + 1}`);
+    assert.equal(c.x - Math.floor(c.x), 0.5, `x off-center after press ${i + 1}`);
+    assert.equal(c.y - Math.floor(c.y), 0.5, `y off-center after press ${i + 1}`);
   }
   // ...and it is still exactly one cell per press, not a bigger jump each time.
   assert.equal(c.x, 3.5, 'four presses from cell 7 must land on cell 3');
 });
 
-test('re-centring happens only inside the region, never against the damping', () => {
+test('re-centering happens only inside the region, never against the damping', () => {
   // Snapping outside would defeat the resistance entirely - it would round a
   // heavily damped fractional step back up to a whole cell.
   const outside = { x: 20.0, y: 0.3, zoom: 220 };

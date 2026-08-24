@@ -83,7 +83,7 @@ const three = () => ({
 });
 
 test('scans a directory into a manifest', async () => {
-  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
+  await corpus({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.mode, 'offline');
     assert.equal(m.directory, dir);
@@ -104,112 +104,91 @@ test('scans a directory into a manifest', async () => {
   });
 });
 
-test('the centre tile is base.* by default, and is not also a corpus room', async () => {
-  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
+test('the center tile is center.* by default, and is not also a corpus room', async () => {
+  await corpus({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir);
-    assert.equal(m.base.centre.file, 'base.png');
-    // Served from /base, even when the base directory is the corpus directory.
-    assert.deepEqual(m.base.centre, { file: 'base.png', url: '/base/base.png', w: 1024, h: 1024 });
-    // Being both the wallpaper and a search result would put the same picture
-    // everywhere and in the ranking too.
-    assert.ok(!m.rooms.some((r) => r.file === 'base.png'));
+    assert.equal(m.shared.center.file, 'center.png');
+    // Served from /shared, even when the shared directory is the corpus directory.
+    assert.deepEqual(m.shared.center, { file: 'center.png', url: '/shared/center.png', w: 1024, h: 1024 });
+    // Being both the generic wallpaper and a search result would put the same
+    // picture everywhere and in the ranking too.
+    assert.ok(!m.rooms.some((r) => r.file === 'center.png'));
   });
 });
 
-test('base.tile.* wins over a plain base.*', async () => {
-  // The demo's centre render is base.tile.png; a stray base.png next to it must
-  // not steal the slot.
-  await corpus(
-    { ...three(), 'base.png': fixture.png(64, 64), 'base.tile.png': fixture.png(1024, 768) },
-    async (dir) => {
-      const m = await scanDirectory(dir);
-      assert.equal(m.base.centre.file, 'base.tile.png');
-      assert.ok(m.rooms.some((r) => r.file === 'base.png'), 'the plain base is a room like any other');
-    }
-  );
-});
-
-test('--base picks the centre tile, by filename or by stem', async () => {
-  for (const base of ['002.png', '002']) {
+test('--center picks the center tile, by filename or by stem', async () => {
+  for (const center of ['002.png', '002']) {
     await corpus(three(), async (dir) => {
-      const m = await scanDirectory(dir, { base });
-      assert.equal(m.base.centre.file, '002.png', `--base ${base}`);
+      const m = await scanDirectory(dir, { center });
+      assert.equal(m.shared.center.file, '002.png', `--center ${center}`);
       assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '003.webp']);
       assert.deepEqual(m.rooms.map((r) => r.id), [0, 1], 'ids stay contiguous');
     });
   }
 });
 
-test('--base beats a file called base.*', async () => {
-  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
-    const m = await scanDirectory(dir, { base: '003.webp' });
-    assert.equal(m.base.centre.file, '003.webp');
-    assert.ok(m.rooms.some((r) => r.file === 'base.png'), 'the demoted base is a room like any other');
-  });
-});
-
-test('with no base at all, the first file stands in - but only when it lives with the corpus', async () => {
+test('with no center at all, the first file stands in - but only when it lives with the corpus', async () => {
   await corpus(three(), async (dir) => {
     const m = await scanDirectory(dir);
-    assert.equal(m.base.centre.file, '001.jpg');
+    assert.equal(m.shared.center.file, '001.jpg');
     assert.equal(m.count, 2);
   });
 });
 
-test('a --base that matches nothing falls back rather than failing', async () => {
-  await corpus({ ...three(), 'base.png': fixture.png(1024, 1024) }, async (dir) => {
-    const m = await scanDirectory(dir, { base: 'nope.jpg' });
-    assert.equal(m.base.centre.file, 'base.png');
+test('a --center that matches nothing falls back rather than failing', async () => {
+  await corpus({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
+    const m = await scanDirectory(dir, { center: 'nope.jpg' });
+    assert.equal(m.shared.center.file, 'center.png');
   });
 });
 
-test('the variants are the sorted base_variations folder, served from /base', async () => {
+test('the generic tiles are the sorted generic folder, served from /shared', async () => {
   await corpus(
     {
       ...three(),
-      'base.tile.png': fixture.png(1024, 768),
-      'base_variations/v2.webp': fixture.webpVp8(1024, 768),
-      'base_variations/v1.webp': fixture.webpVp8(1024, 768),
-      'base_variations/notes.txt': 'ignored',
+      'center_tile.png': fixture.png(1024, 768),
+      'generic/v2.webp': fixture.webpVp8(1024, 768),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      'generic/notes.txt': 'ignored',
     },
     async (dir) => {
       const m = await scanDirectory(dir);
       assert.deepEqual(
-        m.base.variants.map((v) => [v.file, v.url]),
+        m.shared.generic.map((v) => [v.file, v.url]),
         [
-          ['v1.webp', '/base/base_variations/v1.webp'],
-          ['v2.webp', '/base/base_variations/v2.webp'],
+          ['v1.webp', '/shared/generic/v1.webp'],
+          ['v2.webp', '/shared/generic/v2.webp'],
         ]
       );
-      // The variants are wallpaper, not corpus - they never become rooms.
+      // The generic tiles are wallpaper, not corpus - they never become rooms.
       assert.ok(!m.rooms.some((r) => r.file.startsWith('v')));
     }
   );
 });
 
-test('no base_variations folder means no variants, not a failure', async () => {
-  await corpus({ ...three(), 'base.tile.png': fixture.png(1024, 768) }, async (dir) => {
+test('no generic folder means no generic tiles, not a failure', async () => {
+  await corpus({ ...three(), 'center_tile.png': fixture.png(1024, 768) }, async (dir) => {
     const m = await scanDirectory(dir);
-    assert.deepEqual(m.base.variants, []);
+    assert.deepEqual(m.shared.generic, []);
   });
 });
 
-test('a base directory outside the corpus leaves every corpus image a room', async () => {
-  // The demo shape: --images points at the rooms, --base-dir at the shared
-  // assets. Nothing in the corpus is the wallpaper, so nothing is excluded.
+test('a shared directory outside the corpus leaves every corpus image a room', async () => {
+  // The demo shape: --images points at the rooms, --shared-dir at the shared
+  // assets. Nothing in the corpus is a generic tile, so nothing is excluded.
   await corpus(
     {
       'rooms/001.jpg': fixture.jpeg(512, 512),
       'rooms/002.jpg': fixture.jpeg(512, 512),
-      'base.tile.png': fixture.png(1024, 768),
-      'base_variations/v1.webp': fixture.webpVp8(1024, 768),
+      'center_tile.png': fixture.png(1024, 768),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
     },
     async (dir) => {
-      const m = await scanDirectory(join(dir, 'rooms'), { baseDir: dir });
+      const m = await scanDirectory(join(dir, 'rooms'), { sharedDir: dir });
       assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '002.jpg']);
-      assert.equal(m.count, 2, 'the base tiles do not steal a corpus slot');
-      assert.equal(m.base.centre.file, 'base.tile.png');
-      assert.deepEqual(m.base.variants.map((v) => v.file), ['v1.webp']);
+      assert.equal(m.count, 2, 'the shared tiles do not steal a corpus slot');
+      assert.equal(m.shared.center.file, 'center_tile.png');
+      assert.deepEqual(m.shared.generic.map((v) => v.file), ['v1.webp']);
     }
   );
 });
@@ -241,7 +220,7 @@ test('non-image files are ignored, whatever their case', async () => {
     async (dir) => {
       const m = await scanDirectory(dir);
       assert.deepEqual(m.rooms.map((r) => r.file), ['002.JPEG']);
-      assert.equal(m.base.centre.file, '001.JPG');
+      assert.equal(m.shared.center.file, '001.JPG');
     }
   );
 });
@@ -258,7 +237,7 @@ test('subdirectories are not walked into', async () => {
 
 test('filenames that need escaping survive the round trip into a url', async () => {
   await corpus(
-    { 'base.png': fixture.png(8, 8), 'a room #1.jpg': fixture.jpeg(32, 32), 'x&y=2.png': fixture.png(16, 16) },
+    { 'center.png': fixture.png(8, 8), 'a room #1.jpg': fixture.jpeg(32, 32), 'x&y=2.png': fixture.png(16, 16) },
     async (dir) => {
       const m = await scanDirectory(dir);
       const byFile = Object.fromEntries(m.rooms.map((r) => [r.file, r.url]));
@@ -271,7 +250,7 @@ test('filenames that need escaping survive the round trip into a url', async () 
 });
 
 test('a room whose header cannot be read still appears, without a size', async () => {
-  await corpus({ 'base.png': fixture.png(8, 8), '001.jpg': fixture.truncatedJpeg() }, async (dir) => {
+  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.truncatedJpeg() }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.count, 1);
     assert.equal(m.rooms[0].file, '001.jpg');
@@ -293,10 +272,10 @@ test('a missing directory fails rather than returning an empty corpus', async ()
   await assert.rejects(scanDirectory(join(tmpdir(), 'babel-does-not-exist-9e3779b1')));
 });
 
-test('a directory with one image serves it as the centre tile and has no rooms', async () => {
+test('a directory with one image serves it as the center tile and has no rooms', async () => {
   await corpus({ 'only.png': fixture.png(64, 64) }, async (dir) => {
     const m = await scanDirectory(dir);
-    assert.equal(m.base.centre.file, 'only.png');
+    assert.equal(m.shared.center.file, 'only.png');
     assert.deepEqual(m.rooms, []);
     assert.equal(m.count, 0);
   });
@@ -306,7 +285,7 @@ test('a directory with one image serves it as the centre tile and has no rooms',
 
 /** A corpus of 1024x768 rooms, plus whatever level directories are asked for. */
 const pyramid = (extra = {}) => ({
-  'base.jpg': fixture.jpeg(1024, 768),
+  'center.jpg': fixture.jpeg(1024, 768),
   '001.jpg': fixture.jpeg(1024, 768),
   '002.jpg': fixture.jpeg(1024, 768),
   ...extra,
@@ -380,7 +359,7 @@ test('the ladder is measured off the rooms, not off the generic', async () => {
   // The generic is one file and may be any shape; the rooms are what the map is
   // made of, so they are what the level widths have to match.
   await corpus(
-    { 'base.jpg': fixture.jpeg(640, 480), '001.jpg': fixture.jpeg(1024, 768), '512/001.jpg': fixture.jpeg(512, 384) },
+    { 'center.jpg': fixture.jpeg(640, 480), '001.jpg': fixture.jpeg(1024, 768), '512/001.jpg': fixture.jpeg(512, 384) },
     async (dir) => {
       const { levels } = await scanDirectory(dir);
       assert.deepEqual(levels.map((l) => [l.level, l.w]), [[0, 1024], [1, 512]]);
@@ -397,7 +376,7 @@ test('an unreadable source size degrades to level 0 rather than guessing', async
 // --- embeddings blob --------------------------------------------------------
 
 test('a corpus without a blob reports no embeddings', async () => {
-  await corpus({ 'base.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
     assert.equal((await scanDirectory(dir)).embeddings, null);
   });
 });
@@ -405,7 +384,7 @@ test('a corpus without a blob reports no embeddings', async () => {
 test('an embeddings sidecar is surfaced with a servable url', async () => {
   await corpus(
     {
-      'base.png': fixture.png(8, 8),
+      'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       '002.jpg': fixture.jpeg(8, 8),
       'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2 }),
@@ -427,7 +406,7 @@ test('a stale blob whose count no longer matches the corpus is ignored', async (
   // rooms, so a mismatch must degrade to the stub rather than be trusted.
   await corpus(
     {
-      'base.png': fixture.png(8, 8),
+      'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       '002.jpg': fixture.jpeg(8, 8),
       'embeddings.json': JSON.stringify({ dim: 512, count: 5 }),
@@ -441,7 +420,7 @@ test('a stale blob whose count no longer matches the corpus is ignored', async (
 // --- keyword/story sidecar --------------------------------------------------
 
 test('a corpus without a sidecar reports no metadata', async () => {
-  await corpus({ 'base.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
     assert.equal((await scanDirectory(dir)).metadata, null);
   });
 });
@@ -449,7 +428,7 @@ test('a corpus without a sidecar reports no metadata', async () => {
 test('a metadata sidecar is surfaced with a servable url and its coverage', async () => {
   await corpus(
     {
-      'base.png': fixture.png(8, 8),
+      'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       '002.jpg': fixture.jpeg(8, 8),
       'metadata.json': JSON.stringify({
@@ -472,7 +451,7 @@ test('a sidecar covering only some rooms is kept, unlike a stale blob', async ()
   // is simply partial and every entry that does match still lands.
   await corpus(
     {
-      'base.png': fixture.png(8, 8),
+      'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       '002.jpg': fixture.jpeg(8, 8),
       '003.jpg': fixture.jpeg(8, 8),
@@ -491,7 +470,7 @@ test('a sidecar that matches nothing is reported rather than hidden', async () =
   // the map it is indistinguishable from having no sidecar at all.
   await corpus(
     {
-      'base.png': fixture.png(8, 8),
+      'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       'metadata.json': JSON.stringify({ 'a.jpg': { story: 'x' }, 'b.jpg': { story: 'y' } }),
     },
@@ -506,7 +485,7 @@ test('a sidecar that matches nothing is reported rather than hidden', async () =
 test('a malformed sidecar degrades to no metadata rather than throwing', async () => {
   await corpus(
     {
-      'base.png': fixture.png(8, 8),
+      'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       'metadata.json': '{ not json',
     },

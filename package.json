@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "generate:figures": "node tools/base-image/hexagon-plan.mjs",
+    "generate:figures": "node tools/center-placement/hexagon-plan.mjs",
     "generate:mips": "node packages/pipeline/index.mjs",
     "generate:embeddings": "node tools/embed/embed.mjs",
     "test": "node --test",

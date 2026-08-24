@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
-import { buildRearrangement, CENTRE, GENERIC as BOARD_GENERIC } from '../../map/board.js';
+import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../map/board.js';
 import { planMoves, applyMove } from '../../map/illusion.js';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
 import { DEFAULTS } from '../../config/config.mjs';
-import { createTileCache, CENTRE as CENTRE_TILE } from './tiles.js';
+import { createTileCache, CENTER as CENTER_TILE } from './tiles.js';
 import { CELL_ASPECT } from './camera.js';
 
 // The shipped defaults, so these tests exercise what the demo actually runs.
@@ -40,7 +40,7 @@ function readyCache() {
       return img;
     },
   });
-  cache.pin(CENTRE_TILE);
+  cache.pin(CENTER_TILE);
   return { cache, settle: () => made.forEach((i) => i.onload?.()) };
 }
 
@@ -146,7 +146,7 @@ test('a cascade overlaps its runs but never finishes them out of order', () => {
   assert.ok(sawOverlap, 'nothing overlapped, so the cascade is doing nothing');
 });
 
-test('the wave sets off from the centre outward', () => {
+test('the wave sets off from the center outward', () => {
   // The plan has wanted this since the cross-fade design: the change should
   // leave from where the reader is standing, not sweep in from an edge.
   const { built, moves } = rearrangement();
@@ -261,9 +261,9 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
   }
 });
 
-test('the centre room is never drawn anywhere but the centre', () => {
+test('the center room is never drawn anywhere but the center', () => {
   // The whole point of the fixed tile. If a slide ever carried it, it would
-  // appear off-centre in some frame, and this is what would see it.
+  // appear off-center in some frame, and this is what would see it.
   const { built, moves } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
@@ -274,9 +274,9 @@ test('the centre room is never drawn anywhere but the centre', () => {
   const centreIndex = built.origin.y * built.width + built.origin.x;
   for (let t = 0; t <= show.totalMs; t += 23) {
     show.advanceTo(t);
-    assert.equal(board.cells[centreIndex], CENTRE, `the centre moved at t=${t}`);
-    const elsewhere = board.cells.filter((v) => v === CENTRE).length;
-    assert.equal(elsewhere, 1, `${elsewhere} centre rooms on the board at t=${t}`);
+    assert.equal(board.cells[centreIndex], CENTER, `the center moved at t=${t}`);
+    const elsewhere = board.cells.filter((v) => v === CENTER).length;
+    assert.equal(elsewhere, 1, `${elsewhere} center rooms on the board at t=${t}`);
   }
   assert.ok(renderer);
 });

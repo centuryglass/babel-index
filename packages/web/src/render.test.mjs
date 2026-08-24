@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
 import { createRenderer } from './render.js';
-import { createTileCache, CENTRE } from './tiles.js';
+import { createTileCache, CENTER } from './tiles.js';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.js';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.js';
 
@@ -60,9 +60,9 @@ function world({ only = null, concurrency = 4 } = {}) {
     createImage: images.createImage,
     concurrency,
   });
-  // No variants here, so every generic cell falls back to the centre base tile;
+  // No generic tiles here, so every generic cell falls back to the center tile;
   // pinning it is what keeps rule 1 (never blank) true across a zoom.
-  cache.pin(CENTRE);
+  cache.pin(CENTER);
   const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT });
   return {
     images,
@@ -169,20 +169,20 @@ test('a flat corpus renders exactly as it did before the pyramid', () => {
   for (const level of w.images.levelsRequested()) assert.equal(level, 0);
 });
 
-test('generic cells draw wallpaper variants, positionally and never blank', () => {
-  // With variants in play a generic cell is one of several ids, chosen by
+test('generic cells draw generic tiles, positionally and never blank', () => {
+  // With generic tiles in play a generic cell is one of several ids, chosen by
   // position; the far-out field must still fill, from a handful of pinned tiles.
   const images = fakeImages();
   const cache = createTileCache({
     urlFor: (id, level) => `/l${level}/${id}.jpg`,
     createImage: images.createImage,
   });
-  const VARIANTS = 6;
-  for (let i = 0; i < VARIANTS; i++) cache.pin(`base:v${i}`);
-  cache.pin(CENTRE);
+  const GENERICS = 6;
+  for (let i = 0; i < GENERICS; i++) cache.pin(`generic:${i}`);
+  cache.pin(CENTER);
   const layout = createLayout({
     roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT,
-    variantCount: VARIANTS, variantSeed: 3,
+    genericCount: GENERICS, genericSeed: 3,
   });
   const renderer = createRenderer({ cache });
   const order = shuffledOrder(ROOMS, 1);
@@ -192,10 +192,10 @@ test('generic cells draw wallpaper variants, positionally and never blank', () =
   drawOnce(fakeCtx());
   images.settleAll();
   const stats = drawOnce(fakeCtx());
-  assert.equal(stats.blank, 0, 'the wallpaper fills every generic cell');
+  assert.equal(stats.blank, 0, 'the generic tiles fill every generic cell');
 
-  const variantsSeen = new Set(images.urls().filter((u) => /\/base:v\d+\.jpg$/.test(u)));
-  assert.ok(variantsSeen.size > 1, `expected several variants on screen, saw ${variantsSeen.size}`);
+  const genericsSeen = new Set(images.urls().filter((u) => /\/generic:\d+\.jpg$/.test(u)));
+  assert.ok(genericsSeen.size > 1, `expected several generic tiles on screen, saw ${genericsSeen.size}`);
 });
 
 // --- rule 2: load ahead -----------------------------------------------------
@@ -273,7 +273,7 @@ test('the renderer never assumes a square cell', () => {
 });
 
 test('the keyboard cursor draws a ring only when passed, and only on screen', () => {
-  // `chrome: false` isolates the cursor's ring from the centre room's own
+  // `chrome: false` isolates the cursor's ring from the center room's own
   // marker - at a 1600x900 screen and this zoom the origin is easily still in
   // view of a room a couple of cells out, and chrome strokes it unconditionally.
   const w = world();

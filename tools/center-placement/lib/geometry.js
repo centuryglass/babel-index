@@ -4,11 +4,11 @@ import { MEASURED } from './measured.js';
  * Layout of one tile.
  *
  * A tile is ONE SHELVED WALL of a gallery, seen in shallow one-point
- * perspective - not a whole room. Only the centre tile (cell (0, 0)) is
+ * perspective - not a whole room. Only the center tile (cell (0, 0)) is
  * traced exactly; every corpus room is inpainted and needs only a bounding
- * box, so this module's precision exists for the centre alone.
+ * box, so this module's precision exists for the center alone.
  *
- * The centre's own book count and shelf count are a UI choice - legible
+ * The center's own book count and shelf count are a UI choice - legible
  * search-history titles - not a restatement of Borges' 5 shelves x 32 books;
  * see docs/borges-parameters.md for the story's numbers, which this module no
  * longer tracks.

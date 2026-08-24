@@ -21,8 +21,8 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {object} opts
  * @param {object} opts.manifest       the initial scan (see scan.mjs)
  * @param {string} opts.imagesDir      directory the corpus is served from
- * @param {string} [opts.baseDir]      directory the base tiles are served from,
- *                                     under /base (default: the images directory)
+ * @param {string} [opts.sharedDir]    directory the shared tiles are served from,
+ *                                     under /shared (default: the images directory)
  * @param {() => Promise<object>} opts.rescan re-read the directory
  * @param {object} [opts.config]       resolved config (see packages/config); the
  *                                     defaults when absent
@@ -30,7 +30,7 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
  *                                     editing the page needs no restart
  */
-export function createApp({ manifest, imagesDir, baseDir = imagesDir, rescan, config, bundleJs = '', readIndexHtml }) {
+export function createApp({ manifest, imagesDir, sharedDir = imagesDir, rescan, config, bundleJs = '', readIndexHtml }) {
   const app = express();
 
   // Config rides on the manifest rather than getting an endpoint of its own:
@@ -60,7 +60,7 @@ export function createApp({ manifest, imagesDir, baseDir = imagesDir, rescan, co
    * tiny stateless thing that could sit in front of a static bundle.
    *
    * Two fallbacks keep the mechanic - type a term, watch the library rearrange
-   * around the centre - alive without a model: no blob for this corpus, or the
+   * around the center - alive without a model: no blob for this corpus, or the
    * model failing to load (offline with nothing cached). Both return a
    * deterministic pseudo-ranking, labelled `stub` so the UI can say so rather
    * than imply the order means something.
@@ -91,10 +91,10 @@ export function createApp({ manifest, imagesDir, baseDir = imagesDir, rescan, co
   // cannot climb out of the images directory.
   app.use('/images', express.static(imagesDir, { maxAge: '1h', immutable: true }));
 
-  // The base tiles (centre + wallpaper variants) live outside the corpus, so
-  // they get their own mount. When baseDir is the images directory the two
-  // overlap harmlessly - the manifest still addresses base tiles via /base.
-  app.use('/base', express.static(baseDir, { maxAge: '1h', immutable: true }));
+  // The shared tiles (center + generic tiles) live outside the corpus, so
+  // they get their own mount. When sharedDir is the images directory the two
+  // overlap harmlessly - the manifest still addresses shared tiles via /shared.
+  app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
 
   // The tab icon would otherwise be a 404 on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());

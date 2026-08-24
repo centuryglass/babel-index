@@ -43,7 +43,7 @@
       canvas.dragging { cursor: grabbing; }
 
       /*
-       * The live search field, anchored to the centre tile's traced search
+       * The live search field, anchored to the center tile's traced search
        * box. `main.jsx` drives display/left/top/width/height imperatively
        * from the render loop each frame - `display: none` here is only the
        * pre-first-frame default, never re-asserted by React.
@@ -59,23 +59,23 @@
        * opens the field back up so a reader can click inside it to place a
        * cursor once they are actually typing.
        */
-      .centre-search { position: absolute; display: none; margin: 0; padding: 0; border: none; background: none; pointer-events: none; }
-      .centre-search:focus-within { pointer-events: auto; }
-      .centre-search input[type="search"] {
+      .center-search { position: absolute; display: none; margin: 0; padding: 0; border: none; background: none; pointer-events: none; }
+      .center-search:focus-within { pointer-events: auto; }
+      .center-search input[type="search"] {
         width: 100%; height: 100%; padding: 0 10px; text-align: center;
         background: rgba(10,8,6,0.55); color: var(--ink);
         border: 1px solid rgba(200,169,95,0.45); border-radius: 4px; font: inherit;
       }
-      .centre-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
+      .center-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
 
       /*
-       * The shelf's book buttons, over the centre tile's painted spines.
+       * The shelf's book buttons, over the center tile's painted spines.
        *
        * Transparent by design: the title is already drawn on the canvas, so a
        * button that painted its own would double it. What these add is
        * everything the pixels cannot have - a name, a focus ring, an activate.
        *
-       * pointer-events: none, and unlike `.centre-search` there is no
+       * pointer-events: none, and unlike `.center-search` there is no
        * `:focus-within` escape hatch: a click on a book already reaches the
        * same `onBook` through the canvas's own tap handling, so opening these
        * up to the pointer would only take gestures away from the map for no
@@ -86,13 +86,13 @@
        * one-spine-wide sliver. The ring's offset comes in from 2px for the
        * same reason: at a spine's width, 2px reaches across its neighbours.
        */
-      .centre-books { position: absolute; display: none; pointer-events: none; }
-      .centre-books button {
+      .center-books { position: absolute; display: none; pointer-events: none; }
+      .center-books button {
         position: absolute; flex: none; margin: 0; padding: 0;
         background: none; border: none; border-radius: 2px;
       }
-      .centre-books button:hover { background: none; }
-      .centre-books button:focus-visible { outline-offset: 1px; }
+      .center-books button:hover { background: none; }
+      .center-books button:focus-visible { outline-offset: 1px; }
 
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
@@ -242,7 +242,7 @@
 
       /*
         The map's wrapper. `display: contents` generates no box at all, so the
-        canvas and the two centre-tile overlays keep positioning against #root
+        canvas and the two center-tile overlays keep positioning against #root
         exactly as they did before there was a wrapper - wrapping must cost
         nothing, or every imperative rect in the render loop shifts. `[hidden]`
         has to be restated because the class would otherwise win on specificity
@@ -267,7 +267,7 @@
       /*
         The cross-fade half of the transition. The FLIP on the first row's
         thumbnail is driven from main.jsx; this is what the REST of the list
-        does, and it is what the whole transition degrades to when the centre
+        does, and it is what the whole transition degrades to when the center
         tile was off screen.
       */
       @keyframes catalog-in { from { opacity: 0; } to { opacity: 1; } }
@@ -450,7 +450,7 @@
       .score-strip .sure { font-style: italic; }
       .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
-      /* The centre room's row: the shelf, as links. */
+      /* The center room's row: the shelf, as links. */
       /*
         The one row that sizes itself. Forty shelf titles wrap to as many lines
         as the width needs, and cropping them to a tile's height would hide the
@@ -458,7 +458,7 @@
         because this row is not a PAGED one: the spacers stand in for those, and
         the scroll arithmetic takes this row's measured height as its lead.
       */
-      .catalog-centre {
+      .catalog-center {
         background: rgba(200,169,95,0.04);
         height: auto; min-height: var(--catalog-row); align-items: flex-start;
       }
@@ -481,7 +481,7 @@
         /*
           And the wall is capped rather than allowed to set the row's height.
           On anything wide this is well under the cap and never scrolls; on a
-          phone it is what keeps the centre room from being the whole page.
+          phone it is what keeps the center room from being the whole page.
         */
         max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
       }

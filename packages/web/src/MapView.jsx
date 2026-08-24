@@ -9,7 +9,7 @@
  *
  * ### `display: contents`, and never unmounted
  *
- * The wrapper generates no box when shown, so the canvas and both centre-tile
+ * The wrapper generates no box when shown, so the canvas and both center-tile
  * overlays keep positioning against `#root` exactly as they did before there
  * was a wrapper - wrapping has to cost nothing, or every imperative rect the
  * render loop writes shifts. Hidden, it is `display: none`, which takes the
@@ -24,7 +24,7 @@
  */
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
-import { describeBook, BOOK_RECTS } from './centre.js';
+import { describeBook, BOOK_RECTS } from './center.js';
 import { TOUCH_DEBUG } from './touchDebug.js';
 
 /**
@@ -86,7 +86,7 @@ export function MapView({
       {/*
         The map, and everything that belongs to it. `display: contents` when
         shown, so wrapping changes no layout at all - the canvas and both
-        centre-tile overlays keep positioning against `#root` exactly as before
+        center-tile overlays keep positioning against `#root` exactly as before
         - and `display: none` when hidden, which takes the whole subtree out of
         the accessibility tree along with the pixels.
 
@@ -150,10 +150,10 @@ export function MapView({
         )}
       </canvas>
       {/*
-        The live search field, on the centre tile itself rather than in the
+        The live search field, on the center tile itself rather than in the
         panel. Always mounted - Playwright's `inputValue()` and React's
         controlled `value` both need it attached - but hidden by the
-        stylesheet (`.centre-search { display: none }`) until the render loop
+        stylesheet (`.center-search { display: none }`) until the render loop
         above finds it on screen and legible, at which point it takes over
         `display`/position directly. No `style` prop here on purpose: a React
         re-render (every keystroke touches `query`) would otherwise reapply
@@ -162,7 +162,7 @@ export function MapView({
       */}
       <SearchForm
         formRef={searchFormRef}
-        className="centre-search"
+        className="center-search"
         query={query}
         setQuery={setQuery}
         onSubmit={onSearch}
@@ -170,7 +170,7 @@ export function MapView({
       />
       {/*
         The shelf, as a real control surface (accessibility-plan.md §3.3).
-        Until now the centre room's forty spines were painted pixels behind a
+        Until now the center room's forty spines were painted pixels behind a
         hit-test: the application's PRIMARY interface - search history, and a
         browsable index of corpus keywords - reachable only by mouse or finger.
         These are the same forty slots `assignTitles` already returns and
@@ -181,7 +181,7 @@ export function MapView({
         so a pan costs one assignment rather than forty. `display: none` in the
         stylesheet is the pre-first-frame default, and the render loop takes it
         over from there - the same arrangement (and the same "no style prop
-        here") as `.centre-search` above.
+        here") as `.center-search` above.
 
         `pointer-events: none`, from the stylesheet, and that is deliberate:
         the canvas keeps every gesture, so a pan that crosses the shelf still
@@ -191,9 +191,9 @@ export function MapView({
       */}
       <div
         ref={booksRef}
-        className="centre-books"
+        className="center-books"
         role="toolbar"
-        aria-label="the centre room's shelf"
+        aria-label="the center room's shelf"
         onKeyDown={onBooksKeyDown}
       >
         {centreSlots.map((slot, i) =>
@@ -307,13 +307,13 @@ export function MapView({
         <div className="buttons">
           <button onClick={onReorder}>reorder</button>
           <button onClick={onRescatter}>rescatter</button>
-          <button onClick={onRecentre}>centre</button>
+          <button onClick={onRecentre}>center</button>
         </div>
 
         {/*
-          The second way in. The primary one is the first book on the centre
+          The second way in. The primary one is the first book on the center
           shelf, but a book only exists while the spines are legible - zoomed in
-          on the centre - so a reader out in the far field, or one who never
+          on the center - so a reader out in the far field, or one who never
           uses a pointer, would otherwise have to fly home before they could
           reach the catalog at all.
         */}
