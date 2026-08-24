@@ -99,7 +99,7 @@ const spanOf = (a, b) => ({
  *   resolved `config.camera`, from the manifest
  * @param {{x: number, y: number, zoom: number}} opts.opening
  *   the page-load camera - where the map opens and how far in. Derived from the
- *   viewport and the centre room's geometry by the caller, not configured, so it
+ *   viewport and the center room's geometry by the caller, not configured, so it
  *   is handed in whole rather than read from `camera`. See `fitZoom` in camera.js.
  * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
  *   canvas-relative point of a right-click or a completed long press, with the
@@ -107,7 +107,7 @@ const spanOf = (a, b) => ({
  *   back for a ref this hook has not returned yet
  * @param {(px: number, py: number, cam: object) => void} [opts.onTap]
  *   canvas-relative point of a left-click / tap that neither panned nor stopped
- *   a flight. The centre room's book spines are what this selects.
+ *   a flight. The center room's book spines are what this selects.
  * @param {(line: string) => void} [opts.onDebug] one line per pointer event.
  *   Off unless asked for. Touch gestures can only really be judged on a device,
  *   and a phone has no console you can read while both thumbs are busy - so
@@ -117,9 +117,9 @@ const spanOf = (a, b) => ({
 export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, opening, onPick, onTap, onDebug }) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
   const cam = useRef({
-    // The PAGE-LOAD camera: centred on the centre room's bookshelf and zoomed to
+    // The PAGE-LOAD camera: centered on the center room's bookshelf and zoomed to
     // fit the display, computed by the caller from the viewport. Not the
-    // return-to-centre view - `defaultZoom` (wider) is where the "centre" button
+    // return-to-center view - `defaultZoom` (wider) is where the "center" button
     // and the rearrangement park, so the animation has a wall of rooms to slide
     // across. Derived from the display rather than configured, so it arrives
     // whole; the zoom is re-clamped here only to defend the invariant.
@@ -354,7 +354,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
 
       // A clean tap: the last finger up, having not wandered and not stopped a
       // flight, and not a cancel. Left-click/tap is otherwise unclaimed, so this
-      // is what selects a book on the centre room.
+      // is what selects a book on the center room.
       const t = tap.current;
       tap.current = null;
       if (onTap && t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {

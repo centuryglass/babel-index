@@ -2,7 +2,7 @@
  * The catalog's arithmetic: which rooms are on a page, which pages are mounted,
  * how tall a row is, and which pyramid level a thumbnail should ask for.
  *
- * The pure half, exactly as `picking.js` and `centre.js` are the pure halves of
+ * The pure half, exactly as `picking.js` and `center.js` are the pure halves of
  * their features - no DOM, no React, so what the list does is assertable without
  * a browser. `CatalogView` is the part that renders; everything it has to be
  * right about is here.
@@ -157,7 +157,7 @@ export function thumbLevel(cssWidth, dpr = 1) {
  *
  * Fixed-height rows mean this is arithmetic rather than a set of observers
  * watching sentinels go by: the page under the top of the viewport is exactly
- * `scrollTop / (perPage * rowPx)`, once the lead - the centre room's row, which
+ * `scrollTop / (perPage * rowPx)`, once the lead - the center room's row, which
  * sits outside the paging - is taken off.
  *
  * @param {number} scrollTop
@@ -192,7 +192,7 @@ export function windowFor(configured, { viewportPx, perPage, rowPx }) {
 /**
  * A DOMRect in the shape the rest of this app uses.
  *
- * `getBoundingClientRect()` returns `width`/`height`; `centreCellRect` and
+ * `getBoundingClientRect()` returns `width`/`height`; `centerCellRect` and
  * everything else here says `w`/`h`. Converting at the boundary rather than
  * teaching `flipTransform` two shapes is what keeps ONE rect shape inside the
  * module - and this function exists at all because the mismatch does not throw:
@@ -209,7 +209,7 @@ export function rectOf(domRect) {
  * The transform that puts `to` exactly where `from` is - the invert half of a
  * FLIP.
  *
- * Entering the catalog, `from` is the centre tile's rect on the map and `to` is
+ * Entering the catalog, `from` is the center tile's rect on the map and `to` is
  * where the first row's thumbnail has landed; the row starts transformed onto
  * the tile and animates to nothing, so the map appears to fold into the list.
  * Leaving, the two swap.

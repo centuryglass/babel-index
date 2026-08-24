@@ -15,7 +15,7 @@ regenerate this blob.
 
 ```sh
 node tools/embed/embed.mjs                        # against assets/corpus-sample/
-node tools/embed/embed.mjs --images <dir> [--base base.jpg] [--out <dir>]
+node tools/embed/embed.mjs --images <dir> [--center center.jpg] [--out <dir>]
 ```
 
 First run downloads the model (cached under `~/.cache/huggingface` afterwards).
@@ -31,7 +31,7 @@ Row order **is** the interface. The file order comes straight from
 is room id _i_ by construction, not by a re-implementation that could drift. The
 map keys slot placement and `rankByEmbedding()` (`packages/map/ordering.js`) on
 that id, so a wrong order would rank the wrong rooms with no error. Pass the same
-`--base` you run the demo server with.
+`--center` you run the demo server with.
 
 Vectors are L2-normalised and quantised to int8 at scale 127, so an int8 dot
 product approximates cosine similarity. Dequantise as `v / 127`.

@@ -1,7 +1,7 @@
 /**
  * The search box, in whichever of its two homes is on screen.
  *
- * On the map it is positioned imperatively over the centre tile by the render
+ * On the map it is positioned imperatively over the center tile by the render
  * loop; in the catalog it sits in the pinned bar. Both are the same controlled
  * input over the same submit, because "what does Enter do" is one question and
  * two answers to it would drift the first time one of them changed.

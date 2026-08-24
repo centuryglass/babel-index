@@ -8,12 +8,12 @@
  *
  * The scheme:
  *
- *   - Every cell is either a *content slot* or a copy of the generic base room.
+ *   - Every cell is either a *content slot* or a copy of the generic room.
  *     Which one is decided by a seeded hash of the coordinate, so it is stable,
  *     needs no storage, and extends to infinity in every direction.
  *   - Content slots are ordered by distance from the origin. A ranking (from
  *     CLIP, from manual score, or shuffled) is poured into that ordering, so
- *     rank 0 lands in the slot nearest the centre.
+ *     rank 0 lands in the slot nearest the center.
  *   - Re-ranking after a search swaps one array. Slot positions never move,
  *     which is what makes the re-order read as the library rearranging itself
  *     rather than as a page reload.
@@ -27,7 +27,7 @@
  * sure about is allowed into nearly every cell it passes and a rank it knows
  * nothing about is scattered at the baseline. Walking outward with that
  * threshold turns a certainty profile directly into a density profile: certain
- * matches pack tight against the centre, and the packing loosens back to the
+ * matches pack tight against the center, and the packing loosens back to the
  * user's chosen sparseness exactly as fast as the search's confidence falls off.
  *
  * The point is that the sliders and the search stop fighting. At an 80% generic
@@ -45,7 +45,7 @@
  *
  * The cost is that a search now recomputes placement, which the uniform scheme
  * never did. It is the same O(slots) rebuild the ratio slider already triggers
- * on every drag, and the rooms still arrive in rank order from the centre out -
+ * on every drag, and the rooms still arrive in rank order from the center out -
  * the map still reads as rearranging itself, with the density as one more thing
  * that rearranges.
  *
@@ -83,37 +83,37 @@ export function cellHash(x, y, seed = 0) {
 }
 
 /**
- * The origin is reserved for the centre room - the one with the search box and
+ * The origin is reserved for the center room - the one with the search box and
  * the hidden controls painted into it (concept.md steps 5-6). It is never a
  * corpus slot, so ranked rooms begin in the ring around it.
  */
-export const isCentre = (x, y) => x === 0 && y === 0;
+export const isCenter = (x, y) => x === 0 && y === 0;
 
 /** Is this cell allowed to hold a ranked corpus room? */
 export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
-  !isCentre(x, y) && cellHash(x, y, seed) < contentRatio;
+  !isCenter(x, y) && cellHash(x, y, seed) < contentRatio;
 
 /**
- * Which wallpaper variant a generic cell shows.
+ * Which generic tile a generic cell shows.
  *
  * A stable, storage-free choice over the same `cellHash` machinery as
  * `isContentSlot`, but salted with its OWN seed: sharing `slotSeed` would
- * correlate the pattern of variants with the pattern of content slots, and the
- * two would be visible in each other. The choice depends only on the cell, not
- * on the search order, so a reorder never changes a generic cell's face - which
- * is exactly why the rearrangement animation can leave `board.js` treating every
- * generic as one interchangeable value.
+ * correlate the pattern of generic tiles with the pattern of content slots, and
+ * the two would be visible in each other. The choice depends only on the cell,
+ * not on the search order, so a reorder never changes a generic cell's face -
+ * which is exactly why the rearrangement animation can leave `board.js` treating
+ * every generic as one interchangeable value.
  *
- * Returns -1 when there are no variants to choose from (an empty
- * `base_variations`), which the renderers read as "fall back to the base tile"
+ * Returns -1 when there are no generic tiles to choose from (an empty
+ * `generic/` dir), which the renderers read as "fall back to the center tile"
  * so the map still draws.
  *
  * @param {number} x
  * @param {number} y
- * @param {{seed?: number, count?: number}} [opts] count is how many variants exist
- * @returns {number} variant index in [0, count), or -1
+ * @param {{seed?: number, count?: number}} [opts] count is how many generic tiles exist
+ * @returns {number} generic tile index in [0, count), or -1
  */
-export const genericVariantAt = (x, y, { seed = 0, count = 0 } = {}) =>
+export const genericIndexAt = (x, y, { seed = 0, count = 0 } = {}) =>
   count > 0 ? Math.min(count - 1, Math.floor(cellHash(x, y, seed) * count)) : -1;
 
 /**
@@ -121,7 +121,7 @@ export const genericVariantAt = (x, y, { seed = 0, count = 0 } = {}) =>
  *
  * Without a floor, a query the corpus has no answer to still produces a faint
  * ranking - some room has to come first - and the faintest gradient would pull
- * it toward the centre, which would say "found it" about noise. The floor is
+ * it toward the center, which would say "found it" about noise. The floor is
  * what makes "no match" and "no search" the same picture, which is the only
  * honest thing for them to look like.
  */
@@ -148,7 +148,7 @@ export const CERTAINTY_FLOOR = 0.05;
 function densityRamp(certainty, contentRatio, peak, floor) {
   if (!certainty?.length) return () => contentRatio;
 
-  // Never below the baseline: the gradient adds density near the centre, it
+  // Never below the baseline: the gradient adds density near the center, it
   // does not take any away from a map the user has already set the sparseness of.
   const top = Math.max(peak, contentRatio);
   const ramp = new Float64Array(certainty.length);
@@ -181,11 +181,11 @@ export const cellDistance = (x, y, aspect = 1) => Math.hypot(x, y * aspect);
  * @param {number} [opts.aspect]      cell height / cell width; 1 for a square
  *                                    cell. Makes the library round on screen
  *                                    rather than round in the index.
- * @param {number} [opts.variantCount] how many wallpaper variants exist, so a
+ * @param {number} [opts.genericCount] how many generic tiles exist, so a
  *                                    generic cell can be given one. 0 means the
- *                                    map has only the base tile to fall back on.
- * @param {number} [opts.variantSeed] salt for the variant choice, kept separate
- *                                    from `seed` - see `genericVariantAt`.
+ *                                    map has only the center tile to fall back on.
+ * @param {number} [opts.genericSeed] salt for the generic tile choice, kept
+ *                                    separate from `seed` - see `genericIndexAt`.
  * @param {object} [opts.density]     the search's density gradient, if a search
  *                                    is running. Absent - or with no certainty
  *                                    in it - is the uniform map, cell for cell.
@@ -199,14 +199,14 @@ export function createLayout({
   contentRatio = 0.2,
   seed = 0,
   aspect = 1,
-  variantCount = 0,
-  variantSeed = 0,
+  genericCount = 0,
+  genericSeed = 0,
   density = null,
 } = {}) {
   if (!Number.isInteger(roomCount) || roomCount < 0)
     throw new RangeError('roomCount must be a non-negative integer');
-  if (!Number.isInteger(variantCount) || variantCount < 0)
-    throw new RangeError('variantCount must be a non-negative integer');
+  if (!Number.isInteger(genericCount) || genericCount < 0)
+    throw new RangeError('genericCount must be a non-negative integer');
   if (!(contentRatio > 0 && contentRatio <= 1))
     throw new RangeError('contentRatio must be in (0, 1]');
   if (!(aspect > 0 && Number.isFinite(aspect)))
@@ -243,17 +243,17 @@ export function createLayout({
     seed,
     roomCount,
     aspect,
-    variantCount,
-    variantSeed,
+    genericCount,
+    genericSeed,
 
     /**
-     * Which wallpaper variant a generic cell shows, in [0, variantCount), or -1
-     * when there are none. Positional and order-independent - see
-     * `genericVariantAt`. Only meaningful for a cell `roomAt` calls generic; the
-     * centre draws the base tile, not a variant.
+     * Which generic tile a generic cell shows, in [0, genericCount), or -1
+     * when there are none. Positional and order-independent - see the
+     * module-level `genericIndexAt`. Only meaningful for a cell `roomAt`
+     * calls generic; the center draws the center tile, not a generic one.
      */
-    variantAt(x, y) {
-      return genericVariantAt(x, y, { seed: variantSeed, count: variantCount });
+    genericIndexAt(x, y) {
+      return genericIndexAt(x, y, { seed: genericSeed, count: genericCount });
     },
 
     /** Rank position of a cell, or -1 if it holds a generic room. */
@@ -265,10 +265,10 @@ export function createLayout({
     /**
      * What is drawn at this cell.
      * @param {number[]} order room ids, best-first (from search, score, shuffle)
-     * @returns {{centre: true} | {generic: true} | {generic: false, id: number, rank: number}}
+     * @returns {{center: true} | {generic: true} | {generic: false, id: number, rank: number}}
      */
     roomAt(x, y, order) {
-      if (isCentre(x, y)) return { centre: true };
+      if (isCenter(x, y)) return { center: true };
       const rank = this.rankOf(x, y);
       if (rank === -1 || rank >= order.length) return { generic: true };
       return { generic: false, id: order[rank], rank };
@@ -391,7 +391,7 @@ function collectSlots(count, contentRatio, seed, aspect = 1, ramp = () => conten
 const radiusFor = (cells, aspect) => Math.ceil(Math.sqrt((cells * aspect) / Math.PI) * 1.35) + 4;
 
 /**
- * Visit every non-centre cell within `radius`, in no particular order.
+ * Visit every non-center cell within `radius`, in no particular order.
  *
  * A screen-circle of radius r spans r cells across and r / aspect up and down,
  * so a short cell means more rows for the same apparent distance.
@@ -401,7 +401,7 @@ function sweep(radius, aspect, visit) {
   const yMax = Math.ceil(radius / aspect);
   for (let y = -yMax; y <= yMax; y++)
     for (let x = -xMax; x <= xMax; x++) {
-      if (isCentre(x, y)) continue;
+      if (isCenter(x, y)) continue;
       const d = cellDistance(x, y, aspect);
       if (d <= radius) visit(x, y, d);
     }

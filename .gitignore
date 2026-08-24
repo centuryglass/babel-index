@@ -1,12 +1,14 @@
 node_modules/
 *.log
 .DS_Store
+*.kate-swp
 
 # Screenshots the browser smoke test leaves behind.
 packages/web/e2e/artifacts/
 
 # Blender's texture cache for babel_shelf.blend.
-assets/blender/textures
+reference/blender/textures
+reference/blender/assets
 
 # Blender's per-save backup files.
 *.blend1

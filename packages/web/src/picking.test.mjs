@@ -33,7 +33,7 @@ test('the picked room follows the ranking, not the cell', () => {
   assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, reversed).id, reversed[3]);
 });
 
-test('the centre room is never picked', () => {
+test('the center room is never picked', () => {
   // It is the controls, not a corpus room, and it has no metadata to show.
   const p = centreOf(0, 0);
   assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, order), null);
@@ -63,7 +63,7 @@ test('a rank beyond the end of the order is generic, not a crash', () => {
 test('picking is exact at cell edges rather than rounding into the neighbour', () => {
   // Cells are addressed by their lower corner, so the boundary belongs to the
   // higher cell. Rounding instead of flooring would shift every pick half a
-  // cell up and left, which is invisible at the centre and wrong at the edges.
+  // cell up and left, which is invisible at the center and wrong at the edges.
   const slot = layout.slots[5];
   const per = pxPerCell(cam);
   const topLeft = worldToScreen(slot.x, slot.y, cam, rect);
@@ -79,7 +79,7 @@ test('picking follows the camera, at any zoom', () => {
   const slot = layout.slots[11];
   for (const zoom of [40, 220, 700]) {
     const camera = { ...cam, zoom, x: slot.x + 0.5, y: slot.y + 0.5 };
-    // The camera is centred on the slot, so the middle of the screen is it.
+    // The camera is centered on the slot, so the middle of the screen is it.
     const hit = roomAtPoint(rect.width / 2, rect.height / 2, camera, rect, layout, order);
     assert.ok(hit, `nothing picked at zoom ${zoom}`);
     assert.equal(hit.x, slot.x, `zoom ${zoom}`);
@@ -90,7 +90,7 @@ test('picking follows the camera, at any zoom', () => {
 test('picking uses the cell shape, not a square cell', () => {
   // A cell is 4:3, so a point 0.9 of a cell WIDTH below a cell's top edge is
   // already in the cell below it. Treating the world as square would keep it in
-  // the same row and pick the wrong room everywhere off-centre.
+  // the same row and pick the wrong room everywhere off-center.
   assert.ok(CELL_ASPECT < 1, 'this test assumes a short cell');
   const slot = layout.slots[9];
   const per = pxPerCell(cam);

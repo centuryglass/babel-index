@@ -9,9 +9,9 @@ const order = Array.from({ length: 40 }, (_, i) => i);
 /** A room whose slot rank is known, so the message can be checked exactly. */
 const roomAt = (rank) => layout.slots[rank];
 
-test('the centre room is named, not ranked', () => {
+test('the center room is named, not ranked', () => {
   const d = describeCell(0, 0, { layout, order });
-  assert.equal(d.kind, 'centre');
+  assert.equal(d.kind, 'center');
   assert.equal(d.description, null);
 });
 
@@ -105,7 +105,7 @@ test('no caption is null everywhere, and nothing invents one', () => {
   metadata[id] = { keywords: [{ text: 'brass', type: 'material' }], story: 'A story.' };
   assert.equal(describeCell(slot.x, slot.y, { layout, order, metadata }).picture, null);
   assert.equal(describeCell(slot.x, slot.y, { layout, order }).picture, null);
-  assert.equal(describeCell(0, 0, { layout, order }).picture, null, 'the centre has no picture');
+  assert.equal(describeCell(0, 0, { layout, order }).picture, null, 'the center has no picture');
 });
 
 // --- the arrangement, for a reader who cannot watch it happen ---------------

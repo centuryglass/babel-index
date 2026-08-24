@@ -286,10 +286,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
   });
 
   test('the camera flies rather than teleports', async () => {
-    // Park at the centre, then zoom well away from the default so "centre" has
+    // Park at the center, then zoom well away from the default so "center" has
     // a long way to travel. Zoom is the axis to watch: it is independent of the
     // content boundary, so nothing seen here can be the glide back inside it.
-    await page.locator('button', { hasText: 'centre' }).click();
+    await page.locator('button', { hasText: 'center' }).click();
     await landed(page);
     await page.mouse.move(640, 400);
     for (let i = 0; i < 5; i++) await page.mouse.wheel(0, 600);
@@ -299,13 +299,13 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // teleport shows two cameras - the one before and the one after - and an
     // eased one shows a frame's worth each; the count is what separates them.
     const sampling = sampleCamera(page, flightMs * 3);
-    await page.locator('button', { hasText: 'centre' }).click();
+    await page.locator('button', { hasText: 'center' }).click();
     const seen = await sampling;
     assert.ok(seen.length > 4, `only ${seen.length} distinct cameras: the camera teleported`);
 
     const home = await landed(page);
     assert.ok(home.zoom > far.zoom, `the flight never restored the zoom: ${far.zoom} -> ${home.zoom}`);
-    assert.deepEqual({ x: home.x, y: home.y }, { x: 0.5, y: 0.5 }, 'and it must land at the centre');
+    assert.deepEqual({ x: home.x, y: home.y }, { x: 0.5, y: 0.5 }, 'and it must land at the center');
   });
 
   test('a hand on the map interrupts a flight instead of fighting it', async () => {
@@ -313,14 +313,14 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // easing under your hand drags the world out from under the finger holding
     // it, and the zoom is where that is unambiguous: a drag never changes zoom,
     // so any zoom that moves after the grab is the flight refusing to yield.
-    await page.locator('button', { hasText: 'centre' }).click();
-    const centred = await landed(page);
+    await page.locator('button', { hasText: 'center' }).click();
+    const centered = await landed(page);
     await page.mouse.move(640, 400);
     for (let i = 0; i < 5; i++) await page.mouse.wheel(0, 600);
     const low = await settled(page);
-    assert.ok(low.zoom < centred.zoom, `the wheel should have zoomed out: ${centred.zoom} -> ${low.zoom}`);
+    assert.ok(low.zoom < centered.zoom, `the wheel should have zoomed out: ${centered.zoom} -> ${low.zoom}`);
 
-    await page.locator('button', { hasText: 'centre' }).click();
+    await page.locator('button', { hasText: 'center' }).click();
     // Back onto the canvas first: clicking the button left the pointer over the
     // panel, and a press there never reaches the map at all - which looks
     // exactly like a flight that refused to be interrupted.
@@ -332,8 +332,8 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await page.mouse.move(600, 400, { steps: 4 });
     const grabbed = await settled(page);
     assert.ok(
-      grabbed.zoom > low.zoom && grabbed.zoom < centred.zoom,
-      `the grab did not catch the flight in the air (${low.zoom} -> ${grabbed.zoom} -> ${centred.zoom})`
+      grabbed.zoom > low.zoom && grabbed.zoom < centered.zoom,
+      `the grab did not catch the flight in the air (${low.zoom} -> ${grabbed.zoom} -> ${centered.zoom})`
     );
 
     await page.waitForTimeout(flightMs);
@@ -344,19 +344,19 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // The wheel yields the same way and for the same reason: a flight easing
     // its own zoom underneath would fight every notch. Separate line of code
     // from the one above, so separate assertion.
-    await page.locator('button', { hasText: 'centre' }).click();
+    await page.locator('button', { hasText: 'center' }).click();
     await page.mouse.move(640, 400);
     await page.waitForTimeout(flightMs / 3);
     await page.mouse.wheel(0, 600);
     const wheeled = await settled(page);
     await page.waitForTimeout(flightMs);
     const after = await settled(page);
-    assert.ok(wheeled.zoom < centred.zoom, 'the wheel should have caught the flight in the air');
+    assert.ok(wheeled.zoom < centered.zoom, 'the wheel should have caught the flight in the air');
     assert.equal(after.zoom, wheeled.zoom, `the flight flew on under the wheel: ${wheeled.zoom} -> ${after.zoom}`);
   });
 
-  test('a search reorders the library around the centre', async () => {
-    // Park at the centre and record the view, because a search both moves the
+  test('a search reorders the library around the center', async () => {
+    // Park at the center and record the view, because a search both moves the
     // camera home AND reorders the rooms. Comparing pixels from two different
     // camera positions would pass on the camera move alone, which is a test
     // that cannot tell a working search from one whose ranking is discarded.
@@ -364,7 +364,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // `landed` rather than `settled`: the camera is flying for ~450ms after the
     // click, and a "parked" camera read mid-flight is a position the search's
     // own flight home would only pass through.
-    await page.locator('button', { hasText: 'centre' }).click();
+    await page.locator('button', { hasText: 'center' }).click();
     const parked = await landed(page);
     const before = await fingerprint(page);
 
@@ -376,7 +376,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     const wandered = await settled(page);
     assert.notEqual(wandered.x, parked.x, 'the drag did not move the camera');
 
-    // The live field lives on the centre tile, not the panel - wandered this
+    // The live field lives on the center tile, not the panel - wandered this
     // far out it is off screen, so reaching it is itself a flight the search
     // trigger starts. Land that one before typing into what it flew to.
     await page.locator('button.search-trigger').click();
@@ -384,7 +384,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await page.locator('input[type=search]').fill('hexagonal galleries');
     await page.locator('input[type=search]').press('Enter');
 
-    // A search flies back to the centre, which is the visible half of "the
+    // A search flies back to the center, which is the visible half of "the
     // library rearranges around you" - and it is the completion signal we can
     // observe without knowing whether a real ranking or the stub answered:
     // the camera only returns home once the response has been applied.
@@ -394,13 +394,13 @@ describe('the library, in a browser', { concurrency: false }, () => {
         return c.x === parked.x && c.y === parked.y && c.zoom === parked.zoom;
       },
       SEARCH_TIMEOUT,
-      'the search never flew the camera back to the centre it started from'
+      'the search never flew the camera back to the center it started from'
     );
     const home = await settled(page);
     assert.deepEqual(
       { x: home.x, y: home.y, zoom: home.zoom },
       { x: parked.x, y: parked.y, zoom: parked.zoom },
-      'a search must return the camera to the centre'
+      'a search must return the camera to the center'
     );
 
     // Same camera, same slots - so any change in pixels is the rooms moving
@@ -419,10 +419,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
     const card = page.locator('.card');
     await page.mouse.move(640, 400);
 
-    // The map is 100% non-generic by the time this runs, so the centre of the
-    // screen is a corpus room - but the centre CELL is reserved, so aim off it.
-    // (The reader last returned to the centre at `defaultZoom`, not the fully-in
-    // page-load zoom, so rooms around the centre are on screen here.)
+    // The map is 100% non-generic by the time this runs, so the center of the
+    // screen is a corpus room - but the center CELL is reserved, so aim off it.
+    // (The reader last returned to the center at `defaultZoom`, not the fully-in
+    // page-load zoom, so rooms around the center are on screen here.)
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
     assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
@@ -610,16 +610,16 @@ describe('the library, in a browser', { concurrency: false }, () => {
     } finally {
       // Restores the RATIO and the CAMERA, not just the ratio. A search that
       // finds the field off screen flies to the far-zoomed `opening` view
-      // (fitted tight on the centre tile) rather than simply focusing it; an
+      // (fitted tight on the center tile) rather than simply focusing it; an
       // assertion failing before this test flies anywhere else left the
       // camera there once, and a right-click at a fixed screen point in a
-      // LATER test landed on the centre tile's own controls instead of a room
+      // LATER test landed on the center tile's own controls instead of a room
       // - one test's failure taking down an unrelated one's precondition,
-      // which is worse than the original failure. Clicking "centre" is cheap
+      // which is worse than the original failure. Clicking "center" is cheap
       // and makes every subsequent test's assumption ("a dense map, framed
       // normally") true regardless of how far this one got.
       await ratio.press('End');
-      await page.getByRole('button', { name: 'centre' }).click();
+      await page.getByRole('button', { name: 'center' }).click();
       await landed(page);
     }
   });
@@ -674,18 +674,18 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // Superseded by phase C: the canvas WAS `role="img"` with a static label,
     // a placeholder for the picture nobody could yet navigate. Now it is the
     // cursor's own `role="application"` region, named by whatever cell is
-    // currently under the camera centre.
+    // currently under the camera center.
     //
     // Named by WHICHEVER cell that is, and this test deliberately does not
     // move the camera to make it a known one. The rearrangement announcement
     // (§8 item 4) means a search moves the cursor as well as the map, so a
     // listbox jump earlier in this suite can leave it on a room rather than
-    // the centre - and flying home to pin the name down would wipe the live
+    // the center - and flying home to pin the name down would wipe the live
     // region the announcement test after this one reads. What must hold here
     // is the role and that the name is a real cell's, which is exactly what
     // an unlabelled graphic or a static placeholder would fail.
     const named = page.getByRole('application', {
-      name: /the centre of the library|Room \d+, rank \d+ of \d+|a blank wall|the far field/i,
+      name: /the center of the library|Room \d+, rank \d+ of \d+|a blank wall|the far field/i,
     });
     await named.waitFor({ timeout: 5000 });
     assert.equal(await named.count(), 1, 'exactly one application region, and it is the map');
@@ -755,14 +755,14 @@ describe('the library, in a browser', { concurrency: false }, () => {
   test('reduced motion rebuilds the library instead of sliding it', async () => {
     // Asserted through the CAMERA rather than by watching for the absence of an
     // animation, which would be a race dressed up as a test. A normal
-    // rearrangement parks the camera on the centre first, because the slide is
+    // rearrangement parks the camera on the center first, because the slide is
     // planned against exactly the cells on screen. Reduced motion bails out
     // before that flight - there is no animation to set up, and moving someone's
     // camera unasked is the very thing they turned off - so the giveaway is a
     // camera that did not move at all.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     try {
-      // Somewhere clearly not the centre, so "did not move" is unambiguous.
+      // Somewhere clearly not the center, so "did not move" is unambiguous.
       await page.mouse.move(700, 420);
       await page.mouse.down();
       for (let i = 1; i <= 8; i++) await page.mouse.move(700 - i * 25, 420 - i * 15);
@@ -770,7 +770,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       const before = await settled(page);
       assert.ok(
         Math.abs(before.x) > 0.2 || Math.abs(before.y) > 0.2,
-        `the drag must leave the centre, got (${before.x}, ${before.y})`
+        `the drag must leave the center, got (${before.x}, ${before.y})`
       );
 
       // "rescatter", not "reorder", and the difference is load-bearing: a
@@ -796,8 +796,8 @@ describe('the library, in a browser', { concurrency: false }, () => {
       await page.emulateMedia({ reducedMotion: null });
     }
 
-    // Put the reader back on the centre for whatever runs next.
-    await page.getByRole('button', { name: 'centre' }).click();
+    // Put the reader back on the center for whatever runs next.
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
   });
 
@@ -848,7 +848,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await page.keyboard.press('Home');
     await page.waitForTimeout(flightMs + 200);
     await assert.doesNotReject(
-      page.getByRole('application', { name: /centre of the library/i }).waitFor({ timeout: 2000 })
+      page.getByRole('application', { name: /center of the library/i }).waitFor({ timeout: 2000 })
     );
   });
 
@@ -961,9 +961,9 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await page.keyboard.press('Home');
     await page.waitForTimeout(flightMs + 200);
     await waitFor(
-      async () => (await live.textContent()) === 'the centre of the library',
+      async () => (await live.textContent()) === 'the center of the library',
       2000,
-      'Home must return to the centre and announce it'
+      'Home must return to the center and announce it'
     );
   });
 
@@ -1031,7 +1031,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     );
     await waitFor(async () => (await hud(page)).x === before.x + 1, 1000, 'the arrow press never finished arriving');
 
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -1051,7 +1051,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       await page.emulateMedia({ reducedMotion: null });
     }
 
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
   });
 
@@ -1099,13 +1099,13 @@ describe('the library, in a browser', { concurrency: false }, () => {
       'two rapid arrow presses must move two cells, not collapse into one'
     );
 
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
   });
 
-  test('arrows re-centre the map after a trip outside the boundary', async () => {
+  test('arrows re-center the map after a trip outside the boundary', async () => {
     // Reported from real use: after pushing past the border the camera settles
-    // off-centre from the cursor's own cell - part of it hanging off the screen
+    // off-center from the cursor's own cell - part of it hanging off the screen
     // edge - and arrowing around in bounds never fixes it, while a zoom or a
     // ctrl+arrow does. The cause is that a trip outside leaves the camera off
     // the grid (damped steps out there are fractional by design, and the glide
@@ -1115,7 +1115,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // Only a browser reaches this: it needs the real damping, the real glide,
     // and the real settling between them.
     const canvas = page.locator('canvas');
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
     await canvas.focus();
 
@@ -1130,24 +1130,24 @@ describe('the library, in a browser', { concurrency: false }, () => {
     const settled = await hud(page);
     assert.ok(settled.x > settled.edge, `the hold must end outside: x=${settled.x}, edge=${settled.edge}`);
 
-    // Walk back in. Once inside, a press must land the camera cell-centred on
+    // Walk back in. Once inside, a press must land the camera cell-centered on
     // BOTH axes - the offset a trip outward leaves is rarely axis-aligned, so
     // an implementation that only fixed the axis being moved along would leave
     // the other one crooked forever.
-    const offCentre = (v) => Math.abs(v - Math.floor(v) - 0.5);
+    const offCenter = (v) => Math.abs(v - Math.floor(v) - 0.5);
     await waitFor(
       async () => {
         await page.keyboard.press('ArrowLeft');
         await page.waitForTimeout(250);
         const c = await hud(page);
-        // The HUD rounds to one decimal, so "centred" is .5 within that.
-        return c.x < c.edge && offCentre(c.x) < 0.05 && offCentre(c.y) < 0.05;
+        // The HUD rounds to one decimal, so "centered" is .5 within that.
+        return c.x < c.edge && offCenter(c.x) < 0.05 && offCenter(c.y) < 0.05;
       },
       15000,
-      'arrowing back in bounds never re-centred the camera on its cell'
+      'arrowing back in bounds never re-centered the camera on its cell'
     );
 
-    // And it stays centred, one clean cell per press, rather than re-acquiring
+    // And it stays centered, one clean cell per press, rather than re-acquiring
     // an offset as it goes.
     for (let i = 0; i < 3; i++) {
       const before = await hud(page);
@@ -1155,8 +1155,8 @@ describe('the library, in a browser', { concurrency: false }, () => {
       await page.waitForTimeout(300);
       const after = await hud(page);
       assert.ok(
-        offCentre(after.x) < 0.05 && offCentre(after.y) < 0.05,
-        `press ${i + 1} left the camera off-centre: x=${after.x}, y=${after.y}`
+        offCenter(after.x) < 0.05 && offCenter(after.y) < 0.05,
+        `press ${i + 1} left the camera off-center: x=${after.x}, y=${after.y}`
       );
       assert.ok(
         Math.abs(after.x - before.x + 1) < 0.05,
@@ -1164,7 +1164,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       );
     }
 
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
   });
 
@@ -1183,7 +1183,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // push 15 past, and it was still climbing linearly.
     const canvas = page.locator('canvas');
     const recentre = async () => {
-      await page.getByRole('button', { name: 'centre' }).click();
+      await page.getByRole('button', { name: 'center' }).click();
       await landed(page);
     };
 
@@ -1285,7 +1285,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // Reduced motion gets the same correction without the frames it takes to
     // ease there - the glide had never checked the setting at all, an ambient
     // gap older than any of the keyboard work.
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     try {
@@ -1307,7 +1307,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       await page.emulateMedia({ reducedMotion: null });
     }
 
-    await page.getByRole('button', { name: 'centre' }).click();
+    await page.getByRole('button', { name: 'center' }).click();
     await landed(page);
   });
 
@@ -1378,7 +1378,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     const summary = violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length}): ${v.help}`);
     assert.deepEqual(summary, [], `axe reported violations with the cursor active:\n  ${summary.join('\n  ')}`);
 
-    // Restore the centre for whatever runs next, and the ratio slider this
+    // Restore the center for whatever runs next, and the ratio slider this
     // block's first test set - the long-press and pinch tests after this rely
     // on a dense map to reliably land on a room at a fixed screen point.
     await page.keyboard.press('Home');
@@ -1388,10 +1388,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await ratio.press('End');
   });
 
-  // --- the centre room's shelf (accessibility-plan.md phase D) ---------------
+  // --- the center room's shelf (accessibility-plan.md phase D) ---------------
 
   test('the shelf is a real control surface: one tab stop in, arrows within, a book searches', async () => {
-    // The centre room's forty spines were painted pixels behind a hit-test -
+    // The center room's forty spines were painted pixels behind a hit-test -
     // the application's PRIMARY interface reachable only by mouse or finger.
     // Everything here is what a keyboard can now do with them.
     //
@@ -1402,7 +1402,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await landed(page);
 
     try {
-      const shelf = page.locator('.centre-books');
+      const shelf = page.locator('.center-books');
       await shelf.waitFor({ state: 'visible', timeout: 5000 });
       const books = shelf.locator('button');
       await waitFor(async () => (await books.count()) > 0, 5000, 'the shelf mounted no books');
@@ -1422,14 +1422,14 @@ describe('the library, in a browser', { concurrency: false }, () => {
       const inShelf = () =>
         page.evaluate(() => {
           const el = document.activeElement;
-          return el?.closest('.centre-books') ? el.dataset.book : null;
+          return el?.closest('.center-books') ? el.dataset.book : null;
         });
       const first = await inShelf();
       assert.ok(first !== null, 'Tab from the search field must reach the shelf');
 
       // Arrows move WITHIN the shelf: right along the wall's flat queue, down
       // by a shelf. Both are `bookNeighbour`, which is asserted exactly in
-      // centre.test.mjs - what only a browser can say is that the key actually
+      // center.test.mjs - what only a browser can say is that the key actually
       // reaches it and focus actually follows.
       await page.keyboard.press('ArrowRight');
       const right = await inShelf();
@@ -1463,7 +1463,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       // reaches through the canvas, which is the point of there being one.
       const term = book.name.split(' - ')[0];
       await page.evaluate((want) => {
-        const el = [...document.querySelectorAll('.centre-books button')].find(
+        const el = [...document.querySelectorAll('.center-books button')].find(
           (b) => b.getAttribute('aria-label')?.startsWith(want)
         );
         el.focus();
@@ -1475,9 +1475,9 @@ describe('the library, in a browser', { concurrency: false }, () => {
         `pressing a book must run its own title as a search (wanted "${term}")`
       );
     } finally {
-      // Back to the centre at the ordinary zoom, which is where the block
+      // Back to the center at the ordinary zoom, which is where the block
       // above leaves things and what the pointer tests after this expect - a
-      // viewport filled by the centre room would put every one of their fixed
+      // viewport filled by the center room would put every one of their fixed
       // screen points on the same tile.
       await page.locator('canvas').focus();
       await page.keyboard.press('Home');
@@ -1490,7 +1490,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await page.locator('button.search-trigger').click();
     await landed(page);
     try {
-      await page.locator('.centre-books').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('.center-books').waitFor({ state: 'visible', timeout: 5000 });
       const { violations } = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze();
@@ -1523,11 +1523,11 @@ describe('the library, in a browser', { concurrency: false }, () => {
     const said = (await live.textContent()) ?? '';
     assert.match(said, /\d+ rooms on the map/, `no size in the announcement: ${said}`);
     // And where the reader now stands - the clause §4.3 asks for. An animated
-    // rearrangement parks the camera on the centre, so that is the honest
+    // rearrangement parks the camera on the center, so that is the honest
     // answer here rather than the cell the search was typed from.
     assert.match(
       said,
-      /the centre of the library|Room \d+|a blank wall|the far field/,
+      /the center of the library|Room \d+|a blank wall|the far field/,
       `the announcement never names a cell: ${said}`
     );
 
@@ -1638,13 +1638,13 @@ describe('the library, in a browser', { concurrency: false }, () => {
     try {
       const moves = [];
       for (let i = 0; i < 3; i++) {
-        // Re-centre first. Pan resistance grows with distance from the origin,
+        // Re-center first. Pan resistance grows with distance from the origin,
         // so three drags in a row from wherever the last one ended would differ
         // for a reason that has nothing to do with pointer bookkeeping - which
         // is exactly what the first version of this test measured. And the
-        // re-centre now flies, so the baseline has to be taken after it lands
+        // re-center now flies, so the baseline has to be taken after it lands
         // or the drag is measured partly against the flight.
-        await page.locator('button', { hasText: 'centre' }).click();
+        await page.locator('button', { hasText: 'center' }).click();
         const before = await landed(page);
         await touchDrag(page, { from: { x: 900, y: 400 }, to: { x: 700, y: 400 } });
         moves.push((await settled(page)).x - before.x);
@@ -1682,7 +1682,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // Last in the file because it reloads: everything above shares one page.
     //
     // Sets its own camera and density rather than inheriting them: a reload
-    // resets both, and at the opening view the centre room fills the screen so
+    // resets both, and at the opening view the center room fills the screen so
     // a fixed screen point would land on the one cell that is never a corpus
     // room.
     const openCard = async () => {
@@ -1749,18 +1749,18 @@ describe('the library, in a browser', { concurrency: false }, () => {
     await settled(page);
   }
 
-  test('the catalog lists every room once, starting with the centre', async () => {
+  test('the catalog lists every room once, starting with the center', async () => {
     await openCatalog();
     try {
       const rows = page.locator('.catalog-row');
-      // One row per room, plus the centre's - "always 100% unique tiles", so
+      // One row per room, plus the center's - "always 100% unique tiles", so
       // nothing here is wallpaper and nothing repeats.
       assert.equal(await rows.count(), roomCount + 1);
-      assert.equal(await rows.first().getAttribute('class'), 'catalog-row catalog-centre');
+      assert.equal(await rows.first().getAttribute('class'), 'catalog-row catalog-center');
 
-      // The centre's row carries the shelf as real links rather than as paint,
+      // The center's row carries the shelf as real links rather than as paint,
       // and the first of them is the override that got us here.
-      assert.ok((await page.locator('.shelf-link').count()) > 0, 'the shelf is not in the centre row');
+      assert.ok((await page.locator('.shelf-link').count()) > 0, 'the shelf is not in the center row');
       assert.equal(await page.locator('.shelf-link').first().textContent(), 'the catalog');
 
       // Every room row names its rank and points at a real tile.
@@ -1775,7 +1775,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
   test('a search from the catalog ranks it, explains it, and marks what matched', async () => {
     await openCatalog();
     try {
-      const term = await page.locator('.catalog-row:not(.catalog-centre) .chip').first().textContent();
+      const term = await page.locator('.catalog-row:not(.catalog-center) .chip').first().textContent();
 
       await page.locator('.catalog-search input').fill(term);
       await page.locator('.catalog-search input').press('Enter');
@@ -1785,7 +1785,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
         'a search from the catalog never re-ranked it'
       );
 
-      const top = page.locator('.catalog-row:not(.catalog-centre)').first();
+      const top = page.locator('.catalog-row:not(.catalog-center)').first();
 
       // The match is MARKED where it matched. Not a decoration: it is the only
       // thing on the row that says WHY these words put this room first.
@@ -1814,7 +1814,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
       await page.locator('.pager').waitFor({ timeout: 5000 });
 
       const namesOn = async () =>
-        page.locator('.catalog-row:not(.catalog-centre) .catalog-name').allTextContents();
+        page.locator('.catalog-row:not(.catalog-center) .catalog-name').allTextContents();
 
       const firstPage = await namesOn();
       assert.ok(firstPage.length > 0, 'pagination mounted nothing');
@@ -1841,9 +1841,9 @@ describe('the library, in a browser', { concurrency: false }, () => {
     }
   });
 
-  test('the catalog folds out of the centre tile rather than appearing', async () => {
+  test('the catalog folds out of the center tile rather than appearing', async () => {
     // The FLIP, which is the whole transition: the first row's thumbnail starts
-    // ON the map's centre tile and eases to its resting place. Worth an
+    // ON the map's center tile and eases to its resting place. Worth an
     // assertion of its own because the bug this had was silent - a DOMRect says
     // `width` where the rest of the app says `w`, so the scale fell through a
     // zero-size guard to 1 and the tile translated into place without ever
@@ -1854,12 +1854,12 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // never true at all when the scale is being dropped.
     //
     // The camera has to be established first. How big the tile starts depends
-    // entirely on how large the centre cell is on screen, and this suite shares
-    // one page - at the return-to-centre zoom (220) the cell is SMALLER than
+    // entirely on how large the center cell is on screen, and this suite shares
+    // one page - at the return-to-center zoom (220) the cell is SMALLER than
     // the thumbnail and the tile would legitimately shrink into place, while
-    // from far enough out the centre is off screen and there is deliberately no
+    // from far enough out the center is off screen and there is deliberately no
     // flip at all. The search trigger flies to the opening view, which frames
-    // the centre tile near its native width.
+    // the center tile near its native width.
     await page.locator('button.search-trigger').click();
     await landed(page);
 
@@ -2200,7 +2200,7 @@ async function settled(page) {
  * The HUD once the camera has stopped moving.
  *
  * Two frames were enough while `flyTo` teleported. It now eases over
- * `camera.flightMs`, so anything reading the camera straight after a "centre" click
+ * `camera.flightMs`, so anything reading the camera straight after a "center" click
  * reads one still in the air - and every assertion here that compares a camera
  * before and after some gesture needs the before to be a camera at rest.
  *

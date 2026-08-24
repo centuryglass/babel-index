@@ -36,15 +36,15 @@
 import { PYRAMID, PREFETCH } from './pyramid.js';
 
 /**
- * The base-tile ids. Strings, so they can never collide with a numeric room id.
+ * The shared-tile ids. Strings, so they can never collide with a numeric room id.
  *
- * `CENTRE` is the blank base tile at cell (0, 0). The wallpaper elsewhere is one
- * of N inpainted variants, addressed by `variantId(i)`; a generic cell with no
- * variant available (an empty `base_variations`) falls back to `CENTRE`, which
- * is why `variantId(-1)` is `CENTRE` rather than an id that resolves to nothing.
+ * `CENTER` is the blank center tile at cell (0, 0). The wallpaper elsewhere is
+ * one of N inpainted generics, addressed by `genericId(i)`; a generic cell with
+ * none available (an empty `generic/` dir) falls back to `CENTER`, which is why
+ * `genericId(-1)` is `CENTER` rather than an id that resolves to nothing.
  */
-export const CENTRE = 'base:centre';
-export const variantId = (i) => (i < 0 ? CENTRE : `base:v${i}`);
+export const CENTER = 'center';
+export const genericId = (i) => (i < 0 ? CENTER : `generic:${i}`);
 
 /** How many prefetches may be waiting at once. See prefetch() for why. */
 const QUEUE_LIMIT = 256;

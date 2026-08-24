@@ -416,7 +416,7 @@ test('an exact keyword match is certain whatever the picture looks like', () => 
 });
 
 test('a partial keyword is partially certain', () => {
-  // 3/11 of "art nouveau" matched is 3/11 of a reason to pull it to the centre.
+  // 3/11 of "art nouveau" matched is 3/11 of a reason to pull it to the center.
   const certainty = certaintyOf({
     query: 'art',
     embeddings: atCosines(0.1, 0.1, 0.1),

@@ -23,7 +23,7 @@ import { screenToWorld } from './camera.js';
  * @param {object} layout from `createLayout()`
  * @param {number[]} order the ranking currently on the map
  * @returns {{id: number, rank: number, x: number, y: number}|null}
- *   null for the centre room and for generic cells - neither has anything to
+ *   null for the center room and for generic cells - neither has anything to
  *   show, and opening an empty card over the wallpaper would make the gesture
  *   feel broken rather than empty
  */
@@ -33,6 +33,6 @@ export function roomAtPoint(px, py, cam, rect, layout, order) {
   const y = Math.floor(world.y);
 
   const at = layout.roomAt(x, y, order);
-  if (at.centre || at.generic) return null;
+  if (at.center || at.generic) return null;
   return { id: at.id, rank: at.rank, x, y };
 }

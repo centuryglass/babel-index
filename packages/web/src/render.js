@@ -25,17 +25,18 @@
  */
 import { PYRAMID, prefetchBounds } from './pyramid.js';
 import { pxPerCell } from './camera.js';
-import { CENTRE, variantId } from './tiles.js';
-import { composeSpines } from './centre.js';
+import { CENTER, genericId } from './tiles.js';
+import { composeSpines } from './center.js';
 
 /**
- * The cache id for whatever a cell holds. The centre is the blank base tile; a
- * generic cell is one of the wallpaper variants, chosen positionally by the
- * layout (so a reorder never changes it); a slot is its room. `variantId(-1)`
- * falls back to the centre tile, which covers a corpus with no variants at all.
+ * The cache id for whatever a cell holds. The center is the blank center tile;
+ * a generic cell is one of the generic tiles, chosen positionally by the
+ * layout (so a reorder never changes it); a slot is its room. `genericId(-1)`
+ * falls back to the center tile, which covers a corpus with no generic tiles
+ * at all.
  */
 const idOf = (cell, layout, gx, gy) =>
-  cell.centre ? CENTRE : cell.generic ? variantId(layout.variantAt(gx, gy)) : cell.id;
+  cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
 
 export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
   // Survives across frames purely so hysteresis has something to compare to.
@@ -50,9 +51,9 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {{x: number, y: number, zoom: number}} opts.cam
    * @param {object} opts.layout  from packages/map
    * @param {number[]} opts.order room ids, best first
-   * @param {boolean} [opts.chrome] draw the centre-room marker and rank labels
+   * @param {boolean} [opts.chrome] draw the center-room marker and rank labels
    * @param {Array|null} [opts.centreSlots] the history/tag titles to composite
-   *   onto the centre tile's spines, or null to draw none. Optional so tests and
+   *   onto the center tile's spines, or null to draw none. Optional so tests and
    *   the slide renderer, which never pass it, exercise no text compositing.
    * @returns {object} what the frame did, for the HUD and for tests
    */
@@ -113,10 +114,10 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
         }
 
         if (chrome) drawChrome(ctx, cell, sx, sy, cellPx, zoom);
-        // The centre room's spines carry the search history. Content, not
+        // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
-        if (cell.centre && centreSlots)
+        if (cell.center && centreSlots)
           composeSpines(ctx, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots);
       }
     }
@@ -158,16 +159,16 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
   return { draw };
 }
 
-/** The centre-room marker and the rank labels. Cosmetic, and zoom-gated. */
+/** The center-room marker and the rank labels. Cosmetic, and zoom-gated. */
 function drawChrome(ctx, cell, sx, sy, cellPx, zoom) {
-  if (cell.centre) {
+  if (cell.center) {
     ctx.strokeStyle = 'rgba(200,169,95,0.9)';
     ctx.lineWidth = 2;
     ctx.strokeRect(sx + 1, sy + 1, cellPx.x - 2, cellPx.y - 2);
     if (zoom > 90) {
       ctx.fillStyle = 'rgba(200,169,95,0.95)';
       ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText('the centre', sx + 10, sy + 22);
+      ctx.fillText('the center', sx + 10, sy + 22);
     }
   } else if (!cell.generic && zoom > 120) {
     ctx.fillStyle = 'rgba(232,224,210,0.55)';

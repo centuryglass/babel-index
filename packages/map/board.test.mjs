@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from './ordering.js';
-import { buildRearrangement, CENTRE, GENERIC } from './board.js';
+import { buildRearrangement, CENTER, GENERIC } from './board.js';
 import { planMoves, applyMove } from './illusion.js';
 
 const ASPECT = 0.75; // the 4:3 tile's cell
@@ -33,7 +33,7 @@ function planAndCheck(before, after, view = VIEW) {
     for (let mx = view.x0; mx <= view.x1; mx++) {
       const p = (my + built.origin.y) * built.width + (mx + built.origin.x);
       const cell = after.layout.roomAt(mx, my, after.order);
-      const want = cell.centre ? CENTRE : cell.generic ? GENERIC : cell.id;
+      const want = cell.center ? CENTER : cell.generic ? GENERIC : cell.id;
       assert.equal(live.cells[p], want, `visible cell (${mx}, ${my}) is wrong after the plan`);
     }
 
@@ -46,10 +46,10 @@ test('a shuffle is animatable, and lands the visible cells exactly', () => {
   const after = arrangement(n, shuffledOrder(n, 2));
   const { built } = planAndCheck(before, after);
 
-  // The centre never moves, and holds the centre room at both ends.
+  // The center never moves, and holds the center room at both ends.
   const c = built.origin.y * built.width + built.origin.x;
-  assert.equal(built.start.cells[c], CENTRE);
-  assert.equal(built.end.cells[c], CENTRE);
+  assert.equal(built.start.cells[c], CENTER);
+  assert.equal(built.end.cells[c], CENTER);
 });
 
 test('a search moves the slots themselves, and that is still animatable', () => {
@@ -164,7 +164,7 @@ test('visible work is bounded by the viewport, not by the corpus', () => {
     `the largest corpus was the most expensive: ${counts}`
   );
 
-  // The conveyor's own cost: one row shift per region row to feed the centre
+  // The conveyor's own cost: one row shift per region row to feed the center
   // column, then one column step per region cell. Extractions add a few on top,
   // and even doubled that stays far under the region's area.
   const rows = bounds.ymax - bounds.ymin + 1;
