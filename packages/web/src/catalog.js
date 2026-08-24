@@ -190,6 +190,31 @@ export function windowFor(configured, { viewportPx, perPage, rowPx }) {
 }
 
 /**
+ * The catalog's own default order: every room id, by filename.
+ *
+ * The map's idle order is a shuffle - there is no "index order" worth reading
+ * on a wall of tiles nobody can alphabetize by eye. A LIST is exactly the
+ * thing alphabetical order suits, so the two views' idle orders are not the
+ * same array read two ways, they are two different orders that happen to
+ * agree only while a search is running (`result.order` is both). Plain
+ * string comparison, not `localeCompare`, to match `scan.mjs`'s own
+ * `.sort()` of the same filenames - two different orderings of one file list
+ * would be its own bug.
+ *
+ * @param {{file: string}[]} rooms manifest.rooms, indexed by id
+ * @returns {number[]} room ids
+ */
+export function alphabeticalOrder(rooms) {
+  return rooms
+    .map((room, id) => id)
+    .sort((a, b) => {
+      const fa = rooms[a].file;
+      const fb = rooms[b].file;
+      return fa < fb ? -1 : fa > fb ? 1 : 0;
+    });
+}
+
+/**
  * A DOMRect in the shape the rest of this app uses.
  *
  * `getBoundingClientRect()` returns `width`/`height`; `centerCellRect` and
