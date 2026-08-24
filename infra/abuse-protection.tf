@@ -29,7 +29,13 @@ resource "cloudflare_ruleset" "rate_limit_assets" {
       period              = var.rate_limit_period_seconds
       requests_per_period = var.rate_limit_requests_per_period
       mitigation_timeout  = var.rate_limit_mitigation_timeout_seconds
-      counting_expression = "(http.host eq \"${var.assets_hostname}\" and not cf.cache_status in {\"HIT\" \"REVALIDATED\"})"
+      # Only count requests that miss cache_assets and actually reach R2 -
+      # a cache HIT never becomes a billed Class B op, so it shouldn't count
+      # against the same-IP threshold either. `counting_expression` looked
+      # like the way to express that but rejects cf.cache_status as an
+      # unknown identifier there; requests_to_origin is the dedicated field
+      # for it.
+      requests_to_origin = true
     }
   }]
 }

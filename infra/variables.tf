@@ -52,18 +52,21 @@ variable "assets_hostname" {
 variable "rate_limit_requests_per_period" {
   description = "Requests per IP per rate_limit_period_seconds before the WAF rule starts blocking."
   type        = number
-  default     = 300
+  default     = 50
 }
 
+# The Free plan is only entitled to a 10-second counting period (a
+# terraform apply with 60 fails with "not entitled to use the period 60,
+# can only use a period among [10]") - a paid plan may allow others.
 variable "rate_limit_period_seconds" {
   type    = number
-  default = 60
+  default = 10
 }
 
 variable "rate_limit_mitigation_timeout_seconds" {
-  description = "How long a blocked IP stays blocked once it trips the rate limit."
+  description = "How long a blocked IP stays blocked once it trips the rate limit. The Free plan is only entitled to 10 (same apply-time error pattern as rate_limit_period_seconds above) - a paid plan may allow others."
   type        = number
-  default     = 600
+  default     = 10
 }
 
 variable "cache_edge_ttl_seconds" {
