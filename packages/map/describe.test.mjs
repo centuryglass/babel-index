@@ -22,7 +22,11 @@ test('a generic cell reads as a blank wall', () => {
       if (layout.rankOf(x, y) !== -1 || (x === 0 && y === 0)) continue;
       const d = describeCell(x, y, { layout, order });
       assert.equal(d.kind, 'generic');
-      assert.equal(d.description, null);
+      // Unlike the center, a generic cell has something to say - the room
+      // card opened on it should tell a reader this is wallpaper, not an
+      // unindexed room. Not pinning the exact wording, just that there is
+      // some.
+      assert.ok(typeof d.description === 'string' && d.description.length > 0);
       checked = true;
     }
   assert.ok(checked, 'no generic cell was available to check');
