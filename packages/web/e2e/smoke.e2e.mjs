@@ -1769,9 +1769,10 @@ describe('the library, in a browser', { concurrency: false }, () => {
       assert.equal(await rows.first().getAttribute('class'), 'catalog-row catalog-center');
 
       // The center's row carries the shelf as real links rather than as paint,
-      // and the first of them is the override that got us here.
+      // first is the help button, second is the catalog link.
       assert.ok((await page.locator('.shelf-link').count()) > 0, 'the shelf is not in the center row');
-      assert.equal(await page.locator('.shelf-link').first().textContent(), 'the catalog');
+      assert.equal(await page.locator('.shelf-link').first().textContent(), 'READ ME');
+      assert.equal(await page.locator('.shelf-link').nth(1).textContent(), 'The Catalog');
 
       // Every room row names its rank and points at a real tile.
       const first = rows.nth(1);
