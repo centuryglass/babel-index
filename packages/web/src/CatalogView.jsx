@@ -133,6 +133,8 @@ export function CatalogView({
   centreSlots,
   onBook,
   cellOfId,
+  history,
+  onForgetSearches,
   note,
   scrollRef,
   firstTileRef,
@@ -253,6 +255,23 @@ export function CatalogView({
           <button className="mode-toggle" onClick={onExit}>
             ← the map
           </button>
+          {/*
+            The same "forget searches" act the bottom-right book on the shelf
+            runs (main.jsx's `CENTER_OVERRIDES`/`onOverride`) - a second home
+            for it here because the catalog is not the map, and a reader who
+            never opens it should still have a way to end a persisted history.
+            Absent when there is nothing to forget, same as the book and the
+            panel's own button.
+          */}
+          {history.length > 0 && (
+            <button
+              className="forget"
+              onClick={onForgetSearches}
+              aria-label={`forget ${history.length} remembered ${history.length === 1 ? 'search' : 'searches'}`}
+            >
+              forget searches ({history.length})
+            </button>
+          )}
         </div>
 
         <div className="catalog-bar-row sub">
