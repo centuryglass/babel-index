@@ -189,9 +189,26 @@ function Library({ manifest }) {
   // top left to bottom right. Reserved override books are never overwritten.
   // `assignTitles` is pure, so this is a memo, not per-frame work.
   const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
+
+  // The bottom-right book is a second override, present only while there is
+  // something to forget - the same condition that hides the panel's own
+  // "forget searches" button. Built alongside `CENTER_OVERRIDES` rather than
+  // folded into it because that one is a fixed constant with nothing to react
+  // to, and this slot's presence depends on `history`.
+  const overrides = useMemo(() => {
+    if (!history.length) return CENTER_OVERRIDES;
+    return {
+      ...CENTER_OVERRIDES,
+      [BOOK_COUNT - 1]: {
+        text: `forget searches (${history.length})`,
+        action: 'forgetHistory',
+      },
+    };
+  }, [history.length]);
+
   const centreSlots = useMemo(
-    () => assignTitles({ history, tags, overrides: CENTER_OVERRIDES }),
-    [history, tags]
+    () => assignTitles({ history, tags, overrides }),
+    [history, tags, overrides]
   );
 
   // Which book on the shelf holds the wall's single tab stop.
@@ -1202,6 +1219,7 @@ function Library({ manifest }) {
    */
   const onOverride = (slot) => {
     if (slot.action === 'catalog') enterCatalog();
+    else if (slot.action === 'forgetHistory') forgetSearches();
   };
 
   /**
@@ -1336,6 +1354,8 @@ function Library({ manifest }) {
           centreSlots={centreSlots}
           onBook={onBook}
           cellOfId={(id) => cellById.get(id) ?? null}
+          history={history}
+          onForgetSearches={forgetSearches}
           note={result ? describeSignals(result.signals ?? {}, Boolean(searchIndex)) : ''}
           scrollRef={catalogScrollRef}
           firstTileRef={firstTileRef}
@@ -1425,6 +1445,11 @@ const OPENING_MARGIN = 0.94;
  * which is the same argument that put the search field on the center tile.
  * `assignTitles` displaces history past a reserved slot rather than writing
  * over it, so the shelf simply starts one book later.
+ *
+ * The bottom-right book (`BOOK_COUNT - 1`) is the wall's other override, built
+ * beside this constant rather than in it - see `overrides` in `Library`. It
+ * runs `forgetSearches` and exists only while there is history to forget, the
+ * same visible-act argument `persist.js` makes for the panel's own button.
  */
 const CENTER_OVERRIDES = {
   0: { text: 'the catalog', action: 'catalog' },
