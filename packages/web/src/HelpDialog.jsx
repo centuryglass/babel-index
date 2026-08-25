@@ -1,10 +1,7 @@
 /**
  * "A note on finding your way" - the library's one piece of explicit help,
  * reached by pressing a reserved book on the center shelf (`onOverride` in
- * `main.jsx`, action `help`). Diegetic in its ENTRY, not its content: the
- * seam `CENTER_OVERRIDES` was built for is a book that does something other
- * than search, and a plain-language explanation of the controls is exactly
- * that. No new UI chrome outside the shelf.
+ * `main.jsx`, action `help`). No new UI chrome outside the shelf.
  *
  * Structurally a copy of `RoomOverlay`'s dialog machinery (focus in on open,
  * back out on close; Escape and a scrim click dismiss; Tab is trapped inside)
@@ -75,19 +72,19 @@ export function HelpDialog({ onClose }) {
             step back. Right-click a room - or long-press it - to read what is on its wall.
           </p>
           <p>
-            The room at the center holds the search desk. Speak a word or phrase into it and
+            The room at the center holds the search desk. Type a word or phrase into it and
             the library rearranges itself around what matches. The books on its shelf are
             worth trying too: each is either a search already made, waiting to be repeated,
             or a word drawn from the collection, waiting to be tried.
           </p>
           <p>
-            One of those books leads to the catalog - the same collection, read as an
+            One of those books leads to the catalog: the same collection, read as an
             ordinary list rather than walked as a map.
           </p>
           <p>
             With a keyboard: arrow keys move the shelf's focus and pan the map when nothing
             else has claimed the press, Enter reads or repeats a book, and Escape closes
-            whatever this note is currently on top of.
+            an open dialog.
           </p>
         </div>
       </div>

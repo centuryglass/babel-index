@@ -1445,12 +1445,12 @@ const OPENING_MARGIN = 0.94;
  *
  * Overrides replace the default "search history" behavior assigned to the
  * books in the center tile. Current static override list:
- * - catalog: Switch between map and catalog view.
  * - help: Show brief information on room navigation.
+ * - catalog: Switch between map and catalog view.
  */
 const CENTER_OVERRIDES = {
-  0: { text: 'the catalog', action: 'catalog' },
-  1: { text: 'a note on finding your way', action: 'help' },
+  0: { text: 'READ ME', action: 'help' },
+  1: { text: 'The Catalog', action: 'catalog' },
 };
 
 /**
