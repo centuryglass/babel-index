@@ -157,7 +157,7 @@ test('describeRoom reads as well with no metadata at all', () => {
 });
 
 test('the catalog says what it is ordered by, and folds in the signals note', () => {
-  assert.match(describeCatalog({ total: 27 }), /27 rooms in the order the map is showing/);
+  assert.match(describeCatalog({ total: 27 }), /27 rooms in alphabetical order/);
 
   const searched = describeCatalog({ total: 27, query: '  gilt ', note: 'ranked by keywords + CLIP' });
   assert.match(searched, /27 rooms ranked for “gilt”/);

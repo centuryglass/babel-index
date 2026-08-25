@@ -58,6 +58,7 @@ export function MapView({
   query,
   setQuery,
   onSearch,
+  onClearSearch,
   onGoToSearch,
   maxQueryLength,
   cursorLabel,
@@ -169,6 +170,7 @@ export function MapView({
         query={query}
         setQuery={setQuery}
         onSubmit={onSearch}
+        onClear={onClearSearch}
         maxLength={maxQueryLength}
       />
       {/*
