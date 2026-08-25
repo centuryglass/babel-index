@@ -22,6 +22,11 @@
  * sentence about the IMAGE rather than about the room. It is never generated
  * here or anywhere else at runtime - it arrives with the corpus or it does not
  * arrive at all.
+ *
+ * A generic cell gets a `description` too, unlike the center room - it is
+ * shown in the room card opened on it (`RoomCard`/`RoomDetails`), and the one
+ * thing worth telling a reader who opens it is that it's wallpaper, not an
+ * unindexed room.
  */
 
 /**
@@ -40,7 +45,17 @@ export function describeCell(x, y, { layout, order, metadata = null }) {
 
   if (at.center)
     return { kind: 'center', name: 'the center of the library', description: null, picture: null };
-  if (at.generic) return { kind: 'generic', name: 'a blank wall', description: null, picture: null };
+  if (at.generic)
+    return {
+      kind: 'generic',
+      name: 'a blank wall',
+      // Borges's identical hexagons: this is a placeholder, not an unindexed
+      // room, and a reader who opens it should be pointed back at a search
+      // rather than left wondering if they missed something.
+      description:
+        'A blank wall — plain and identical to countless others, its shelves filled with nonsense. There is nothing to find here; the library’s real rooms are the ones your search turns up.',
+      picture: null,
+    };
 
   return describeRoom(at.id, at.rank, order.length, metadata?.[at.id] ?? null);
 }
