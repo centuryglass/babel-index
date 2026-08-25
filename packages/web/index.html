@@ -447,6 +447,11 @@
         exactly what this is for.
       */
       .overlay-body .story { display: block; overflow: visible; }
+
+      /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
+      .help-overlay { width: min(520px, 100%); }
+      .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
+      .help-body p:last-child { margin-bottom: 0; }
       .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
       /*
         The room's identity and the way out to the map share one row, with real

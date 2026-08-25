@@ -10,12 +10,6 @@ serve as completed task history.
    so no one tries right-clicking/long pressing on one of those first and
    doesn't bother trying the same on a unique room.
 
-## Help icon:
- - A small circled "?" icon button. (TODO: center tile book, or another
-   floating overlay?) Clicking it brings up a description of the basic
-   interface and functionality: Navigation, switching to catalog, opening
-   room info, etc.
-
 ## Search:
 - The rules of search ranking and certainty are very approximate, and differ
   from unstated expectations in a lot of subtle ways. Establish a basic set of
