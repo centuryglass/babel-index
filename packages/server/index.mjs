@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
-import { build } from 'esbuild';
+import { context } from 'esbuild';
 import { scanDirectory } from './scan.mjs';
 import { scanRemote } from './remote.mjs';
 import { createApp, hasTextModel } from './app.mjs';
@@ -62,6 +62,13 @@ if (!remoteBase && !existsSync(imagesDir)) {
 // repo's assets by default, so the center render can be shared across corpora
 // and changed without touching --images. See scan.mjs.
 const sharedDir = remoteBase ? null : resolve(process.cwd(), argv['shared-dir'] ?? 'assets');
+// Optional debugging convenience, off by default: `npm run demo:watch` runs
+// this under `node --watch` (restarts the whole process on a server-side
+// edit) AND passes --watch through to us here, which switches the esbuild
+// call below from a one-shot build to a watching one (rebuilds on a
+// client-side edit without a restart). Either kind of change reaches the
+// browser through the same live-reload connection - see app.mjs.
+const watch = Boolean(argv.watch);
 
 // Checked before anything is scanned or bundled, because the failure mode
 // without it is silent and expensive: Node fires the `listening` callback and
@@ -117,8 +124,12 @@ if (manifest.metadata) {
 if (!hasTextModel())
   console.log('  no CLIP text model installed - search will rank by keywords and story only');
 
-console.log('bundling client ...');
-const bundle = await build({
+console.log(watch ? 'bundling client (watch mode) ...' : 'bundling client ...');
+// `app` is assigned below, after this closure is built - referenced here only
+// from onEnd, which never fires before then.
+let app;
+let bundleJs = '';
+const ctx = await context({
   entryPoints: [join(webDir, 'src/main.jsx')],
   bundle: true,
   format: 'esm',
@@ -132,17 +143,32 @@ const bundle = await build({
   // markup rather than traced into JSX by hand, so the source SVGs in
   // assets/ stay the one copy of that path data - see SearchIcon.jsx.
   loader: { '.svg': 'text' },
+  plugins: [
+    {
+      name: 'live-reload',
+      setup(build) {
+        build.onEnd((result) => {
+          if (result.outputFiles?.[0]) bundleJs = result.outputFiles[0].text;
+          app?.locals.broadcastReload?.();
+        });
+      },
+    },
+  ],
 });
+await ctx.rebuild();
+if (watch) await ctx.watch();
+else await ctx.dispose();
 
-const app = createApp({
+app = createApp({
   manifest,
   imagesDir,
   sharedDir,
   remote: remoteBase ? { imagesBase: `${remoteBase}/${argv.prefix}`, sharedBase: `${remoteBase}/shared` } : null,
   config,
   rescan,
-  bundleJs: bundle.outputFiles[0].text,
+  getBundleJs: () => bundleJs,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
+  watch,
 });
 
 const server = app.listen(port, () => {
@@ -151,6 +177,7 @@ const server = app.listen(port, () => {
   // phone on the same network - but only if you know which address to type.
   // Printing them is the difference between "it is exposed" and "it is usable".
   for (const addr of lanAddresses()) console.log(`                       http://${addr}:${port}`);
+  if (watch) console.log('  watch mode: client edits rebuild in place, the browser reloads itself');
   console.log();
 });
 
@@ -181,8 +208,17 @@ function parseArgs(args) {
     const a = args[i];
     if (!a.startsWith('--')) continue;
     const eq = a.indexOf('=');
-    if (eq > -1) out[a.slice(2, eq)] = a.slice(eq + 1);
-    else out[a.slice(2)] = args[++i];
+    if (eq > -1) {
+      out[a.slice(2, eq)] = a.slice(eq + 1);
+      continue;
+    }
+    const key = a.slice(2);
+    const next = args[i + 1];
+    // A flag with no value after it (or immediately followed by another
+    // flag, e.g. `--watch --port 5173`) is boolean rather than missing its
+    // argument - `--watch` has no value to consume.
+    if (next === undefined || next.startsWith('--')) out[key] = true;
+    else out[key] = args[++i];
   }
   return out;
 }
