@@ -27,14 +27,24 @@
  * the same `contentHash()` the pyramid generator uses (packages/pipeline/
  * mips.mjs) rather than a second sha256-of-bytes implementation; a file whose
  * hash matches the manifest's record for its key is skipped. Nothing is
- * deleted from R2, and no other tool reads the manifest - it exists only so a
- * rerun after touching a handful of images costs a handful of PUTs, not the
- * whole corpus. See tools/upload/lib.mjs for the pure decision logic.
+ * deleted from R2, and no other tool reads that upload manifest - it exists
+ * only so a rerun after touching a handful of images costs a handful of PUTs,
+ * not the whole corpus. See tools/upload/lib.mjs for the pure decision logic.
+ *
+ * ### The public manifest
+ *
+ * Separately, the `scanDirectory()` result itself - the same shape
+ * `/api/manifest` serves locally - is written to `<prefix>/manifest.json` on
+ * every run, changed or not. `packages/server/remote.mjs` fetches this when
+ * the demo server is started with `--remote`, so a bucket holding a corpus
+ * needs no listing API: the one local scan that ran here is the only place
+ * "what files make up this corpus" gets decided.
  */
 import { readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { scanDirectory } from '../../packages/server/scan.mjs';
+import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.mjs';
 import { contentHash } from '../../packages/pipeline/mips.mjs';
 import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.mjs';
 
@@ -160,6 +170,25 @@ async function main() {
     console.log(`manifest updated: ${manifestKey}`);
   } else if (!dryRun) {
     console.log('nothing to upload, manifest unchanged');
+  }
+
+  // The public manifest - what packages/server/remote.mjs fetches to serve
+  // this corpus with --remote. Written every run, not diffed against a hash:
+  // it is small, and it must reflect this scan even when the room bytes it
+  // describes didn't change (a metadata-only or embeddings-only rerun still
+  // needs it current).
+  if (!dryRun) {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: `${prefix}/${REMOTE_MANIFEST_NAME}`,
+        Body: JSON.stringify(manifest, null, 2) + '\n',
+        ContentType: 'application/json',
+      })
+    );
+    console.log(`public manifest updated: ${prefix}/${REMOTE_MANIFEST_NAME}`);
+  } else {
+    console.log(`  would update public manifest: ${prefix}/${REMOTE_MANIFEST_NAME}`);
   }
 }
 

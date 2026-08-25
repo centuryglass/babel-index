@@ -8,6 +8,7 @@
  */
 import express from 'express';
 import { resolveConfig } from '../config/config.mjs';
+import { mountProxy } from './remote.mjs';
 
 // Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
 // text and image towers point into different spaces and every ranking is quiet
@@ -36,11 +37,15 @@ const LIVE_RELOAD_CLIENT = `(function () {
  * Build the app.
  *
  * @param {object} opts
- * @param {object} opts.manifest       the initial scan (see scan.mjs)
- * @param {string} opts.imagesDir      directory the corpus is served from
+ * @param {object} opts.manifest       the initial scan (see scan.mjs or remote.mjs)
+ * @param {string} [opts.imagesDir]    directory the corpus is served from (local mode)
  * @param {string} [opts.sharedDir]    directory the shared tiles are served from,
- *                                     under /shared (default: the images directory)
- * @param {() => Promise<object>} opts.rescan re-read the directory
+ *                                     under /shared (local mode default: the images directory)
+ * @param {{imagesBase: string, sharedBase: string}} [opts.remote] when set,
+ *                                     `/images` and `/shared` proxy these remote
+ *                                     bases instead of serving `imagesDir`/`sharedDir`
+ *                                     from disk (see remote.mjs)
+ * @param {() => Promise<object>} opts.rescan re-read the corpus (directory or remote manifest)
  * @param {object} [opts.config]       resolved config (see packages/config); the
  *                                     defaults when absent
  * @param {string} [opts.bundleJs]     the built client, fixed for the process's
@@ -58,6 +63,7 @@ export function createApp({
   manifest,
   imagesDir,
   sharedDir = imagesDir,
+  remote,
   rescan,
   config,
   bundleJs = '',
@@ -122,14 +128,23 @@ export function createApp({
     }
   });
 
-  // express.static resolves and confines paths itself, so `..` in a request
-  // cannot climb out of the images directory.
-  app.use('/images', express.static(imagesDir, { maxAge: '1h', immutable: true }));
+  if (remote) {
+    // The corpus lives on a remote host (see remote.mjs); /images and /shared
+    // proxy it rather than serving a local directory, so nothing downstream -
+    // the client, createUrlFor, the manifest's urls - has to know the
+    // difference.
+    mountProxy(app, '/images', remote.imagesBase);
+    mountProxy(app, '/shared', remote.sharedBase);
+  } else {
+    // express.static resolves and confines paths itself, so `..` in a request
+    // cannot climb out of the images directory.
+    app.use('/images', express.static(imagesDir, { maxAge: '1h', immutable: true }));
 
-  // The shared tiles (center + generic tiles) live outside the corpus, so
-  // they get their own mount. When sharedDir is the images directory the two
-  // overlap harmlessly - the manifest still addresses shared tiles via /shared.
-  app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
+    // The shared tiles (center + generic tiles) live outside the corpus, so
+    // they get their own mount. When sharedDir is the images directory the two
+    // overlap harmlessly - the manifest still addresses shared tiles via /shared.
+    app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
+  }
 
   // The tab icon would otherwise be a 404 on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
