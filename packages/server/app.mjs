@@ -73,6 +73,7 @@ export function createApp({
   // and does not yet know its own zoom range. `notes` is for the operator, not
   // the browser, so it is stripped here - index.mjs prints it at startup.
   const { notes: _notes, source: _source, ...clientConfig } = config ?? resolveConfig();
+  const clipTextDtype = clientConfig.search?.clipTextDtype ?? 'fp32';
 
   app.get('/api/manifest', (_req, res) => res.json({ ...manifest, config: clientConfig }));
 
@@ -107,7 +108,7 @@ export function createApp({
       return res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q) });
 
     try {
-      const vector = await embedQuery(q);
+      const vector = await embedQuery(q, clipTextDtype);
       res.json({ stub: false, query: q, vector });
     } catch (err) {
       // The note reaches the browser, so it says what happened rather than
@@ -207,18 +208,25 @@ export function hasTextModel() {
   }
 }
 
-let textTowerPromise = null;
-function textTower() {
-  if (!textTowerPromise)
-    textTowerPromise = (async () => {
-      const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
-      const [tokenizer, model] = await Promise.all([
-        AutoTokenizer.from_pretrained(TEXT_MODEL),
-        CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype: 'fp32' }),
-      ]);
-      return { tokenizer, model };
-    })();
-  return textTowerPromise;
+// Keyed by dtype rather than one bare promise: `createApp` may be built more
+// than once in a process (tests do this) with different config, and reusing
+// a model loaded at the wrong precision would be silently wrong rather than
+// slow.
+const textTowerPromises = new Map();
+function textTower(dtype) {
+  if (!textTowerPromises.has(dtype))
+    textTowerPromises.set(
+      dtype,
+      (async () => {
+        const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
+        const [tokenizer, model] = await Promise.all([
+          AutoTokenizer.from_pretrained(TEXT_MODEL),
+          CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype }),
+        ]);
+        return { tokenizer, model };
+      })()
+    );
+  return textTowerPromises.get(dtype);
 }
 
 /**
@@ -228,10 +236,11 @@ function textTower() {
  * the image rows were normalised the same way when the blob was written.
  *
  * @param {string} q
+ * @param {string} dtype transformers.js precision to load the text tower at
  * @returns {Promise<number[]>}
  */
-async function embedQuery(q) {
-  const { tokenizer, model } = await textTower();
+async function embedQuery(q, dtype) {
+  const { tokenizer, model } = await textTower(dtype);
   const inputs = tokenizer([q], { padding: true, truncation: true });
   const { text_embeds } = await model(inputs);
   const v = Float32Array.from(text_embeds.tolist()[0]);
