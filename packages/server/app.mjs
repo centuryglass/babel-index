@@ -15,6 +15,23 @@ import { resolveConfig } from '../config/config.mjs';
 // is the matching text side.
 const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
 
+// Dev-only live reload (see the `watch` option below). One mechanism covers
+// two different restart shapes: a client-only rebuild broadcasts 'reload' on
+// the still-open connection, while a full process restart (`node --watch` on
+// the server itself) kills the connection outright - EventSource's own
+// auto-reconnect then re-opens it, and `onopen` after a prior error is
+// indistinguishable from "the server just came back", which is exactly the
+// signal we want.
+const LIVE_RELOAD_TAG = '<script src="/__live-reload.js"></script>';
+const LIVE_RELOAD_CLIENT = `(function () {
+  let sawError = false;
+  const es = new EventSource('/api/live-reload');
+  es.onmessage = () => location.reload();
+  es.onerror = () => { sawError = true; };
+  es.onopen = () => { if (sawError) location.reload(); };
+})();
+`;
+
 /**
  * Build the app.
  *
@@ -26,11 +43,28 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {() => Promise<object>} opts.rescan re-read the directory
  * @param {object} [opts.config]       resolved config (see packages/config); the
  *                                     defaults when absent
- * @param {string} [opts.bundleJs]     the built client
+ * @param {string} [opts.bundleJs]     the built client, fixed for the process's
+ *                                     lifetime
+ * @param {() => string} [opts.getBundleJs] the built client, read on each
+ *                                     request instead - how `watch` mode serves
+ *                                     a bundle that gets rebuilt in place
  * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
  *                                     editing the page needs no restart
+ * @param {boolean} [opts.watch]       dev convenience: serve the live-reload
+ *                                     client and expose `app.locals.broadcastReload`
+ *                                     for a rebuild to call
  */
-export function createApp({ manifest, imagesDir, sharedDir = imagesDir, rescan, config, bundleJs = '', readIndexHtml }) {
+export function createApp({
+  manifest,
+  imagesDir,
+  sharedDir = imagesDir,
+  rescan,
+  config,
+  bundleJs = '',
+  getBundleJs,
+  readIndexHtml,
+  watch = false,
+}) {
   const app = express();
 
   // Config rides on the manifest rather than getting an endpoint of its own:
@@ -100,17 +134,40 @@ export function createApp({ manifest, imagesDir, sharedDir = imagesDir, rescan, 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
   app.get('/bundle.js', (_req, res) => {
-    res.type('application/javascript').send(bundleJs);
+    res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
   });
 
   if (readIndexHtml)
     app.get('/', async (_req, res, next) => {
       try {
-        res.type('html').send(await readIndexHtml());
+        let html = await readIndexHtml();
+        if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
+        res.type('html').send(html);
       } catch (err) {
         next(err);
       }
     });
+
+  if (watch) {
+    app.get('/__live-reload.js', (_req, res) => {
+      res.type('application/javascript').send(LIVE_RELOAD_CLIENT);
+    });
+
+    const clients = new Set();
+    app.get('/api/live-reload', (req, res) => {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      res.write('\n');
+      clients.add(res);
+      req.on('close', () => clients.delete(res));
+    });
+    app.locals.broadcastReload = () => {
+      for (const res of clients) res.write('data: reload\n\n');
+    };
+  }
 
   return app;
 }
