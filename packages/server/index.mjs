@@ -10,6 +10,14 @@
  * the whole point of offline mode: get a working local demo before hosting is
  * worth thinking about.
  *
+ * Or point it at a corpus already uploaded with tools/upload/upload-r2.mjs:
+ *
+ *   npm run demo -- --remote https://assets.example.com --prefix corpus-sample
+ *
+ * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the corpus
+ * and shared tiles both come from the remote host (see remote.mjs), and
+ * `/images`/`/shared` proxy it rather than serving a local directory.
+ *
  * The routes live in app.mjs; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
  * the client against precomputed embeddings, so /api/search stays a text tower
@@ -22,6 +30,7 @@ import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { scanDirectory } from './scan.mjs';
+import { scanRemote } from './remote.mjs';
 import { createApp, hasTextModel } from './app.mjs';
 import { loadConfig } from '../config/load.mjs';
 import { portInUse } from './port.mjs';
@@ -30,18 +39,29 @@ const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, '../web');
 
 const argv = parseArgs(process.argv.slice(2));
+const port = Number(argv.port ?? 5173);
+
+const remoteBase = argv.remote ?? null;
+if (remoteBase && argv.images) {
+  console.error('--remote and --images are mutually exclusive - the corpus comes from one place or the other.');
+  process.exit(1);
+}
+if (remoteBase && !argv.prefix) {
+  console.error('--remote requires --prefix (the corpus prefix used when it was uploaded).');
+  process.exit(1);
+}
+
 // Defaults to the sample corpus committed to the repo, so `npm run demo` works
-// with no arguments and no external files.
-const imagesDir = resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
-if (!existsSync(imagesDir)) {
+// with no arguments and no external files. Unused entirely in --remote mode.
+const imagesDir = remoteBase ? null : resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
+if (!remoteBase && !existsSync(imagesDir)) {
   console.error(`no such directory: ${imagesDir}`);
   process.exit(1);
 }
 // The shared tiles (center + generic tiles) live outside the corpus, in the
 // repo's assets by default, so the center render can be shared across corpora
 // and changed without touching --images. See scan.mjs.
-const sharedDir = resolve(process.cwd(), argv['shared-dir'] ?? 'assets');
-const port = Number(argv.port ?? 5173);
+const sharedDir = remoteBase ? null : resolve(process.cwd(), argv['shared-dir'] ?? 'assets');
 
 // Checked before anything is scanned or bundled, because the failure mode
 // without it is silent and expensive: Node fires the `listening` callback and
@@ -64,8 +84,12 @@ const config = await loadConfig({ path: argv.config });
 if (config.source) console.log(`config: ${config.source}`);
 for (const note of config.notes) console.warn(`config: ${note}`);
 
-console.log(`scanning ${imagesDir} ...`);
-const manifest = await scanDirectory(imagesDir, { center: argv.center, sharedDir });
+const rescan = remoteBase
+  ? () => scanRemote(remoteBase, argv.prefix)
+  : () => scanDirectory(imagesDir, { center: argv.center, sharedDir });
+
+console.log(remoteBase ? `fetching manifest from ${remoteBase}/${argv.prefix} ...` : `scanning ${imagesDir} ...`);
+const manifest = await rescan();
 const centerFile = manifest.shared.center?.file ?? '(none)';
 console.log(
   `  ${manifest.count} rooms, center tile: ${centerFile}, ${manifest.shared.generic.length} generic tile(s)`
@@ -73,7 +97,7 @@ console.log(
 // A shared directory with no center means the map has no blank tile to draw at
 // the origin or to fall back on - worth saying, since it reads on the map as a
 // hole rather than an error.
-if (!manifest.shared.center)
+if (!manifest.shared.center && !remoteBase)
   console.warn(`  no center tile found in ${sharedDir} - expected center_tile.* (or pass --center)`);
 
 if (manifest.metadata) {
@@ -114,8 +138,9 @@ const app = createApp({
   manifest,
   imagesDir,
   sharedDir,
+  remote: remoteBase ? { imagesBase: `${remoteBase}/${argv.prefix}`, sharedBase: `${remoteBase}/shared` } : null,
   config,
-  rescan: () => scanDirectory(imagesDir, { center: argv.center, sharedDir }),
+  rescan,
   bundleJs: bundle.outputFiles[0].text,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
 });
