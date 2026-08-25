@@ -14,6 +14,7 @@ import { RoomCard } from './RoomCard.jsx';
 import { MapView } from './MapView.jsx';
 import { CatalogView } from './CatalogView.jsx';
 import { RoomOverlay } from './RoomOverlay.jsx';
+import { HelpDialog } from './HelpDialog.jsx';
 import { flipTransform, flipCss, rectOf, alphabeticalOrder } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
@@ -344,6 +345,10 @@ function Library({ manifest }) {
   // reader sees either without going back to the map - see `RoomOverlay`.
   const [overlay, setOverlay] = useState(null);
   const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
+
+  // A reserved book on the center shelf opens this instead of running a
+  // search - see CENTER_OVERRIDES and onOverride below.
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Right-click or long press opens the room's card. The pick is anchored to
   // where it happened rather than tracking the tile: the card names its room,
@@ -1218,6 +1223,7 @@ function Library({ manifest }) {
    */
   const onOverride = (slot) => {
     if (slot.action === 'catalog') enterCatalog();
+    else if (slot.action === 'help') setHelpOpen(true);
     else if (slot.action === 'forgetHistory') forgetSearches();
   };
 
@@ -1398,6 +1404,8 @@ function Library({ manifest }) {
         />
       )}
 
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+
       {card && cardDescription && (
         <RoomCard
           card={card}
@@ -1437,10 +1445,12 @@ const OPENING_MARGIN = 0.94;
  *
  * Overrides replace the default "search history" behavior assigned to the
  * books in the center tile. Current static override list:
+ * - help: Show brief information on room navigation.
  * - catalog: Switch between map and catalog view.
  */
 const CENTER_OVERRIDES = {
-  0: { text: 'the catalog', action: 'catalog' },
+  0: { text: 'READ ME', action: 'help' },
+  1: { text: 'The Catalog', action: 'catalog' },
 };
 
 /**
