@@ -383,27 +383,28 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // far out it is off screen, so reaching it is itself a flight the search
     // trigger starts. Land that one before typing into what it flew to.
     await page.locator('button.search-trigger').click();
-    await landed(page);
+    const atField = await landed(page);
     await page.locator('input[type=search]').fill('hexagonal galleries');
     await page.locator('input[type=search]').press('Enter');
 
-    // A search flies back to the center, which is the visible half of "the
-    // library rearranges around you" - and it is the completion signal we can
-    // observe without knowing whether a real ranking or the stub answered:
-    // the camera only returns home once the response has been applied.
+    // A search flies home to show off the rearrangement, then flies back to
+    // whatever zoom the reader was actually at (here, the search-trigger's
+    // opening view) so the field stays reachable rather than stranding them
+    // at the rearrangement's parked-out zoom. So the final resting point is
+    // the field's zoom, not the center-button's - only x/y return to center.
     await waitFor(
       async () => {
         const c = await settled(page);
-        return c.x === parked.x && c.y === parked.y && c.zoom === parked.zoom;
+        return c.x === parked.x && c.y === parked.y && c.zoom === atField.zoom;
       },
       SEARCH_TIMEOUT,
-      'the search never flew the camera back to the center it started from'
+      'the search never flew the camera back to the zoom it started the search from'
     );
     const home = await settled(page);
     assert.deepEqual(
       { x: home.x, y: home.y, zoom: home.zoom },
-      { x: parked.x, y: parked.y, zoom: parked.zoom },
-      'a search must return the camera to the center'
+      { x: parked.x, y: parked.y, zoom: atField.zoom },
+      'a search must return the camera to the center, at the zoom it was called from'
     );
 
     // Same camera, same slots - so any change in pixels is the rooms moving
@@ -420,11 +421,18 @@ describe('the library, in a browser', { concurrency: false }, () => {
     // is under a point, but only a browser proves that a right-click reaches it
     // at all, that the card renders, and that the chips are wired to search.
     const card = page.locator('.card');
+
+    // The previous test leaves the camera wherever its search was called
+    // from (the search-trigger's zoomed-in opening view), not `defaultZoom` -
+    // return to the center button's view explicitly rather than relying on
+    // leftover state, so rooms are on screen at the coordinates below.
+    await page.locator('button', { hasText: 'center' }).click();
+    await landed(page);
     await page.mouse.move(640, 400);
 
     // The map is 100% non-generic by the time this runs, so the center of the
     // screen is a corpus room - but the center CELL is reserved, so aim off it.
-    // (The reader last returned to the center at `defaultZoom`, not the fully-in
+    // (We just returned to the center at `defaultZoom`, not the fully-in
     // page-load zoom, so rooms around the center are on screen here.)
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
