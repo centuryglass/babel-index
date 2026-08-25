@@ -39,15 +39,20 @@ test('the center room is never picked', () => {
   assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, order), null);
 });
 
-test('a generic cell is not picked', () => {
-  // Opening an empty card over the wallpaper would make the gesture read as
-  // broken rather than as empty.
+test('a generic cell is picked as generic, not as a room', () => {
+  // Unlike the center, a generic cell has something to say (see
+  // `describe.js`), so it picks - just without an id or rank.
   let checked = 0;
   for (let x = -6; x <= 6 && checked < 5; x++)
     for (let y = -6; y <= 6 && checked < 5; y++) {
       if (layout.rankOf(x, y) !== -1 || (x === 0 && y === 0)) continue;
       const p = centreOf(x, y);
-      assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, order), null, `generic cell ${x},${y}`);
+      const hit = roomAtPoint(p.x, p.y, cam, rect, layout, order);
+      assert.ok(hit, `expected a hit on generic cell ${x},${y}`);
+      assert.equal(hit.generic, true);
+      assert.equal(hit.x, x);
+      assert.equal(hit.y, y);
+      assert.equal(hit.id, undefined);
       checked++;
     }
   assert.ok(checked > 0, 'no generic cells were available to check');
@@ -57,7 +62,9 @@ test('a rank beyond the end of the order is generic, not a crash', () => {
   // The "rooms on the map" slider shortens the order without moving slots.
   const slot = layout.slots[30];
   const p = centreOf(slot.x, slot.y);
-  assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, order.slice(0, 10)), null);
+  const hit = roomAtPoint(p.x, p.y, cam, rect, layout, order.slice(0, 10));
+  assert.ok(hit);
+  assert.equal(hit.generic, true);
 });
 
 test('picking is exact at cell edges rather than rounding into the neighbour', () => {
