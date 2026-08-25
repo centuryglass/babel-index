@@ -16,6 +16,23 @@ import { mountProxy } from './remote.mjs';
 // is the matching text side.
 const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
 
+// Dev-only live reload (see the `watch` option below). One mechanism covers
+// two different restart shapes: a client-only rebuild broadcasts 'reload' on
+// the still-open connection, while a full process restart (`node --watch` on
+// the server itself) kills the connection outright - EventSource's own
+// auto-reconnect then re-opens it, and `onopen` after a prior error is
+// indistinguishable from "the server just came back", which is exactly the
+// signal we want.
+const LIVE_RELOAD_TAG = '<script src="/__live-reload.js"></script>';
+const LIVE_RELOAD_CLIENT = `(function () {
+  let sawError = false;
+  const es = new EventSource('/api/live-reload');
+  es.onmessage = () => location.reload();
+  es.onerror = () => { sawError = true; };
+  es.onopen = () => { if (sawError) location.reload(); };
+})();
+`;
+
 /**
  * Build the app.
  *
@@ -31,11 +48,29 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
  * @param {() => Promise<object>} opts.rescan re-read the corpus (directory or remote manifest)
  * @param {object} [opts.config]       resolved config (see packages/config); the
  *                                     defaults when absent
- * @param {string} [opts.bundleJs]     the built client
+ * @param {string} [opts.bundleJs]     the built client, fixed for the process's
+ *                                     lifetime
+ * @param {() => string} [opts.getBundleJs] the built client, read on each
+ *                                     request instead - how `watch` mode serves
+ *                                     a bundle that gets rebuilt in place
  * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
  *                                     editing the page needs no restart
+ * @param {boolean} [opts.watch]       dev convenience: serve the live-reload
+ *                                     client and expose `app.locals.broadcastReload`
+ *                                     for a rebuild to call
  */
-export function createApp({ manifest, imagesDir, sharedDir = imagesDir, remote, rescan, config, bundleJs = '', readIndexHtml }) {
+export function createApp({
+  manifest,
+  imagesDir,
+  sharedDir = imagesDir,
+  remote,
+  rescan,
+  config,
+  bundleJs = '',
+  getBundleJs,
+  readIndexHtml,
+  watch = false,
+}) {
   const app = express();
 
   // Config rides on the manifest rather than getting an endpoint of its own:
@@ -44,6 +79,7 @@ export function createApp({ manifest, imagesDir, sharedDir = imagesDir, remote, 
   // and does not yet know its own zoom range. `notes` is for the operator, not
   // the browser, so it is stripped here - index.mjs prints it at startup.
   const { notes: _notes, source: _source, ...clientConfig } = config ?? resolveConfig();
+  const clipTextDtype = clientConfig.search?.clipTextDtype ?? 'fp32';
 
   app.get('/api/manifest', (_req, res) => res.json({ ...manifest, config: clientConfig }));
 
@@ -78,7 +114,7 @@ export function createApp({ manifest, imagesDir, sharedDir = imagesDir, remote, 
       return res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q) });
 
     try {
-      const vector = await embedQuery(q);
+      const vector = await embedQuery(q, clipTextDtype);
       res.json({ stub: false, query: q, vector });
     } catch (err) {
       // The note reaches the browser, so it says what happened rather than
@@ -114,17 +150,40 @@ export function createApp({ manifest, imagesDir, sharedDir = imagesDir, remote, 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
   app.get('/bundle.js', (_req, res) => {
-    res.type('application/javascript').send(bundleJs);
+    res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
   });
 
   if (readIndexHtml)
     app.get('/', async (_req, res, next) => {
       try {
-        res.type('html').send(await readIndexHtml());
+        let html = await readIndexHtml();
+        if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
+        res.type('html').send(html);
       } catch (err) {
         next(err);
       }
     });
+
+  if (watch) {
+    app.get('/__live-reload.js', (_req, res) => {
+      res.type('application/javascript').send(LIVE_RELOAD_CLIENT);
+    });
+
+    const clients = new Set();
+    app.get('/api/live-reload', (req, res) => {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      res.write('\n');
+      clients.add(res);
+      req.on('close', () => clients.delete(res));
+    });
+    app.locals.broadcastReload = () => {
+      for (const res of clients) res.write('data: reload\n\n');
+    };
+  }
 
   return app;
 }
@@ -164,18 +223,25 @@ export function hasTextModel() {
   }
 }
 
-let textTowerPromise = null;
-function textTower() {
-  if (!textTowerPromise)
-    textTowerPromise = (async () => {
-      const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
-      const [tokenizer, model] = await Promise.all([
-        AutoTokenizer.from_pretrained(TEXT_MODEL),
-        CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype: 'fp32' }),
-      ]);
-      return { tokenizer, model };
-    })();
-  return textTowerPromise;
+// Keyed by dtype rather than one bare promise: `createApp` may be built more
+// than once in a process (tests do this) with different config, and reusing
+// a model loaded at the wrong precision would be silently wrong rather than
+// slow.
+const textTowerPromises = new Map();
+function textTower(dtype) {
+  if (!textTowerPromises.has(dtype))
+    textTowerPromises.set(
+      dtype,
+      (async () => {
+        const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
+        const [tokenizer, model] = await Promise.all([
+          AutoTokenizer.from_pretrained(TEXT_MODEL),
+          CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype }),
+        ]);
+        return { tokenizer, model };
+      })()
+    );
+  return textTowerPromises.get(dtype);
 }
 
 /**
@@ -185,10 +251,11 @@ function textTower() {
  * the image rows were normalised the same way when the blob was written.
  *
  * @param {string} q
+ * @param {string} dtype transformers.js precision to load the text tower at
  * @returns {Promise<number[]>}
  */
-async function embedQuery(q) {
-  const { tokenizer, model } = await textTower();
+async function embedQuery(q, dtype) {
+  const { tokenizer, model } = await textTower(dtype);
   const inputs = tokenizer([q], { padding: true, truncation: true });
   const { text_embeds } = await model(inputs);
   const v = Float32Array.from(text_embeds.tolist()[0]);

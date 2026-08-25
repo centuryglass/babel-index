@@ -127,6 +127,18 @@ test('nonsense values fall back and say so, rather than throwing', () => {
   assert.ok(c.notes.length >= 5, `expected a note for each: ${c.notes.join(' | ')}`);
 });
 
+test('clipTextDtype accepts a valid transformers.js precision', () => {
+  const c = resolveConfig({ search: { clipTextDtype: 'q8' } }, { zoomLimits: LIMITS });
+  assert.equal(c.search.clipTextDtype, 'q8');
+  assert.deepEqual(c.notes, []);
+});
+
+test('clipTextDtype falls back to fp32 on an unknown value', () => {
+  const c = resolveConfig({ search: { clipTextDtype: 'fp99' } }, { zoomLimits: LIMITS });
+  assert.equal(c.search.clipTextDtype, DEFAULTS.search.clipTextDtype);
+  assert.equal(c.notes.length, 1);
+});
+
 test('a section of the wrong type is ignored rather than fatal', () => {
   const c = resolveConfig({ map: 'nope', search: [] }, { zoomLimits: LIMITS });
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio);
