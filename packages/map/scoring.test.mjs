@@ -44,6 +44,14 @@ test('folding removes case and diacritics', () => {
   assert.equal(fold(null), '');
 });
 
+test('folding transliterates letters NFD cannot decompose', () => {
+  // ł, unlike é, is a letter in its own right rather than a base plus a
+  // combining mark, so NFD leaves it untouched - any-ascii is what closes
+  // the gap between "Zdzisław" and "Zdzislaw".
+  assert.equal(fold('Zdzisław Beksiński'), fold('Zdzislaw Beksinski'));
+  assert.equal(fold('Zdzisław'), 'zdzislaw');
+});
+
 test('tokenising drops short words and stopwords', () => {
   assert.deepEqual(tokenise('The Room of Wet Collodion'), ['room', 'wet', 'collodion']);
   assert.deepEqual(tokenise('a to at'), [], 'nothing survives the length floor');
