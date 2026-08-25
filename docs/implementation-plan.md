@@ -39,10 +39,6 @@ serve as completed task history.
   matters for anyone relying on the lossless reading of a search.
 
 ## Hosting:
-- I really need to get the real dataset up on Cloudflare R2. Build a pipeline
-  to update that, using local vs. uploaded metadata.json to verify which files
-  actually need to be replaced.
-- Update the demo to allow pulling data/images from Cloudflare instead of local.
 - Price out what it'll cost to host somewhere I can target with Terraform CD,
   compare with the hassle of just kludging it onto my VPS with other projects.
 
