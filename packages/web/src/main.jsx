@@ -14,6 +14,7 @@ import { RoomCard } from './RoomCard.jsx';
 import { MapView } from './MapView.jsx';
 import { CatalogView } from './CatalogView.jsx';
 import { RoomOverlay } from './RoomOverlay.jsx';
+import { HelpDialog } from './HelpDialog.jsx';
 import { flipTransform, flipCss, rectOf, alphabeticalOrder } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
@@ -328,6 +329,10 @@ function Library({ manifest }) {
   // reader sees either without going back to the map - see `RoomOverlay`.
   const [overlay, setOverlay] = useState(null);
   const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
+
+  // A reserved book on the center shelf opens this instead of running a
+  // search - see CENTER_OVERRIDES and onOverride below.
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Right-click or long press opens the room's card. The pick is anchored to
   // where it happened rather than tracking the tile: the card names its room,
@@ -1202,6 +1207,7 @@ function Library({ manifest }) {
    */
   const onOverride = (slot) => {
     if (slot.action === 'catalog') enterCatalog();
+    else if (slot.action === 'help') setHelpOpen(true);
   };
 
   /**
@@ -1379,6 +1385,8 @@ function Library({ manifest }) {
         />
       )}
 
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+
       {card && cardDescription && (
         <RoomCard
           card={card}
@@ -1425,9 +1433,17 @@ const OPENING_MARGIN = 0.94;
  * which is the same argument that put the search field on the center tile.
  * `assignTitles` displaces history past a reserved slot rather than writing
  * over it, so the shelf simply starts one book later.
+ *
+ * Slot 1 is the second reason a new visitor might otherwise never find: it
+ * opens a short note on how to read and move through the room, in place of
+ * the trial-and-error a bare map and an unlabeled shelf would otherwise ask
+ * for. A question-mark button was the other candidate; this reuses the seam
+ * already built rather than adding chrome outside the shelf, and costs one
+ * book if it turns out not to be enough.
  */
 const CENTER_OVERRIDES = {
   0: { text: 'the catalog', action: 'catalog' },
+  1: { text: 'a note on finding your way', action: 'help' },
 };
 
 /**
