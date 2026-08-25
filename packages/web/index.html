@@ -363,6 +363,17 @@
       }
       .paging button.on { color: var(--ink); background: rgba(200,169,95,0.24); border-color: #c8a95f; }
       .mode-toggle { color: var(--ink); }
+      /*
+        The panel's `.forget { width: 100% }` is sized for its own block-layout
+        `.buttons` row; the catalog bar is flex, so it needs the same
+        sized-to-its-own-text override as `.mode-toggle` above or it stretches
+        across the row and shoves the toggle onto the next line.
+      */
+      .catalog .forget {
+        width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--dim);
+        cursor: pointer; background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
+        border-radius: 4px; padding: 4px 9px;
+      }
 
       .catalog-scroll { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
       .catalog-list { list-style: none; margin: 0; padding: 0; }

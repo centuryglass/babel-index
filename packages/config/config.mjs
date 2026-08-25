@@ -261,6 +261,19 @@ export const DEFAULTS = {
     maxQueryLength: 256,
 
     /**
+     * Precision the CLIP text tower loads at - one of transformers.js's
+     * `dtype` options ('fp32', 'fp16', 'q8', 'q4', ...). 'fp32' is the model's
+     * native precision and the accurate default; 'q8' quantises to a quarter
+     * the memory (one byte per parameter instead of four) at some cost to
+     * embedding accuracy, which is the tradeoff a memory-constrained host
+     * (a cheap VPS) wants and a normal one does not. Server-side only - it
+     * governs `packages/server/app.mjs`'s text tower, not the vision tower
+     * `tools/embed/embed.mjs` runs offline, which stays fp32 since it runs
+     * once per corpus rather than per request.
+     */
+    clipTextDtype: 'fp32',
+
+    /**
      * How a search's certainty becomes map density - see the gradient section
      * of `packages/map/ordering.js`. `map.contentRatio` above is the baseline
      * these numbers lift the middle of the map away from.
@@ -384,6 +397,7 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
         integer(searchIn.maxQueryLength, DEFAULTS.search.maxQueryLength, 'search.maxQueryLength', notes),
         1, 'search.maxQueryLength', notes
       ),
+      clipTextDtype: clipTextDtype(searchIn.clipTextDtype, notes),
       density: density(densityIn, notes),
     },
     notes,
@@ -572,6 +586,22 @@ function duration(value, fallback, path, notes, { composed = false } = {}) {
     notes.push(`${path} ${n} is shorter than one frame, so nothing will animate - milliseconds, not seconds?`);
   }
   return n;
+}
+
+/**
+ * The CLIP text tower's dtype - one of transformers.js's supported precisions.
+ * Anything else is a typo, not a request for a precision that doesn't exist.
+ */
+const CLIP_TEXT_DTYPES = ['fp32', 'fp16', 'q8', 'q4', 'int8', 'uint8', 'q4f16', 'bnb4'];
+
+function clipTextDtype(value, notes) {
+  const d = DEFAULTS.search.clipTextDtype;
+  if (value === undefined) return d;
+  if (typeof value !== 'string' || !CLIP_TEXT_DTYPES.includes(value)) {
+    notes.push(`search.clipTextDtype should be one of ${CLIP_TEXT_DTYPES.join(', ')}; using ${d}`);
+    return d;
+  }
+  return value;
 }
 
 /** A search weight: any non-negative number. Zero is a legitimate "ignore this signal". */

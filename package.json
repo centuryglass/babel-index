@@ -15,9 +15,11 @@
     "test": "node --test",
     "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
     "lint": "eslint .",
-    "demo": "node packages/server/index.mjs"
+    "demo": "node packages/server/index.mjs",
+    "demo:watch": "node --watch packages/server/index.mjs --watch"
   },
   "dependencies": {
+    "any-ascii": "^0.3.3",
     "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "react": "^19.2.8",
