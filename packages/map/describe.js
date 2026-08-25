@@ -48,12 +48,12 @@ export function describeCell(x, y, { layout, order, metadata = null }) {
   if (at.generic)
     return {
       kind: 'generic',
-      name: 'a blank wall',
+      name: 'a library wall',
       // Borges's identical hexagons: this is a placeholder, not an unindexed
       // room, and a reader who opens it should be pointed back at a search
       // rather than left wondering if they missed something.
       description:
-        'A blank wall — plain and identical to countless others, its shelves filled with nonsense. There is nothing to find here; the library’s real rooms are the ones your search turns up.',
+        'A library wall, plain and identical to countless others, its shelves filled with nonsense. There is nothing to find here.',
       picture: null,
     };
 
