@@ -124,6 +124,6 @@ export function describeArrangement(layout) {
 export function describeCatalog({ total, query = '', note = '' }) {
   const head = query.trim()
     ? `the catalog, ${total} rooms ranked for “${query.trim()}”`
-    : `the catalog, ${total} rooms in the order the map is showing`;
+    : `the catalog, ${total} rooms in alphabetical order`;
   return [head, note].filter(Boolean).join('. ');
 }

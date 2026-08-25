@@ -1419,8 +1419,15 @@ describe('the library, in a browser', { concurrency: false }, () => {
         'the shelf must be one tab stop, not one per book'
       );
 
-      // Reached from the search field, which is the element before it.
+      // Reached from the search field. A query is active from an earlier
+      // test, so the clear button is mounted right after the input and
+      // takes the first Tab; the shelf is the stop after that.
       await page.locator('input[type=search]').focus();
+      await page.keyboard.press('Tab');
+      assert.ok(
+        await page.evaluate(() => document.activeElement?.classList.contains('search-clear')),
+        'Tab from the search field must reach the clear button first'
+      );
       await page.keyboard.press('Tab');
       const inShelf = () =>
         page.evaluate(() => {
@@ -1428,7 +1435,7 @@ describe('the library, in a browser', { concurrency: false }, () => {
           return el?.closest('.center-books') ? el.dataset.book : null;
         });
       const first = await inShelf();
-      assert.ok(first !== null, 'Tab from the search field must reach the shelf');
+      assert.ok(first !== null, 'Tab from the clear button must reach the shelf');
 
       // Arrows move WITHIN the shelf: right along the wall's flat queue, down
       // by a shelf. Both are `bookNeighbour`, which is asserted exactly in

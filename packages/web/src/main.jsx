@@ -14,7 +14,7 @@ import { RoomCard } from './RoomCard.jsx';
 import { MapView } from './MapView.jsx';
 import { CatalogView } from './CatalogView.jsx';
 import { RoomOverlay } from './RoomOverlay.jsx';
-import { flipTransform, flipCss, rectOf } from './catalog.js';
+import { flipTransform, flipCss, rectOf, alphabeticalOrder } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
 import { buildRearrangement } from '../../map/board.js';
@@ -243,6 +243,30 @@ function Library({ manifest }) {
     if (result) return result.order;
     return shuffledOrder(total, orderSeed);
   }, [total, orderSeed, result]);
+
+  // The catalog's own order: a shuffle is not a list order anyone can read by
+  // eye, so its idle default is alphabetical rather than a second read of the
+  // map's random `order`. The two only agree while a search is running -
+  // `result.order` is the one array both views take a rank from - which is
+  // why a search and a clear are the only things that can move a room's
+  // catalog row, exactly as they are the only things that move it on the map.
+  const catalogOrder = useMemo(() => {
+    if (result) return result.order;
+    return alphabeticalOrder(manifest.rooms);
+  }, [manifest, result]);
+
+  // Which cell a room id sits in on the map right now, keyed by id rather
+  // than by rank - the catalog's rank in `catalogOrder` and the map's rank in
+  // `order` are the same number only while a search is active, so "show on
+  // the map" has to look a room up by what it IS, not by its row position.
+  const cellById = useMemo(() => {
+    const cells = new Map();
+    order.forEach((id, rank) => {
+      const cell = layout.cellOfRank(rank);
+      if (cell) cells.set(id, cell);
+    });
+    return cells;
+  }, [order, layout]);
 
   const draw = useRef(() => {});
   const requestDraw = useCallback(() => {
@@ -975,6 +999,14 @@ function Library({ manifest }) {
     search(query);
   };
 
+  // The clear-x: not just an empty submit, because setQuery is async state -
+  // calling search('') directly rather than search(query) after setQuery('')
+  // means it does not race the render that clears the box.
+  const clearSearch = () => {
+    setQuery('');
+    search('');
+  };
+
   // The panel's one remaining search affordance: reach the live field on the
   // center tile. If it is already on screen and legible, just focus it -
   // otherwise fly home to the opening view first, the same framing the map
@@ -1254,6 +1286,7 @@ function Library({ manifest }) {
         query={query}
         setQuery={setQuery}
         onSearch={runSearch}
+        onClearSearch={clearSearch}
         onGoToSearch={goToSearch}
         maxQueryLength={config.search.maxQueryLength}
         cursorLabel={cursorLabel}
@@ -1286,13 +1319,14 @@ function Library({ manifest }) {
           manifest={manifest}
           config={config}
           urlFor={urlFor}
-          order={order}
+          order={catalogOrder}
           metadata={metadata}
           result={result}
           highlight={highlight}
           query={query}
           setQuery={setQuery}
           onSearch={runSearch}
+          onClearSearch={clearSearch}
           paging={paging}
           setPaging={setPaging}
           onExit={exitCatalog}
@@ -1301,7 +1335,7 @@ function Library({ manifest }) {
           onExpand={expandRoom}
           centreSlots={centreSlots}
           onBook={onBook}
-          cellOfRank={(rank) => layout.cellOfRank(rank)}
+          cellOfId={(id) => cellById.get(id) ?? null}
           note={result ? describeSignals(result.signals ?? {}, Boolean(searchIndex)) : ''}
           scrollRef={catalogScrollRef}
           firstTileRef={firstTileRef}
