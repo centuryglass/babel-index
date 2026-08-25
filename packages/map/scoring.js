@@ -66,6 +66,7 @@
 // Default import only: wink-lemmatizer is CommonJS, and Node's ESM interop
 // does not statically discover its named exports.
 import winkLemmatizer from 'wink-lemmatizer';
+import anyAscii from 'any-ascii';
 import { embeddingScores } from './ordering.js';
 
 const { noun, verb, adjective } = winkLemmatizer;
@@ -113,11 +114,15 @@ export const STOPWORDS = new Set([
 ]);
 
 /**
- * Lowercase, strip diacritics, collapse whitespace.
+ * Lowercase, strip diacritics, transliterate to ASCII, collapse whitespace.
  *
  * Decomposing to NFD and dropping the combining marks means `rosé` and `rose`
  * are the same word, which matters for a corpus whose vocabulary is full of art
- * terms borrowed from French and German.
+ * terms borrowed from French and German. NFD only exposes marks riding on a
+ * base letter, though - `ł`, `ø`, `đ` are letters in their own right with
+ * nothing to strip, so `Zdzisław` survives NFD unchanged. `any-ascii` is the
+ * fallback for exactly that remainder: a per-code-point transliteration table,
+ * so `Zdzisław` and `Zdzislaw` fold to the same string.
  */
 export function fold(text) {
   return foldWithMap(text).folded.trim();
@@ -148,7 +153,11 @@ const COMBINING = /[\u0300-\u036f]/g;
  * of a word), and an index wants folding to be position independent, so the
  * same word folds the same way wherever it appears. Canonical reordering across
  * a combining sequence is likewise moot here, because every combining mark is
- * stripped a line later.
+ * stripped a line later. `any-ascii` is called per code point for the same
+ * reason - it accepts a whole string, but feeding it one code point at a time
+ * keeps its output attributable to a single source index like everything else
+ * in this loop, even though nothing in this corpus's vocabulary actually
+ * produces its multi-character transliterations (CJK, emoji).
  *
  * Deliberately does NOT trim: `fold` trims its own result, and trimming inside
  * this would shift every recorded index off the text it describes.
@@ -163,7 +172,8 @@ export function foldWithMap(text) {
 
   for (let i = 0; i < src.length; ) {
     const cp = String.fromCodePoint(src.codePointAt(i));
-    const out = cp.normalize('NFD').replace(COMBINING, '').toLowerCase();
+    let out = cp.normalize('NFD').replace(COMBINING, '').toLowerCase();
+    if ([...out].some((c) => c.codePointAt(0) > 0x7f)) out = anyAscii(out).toLowerCase();
     for (let k = 0; k < out.length; k++) map.push(i);
     folded += out;
     i += cp.length;
