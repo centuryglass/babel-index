@@ -24,9 +24,7 @@ import { screenToWorld } from './camera.js';
  * @param {number[]} order the ranking currently on the map
  * @returns {{id: number, rank: number, x: number, y: number}|{generic: true, x: number, y: number}|null}
  *   null only for the center room - it is the controls, not a room, and has
- *   nothing to show. A generic cell picks too (`describeCell` gives it a
- *   description), because a right-click there should say "wallpaper, keep
- *   looking" rather than read as a broken gesture.
+ *   no description to show.
  */
 export function roomAtPoint(px, py, cam, rect, layout, order) {
   const world = screenToWorld(px, py, cam, rect);
