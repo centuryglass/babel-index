@@ -18,6 +18,7 @@
     "demo": "node packages/server/index.mjs"
   },
   "dependencies": {
+    "any-ascii": "^0.3.3",
     "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "react": "^19.2.8",
