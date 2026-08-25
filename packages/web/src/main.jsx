@@ -190,9 +190,25 @@ function Library({ manifest }) {
   // top left to bottom right. Reserved override books are never overwritten.
   // `assignTitles` is pure, so this is a memo, not per-frame work.
   const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
+
+  // The bottom-right book is a second override, present only while there is
+  // something to forget. Built alongside `CENTER_OVERRIDES` rather than
+  // folded into it because that one is a fixed constant with nothing to react
+  // to, and this slot's presence depends on `history`.
+  const overrides = useMemo(() => {
+    if (!history.length) return CENTER_OVERRIDES;
+    return {
+      ...CENTER_OVERRIDES,
+      [BOOK_COUNT - 1]: {
+        text: `forget searches (${history.length})`,
+        action: 'forgetHistory',
+      },
+    };
+  }, [history.length]);
+
   const centreSlots = useMemo(
-    () => assignTitles({ history, tags, overrides: CENTER_OVERRIDES }),
-    [history, tags]
+    () => assignTitles({ history, tags, overrides }),
+    [history, tags, overrides]
   );
 
   // Which book on the shelf holds the wall's single tab stop.
@@ -1208,6 +1224,7 @@ function Library({ manifest }) {
   const onOverride = (slot) => {
     if (slot.action === 'catalog') enterCatalog();
     else if (slot.action === 'help') setHelpOpen(true);
+    else if (slot.action === 'forgetHistory') forgetSearches();
   };
 
   /**
@@ -1342,6 +1359,8 @@ function Library({ manifest }) {
           centreSlots={centreSlots}
           onBook={onBook}
           cellOfId={(id) => cellById.get(id) ?? null}
+          history={history}
+          onForgetSearches={forgetSearches}
           note={result ? describeSignals(result.signals ?? {}, Boolean(searchIndex)) : ''}
           scrollRef={catalogScrollRef}
           firstTileRef={firstTileRef}
@@ -1420,26 +1439,14 @@ const RESULTS_WINDOW = 50;
 const OPENING_MARGIN = 0.94;
 
 /**
- * Books on the center shelf with a distinct function, reserved by slot index.
+ * Books on the center shelf with a fixed distinct function, reserved by slot
+ * index. Dynamic overrides will be injected separately into the overrides
+ * memo above.
  *
- * The seam the concept asks for - "certain books will have distinct functions,
- * e.g. displaying an artist's statement" - built so history can never overwrite
- * them. `action` is dispatched by `onOverride` in `Library`; add nothing here
- * until the function it names exists, so an override always does something.
- *
- * Slot 0 is the top-left book, reserved before history fills the wall, and it
- * opens the catalog - the corpus read as a list rather than as a map. That it
- * is a BOOK is the point: the way out of the map is an object in the room,
- * which is the same argument that put the search field on the center tile.
- * `assignTitles` displaces history past a reserved slot rather than writing
- * over it, so the shelf simply starts one book later.
- *
- * Slot 1 is the second reason a new visitor might otherwise never find: it
- * opens a short note on how to read and move through the room, in place of
- * the trial-and-error a bare map and an unlabeled shelf would otherwise ask
- * for. A question-mark button was the other candidate; this reuses the seam
- * already built rather than adding chrome outside the shelf, and costs one
- * book if it turns out not to be enough.
+ * Overrides replace the default "search history" behavior assigned to the
+ * books in the center tile. Current static override list:
+ * - catalog: Switch between map and catalog view.
+ * - help: Show brief information on room navigation.
  */
 const CENTER_OVERRIDES = {
   0: { text: 'the catalog', action: 'catalog' },

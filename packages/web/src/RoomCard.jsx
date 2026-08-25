@@ -94,8 +94,7 @@ export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highligh
     >
       <div className="card-head">
         <span className="card-id">
-          room {card.id}
-          {file ? ` · ${file}` : ''}
+          {card.generic ? 'blank wall' : `room ${card.id}${file ? ` · ${file}` : ''}`}
         </span>
         <button className="card-close" onClick={onClose} aria-label="close">
           ×
