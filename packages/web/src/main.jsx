@@ -856,6 +856,21 @@ function Library({ manifest }) {
       // already replaced.
       anim.current = { before };
 
+      // Remembered so the map can return to it once the slide settles - the
+      // fly-home to the default zoom is only there to give the animation a
+      // wall of rooms to work with, and leaving the camera parked there
+      // afterwards fights whatever zoom the reader actually wanted (often
+      // the opening view, to keep using the center tile's controls).
+      const returnZoom = cam.current.zoom;
+
+      // A reader mid-search keeps their place in the field: the fly-home and
+      // the slide both move focus-stealing content under the browser, and
+      // some browsers blur an input whose containing scroll position moves
+      // out from under it. Refocus once the map is done moving rather than
+      // leaving the reader to click back in.
+      const searchInput = searchFormRef.current?.querySelector('input');
+      const hadFocus = !!searchInput && document.activeElement === searchInput;
+
       // Land before rearranging, rather than racing it: two animations
       // competing for the same attention and neither lands. It is also a
       // correctness requirement now that flights ease - the plan is made
@@ -900,7 +915,16 @@ function Library({ manifest }) {
         if (!running?.show) return; // interrupted
         const { done, motions } = running.show.advanceTo(performance.now() - running.t0);
         running.motions = motions;
-        if (done) anim.current = null;
+        if (done) {
+          anim.current = null;
+          if (returnZoom !== config.camera.defaultZoom) {
+            flyTo(0, 0, returnZoom).then((landedBack) => {
+              if (landedBack && hadFocus) searchInput.focus();
+            });
+          } else if (hadFocus) {
+            searchInput.focus();
+          }
+        }
         requestDraw();
         if (!done) requestAnimationFrame(tick);
       };
