@@ -191,8 +191,7 @@ function Library({ manifest }) {
   const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
 
   // The bottom-right book is a second override, present only while there is
-  // something to forget - the same condition that hides the panel's own
-  // "forget searches" button. Built alongside `CENTER_OVERRIDES` rather than
+  // something to forget. Built alongside `CENTER_OVERRIDES` rather than
   // folded into it because that one is a fixed constant with nothing to react
   // to, and this slot's presence depends on `history`.
   const overrides = useMemo(() => {
@@ -1432,24 +1431,13 @@ const RESULTS_WINDOW = 50;
 const OPENING_MARGIN = 0.94;
 
 /**
- * Books on the center shelf with a distinct function, reserved by slot index.
+ * Books on the center shelf with a fixed distinct function, reserved by slot
+ * index. Dynamic overrides will be injected separately into the overrides
+ * memo above.
  *
- * The seam the concept asks for - "certain books will have distinct functions,
- * e.g. displaying an artist's statement" - built so history can never overwrite
- * them. `action` is dispatched by `onOverride` in `Library`; add nothing here
- * until the function it names exists, so an override always does something.
- *
- * Slot 0 is the top-left book, reserved before history fills the wall, and it
- * opens the catalog - the corpus read as a list rather than as a map. That it
- * is a BOOK is the point: the way out of the map is an object in the room,
- * which is the same argument that put the search field on the center tile.
- * `assignTitles` displaces history past a reserved slot rather than writing
- * over it, so the shelf simply starts one book later.
- *
- * The bottom-right book (`BOOK_COUNT - 1`) is the wall's other override, built
- * beside this constant rather than in it - see `overrides` in `Library`. It
- * runs `forgetSearches` and exists only while there is history to forget, the
- * same visible-act argument `persist.js` makes for the panel's own button.
+ * Overrides replace the default "search history" behavior assigned to the
+ * books in the center tile. Current static override list:
+ * - catalog: Switch between map and catalog view.
  */
 const CENTER_OVERRIDES = {
   0: { text: 'the catalog', action: 'catalog' },
