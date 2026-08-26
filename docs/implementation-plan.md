@@ -35,12 +35,12 @@ serve as completed task history.
 ## Hosting:
 - Price out what it'll cost to host somewhere I can target with Terraform CD,
   compare with the hassle of just kludging it onto my VPS with other projects.
-- `--remote` mode's manifest urls now point straight at `assets_hostname`
-  (fixed - see remote.mjs), but `embeddings.bin` and `metadata.json` are
-  fetched with `fetch()` in main.jsx, which enforces CORS unlike an `<img>`
-  tag. Add a CORS policy on the R2 bucket/custom domain allowing the app's
-  origin before relying on this in production - untested against a real
-  Cloudflare zone yet.
+- The CORS follow-up for `--remote` mode is done: `infra/r2.tf`'s
+  `cloudflare_r2_bucket_cors` (schema confirmed against the provider version
+  pinned in `versions.tf`) covers `embeddings.bin`/`metadata.json`'s
+  cross-origin `fetch()` calls. Set `app_origins` in `terraform.tfvars` and
+  apply before relying on `--remote` mode in production - not yet applied or
+  tested against a real Cloudflare zone.
 - Search on a cheap VPS: `/api/search` runs the CLIP text tower per request
   with no concurrency cap and no cache, so a burst of distinct queries piles
   up on however many threads `onnxruntime-node` uses, each paying full

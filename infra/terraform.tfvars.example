@@ -13,3 +13,9 @@ r2_bucket_name         = "babel-index-corpus"
 # cloudflare_zone_id                 = "paste-zone-id-here"
 # assets_hostname                    = "assets.example.com"
 # billing_alert_email_integration_id = "paste-email-integration-id-here"
+
+# Needed once the demo server runs with --remote against this bucket
+# (packages/server/remote.mjs points the manifest's urls straight at it,
+# and main.jsx's fetch() of embeddings.bin/metadata.json enforces CORS).
+# Independent of enable_zone_protections - works even against *.r2.dev.
+# app_origins = ["https://babel.example.com", "http://localhost:5173"]
