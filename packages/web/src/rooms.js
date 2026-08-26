@@ -29,6 +29,9 @@ import { CENTER, genericId } from './tiles.js';
 export function createUrlFor(manifest) {
   // Older manifests have no `levels`; a flat level 0 is the honest reading.
   const dirs = new Map((manifest.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l.dir]));
+  // Older manifests (and any manifest.imagesBase omission) fall back to the
+  // local mount path - see scan.mjs's IMAGES_BASE.
+  const imagesBase = manifest.imagesBase ?? '/images';
 
   // Every shared-tile id to its (flat) url, so resolving one is a lookup rather
   // than string-parsing an index back out of the id.
@@ -47,6 +50,6 @@ export function createUrlFor(manifest) {
     const dir = dirs.get(level);
     // Level 0 is flat, so its url is exactly the `url` the manifest already
     // carries for each room - the two must not drift apart.
-    return `/images/${dir ? `${dir}/` : ''}${encodeURIComponent(file)}`;
+    return `${imagesBase}/${dir ? `${dir}/` : ''}${encodeURIComponent(file)}`;
   };
 }

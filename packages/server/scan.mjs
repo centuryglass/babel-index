@@ -5,6 +5,17 @@ import { metadataCoverage } from '../map/metadata.js';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
+/**
+ * Where a local scan's urls are rooted. `remote.mjs` rewrites both the
+ * manifest's `imagesBase`/`sharedBase` fields and every url built from these
+ * constants when serving a corpus from R2/Cloudflare instead of disk, so this
+ * is the one place "what does a room/shared/blob url look like" is decided -
+ * rooms.js's per-level url construction reads `imagesBase` off the manifest
+ * rather than restating the string.
+ */
+export const IMAGES_BASE = '/images';
+export const SHARED_BASE = '/shared';
+
 /** The keyword/story sidecar, written by the generator. See packages/map/metadata.js. */
 export const METADATA_FILE = 'metadata.json';
 
@@ -110,7 +121,7 @@ async function listImages(dir) {
 /** One shared asset: its file, a `/shared/`-rooted url, and its size if readable. */
 async function describeShared(sharedDir, sub, file) {
   const size = await imageSize(join(sharedDir, sub, file)).catch(() => null);
-  return { file, url: `/shared/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
+  return { file, url: `${SHARED_BASE}/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
 }
 
 /**
@@ -188,7 +199,7 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
     corpus.map(async (file, id) => {
       const path = join(dir, file);
       const [size, st] = await Promise.all([imageSize(path).catch(() => null), stat(path)]);
-      return { id, file, url: `/images/${encodeURIComponent(file)}`, bytes: st.size, ...(size ?? {}) };
+      return { id, file, url: `${IMAGES_BASE}/${encodeURIComponent(file)}`, bytes: st.size, ...(size ?? {}) };
     })
   );
 
@@ -210,7 +221,7 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   try {
     const meta = JSON.parse(await readFile(join(dir, 'embeddings.json'), 'utf8'));
     if (meta.count === rooms.length && meta.dim > 0)
-      embeddings = { url: '/images/embeddings.bin', dim: meta.dim, count: meta.count, model: meta.model ?? null };
+      embeddings = { url: `${IMAGES_BASE}/embeddings.bin`, dim: meta.dim, count: meta.count, model: meta.model ?? null };
   } catch {
     // no blob, unreadable, or malformed - leave embeddings null
   }
@@ -224,7 +235,7 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   try {
     const sidecar = JSON.parse(await readFile(join(dir, METADATA_FILE), 'utf8'));
     const { matched, entries } = metadataCoverage(rooms, sidecar);
-    metadata = { url: `/images/${METADATA_FILE}`, matched, entries };
+    metadata = { url: `${IMAGES_BASE}/${METADATA_FILE}`, matched, entries };
   } catch {
     // no sidecar, unreadable, or malformed - leave metadata null
   }
@@ -232,6 +243,15 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   return {
     mode: 'offline',
     directory: dir,
+    /**
+     * Where every url in this manifest is rooted - `rooms.js`'s `createUrlFor`
+     * reads these instead of hardcoding the paths, so `remote.mjs` can point a
+     * remotely-served corpus's urls (and every url already baked into this
+     * manifest) at R2/Cloudflare directly without the client needing a second
+     * "how do I build a url" implementation.
+     */
+    imagesBase: IMAGES_BASE,
+    sharedBase: SHARED_BASE,
     /**
      * The shared tiles: the blank `center` (or null if none was found) and the
      * `generic` array the generic tiles are drawn from. Served from `/shared/`,
