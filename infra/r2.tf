@@ -16,3 +16,22 @@ resource "cloudflare_r2_custom_domain" "corpus" {
   domain      = var.assets_hostname
   enabled     = true
 }
+
+# See variables.tf's app_origins for why this exists. Does not support
+# `terraform import` (confirmed against the provider's own docs at the
+# version pinned in versions.tf) - if this bucket ever grows a CORS rule set
+# by hand instead, it has to be recreated here rather than imported.
+resource "cloudflare_r2_bucket_cors" "corpus" {
+  count       = length(var.app_origins) > 0 ? 1 : 0
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.corpus.name
+
+  rules = [{
+    id = "allow-app-fetch"
+    allowed = {
+      methods = ["GET"]
+      origins = var.app_origins
+    }
+    max_age_seconds = 86400
+  }]
+}

@@ -25,6 +25,22 @@ real bill, not just a slowdown. The defenses here, cheapest first:
 All three are free on Cloudflare's Free plan at this scale; nothing here
 needs a paid plan.
 
+## CORS, for `--remote` mode
+
+`cloudflare_r2_bucket_cors` is a separate, bucket-level resource (not gated
+behind `enable_zone_protections` - it works even against the bare `*.r2.dev`
+url) that has nothing to do with abuse protection. It exists because
+`packages/server/remote.mjs` points a `--remote`-mode manifest's urls directly
+at this bucket, and `packages/web/src/main.jsx` reads two of them
+(`embeddings.bin`, `metadata.json`) with `fetch()` rather than an `<img>` tag -
+`fetch()` enforces CORS cross-origin, so those two requests fail silently
+without it even though the room tiles themselves (loaded via `<img>`) don't
+need it at all. Set `app_origins` in `terraform.tfvars` to every origin the
+demo server is reachable from (production hostname, `http://localhost:5173`
+for local `--remote` testing) once you actually use `--remote`; leave it
+empty (the default) until then, since it's not needed for a purely local
+demo.
+
 ## Setup
 
 ```sh
@@ -87,6 +103,12 @@ versions:
   URLs before proxying - the bucket is public read once
   `enable_zone_protections` binds it to a hostname. Add that layer if the
   corpus needs to not be fully public.
+- `cloudflare_r2_bucket_cors`'s schema was confirmed against the provider's
+  own docs at the exact version pinned in `versions.tf` (v5.24.0) - `rules`
+  is a list of `{ id, allowed: { methods, origins, headers }, expose_headers,
+  max_age_seconds }`, and `allowed.methods`/`allowed.origins` are the only
+  required fields. It does not support `terraform import` - a CORS rule set
+  by hand instead has to be recreated here, not imported.
 
 ## State
 
