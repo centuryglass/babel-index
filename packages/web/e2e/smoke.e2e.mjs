@@ -1826,6 +1826,122 @@ describe('the library, in a browser', { concurrency: false }, () => {
     }
   });
 
+  test('a slow search cannot overwrite the one that came after it', async () => {
+    // `search` awaits the server, and two queries can be in the air at once: a
+    // book on the shelf is one click, and the first request of a session pays
+    // for loading the CLIP text tower. Without a sequence guard the slow early
+    // reply lands last and wins, leaving the library ranked for a term the
+    // reader has already moved on from.
+    //
+    // Ordered by condition rather than by duration: the first query's reply is
+    // held until the second has been fulfilled, so "out of order" is
+    // guaranteed here rather than raced for.
+    const slow = 'magma';
+    const fast = 'peaceful';
+    let releasedBy = null;
+    let release;
+    const held = new Promise((r) => (release = r));
+    const releaseTo = (who) => {
+      if (!releasedBy) {
+        releasedBy = who;
+        release();
+      }
+    };
+    let landed = false;
+
+    await page.route('**/api/search*', async (route) => {
+      const q = new URL(route.request().url()).searchParams.get('q');
+      if (q === slow) {
+        // Bounded, so a second query that never goes out fails this test
+        // instead of hanging the suite - see `releasedBy` below.
+        const timer = setTimeout(() => releaseTo('a timeout'), SEARCH_TIMEOUT);
+        await held;
+        clearTimeout(timer);
+        await route.fulfill({ response: await route.fetch() });
+        landed = true;
+        return;
+      }
+      await route.fulfill({ response: await route.fetch() });
+      releaseTo('the later query');
+    });
+
+    await openCatalog();
+    try {
+      const box = page.locator('.catalog-search input');
+      await box.fill(slow);
+      await box.press('Enter');
+      await box.fill(fast);
+      await box.press('Enter');
+
+      await waitFor(() => landed, SEARCH_TIMEOUT * 2, 'the held reply was never delivered');
+      assert.equal(releasedBy, 'the later query', 'the second query never reached the server');
+
+      // Both replies are in, the superseded one last. The count names the
+      // ranking the catalog is showing, so it is exactly the state a lost race
+      // would corrupt - and the assertion below it is not a wait for anything
+      // to arrive, since the stale reply has already been answered.
+      await waitFor(
+        async () => new RegExp(fast).test((await page.locator('.catalog-count').textContent()) ?? ''),
+        SEARCH_TIMEOUT,
+        `the catalog never ranked for ${JSON.stringify(fast)}`
+      );
+      const count = (await page.locator('.catalog-count').textContent()) ?? '';
+      assert.doesNotMatch(count, new RegExp(slow), 'a superseded search overwrote the newer one');
+
+      // And the marks agree with it. The highlight ranges are derived from the
+      // ranking's own term, so a stale one showing through here would mean the
+      // two disagree about which search the reader is looking at.
+      const marks = await page.locator('.catalog-row mark').allTextContents();
+      assert.ok(marks.length > 0, `nothing was marked for ${JSON.stringify(fast)}`);
+      for (const m of marks)
+        assert.match(m.toLowerCase(), new RegExp(fast), 'a mark left over from the superseded search');
+    } finally {
+      await page.unroute('**/api/search*');
+      await page.locator('.catalog-search input').fill('');
+      await page.locator('.catalog-search input').press('Enter');
+      await closeCatalog();
+    }
+  });
+
+  test('a search the server cannot answer says so and leaves the library alone', async () => {
+    await page.route('**/api/search*', (route) => route.fulfill({ status: 500, body: 'no' }));
+    await openCatalog();
+    try {
+      const before = await page.locator('.catalog-count').textContent();
+      const box = page.locator('.catalog-search input');
+      await box.fill('brass');
+      await box.press('Enter');
+
+      // Nothing rearranged, so the effect that normally speaks for a search
+      // never runs - the failure path has to write the live region itself.
+      // Before this was handled the rejected promise simply went unhandled and
+      // the reader was told nothing at all, which is the case this catches.
+      await waitFor(
+        async () => /could not be run/.test((await page.locator('[role=status]').textContent()) ?? ''),
+        SEARCH_TIMEOUT,
+        'a failed search never reported itself'
+      );
+      assert.equal(
+        await page.locator('.catalog-count').textContent(),
+        before,
+        'a failed search re-ranked the catalog'
+      );
+    } finally {
+      await page.unroute('**/api/search*');
+      // Chromium logs a failed request on its own, and Playwright relays it -
+      // so the 500 this test forced would fail the console check at the end of
+      // the suite. It is this test's own noise rather than the app's, and it is
+      // taken back out here rather than being allowed to mask a real one by
+      // widening what that check tolerates.
+      const forced = /Failed to load resource[\s\S]*\b500\b/;
+      for (let i = consoleErrors.length - 1; i >= 0; i--)
+        if (forced.test(consoleErrors[i])) consoleErrors.splice(i, 1);
+      await page.locator('.catalog-search input').fill('');
+      await page.locator('.catalog-search input').press('Enter');
+      await closeCatalog();
+    }
+  });
+
   test('pagination and scrolling are the same list, and the choice is remembered', async () => {
     await openCatalog();
     try {
