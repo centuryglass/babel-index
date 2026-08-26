@@ -3,19 +3,6 @@
 Pending task list. Remove tasks as they are completed, the code and git logs will
 serve as completed task history.
 
-## Priority: images proxy through the VPS in --remote mode
-- `scan.mjs` always emits manifest urls as relative `/images/...` and
-  `/shared/...` paths, and `remote.mjs`'s `mountProxy` answers those routes by
-  `fetch()`-ing the corpus from R2/Cloudflare and streaming the response back
-  through the VPS's own Express process. So every tile byte flows through the
-  VPS even when the corpus is hosted remotely - Cloudflare's edge cache and
-  rate limiting (`infra/abuse-protection.tf`) only protect the VPS's own
-  fetches to R2, not the browser-to-VPS leg, and the CDN's edge PoPs are never
-  actually used for image delivery.
-- Fix: have the manifest emit absolute urls pointing at `assets_hostname`
-  directly when running in `--remote` mode, so the browser fetches images
-  from Cloudflare/R2 and only `/api/manifest` and `/api/search` hit the VPS.
-
 ## Map interface:
  - Inpaint the "Catalog" volume in the center tile to give it a more
    distinctive appearance.
@@ -48,6 +35,12 @@ serve as completed task history.
 ## Hosting:
 - Price out what it'll cost to host somewhere I can target with Terraform CD,
   compare with the hassle of just kludging it onto my VPS with other projects.
+- `--remote` mode's manifest urls now point straight at `assets_hostname`
+  (fixed - see remote.mjs), but `embeddings.bin` and `metadata.json` are
+  fetched with `fetch()` in main.jsx, which enforces CORS unlike an `<img>`
+  tag. Add a CORS policy on the R2 bucket/custom domain allowing the app's
+  origin before relying on this in production - untested against a real
+  Cloudflare zone yet.
 - Search on a cheap VPS: `/api/search` runs the CLIP text tower per request
   with no concurrency cap and no cache, so a burst of distinct queries piles
   up on however many threads `onnxruntime-node` uses, each paying full
