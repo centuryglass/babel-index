@@ -337,6 +337,14 @@ function Library({ manifest }) {
   // hears ONE sentence about both; two writes a few hundred milliseconds apart
   // would be two interruptions describing one event.
   const pendingNote = useRef('');
+  // Which search is the newest one asked for. `search` awaits the server, and
+  // nothing stops a second query being submitted while the first is still in
+  // the air - a book on the shelf is one click, and the first request of a
+  // session pays for loading the CLIP text tower - so without this the slow
+  // early query resolves last and wins, leaving the map ranked by a term the
+  // reader has already moved on from. Every write a search makes is gated on
+  // still being the newest, so a superseded one lands nowhere.
+  const searchSeq = useRef(0);
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
 
@@ -991,6 +999,10 @@ function Library({ manifest }) {
   // history entry all reach this without touching the box.
   const search = async (rawTerm) => {
     const term = String(rawTerm ?? '').slice(0, config.search.maxQueryLength);
+    // Claiming the sequence is what makes this the current search, and it is
+    // done before the first await so that a clear - which needs none of what
+    // follows - still supersedes a query in flight.
+    const seq = ++searchSeq.current;
     // Both branches rearrange the library - clearing the box restores the
     // uniform map, which is as much a rearrangement as finding something is.
     animateNext.current = true;
@@ -1003,7 +1015,28 @@ function Library({ manifest }) {
     // before the fetch, so a click on that book is remembered even if the
     // ranking that follows is a stub.
     pushHistory(term.trim());
-    const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`).then((r) => r.json());
+
+    let res;
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
+      // fetch only rejects on a network failure; a 500 arrives as an ordinary
+      // response whose body is not the JSON this expects.
+      if (!response.ok) throw new Error(`the library answered ${response.status}`);
+      res = await response.json();
+    } catch (e) {
+      if (seq !== searchSeq.current) return;
+      // Nothing rearranged, so the effect that normally speaks for a search
+      // will not run - this is the one path that has to write the live region
+      // itself. The flag has to be cleared with it, or the next slider drag
+      // inherits an animation this search asked for and never used.
+      animateNext.current = false;
+      pendingNote.current = '';
+      setStatus(`the search could not be run - ${e.message}. The library is unchanged.`);
+      return;
+    }
+    // Past here the reply is this search's to act on, and a newer query has
+    // already claimed the map.
+    if (seq !== searchSeq.current) return;
 
     // Three signals, blended into one sort over the whole corpus. Any of them
     // may be missing - no blob, no metadata - and a ranking from the rest is
