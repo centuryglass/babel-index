@@ -6,8 +6,10 @@
  * `fetch` against an ephemeral port - no browser, no bundler, no fixtures on
  * disk beyond the images directory under test.
  */
+import { availableParallelism } from 'node:os';
 import express from 'express';
 import { resolveConfig } from '../config/config.mjs';
+import { createLruCache, createLimiter } from './search-cache.mjs';
 
 // Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
 // text and image towers point into different spaces and every ranking is quiet
@@ -111,7 +113,12 @@ export function createApp({
       return res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q) });
 
     try {
-      const vector = await embedQuery(q, clipTextDtype);
+      const cacheKey = `${clipTextDtype} ${q}`;
+      let vector = embedCache.get(cacheKey);
+      if (!vector) {
+        vector = await embedLimiter(() => embedQuery(q, clipTextDtype));
+        embedCache.set(cacheKey, vector);
+      }
       res.json({ stub: false, query: q, vector });
     } catch (err) {
       // The note reaches the browser, so it says what happened rather than
@@ -216,6 +223,24 @@ export function hasTextModel() {
     return false;
   }
 }
+
+// Module-level for the same reason as `textTowerPromises` below: CPU cores and
+// a warm cache are resources of the process, not of one `createApp()` call, and
+// tests build more than one app per process. The cache key folds in dtype (see
+// the route above) so a config that loads a different precision never reads a
+// vector computed at another one back out. Capacity is a guess, not a
+// measurement - repeat searches (history, re-searching the same term) are
+// common enough that even a small cache earns its keep, and 512 floats per
+// entry keeps 200 of them cheap to hold.
+const EMBED_CACHE_SIZE = 200;
+const embedCache = createLruCache(EMBED_CACHE_SIZE);
+
+// Bounds how many CLIP text-tower inferences run at once. Sized to the CPU,
+// like the concurrency any other CPU-bound worker pool would use - past that
+// many threads are fighting for the same cores rather than doing useful work,
+// so a burst of distinct queries degrades to queueing latency instead of
+// thrashing the machine.
+const embedLimiter = createLimiter(Math.max(1, availableParallelism()));
 
 // Keyed by dtype rather than one bare promise: `createApp` may be built more
 // than once in a process (tests do this) with different config, and reusing
