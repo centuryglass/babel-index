@@ -32,11 +32,7 @@ import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from './camera.js
  * @param {Function} opts.setStatus       writes the one live region
  * @param {Function} opts.requestDraw
  * @param {Function} opts.onOpenCard      Enter over a room opens its card
- * @param {{current: Function}} opts.goToSearchRef
- *   A REF rather than a callback: `goToSearch` closes over state that changes
- *   often and is defined further down `main.jsx` than this hook is called, so
- *   reading `.current` at press time is what keeps `/` from being bound to a
- *   stale one. Same trick, same reason, now across a file boundary.
+ * @param {Function} opts.goToSearch      `/` reaches the live search field
  */
 export function useMapCursor({
   layout,
@@ -51,7 +47,7 @@ export function useMapCursor({
   setStatus,
   requestDraw,
   onOpenCard,
-  goToSearchRef,
+  goToSearch,
 }) {
   // --- the keyboard cursor ---------------------------------------------------
   //
@@ -336,7 +332,7 @@ export function useMapCursor({
 
       if (e.key === '/') {
         e.preventDefault();
-        goToSearchRef.current();
+        goToSearch();
         return;
       }
 
@@ -347,7 +343,7 @@ export function useMapCursor({
     },
     [
       layout, order, flyTo, nudgeBy, flightTarget, cursorNow, camera, canvasRef,
-      announceCursorMove, announceSurroundings, cam, onOpenCard, goToSearchRef,
+      announceCursorMove, announceSurroundings, cam, onOpenCard, goToSearch,
       setStatus,
     ]
   );
