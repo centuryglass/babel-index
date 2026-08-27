@@ -557,6 +557,15 @@ code, not a standing invariant.
 
 ### Testing and CI
 
+- **In a cloud agent container, running `npm run test:e2e` yourself is slow**
+  (the pinned Chromium isn't preinstalled the way it is in CI, and each spec
+  launches its own browser). If a change doesn't touch `packages/web/e2e/**`
+  or behavior an existing e2e spec exercises, don't run the suite locally —
+  `npm test` plus lint is the fast local signal, and `e2e.yml` runs as the PR's
+  merge gate regardless. Run it locally anyway when the change is
+  behavior-sensitive enough that you want the read before opening the PR (e.g.
+  refactors touching the rearrangement/camera/search state machines), or when
+  you're editing the e2e specs themselves.
 - **e2e is a merge gate.** `ci.yml` runs `npm test` across the Node matrix and
   calls `e2e.yml`; the aggregate `ci` job needs both. A flaky browser test
   blocks merges for everyone, so wait on a condition, never on a duration —
