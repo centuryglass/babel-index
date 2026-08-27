@@ -23,17 +23,13 @@ import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.js';
 import {
-  assignTitles,
-  pickTags,
   bookAtPoint,
-  bookNeighbour,
   centerCellRect,
   searchBoxScreenRect,
   isSearchBoxUsable,
   searchBoxAtPoint,
   areSpinesLegible,
   overlapsViewport,
-  BOOK_COUNT,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
 } from './center.js';
@@ -46,6 +42,7 @@ import { BASE_TILE } from './pyramid.js';
 import { useMapCamera, prefersReducedMotion } from './useMapCamera.js';
 import { useMapRenderer } from './useMapRenderer.js';
 import { useMapCursor } from './useMapCursor.js';
+import { useCenterShelf } from './useCenterShelf.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -185,41 +182,25 @@ function Library({ manifest }) {
   // megabyte of string work.
   const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
-  // The center room's book titles. Every book shows a stable random corpus
-  // keyword until history reaches it: past searches fill the wall newest first,
-  // top left to bottom right. Reserved override books are never overwritten.
-  // `assignTitles` is pure, so this is a memo, not per-frame work.
-  const tags = useMemo(() => pickTags(metadata, config.map.slotSeed), [metadata, config]);
+  // `search`, `enterCatalog`, `setHelpOpen` and `forgetSearches` - the actions
+  // a book on the shelf can run - are declared much further down this file, so
+  // `useCenterShelf` (called next, ahead of all of them) cannot take them
+  // directly: it has to run early enough that `centreSlots` is ready before
+  // `useMapRenderer` reads it below. This ref is the same forward-reference
+  // trick `useMapCursor`'s `goToSearchRef` uses; `main.jsx` fills it in once
+  // everything it points to actually exists (see the assignment near
+  // `forgetSearches`), and every book press from then on reads the live
+  // functions rather than a closure captured before they were.
+  const shelfActionsRef = useRef({});
 
-  // The bottom-right book is a second override, present only while there is
-  // something to forget. Built alongside `CENTER_OVERRIDES` rather than
-  // folded into it because that one is a fixed constant with nothing to react
-  // to, and this slot's presence depends on `history`.
-  const overrides = useMemo(() => {
-    if (!history.length) return CENTER_OVERRIDES;
-    return {
-      ...CENTER_OVERRIDES,
-      [BOOK_COUNT - 1]: {
-        text: `forget searches (${history.length})`,
-        action: 'forgetHistory',
-      },
-    };
-  }, [history.length]);
-
-  const centreSlots = useMemo(
-    () => assignTitles({ history, tags, overrides }),
-    [history, tags, overrides]
-  );
-
-  // Which book on the shelf holds the wall's single tab stop.
-  //
-  // Roving tabindex, the ordinary toolbar pattern: forty buttons each in the
-  // tab sequence would put forty presses between the map and the panel, which
-  // is a tax on every keyboard user for a wall that is mostly a browsable
-  // index of keywords. One stop in, arrows within, Tab straight out - the same
-  // shape the map itself has (accessibility-plan.md §4.2b's "arrows mean
-  // whatever the focused thing says they mean").
-  const [bookFocus, setBookFocus] = useState(0);
+  const { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown } = useCenterShelf({
+    metadata,
+    slotSeed: config.map.slotSeed,
+    history,
+    booksRef,
+    setQuery,
+    actionsRef: shelfActionsRef,
+  });
 
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
@@ -355,7 +336,7 @@ function Library({ manifest }) {
   const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
 
   // A reserved book on the center shelf opens this instead of running a
-  // search - see CENTER_OVERRIDES and onOverride below.
+  // search - see useCenterShelf.js's CENTER_OVERRIDES and onOverride.
   const [helpOpen, setHelpOpen] = useState(false);
 
   // Right-click or long press opens the room's card. The pick is anchored to
@@ -1006,59 +987,11 @@ function Library({ manifest }) {
   );
   const forgetSearches = useCallback(() => setHistory([]), []);
 
-  /**
-   * What an override book does. The seam this file has carried empty since the
-   * shelf was built; the catalog is the first thing to claim a slot.
-   */
-  const onOverride = (slot) => {
-    if (slot.action === 'catalog') enterCatalog();
-    else if (slot.action === 'help') setHelpOpen(true);
-    else if (slot.action === 'forgetHistory') forgetSearches();
-  };
-
-  /**
-   * What book `i` does. ONE implementation, two entry points: a sighted click
-   * arrives through `onTap` -> `bookAtPoint` below, a keyboard Enter (and a
-   * screen reader's activate) through the button's own click. Two copies of
-   * "what does book i do" would drift, which is the whole reason this is not
-   * written inline in either.
-   *
-   * A history or tag book repeats its search; an override book runs its
-   * function; an untitled book does nothing, and has no button.
-   */
-  const onBook = (i) => {
-    const slot = centreSlots[i];
-    if (!slot) return;
-    if (slot.term) {
-      setQuery(slot.term);
-      search(slot.term);
-    } else if (slot.action) {
-      onOverride(slot);
-    }
-  };
-
-  // Arrows move within the shelf; Tab leaves it. Left and right run along the
-  // wall's flat queue across shelf ends, up and down move a shelf holding the
-  // column - `bookNeighbour` owns both, so what a press does is asserted
-  // without a browser. Home and End reuse it from outside the wall rather than
-  // being a second way to say "first" and "last".
-  const onBooksKeyDown = (e) => {
-    const dir = {
-      ArrowLeft: { dx: -1 }, ArrowRight: { dx: 1 },
-      ArrowUp: { dy: -1 }, ArrowDown: { dy: 1 },
-    }[e.key];
-    const next = dir
-      ? bookNeighbour(bookFocus, dir, centreSlots)
-      : e.key === 'Home'
-        ? bookNeighbour(-1, { dx: 1 }, centreSlots)
-        : e.key === 'End'
-          ? bookNeighbour(BOOK_COUNT, { dx: -1 }, centreSlots)
-          : null;
-    if (next === null) return;
-    e.preventDefault();
-    setBookFocus(next);
-    booksRef.current?.querySelector(`[data-book="${next}"]`)?.focus();
-  };
+  // `useCenterShelf` was called before any of these four existed - see the
+  // comment on `shelfActionsRef` above. Now that they do, every book press
+  // reads them through here rather than through a closure that would have
+  // been stale from the moment it was captured.
+  shelfActionsRef.current = { search, enterCatalog, setHelpOpen, forgetSearches };
 
   // Selecting a book on the center room. Off the center cell or on an empty
   // book, nothing happens - the tap is not otherwise claimed.
@@ -1226,21 +1159,6 @@ const RESULTS_WINDOW = 50;
  * its value.
  */
 const OPENING_MARGIN = 0.94;
-
-/**
- * Books on the center shelf with a fixed distinct function, reserved by slot
- * index. Dynamic overrides will be injected separately into the overrides
- * memo above.
- *
- * Overrides replace the default "search history" behavior assigned to the
- * books in the center tile. Current static override list:
- * - help: Show brief information on room navigation.
- * - catalog: Switch between map and catalog view.
- */
-const CENTER_OVERRIDES = {
-  0: { text: 'READ ME', action: 'help' },
-  1: { text: 'The Catalog', action: 'catalog' },
-};
 
 /**
  * Which reading the page opens on.
