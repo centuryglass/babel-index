@@ -88,6 +88,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `src/useMapRenderer.js`: Map frame loop/redraw hook
     * `src/useMapCursor.js`: The keyboard cursor - where it is, what a reader
                            hears about it, and every key over the map
+    * `src/useCenterShelf.js`: The center room's bookshelf - titles, roving
+                           tabindex focus, and what a tap or arrow key does
     * `src/render.js`: Render a single map frame
     * `src/slide.js`: Room rearrangement animation renderer
     * `src/picking.js`: Defines the roomAtPoint function
