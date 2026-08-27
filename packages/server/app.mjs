@@ -9,7 +9,7 @@
 import { availableParallelism } from 'node:os';
 import express from 'express';
 import { resolveConfig } from '../config/config.mjs';
-import { createLruCache, createLimiter } from './search-cache.mjs';
+import { createLruCache, createLimiter } from './search-cache.ts';
 
 // Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
 // text and image towers point into different spaces and every ranking is quiet

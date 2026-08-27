@@ -84,7 +84,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `app.mjs`: Express setup, manifest/rescan/search/images endpoints
   * `scan.mjs`: Image tile directory loading
   * `port.ts`: portInUse helper function
-  * `search-cache.mjs`: LRU cache and concurrency limiter backing `/api/search`'s
+  * `search-cache.ts`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
