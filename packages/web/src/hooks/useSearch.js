@@ -32,7 +32,7 @@ import {
   tokenise,
   keywordMatchRanges,
   storyMatchRanges,
-} from '../../map/scoring.js';
+} from '../../../map/scoring.js';
 
 /**
  * @param {object} opts

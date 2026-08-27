@@ -10,7 +10,7 @@ import {
   panByPixels,
   zoomAt,
   zoomBy,
-} from './camera.js';
+} from '../lib/camera.js';
 
 /**
  * Pan/zoom camera over an unbounded tile grid.

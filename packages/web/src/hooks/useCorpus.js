@@ -12,8 +12,8 @@
  * time it arrives would be paid for nothing anyone reads from it synchronously.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { joinMetadata } from '../../map/metadata.js';
-import { buildSearchIndex } from '../../map/scoring.js';
+import { joinMetadata } from '../../../map/metadata.js';
+import { buildSearchIndex } from '../../../map/scoring.js';
 
 /**
  * @param {object} manifest  the loaded `/api/manifest` response

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
-import { RoomCard } from './RoomCard.jsx';
-import { MapView } from './MapView.jsx';
-import { CatalogView } from './CatalogView.jsx';
-import { RoomOverlay } from './RoomOverlay.jsx';
-import { HelpDialog } from './HelpDialog.jsx';
-import { alphabeticalOrder } from './catalog.js';
-import { load, save, clear, KEYS } from './persist.js';
-import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
-import { roomAtPoint } from './picking.js';
+import { RoomCard } from './components/RoomCard.jsx';
+import { MapView } from './components/MapView.jsx';
+import { CatalogView } from './components/CatalogView.jsx';
+import { RoomOverlay } from './components/RoomOverlay.jsx';
+import { HelpDialog } from './components/HelpDialog.jsx';
+import { alphabeticalOrder } from './lib/catalog.js';
+import { load, save, clear, KEYS } from './lib/persist.js';
+import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.js';
+import { roomAtPoint } from './lib/picking.js';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.js';
 import {
   bookAtPoint,
@@ -21,21 +21,21 @@ import {
   overlapsViewport,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
-} from './center.js';
-import { CELL_ASPECT, fitZoom } from './camera.js';
-import { createTileCache, CENTER, genericId } from './tiles.js';
-import { createUrlFor } from './rooms.js';
-import { createRenderer } from './render.js';
-import { createSlideRenderer } from './slide.js';
-import { BASE_TILE } from './pyramid.js';
-import { useMapCamera } from './useMapCamera.js';
-import { useMapRenderer } from './useMapRenderer.js';
-import { useMapCursor } from './useMapCursor.js';
-import { useCenterShelf } from './useCenterShelf.js';
-import { useModeTransition } from './useModeTransition.js';
-import { useCorpus } from './useCorpus.js';
-import { useRearrangement } from './useRearrangement.js';
-import { useSearch, describeSignals } from './useSearch.js';
+} from './lib/center.js';
+import { CELL_ASPECT, fitZoom } from './lib/camera.js';
+import { createTileCache, CENTER, genericId } from './lib/tiles.js';
+import { createUrlFor } from './lib/rooms.js';
+import { createRenderer } from './lib/render.js';
+import { createSlideRenderer } from './lib/slide.js';
+import { BASE_TILE } from './lib/pyramid.js';
+import { useMapCamera } from './hooks/useMapCamera.js';
+import { useMapRenderer } from './hooks/useMapRenderer.js';
+import { useMapCursor } from './hooks/useMapCursor.js';
+import { useCenterShelf } from './hooks/useCenterShelf.js';
+import { useModeTransition } from './hooks/useModeTransition.js';
+import { useCorpus } from './hooks/useCorpus.js';
+import { useRearrangement } from './hooks/useRearrangement.js';
+import { useSearch, describeSignals } from './hooks/useSearch.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);

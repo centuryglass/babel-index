@@ -19,7 +19,7 @@
  * here would make it two.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from './center.js';
+import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from '../lib/center.js';
 
 /**
  * Books on the center shelf with a fixed distinct function, reserved by slot

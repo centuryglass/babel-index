@@ -34,8 +34,8 @@
  * "3 of 511" part by hand.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { describeRoom } from '../../map/describe.js';
-import { describeBook } from './center.js';
+import { describeRoom } from '../../../map/describe.js';
+import { describeBook } from '../lib/center.js';
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import {
@@ -49,8 +49,8 @@ import {
   pageAtScroll,
   windowFor,
   storyLines,
-} from './catalog.js';
-import { CENTER } from './tiles.js';
+} from '../lib/catalog.js';
+import { CENTER } from '../lib/tiles.js';
 
 /**
  * How wide a thumbnail is, from the width the list has to spend.

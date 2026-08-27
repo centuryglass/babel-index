@@ -1,7 +1,7 @@
 /**
  * Writing the resolution pyramid to disk.
  *
- * The client picks a level per frame (see packages/web/src/pyramid.js); this is
+ * The client picks a level per frame (see packages/web/src/lib/pyramid.js); this is
  * the job that makes those levels exist. It runs once per corpus, offline, and
  * is deliberately not something the server does on demand - resizing 10,000
  * rooms is a pipeline concern, and a server that resizes on request has put a
@@ -47,7 +47,7 @@ import { mkdir, copyFile, readdir, stat, readFile, writeFile } from 'node:fs/pro
 import { join, extname, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
-import { LEVELS } from '../web/src/pyramid.js';
+import { LEVELS } from '../web/src/lib/pyramid.js';
 import { mipPlan } from './layout.mjs';
 
 // Re-exported because this is where callers have always looked for it. It lives

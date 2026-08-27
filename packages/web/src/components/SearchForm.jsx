@@ -1,4 +1,4 @@
-import clearSvg from '../../../assets/clear_search.svg';
+import clearSvg from '../../../../assets/clear_search.svg';
 
 /**
  * The search box, in whichever of its two homes is on screen.

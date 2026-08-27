@@ -123,7 +123,7 @@ console.log(
   `viewBox ${round(vbW)} x ${round(vbH)} (aspect ${round(vbH / vbW)}), ` +
     `layer translate ${round(tx)},${round(ty)}`
 );
-console.log('  -> BASE_TILE in packages/web/src/pyramid.js must match this aspect');
+console.log('  -> BASE_TILE in packages/web/src/lib/pyramid.js must match this aspect');
 console.log(`rects ${rects.length}: ${spines.length} books, ${searchBoxRects.length} search_box, ${other.length} unlabelled`);
 console.log(`search_box: ${searchBox ? nrect(searchBox).join(', ') : 'MISSING'}`);
 console.log(`opening: ${nrect(openingRect).join(', ')}`);
@@ -152,7 +152,7 @@ const body = `/**
  * y against the traced height, so they carry no aspect of their own. \`tile\`
  * records the shape they were traced at, because that is the one thing the
  * normalisation throws away and the one thing that has to keep agreeing with
- * BASE_TILE in packages/web/src/pyramid.js.
+ * BASE_TILE in packages/web/src/lib/pyramid.js.
  *
  * Rects are [x, y, w, h].
  */
