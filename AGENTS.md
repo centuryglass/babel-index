@@ -92,6 +92,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                            hears about it, and every key over the map
     * `src/useCenterShelf.js`: The center room's bookshelf - titles, roving
                            tabindex focus, and what a tap or arrow key does
+    * `src/useModeTransition.js`: Switching between the map and catalog readings,
+                           the FLIP animation between them
+    * `src/useRearrangement.js`: The sliding-tile rearrangement animation - whether
+                           a layout/order change animates, and what gets said
+                           once it lands
     * `src/render.js`: Render a single map frame
     * `src/slide.js`: Room rearrangement animation renderer
     * `src/picking.js`: Defines the roomAtPoint function
