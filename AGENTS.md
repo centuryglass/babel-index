@@ -32,6 +32,7 @@ npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--po
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run lint                       # config in eslint.config.js
+npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
 node tools/center-placement/import-shelf-svg.mjs tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
 ```
@@ -180,9 +181,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   confirmation before adding dependencies, try to keep dependencies minimal.
 - **No TypeScript yet - pending review, not ruled out.** Don't introduce `.ts`
   files or a build step on your own initiative; the question of typing the
-  cross-module data protocols is open and the near-term step is `checkJs` over
-  the JSDoc already in the tree. See `docs/implementation-plan.md`. Writing
-  accurate JSDoc on new code in the pure packages is always welcome.
+  cross-module data protocols is still open. `checkJs` is on (`jsconfig.json`,
+  `npm run typecheck`) as a local signal, not yet a CI gate - see
+  `docs/implementation-plan.md` for what it has and hasn't caught so far.
+  Writing accurate JSDoc on new code in the pure packages is always welcome.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so new files need no
   wiring. e2e files are `*.e2e.mjs`, intentionally skipping the pattern.

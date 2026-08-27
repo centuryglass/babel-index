@@ -171,6 +171,25 @@ function densityRamp(certainty, contentRatio, peak, floor) {
 export const cellDistance = (x, y, aspect = 1) => Math.hypot(x, y * aspect);
 
 /**
+ * @typedef {object} MapLayout
+ * @property {{x: number, y: number, d: number}[]} slots content slots, nearest first
+ * @property {number} boundaryRadius distance to the outermost occupied slot
+ * @property {number} gradedCount leading ranks the density gradient lifts above baseline
+ * @property {number} contentRatio
+ * @property {number} seed
+ * @property {number} roomCount
+ * @property {number} aspect
+ * @property {number} genericCount
+ * @property {number} genericSeed
+ * @property {(x: number, y: number) => number} genericIndexAt which generic tile a cell shows, or -1
+ * @property {(x: number, y: number) => number} rankOf rank position of a cell, or -1 if generic
+ * @property {(x: number, y: number, order: number[]) =>
+ *   {center: true} | {generic: true} | {generic: false, id: number, rank: number}} roomAt
+ * @property {(rank: number) => {x: number, y: number}|null} cellOfRank
+ * @property {(x: number, y: number, softness?: number) => number} resistanceAt pan resistance, 1 to 0
+ */
+
+/**
  * Build the map layout.
  *
  * @param {object} opts

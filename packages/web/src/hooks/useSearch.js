@@ -38,7 +38,7 @@ import {
  * @param {object} opts
  * @param {number} opts.total                     corpus size
  * @param {object} opts.searchConfig               `config.search`
- * @param {ReturnType<typeof import('../../map/scoring.js').buildSearchIndex>|null} opts.searchIndex
+ * @param {ReturnType<typeof import('../../../map/scoring.js').buildSearchIndex>|null} opts.searchIndex
  * @param {{current: {data: Int8Array, dim: number}|null}} opts.embeddings
  * @param {{current: Function}} opts.requestAnimationRef
  *   filled in by `main.jsx` once `useRearrangement` exists - see the file

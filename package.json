@@ -15,6 +15,7 @@
     "test": "node --test",
     "test:e2e": "node --test --test-concurrency=1 packages/web/e2e/*.e2e.mjs",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p jsconfig.json",
     "demo": "node packages/server/index.mjs",
     "demo:watch": "node --watch packages/server/index.mjs --watch"
   },
@@ -33,10 +34,15 @@
     "@aws-sdk/client-s3": "^3.1116.0",
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "eslint": "^10.9.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.11.0",
     "playwright": "^1.62.1",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "typescript": "^7.0.2"
   }
 }
