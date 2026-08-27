@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:net';
-import { portInUse } from './port.mjs';
+import { portInUse } from './port.ts';
 
 /** A server on an ephemeral port, closed again afterwards. */
 async function holding(run) {
