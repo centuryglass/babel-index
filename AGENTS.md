@@ -141,7 +141,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `load.mjs`: Load an optional config.json
 - `packages/map`: Map and room data handling
   * `ordering.js`: Room placement, search density gradient, rank by embedding, pan resistance
-  * `nextRoom.js`: Find the next non-default room on the map in a given direction
+  * `nextRoom.ts`: Find the next non-default room on the map in a given direction
   * `metadata.js`: Normalizing and joining per-room keyword/story data
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
