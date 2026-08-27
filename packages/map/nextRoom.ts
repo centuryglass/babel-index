@@ -10,16 +10,30 @@
  * enough to bound generously rather than tune tightly.
  */
 
+export interface Cell {
+  x: number;
+  y: number;
+}
+
+interface Direction {
+  dx: number;
+  dy: number;
+}
+
+/** The slice of `createLayout()`'s return this walk actually reads. */
+interface WalkableLayout {
+  boundaryRadius: number;
+  rankOf(x: number, y: number): number;
+}
+
 /**
- * @param {object} layout from `createLayout()`
- * @param {{x: number, y: number}} from the cell to walk from - never returned,
- *   even if it is itself a room
- * @param {{dx: number, dy: number}} delta one of the four axis directions;
- *   exactly one of `dx`/`dy` should be nonzero
- * @returns {{x: number, y: number}|null} the nearest room strictly in that
- *   direction, or null if none is found before the walk gives up
+ * @param from the cell to walk from - never returned, even if it is itself a room
+ * @param direction one of the four axis directions; exactly one of `dx`/`dy`
+ *   should be nonzero
+ * @returns the nearest room strictly in that direction, or null if none is
+ *   found before the walk gives up
  */
-export function nextRoom(layout, from, { dx, dy }) {
+export function nextRoom(layout: WalkableLayout, from: Cell, { dx, dy }: Direction): Cell | null {
   // A room can sit anywhere within `boundaryRadius` of the ORIGIN, not of
   // `from` - so a cursor standing at one edge of the content region can need
   // to cross close to the full span to reach a room at the other edge. Steps

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextRoom } from './nextRoom.js';
+import { nextRoom } from './nextRoom.ts';
 import { createLayout } from './ordering.js';
 
 const layout = createLayout({ roomCount: 30, contentRatio: 0.15, seed: 1 });
