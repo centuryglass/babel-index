@@ -7,15 +7,11 @@
  * reader anywhere else in that file, which is what made this the second
  * cleanest seam after the cursor.
  *
- * `search`, `enterCatalog`, `setHelpOpen` and `forgetSearches` arrive through
- * one ref (`actionsRef`) rather than as plain arguments. This hook has to run
- * early enough that `centreSlots` is ready before the render loop needs it
- * (`useMapRenderer` reads it), and all four of those are declared much further
- * down `main.jsx` - `search` closes over the fetch machinery, `enterCatalog`
- * over the camera. Same trick `useMapCursor` uses for `goToSearchRef`, and for
- * the same reason: `main.jsx` fills in `actionsRef.current` once everything it
- * needs exists, and every book press after that reads the live functions
- * rather than a closure captured before they were.
+ * `search`, `enterCatalog`, `setHelpOpen` and `forgetSearches` arrive as plain
+ * arguments. This hook is called from `main.jsx` only once all four already
+ * exist - `centreSlots` has no reader of its own until `useMapRenderer`, well
+ * after `useSearch` (`search`) and `useModeTransition` (`enterCatalog`) have
+ * already run, so there is nothing to forward-reference here.
  *
  * `tapRef.current` stays in `main.jsx`: it routes the search box AND the
  * books, so it is not the shelf's alone. It calls `onBook` from this hook,
@@ -23,7 +19,7 @@
  * here would make it two.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from './center.js';
+import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from '../lib/center.js';
 
 /**
  * Books on the center shelf with a fixed distinct function, reserved by slot
@@ -44,9 +40,22 @@ const CENTER_OVERRIDES = {
  * @param {string[]} opts.history         search history, newest first
  * @param {{current: HTMLElement|null}} opts.booksRef
  * @param {Function} opts.setQuery        fills the search box to match a pressed book
- * @param {{current: {search: Function, enterCatalog: Function, setHelpOpen: Function, forgetSearches: Function}}} opts.actionsRef
+ * @param {Function} opts.search          a history/tag book repeats its search
+ * @param {Function} opts.enterCatalog    the reserved "The Catalog" book
+ * @param {Function} opts.setHelpOpen     the reserved "READ ME" book
+ * @param {Function} opts.forgetSearches  the reserved "forget searches" book
  */
-export function useCenterShelf({ metadata, slotSeed, history, booksRef, setQuery, actionsRef }) {
+export function useCenterShelf({
+  metadata,
+  slotSeed,
+  history,
+  booksRef,
+  setQuery,
+  search,
+  enterCatalog,
+  setHelpOpen,
+  forgetSearches,
+}) {
   // The center room's book titles. Every book shows a stable random corpus
   // keyword until history reaches it: past searches fill the wall newest
   // first, top left to bottom right. Reserved override books are never
@@ -89,12 +98,11 @@ export function useCenterShelf({ metadata, slotSeed, history, booksRef, setQuery
    */
   const onOverride = useCallback(
     (slot) => {
-      const { enterCatalog, setHelpOpen, forgetSearches } = actionsRef.current;
       if (slot.action === 'catalog') enterCatalog();
       else if (slot.action === 'help') setHelpOpen(true);
       else if (slot.action === 'forgetHistory') forgetSearches();
     },
-    [actionsRef]
+    [enterCatalog, setHelpOpen, forgetSearches]
   );
 
   /**
@@ -113,12 +121,12 @@ export function useCenterShelf({ metadata, slotSeed, history, booksRef, setQuery
       if (!slot) return;
       if (slot.term) {
         setQuery(slot.term);
-        actionsRef.current.search(slot.term);
+        search(slot.term);
       } else if (slot.action) {
         onOverride(slot);
       }
     },
-    [centreSlots, setQuery, actionsRef, onOverride]
+    [centreSlots, setQuery, search, onOverride]
   );
 
   // Arrows move within the shelf; Tab leaves it. Left and right run along the

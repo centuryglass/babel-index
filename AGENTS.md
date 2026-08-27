@@ -67,45 +67,56 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `port.mjs`: portInUse helper function
   * `search-cache.mjs`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
-- `packages/web`: browser-side code (only place DOM is expected)
-  - General purpose:
+- `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
+  out by React convention - components, hooks, and everything else (`lib/`) -
+  rather than by feature area; a hook and the `lib/` module it wraps often
+  belong to the same subsystem (`useMapCamera.js` / `lib/camera.js`,
+  `useRearrangement.js` / `lib/slide.js`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
-    * `src/main.jsx`: React entry point, orchestration
-    * `src/center.js`: Geometry and content management for the center tile interface
-    * `src/RoomDetails.jsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
-    * `src/SearchForm.jsx`: Shared search box component
-  - Data management:
-    * `src/persist.js`: Persistent data management (search history, pagination settings)
-    * `src/pyramid.js`: Manage room tile resolution options and cache budgets
-    * `src/rooms.js`: Map room data in the manifest to image URLs
-    * `src/tiles.js`: Load, cache, and unload room images
-    * `src/useCorpus.js`: Load the metadata sidecar and embedding blob, build
-                          the search index
-  - Map interface:
-    * `src/MapView.jsx`: The 2D map canvas view
-    * `src/RoomCard.jsx`: RoomDetails popup, shown on right-click/long press
-    * `src/camera.js`: Pure-math mapping functions for the map camera
-    * `src/useMapCamera.js`: React hook for camera changes, inputs entangled with
-                           camera controls
-    * `src/useMapRenderer.js`: Map frame loop/redraw hook
-    * `src/useMapCursor.js`: The keyboard cursor - where it is, what a reader
-                           hears about it, and every key over the map
-    * `src/useCenterShelf.js`: The center room's bookshelf - titles, roving
+    * `src/main.jsx`: React entry point - loads the corpus, derives the layout
+                      from the search, wires the hooks below together, renders
+                      the map and catalog views. The only file at `src/` top level.
+  - `src/components/`: presentational React components
+    * `MapView.jsx`: The 2D map canvas view
+    * `CatalogView.jsx`: Alternate catalog list view
+    * `RoomCard.jsx`: RoomDetails popup, shown on right-click/long press
+    * `RoomOverlay.jsx`: Modal showing full-size room image along with story content
+    * `RoomDetails.jsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
+    * `SearchForm.jsx`: Shared search box component
+    * `SearchIcon.jsx`: The search badge's glyph and orbiting arrow
+    * `HelpDialog.jsx`: The "READ ME" book's dialog
+  - `src/hooks/`: the subsystems `main.jsx` wires together - see
+                 `docs/state-architecture-plan.md` §3 for why each exists and
+                 what it hides
+    * `useCorpus.js`: Load the metadata sidecar and embedding blob, build the search index
+    * `useSearch.js`: The query box, the `/api/search` fetch, blending the
+                      reply into one ranking, the highlight range-finders
+    * `useMapCamera.js`: React hook for camera changes, inputs entangled with
+                         camera controls
+    * `useMapRenderer.js`: Map frame loop/redraw hook
+    * `useMapCursor.js`: The keyboard cursor - where it is, what a reader
+                         hears about it, and every key over the map
+    * `useCenterShelf.js`: The center room's bookshelf - titles, roving
                            tabindex focus, and what a tap or arrow key does
-    * `src/useModeTransition.js`: Switching between the map and catalog readings,
-                           the FLIP animation between them
-    * `src/useRearrangement.js`: The sliding-tile rearrangement animation - whether
-                           a layout/order change animates, and what gets said
-                           once it lands
-    * `src/render.js`: Render a single map frame
-    * `src/slide.js`: Room rearrangement animation renderer
-    * `src/picking.js`: Defines the roomAtPoint function
-    * `src/touchDebug.js`: View touch event stream if `?touchdebug` set 
-  - Catalog interface:
-    * `src/CatalogView.jsx`: Alternate catalog list view
-    * `src/catalog.js`: Catalog pagination and geometry helpers
-    * `src/RoomOverlay.jsx`: Modal showing full-size room image along with
-                             story content.
+    * `useModeTransition.js`: Switching between the map and catalog readings,
+                              the FLIP animation between them
+    * `useRearrangement.js`: The sliding-tile rearrangement animation - whether
+                             a layout/order change animates, and what gets said
+                             once it lands
+  - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
+               geometry, and rendering
+    * `center.js`: Geometry and content management for the center tile interface
+    * `camera.js`: Pure-math mapping functions for the map camera
+    * `render.js`: Render a single map frame
+    * `slide.js`: Room rearrangement animation renderer
+    * `picking.js`: Defines the roomAtPoint function
+    * `catalog.js`: Catalog pagination and geometry helpers
+    * `pyramid.js`: Manage room tile resolution options and cache budgets
+    * `tiles.js`: Load, cache, and unload room images
+    * `rooms.js`: Map room data in the manifest to image URLs
+    * `persist.js`: Persistent data management (search history, pagination settings)
+    * `touchDebug.js`: View touch event stream if `?touchdebug` set
+    * `debug.js`: Gates the dev panel behind `?debug`
 - `packages/config`: Central definition for numbers tuned by feel
   * `config.mjs`: Defaults and validation (no fs)
   * `load.mjs`: Load an optional config.json
@@ -114,7 +125,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `nextRoom.js`: Find the next non-default room on the map in a given direction
   * `metadata.js`: Normalizing and joining per-room keyword/story data
   * `scoring.js`: Find room rank and match certainty for a search, searh tokenization
-  * `illusion.js`: Build a convincing sliding-tile animation for `packages/web/src/slide.js`
+  * `illusion.js`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.js`
   * `board.js`: Sliding animation illusion's board data structure
   * `describe.js`: Build screen reader messages
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
@@ -129,7 +140,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `shelf_geometry.svg`: Center tile geometry.
   * `lib/geometry.js`: Book and search box placement structure
   * `lib/measured.js`: Auto-generated svg geometry data
-  * `lib/prng.js`: RNG utility function currently only used by web/src/center.js,
+  * `lib/prng.js`: RNG utility function currently only used by web/src/lib/center.js,
                    should probably be moved elsewhere.
 - `tools/embed/embed.mjs`: Compute and store CLIP image embeddings for all rooms.
 - `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,
@@ -279,7 +290,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 - **`center.js` is the pure half, and the geometry comes from the tools tree.**
   The book layout, `assignTitles`, the hit-test and `pickTags` live in
-  `packages/web/src/center.js` and are asserted browser-free in `center.test.mjs`
+  `packages/web/src/lib/center.js` and are asserted browser-free in `center.test.mjs`
   — the same split as `picking.js`. Every book is lettered; a book is one
   flat slot id (`BOOK_COUNT` of them), assigned top left to bottom right, so
   there is no (shelf, index) pair to keep in step. A shelf need not be one
@@ -468,7 +479,7 @@ code, not a standing invariant.
 - **The configured range rides on the camera as `limits`**, same as `aspect` —
   rebuild a camera instead of spreading it and the range is lost mid-gesture.
 - **Every pyramid number (tile dimensions, ladder, cache budgets, prefetch
-  ring) lives in `packages/web/src/pyramid.js`.** `tiles.js` and the render
+  ring) lives in `packages/web/src/lib/pyramid.js`.** `tiles.js` and the render
   loop read the policy, they don't restate it. `BASE_TILE` is the only place
   size/shape is stated — don't assume square or compute a size from a literal.
 - **Tile eviction is frame-aware.** The renderer walks cells row by row, so a

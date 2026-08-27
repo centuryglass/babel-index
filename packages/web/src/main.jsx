@@ -1,22 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
-import {
-  rankHybrid,
-  fold,
-  tokenise,
-  keywordMatchRanges,
-  storyMatchRanges,
-} from '../../map/scoring.js';
-import { RoomCard } from './RoomCard.jsx';
-import { MapView } from './MapView.jsx';
-import { CatalogView } from './CatalogView.jsx';
-import { RoomOverlay } from './RoomOverlay.jsx';
-import { HelpDialog } from './HelpDialog.jsx';
-import { alphabeticalOrder } from './catalog.js';
-import { load, save, clear, KEYS } from './persist.js';
-import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
-import { roomAtPoint } from './picking.js';
+import { RoomCard } from './components/RoomCard.jsx';
+import { MapView } from './components/MapView.jsx';
+import { CatalogView } from './components/CatalogView.jsx';
+import { RoomOverlay } from './components/RoomOverlay.jsx';
+import { HelpDialog } from './components/HelpDialog.jsx';
+import { alphabeticalOrder } from './lib/catalog.js';
+import { load, save, clear, KEYS } from './lib/persist.js';
+import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.js';
+import { roomAtPoint } from './lib/picking.js';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.js';
 import {
   bookAtPoint,
@@ -28,20 +21,21 @@ import {
   overlapsViewport,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
-} from './center.js';
-import { CELL_ASPECT, fitZoom } from './camera.js';
-import { createTileCache, CENTER, genericId } from './tiles.js';
-import { createUrlFor } from './rooms.js';
-import { createRenderer } from './render.js';
-import { createSlideRenderer } from './slide.js';
-import { BASE_TILE } from './pyramid.js';
-import { useMapCamera } from './useMapCamera.js';
-import { useMapRenderer } from './useMapRenderer.js';
-import { useMapCursor } from './useMapCursor.js';
-import { useCenterShelf } from './useCenterShelf.js';
-import { useModeTransition } from './useModeTransition.js';
-import { useCorpus } from './useCorpus.js';
-import { useRearrangement } from './useRearrangement.js';
+} from './lib/center.js';
+import { CELL_ASPECT, fitZoom } from './lib/camera.js';
+import { createTileCache, CENTER, genericId } from './lib/tiles.js';
+import { createUrlFor } from './lib/rooms.js';
+import { createRenderer } from './lib/render.js';
+import { createSlideRenderer } from './lib/slide.js';
+import { BASE_TILE } from './lib/pyramid.js';
+import { useMapCamera } from './hooks/useMapCamera.js';
+import { useMapRenderer } from './hooks/useMapRenderer.js';
+import { useMapCursor } from './hooks/useMapCursor.js';
+import { useCenterShelf } from './hooks/useCenterShelf.js';
+import { useModeTransition } from './hooks/useModeTransition.js';
+import { useCorpus } from './hooks/useCorpus.js';
+import { useRearrangement } from './hooks/useRearrangement.js';
+import { useSearch, describeSignals } from './hooks/useSearch.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -98,11 +92,6 @@ function Library({ manifest }) {
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
   const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(1);
-  // One piece of state, not two: the ranking and its certainty profile describe
-  // the same search, and a frame that paired one search's order with another's
-  // densities would put the wrong rooms in the cluster.
-  const [result, setResult] = useState(null);
-  const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   // Search history, newest first, one book per entry - and one of the two
   // things in this app that survives a reload (see `persist.js` for why so few
@@ -134,24 +123,20 @@ function Library({ manifest }) {
   // index built over them. See useCorpus.js.
   const { metadata, embeddings, searchIndex, described } = useCorpus(manifest);
 
-  // `search`, `enterCatalog`, `setHelpOpen` and `forgetSearches` - the actions
-  // a book on the shelf can run - are declared much further down this file, so
-  // `useCenterShelf` (called next, ahead of all of them) cannot take them
-  // directly: it has to run early enough that `centreSlots` is ready before
-  // `useMapRenderer` reads it below. This ref is the same forward-reference
-  // trick `useMapCursor`'s `goToSearchRef` uses; `main.jsx` fills it in once
-  // everything it points to actually exists (see the assignment near
-  // `forgetSearches`), and every book press from then on reads the live
-  // functions rather than a closure captured before they were.
-  const shelfActionsRef = useRef({});
-
-  const { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown } = useCenterShelf({
-    metadata,
-    slotSeed: config.map.slotSeed,
-    history,
-    booksRef,
-    setQuery,
-    actionsRef: shelfActionsRef,
+  // `requestAnimation` doesn't exist yet - it comes back from `useRearrangement`
+  // below, which itself needs `announce`, which needs this hook's `result` to
+  // say what a change was for. `useSearch` has to run before that circle closes,
+  // so it takes a ref and `main.jsx` fills it in once `useRearrangement` has
+  // returned - see useSearch.js's file comment.
+  const requestAnimationRef = useRef(() => {});
+  const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
+    total,
+    searchConfig: config.search,
+    searchIndex,
+    embeddings,
+    requestAnimationRef,
+    pushHistory,
+    setStatus,
   });
 
   // Both of these are runtime parameters: changing either re-derives the
@@ -260,14 +245,6 @@ function Library({ manifest }) {
   // camera it was planned for, which is the one the frame must be drawn at
   // however the live camera has been nudged since.
   const anim = useRef(null);
-  // Which search is the newest one asked for. `search` awaits the server, and
-  // nothing stops a second query being submitted while the first is still in
-  // the air - a book on the shelf is one click, and the first request of a
-  // session pays for loading the CLIP text tower - so without this the slow
-  // early query resolves last and wins, leaving the map ranked by a term the
-  // reader has already moved on from. Every write a search makes is gated on
-  // still being the newest, so a superseded one lands nowhere.
-  const searchSeq = useRef(0);
 
   const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
 
@@ -342,40 +319,11 @@ function Library({ manifest }) {
     return { rooms, total: layout.gradedCount };
   }, [result, layout, order, metadata]);
 
-  // The two range finders, bound to the query the CURRENT ranking is for.
-  //
-  // Bound rather than called with the query at each site: every consumer would
-  // otherwise have to remember which of the two rules applies to the text it is
-  // holding, and the whole point of `scoring.js` owning them is that the answer
-  // is decided once. A keyword matches by substring, a story word by prefix;
-  // handing out two functions named for the thing they mark keeps that from
-  // being a decision anyone makes twice.
-  //
-  // Null with no search, which every consumer reads as "mark nothing".
-  const highlight = useMemo(() => {
-    const term = result?.term?.trim();
-    if (!term) return null;
-    const foldedQuery = fold(term);
-    const tokens = tokenise(term, { minLength: config.search.minTokenLength });
-    if (!foldedQuery && !tokens.length) return null;
-    return {
-      keyword: (text) => keywordMatchRanges(text, foldedQuery, tokens),
-      story: (text) => storyMatchRanges(text, tokens),
-    };
-  }, [result, config]);
-
   // A tap selects a book on the center room. Stable identity - so the pointer
   // listeners are not re-bound every render - over a ref that always holds the
   // latest logic, since the handler closes over `search` and `centreSlots`,
   // which are redefined below and on every render.
   const tapRef = useRef(() => {});
-
-  // `/` (below) needs `goToSearch`, which is declared further down and closes
-  // over state that changes often - the same "stable identity over a ref that
-  // always holds the latest logic" as `tapRef`, and for the same reason: the
-  // map's keyboard handler must not itself be rebuilt every time `goToSearch`
-  // is.
-  const goToSearchRef = useRef(() => {});
   const onTap = useCallback((px, py, camera) => tapRef.current(px, py, camera), []);
 
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
@@ -449,6 +397,35 @@ function Library({ manifest }) {
     [cam]
   );
 
+  // The panel's one remaining search affordance: reach the live field on the
+  // center tile. If it is already on screen and legible, just focus it -
+  // otherwise fly home to the opening view first, the same framing the map
+  // loads on, and focus once landed. A dropped flight (the reader grabbed the
+  // map mid-flight) leaves the field alone rather than fighting for focus.
+  //
+  // Defined here, right after its own inputs (`flyTo`, `opening`,
+  // `centreOverlay`) exist, rather than down with the rest of the search
+  // wiring - `useMapCursor` needs it for `/` and takes it directly. There is
+  // no listener-rebind cost to protect against by holding it behind a ref:
+  // `onMapKeyDown` is a plain JSX prop, not something an effect re-subscribes
+  // when it changes.
+  const goToSearch = useCallback(async () => {
+    const canvas = canvasRef.current;
+    const input = searchFormRef.current?.querySelector('input');
+    if (!canvas || !input) return;
+    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).usable) {
+      input.focus();
+      return;
+    }
+    // flyTo always routes through cameraAtCell, which adds +0.5 to aim at a
+    // cell's MIDDLE - every other caller flies to a whole cell by its corner
+    // index. `opening` is already a raw camera target, not a cell index (see
+    // useMapCamera's mount-time use of it, unmodified), so that offset has to
+    // be cancelled here or the flight lands half a cell short on each axis.
+    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
+    if (landed) input.focus();
+  }, [flyTo, opening, centreOverlay]);
+
   // --- the keyboard cursor ---------------------------------------------------
   //
   // Everything about it - the cell, what gets said, and every key - is
@@ -468,7 +445,7 @@ function Library({ manifest }) {
       setStatus,
       requestDraw,
       onOpenCard: setCard,
-      goToSearchRef,
+      goToSearch,
     });
 
   // --- switching between the two readings ----------------------------------
@@ -484,6 +461,28 @@ function Library({ manifest }) {
     catalogConfig: config.catalog,
     onModeChange: useCallback(() => setCard(null), []),
     initialMode: INITIAL_MODE,
+  });
+
+  // Cleared rather than emptied one at a time - see the shelf's "forget
+  // searches" book. Defined here, ahead of `useCenterShelf` just below, which
+  // is the only thing that runs it.
+  const forgetSearches = useCallback(() => setHistory([]), []);
+
+  // The center room's bookshelf. Called here rather than earlier in the file
+  // because two of the four actions a book can run - `enterCatalog` (just
+  // above) and `search` (from `useSearch`, already in scope) - have to exist
+  // first; `centreSlots` has no reader of its own until `useMapRenderer`
+  // just below, so nothing is lost by waiting this long to call it.
+  const { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown } = useCenterShelf({
+    metadata,
+    slotSeed: config.map.slotSeed,
+    history,
+    booksRef,
+    setQuery,
+    search,
+    enterCatalog,
+    setHelpOpen,
+    forgetSearches,
   });
 
   // --- rendering -----------------------------------------------------------
@@ -516,6 +515,11 @@ function Library({ manifest }) {
     [mode, order, result, setStatus, announceArrangement]
   );
 
+  // `useSearch`'s `search()` needs `requestAnimation`, but `useRearrangement`
+  // needs `announce`, which needs `useSearch`'s own `result` (by way of
+  // `layout`/`order`) - a genuine cycle, not just an ordering accident, so
+  // `requestAnimationRef` (filled in below) is the one forward reference left
+  // in this file that reordering cannot remove.
   const { requestAnimation } = useRearrangement({
     layout,
     order,
@@ -529,122 +533,7 @@ function Library({ manifest }) {
     anim,
     announce,
   });
-
-  // --- search --------------------------------------------------------------
-  //
-  // Every query passes through here, whether it came from the box, a keyword
-  // chip, a book on the shelf or a catalog row - so this is the one place the
-  // length cap has to hold. Scoring is O(tokens x keywords) per room, and a
-  // pasted tag list against a full corpus is tens of millions of substring
-  // tests on the main thread, which does not degrade, it stops. The input has a
-  // `maxLength` too, but that only covers typing: a chip, a book and a restored
-  // history entry all reach this without touching the box.
-  const search = async (rawTerm) => {
-    const term = String(rawTerm ?? '').slice(0, config.search.maxQueryLength);
-    // Claiming the sequence is what makes this the current search, and it is
-    // done before the first await so that a clear - which needs none of what
-    // follows - still supersedes a query in flight.
-    const seq = ++searchSeq.current;
-    if (!term.trim()) {
-      // Both branches rearrange the library - clearing the box restores the
-      // uniform map, which is as much a rearrangement as finding something is.
-      requestAnimation('');
-      setResult(null);
-      return;
-    }
-    // A real search is a history entry, and the frontmost book from now on. Done
-    // before the fetch, so a click on that book is remembered even if the
-    // ranking that follows is a stub.
-    pushHistory(term.trim());
-
-    let res;
-    try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
-      // fetch only rejects on a network failure; a 500 arrives as an ordinary
-      // response whose body is not the JSON this expects.
-      if (!response.ok) throw new Error(`the library answered ${response.status}`);
-      res = await response.json();
-    } catch (e) {
-      if (seq !== searchSeq.current) return;
-      // Nothing rearranged - no `requestAnimation` was ever made for this
-      // search - so this is the one path that has to write the live region
-      // itself.
-      setStatus(`the search could not be run - ${e.message}. The library is unchanged.`);
-      return;
-    }
-    // Past here the reply is this search's to act on, and a newer query has
-    // already claimed the map.
-    if (seq !== searchSeq.current) return;
-
-    // Three signals, blended into one sort over the whole corpus. Any of them
-    // may be missing - no blob, no metadata - and a ranking from the rest is
-    // still a real ranking, so the only case that needs the server's stub is
-    // having neither. The note says which of the three it actually was, rather
-    // than implying more than the corpus can support.
-    const blob = res.vector ? embeddings.current : null;
-    if (blob || searchIndex) {
-      const { order, certainty, breakdown, signals } = rankHybrid({
-        query: term,
-        count: total,
-        weights: config.search.weights,
-        minTokenLength: config.search.minTokenLength,
-        embeddings: blob?.data,
-        dim: blob?.dim,
-        vector: res.vector,
-        index: searchIndex,
-        clipCertainty: { low: config.search.density.clipLow, high: config.search.density.clipHigh },
-      });
-      requestAnimation(describeSignals(signals, Boolean(searchIndex)));
-      // `term`, not the live `query`: the box changes on every keystroke and
-      // the ranking does not, so anything derived from "what was searched for"
-      // - the highlight ranges especially - has to read the submitted term or
-      // it would mark text against a query nobody has run yet.
-      setResult({ order, certainty, breakdown, signals, term });
-    } else {
-      // The stub ranking is a hash, so it is not certain of anything and must
-      // not pretend to be: no profile, and the map stays evenly scattered.
-      requestAnimation('stub ranking — no embeddings and no keywords in this corpus');
-      // No breakdown: a hash-ordered stub has no signals to explain, and an
-      // explanation of a ranking nothing decided would be an invented one.
-      setResult({ order: res.order, certainty: null, breakdown: null, signals: null, term });
-    }
-  };
-
-  const runSearch = (e) => {
-    e.preventDefault();
-    search(query);
-  };
-
-  // The clear-x: not just an empty submit, because setQuery is async state -
-  // calling search('') directly rather than search(query) after setQuery('')
-  // means it does not race the render that clears the box.
-  const clearSearch = () => {
-    setQuery('');
-    search('');
-  };
-
-  // The panel's one remaining search affordance: reach the live field on the
-  // center tile. If it is already on screen and legible, just focus it -
-  // otherwise fly home to the opening view first, the same framing the map
-  // loads on, and focus once landed. A dropped flight (the reader grabbed the
-  // map mid-flight) leaves the field alone rather than fighting for focus.
-  const goToSearch = useCallback(async () => {
-    const canvas = canvasRef.current;
-    const input = searchFormRef.current?.querySelector('input');
-    if (!canvas || !input) return;
-    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).usable) {
-      input.focus();
-      return;
-    }
-    // flyTo always routes through cameraAtCell, which adds +0.5 to aim at a
-    // cell's MIDDLE - every other caller flies to a whole cell by its corner
-    // index. `opening` is already a raw camera target, not a cell index (see
-    // useMapCamera's mount-time use of it, unmodified), so that offset has to
-    // be cancelled here or the flight lands half a cell short on each axis.
-    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
-    if (landed) input.focus();
-  }, [flyTo, opening, centreOverlay]);
-  goToSearchRef.current = goToSearch;
+  requestAnimationRef.current = requestAnimation;
 
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
@@ -707,13 +596,6 @@ function Library({ manifest }) {
     () => flyTo(0, 0, config.camera.defaultZoom),
     [flyTo, config]
   );
-  const forgetSearches = useCallback(() => setHistory([]), []);
-
-  // `useCenterShelf` was called before any of these four existed - see the
-  // comment on `shelfActionsRef` above. Now that they do, every book press
-  // reads them through here rather than through a closure that would have
-  // been stale from the moment it was captured.
-  shelfActionsRef.current = { search, enterCatalog, setHelpOpen, forgetSearches };
 
   // Selecting a book on the center room. Off the center cell or on an empty
   // book, nothing happens - the tap is not otherwise claimed.
@@ -898,13 +780,6 @@ const INITIAL_MODE =
 
 
 /**
- * What actually decided this ranking, in the panel's own voice.
- *
- * `signals` reports which of the three found anything for this query, not which
- * were available - a corpus full of keywords that none of them matched should
- * not claim the ranking was keyword-driven.
- */
-/**
  * `?` - the screen-reader equivalent of peripheral vision
  * (accessibility-plan.md §4.2a): what a sighted reader gets for free by
  * glancing at the screen, on request rather than on every move, because
@@ -912,21 +787,10 @@ const INITIAL_MODE =
  *
  * Sentence construction over already-tested primitives (`nextRoom`,
  * `cellDistance`) rather than a new pure module of its own - the same kind of
- * job `describeSignals` above does for a search. Simplified from the plan's
- * own example on purpose: four cardinal directions via straight-line
+ * job `describeSignals` (useSearch.js) does for a search. Simplified from the
+ * plan's own example on purpose: four cardinal directions via straight-line
  * `nextRoom` walks, not eight - a true diagonal nearest-room search is more
  * geometry than a `?` press needs to earn its keep.
  */
-
-function describeSignals({ clip, keyword, story }, hasText) {
-  const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
-  // Nothing matched and no CLIP means every score is zero, so the sort falls
-  // back to index order - which is a real rearrangement, not a no-op, and
-  // saying "unchanged" while the map visibly moves would be the wrong lie.
-  if (!hits.length) return hasText ? 'nothing matched — showing index order' : '';
-  // CLIP alone is the ordinary case for most queries and needs no announcement.
-  if (hits.length === 1 && clip) return '';
-  return `ranked by ${hits.join(' + ')}`;
-}
 
 createRoot(document.getElementById('root')).render(<App />);

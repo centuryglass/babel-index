@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, readdir, readFile, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { LEVELS } from '../web/src/pyramid.js';
+import { LEVELS } from '../web/src/lib/pyramid.js';
 import {
   mipPlan,
   writeMips,

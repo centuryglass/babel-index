@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { createLayout, shuffledOrder } from '../../../map/ordering.js';
 import { createRenderer } from './render.js';
 import { createTileCache, CENTER } from './tiles.js';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.js';

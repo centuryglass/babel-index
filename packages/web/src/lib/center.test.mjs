@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layout } from '../../../tools/center-placement/lib/geometry.js';
+import { layout } from '../../../../tools/center-placement/lib/geometry.js';
 import {
   BOOK_COUNT,
   HISTORY_SLOT_COUNT,

@@ -12,7 +12,7 @@
  * content-hash caching) are left alone, so a rerun after touching a handful of
  * images only re-resizes those.
  *
- * The ladder comes from packages/web/src/pyramid.js, so what this writes and
+ * The ladder comes from packages/web/src/lib/pyramid.js, so what this writes and
  * what the client asks for cannot drift apart. Resizing is the whole of the
  * work, which is why it is a pipeline job run once rather than anything the
  * demo server does on request.
@@ -20,7 +20,7 @@
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import sharp from 'sharp';
-import { LEVELS } from '../web/src/pyramid.js';
+import { LEVELS } from '../web/src/lib/pyramid.js';
 import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes } from './mips.mjs';
 
 const argv = parseArgs(process.argv.slice(2));

@@ -19,7 +19,7 @@
  * pipeline still reads as a valid level 0, and running in place costs no
  * duplicated bytes.
  */
-import { LEVELS } from '../web/src/pyramid.js';
+import { LEVELS } from '../web/src/lib/pyramid.js';
 
 /**
  * What levels a source image of these dimensions should produce.

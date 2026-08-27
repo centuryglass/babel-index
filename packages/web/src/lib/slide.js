@@ -59,7 +59,7 @@
 import { PYRAMID } from './pyramid.js';
 import { pxPerCell } from './camera.js';
 import { CENTER, genericId } from './tiles.js';
-import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../map/board.js';
+import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.js';
 
 /**
  * The cache id for a board value at its HOME map cell.
