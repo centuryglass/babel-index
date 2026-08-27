@@ -702,6 +702,15 @@ describe('the library, in a browser', { concurrency: false }, () => {
     assert.equal(await named.count(), 1, 'exactly one application region, and it is the map');
   });
 
+  // TODO: this test has been observed to spontaneously fail in CI - the
+  // right-click at a fixed pixel lands on whatever room the previous tests'
+  // camera/cursor state left under it, and a `.card` timeout there reads as
+  // this test's own bug even when it isn't. Confirmed as a flake once (main
+  // was green at this PR's base commit, and the failing run passed on a
+  // plain re-run). Whoever next touches the card/right-click/camera-state
+  // path should make this wait on a condition rather than a fixed coordinate
+  // and fixed timeout - see the "wait on a condition, never a duration" rule
+  // in AGENTS.md's Testing and CI section.
   test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
     const card = page.locator('.card');
 

@@ -15,8 +15,9 @@
  *   npm run demo -- --remote https://assets.example.com --prefix corpus-sample
  *
  * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the corpus
- * and shared tiles both come from the remote host (see remote.mjs), and
- * `/images`/`/shared` proxy it rather than serving a local directory.
+ * and shared tiles both come from the remote host (see remote.mjs), and the
+ * manifest's urls point the browser there directly rather than this server
+ * serving or proxying anything under `/images`/`/shared`.
  *
  * The routes live in app.mjs; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
@@ -163,7 +164,6 @@ app = createApp({
   manifest,
   imagesDir,
   sharedDir,
-  remote: remoteBase ? { imagesBase: `${remoteBase}/${argv.prefix}`, sharedBase: `${remoteBase}/shared` } : null,
   config,
   rescan,
   getBundleJs: () => bundleJs,
