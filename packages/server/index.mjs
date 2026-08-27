@@ -34,7 +34,7 @@ import { scanDirectory } from './scan.mjs';
 import { scanRemote } from './remote.mjs';
 import { createApp, hasTextModel } from './app.mjs';
 import { loadConfig } from '../config/load.mjs';
-import { portInUse } from './port.mjs';
+import { portInUse } from './port.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, '../web');

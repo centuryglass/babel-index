@@ -178,6 +178,7 @@ async function scanShared(sharedDir, { center, allowFirst = false } = {}) {
  * @param {{center?: string, sharedDir?: string}} [opts] center names the
  *   center tile; sharedDir is where the shared tiles live (default: the
  *   corpus directory)
+ * @returns {Promise<import('../map/manifest.ts').Manifest>}
  */
 export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   const files = await listImages(dir);

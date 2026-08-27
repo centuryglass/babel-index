@@ -23,7 +23,7 @@
 import { CENTER, genericId } from './tiles.js';
 
 /**
- * @param {object} manifest  as served by /api/manifest
+ * @param {import('../../../map/manifest.ts').Manifest} manifest  as served by /api/manifest
  * @returns {(id: number|string, level: number) => string|null}
  */
 export function createUrlFor(manifest) {

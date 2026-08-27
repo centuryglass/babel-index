@@ -81,11 +81,19 @@ serve as completed task history.
     typing the data protocols (`RoomMeta`/`MapLayout` now exist; `Manifest`,
     `SearchResult`, `Move`, `Rearrangement`, `Config` don't yet) is where
     `checkJs` earns the most, cheaply, for the size of file it clears.
-- **Then decide about TypeScript.** The data protocols between modules -
-  Manifest, Room, Metadata, SearchResult, MapLayout, Move, Rearrangement,
-  Config - are where the value would be, and they are worth typing first if
-  anything is. Pending review rather than settled: keep running `checkJs` for
-  a while, and let what it catches (or fails to catch) decide how far to go.
+- **Decided: migrating to TypeScript, file by file.** See AGENTS.md's
+  TypeScript bullet for the two file kinds (pure type contract vs. real
+  module) and how each runs. `packages/map/manifest.ts` (the `Manifest`
+  contract) and `packages/server/port.ts` (a first real-module conversion,
+  proving out `build/`'s Node loader hook) are done; `Room`, `Metadata`,
+  `SearchResult`, `MapLayout`, `Move`, `Rearrangement`, `Config` are the
+  remaining data protocols worth typing early, same reasoning as before -
+  they're where a bare `object` currently swallows the most real bugs.
+  Application logic converts opportunistically, not on a schedule; the
+  deliberately loose shapes called out in AGENTS.md (metadata sidecar
+  parsing, `center.js`'s `RUNS`, the animation state in `slide.js`/`camera.js`)
+  are the ones to leave for last, once there's a real type worth writing for
+  them.
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.
 - Fonts and text rendering are unpolished, try some alternatives. The
