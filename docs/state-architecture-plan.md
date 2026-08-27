@@ -86,7 +86,7 @@ pass the lead string *in* as an argument. Step 5 gives it a proper home.
 `cam.current` - the compounding-keypress rule. `announceCursorMove` after
 `nudgeBy` must still re-read where the move actually landed rather than where it
 aimed.
-**Covered by:** the keyboard-cursor block of `smoke.e2e.mjs` (~10 tests,
+**Covered by:** `packages/web/e2e/keyboard-cursor.e2e.mjs` (~10 tests,
 including the compounding-presses and boundary-glide cases).
 
 ### Step 2 - `useCenterShelf`

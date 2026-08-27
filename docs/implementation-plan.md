@@ -69,14 +69,6 @@ serve as completed task history.
   Config - are where the value would be, and they are worth typing first if
   anything is. Pending review rather than settled: run `checkJs` for a while
   first, and let what it catches (or fails to catch) decide how far to go.
-- **Break up `packages/web/e2e/smoke.e2e.mjs`.** At ~2440 lines it is the
-  largest file in the repo, it shares one `page` across 52 tests, and one
-  stranded piece of state turns a single failure into several unrelated ones.
-  Split along the seams the section comments already mark - map/gestures,
-  accessibility, keyboard cursor, shelf, catalog - keeping the shared-server
-  fixture. Lower priority than the application-side work above: a mess in the
-  tests costs less than a mess in the thing being tested.
-
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.
 - Fonts and text rendering are unpolished, try some alternatives. The

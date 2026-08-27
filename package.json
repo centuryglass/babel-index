@@ -13,7 +13,7 @@
     "generate:embeddings": "node tools/embed/embed.mjs",
     "upload:r2": "node tools/upload/upload-r2.mjs",
     "test": "node --test",
-    "test:e2e": "node --test packages/web/e2e/smoke.e2e.mjs",
+    "test:e2e": "node --test --test-concurrency=1 packages/web/e2e/*.e2e.mjs",
     "lint": "eslint .",
     "demo": "node packages/server/index.mjs",
     "demo:watch": "node --watch packages/server/index.mjs --watch"
