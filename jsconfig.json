@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true
+  },
+  "include": ["packages/**/*.js", "packages/**/*.jsx", "packages/**/*.mjs", "tools/**/*.mjs", "tools/**/*.js"],
+  "exclude": ["node_modules", "packages/web/e2e/**", "**/*.test.mjs"]
+}

@@ -321,7 +321,8 @@ export const DEFAULTS = {
  * @param {{min: number, max: number}} [opts.zoomLimits] the hard range this
  *   config may narrow but not widen. Injected so the whole policy can be
  *   exercised at limits the app is not currently using.
- * @returns {{camera: object, map: object, search: object, notes: string[]}}
+ * @returns {{camera: object, slide: object, catalog: object, map: object,
+ *   search: object, notes: string[]}}
  */
 export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
   const notes = [];

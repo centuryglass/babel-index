@@ -46,16 +46,46 @@ serve as completed task history.
   query string) scoped to the app's hostname for that endpoint specifically.
 
 ## Architecture:
-- **Turn on `checkJs`.** The pure packages already carry JSDoc `@param`/
-  `@returns` on ~180 declarations and nothing checks any of it. A `jsconfig.json`
-  with `checkJs` plus a `tsc --noEmit` lint step costs one config file and no
-  syntax change, and answers the question the entry below depends on: is the
-  JSDoc that already exists actually accurate?
+- **`checkJs` is on.** `jsconfig.json` (project-wide, `skipLibCheck`, JSX via
+  `react-jsx` since the app uses the automatic runtime) plus `npm run typecheck`
+  (`tsc --noEmit`) and `typescript`/`@types/{node,react,react-dom,express}` as
+  devDependencies. Not wired into CI yet - it's a local signal for now, same
+  spirit as `npm run lint`.
+  - First run surfaced two real JSDoc bugs, now fixed: an `import('../../map/
+    metadata.js')` / `scoring.js` type reference off by one `../` in
+    `useCorpus.js`/`useSearch.js` (silently resolved to nothing, so the linked
+    type was never checked), and a `@returns {MapLayout}` in `ordering.js`
+    referencing a typedef that was never declared anywhere. Also gave
+    `packages/map/metadata.js` a real `RoomMeta` typedef (`joinMetadata` was
+    typed as returning `(object|null)[]`, so every downstream reader of a
+    room's `keywords`/`story`/`alt` was checked as `object` and silently
+    unchecked), and added the `slide`/`catalog` sections `resolveConfig`
+    (`config.mjs`) actually returns but its `@returns` didn't mention.
+  - After those fixes, ~227 diagnostics remain (`npm run typecheck` to see
+    them), almost all the same root cause repeated: hook/function params
+    documented as `@param {object} opts` rather than a typed shape, so every
+    property and every `.current` read off a ref inside comes back as
+    `TS2339` on bare `object`. Heaviest concentrations: `useMapRenderer.js`,
+    `slide.js`, `useRearrangement.js`, `tiles.js`, `useMapCursor.js`,
+    `useMapCamera.js`, `main.jsx`, `scoring.js`. A few other shapes worth
+    knowing about before writing more JSDoc: `useRef(fn)` for a stable-identity
+    ref reassigned later (`main.jsx`'s `tapRef`) infers the ref's type from the
+    initial closure, not what it's reassigned to, so calls through it come back
+    arity-mismatched; a `@param {unknown} raw` narrowed by `typeof x ===
+    'object'` still can't be property-accessed without a cast (see
+    `normaliseEntry`'s `entry` pattern) because TS's `object` is deliberately
+    property-less; asset imports (`.svg`) and CSS custom properties in style
+    objects need a small `.d.ts` if imports of them should typecheck at all.
+  - So: the JSDoc that exists is basically accurate where it names a real
+    type, and wrong or absent in the two ways above. Confirms the plan below -
+    typing the data protocols (`RoomMeta`/`MapLayout` now exist; `Manifest`,
+    `SearchResult`, `Move`, `Rearrangement`, `Config` don't yet) is where
+    `checkJs` earns the most, cheaply, for the size of file it clears.
 - **Then decide about TypeScript.** The data protocols between modules -
   Manifest, Room, Metadata, SearchResult, MapLayout, Move, Rearrangement,
   Config - are where the value would be, and they are worth typing first if
-  anything is. Pending review rather than settled: run `checkJs` for a while
-  first, and let what it catches (or fails to catch) decide how far to go.
+  anything is. Pending review rather than settled: keep running `checkJs` for
+  a while, and let what it catches (or fails to catch) decide how far to go.
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.
 - Fonts and text rendering are unpolished, try some alternatives. The

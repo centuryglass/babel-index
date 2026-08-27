@@ -47,26 +47,33 @@
  */
 
 /**
+ * @typedef {object} RoomMeta
+ * @property {{text: string, type: string|null}[]} keywords
+ * @property {string|null} story
+ * @property {string|null} alt
+ */
+
+/**
  * Normalise one sidecar entry.
  *
  * @param {unknown} raw
- * @returns {{keywords: {text: string, type: string|null}[], story: string|null,
- *   alt: string|null}|null}
+ * @returns {RoomMeta|null}
  *   null when there is nothing usable, so "has metadata" stays a real question
  */
 export function normaliseEntry(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const entry = /** @type {Record<string, unknown>} */ (raw);
 
   const keywords = [];
-  if (Array.isArray(raw.keywords))
-    for (const k of raw.keywords) {
+  if (Array.isArray(entry.keywords))
+    for (const k of entry.keywords) {
       const text = typeof k === 'string' ? k : typeof k?.text === 'string' ? k.text : '';
       const trimmed = text.trim();
       if (trimmed) keywords.push({ text: trimmed, type: typeof k?.type === 'string' ? k.type : null });
     }
 
-  const story = typeof raw.story === 'string' && raw.story.trim() ? raw.story.trim() : null;
-  const alt = typeof raw.alt === 'string' && raw.alt.trim() ? raw.alt.trim() : null;
+  const story = typeof entry.story === 'string' && entry.story.trim() ? entry.story.trim() : null;
+  const alt = typeof entry.alt === 'string' && entry.alt.trim() ? entry.alt.trim() : null;
 
   // An entry carrying only an `alt` is still an entry: it describes the room,
   // which is the question "has metadata" is actually asking. Nothing at all -
@@ -79,7 +86,7 @@ export function normaliseEntry(raw) {
  *
  * @param {{id: number, file: string}[]} rooms the manifest's rooms
  * @param {object} sidecar parsed `metadata.json`
- * @returns {(object|null)[]} indexed by room id; null where a room has none
+ * @returns {(RoomMeta|null)[]} indexed by room id; null where a room has none
  */
 export function joinMetadata(rooms, sidecar) {
   const byId = new Array(rooms.length).fill(null);

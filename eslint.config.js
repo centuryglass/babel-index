@@ -1,8 +1,9 @@
 // Flat config, kept small on purpose: recommended JS rules plus just enough
 // environment/JSX wiring to stop false-positive no-undef on real globals.
-// The lint pass is descriptive-only for now (see AGENTS.md) — no CI-blocking
-// intent yet, so rule tuning beyond `recommended` is deferred until the
-// existing findings are triaged.
+// The lint pass is a required CI check (see .github/workflows/ci.yml's
+// `lint` job), so rule tuning beyond `recommended` should stay deliberate -
+// a new error-level rule needs the existing tree triaged against it first,
+// not just enabled and left to fail CI.
 import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
