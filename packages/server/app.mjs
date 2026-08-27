@@ -38,14 +38,16 @@ const LIVE_RELOAD_CLIENT = `(function () {
  * Build the app.
  *
  * @param {object} opts
- * @param {object} opts.manifest       the initial scan (see scan.mjs or remote.mjs)
+ * @param {import('../map/manifest.ts').Manifest} opts.manifest the initial scan
+ *                                     (see scan.mjs or remote.mjs)
  * @param {string} [opts.imagesDir]    directory the corpus is served from (local mode);
  *                                     omit in remote mode, where the manifest's urls
  *                                     already point directly at R2/Cloudflare and this
  *                                     server never serves images at all (see remote.mjs)
  * @param {string} [opts.sharedDir]    directory the shared tiles are served from,
  *                                     under /shared (local mode default: the images directory)
- * @param {() => Promise<object>} opts.rescan re-read the corpus (directory or remote manifest)
+ * @param {() => Promise<import('../map/manifest.ts').Manifest>} opts.rescan
+ *                                     re-read the corpus (directory or remote manifest)
  * @param {object} [opts.config]       resolved config (see packages/config); the
  *                                     defaults when absent
  * @param {string} [opts.bundleJs]     the built client, fixed for the process's

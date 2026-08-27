@@ -46,8 +46,8 @@ function rebase(url, oldBase, newBase) {
 /**
  * @param {string} baseUrl  e.g. https://assets.centuryglass.us
  * @param {string} prefix   the corpus prefix used at upload time
- * @returns {Promise<object>} a manifest shaped like scanDirectory()'s, with
- *   every url pointing directly at the remote host
+ * @returns {Promise<import('../map/manifest.ts').Manifest>} a manifest shaped
+ *   like scanDirectory()'s, with every url pointing directly at the remote host
  */
 export async function scanRemote(baseUrl, prefix) {
   const root = baseUrl.replace(/\/+$/, '');
