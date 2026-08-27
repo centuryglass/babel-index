@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { roomAtPoint } from './picking.js';
 import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.js';
-import { createLayout } from '../../map/ordering.js';
+import { createLayout } from '../../../map/ordering.js';
 
 const rect = { width: 1280, height: 800 };
 const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1, aspect: CELL_ASPECT });

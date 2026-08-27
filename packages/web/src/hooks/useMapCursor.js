@@ -13,10 +13,10 @@
  * in `docs/design-history.md` that made the point the hard way.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cellDistance } from '../../map/ordering.js';
-import { describeCell, describeRoom, describeArrangement } from '../../map/describe.js';
-import { nextRoom } from '../../map/nextRoom.js';
-import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from './camera.js';
+import { cellDistance } from '../../../map/ordering.js';
+import { describeCell, describeRoom, describeArrangement } from '../../../map/describe.js';
+import { nextRoom } from '../../../map/nextRoom.js';
+import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from '../lib/camera.js';
 
 /**
  * @param {object} opts

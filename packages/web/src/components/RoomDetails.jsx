@@ -19,7 +19,7 @@
  * the fallback now follows it rather than the reverse order it used to have.
  * One order, so a reader who meets a room both ways meets it the same way.
  */
-import { explainScore } from '../../map/scoring.js';
+import { explainScore } from '../../../map/scoring.js';
 
 /**
  * Text with the matched spans marked.

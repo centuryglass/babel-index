@@ -19,8 +19,8 @@
  * center tile currently is on screen - including off it.
  */
 import { forwardRef } from 'react';
-import buttonSvg from '../../../assets/search_button.svg';
-import arrowSvg from '../../../assets/search_arrow.svg';
+import buttonSvg from '../../../../assets/search_button.svg';
+import arrowSvg from '../../../../assets/search_arrow.svg';
 
 export function SearchGlyph(props) {
   return <span aria-hidden="true" {...props} dangerouslySetInnerHTML={{ __html: buttonSvg }} />;
