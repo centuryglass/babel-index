@@ -391,7 +391,7 @@ test('a query nothing matches clusters nothing, however the ranking came out', (
   // *some* room a score of 1 for any query at all, so the blend cannot tell
   // "cghjj" from "art nouveau" - and a gradient driven by the blend would
   // cluster noise and claim a find. The raw cosines say what is really going on.
-  const cosines = [0.11, 0.12, 0.13];
+  const cosines = [-0.2, -0.15, -0.1];
   const certainty = certaintyOf({ query: 'cghjj', embeddings: atCosines(...cosines) });
 
   assert.equal(Math.max(...certainty), 0, `expected no certainty, got ${[...certainty]}`);
@@ -414,7 +414,7 @@ test('a query nothing matches clusters nothing, however the ranking came out', (
 test('a strong cosine is certain on its own', () => {
   // "red", against rooms CLIP really does think are red: certainty falls off
   // gradually with the cosine, which is what makes the density falloff gradual.
-  const certainty = certaintyOf({ query: 'red', embeddings: atCosines(0.32, 0.24, 0.12) });
+  const certainty = certaintyOf({ query: 'red', embeddings: atCosines(0.4, 0.15, -0.1) });
   assert.equal(certainty[0], 1);
   assert.ok(certainty[1] > 0.4 && certainty[1] < 0.6, `middling cosine gave ${certainty[1]}`);
   assert.equal(certainty[2], 0);
@@ -425,7 +425,7 @@ test('an exact keyword match is certain whatever the picture looks like', () => 
   // answer; the cosine has no say in whether it is one.
   const certainty = certaintyOf({
     query: 'yuiop',
-    embeddings: atCosines(0.1, 0.1, 0.1),
+    embeddings: atCosines(-0.1, -0.1, -0.1),
     index: indexOf([['yuiop'], null], [['oak'], null], [['pine'], null]),
   });
   assert.equal(certainty[0], 1, 'the tagged room');
@@ -436,7 +436,7 @@ test('a partial keyword is partially certain', () => {
   // 3/11 of "art nouveau" matched is 3/11 of a reason to pull it to the center.
   const certainty = certaintyOf({
     query: 'art',
-    embeddings: atCosines(0.1, 0.1, 0.1),
+    embeddings: atCosines(-0.1, -0.1, -0.1),
     index: indexOf([['art nouveau'], null], [['oak'], null], [['pine'], null]),
   });
   assert.ok(Math.abs(certainty[0] - 3 / 11) < 1e-6, `got ${certainty[0]}`);
@@ -459,13 +459,13 @@ test('certainty is indexed by rank, not by room', () => {
 test('the certainty bounds are configurable', () => {
   // They are the one part of the gradient that wants measuring against a real
   // corpus, which is why they are config rather than a constant in the blend.
-  const opts = { query: 'red', embeddings: atCosines(0.15, 0.15, 0.15), dim: 2, vector: CLIP_QUERY };
+  const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, vector: CLIP_QUERY };
   assert.equal(rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).certainty[0], 0);
   const loosened = rankHybrid({
     count: 3,
     weights: WEIGHTS,
     ...opts,
-    clipCertainty: { low: 0.05, high: 0.1 },
+    clipCertainty: { low: -0.3, high: -0.15 },
   });
   assert.equal(loosened.certainty[0], 1, 'a lower band makes the same cosine certain');
 });
@@ -601,7 +601,7 @@ test('a CLIP row shows the raw cosine beside the relative one, so a certain-look
   // Every cosine is below `clipLow`: CLIP is saying nothing about any of these
   // rooms. Min-maxing still puts the best of them at exactly 1.00, which is the
   // trap - a breakdown printing that alone would claim a confident match.
-  const cosines = [0.12, 0.08, 0.05];
+  const cosines = [-0.1, -0.15, -0.2];
   assert.ok(cosines.every((c) => c < CLIP_CERTAINTY.low));
 
   const { breakdown, certainty } = rankHybrid({

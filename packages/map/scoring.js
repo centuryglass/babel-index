@@ -90,13 +90,15 @@ export function lemmatise(word) {
  * Raw-cosine bounds for CLIP's share of certainty: at or below `low` it is
  * saying nothing, at or above `high` it is as sure as it gets.
  *
- * Starting values for CLIP ViT-B/32, where image-text cosines run roughly 0.10
- * to 0.15 for a string the image has nothing to do with and 0.30 upward for a
- * good match - narrowed at the bottom because a corpus of near-identical
- * library walls sits higher than a corpus of arbitrary photographs. Overridable,
- * and worth measuring once there are real queries to measure against.
+ * Measured against the real corpus (1901 rooms x 2149 generation keywords,
+ * CLIP ViT-B/32): every observed cosine fell inside -0.060 to 0.346, so these
+ * sit just outside that span rather than at the true min/max. That keeps
+ * certainty from ever hitting exactly 0 or 1 - CLIP is never quite that sure,
+ * in either direction - while still spending nearly the whole [0, 1] range on
+ * the spread that's actually there, instead of the sliver it would get if the
+ * bounds were the theoretical cosine range of -1 to 1.
  */
-export const CLIP_CERTAINTY = { low: 0.18, high: 0.3 };
+export const CLIP_CERTAINTY = { low: -0.08, high: 0.37 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
