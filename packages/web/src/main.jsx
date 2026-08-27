@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
-import { joinMetadata } from '../../map/metadata.js';
 import {
-  buildSearchIndex,
   rankHybrid,
   fold,
   tokenise,
@@ -44,6 +42,7 @@ import { useMapRenderer } from './useMapRenderer.js';
 import { useMapCursor } from './useMapCursor.js';
 import { useCenterShelf } from './useCenterShelf.js';
 import { useModeTransition } from './useModeTransition.js';
+import { useCorpus } from './useCorpus.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -106,7 +105,6 @@ function Library({ manifest }) {
   const [result, setResult] = useState(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
-  const [metadata, setMetadata] = useState(null);
   // Search history, newest first, one book per entry - and one of the two
   // things in this app that survives a reload (see `persist.js` for why so few
   // do). It is not only a convenience: this is what titles the center room's
@@ -133,47 +131,9 @@ function Library({ manifest }) {
     else clear(KEYS.history);
   }, [history]);
 
-  // The embedding blob, fetched once if the corpus has one. Ranking is a few
-  // million int8 multiply-adds against it (rankByEmbedding), well under a frame,
-  // so a search - and every re-rank off the same vector - stays on the client.
-  const embeddings = useRef(null);
-  useEffect(() => {
-    if (!manifest.embeddings) return;
-    let cancelled = false;
-    fetch(manifest.embeddings.url)
-      .then((r) => r.arrayBuffer())
-      .then((buf) => {
-        if (!cancelled) embeddings.current = { data: new Int8Array(buf), dim: manifest.embeddings.dim };
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [manifest]);
-
-  // The keyword/story sidecar, fetched alongside the blob rather than inlined
-  // into the manifest: at a full corpus it is megabytes, and the manifest is on
-  // the path to the first frame. Joined by filename into an array indexed by
-  // room id, which is what search and the overlay will both want.
-  useEffect(() => {
-    if (!manifest.metadata) return;
-    let cancelled = false;
-    fetch(manifest.metadata.url)
-      .then((r) => r.json())
-      .then((sidecar) => {
-        if (!cancelled) setMetadata(joinMetadata(manifest.rooms, sidecar));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [manifest]);
-
-  const described = useMemo(() => metadata?.filter(Boolean).length ?? 0, [metadata]);
-
-  // Folded and tokenised once, so a search is set lookups rather than a
-  // megabyte of string work.
-  const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
+  // Everything the corpus IS - the sidecar, the embedding blob, the search
+  // index built over them. See useCorpus.js.
+  const { metadata, embeddings, searchIndex, described } = useCorpus(manifest);
 
   // `search`, `enterCatalog`, `setHelpOpen` and `forgetSearches` - the actions
   // a book on the shelf can run - are declared much further down this file, so
