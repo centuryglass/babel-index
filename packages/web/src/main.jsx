@@ -15,7 +15,7 @@ import { MapView } from './MapView.jsx';
 import { CatalogView } from './CatalogView.jsx';
 import { RoomOverlay } from './RoomOverlay.jsx';
 import { HelpDialog } from './HelpDialog.jsx';
-import { flipTransform, flipCss, rectOf, alphabeticalOrder } from './catalog.js';
+import { alphabeticalOrder } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
 import { buildRearrangement } from '../../map/board.js';
@@ -43,6 +43,7 @@ import { useMapCamera, prefersReducedMotion } from './useMapCamera.js';
 import { useMapRenderer } from './useMapRenderer.js';
 import { useMapCursor } from './useMapCursor.js';
 import { useCenterShelf } from './useCenterShelf.js';
+import { useModeTransition } from './useModeTransition.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -82,14 +83,6 @@ function Library({ manifest }) {
   // than from a literal here - see packages/config. The sliders still move
   // freely afterwards; config decides where they start.
   const config = manifest.config;
-
-  // Which reading of the corpus is on screen. The map is never unmounted - it
-  // is hidden and its render loop stops - so switching carries no state and
-  // nothing has to be rebuilt on the way back. See `docs/catalog-plan.md` §2.
-  const [mode, setMode] = useState(INITIAL_MODE);
-  // Mounted through the exit animation, so the catalog can fold back into the
-  // center tile rather than vanishing. Cleared when the animation lands.
-  const [leaving, setLeaving] = useState(false);
 
   // How the catalog advances, and one of the two things that survive a reload.
   // Config supplies the DEFAULT for a reader who has never chosen; a stored
@@ -529,6 +522,21 @@ function Library({ manifest }) {
       goToSearchRef,
     });
 
+  // --- switching between the two readings ----------------------------------
+  //
+  // The map is hidden rather than unmounted, so neither direction rebuilds
+  // anything: the camera is exactly where it was left, the tile cache is
+  // warm, and `useMapCamera`'s pointer listeners - bound once against a ref
+  // object rather than an element - are still attached to a canvas that
+  // never went away. See `useModeTransition.js` for the FLIP itself.
+  const { mode, leaving, enterCatalog, exitCatalog, firstTileRef } = useModeTransition({
+    canvasRef,
+    cam,
+    catalogConfig: config.catalog,
+    onModeChange: useCallback(() => setCard(null), []),
+    initialMode: INITIAL_MODE,
+  });
+
   // --- rendering -----------------------------------------------------------
   //
   // The frame loop itself is `useMapRenderer.js`. `draw` stays here because the
@@ -853,112 +861,9 @@ function Library({ manifest }) {
     [flyTo, config]
   );
 
-  // --- switching between the two readings ----------------------------------
-  //
-  // The map is hidden rather than unmounted, so neither direction rebuilds
-  // anything: the camera is exactly where it was left, the tile cache is warm,
-  // and `useMapCamera`'s pointer listeners - bound once against a ref object
-  // rather than an element - are still attached to a canvas that never went
-  // away.
-  //
-  // The animation is a FLIP on ONE element. The center tile is what the map is
-  // framed on and what the catalog's first row shows, so folding one into the
-  // other is a transform on that row's thumbnail while the map cross-fades,
-  // rather than anything the renderer has to know about.
+  // The catalog's own scroll position - not part of the mode transition, so
+  // it stays here rather than moving into `useModeTransition`.
   const catalogScrollRef = useRef(null);
-  const firstTileRef = useRef(null);
-  // Where the center tile was on the map when the switch began, or null if it
-  // was off screen - a reader who panned away has nothing to fold from, and the
-  // transition degrades to a cross-fade rather than flying in from a corner.
-  const flipFrom = useRef(null);
-
-  /** The center cell's screen rect, or null if none of it is in view. */
-  const centreRectNow = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    const rect = centerCellRect(cam.current, { width: w, height: h });
-    return overlapsViewport(rect, w, h) ? rect : null;
-  }, [cam]);
-
-  const animatedSwitch = () =>
-    !prefersReducedMotion() && config.catalog.transitionMs > 0;
-
-  const enterCatalog = useCallback(() => {
-    flipFrom.current = animatedSwitch() ? centreRectNow() : null;
-    setCard(null);
-    setMode('catalog');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centreRectNow, config]);
-
-  const exitCatalog = useCallback(() => {
-    if (!animatedSwitch()) {
-      setMode('map');
-      return;
-    }
-    // The map is already at the camera it will land on, so the tile's
-    // destination is knowable before anything moves.
-    flipFrom.current = centreRectNow();
-    setLeaving(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centreRectNow, config]);
-
-  /**
-   * Run the FLIP, in whichever direction the mode just moved.
-   *
-   * `useLayoutEffect` because the invert transform has to be applied before the
-   * browser paints the catalog in its resting position - one frame of the list
-   * at full size, then a jump onto the tile, is exactly the flash this is meant
-   * to replace.
-   */
-  useLayoutEffect(() => {
-    const entering = mode === 'catalog' && !leaving;
-    if (!entering && !leaving) return;
-
-    const tile = firstTileRef.current;
-    const anchor = flipFrom.current;
-    const ms = config.catalog.transitionMs;
-    let timer = 0;
-
-    // Nothing to fold from or to: cross-fade, which the stylesheet does on its
-    // own, and just land.
-    if (!tile || !anchor || !animatedSwitch()) {
-      if (leaving) timer = setTimeout(() => { setMode('map'); setLeaving(false); }, 0);
-      return () => clearTimeout(timer);
-    }
-
-    // `rectOf`, not the DOMRect itself - see its comment. Passing the DOMRect
-    // straight in does not throw; it silently drops the scale.
-    const rest = rectOf(tile.getBoundingClientRect());
-    const onto = flipCss(flipTransform(anchor, rest));
-
-    if (entering) {
-      // Start on the tile, then release to nothing.
-      tile.style.transition = 'none';
-      tile.style.transform = onto;
-      // Read back, so the two writes cannot be coalesced into no animation.
-      void tile.offsetWidth;
-      tile.style.transition = `transform ${ms}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
-      tile.style.transform = '';
-      timer = setTimeout(() => {
-        tile.style.transition = '';
-      }, ms);
-    } else {
-      // Leaving: from nothing back onto the tile, and land when it arrives.
-      tile.style.transition = `transform ${ms}ms cubic-bezier(0.55, 0.06, 0.68, 0.19)`;
-      tile.style.transform = onto;
-      timer = setTimeout(() => {
-        tile.style.transition = '';
-        tile.style.transform = '';
-        setMode('map');
-        setLeaving(false);
-      }, ms);
-    }
-
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, leaving, config]);
 
   /** A row's "show on the map" - aim the camera, then go and look. */
   const showOnMap = useCallback(
