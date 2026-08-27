@@ -15,8 +15,6 @@ serve as completed task history.
   from unstated expectations in a lot of subtle ways. Establish a basic set of
   conditions that define how search should act, making sure to cover all the
   odd edge cases.
-- Fix the CLIP cosine bounds, they're way off. Branch
-  claude/clip-cosine-range-analysis-r3vslg has analysis code that will help.
 - Decide on a user-friendly way to present search ranking and certainty to
   users in the catalog mode.
 

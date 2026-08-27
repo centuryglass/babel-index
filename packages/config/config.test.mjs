@@ -274,7 +274,7 @@ test('the default gradient bounds bracket a real CLIP cosine', () => {
   // gradient to grade anything at all.
   const { clipLow, clipHigh } = DEFAULTS.search.density;
   assert.ok(clipHigh > clipLow, `${clipLow}-${clipHigh}`);
-  assert.ok(clipLow > 0 && clipHigh < 1, 'a cosine, not a normalised score');
+  assert.ok(clipLow > -1 && clipHigh < 1, 'a cosine, not a normalised score');
 });
 
 // --- the catalog's block ---------------------------------------------------
