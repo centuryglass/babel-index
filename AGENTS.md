@@ -137,6 +137,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `docs/implementation-plan.md`: TODO list, temporary holding place for
                                  ongoing plans
 - `docs/accessibility-plan.md`: Keyboard/screen reader plan, mostly complete.
+- `docs/state-architecture-plan.md`: How `packages/web/src/main.jsx` gets taken
+                                     apart, and what is deliberately left alone.
 - `docs/design-history.md`: Record of all the dead ends we went down because
                             of incomplete specifications.
   
@@ -145,9 +147,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **ESM everywhere** (`"type": "module"`). `.mjs` for anything Node runs
   directly, `.js` for modules the browser bundles, `.jsx` for React.
   Import Node built-ins with the `node:` prefix.
-- **Node 20 is the floor** (`engines`), and CI runs 20/22/24. No TypeScript,
-  get user confirmation before adding dependencies, try to keep dependencies
-  minimal.
+- **Node 20 is the floor** (`engines`), and CI runs 20/22/24. Get user
+  confirmation before adding dependencies, try to keep dependencies minimal.
+- **No TypeScript yet - pending review, not ruled out.** Don't introduce `.ts`
+  files or a build step on your own initiative; the question of typing the
+  cross-module data protocols is open and the near-term step is `checkJs` over
+  the JSDoc already in the tree. See `docs/implementation-plan.md`. Writing
+  accurate JSDoc on new code in the pure packages is always welcome.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so new files need no
   wiring. The e2e file is `*.e2e.mjs`, intentionally skipping the pattern.
