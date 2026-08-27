@@ -17,6 +17,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Skip the browser smoke test on a PR that cannot have touched anything it
+  # tests - a docs-only change, an infra tweak, a tool that runs offline and
+  # is never on the demo server's or the client's import graph. A push to
+  # main always runs the full suite regardless (see the file header on why),
+  # so this job only has an opinion on `pull_request` events.
+  changes:
+    name: what changed
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      browser: ${{ steps.filter.outputs.browser }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        name: does this PR touch anything the browser can see
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE" "$HEAD")"
+          echo "$changed"
+          # Everything the demo server bundles or serves, plus the corpus
+          # it's served from and the workflows that run it. See AGENTS.md's
+          # Layout section for why each of these is (or is deliberately not)
+          # on the browser's import graph - `tools/center-placement/lib` is
+          # imported by `packages/web/src/center.js` directly, and
+          # `packages/pipeline/layout.mjs` is imported by
+          # `packages/server/scan.mjs`, so both count even though "tools" and
+          # "pipeline" sound offline. `tools/embed` and `tools/upload` are
+          # genuinely offline (see AGENTS.md) and stay out on purpose.
+          pattern='^(packages/(web|server|config|map|pipeline)/|tools/center-placement/lib/|assets/|package(-lock)?\.json$|\.github/workflows/(ci|e2e)\.yml$)'
+          if echo "$changed" | grep -qE "$pattern"; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "browser=false" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
     name: test (node ${{ matrix.node }})
     runs-on: ubuntu-latest
@@ -50,8 +90,14 @@ jobs:
   # one definition of how it runs and keeps its own manual dispatch. One Node
   # version is enough here: this job is about the browser, and the arithmetic
   # that actually varies by runtime is covered by the matrix above.
+  #
+  # `if: always()` overrides the default "skip if a need was skipped" rule -
+  # `changes` itself is skipped on a push (it only runs for `pull_request`),
+  # and that must not skip this job on push, where the full suite always runs.
   e2e:
     name: browser smoke test
+    needs: [changes]
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.browser == 'true')
     uses: ./.github/workflows/e2e.yml
     with:
       node: '22'
@@ -84,8 +130,14 @@ jobs:
     needs: [test, e2e, lint]
     runs-on: ubuntu-latest
     steps:
+      # `e2e` is allowed to be `skipped` - the `changes` job decided this PR
+      # cannot have touched anything the browser smoke test can see - but
+      # never anything else.
       - name: All checks passed
-        if: needs.test.result != 'success' || needs.e2e.result != 'success' || needs.lint.result != 'success'
+        if: |
+          needs.test.result != 'success' ||
+          (needs.e2e.result != 'success' && needs.e2e.result != 'skipped') ||
+          needs.lint.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
           echo "e2e result: ${{ needs.e2e.result }}"
