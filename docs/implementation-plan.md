@@ -36,6 +36,30 @@ serve as completed task history.
 - Price out what it'll cost to host somewhere I can target with Terraform CD,
   compare with the hassle of just kludging it onto my VPS with other projects.
 
+## Architecture:
+- **Split up `packages/web/src/main.jsx`.** It holds 19 pieces of state, 18
+  refs and 8 effects, and hands `MapView` 38 props; the coordination between
+  the search, the rearrangement and what gets announced lives in mutable refs
+  and effect ordering rather than anywhere a reader can see it. Six extractions,
+  ordered by risk, in [`state-architecture-plan.md`](state-architecture-plan.md).
+- **Turn on `checkJs`.** The pure packages already carry JSDoc `@param`/
+  `@returns` on ~180 declarations and nothing checks any of it. A `jsconfig.json`
+  with `checkJs` plus a `tsc --noEmit` lint step costs one config file and no
+  syntax change, and answers the question the entry below depends on: is the
+  JSDoc that already exists actually accurate?
+- **Then decide about TypeScript.** The data protocols between modules -
+  Manifest, Room, Metadata, SearchResult, MapLayout, Move, Rearrangement,
+  Config - are where the value would be, and they are worth typing first if
+  anything is. Pending review rather than settled: run `checkJs` for a while
+  first, and let what it catches (or fails to catch) decide how far to go.
+- **Break up `packages/web/e2e/smoke.e2e.mjs`.** At ~2440 lines it is the
+  largest file in the repo, it shares one `page` across 52 tests, and one
+  stranded piece of state turns a single failure into several unrelated ones.
+  Split along the seams the section comments already mark - map/gestures,
+  accessibility, keyboard cursor, shelf, catalog - keeping the shared-server
+  fixture. Lower priority than the application-side work above: a mess in the
+  tests costs less than a mess in the thing being tested.
+
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.
 - Fonts and text rendering are unpolished, try some alternatives. The
