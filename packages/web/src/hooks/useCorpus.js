@@ -18,7 +18,7 @@ import { buildSearchIndex } from '../../../map/scoring.js';
 /**
  * @param {object} manifest  the loaded `/api/manifest` response
  * @returns {{
- *   metadata: (import('../../map/metadata.js').RoomMeta|null)[] | null,
+ *   metadata: (import('../../../map/metadata.js').RoomMeta|null)[] | null,
  *   embeddings: {current: {data: Int8Array, dim: number} | null},
  *   searchIndex: ReturnType<typeof buildSearchIndex> | null,
  *   described: number,
