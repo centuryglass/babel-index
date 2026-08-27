@@ -46,11 +46,6 @@ serve as completed task history.
   query string) scoped to the app's hostname for that endpoint specifically.
 
 ## Architecture:
-- **Split up `packages/web/src/main.jsx`.** It holds 19 pieces of state, 18
-  refs and 8 effects, and hands `MapView` 38 props; the coordination between
-  the search, the rearrangement and what gets announced lives in mutable refs
-  and effect ordering rather than anywhere a reader can see it. Six extractions,
-  ordered by risk, in [`state-architecture-plan.md`](state-architecture-plan.md).
 - **Turn on `checkJs`.** The pure packages already carry JSDoc `@param`/
   `@returns` on ~180 declarations and nothing checks any of it. A `jsconfig.json`
   with `checkJs` plus a `tsc --noEmit` lint step costs one config file and no
