@@ -84,8 +84,8 @@ export function normaliseEntry(raw) {
 /**
  * Join a sidecar onto the corpus, by filename.
  *
- * @param {{id: number, file: string}[]} rooms the manifest's rooms
- * @param {object} sidecar parsed `metadata.json`
+ * @param {import('./manifest.ts').Room[]} rooms the manifest's rooms
+ * @param {unknown} sidecar parsed `metadata.json`
  * @returns {(RoomMeta|null)[]} indexed by room id; null where a room has none
  */
 export function joinMetadata(rooms, sidecar) {
@@ -109,6 +109,8 @@ export function joinMetadata(rooms, sidecar) {
  * describing files this corpus does not have, which reads exactly like having
  * no metadata unless someone says so.
  *
+ * @param {import('./manifest.ts').Room[]} rooms
+ * @param {unknown} sidecar
  * @returns {{matched: number, entries: number}}
  */
 export function metadataCoverage(rooms, sidecar) {

@@ -1,0 +1,86 @@
+/**
+ * The corpus manifest's shape: what `scan.mjs` (or `remote.mjs`, rewriting a
+ * remote scan's urls) produces, `/api/manifest` serves verbatim plus a
+ * `config` field, and every consumer in `packages/web` and `packages/map`
+ * reads.
+ *
+ * Type-only, imported through JSDoc (`@type {import('./manifest.ts').Manifest}`)
+ * rather than `.js`/`.mjs`/`.jsx` importing it at runtime - this is the first
+ * `.ts` file in the repo (see AGENTS.md), and it stays a pure type contract so
+ * it never needs to go through esbuild's client bundle or Node's loader. `tsc
+ * --noEmit` (npm run typecheck) is what actually checks it against every
+ * `@type`/`@param` that names it.
+ */
+
+export interface ImageSize {
+  w: number;
+  h: number;
+}
+
+/** One room: a corpus image, its url, and its size if it could be read. */
+export interface Room extends Partial<ImageSize> {
+  id: number;
+  file: string;
+  url: string;
+  bytes: number;
+}
+
+/** One shared tile (the center render, or one generic): its url and size. */
+export interface SharedAsset extends Partial<ImageSize> {
+  file: string;
+  url: string;
+}
+
+/** The shared tiles: the blank center (if any) and the generic alternates. */
+export interface SharedAssets {
+  center: SharedAsset | null;
+  generic: SharedAsset[];
+}
+
+/** One rung of the resolution pyramid, as actually found on disk. */
+export interface LevelInfo extends Partial<ImageSize> {
+  level: number;
+  /** Subdirectory holding this level's files; null for the flat level 0. */
+  dir: string | null;
+}
+
+/** The image-embedding blob's metadata, if `tools/embed` has produced one. */
+export interface EmbeddingsInfo {
+  url: string;
+  dim: number;
+  count: number;
+  model: string | null;
+}
+
+/**
+ * The keyword/story sidecar's coverage, if `METADATA_FILE` was found. `matched`
+ * far below `entries` means the sidecar describes files this corpus does not
+ * have - see `packages/map/metadata.js`.
+ */
+export interface MetadataInfo {
+  url: string;
+  matched: number;
+  entries: number;
+}
+
+/** A corpus manifest, as `scanDirectory()`/`fetchRemoteManifest()` produce it. */
+export interface Manifest {
+  mode: 'offline' | 'remote';
+  /** The scanned local directory; absent from a remote manifest (see remote.mjs). */
+  directory?: string;
+  /** The remote manifest.json url this was fetched from, in remote mode only. */
+  source?: string;
+  imagesBase: string;
+  sharedBase: string;
+  shared: SharedAssets;
+  rooms: Room[];
+  count: number;
+  embeddings: EmbeddingsInfo | null;
+  metadata: MetadataInfo | null;
+  levels: LevelInfo[];
+}
+
+/** The manifest as served by `/api/manifest`: the scan plus the client config. */
+export interface ManifestResponse extends Manifest {
+  config: Record<string, unknown>;
+}

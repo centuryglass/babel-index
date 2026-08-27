@@ -125,6 +125,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `ordering.js`: Room placement, search density gradient, rank by embedding, pan resistance
   * `nextRoom.js`: Find the next non-default room on the map in a given direction
   * `metadata.js`: Normalizing and joining per-room keyword/story data
+  * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
+                   `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
   * `scoring.js`: Find room rank and match certainty for a search, searh tokenization
   * `illusion.js`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.js`
   * `board.js`: Sliding animation illusion's board data structure
@@ -179,12 +181,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   Import Node built-ins with the `node:` prefix.
 - **Node 20 is the floor** (`engines`), and CI runs 20/22/24. Get user
   confirmation before adding dependencies, try to keep dependencies minimal.
-- **No TypeScript yet - pending review, not ruled out.** Don't introduce `.ts`
-  files or a build step on your own initiative; the question of typing the
-  cross-module data protocols is still open. `checkJs` is on (`jsconfig.json`,
-  `npm run typecheck`) as a local signal, not yet a CI gate - see
-  `docs/implementation-plan.md` for what it has and hasn't caught so far.
-  Writing accurate JSDoc on new code in the pure packages is always welcome.
+- **TypeScript is coming in as type-only `.ts` contracts, not as a build step.**
+  `packages/map/manifest.ts` (the corpus manifest's shape) is the first: a
+  `.ts` file exporting only `interface`s, never imported by a `.js`/`.mjs`/`.jsx`
+  file at runtime - only through JSDoc (`@type {import('./manifest.ts').Manifest}`).
+  `tsc --noEmit` (`npm run typecheck`) is what actually checks it, so it needs
+  no esbuild/Node loader support and adds no build step. Cross-module data
+  shapes (a manifest, a room, a search result) are the right candidates for
+  this; application logic staying `.js`/`.mjs` with JSDoc is not otherwise
+  affected. `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local
+  signal, not yet a CI gate - see `docs/implementation-plan.md` for what it has
+  and hasn't caught so far. Writing accurate JSDoc on new code in the pure
+  packages is always welcome.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so new files need no
   wiring. e2e files are `*.e2e.mjs`, intentionally skipping the pattern.

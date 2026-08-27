@@ -16,7 +16,7 @@ import { joinMetadata } from '../../../map/metadata.js';
 import { buildSearchIndex } from '../../../map/scoring.js';
 
 /**
- * @param {object} manifest  the loaded `/api/manifest` response
+ * @param {import('../../../map/manifest.ts').ManifestResponse} manifest  the loaded `/api/manifest` response
  * @returns {{
  *   metadata: (import('../../../map/metadata.js').RoomMeta|null)[] | null,
  *   embeddings: {current: {data: Int8Array, dim: number} | null},
