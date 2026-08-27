@@ -12,13 +12,14 @@
  * directly, which is the fifteen-parameter failure the plan is trying to
  * avoid.
  *
- * `requestAnimation` arrives through a ref rather than as a plain argument,
- * the same forward-reference trick `useCenterShelf`'s `actionsRef` and
- * `useMapCursor`'s `goToSearchRef` use: `announce` (`main.jsx`) needs this
- * hook's `result` to know what to say, `useRearrangement` needs `announce`,
- * and `useRearrangement` is the thing that returns `requestAnimation` - so
- * this hook has to be called before `useRearrangement` exists, and can only
- * get its `requestAnimation` once `main.jsx` fills the ref in afterwards.
+ * `requestAnimation` arrives through a ref rather than as a plain argument -
+ * the one forward reference left in `main.jsx` after the rest were reordered
+ * away, because this one is a genuine cycle rather than an ordering accident:
+ * `announce` (`main.jsx`) needs this hook's `result` to know what to say,
+ * `useRearrangement` needs `announce`, and `useRearrangement` is the thing
+ * that returns `requestAnimation` - so this hook has to be called before
+ * `useRearrangement` exists, and can only get its `requestAnimation` once
+ * `main.jsx` fills the ref in afterwards.
  *
  * `history`/`pushHistory` stay in `main.jsx`: the shelf reads history, the
  * panel's forget button writes it, and it survives a reload - a search is a

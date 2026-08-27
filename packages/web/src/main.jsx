@@ -139,26 +139,6 @@ function Library({ manifest }) {
     setStatus,
   });
 
-  // `search`, `enterCatalog`, `setHelpOpen` and `forgetSearches` - the actions
-  // a book on the shelf can run - are declared much further down this file, so
-  // `useCenterShelf` (called next, ahead of all of them) cannot take them
-  // directly: it has to run early enough that `centreSlots` is ready before
-  // `useMapRenderer` reads it below. This ref is the same forward-reference
-  // trick `useMapCursor`'s `goToSearchRef` uses; `main.jsx` fills it in once
-  // everything it points to actually exists (see the assignment near
-  // `forgetSearches`), and every book press from then on reads the live
-  // functions rather than a closure captured before they were.
-  const shelfActionsRef = useRef({});
-
-  const { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown } = useCenterShelf({
-    metadata,
-    slotSeed: config.map.slotSeed,
-    history,
-    booksRef,
-    setQuery,
-    actionsRef: shelfActionsRef,
-  });
-
   // Both of these are runtime parameters: changing either re-derives the
   // layout without touching a single byte of downloaded image data.
   //
@@ -344,13 +324,6 @@ function Library({ manifest }) {
   // latest logic, since the handler closes over `search` and `centreSlots`,
   // which are redefined below and on every render.
   const tapRef = useRef(() => {});
-
-  // `/` (below) needs `goToSearch`, which is declared further down and closes
-  // over state that changes often - the same "stable identity over a ref that
-  // always holds the latest logic" as `tapRef`, and for the same reason: the
-  // map's keyboard handler must not itself be rebuilt every time `goToSearch`
-  // is.
-  const goToSearchRef = useRef(() => {});
   const onTap = useCallback((px, py, camera) => tapRef.current(px, py, camera), []);
 
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
@@ -424,6 +397,35 @@ function Library({ manifest }) {
     [cam]
   );
 
+  // The panel's one remaining search affordance: reach the live field on the
+  // center tile. If it is already on screen and legible, just focus it -
+  // otherwise fly home to the opening view first, the same framing the map
+  // loads on, and focus once landed. A dropped flight (the reader grabbed the
+  // map mid-flight) leaves the field alone rather than fighting for focus.
+  //
+  // Defined here, right after its own inputs (`flyTo`, `opening`,
+  // `centreOverlay`) exist, rather than down with the rest of the search
+  // wiring - `useMapCursor` needs it for `/` and takes it directly. There is
+  // no listener-rebind cost to protect against by holding it behind a ref:
+  // `onMapKeyDown` is a plain JSX prop, not something an effect re-subscribes
+  // when it changes.
+  const goToSearch = useCallback(async () => {
+    const canvas = canvasRef.current;
+    const input = searchFormRef.current?.querySelector('input');
+    if (!canvas || !input) return;
+    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).usable) {
+      input.focus();
+      return;
+    }
+    // flyTo always routes through cameraAtCell, which adds +0.5 to aim at a
+    // cell's MIDDLE - every other caller flies to a whole cell by its corner
+    // index. `opening` is already a raw camera target, not a cell index (see
+    // useMapCamera's mount-time use of it, unmodified), so that offset has to
+    // be cancelled here or the flight lands half a cell short on each axis.
+    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
+    if (landed) input.focus();
+  }, [flyTo, opening, centreOverlay]);
+
   // --- the keyboard cursor ---------------------------------------------------
   //
   // Everything about it - the cell, what gets said, and every key - is
@@ -443,7 +445,7 @@ function Library({ manifest }) {
       setStatus,
       requestDraw,
       onOpenCard: setCard,
-      goToSearchRef,
+      goToSearch,
     });
 
   // --- switching between the two readings ----------------------------------
@@ -459,6 +461,28 @@ function Library({ manifest }) {
     catalogConfig: config.catalog,
     onModeChange: useCallback(() => setCard(null), []),
     initialMode: INITIAL_MODE,
+  });
+
+  // Cleared rather than emptied one at a time - see the shelf's "forget
+  // searches" book. Defined here, ahead of `useCenterShelf` just below, which
+  // is the only thing that runs it.
+  const forgetSearches = useCallback(() => setHistory([]), []);
+
+  // The center room's bookshelf. Called here rather than earlier in the file
+  // because two of the four actions a book can run - `enterCatalog` (just
+  // above) and `search` (from `useSearch`, already in scope) - have to exist
+  // first; `centreSlots` has no reader of its own until `useMapRenderer`
+  // just below, so nothing is lost by waiting this long to call it.
+  const { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown } = useCenterShelf({
+    metadata,
+    slotSeed: config.map.slotSeed,
+    history,
+    booksRef,
+    setQuery,
+    search,
+    enterCatalog,
+    setHelpOpen,
+    forgetSearches,
   });
 
   // --- rendering -----------------------------------------------------------
@@ -491,6 +515,11 @@ function Library({ manifest }) {
     [mode, order, result, setStatus, announceArrangement]
   );
 
+  // `useSearch`'s `search()` needs `requestAnimation`, but `useRearrangement`
+  // needs `announce`, which needs `useSearch`'s own `result` (by way of
+  // `layout`/`order`) - a genuine cycle, not just an ordering accident, so
+  // `requestAnimationRef` (filled in below) is the one forward reference left
+  // in this file that reordering cannot remove.
   const { requestAnimation } = useRearrangement({
     layout,
     order,
@@ -505,29 +534,6 @@ function Library({ manifest }) {
     announce,
   });
   requestAnimationRef.current = requestAnimation;
-
-  // The panel's one remaining search affordance: reach the live field on the
-  // center tile. If it is already on screen and legible, just focus it -
-  // otherwise fly home to the opening view first, the same framing the map
-  // loads on, and focus once landed. A dropped flight (the reader grabbed the
-  // map mid-flight) leaves the field alone rather than fighting for focus.
-  const goToSearch = useCallback(async () => {
-    const canvas = canvasRef.current;
-    const input = searchFormRef.current?.querySelector('input');
-    if (!canvas || !input) return;
-    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).usable) {
-      input.focus();
-      return;
-    }
-    // flyTo always routes through cameraAtCell, which adds +0.5 to aim at a
-    // cell's MIDDLE - every other caller flies to a whole cell by its corner
-    // index. `opening` is already a raw camera target, not a cell index (see
-    // useMapCamera's mount-time use of it, unmodified), so that offset has to
-    // be cancelled here or the flight lands half a cell short on each axis.
-    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
-    if (landed) input.focus();
-  }, [flyTo, opening, centreOverlay]);
-  goToSearchRef.current = goToSearch;
 
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
@@ -590,13 +596,6 @@ function Library({ manifest }) {
     () => flyTo(0, 0, config.camera.defaultZoom),
     [flyTo, config]
   );
-  const forgetSearches = useCallback(() => setHistory([]), []);
-
-  // `useCenterShelf` was called before any of these four existed - see the
-  // comment on `shelfActionsRef` above. Now that they do, every book press
-  // reads them through here rather than through a closure that would have
-  // been stale from the moment it was captured.
-  shelfActionsRef.current = { search, enterCatalog, setHelpOpen, forgetSearches };
 
   // Selecting a book on the center room. Off the center cell or on an empty
   // book, nothing happens - the tap is not otherwise claimed.
