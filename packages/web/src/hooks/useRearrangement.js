@@ -16,10 +16,10 @@
  * must not be rebuilt when it changes.
  */
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { buildRearrangement } from '../../map/board.js';
-import { planMoves, applyMove } from '../../map/illusion.js';
-import { CELL_ASPECT, pxPerCell } from './camera.js';
-import { createSlideshow } from './slide.js';
+import { buildRearrangement } from '../../../map/board.js';
+import { planMoves, applyMove } from '../../../map/illusion.js';
+import { CELL_ASPECT, pxPerCell } from '../lib/camera.js';
+import { createSlideshow } from '../lib/slide.js';
 import { prefersReducedMotion } from './useMapCamera.js';
 
 /**

@@ -1,7 +1,7 @@
 /**
  * THIS FILE IS THE TUNING SURFACE for everything decided by feel.
  *
- * The pyramid has its own (`packages/web/src/pyramid.js`) and keeps it: tile
+ * The pyramid has its own (`packages/web/src/lib/pyramid.js`) and keeps it: tile
  * size, the ladder, per-level budgets, the hysteresis band and the prefetch ring
  * are *derived and asserted*, not tuned - restating any of them here would be a
  * second statement of a fact that already has one. What lives here is the other
@@ -31,7 +31,7 @@
  * be exercised at any limits without a disk or a server. `load.mjs` is the part
  * that reads a file.
  */
-import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
 import { CERTAINTY_FLOOR } from '../map/ordering.js';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
@@ -123,7 +123,7 @@ export const DEFAULTS = {
      * The visible cost is the viewport's, not the corpus's - the planner slides
      * only lines that cross the on-camera rectangle, and everything else is an
      * invisible swap - so these numbers set the whole duration and the corpus
-     * size does not enter into it. See `packages/web/src/slide.js` for how a
+     * size does not enter into it. See `packages/web/src/lib/slide.js` for how a
      * plan is laid out in time, and `packages/map/illusion.js` for why the
      * lines of a wave are free to move at once.
      *
@@ -178,7 +178,7 @@ export const DEFAULTS = {
      * Rows per page - the unit BOTH paging modes slice by. Pagination shows one
      * page; infinite scroll keeps a window of them mounted and replaces the
      * rest with spacers. They are one primitive with a different window (see
-     * `packages/web/src/catalog.js`), so this number sets the granularity of
+     * `packages/web/src/lib/catalog.js`), so this number sets the granularity of
      * both and there is deliberately no second one for scrolling.
      */
     perPage: 20,

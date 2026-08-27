@@ -8,7 +8,7 @@
  * y against the traced height, so they carry no aspect of their own. `tile`
  * records the shape they were traced at, because that is the one thing the
  * normalisation throws away and the one thing that has to keep agreeing with
- * BASE_TILE in packages/web/src/pyramid.js.
+ * BASE_TILE in packages/web/src/lib/pyramid.js.
  *
  * Rects are [x, y, w, h].
  */
