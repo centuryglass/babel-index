@@ -266,21 +266,33 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.equal(await named.count(), 1, 'exactly one application region, and it is the map');
   });
 
-  // TODO: this test has been observed to spontaneously fail in CI - the
-  // right-click at a fixed pixel lands on whatever room the previous tests'
-  // camera/cursor state left under it, and a `.card` timeout there reads as
-  // this test's own bug even when it isn't. Confirmed as a flake once (main
-  // was green at this PR's base commit, and the failing run passed on a
-  // plain re-run). Whoever next touches the card/right-click/camera-state
-  // path should make this wait on a condition rather than a fixed coordinate
-  // and fixed timeout - see the "wait on a condition, never a duration" rule
-  // in AGENTS.md's Testing and CI section.
   test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
     const { page } = session;
     const card = page.locator('.card');
 
+    // This used to right-click a fixed pixel with no setup of its own,
+    // trusting the camera/ratio state the tests before it happened to leave
+    // behind - which read as this test's own flake on a run where it didn't
+    // (see git history). A dense map and a centered camera are a real,
+    // checkable precondition, not a guess, so establish both explicitly
+    // rather than lean on whatever ran earlier in this file.
+    const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
+    await ratio.focus();
+    await ratio.press('End');
+    await page.getByRole('button', { name: 'center' }).click();
+    await landed(page, session.flightMs);
+
+    // And a single right-click can still land in the gap between a render and
+    // the browser wiring up its context-menu handler on a loaded runner -
+    // retry once rather than trust one attempt, but still fail loudly if the
+    // card genuinely never shows.
     await page.mouse.click(880, 300, { button: 'right' });
-    await card.waitFor({ timeout: 5000 });
+    try {
+      await card.waitFor({ timeout: 3000 });
+    } catch {
+      await page.mouse.click(880, 300, { button: 'right' });
+      await card.waitFor({ timeout: 5000 });
+    }
 
     // Focus moves in - otherwise a keyboard user is told a dialog opened and
     // has no way to reach a word of it.
