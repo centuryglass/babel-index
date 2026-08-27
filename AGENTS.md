@@ -49,6 +49,11 @@ Linting is minimal:
   as recommended rules bundled in v7 disagree with how we use refs.
 
 ## Layout
+**This map is part of the change.** A file added, removed or renamed here is
+not done until this list says so - the list is how anyone (or anything) finds
+its way around the tree, and one silently missing entry is how a module gets
+written twice.
+
 Tests and test helpers not listed, assume each appropriate file is paired with
 a corresponding {name}.test.mjs within the same directory. Playwright tests
 are in `packages/web/e2e`. Anything under `reference` is only used with the
@@ -79,6 +84,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `src/useMapCamera.js`: React hook for camera changes, inputs entangled with
                            camera controls
     * `src/useMapRenderer.js`: Map frame loop/redraw hook
+    * `src/useMapCursor.js`: The keyboard cursor - where it is, what a reader
+                           hears about it, and every key over the map
     * `src/render.js`: Render a single map frame
     * `src/slide.js`: Room rearrangement animation renderer
     * `src/picking.js`: Defines the roomAtPoint function
