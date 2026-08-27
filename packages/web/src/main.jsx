@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.js';
 import {
@@ -16,8 +16,6 @@ import { HelpDialog } from './HelpDialog.jsx';
 import { alphabeticalOrder } from './catalog.js';
 import { load, save, clear, KEYS } from './persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './touchDebug.js';
-import { buildRearrangement } from '../../map/board.js';
-import { planMoves, applyMove } from '../../map/illusion.js';
 import { roomAtPoint } from './picking.js';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.js';
 import {
@@ -31,18 +29,19 @@ import {
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
 } from './center.js';
-import { CELL_ASPECT, pxPerCell, fitZoom } from './camera.js';
+import { CELL_ASPECT, fitZoom } from './camera.js';
 import { createTileCache, CENTER, genericId } from './tiles.js';
 import { createUrlFor } from './rooms.js';
 import { createRenderer } from './render.js';
-import { createSlideshow, createSlideRenderer } from './slide.js';
+import { createSlideRenderer } from './slide.js';
 import { BASE_TILE } from './pyramid.js';
-import { useMapCamera, prefersReducedMotion } from './useMapCamera.js';
+import { useMapCamera } from './useMapCamera.js';
 import { useMapRenderer } from './useMapRenderer.js';
 import { useMapCursor } from './useMapCursor.js';
 import { useCenterShelf } from './useCenterShelf.js';
 import { useModeTransition } from './useModeTransition.js';
 import { useCorpus } from './useCorpus.js';
+import { useRearrangement } from './useRearrangement.js';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -261,16 +260,6 @@ function Library({ manifest }) {
   // camera it was planned for, which is the one the frame must be drawn at
   // however the live camera has been nudged since.
   const anim = useRef(null);
-  // Set by the two controls that mean "rearrange the library", and consumed by
-  // the effect below. Slider drags change the layout too, and must not animate.
-  const animateNext = useRef(false);
-  const arrangement = useRef(null);
-  // What brought the next rearrangement about, in the search's own voice -
-  // handed to the announcement below rather than pushed into the live region
-  // where it is decided. A search resolves, the map rearranges, and the reader
-  // hears ONE sentence about both; two writes a few hundred milliseconds apart
-  // would be two interruptions describing one event.
-  const pendingNote = useRef('');
   // Which search is the newest one asked for. `search` awaits the server, and
   // nothing stops a second query being submitted while the first is still in
   // the air - a book on the shelf is one click, and the first request of a
@@ -508,166 +497,38 @@ function Library({ manifest }) {
   });
 
   // --- the rearrangement animation -----------------------------------------
-
-  /**
-   * Slide the library from one arrangement into another.
-   *
-   * The camera is parked on the center at the opening zoom first, and stays
-   * there: the plan is made against exactly the cells that are on screen, and
-   * the guarantee it offers - that nothing is ever seen to teleport - is a
-   * guarantee about that rectangle. Returns false when the change cannot be
-   * animated legally, which is the caller's cue to let it happen at once.
-   */
-  const startRearrangement = useCallback(
-    async (before, after) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return false;
-
-      // Someone who asked for less motion gets the library rebuilt at once.
-      // Returning false here is not a special case: it is the same answer
-      // `buildRearrangement` gives for a change that cannot be animated
-      // legally, and the caller already knows what to do with it. So reduced
-      // motion costs one condition and reuses a path that is already written
-      // and already tested, rather than adding a branch of its own.
-      //
-      // Before the flight, deliberately: the fly-home exists to set up the
-      // animation, so with no animation to set up there is no reason to move
-      // the camera - and moving it unasked is itself the thing being avoided.
-      if (prefersReducedMotion()) return false;
-
-      // Hold the old arrangement on screen for the flight. `layout` and `order`
-      // already describe the new one, and without this the map would show it,
-      // fly to it, and only then slide it in from the arrangement it had
-      // already replaced.
-      anim.current = { before };
-
-      // Remembered so the map can return to it once the slide settles - the
-      // fly-home to the default zoom is only there to give the animation a
-      // wall of rooms to work with, and leaving the camera parked there
-      // afterwards fights whatever zoom the reader actually wanted (often
-      // the opening view, to keep using the center tile's controls).
-      const returnZoom = cam.current.zoom;
-
-      // A reader mid-search keeps their place in the field: the fly-home and
-      // the slide both move focus-stealing content under the browser, and
-      // some browsers blur an input whose containing scroll position moves
-      // out from under it. Refocus once the map is done moving rather than
-      // leaving the reader to click back in.
-      const searchInput = searchFormRef.current?.querySelector('input');
-      const hadFocus = !!searchInput && document.activeElement === searchInput;
-
-      // Land before rearranging, rather than racing it: two animations
-      // competing for the same attention and neither lands. It is also a
-      // correctness requirement now that flights ease - the plan is made
-      // against exactly the cells on screen, so it cannot be made until the
-      // camera has stopped moving.
-      const landed = await flyTo(0, 0, config.camera.defaultZoom);
-      if (anim.current?.before !== before) return true; // superseded; not ours to undo
-      if (!landed) {
-        // The reader took the map. Not the moment to rebuild the library.
-        anim.current = null;
-        return false;
+  //
+  // Everything about it - whether a layout/order change animates, what plays
+  // out on screen while it does, and what gets said once it lands - is
+  // `useRearrangement`. `announce` is the one thing it cannot own: which
+  // voice speaks for a change is a fact about which reading is on screen, and
+  // that lives here, not in the hook. The catalog has no map to rearrange, so
+  // it says what happened in its own voice instead - the arrangement sentence
+  // talks about clustering near a center that reading does not have.
+  const announce = useCallback(
+    (note) => {
+      if (mode !== 'map') {
+        setStatus(describeCatalog({ total: order.length, query: result?.term ?? '', note }));
+        return;
       }
-
-      const parked = { ...cam.current };
-      const perCell = pxPerCell(parked);
-      const halfW = canvas.clientWidth / 2 / perCell.x;
-      const halfH = canvas.clientHeight / 2 / perCell.y;
-      const view = {
-        x0: Math.floor(parked.x - halfW), x1: Math.ceil(parked.x + halfW),
-        y0: Math.floor(parked.y - halfH), y1: Math.ceil(parked.y + halfH),
-      };
-
-      const built = buildRearrangement({ before, after, view, aspect: CELL_ASPECT });
-      if (!built) {
-        anim.current = null;
-        return false;
-      }
-
-      const board = { width: built.width, height: built.height, cells: built.start.cells.slice() };
-      const show = createSlideshow({
-        board,
-        moves: planMoves(built.start, built.end, built.bounds, built.fixed),
-        apply: applyMove,
-        timing: config.slide,
-      });
-      anim.current = {
-        before, show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now(),
-      };
-
-      const tick = () => {
-        const running = anim.current;
-        if (!running?.show) return; // interrupted
-        const { done, motions } = running.show.advanceTo(performance.now() - running.t0);
-        running.motions = motions;
-        if (done) {
-          anim.current = null;
-          if (returnZoom !== config.camera.defaultZoom) {
-            flyTo(0, 0, returnZoom).then((landedBack) => {
-              if (landedBack && hadFocus) searchInput.focus();
-            });
-          } else if (hadFocus) {
-            searchInput.focus();
-          }
-        }
-        requestDraw();
-        if (!done) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-      return true;
+      announceArrangement(note);
     },
-    [flyTo, cam, config, requestDraw]
+    [mode, order, result, setStatus, announceArrangement]
   );
 
-  // Every change to what is on the map arrives here. Only the ones a control
-  // asked to be animated are: the sliders change the layout on every drag, and
-  // a rearrangement per frame would be neither legible nor affordable.
-  //
-  // `useLayoutEffect` so the hold is in place before the first paint of the new
-  // arrangement. The drawing effect above calls `render()` when it is set up,
-  // and effects of the same kind run in declaration order - so an ordinary
-  // effect here would paint one frame of the new library before the hold could
-  // stop it.
-  useLayoutEffect(() => {
-    const current = { layout, order };
-    const previous = arrangement.current;
-    arrangement.current = current;
-
-    // In the catalog there is no map on screen to rearrange, and flying a
-    // hidden camera to set up a slide nobody can see would be a second of
-    // nothing. The map's `layout` and `order` still updated, so returning to it
-    // simply shows the new arrangement at once - which is not a new path but
-    // the one `buildRearrangement` already takes when a change cannot be
-    // animated legally.
-    //
-    // The catalog says what happened in its own voice instead: the arrangement
-    // sentence talks about clustering near a center this reading does not have.
-    if (mode !== 'map') {
-      animateNext.current = false;
-      const note = pendingNote.current;
-      pendingNote.current = '';
-      setStatus(describeCatalog({ total: order.length, query: result?.term ?? '', note }));
-      return;
-    }
-
-    if (!animateNext.current || !previous) {
-      requestDraw();
-      return;
-    }
-    animateNext.current = false;
-    startRearrangement(previous, current).then((started) => {
-      if (!started) requestDraw();
-      // Announce the arrangement this effect was for, and only if it is still
-      // the one on the map: `startRearrangement` reports true for a run that
-      // was superseded mid-flight as well as for one that got going, and the
-      // effect for the newer arrangement will announce that one itself.
-      if (arrangement.current === current) {
-        const note = pendingNote.current;
-        pendingNote.current = '';
-        announceArrangement(note);
-      }
-    });
-  }, [layout, order, startRearrangement, requestDraw, announceArrangement, mode, result]);
+  const { requestAnimation } = useRearrangement({
+    layout,
+    order,
+    mode,
+    canvasRef,
+    searchFormRef,
+    cam,
+    flyTo,
+    requestDraw,
+    config,
+    anim,
+    announce,
+  });
 
   // --- search --------------------------------------------------------------
   //
@@ -684,12 +545,11 @@ function Library({ manifest }) {
     // done before the first await so that a clear - which needs none of what
     // follows - still supersedes a query in flight.
     const seq = ++searchSeq.current;
-    // Both branches rearrange the library - clearing the box restores the
-    // uniform map, which is as much a rearrangement as finding something is.
-    animateNext.current = true;
     if (!term.trim()) {
+      // Both branches rearrange the library - clearing the box restores the
+      // uniform map, which is as much a rearrangement as finding something is.
+      requestAnimation('');
       setResult(null);
-      pendingNote.current = '';
       return;
     }
     // A real search is a history entry, and the frontmost book from now on. Done
@@ -706,12 +566,9 @@ function Library({ manifest }) {
       res = await response.json();
     } catch (e) {
       if (seq !== searchSeq.current) return;
-      // Nothing rearranged, so the effect that normally speaks for a search
-      // will not run - this is the one path that has to write the live region
-      // itself. The flag has to be cleared with it, or the next slider drag
-      // inherits an animation this search asked for and never used.
-      animateNext.current = false;
-      pendingNote.current = '';
+      // Nothing rearranged - no `requestAnimation` was ever made for this
+      // search - so this is the one path that has to write the live region
+      // itself.
       setStatus(`the search could not be run - ${e.message}. The library is unchanged.`);
       return;
     }
@@ -737,7 +594,7 @@ function Library({ manifest }) {
         index: searchIndex,
         clipCertainty: { low: config.search.density.clipLow, high: config.search.density.clipHigh },
       });
-      pendingNote.current = describeSignals(signals, Boolean(searchIndex));
+      requestAnimation(describeSignals(signals, Boolean(searchIndex)));
       // `term`, not the live `query`: the box changes on every keystroke and
       // the ranking does not, so anything derived from "what was searched for"
       // - the highlight ranges especially - has to read the submitted term or
@@ -746,7 +603,7 @@ function Library({ manifest }) {
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
-      pendingNote.current = 'stub ranking — no embeddings and no keywords in this corpus';
+      requestAnimation('stub ranking — no embeddings and no keywords in this corpus');
       // No breakdown: a hash-ordered stub has no signals to explain, and an
       // explanation of a ranking nothing decided would be an invented one.
       setResult({ order: res.order, certainty: null, breakdown: null, signals: null, term });
@@ -839,13 +696,13 @@ function Library({ manifest }) {
   // change to animate, which is a fact about this file's machinery and not
   // something a presenter should have to know.
   const reorder = useCallback(() => {
-    animateNext.current = true;
+    requestAnimation('');
     setOrderSeed((s) => s + 1);
-  }, []);
+  }, [requestAnimation]);
   const rescatter = useCallback(() => {
-    animateNext.current = true;
+    requestAnimation('');
     setSeed((s) => s + 1);
-  }, []);
+  }, [requestAnimation]);
   const recentre = useCallback(
     () => flyTo(0, 0, config.camera.defaultZoom),
     [flyTo, config]
