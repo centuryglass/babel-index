@@ -79,6 +79,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `src/pyramid.js`: Manage room tile resolution options and cache budgets
     * `src/rooms.js`: Map room data in the manifest to image URLs
     * `src/tiles.js`: Load, cache, and unload room images
+    * `src/useCorpus.js`: Load the metadata sidecar and embedding blob, build
+                          the search index
   - Map interface:
     * `src/MapView.jsx`: The 2D map canvas view
     * `src/RoomCard.jsx`: RoomDetails popup, shown on right-click/long press
