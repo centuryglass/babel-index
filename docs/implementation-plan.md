@@ -35,6 +35,23 @@ serve as completed task history.
 ## Hosting:
 - Price out what it'll cost to host somewhere I can target with Terraform CD,
   compare with the hassle of just kludging it onto my VPS with other projects.
+- The CORS follow-up for `--remote` mode is done: `infra/r2.tf`'s
+  `cloudflare_r2_bucket_cors` (schema confirmed against the provider version
+  pinned in `versions.tf`) covers `embeddings.bin`/`metadata.json`'s
+  cross-origin `fetch()` calls. Set `app_origins` in `terraform.tfvars` and
+  apply before relying on `--remote` mode in production - not yet applied or
+  tested against a real Cloudflare zone.
+- Search on a cheap VPS: `/api/search` runs the CLIP text tower per request
+  with no concurrency cap and no cache, so a burst of distinct queries piles
+  up on however many threads `onnxruntime-node` uses, each paying full
+  inference cost. Add an LRU cache keyed on `(query, dtype)` since repeat
+  searches are common, and bound concurrency with a small queue sized to CPU
+  cores so a burst degrades to latency instead of thrashing the CPU.
+- The Cloudflare abuse protection in `infra/abuse-protection.tf` only scopes
+  `assets_hostname` (the R2 bucket). `/api/search` is a much better DoS target
+  than static asset serving - it's CPU-bound ML inference on an unprotected
+  origin. Add a second ruleset (rate limit + short-TTL cache keyed on the
+  query string) scoped to the app's hostname for that endpoint specifically.
 
 ## Architecture:
 - **Split up `packages/web/src/main.jsx`.** It holds 19 pieces of state, 18

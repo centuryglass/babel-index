@@ -86,3 +86,20 @@ variable "billing_alert_limit_usd" {
   type        = number
   default     = 5
 }
+
+# --- CORS ---
+#
+# Bucket-level, so this applies regardless of enable_zone_protections and
+# works even against the bare *.r2.dev url - unlike the WAF/cache rules above,
+# it needs no zone. It exists because packages/server/remote.mjs points the
+# --remote-mode manifest's urls straight at this bucket, and two of them
+# (embeddings.bin, metadata.json) are read with `fetch()` in
+# packages/web/src/main.jsx rather than an <img> tag - fetch() enforces CORS
+# cross-origin, an <img> tag does not, so the room tiles work with no CORS
+# rule at all but those two requests fail silently without one.
+
+variable "app_origins" {
+  description = "Origins allowed to fetch embeddings.bin/metadata.json cross-origin from the R2 bucket (e.g. [\"https://babel.example.com\", \"http://localhost:5173\"] for prod plus local --remote testing). Leave empty to skip the CORS resource entirely - harmless until the demo server actually runs in --remote mode against this bucket."
+  type        = list(string)
+  default     = []
+}
