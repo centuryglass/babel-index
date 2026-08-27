@@ -37,10 +37,21 @@ npm run generate:mips -- --images <dir>    # write the resolution pyramid in pla
 node tools/center-placement/import-shelf-svg.mjs tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
 ```
 
-There is no build step or bundler config. The demo server bundles the client
-with esbuild in-process at startup (`packages/server/index.mjs`), so editing
-web sources means restarting `npm run demo`. Demo run will fail if its port is
-in use.
+No compiled output ever hits disk. The demo server bundles the client with
+esbuild in-process at startup (`packages/server/index.mjs`), so editing web
+sources means restarting `npm run demo`. Demo run will fail if its port is in
+use.
+
+Every `npm run` script that invokes `node` directly passes
+`--import ./build/register.mjs` (see `build/ts-loader.mjs`) so `.ts`/`.tsx`
+sources run exactly like `.mjs`/`.jsx` - no separate compile step, no `dist/`
+to keep in sync with the tree Layout describes below. It hooks Node's ESM
+loader and runs every `.ts`/`.tsx` module through `esbuild`'s `transform` in
+memory, once per process per module - this is what makes a full TypeScript
+migration possible on the Node 20 floor (`engines`), which cannot run `.ts`
+natively (type-stripping is Node 22.6+ experimental, 23.6+ default). Calling a
+script directly with plain `node` instead of through `npm run` skips the hook
+and fails to import any `.ts` file with `ERR_UNKNOWN_FILE_EXTENSION`.
 
 Linting is minimal:
 - The usual recommended JS rules
@@ -60,12 +71,19 @@ a corresponding {name}.test.mjs within the same directory. Playwright tests
 are in `packages/web/e2e`. Anything under `reference` is only used with the
 inpainting pipeline, and isn't touched anywhere else in the project.
 
+### Build:
+- `build`: the Node-side TypeScript hook (see Commands above) - not a bundler,
+           nothing here touches `packages/web`'s client bundle
+  * `register.mjs`: what every `node`-invoking npm script passes to `--import`
+  * `ts-loader.mjs`: the ESM `load` hook that runs `.ts`/`.tsx` through
+                     esbuild's `transform` in memory
+
 ### Client/Server code:
 - `packages/server`: the demo server
   * `index.mjs`: CLI
   * `app.mjs`: Express setup, manifest/rescan/search/images endpoints
   * `scan.mjs`: Image tile directory loading
-  * `port.mjs`: portInUse helper function
+  * `port.ts`: portInUse helper function
   * `search-cache.mjs`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
@@ -177,22 +195,44 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ## Conventions
 
 - **ESM everywhere** (`"type": "module"`). `.mjs` for anything Node runs
-  directly, `.js` for modules the browser bundles, `.jsx` for React.
-  Import Node built-ins with the `node:` prefix.
+  directly, `.js` for modules the browser bundles, `.jsx` for React, `.ts`/
+  `.tsx` as the TypeScript equivalent of any of those three (see the
+  TypeScript migration note below for how each runs). Import Node built-ins
+  with the `node:` prefix, and always give an internal import its real file
+  extension (`./port.ts`, not extensionless) - Node's resolver doesn't guess.
 - **Node 20 is the floor** (`engines`), and CI runs 20/22/24. Get user
   confirmation before adding dependencies, try to keep dependencies minimal.
-- **TypeScript is coming in as type-only `.ts` contracts, not as a build step.**
-  `packages/map/manifest.ts` (the corpus manifest's shape) is the first: a
-  `.ts` file exporting only `interface`s, never imported by a `.js`/`.mjs`/`.jsx`
-  file at runtime - only through JSDoc (`@type {import('./manifest.ts').Manifest}`).
-  `tsc --noEmit` (`npm run typecheck`) is what actually checks it, so it needs
-  no esbuild/Node loader support and adds no build step. Cross-module data
-  shapes (a manifest, a room, a search result) are the right candidates for
-  this; application logic staying `.js`/`.mjs` with JSDoc is not otherwise
-  affected. `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local
-  signal, not yet a CI gate - see `docs/implementation-plan.md` for what it has
-  and hasn't caught so far. Writing accurate JSDoc on new code in the pure
-  packages is always welcome.
+- **This codebase is migrating to TypeScript, file by file, not all at once.**
+  `.js`/`.mjs`/`.jsx` and `.ts`/`.tsx` are expected to coexist for a long
+  stretch, and that is fine - there is no deadline and no "temporary" framing
+  to a file that hasn't moved yet. Convert a file when you are already in it
+  for another reason, or when its shape is a good candidate (see below); don't
+  go rename files solely to convert them unless asked. Two kinds of file so
+  far:
+  - **A pure type contract** (`packages/map/manifest.ts`): a `.ts` file
+    exporting only `interface`s/`type`s, never imported by a `.js`/`.mjs`/`.jsx`
+    file at runtime - only through JSDoc (`@type {import('./manifest.ts').Manifest}`).
+    `tsc --noEmit` (`npm run typecheck`) is what checks it.
+  - **A real module** (`packages/server/port.ts`): runs at runtime like any
+    other source file, through the Node loader hook in `build/` (see
+    Commands above) or through esbuild's client bundle in `packages/web`.
+    Prefer converting a file outright over leaving new TSDoc-only types on a
+    `.js` file once its neighbors are already `.ts` - two type notations for
+    one module is the drift this migration exists to remove.
+
+  Good early candidates: files with little duck-typing and a fixed shape
+  (`port.ts` was one - one function, two primitive params). Defer files whose
+  data is *deliberately* loose - `metadata.js`'s "liberal about shape" sidecar
+  parsing, `center.js`'s runtime-computed `RUNS`, `slide.js`/`camera.js`'s
+  animation state shapes - until there's a real type worth writing that
+  doesn't just paper over the looseness with `any` or a lying assertion. A
+  strict type that fights the code's actual tolerance is worse than an honest
+  `object`/JSDoc.
+
+  `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local signal, not
+  yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't
+  caught so far. Writing accurate JSDoc on new `.js`/`.mjs` code is still
+  welcome; it's what the next conversion reads from.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so new files need no
   wiring. e2e files are `*.e2e.mjs`, intentionally skipping the pattern.
