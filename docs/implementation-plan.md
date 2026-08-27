@@ -39,12 +39,6 @@ serve as completed task history.
   cross-origin `fetch()` calls. Set `app_origins` in `terraform.tfvars` and
   apply before relying on `--remote` mode in production - not yet applied or
   tested against a real Cloudflare zone.
-- Search on a cheap VPS: `/api/search` runs the CLIP text tower per request
-  with no concurrency cap and no cache, so a burst of distinct queries piles
-  up on however many threads `onnxruntime-node` uses, each paying full
-  inference cost. Add an LRU cache keyed on `(query, dtype)` since repeat
-  searches are common, and bound concurrency with a small queue sized to CPU
-  cores so a burst degrades to latency instead of thrashing the CPU.
 - The Cloudflare abuse protection in `infra/abuse-protection.tf` only scopes
   `assets_hostname` (the R2 bucket). `/api/search` is a much better DoS target
   than static asset serving - it's CPU-bound ML inference on an unprotected

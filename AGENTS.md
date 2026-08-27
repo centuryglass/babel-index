@@ -65,6 +65,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `app.mjs`: Express setup, manifest/rescan/search/images endpoints
   * `scan.mjs`: Image tile directory loading
   * `port.mjs`: portInUse helper function
+  * `search-cache.mjs`: LRU cache and concurrency limiter backing `/api/search`'s
+                        CLIP text tower calls
 - `packages/web`: browser-side code (only place DOM is expected)
   - General purpose:
     * `index.html`: HTML entry point, static page structure
