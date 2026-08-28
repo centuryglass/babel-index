@@ -207,7 +207,7 @@ export function tokenise(text, { minLength = 3, stopwords = true } = {}) {
  * lookups. Rooms without metadata stay null, so the array is still indexed by
  * room id.
  *
- * @param {(import('./metadata.js').RoomMeta|null)[]} joined output of `joinMetadata()`
+ * @param {(import('./metadata.ts').RoomMeta|null)[]} joined output of `joinMetadata()`
  * @returns {import('./searchResult.ts').SearchIndex}
  */
 export function buildSearchIndex(joined) {

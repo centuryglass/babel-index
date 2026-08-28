@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, basename, resolve } from 'node:path';
 import { mipPlan } from '../pipeline/layout.mjs';
-import { metadataCoverage } from '../map/metadata.js';
+import { metadataCoverage } from '../map/metadata.ts';
 import type { ImageSize, Manifest, Room, SharedAsset, SharedAssets, LevelInfo } from '../map/manifest.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -17,7 +17,7 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 export const IMAGES_BASE = '/images';
 export const SHARED_BASE = '/shared';
 
-/** The keyword/story sidecar, written by the generator. See packages/map/metadata.js. */
+/** The keyword/story sidecar, written by the generator. See packages/map/metadata.ts. */
 export const METADATA_FILE = 'metadata.json';
 
 /**

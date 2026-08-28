@@ -20,10 +20,10 @@
  * looks identical from the map. `scan.mjs` reports both numbers so the two can
  * be told apart.
  *
- * ### Liberal about shape
+ * ### `keywords` is a fixed shape
  *
- * Keywords may be plain strings or `{text, type}` objects; both normalise to the
- * same record. The count is not enforced - "exactly three" is a fact about how
+ * Every keyword is a `{text, type}` record - the generator always writes it
+ * that way. The count is not enforced - "exactly three" is a fact about how
  * the corpus is generated, not a constraint the map needs, and rejecting a room
  * with two would lose real data to a rule nothing here depends on.
  *
@@ -46,30 +46,37 @@
  * with two consumers is what keeps those two from drifting.
  */
 
-/**
- * @typedef {object} RoomMeta
- * @property {{text: string, type: string|null}[]} keywords
- * @property {string|null} story
- * @property {string|null} alt
- */
+/** One keyword, as the generator writes it. */
+export interface Keyword {
+  text: string;
+  type: string | null;
+}
+
+/** One room's normalised sidecar entry. */
+export interface RoomMeta {
+  keywords: Keyword[];
+  story: string | null;
+  alt: string | null;
+}
 
 /**
  * Normalise one sidecar entry.
  *
- * @param {unknown} raw
- * @returns {RoomMeta|null}
- *   null when there is nothing usable, so "has metadata" stays a real question
+ * @param raw parsed JSON, of whatever shape the sidecar file actually holds
+ * @returns null when there is nothing usable, so "has metadata" stays a real question
  */
-export function normaliseEntry(raw) {
+export function normaliseEntry(raw: unknown): RoomMeta | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const entry = /** @type {Record<string, unknown>} */ (raw);
+  const entry = raw as Record<string, unknown>;
 
-  const keywords = [];
+  const keywords: Keyword[] = [];
   if (Array.isArray(entry.keywords))
     for (const k of entry.keywords) {
-      const text = typeof k === 'string' ? k : typeof k?.text === 'string' ? k.text : '';
-      const trimmed = text.trim();
-      if (trimmed) keywords.push({ text: trimmed, type: typeof k?.type === 'string' ? k.type : null });
+      if (!k || typeof k !== 'object') continue;
+      const text = typeof (k as Record<string, unknown>).text === 'string' ? ((k as Record<string, unknown>).text as string).trim() : '';
+      if (!text) continue;
+      const type = typeof (k as Record<string, unknown>).type === 'string' ? ((k as Record<string, unknown>).type as string) : null;
+      keywords.push({ text, type });
     }
 
   const story = typeof entry.story === 'string' && entry.story.trim() ? entry.story.trim() : null;
@@ -84,20 +91,21 @@ export function normaliseEntry(raw) {
 /**
  * Join a sidecar onto the corpus, by filename.
  *
- * @param {import('./manifest.ts').Room[]} rooms the manifest's rooms
- * @param {unknown} sidecar parsed `metadata.json`
- * @returns {(RoomMeta|null)[]} indexed by room id; null where a room has none
+ * @param rooms the manifest's rooms
+ * @param sidecar parsed `metadata.json`
+ * @returns indexed by room id; null where a room has none
  */
-export function joinMetadata(rooms, sidecar) {
-  const byId = new Array(rooms.length).fill(null);
+export function joinMetadata(rooms: import('./manifest.ts').Room[], sidecar: unknown): (RoomMeta | null)[] {
+  const byId: (RoomMeta | null)[] = new Array(rooms.length).fill(null);
   if (!sidecar || typeof sidecar !== 'object') return byId;
+  const table = sidecar as Record<string, unknown>;
 
   for (const room of rooms) {
     // hasOwn rather than a bare lookup, for a corpus containing a file called
     // `constructor` or `toString`. Defensive rather than load-bearing: every
     // Object.prototype member normalises to null anyway, so this is style, and
     // there is deliberately no test pinning it - one could not fail.
-    if (Object.hasOwn(sidecar, room.file)) byId[room.id] = normaliseEntry(sidecar[room.file]);
+    if (Object.hasOwn(table, room.file)) byId[room.id] = normaliseEntry(table[room.file]);
   }
   return byId;
 }
@@ -108,12 +116,11 @@ export function joinMetadata(rooms, sidecar) {
  * The pair is the point: `matched` far below `entries` means the sidecar is
  * describing files this corpus does not have, which reads exactly like having
  * no metadata unless someone says so.
- *
- * @param {import('./manifest.ts').Room[]} rooms
- * @param {unknown} sidecar
- * @returns {{matched: number, entries: number}}
  */
-export function metadataCoverage(rooms, sidecar) {
+export function metadataCoverage(
+  rooms: import('./manifest.ts').Room[],
+  sidecar: unknown
+): { matched: number; entries: number } {
   const joined = joinMetadata(rooms, sidecar);
   return {
     matched: joined.filter(Boolean).length,
