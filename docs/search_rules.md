@@ -7,6 +7,11 @@ behavior that the implementation (`packages/map/scoring.js`, `packages/map/order
 `packages/config/config.ts`) has to satisfy. It supersedes every earlier draft of
 this file.
 
+This describes the finished behavior, not the code as it stands today. Where the
+two differ — and they do, in named ways — the gap and the steps to close it live
+in [`docs/search-plan.md`](search-plan.md), so this file can stay a clean
+statement of the target rather than a running diff against the present.
+
 ## Overview: one evaluation, two questions
 
 A search asks each room in the corpus the same three questions - does the query
@@ -19,10 +24,12 @@ hold onto while reading the rest of this document:
   for this query on this corpus". It sorts the whole corpus into one order. A
   weighted sum, not a tiered bucket sort - see "One sort, not tiers" below.
 - **Certainty** answers "how sure are we that this is a real match, in absolute
-  terms, independent of what anything else in the corpus scored". It drives the
-  map's density gradient (rooms the search is sure about cluster near the
-  center; rooms it isn't stay scattered at the baseline) and the percentages the
-  UI reports.
+  terms, independent of what anything else in the corpus scored". One signed
+  number in `[-1, 1]`: positive is confidence the room matches, `0` is no
+  opinion, negative is confidence it does *not*. It drives the map's density
+  gradient (rooms the search is sure about cluster near the center; rooms it
+  isn't stay scattered at the baseline - only the positive side clusters) and
+  the percentages the UI reports. Its full definition is "Computing certainty".
 
 These can't be answered from the same number, because ranking is *relative* -
 some room is always the best match for any query, including a nonsense one - and
@@ -110,18 +117,23 @@ RoomMatch = {
   tagPartialSum: number,      // sum of best-substring fractions over every term
                                // that matched partially (not exactly) - a SUM,
                                // not an average; see the tag assertions for why
-  storyRatio: number,          // matched story chars / query chars, in [0, 1]
-  storyMatchedChars: number,    // absolute count - what tells "cat" apart from
-                                 // a whole matched sentence, which storyRatio can't
+  storyRatio: number,          // matched story chars / query chars, in [0, 1] -
+                                // a RANKING input; certainty reads the length below
+  storyLongChars: number,       // longest CONTIGUOUS run of matched query words,
+                                 // in chars - what tells "cat" (short, moderate
+                                 // certainty) from a whole matched clause (100%)
   clipCosine: number | null,     // raw cosine against this room's image, or null
   clipNorm: number,                // clipCosine min-max normalised across every
                                      // room FOR THIS QUERY - always 1 for the
                                      // best-matching room, whatever the query was
-  clipCertaintyGate: number,        // clipCosine placed against CLIP_MATCH_BAND,
-                                     // in [0, 1] - see "Calibrating CLIP" below
+  clipCertaintyGate: number,        // clipCosine placed against the match band,
+                                     // in [0, 1] - the positive half of the signed
+                                     // certainty curve, see "Image-content" below
   score: number,                     // the one weighted sum ranking sorts by
-  certainty: number,                  // the one absolute [0, 1] the density
-}                                      // gradient and the UI's "how sure" reads
+  certainty: number,                  // the one absolute [-1, 1] the density
+}                                      // gradient and the UI's "how sure" reads -
+                                       // negative is "sure it does NOT match", see
+                                       // "Computing certainty"
 ```
 
 ### 4. The corpus-wide result
@@ -163,15 +175,15 @@ column never touches placement.
   credit from the quoted phrase, because the phrase never appears as a
   contiguous run in either one. Quoting an unquoted-equivalent single word
   (`"art"`) changes nothing.
-- **Story text does not understand quotes yet.** `buildSearchIndex` keeps only
-  a lemmatised `Set<string>` for a room's story - no order, no adjacency - so
-  there is nothing in the index a phrase's word-order could be checked against.
-  A quoted phrase's words still count toward story matching individually,
-  exactly as if the query had been unquoted. Real phrase-in-story matching
-  needs the index to keep something closer to the raw text and a substring
-  search at query time (the same shape `storyMatchRanges` already builds for
-  highlighting, generalised into a score) - a real architecture change, not a
-  parsing change, and out of scope here.
+- **A quoted phrase matches the story as an ordered run too.** The story is
+  indexed as the lemmatised token *sequence*, positions kept, so a phrase is
+  checked against the story the same way it is against a keyword: the phrase's
+  words must appear consecutively (by lemma), not merely somewhere in the room.
+  This is the same machinery the "long story match" rule needs - a contiguous
+  run of matched query words - so quoted phrases get story credit for free once
+  that exists, rather than being a special case. (The word-set index this
+  replaces, and why the change is an architecture change rather than a parsing
+  one, is `docs/search-plan.md` §3.)
 
 ## Assertions
 
@@ -261,23 +273,30 @@ unusually sure of itself.
 contributing the full `S = 0.4`. Since a "highly certain" CLIP match
 contributes at least `0.5` (`clip * clipCertaintyGate >= 1 * 0.5`), it still
 wins - but nothing short of that threshold (roughly the top of the corpus's
-ordinary cosine range, see "Calibrating CLIP" below) can beat the bare word
+ordinary cosine range, see "Image-content (CLIP) matching" below) can beat the bare word
 match. This is the same inequality as the partial-tag rule above, from the
 story side.
 
 **A long story match - most or all of a matched sentence - outranks every CLIP
-match and every partial tag match, at once, unconditionally.**
-*Enforcement:* `storyMatchedChars` (the absolute count of matched characters,
-not the query-relative ratio) feeds a saturating bonus:
-`storyLongBonus = clamp01((storyMatchedChars - 16) / (40 - 16))`. Below 16
-matched characters (roughly one or two words) the bonus is exactly zero;
-by 40 (roughly a full clause) it saturates at `L = 2`, and `L` is set above
-`clip + tagPartial` (`2 > 1 + 0.45 = 1.45`) - so it wins even against a room
-that is simultaneously CLIP's top, fully-confident pick AND has a maxed-out
-partial tag match.
+match and every partial tag match, at once, unconditionally.** "Long" means
+*contiguous*: a run of query words found consecutively in the story, not the same
+words scattered across it. `cat dog bird fish` hitting four unrelated sentences is
+not a long match; `a room walled in glass` found as one phrase is.
+*Enforcement:* `storyLongChars` (the character length of the longest contiguous
+run of matched query words, by lemma - not the query-relative ratio, and not a
+sum over scattered hits) feeds a saturating bonus:
+`storyLongBonus = clamp01((storyLongChars - 16) / (40 - 16))`. Below 16 matched
+characters (roughly one or two words) the bonus is exactly zero; by 40 (roughly a
+full clause) it saturates at `L = 2`, and `L` is set above `clip + tagPartial`
+(`2 > 1 + 0.45 = 1.45`) - so it wins even against a room that is simultaneously
+CLIP's top, fully-confident pick AND has a maxed-out partial tag match. Measuring
+a contiguous run needs the story indexed as an ordered token sequence, not a set
+(`docs/search-plan.md` §3).
 
-**Quoted phrases get no special story treatment (yet).** See Feature additions
-- a quoted phrase's words score against the story exactly as if unquoted.
+**A quoted phrase is one contiguous story match, same as one keyword match.**
+`"art nouveau"` credits the story only where those two words appear consecutively,
+feeding `storyLongChars` as a single run - the same ordered-run test the long-match
+rule above already makes, so quoting adds no new story mechanism.
 
 ### Image-content (CLIP) matching
 
@@ -295,53 +314,116 @@ real signal has every raw cosine sitting low against those bounds, so
 - whatever `clipNorm` says.
 
 **"Reasonably certain" and "highly certain" are calibrated against this
-corpus, not guessed.** These phrases appear in the tag and story rules above
-and need one precise meaning.
-*Enforcement:* `clipCertaintyGate = clamp01((clipCosine - CLIP_MATCH_BAND.low)
-/ (CLIP_MATCH_BAND.high - CLIP_MATCH_BAND.low))`, and "reasonably/highly
-certain" means `clipCertaintyGate >= 0.5`. `CLIP_MATCH_BAND` is calibrated from
-`tools/embed/cosine-range.ts` run against known-near-universal keywords for
-this corpus (`bookshelf`, `book`, `library`, `shelf`, ... - words true of
-nearly every room) rather than off percentiles of the whole keyword list: the
-whole-list percentile approach silently assumed "most pairs are unrelated",
-which turned out to be wrong for common, genuinely-true words (`book` scored
-below the naive 90th-percentile "noise" cutoff on real, correct matches). The
-measured band is `{ low: 0.217, high: 0.279 }` - the floor is the *weakest*
-p10 across every universal keyword tried (conservative, since different
-phrasings sit at different absolute cosines - see the cosine-stats.ts
-docstring), the ceiling is the *median* p50 across them.
+corpus's cosine DISTRIBUTION, not guessed.** These phrases appear in the tag
+and story rules above and need one precise meaning.
+*Enforcement:* they read off the same signed certainty curve "Computing
+certainty" defines. The curve's `0` is the *no-opinion centre* of the measured
+cosine distribution - the cosine an unrelated query lands at, where CLIP is
+neither confirming nor denying - and `+1` is the high extreme a genuine match
+reaches. `clipCertaintyGate` is the positive half of that curve read back into
+`[0, 1]`, and "reasonably/highly certain" means `clipCertaintyGate >= 0.5`. The
+anchors are measured by `tools/embed/cosine-range.ts`, not chosen: the match
+ceiling comes from known-near-universal keywords for this corpus (`bookshelf`,
+`book`, `library`, `shelf`, ... - words true of nearly every room) rather than
+off percentiles of the whole keyword list, because the whole-list percentile
+approach silently assumed "most pairs are unrelated", which turned out wrong for
+common, genuinely-true words (`book` scored below the naive 90th-percentile
+"noise" cutoff on real, correct matches). The current calibration puts the gate's
+low at `0.217` (the *weakest* p10 across every universal keyword tried,
+conservative because different phrasings sit at different absolute cosines - see
+the cosine-stats.ts docstring, just above the noise centre of `≈ 0.205`) and its
+high at `0.279` (the *median* p50 across them). The distribution the anchors are
+read from, and the mean-centring that might sharpen it, are `docs/search-plan.md`
+§§5-7.
 
 ### Balancing signals against each other
 
 **Nothing here is a hard tier - every guarantee above is one inequality inside
-a single weighted sum.** See "One sort, not tiers" in the overview. Every
-constant referenced above (`E=5, P=0.45, C=1, S=0.4, L=2`) was chosen
-specifically so each rule's inequality holds with real margin, not just at the
-boundary - re-tuning any one of them requires re-checking the others' margins,
-not just eyeballing the new number in isolation.
+a single weighted sum.** See "One sort, not tiers" in the overview.
 
-### Certainty and reporting
+**These five constants ARE the search weights, not a separate accounting.**
+`E=5` (per exact tag), `P=0.45` (partial-tag budget), `S=0.4` (full short-story
+match), `L=2` (long contiguous-story bonus) and `C=1` (CLIP) are exactly what
+`config.search.weights` carries - the target replaces the three-way
+`{keyword, story, clip}` it holds today with this five-way
+`{tagExact, tagPartial, story, storyLong, clip}` shape, because the exact/partial
+and short/long distinctions each need their own weight for the inequalities to
+hold. Each was chosen so its rule's inequality holds with real margin, not just
+at the boundary, so re-tuning any one requires re-checking the others' margins
+rather than eyeballing it alone. (The current three weights, and why the
+inequalities are false under them, are `docs/search-plan.md` §2.)
 
-**CLIP's reported certainty is a percentage that can reach either extreme.**
-Unlike the internal "reasonably certain" band above, the number shown to a
-reader spans the full range this model has ever produced on this corpus, so a
-truly extreme match or mismatch can still read as close to 100%/-100%.
-*Enforcement:* the displayed percentage uses a separate, wider band,
-`CLIP_DISPLAY_RANGE = { low: -0.08, high: 0.37 }` - padded just past the
-measured global extremes (`-0.060` to `0.346`, stable across two independently
-measured corpora) rather than the tight `CLIP_MATCH_BAND` used for ranking
-decisions. The two bands answer different questions (see the overview) and
-must not be merged into one.
+### Computing certainty
+
+Ranking asked "which room is most like the query"; certainty asks the different
+question the overview names - "how sure are we this is a real match, in absolute
+terms" - and the density gradient and the "how sure" UI both read its answer.
+It is one signed number in `[-1, 1]`: positive is confidence the room matches,
+`0` is no opinion, negative is confidence it does *not*. It is built from the
+same evaluation ranking uses, but from each signal's *absolute* reading, never
+the query-normalised one.
+
+**Certainty is a signed soft-OR of the three absolute readings.** Any one signal
+can carry it alone - an exact tag is certain whatever CLIP thinks of the picture -
+and two weak agreeing signals count for more than either alone.
+*Enforcement:* three inputs, each in `[0, 1]`, plus CLIP's negative half:
+- `K` (tags), **coverage-scaled**: each query term contributes `1` if it exactly
+  equals a keyword, its substring fraction if it only partially matches, or `0`,
+  and `K` is the mean of those over the query's terms. So a query wholly covered
+  by exact tags is `1`, one exact term among several is high but not `1`, and a
+  lone partial match is moderate - which is what "an exact tag pushes certainty
+  to 100%" has to mean once a query can have terms an exact tag does not cover.
+- `S` (story), from **absolute matched length**, not the query-relative
+  `storyRatio` ranking uses: `S = STORY_FLOOR + (1 - STORY_FLOOR) x storyLongBonus01`
+  when any story word matched, where `storyLongBonus01 = clamp01((storyLongChars
+  - 16) / (40 - 16))` is the same contiguous-run curve the ranking bonus reads.
+  A single matched word sits at the moderate `STORY_FLOOR`; a full matched clause
+  reaches `1`. Using `storyRatio` here instead would make a one-word query that
+  matches read as 100% certain, which is the bug this rule exists to avoid.
+- `Cpos` / `Cneg` (CLIP), the positive and negative halves of the signed curve
+  below: `Cpos = max(0, signedClip)`, `Cneg = max(0, -signedClip)`.
+
+The positive certainty is the soft-OR `pos = 1 - (1 - K)(1 - S)(1 - Cpos)`, and
+the signed result is `pos` when any positive signal fired, else `-Cneg`. A room
+with real text evidence is never reported as a mismatch just because CLIP is cool
+on its picture - the negative reading is only reached when nothing positive
+contradicts it. With no embedding blob `Cpos = Cneg = 0` and certainty is
+text-only; with no metadata `K = S = 0` and certainty is CLIP-only, free to go
+negative.
+
+**Certainty need not be monotone with rank; the map makes it so.** The blend
+above can hand back a later rank a higher certainty than an earlier one (they
+sort on `score`, not on this). `ordering.ts`'s density ramp takes the running
+minimum down the ranks and snaps anything under `CERTAINTY_FLOOR` to the
+baseline, so density still falls monotonically outward - certainty does not have
+to arrive that way. Only the positive part feeds the gradient: a mismatch is not
+a reason to cluster a room toward the center.
+
+### Reporting
+
+**CLIP's reported certainty is a signed percentage anchored on the
+distribution's no-opinion centre.** The number shown to a reader is the signed
+curve above rendered as a percentage: `0` at the cosine an unrelated query lands
+at, rising toward `+100%` at the high extreme a genuine match reaches, and - for
+the rare cosine that falls *below* the no-opinion centre - toward `-100%`.
+*Enforcement:* a monotone map with three measured anchors (no-opinion centre,
+high extreme, low extreme) rather than one linear band from a hand-set floor. A
+signed transform of the measured noise CDF is the natural shape; `cosine-stats.ts`
+computes the percentiles it reads. Most of the negative percentage range maps
+onto *low-positive* cosines - text→image cosines almost never actually go below
+zero on this corpus (global min `-0.060` across 4.4M pairs) - so a "does not
+match" reading is a cosine well under the noise centre, not a negative cosine.
 
 **CLIP is never reported as completely certain, in either direction.** The
 percentage is clamped to `0.01%`-`99.99%` (and the same for the negative side)
 - CLIP never gets the last word.
 
-**A negative match reads as evidence of a mismatch, not as a negative number.**
-A cosine below the display range's midpoint is shown as a compact phrase like
-"73% certain this does not match", in a visually distinct style (a different
-color, and either italics or bold - resolved during implementation) so it is
-not confused with a positive, if weaker, match.
+**A negative match reads as evidence of a mismatch, not as a bare minus sign.**
+A cosine below the no-opinion centre is shown as a compact phrase like "73%
+certain the image content does not match the text", in a visually distinct style
+(a different color, and either italics or bold - resolved during implementation)
+so it is not confused with a positive, if weaker, match. Internally this is the
+negative certainty value (e.g. `-0.73`); the phrasing is how it is surfaced.
 
 **Tags and story report counts, not percentages - certainty isn't the right
 question for them.** A tag match is either exact, partial, or absent; a story
@@ -349,15 +431,15 @@ match is a run of characters. There's no meaningful "73% sure" reading for
 either.
 *Enforcement:* the tag row shows `tagExact` and however many terms matched
 partially (derived from `tagPartialSum`'s contributing terms); the story row
-shows `storyMatchedChars`. Neither reads from `CLIP_MATCH_BAND` or
-`CLIP_DISPLAY_RANGE` - those exist only for the CLIP row.
+shows `storyLongChars`. Neither reads from the CLIP certainty curve - the
+distribution anchors exist only for the CLIP row.
 
 **Every room can be read on each axis independently, including how it compares
 only on that axis.** A reader should be able to see "this room ranks #4 by tag
 match, tied with 2 others" separately from its overall position.
 *Enforcement:* `SearchResult.ranks`/`ties` (see Data structures) are computed
 by sorting `breakdown.tagExact`/`tagPartialSum`, `breakdown.storyRatio`/
-`storyMatchedChars`, and `breakdown.clipCosine` independently of the composite
+`storyLongChars`, and `breakdown.clipCosine` independently of the composite
 `order` - three extra sorts of already-computed numbers, not three extra
 scoring passes.
 
