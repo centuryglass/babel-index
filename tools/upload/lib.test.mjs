@@ -59,7 +59,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   );
 });
 
-test('diffAgainstManifest uploads new and changed files, skips matching hashes', () => {
+test('diffAgainstManifest uploads new and changed files, skips matching hashes present in the bucket', () => {
   const uploads = [
     { local: '/a', key: 'k/a' },
     { local: '/b', key: 'k/b' },
@@ -71,8 +71,9 @@ test('diffAgainstManifest uploads new and changed files, skips matching hashes',
     ['/c', 'hash-c'],
   ]);
   const remoteManifest = { 'k/a': 'hash-a', 'k/b': 'hash-b-old' }; // k/c never uploaded before
+  const existingKeys = new Set(['k/a', 'k/b']);
 
-  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest);
+  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest, existingKeys);
   assert.deepEqual(
     toUpload.map((u) => u.key).sort(),
     ['k/b', 'k/c']
@@ -84,8 +85,22 @@ test('diffAgainstManifest uploads new and changed files, skips matching hashes',
 test('diffAgainstManifest treats an empty remote manifest as upload-everything', () => {
   const uploads = [{ local: '/a', key: 'k/a' }];
   const hashes = new Map([['/a', 'hash-a']]);
-  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, {});
+  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, {}, new Set());
   assert.equal(toUpload.length, 1);
+  assert.equal(unchanged.length, 0);
+});
+
+test('diffAgainstManifest re-uploads a key whose hash matches but is missing from the live bucket listing', () => {
+  const uploads = [{ local: '/a', key: 'k/a' }];
+  const hashes = new Map([['/a', 'hash-a']]);
+  const remoteManifest = { 'k/a': 'hash-a' }; // recorded as uploaded before...
+  const existingKeys = new Set(); // ...but not actually present in the bucket (deleted, or lost)
+
+  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest, existingKeys);
+  assert.deepEqual(
+    toUpload.map((u) => u.key),
+    ['k/a']
+  );
   assert.equal(unchanged.length, 0);
 });
 

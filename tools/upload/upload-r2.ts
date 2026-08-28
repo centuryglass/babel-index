@@ -31,6 +31,21 @@
  * only so a rerun after touching a handful of images costs a handful of PUTs,
  * not the whole corpus. See tools/upload/lib.ts for the pure decision logic.
  *
+ * The recorded manifest is only ever what a past run *believed* it wrote, so
+ * a matching hash alone doesn't prove the object still exists in the bucket -
+ * a manual delete, a lifecycle rule, or any other out-of-band loss would read
+ * as "unchanged" forever. Every run also lists the bucket (`ListObjectsV2`,
+ * scoped to this corpus's prefix and to `shared/`) and treats a key missing
+ * from that listing as needing upload regardless of its recorded hash.
+ *
+ * ### Concurrency
+ *
+ * Hashing and uploading both run through the same bounded-concurrency
+ * `createLimiter` used for CLIP inference in packages/server/search-cache.ts -
+ * a corpus is many small files, and doing either step one file at a time pays
+ * full round-trip latency per file for no reason; R2 handles many concurrent
+ * requests fine.
+ *
  * ### The public manifest
  *
  * Separately, the `scanDirectory()` result itself - the same shape
@@ -42,13 +57,15 @@
  */
 import { readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { scanDirectory } from '../../packages/server/scan.ts';
 import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.ts';
+import { createLimiter } from '../../packages/server/search-cache.ts';
 import { contentHash } from '../../packages/pipeline/mips.mjs';
 import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const MANIFEST_NAME = 'upload-manifest.json';
+const CONCURRENCY = 16;
 
 type Args = Record<string, string | boolean>;
 
@@ -97,6 +114,31 @@ async function fetchRemoteManifest(client: S3Client, bucket: string, key: string
   }
 }
 
+/** Every key actually present in the bucket under `prefix`, paginated. */
+async function listKeys(client: S3Client, bucket: string, prefix: string): Promise<Set<string>> {
+  const keys = new Set<string>();
+  let ContinuationToken: string | undefined;
+  do {
+    const res = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken }));
+    for (const obj of res.Contents ?? []) if (obj.Key) keys.add(obj.Key);
+    ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (ContinuationToken);
+  return keys;
+}
+
+/**
+ * Keys this run's uploads could occupy, in two namespaces: `<prefix>/...` for
+ * the corpus, `shared/...` for the center/generic tiles (shared across
+ * corpora, so listed separately rather than folded into the prefix scan).
+ */
+async function listExistingKeys(client: S3Client, bucket: string, prefix: string): Promise<Set<string>> {
+  const [corpus, shared] = await Promise.all([
+    listKeys(client, bucket, `${prefix}/`),
+    listKeys(client, bucket, 'shared/'),
+  ]);
+  return new Set([...corpus, ...shared]);
+}
+
 async function putFile(client: S3Client, bucket: string, key: string, path: string): Promise<void> {
   await client.send(
     new PutObjectCommand({
@@ -120,15 +162,20 @@ async function main() {
   const uploads = buildUploadList(manifest, { imagesDir, sharedDir, prefix }, join);
   console.log(`${uploads.length} file(s) make up this corpus (prefix "${prefix}")`);
 
+  const limiter = createLimiter(CONCURRENCY);
   const hashes = new Map<string, string>();
   const missing: string[] = [];
-  for (const { local } of uploads) {
-    try {
-      hashes.set(local, await contentHash(local));
-    } catch {
-      missing.push(local);
-    }
-  }
+  await Promise.all(
+    uploads.map(({ local }) =>
+      limiter(async () => {
+        try {
+          hashes.set(local, await contentHash(local));
+        } catch {
+          missing.push(local);
+        }
+      })
+    )
+  );
   if (missing.length) {
     console.error(`\n  ${missing.length} file(s) the manifest expects but couldn't be read:`);
     for (const m of missing.slice(0, 10)) console.error(`    ${m}`);
@@ -139,8 +186,11 @@ async function main() {
 
   const manifestKey = `${prefix}/${MANIFEST_NAME}`;
   const client = makeClient();
-  const remoteManifest = await fetchRemoteManifest(client, bucket, manifestKey);
-  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest);
+  const [remoteManifest, existingKeys] = await Promise.all([
+    fetchRemoteManifest(client, bucket, manifestKey),
+    listExistingKeys(client, bucket, prefix),
+  ]);
+  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest, existingKeys);
 
   console.log(
     `${toUpload.length} new/changed, ${unchanged.length} already current` +
@@ -149,11 +199,15 @@ async function main() {
 
   if (!dryRun) {
     let done = 0;
-    for (const { local, key } of toUpload) {
-      await putFile(client, bucket, key, local);
-      done++;
-      if (done % 10 === 0 || done === toUpload.length) process.stdout.write(`  ${done}/${toUpload.length}\r`);
-    }
+    await Promise.all(
+      toUpload.map(({ local, key }) =>
+        limiter(async () => {
+          await putFile(client, bucket, key, local);
+          done++;
+          if (done % 10 === 0 || done === toUpload.length) process.stdout.write(`  ${done}/${toUpload.length}\r`);
+        })
+      )
+    );
     if (toUpload.length) console.log('');
   } else {
     for (const { key } of toUpload) console.log(`  would upload ${key}`);
