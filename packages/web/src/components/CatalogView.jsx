@@ -49,7 +49,7 @@ import {
   pageAtScroll,
   windowFor,
   storyLines,
-} from '../lib/catalog.js';
+} from '../lib/catalog.ts';
 import { CENTER } from '../lib/tiles.js';
 
 /**

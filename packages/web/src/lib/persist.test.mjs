@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { load, save, clear, KEYS } from './persist.js';
+import { load, save, clear, KEYS } from './persist.ts';
 
 /** A working store, so the happy path is not the only thing asserted. */
 function memoryStore() {
