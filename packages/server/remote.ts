@@ -8,7 +8,7 @@
  * time, and this only fetches what it already computed.
  *
  * The manifest's urls come out of that scan rooted at the LOCAL mount paths
- * (`scan.ts`'s `IMAGES_BASE`/`SHARED_BASE`, `/images` and `/shared`), because
+ * (`scan.ts`'s `IMAGES_BASE`/`SHARED_BASE`, `images` and `shared`), because
  * the scan has no idea it will ever be served remotely. `rebase` below
  * rewrites every one of them - `imagesBase`/`sharedBase` themselves, and every
  * url already baked into `rooms`/`shared`/`embeddings`/`metadata` - to point

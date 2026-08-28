@@ -13,9 +13,18 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * is the one place "what does a room/shared/blob url look like" is decided -
  * rooms.js's per-level url construction reads `imagesBase` off the manifest
  * rather than restating the string.
+ *
+ * Deliberately RELATIVE, not `/images`/`/shared` - a subpath deployment
+ * (`server-nginx.conf`, `--base-path`) needs every url the browser resolves
+ * to go through `<base href>`, and a leading slash opts a url out of that
+ * resolution entirely (it always means "from the origin root", subpath or
+ * not). Express's own routes are unaffected either way - `app.use('/images',
+ * ...)` matches on the path Express receives, which `server-nginx.conf`'s
+ * prefix-stripping proxy_pass has already reduced to this same relative
+ * shape by the time it arrives.
  */
-export const IMAGES_BASE = '/images';
-export const SHARED_BASE = '/shared';
+export const IMAGES_BASE = 'images';
+export const SHARED_BASE = 'shared';
 
 /** The keyword/story sidecar, written by the generator. See packages/map/metadata.ts. */
 export const METADATA_FILE = 'metadata.json';
@@ -292,7 +301,7 @@ export async function scanDirectory(
     tagLinks,
     /**
      * The pyramid as it exists on disk, finest first. Clients build a level's
-     * url as `/images/<dir>/<file>`, or `/images/<file>` where `dir` is null.
+     * url as `images/<dir>/<file>`, or `images/<file>` where `dir` is null.
      */
     levels,
   };
