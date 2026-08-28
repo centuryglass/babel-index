@@ -23,7 +23,7 @@
 import { useEffect, useRef } from 'react';
 import { RoomDetails } from './RoomDetails.jsx';
 
-export function RoomOverlay({ room, desc, entry, file, src, onClose, onKeyword, highlight, result, weights }) {
+export function RoomOverlay({ room, desc, entry, file, src, onClose, onKeyword, highlight, tagLinks, result, weights }) {
   const ref = useRef(null);
 
   // Focus in on open and back where it came from on close - the same contract
@@ -94,6 +94,7 @@ export function RoomOverlay({ room, desc, entry, file, src, onClose, onKeyword, 
             desc={desc}
             onKeyword={onKeyword}
             highlight={highlight}
+            tagLinks={tagLinks}
             rank={room.rank}
             result={result}
             weights={weights}

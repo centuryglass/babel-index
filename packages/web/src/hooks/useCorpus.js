@@ -10,6 +10,10 @@
  * `embeddings` stays a ref holding `{ data, dim }` rather than becoming React
  * state - it is a megabyte-scale `Int8Array`, and re-rendering `Library` every
  * time it arrives would be paid for nothing anyone reads from it synchronously.
+ *
+ * `tagLinks` is a flat keyword -> url object, small enough (a few dozen
+ * entries at most) to just become React state directly rather than getting
+ * the ref treatment `embeddings` needs.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinMetadata } from '../../../map/metadata.ts';
@@ -22,10 +26,12 @@ import { buildSearchIndex } from '../../../map/scoring.js';
  *   embeddings: {current: {data: Int8Array, dim: number} | null},
  *   searchIndex: ReturnType<typeof buildSearchIndex> | null,
  *   described: number,
+ *   tagLinks: Record<string, string> | null,
  * }}
  */
 export function useCorpus(manifest) {
   const [metadata, setMetadata] = useState(null);
+  const [tagLinks, setTagLinks] = useState(null);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a
@@ -64,11 +70,27 @@ export function useCorpus(manifest) {
     };
   }, [manifest]);
 
+  // The keyword -> external-link map, fetched the same way as the sidecar: a
+  // corpus-specific file, absent from a corpus that hasn't been given one.
+  useEffect(() => {
+    if (!manifest.tagLinks) return;
+    let cancelled = false;
+    fetch(manifest.tagLinks.url)
+      .then((r) => r.json())
+      .then((map) => {
+        if (!cancelled) setTagLinks(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [manifest]);
+
   const described = useMemo(() => metadata?.filter(Boolean).length ?? 0, [metadata]);
 
   // Folded and tokenised once, so a search is set lookups rather than a
   // megabyte of string work.
   const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
-  return { metadata, embeddings, searchIndex, described };
+  return { metadata, embeddings, searchIndex, described, tagLinks };
 }

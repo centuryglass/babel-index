@@ -63,6 +63,16 @@ export interface MetadataInfo {
   entries: number;
 }
 
+/**
+ * The keyword -> external-link map, if `TAG_LINKS_FILE` was found in the
+ * corpus directory. Unlike `MetadataInfo` there is no per-room coverage to
+ * report - it's a flat vocabulary lookup, not something joined to a room.
+ */
+export interface TagLinksInfo {
+  url: string;
+  count: number;
+}
+
 /** A corpus manifest, as `scanDirectory()`/`fetchRemoteManifest()` produce it. */
 export interface Manifest {
   mode: 'offline' | 'remote';
@@ -77,6 +87,7 @@ export interface Manifest {
   count: number;
   embeddings: EmbeddingsInfo | null;
   metadata: MetadataInfo | null;
+  tagLinks: TagLinksInfo | null;
   levels: LevelInfo[];
 }
 

@@ -21,6 +21,13 @@ export const SHARED_BASE = '/shared';
 export const METADATA_FILE = 'metadata.json';
 
 /**
+ * Keyword -> external-link map (e.g. a Wikipedia page for "Cubism"), hand-
+ * edited rather than generated. Optional, like the sidecar above - a corpus
+ * with no file here just shows chips with no "more about this" link.
+ */
+export const TAG_LINKS_FILE = 'tagLinks.json';
+
+/**
  * The subdirectory of the shared directory that holds the generic tiles. It is
  * a folder rather than a `generic*` glob so the center tile can sit in the
  * repo's `assets/` root without every stray image beside it (masks, canny
@@ -239,6 +246,17 @@ export async function scanDirectory(
     // no sidecar, unreadable, or malformed - leave metadata null
   }
 
+  // The keyword -> external-link map. A flat object, not joined to anything -
+  // count is just how many keywords it names.
+  let tagLinks: Manifest['tagLinks'] = null;
+  try {
+    const map = JSON.parse(await readFile(join(dir, TAG_LINKS_FILE), 'utf8'));
+    if (map && typeof map === 'object' && !Array.isArray(map))
+      tagLinks = { url: `${IMAGES_BASE}/${TAG_LINKS_FILE}`, count: Object.keys(map).length };
+  } catch {
+    // no file, unreadable, or malformed - leave tagLinks null
+  }
+
   return {
     mode: 'offline',
     directory: dir,
@@ -267,6 +285,11 @@ export async function scanDirectory(
      * the path to the first frame.
      */
     metadata,
+    /**
+     * The keyword -> external link map, if `TAG_LINKS_FILE` was found; else
+     * null. Fetched separately by the client, same as `metadata` above.
+     */
+    tagLinks,
     /**
      * The pyramid as it exists on disk, finest first. Clients build a level's
      * url as `/images/<dir>/<file>`, or `/images/<file>` where `dir` is null.

@@ -15,6 +15,7 @@ function manifest() {
       { level: 1, w: 512, h: 512, dir: '512' },
     ],
     metadata: { url: '/images/metadata.json', matched: 2, entries: 2 },
+    tagLinks: { url: '/images/tagLinks.json', count: 3 },
     embeddings: { url: '/images/embeddings.bin', dim: 512, count: 2, model: 'x' },
     shared: {
       center: { file: 'center_tile.png', url: '/shared/center_tile.png' },
@@ -34,6 +35,7 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'sample/embeddings.bin',
     'sample/embeddings.json',
     'sample/metadata.json',
+    'sample/tagLinks.json',
     'shared/center_tile.png',
     'shared/generic/a.jpg',
   ]);
@@ -44,9 +46,10 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
   assert.equal(level1.local, 'corpus/512/001.jpg');
 });
 
-test('buildUploadList omits metadata/embeddings/shared entries the manifest does not have', () => {
+test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have', () => {
   const m = manifest();
   m.metadata = null;
+  m.tagLinks = null;
   m.embeddings = null;
   m.shared = { center: null, generic: [] };
   const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);

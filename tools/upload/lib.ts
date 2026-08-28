@@ -50,6 +50,8 @@ export function buildUploadList(
 
   if (manifest.metadata) uploads.push({ local: join(imagesDir, 'metadata.json'), key: `${prefix}/metadata.json` });
 
+  if (manifest.tagLinks) uploads.push({ local: join(imagesDir, 'tagLinks.json'), key: `${prefix}/tagLinks.json` });
+
   if (manifest.embeddings) {
     uploads.push({ local: join(imagesDir, 'embeddings.bin'), key: `${prefix}/embeddings.bin` });
     uploads.push({ local: join(imagesDir, 'embeddings.json'), key: `${prefix}/embeddings.json` });
