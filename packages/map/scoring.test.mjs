@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildSearchIndex,
+  classifyTagTerm,
   CLIP_CERTAINTY,
   explainScore,
   fold,
@@ -9,11 +10,18 @@ import {
   keywordMatchRanges,
   keywordScore,
   lemmatise,
+  longestMatchRun,
   matchCertainty,
   normaliseScores,
+  parseQuery,
   rankHybrid,
+  signedClipCertainty,
+  STORY_FLOOR,
+  STORY_LONG_RANGE,
   storyMatchRanges,
+  storyPhraseRun,
   storyScore,
+  TAG_PARTIAL_SATURATION,
   tokenise,
 } from './scoring.js';
 import { CERTAINTY_FLOOR } from './ordering.ts';
@@ -102,7 +110,7 @@ test('a room with no keywords scores zero rather than throwing', () => {
 
 // --- story scoring ----------------------------------------------------------
 
-const story = (text) => new Set(tokenise(text).map(lemmatise));
+const story = (text) => buildSearchIndex([{ keywords: [], story: text }])[0].story;
 
 test('story scoring is normalised by the query, not by the text', () => {
   // The property that matters: the same hit in a longer story scores the same.
@@ -149,6 +157,134 @@ test('a lemma match does not collide across unrelated word families', () => {
 test('an empty story or query scores zero', () => {
   assert.equal(storyScore(['anything'], story('')), 0);
   assert.equal(storyScore([], story('a real story about copper')), 0);
+});
+
+// --- the story sequence: contiguous-run measurement --------------------------
+
+test('the longest match run spans scattered hits less than one contiguous clause', () => {
+  const scattered = story('The cat waited. Later a dog barked. A bird sang, and a fish swam by.');
+  const clause = story('A room walled entirely in glass, floor to ceiling.');
+  const lemmas = (...words) => new Set(words.map(lemmatise));
+
+  const scatteredRun = longestMatchRun(scattered.sequence, lemmas('cat', 'dog', 'bird', 'fish'));
+  const clauseRun = longestMatchRun(clause.sequence, lemmas('room', 'walled', 'entirely', 'glass'));
+
+  // Each scattered word is its own one-word run; the clause is one long one.
+  assert.ok(clauseRun > scatteredRun, `clause run ${clauseRun} should beat scattered run ${scatteredRun}`);
+  assert.ok(clauseRun >= 20, `expected a near-full-clause span, got ${clauseRun}`);
+});
+
+test('a stopword or short word between two matches does not break the run', () => {
+  // "of" (2 chars) and "a" never enter the sequence at all, so "room" and
+  // "glass" are adjacent in it even though "a room of glass" is not.
+  const s = story('a room of glass');
+  const run = longestMatchRun(s.sequence, new Set([lemmatise('room'), lemmatise('glass')]));
+  assert.ok(run > 0, 'room and glass count as contiguous');
+});
+
+test('the longest run is measured by lemma, matching storyScore', () => {
+  const s = story('The rooms were surveyed twice.');
+  const run = longestMatchRun(s.sequence, new Set([lemmatise('room'), lemmatise('survey')]));
+  assert.ok(run > 0);
+});
+
+test('no match run when nothing in the query lemma set appears', () => {
+  const s = story('A room of oak.');
+  assert.equal(longestMatchRun(s.sequence, new Set([lemmatise('sailboat')])), 0);
+  assert.equal(longestMatchRun(s.sequence, new Set()), 0);
+  assert.equal(longestMatchRun([], new Set([lemmatise('room')])), 0);
+});
+
+test('a quoted phrase matches the story only as an ordered run', () => {
+  const s = story('A room walled in glass, floor to ceiling.');
+  const forward = ['room', 'walled', 'glass'].map(lemmatise);
+  const reversed = ['glass', 'walled', 'room'].map(lemmatise);
+
+  assert.ok(storyPhraseRun(s.sequence, forward) > 0, 'the phrase appears in order');
+  assert.equal(storyPhraseRun(s.sequence, reversed), 0, 'reversed is not the same phrase');
+});
+
+test('a phrase run must be truly consecutive, not just present', () => {
+  const s = story('A room, entirely walled in oak, then glass.');
+  // "room" and "glass" both occur, far apart - not a phrase match.
+  assert.equal(storyPhraseRun(s.sequence, ['room', 'glass'].map(lemmatise)), 0);
+});
+
+// --- query parsing: quoted phrases as single terms ---------------------------
+
+test('an unquoted query splits into one term per word', () => {
+  const { terms } = parseQuery('art nouveau oak');
+  assert.deepEqual(terms.map((t) => t.text), ['art', 'nouveau', 'oak']);
+  assert.ok(terms.every((t) => t.quoted === false));
+  assert.deepEqual(terms.map((t) => t.words), [['art'], ['nouveau'], ['oak']]);
+});
+
+test('a quoted phrase is one term, not one per word inside it', () => {
+  const { terms } = parseQuery('"art nouveau" oak');
+  assert.equal(terms.length, 2);
+  assert.equal(terms[0].quoted, true);
+  assert.equal(terms[0].text, 'art nouveau');
+  assert.equal(terms[0].folded, 'art nouveau');
+  assert.deepEqual(terms[0].words, ['art', 'nouveau']);
+  assert.equal(terms[1].quoted, false);
+  assert.equal(terms[1].text, 'oak');
+});
+
+test('quoting a single word changes nothing about how it folds', () => {
+  const bare = parseQuery('art');
+  const quoted = parseQuery('"art"');
+  assert.equal(bare.terms[0].folded, quoted.terms[0].folded);
+  assert.equal(quoted.terms[0].quoted, true);
+});
+
+test('an unterminated quote falls back to ordinary word terms', () => {
+  const { terms } = parseQuery('art "nouveau');
+  assert.deepEqual(terms.map((t) => t.text), ['art', '"nouveau']);
+  assert.ok(terms.every((t) => t.quoted === false));
+});
+
+test('folded and raw are preserved on the parsed query as a whole', () => {
+  const parsed = parseQuery('  Art Nouveau  ');
+  assert.equal(parsed.raw, '  Art Nouveau  ');
+  assert.equal(parsed.folded, fold('  Art Nouveau  '));
+});
+
+test('an empty or whitespace-only query parses to no terms', () => {
+  assert.deepEqual(parseQuery('').terms, []);
+  assert.deepEqual(parseQuery('   ').terms, []);
+  assert.deepEqual(parseQuery(null).terms, []);
+});
+
+// --- classifying one term against a room's keywords ---------------------------
+
+test('an exact term match is exact, not a 1.0 partial', () => {
+  const { terms } = parseQuery('oak');
+  assert.deepEqual(classifyTagTerm(terms[0], ['oak', 'art nouveau']), { exact: true, partial: 0 });
+});
+
+test('a partial term match is the fraction of the keyword it covers', () => {
+  const { terms } = parseQuery('art');
+  assert.deepEqual(classifyTagTerm(terms[0], ['art nouveau']), { exact: false, partial: 3 / 11 });
+});
+
+test('a quoted phrase is classified as one whole-phrase match, not per word', () => {
+  const { terms } = parseQuery('"art nouveau"');
+  assert.deepEqual(classifyTagTerm(terms[0], ['art nouveau', 'oak']), { exact: true, partial: 0 });
+
+  // The room tagged with the two words SEPARATELY gets no credit at all - the
+  // phrase never appears as a contiguous run in either keyword.
+  assert.deepEqual(classifyTagTerm(terms[0], ['art', 'nouveau']), { exact: false, partial: 0 });
+});
+
+test('no match is neither exact nor partial', () => {
+  const { terms } = parseQuery('sailboat');
+  assert.deepEqual(classifyTagTerm(terms[0], ['oak', 'art nouveau']), { exact: false, partial: 0 });
+});
+
+test('classifying against no keywords is a clean miss, not a throw', () => {
+  const { terms } = parseQuery('oak');
+  assert.deepEqual(classifyTagTerm(terms[0], []), { exact: false, partial: 0 });
+  assert.deepEqual(classifyTagTerm(terms[0], undefined), { exact: false, partial: 0 });
 });
 
 // --- normalisation ----------------------------------------------------------
@@ -212,14 +348,18 @@ test('CLIP still orders everything the text signals are silent about', () => {
   assert.deepEqual(order, [0, 2, 1], 'keyword first, then the two by CLIP');
 });
 
-test('a weak partial keyword does not beat a room CLIP is certain about', () => {
+test('a weak partial tag does not beat a room CLIP is certain about', () => {
   // This is the difference between blending and tiering, and the reason the
-  // design blends. Room 0 matches "art" against a long keyword - 3/31 of it -
-  // while room 1 is CLIP's clear favourite and matches no text at all. Any
-  // scheme that sorts "has a keyword hit" ahead of "has none" puts room 0
-  // first; the blend correctly does not.
-  const weak = keywordScore('art', ['art'], ['art nouveau and gilded rosewood']);
-  assert.ok(weak * WEIGHTS.keyword < WEIGHTS.clip, `partial ${weak} should be worth less than top CLIP`);
+  // design blends. Room 0 matches "art" against a long keyword - a small
+  // fraction of it - while room 1 is CLIP's clear favourite and matches no
+  // text at all. Any scheme that sorts "has a keyword hit" ahead of "has
+  // none" puts room 0 first; the blend correctly does not, because the
+  // partial-tag budget (P) is capped below what a certain CLIP match earns.
+  const { partial } = classifyTagTerm(parseQuery('art').terms[0], ['art nouveau and gilded rosewood']);
+  assert.ok(
+    WEIGHTS.tagPartial * Math.min(1, partial / TAG_PARTIAL_SATURATION) < WEIGHTS.clip,
+    `partial ${partial} should be worth less than top CLIP`
+  );
 
   const { order } = rankHybrid({
     query: 'art',
@@ -323,14 +463,14 @@ test('signals report what matched, not what was available', () => {
 });
 
 test('a zero weight silences a signal without removing it', () => {
-  const weights = { ...WEIGHTS, keyword: 0 };
+  const weights = { ...WEIGHTS, tagExact: 0 };
   const { order } = rankHybrid({
     query: 'brutalism',
     count: 2,
     weights,
     index: indexOf([['brutalism'], null], [[], 'brutalism everywhere']),
   });
-  assert.deepEqual(order, [1, 0], 'story decides once keywords are switched off');
+  assert.deepEqual(order, [1, 0], 'story decides once tags are switched off');
 });
 
 test('rooms without metadata are ranked, not dropped', () => {
@@ -348,6 +488,105 @@ test('an empty index behaves like no index', () => {
   const { order, signals } = rankHybrid({ query: 'oak', count: 3, weights: WEIGHTS, index: [null, null, null] });
   assert.deepEqual(order, [0, 1, 2]);
   assert.deepEqual(signals, { clip: false, keyword: false, story: false });
+});
+
+// --- the spec's own inequalities, checked directly against the resolved
+// weights, so a re-tune that breaks a margin fails loudly rather than
+// silently reordering results (docs/search_rules.md "Balancing signals").
+
+test('E clears the combined ceiling of every other signal', () => {
+  const { tagExact, tagPartial, story, storyLong, clip } = WEIGHTS;
+  assert.ok(tagExact > tagPartial + story + storyLong + clip, 'one exact tag always outranks everything else combined');
+});
+
+test('L (the long-story bonus) clears clip + tagPartial', () => {
+  assert.ok(WEIGHTS.storyLong > WEIGHTS.clip + WEIGHTS.tagPartial);
+});
+
+test('a reasonably certain CLIP match (gate >= 0.5) clears the partial-tag budget', () => {
+  assert.ok(WEIGHTS.clip * 0.5 >= WEIGHTS.tagPartial);
+});
+
+test('more exact tag matches always beat fewer', () => {
+  const { order } = rankHybrid({
+    query: 'alien impasto',
+    count: 2,
+    weights: WEIGHTS,
+    index: indexOf([['alien'], null], [['alien', 'impasto'], null]),
+  });
+  assert.deepEqual(order, [1, 0], 'both tags beat one');
+});
+
+test('more partial tag matches beat fewer, for the same number of exact matches', () => {
+  const { order } = rankHybrid({
+    query: 'art deco moderne',
+    count: 2,
+    weights: WEIGHTS,
+    // Neither term matches any keyword exactly; room 1 partially matches two,
+    // room 0 only one - tagPartialSum is a SUM, so more terms is strictly more.
+    index: indexOf([['art nouveau'], null], [['art nouveau', 'deco revival'], null]),
+  });
+  assert.deepEqual(order, [1, 0]);
+});
+
+test('a quoted phrase credits one match, not one per word it contains', () => {
+  const [phraseRoom, splitRoom] = indexOf([['art nouveau', 'oak'], null], [['art', 'nouveau'], null]);
+
+  const [phraseTerm] = parseQuery('"art nouveau"').terms;
+  assert.deepEqual(classifyTagTerm(phraseTerm, phraseRoom.keywords), { exact: true, partial: 0 });
+  // The room tagged with the two words SEPARATELY gets no credit at all - the
+  // phrase never appears as a contiguous run in either keyword.
+  assert.deepEqual(classifyTagTerm(phraseTerm, splitRoom.keywords), { exact: false, partial: 0 });
+});
+
+test('a long contiguous story match outranks CLIP and a maxed partial tag together', () => {
+  // A whole matched clause outranks a room that is SIMULTANEOUSLY CLIP's top,
+  // fully-confident pick and has a maxed-out partial tag match - the headline
+  // property L's margin (L > clip + tagPartial) exists to guarantee. The query
+  // needs enough contiguous content words to saturate storyLongChars's 40-char
+  // ceiling (only glue words shorter than minTokenLength or on the stopword
+  // list may sit between them without breaking the run).
+  const query = 'a room walled entirely in glass and bathed in warm light';
+  const clauseRoom = { keywords: [], story: `A ${query.replace(/^a /, '')}, though nothing else was said.` };
+  // Near-misses of most query terms - each partial fraction is close to 1
+  // (`term/(term+1)` chars), so seven of them comfortably saturate
+  // TAG_PARTIAL_SATURATION without any of them being an exact match.
+  const rivalRoom = {
+    keywords: ['roomx', 'walledx', 'entirelyx', 'glassx', 'bathedx', 'warmx', 'lightx'],
+    story: null,
+  };
+
+  assert.ok(
+    longestMatchRun(
+      buildSearchIndex([{ keywords: [], story: clauseRoom.story }])[0].story.sequence,
+      new Set(tokenise(query).map(lemmatise))
+    ) >= STORY_LONG_RANGE.high,
+    'the fixture must actually saturate the long-match bonus'
+  );
+
+  const { order } = rankHybrid({
+    query,
+    count: 2,
+    weights: WEIGHTS,
+    embeddings: Int8Array.from([0, 0, 127, 0]),
+    dim: 2,
+    vector: Float32Array.from([1, 0]),
+    index: indexOf([clauseRoom.keywords, clauseRoom.story], [rivalRoom.keywords, rivalRoom.story]),
+  });
+  assert.deepEqual(order, [0, 1], 'the long story match wins regardless');
+});
+
+test('a quoted phrase matches the story only as an ordered run, feeding storyLong', () => {
+  const forward = { keywords: [], story: 'A room walled in glass, floor to ceiling.' };
+  const scrambled = { keywords: [], story: 'The glass was walled in around the room, floor to ceiling.' };
+
+  const { order } = rankHybrid({
+    query: '"room walled in glass"',
+    count: 2,
+    weights: WEIGHTS,
+    index: indexOf([forward.keywords, forward.story], [scrambled.keywords, scrambled.story]),
+  });
+  assert.deepEqual(order[0], 0, 'the ordered phrase match ranks above the scrambled words');
 });
 
 // --- certainty, which drives the map's density gradient ---------------------
@@ -369,37 +608,54 @@ const certaintyOf = (opts) =>
   rankHybrid({ count: 3, weights: WEIGHTS, dim: 2, vector: CLIP_QUERY, ...opts }).certainty;
 
 test('a soft OR: any signal can carry certainty, and two weak ones agree', () => {
-  assert.equal(matchCertainty({ keyword: 1 }), 1, 'an exact keyword needs no help');
+  assert.equal(matchCertainty({ tagCoverage: 1 }), 1, 'full tag coverage needs no help');
   assert.equal(matchCertainty({}), 0, 'nothing at all is certain of nothing');
-  assert.equal(matchCertainty({ keyword: 0.5, story: 0.5 }), 0.75);
   assert.ok(
-    matchCertainty({ keyword: 0.4, story: 0.4 }) > matchCertainty({ keyword: 0.4 }),
+    matchCertainty({ tagCoverage: 0.4, storyLongChars: STORY_LONG_RANGE.low, storyMatched: true }) >
+      matchCertainty({ tagCoverage: 0.4 }),
     'agreement between two weak readings counts for more than either alone'
   );
 });
 
-test('CLIP certainty is read off the raw cosine, against absolute bounds', () => {
+test('a single matched story word sits at the moderate STORY_FLOOR, a full clause reaches 1', () => {
+  assert.equal(matchCertainty({ storyMatched: true, storyLongChars: 0 }), STORY_FLOOR, 'one word, no run');
+  assert.equal(matchCertainty({ storyMatched: true, storyLongChars: STORY_LONG_RANGE.high }), 1, 'a full clause');
+  // storyLongChars alone cannot say "did anything match" - a match under the
+  // ramp's floor and no match at all both read as chars=0.
+  assert.equal(matchCertainty({ storyMatched: false, storyLongChars: 0 }), 0);
+});
+
+test('CLIP certainty is read off the raw cosine, against the (still two-point) absolute band', () => {
   const { low, high } = CLIP_CERTAINTY;
-  assert.equal(matchCertainty({ cosine: low - 0.05 }), 0, 'below the band it is saying nothing');
+  assert.equal(matchCertainty({ cosine: low - 0.05 }), 0, 'below the band it is saying nothing, not a mismatch yet');
   assert.equal(matchCertainty({ cosine: high + 0.05 }), 1, 'above it, as sure as it gets');
   const mid = matchCertainty({ cosine: (low + high) / 2 });
   assert.ok(Math.abs(mid - 0.5) < 1e-6, `halfway across the band is ${mid}`);
 });
 
-test('a query nothing matches clusters nothing, however the ranking came out', () => {
+test('signedClipCertainty is the positive-only interim curve, until §5 measures a real low extreme', () => {
+  assert.equal(signedClipCertainty(CLIP_CERTAINTY.low - 1), 0, 'far below the band is still "no opinion", not "sure not"');
+  assert.equal(signedClipCertainty(null), 0);
+  assert.equal(signedClipCertainty(CLIP_CERTAINTY.high + 1), 1);
+});
+
+test('a query nothing matches clusters nothing, and does not even decide the order', () => {
   // The case the whole absolute reading exists for. Min-max normalisation gives
-  // *some* room a score of 1 for any query at all, so the blend cannot tell
-  // "cghjj" from "art nouveau" - and a gradient driven by the blend would
-  // cluster noise and claim a find. The raw cosines say what is really going on.
+  // *some* room a score of 1 for any query at all, so relative CLIP alone
+  // cannot tell "cghjj" from "art nouveau" - and a gradient driven by it would
+  // cluster noise and claim a find. The raw cosines say what is really going
+  // on: every one of these sits below the band, so `clipCertaintyGate` is
+  // exactly 0 for all three, and `clip * clipNorm * clipCertaintyGate` - the
+  // ranking's own CLIP term - is silenced right along with certainty. Ranking
+  // falls back to stable id order, same as if there were no signal at all.
   const cosines = [-0.2, -0.15, -0.1];
+  assert.ok(cosines.every((c) => c <= CLIP_CERTAINTY.low));
   const certainty = certaintyOf({ query: 'cghjj', embeddings: atCosines(...cosines) });
 
   assert.equal(Math.max(...certainty), 0, `expected no certainty, got ${[...certainty]}`);
   assert.ok(certainty.every((c) => c < CERTAINTY_FLOOR), 'and nothing that would survive the floor');
 
-  // The ranking is still a real ranking - the map reorders, it just does not
-  // pretend to be sure. That contrast is the point.
-  assert.equal(Math.max(...normaliseScores(cosines)), 1);
+  assert.equal(Math.max(...normaliseScores(cosines)), 1, 'relative CLIP alone would have picked a "winner"');
   const { order } = rankHybrid({
     query: 'cghjj',
     count: 3,
@@ -408,7 +664,23 @@ test('a query nothing matches clusters nothing, however the ranking came out', (
     dim: 2,
     vector: CLIP_QUERY,
   });
-  assert.deepEqual(order, [2, 1, 0], 'best cosine still leads, faint as it is');
+  assert.deepEqual(order, [0, 1, 2], 'no signal cleared the gate, so nothing decided the order');
+});
+
+test('a cosine that clears the gate still leads once some of the corpus does not', () => {
+  // The gate is continuous, not all-or-nothing across a corpus - once at
+  // least one room clears it, the relative CLIP term differentiates the rest
+  // exactly as before.
+  const cosines = [0.4, -0.2, -0.3];
+  const { order } = rankHybrid({
+    query: 'cghjj',
+    count: 3,
+    weights: WEIGHTS,
+    embeddings: atCosines(...cosines),
+    dim: 2,
+    vector: CLIP_QUERY,
+  });
+  assert.equal(order[0], 0, 'the room that actually cleared the gate still leads');
 });
 
 test('a strong cosine is certain on its own', () => {
@@ -518,7 +790,7 @@ test('a story marks the whole matched word, by lemma, and only real tokens', () 
   // `wit` shares no lemma with anything here, and `with` - the only word it
   // could have reached under the old prefix rule - is a stopword the story
   // index drops, so storyScore never credited it and nothing may be marked.
-  assert.equal(storyScore(['wit'], new Set(tokenise(story))), 0);
+  assert.equal(storyScore(['wit'], buildSearchIndex([{ keywords: [], story }])[0].story), 0);
   assert.deepEqual(storyMatchRanges(story, ['wit']), []);
 
   // Two tokens overlapping one word produce ONE range, not two nested ones.
@@ -575,10 +847,10 @@ test('rankHybrid reports the components it sorted on, by rank', () => {
 
   // Parallel to `order`, i.e. by RANK - the same convention `certainty` uses.
   assert.equal(order[0], 0);
-  assert.equal(breakdown.keyword[0], 1);
-  assert.equal(breakdown.score[0], WEIGHTS.keyword * 1);
+  assert.equal(breakdown.tagExact[0], 1);
+  assert.equal(breakdown.score[0], WEIGHTS.tagExact * 1);
   // Ranks nothing matched carry zeroes rather than being absent.
-  assert.equal(breakdown.keyword[1], 0);
+  assert.equal(breakdown.tagExact[1], 0);
   assert.equal(breakdown.score[1], 0);
   for (const arr of Object.values(breakdown)) assert.equal(arr.length, 3);
 });
@@ -592,9 +864,9 @@ test('explainScore omits a silent signal rather than printing it as zero', () =>
   });
 
   const { rows, total } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
-  assert.deepEqual(rows.map((r) => r.key), ['keyword']);
-  assert.equal(rows[0].weighted, WEIGHTS.keyword);
-  assert.equal(total, WEIGHTS.keyword);
+  assert.deepEqual(rows.map((r) => r.key), ['tagExact']);
+  assert.equal(rows[0].weighted, WEIGHTS.tagExact);
+  assert.equal(total, WEIGHTS.tagExact);
 });
 
 test('a CLIP row shows the raw cosine beside the relative one, so a certain-looking 1.00 reads as uncertain', () => {

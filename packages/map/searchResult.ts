@@ -11,12 +11,54 @@
  * boundary rather than converting the module itself.
  */
 
+/** One story word, lemmatised, keeping its span into the FOLDED story text. */
+export interface StorySequenceEntry {
+  lemma: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * A room's story, tokenised and lemmatised once at build time - both as an
+ * ORDERED sequence (what a contiguous-run measurement needs, see
+ * `longestMatchRun`/`storyPhraseRun` in `scoring.js`) and as a `Set` of the
+ * same lemmas for `storyScore`'s O(1) membership test. The set is derivable
+ * from the sequence; kept alongside rather than rebuilt per query.
+ */
+export interface StoryIndex {
+  sequence: StorySequenceEntry[];
+  set: Set<string>;
+}
+
 /** One room's precomputed search text, or `null` for a room with no metadata. */
 export interface SearchIndexEntry {
   /** Folded (not tokenised) keyword strings - matched whole as well as by token. */
   keywords: string[];
-  /** The story, tokenised and lemmatised once at build time. */
-  story: Set<string>;
+  story: StoryIndex;
+}
+
+/**
+ * One word, or one quoted phrase treated as a single unit - see `parseQuery`
+ * in `scoring.js` and docs/search_rules.md, "The parsed query".
+ */
+export interface Term {
+  /** as typed, one word or the contents of one "quoted phrase" */
+  text: string;
+  /** fold(text) */
+  folded: string;
+  /** was this a "quoted phrase" in the original query? */
+  quoted: boolean;
+  /** folded, tokenised sub-words - always [folded] for an unquoted term */
+  words: string[];
+}
+
+/** `parseQuery()`'s return value. */
+export interface ParsedQuery {
+  /** the query exactly as typed */
+  raw: string;
+  /** fold(raw) - the whole query, still used for the existing "whole query against one keyword" reading */
+  folded: string;
+  terms: Term[];
 }
 
 /** `buildSearchIndex()`'s output: parallel to the manifest's `rooms`, by id. */
@@ -32,9 +74,16 @@ export interface RankSignals {
 /** Per-signal scores, one array per rank - see `rankHybrid`'s doc comment. */
 export interface ScoreBreakdown {
   score: Float32Array;
-  keyword: Float32Array;
+  tagExact: Float32Array;
+  tagPartialSum: Float32Array;
+  /** `storyRatio` - query-relative, the ranking's short-story term */
   story: Float32Array;
+  /** longest contiguous matched run, in characters - the long-story term */
+  storyLongChars: Float32Array;
+  /** `clipNorm` - min-max normalised across the corpus for this query */
   clip: Float32Array;
+  /** the positive half of the signed CLIP certainty curve, in [0, 1] */
+  clipCertaintyGate: Float32Array;
   cosine: Float32Array;
 }
 
