@@ -75,8 +75,10 @@ interface CatalogConfig {
 }
 
 interface SearchWeights {
-  keyword: number;
+  tagExact: number;
+  tagPartial: number;
   story: number;
+  storyLong: number;
   clip: number;
 }
 
@@ -303,25 +305,30 @@ export const DEFAULTS: Defaults = {
 
   search: {
     /**
-     * Relative priority of the three retrieval signals. Every signal is
-     * normalised to [0, 1] before weighting - including CLIP, whose raw cosines
-     * cluster far too tightly on a corpus of near-identical library walls to be
-     * blended unnormalised - so these weights mean exactly what they look like
-     * and can be read against each other directly.
+     * The five constants docs/search_rules.md "Balancing signals" names: `E`
+     * (per exact tag), `P` (the saturating partial-tag budget), `S` (a short
+     * story match), `L` (the saturating long-story bonus), `C` (CLIP). Every
+     * non-CLIP signal is already an absolute ratio or count; CLIP is min-max
+     * normalised across the corpus *for this query* before this weight is
+     * applied - see `packages/map/scoring.js`'s header for why a raw cosine
+     * cannot be weighted directly.
      *
-     * The ordering is the design's: an exact keyword match (1.0 x 1.0) outscores
-     * anything CLIP can say (max 0.25), a whole-story match (0.5) sits between
-     * them, and CLIP still decides the ranking of everything no text touched -
-     * which is most of the corpus for most queries.
-     *
-     * These are a starting point, not a measurement. The real values want the
-     * real corpus and real queries, which is the argument for them being here
-     * rather than in source.
+     * Each value is chosen so its rule's inequality
+     * (docs/search_rules.md's "Tag matching"/"Story matching" assertions)
+     * holds with real margin, not just at the boundary - `E = 5` clears
+     * `tagPartial + story + storyLong + clip = 0.45 + 0.4 + 2 + 1 = 3.85` by
+     * more than the width of `tagPartial` alone, and `storyLong = 2` clears
+     * `clip + tagPartial = 1.45` the same way. Re-tuning any one of these means
+     * re-checking every inequality it was chosen to satisfy, not eyeballing it
+     * alone - `scoring.test.mjs` asserts each inequality directly against
+     * whatever is resolved here.
      */
     weights: {
-      keyword: 1,
-      story: 0.5,
-      clip: 0.25,
+      tagExact: 5,
+      tagPartial: 0.45,
+      story: 0.4,
+      storyLong: 2,
+      clip: 1,
     },
 
     /**
@@ -471,8 +478,14 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     },
     search: {
       weights: {
-        keyword: weight(weightsIn.keyword, DEFAULTS.search.weights.keyword, 'search.weights.keyword', notes),
+        tagExact: weight(weightsIn.tagExact, DEFAULTS.search.weights.tagExact, 'search.weights.tagExact', notes),
+        tagPartial: weight(
+          weightsIn.tagPartial, DEFAULTS.search.weights.tagPartial, 'search.weights.tagPartial', notes
+        ),
         story: weight(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
+        storyLong: weight(
+          weightsIn.storyLong, DEFAULTS.search.weights.storyLong, 'search.weights.storyLong', notes
+        ),
         clip: weight(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
       },
       minTokenLength: tokenLength(
