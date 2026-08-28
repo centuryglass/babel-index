@@ -115,14 +115,14 @@ test('nonsense values fall back and say so, rather than throwing', () => {
     {
       camera: { defaultZoom: 'big' },
       map: { contentRatio: 0, slotSeed: 2.7 },
-      search: { weights: { keyword: -1 }, minTokenLength: 0 },
+      search: { weights: { tagExact: -1 }, minTokenLength: 0 },
     },
     { zoomLimits: LIMITS }
   );
   assert.equal(c.camera.defaultZoom, DEFAULTS.camera.defaultZoom);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio, 'a ratio of 0 is out of range');
   assert.equal(c.map.slotSeed, 3, 'a fractional seed is rounded');
-  assert.equal(c.search.weights.keyword, DEFAULTS.search.weights.keyword);
+  assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
   assert.equal(c.search.minTokenLength, 1, 'a token length below 1 matches everything');
   assert.ok(c.notes.length >= 5, `expected a note for each: ${c.notes.join(' | ')}`);
 });
@@ -149,18 +149,20 @@ test('a section of the wrong type is ignored rather than fatal', () => {
 test('an overlay changes only what it names', () => {
   const c = resolveConfig({ search: { weights: { clip: 0 } } }, { zoomLimits: LIMITS });
   assert.equal(c.search.weights.clip, 0, 'zero is a legitimate "ignore this signal"');
-  assert.equal(c.search.weights.keyword, DEFAULTS.search.weights.keyword);
+  assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
   assert.equal(c.search.weights.story, DEFAULTS.search.weights.story);
   assert.deepEqual(c.notes, []);
 });
 
-test('the default weights put an exact keyword match above anything CLIP can say', () => {
-  // Every signal is normalised to [0, 1] before weighting, so the weights are
-  // directly comparable and this is the property they are chosen to express.
-  const { keyword, story, clip } = DEFAULTS.search.weights;
-  assert.ok(keyword > story, 'keywords outrank story text');
-  assert.ok(story > clip, 'story text outranks CLIP');
-  assert.ok(keyword * 1 > clip * 1, 'a perfect keyword match beats a perfect CLIP score');
+test('the default weights satisfy every cross-signal inequality docs/search_rules.md names', () => {
+  // Every non-CLIP signal is already an absolute ratio or count, and CLIP is
+  // normalised to [0, 1] before weighting, so these are directly comparable -
+  // this is the property the five constants are chosen to express, checked
+  // directly rather than by eyeballing a re-tune (docs/search-plan.md §2).
+  const { tagExact, tagPartial, story, storyLong, clip } = DEFAULTS.search.weights;
+  assert.ok(tagExact > tagPartial + story + storyLong + clip, 'one exact tag always outranks everything else combined');
+  assert.ok(storyLong > clip + tagPartial, 'a long story match outranks CLIP and a maxed partial tag together');
+  assert.ok(clip * 0.5 >= tagPartial, 'a reasonably certain CLIP match clears the partial-tag budget');
 });
 
 test('the shipped defaults are valid against the real limits', () => {
