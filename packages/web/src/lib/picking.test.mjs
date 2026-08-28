@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roomAtPoint } from './picking.js';
+import { roomAtPoint } from './picking.ts';
 import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.js';
 import { createLayout } from '../../../map/ordering.js';
 
