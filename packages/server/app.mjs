@@ -8,7 +8,7 @@
  */
 import { availableParallelism } from 'node:os';
 import express from 'express';
-import { resolveConfig } from '../config/config.mjs';
+import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
 
 // Must be the same CLIP as tools/embed/embed.mjs used for the images, or the

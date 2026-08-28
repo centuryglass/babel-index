@@ -137,7 +137,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
 - `packages/config`: Central definition for numbers tuned by feel
-  * `config.mjs`: Defaults and validation (no fs)
+  * `config.ts`: Defaults and validation (no fs)
   * `load.mjs`: Load an optional config.json
 - `packages/map`: Map and room data handling
   * `ordering.js`: Room placement, search density gradient, rank by embedding, pan resistance

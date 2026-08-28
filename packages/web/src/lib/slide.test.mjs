@@ -4,7 +4,7 @@ import { createLayout, shuffledOrder } from '../../../map/ordering.js';
 import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.js';
 import { planMoves, applyMove } from '../../../map/illusion.js';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
-import { DEFAULTS } from '../../../config/config.mjs';
+import { DEFAULTS } from '../../../config/config.ts';
 import { createTileCache, CENTER as CENTER_TILE } from './tiles.js';
 import { CELL_ASPECT } from './camera.js';
 

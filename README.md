@@ -84,7 +84,7 @@ TODO: screenshot of the center room with the search box and book spines
 
 ### Configuration
 Values that can be adjusted to taste (zoom range, opening camera, slider defaults,
-search weights, etc.) are in [`packages/config/config.mjs`](packages/config/config.mjs),
+search weights, etc.) are in [`packages/config/config.ts`](packages/config/config.ts),
 each with its reasoning. Override any subset with a `config.json`:
 
 ```sh
