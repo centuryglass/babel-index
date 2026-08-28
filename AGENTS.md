@@ -175,6 +175,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                    should probably be moved elsewhere.
   * `lib/svg.ts`: Minimal SVG element builder; currently unused elsewhere.
 - `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
+- `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
+                                 corpus - the source of `CLIP_CERTAINTY`/
+                                 `search.density.clipLow/clipHigh`'s calibration
+                                 and of `docs/search_rules.md`'s thresholds.
+  * `cosine-stats.ts`: Percentile/summary arithmetic and the clipLow/clipHigh
+                       and universal-keyword calibration suggestions - pure,
+                       unit-tested without a model or a corpus.
 - `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,
                   shared tiles) to Cloudflare R2, incrementally by content hash.
   * `upload-r2.ts`: CLI, credentials from env.
@@ -213,13 +220,22 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   extension (`./port.ts`, not extensionless) - Node's resolver doesn't guess.
 - **Node 20 is the floor** (`engines`), and CI runs 20/22/24. Get user
   confirmation before adding dependencies, try to keep dependencies minimal.
-- **This codebase is migrating to TypeScript, file by file, not all at once.**
-  `.js`/`.mjs`/`.jsx` and `.ts`/`.tsx` are expected to coexist for a long
-  stretch, and that is fine - there is no deadline and no "temporary" framing
-  to a file that hasn't moved yet. Convert a file when you are already in it
-  for another reason, or when its shape is a good candidate (see below); don't
-  go rename files solely to convert them unless asked. Two kinds of file so
-  far:
+- **TypeScript is the default for every new file, full stop.** A new module is
+  `.ts`, a new React file is `.tsx`, a new script is a `.ts` run through the
+  loader hook (see Commands above) rather than a bare `.mjs` - the same is true
+  of new tests (`*.test.ts`, not `*.test.mjs`; `node --test` discovers both, see
+  below). Write `.js`/`.mjs`/`.jsx` only when there is a concrete reason a given
+  file can't be `.ts`/`.tsx` yet, not out of habit or to match a neighbor that
+  hasn't been converted.
+
+  This is a change from how the migration below started: the file-by-file
+  conversion of *existing* code is still exactly as described - no deadline,
+  convert something old when you're already in it or it's a good candidate, and
+  don't mass-rename working files just to convert them. What's different is new
+  code's starting point. `.js`/`.mjs`/`.jsx` and `.ts`/`.tsx` are still expected
+  to coexist for a long stretch - the old default doesn't retroactively become
+  wrong - but every file added from here on should be TypeScript unless it
+  can't be. Two kinds of file so far:
   - **A pure type contract** (`packages/map/manifest.ts`): a `.ts` file
     exporting only `interface`s/`type`s, never imported by a `.js`/`.mjs`/`.jsx`
     file at runtime - only through JSDoc (`@type {import('./manifest.ts').Manifest}`).
@@ -247,9 +263,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't
   caught so far. Writing accurate JSDoc on new `.js`/`.mjs` code is still
   welcome; it's what the next conversion reads from.
-- **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
-  `node:assert/strict`. `node --test` discovers them, so new files need no
-  wiring. e2e files are `*.e2e.ts`, intentionally skipping the pattern.
+- **Tests sit next to the code**, using `node:test` + `node:assert/strict`.
+  New tests are `*.test.ts` per the TypeScript-by-default rule above; existing
+  `*.test.mjs` files are untouched until something else brings a reason to
+  convert them. `node --test` discovers both extensions with no wiring needed.
+  e2e files are `*.e2e.ts`, intentionally skipping the `*.test.*` pattern.
 - **`@huggingface/transformers` is OPTIONAL.** `onnxruntime-node` only supports win32/darwin/linux, testing
   through Android/Termux happens occasionally, and base functionality
   shouldn't require CLIP. Never import it statically, see `tools/embed` and
