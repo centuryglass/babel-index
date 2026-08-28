@@ -53,7 +53,11 @@
  * else, which is the one thing this whole approach exists to avoid.
  */
 
-/** The center room's value. Distinct from the wallpaper so the board is self-describing. */
+/**
+ * The center room's value. Distinct from the wallpaper so the board is
+ * self-describing. Must agree with `BoardValue` in `moves.ts` - that type
+ * contract can't import this runtime constant, so it re-declares the literal.
+ */
 export const CENTER = 'center';
 
 /** Every generic room. One value, repeated across most of the board, on purpose. */
@@ -73,8 +77,8 @@ export const GENERIC = 'generic';
  *   least 1: the planner swaps into the cell just outside the region and then
  *   slides it inward, so a region hugging the viewport would put that swap on a
  *   partially visible cell and the illusion would break at the edge of the screen
- * @returns {object|null} `{width, height, start, end, bounds, fixed, origin}`,
- *   or null when the rearrangement cannot be animated legally
+ * @returns {import('./moves.ts').Rearrangement | null} null when the
+ *   rearrangement cannot be animated legally
  */
 export function buildRearrangement({ before, after, view, aspect, margin = 1 }) {
   if (!(margin >= 1)) throw new RangeError('margin must be at least 1 - see the doc comment');
@@ -104,6 +108,7 @@ export function buildRearrangement({ before, after, view, aspect, margin = 1 }) 
   const height = 2 * halfH + 1;
   const at = (mx, my) => (my + halfH) * width + (mx + halfW);
 
+  /** @type {import('./moves.ts').BoardValue[]} */
   const start = new Array(width * height);
   for (let by = 0; by < height; by++)
     for (let bx = 0; bx < width; bx++)
@@ -140,7 +145,11 @@ export function buildRearrangement({ before, after, view, aspect, margin = 1 }) 
   };
 }
 
-/** What one arrangement puts at a map cell. */
+/**
+ * What one arrangement puts at a map cell.
+ *
+ * @returns {import('./moves.ts').BoardValue}
+ */
 function valueAt({ layout, order }, mx, my) {
   const cell = layout.roomAt(mx, my, order);
   if (cell.center) return CENTER;
@@ -160,6 +169,9 @@ function valueAt({ layout, order }, mx, my) {
  * anywhere: a room the new arrangement wants on camera that is not on the board
  * at all. See the module comment on when that happens.
  *
+ * @param {import('./moves.ts').BoardValue[]} start
+ * @param {import('./moves.ts').BoardValue[]} end mutated in place
+ * @param {Map<import('./moves.ts').BoardValue, number>} delta
  * @returns {boolean} whether the repair was possible
  */
 function repairMultiset(start, end, delta, geom) {
