@@ -13,7 +13,7 @@ import { createLruCache, createLimiter } from './search-cache.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
 
-/** A resolved config as `loadConfig()` (packages/config/load.mjs) returns it -
+/** A resolved config as `loadConfig()` (packages/config/load.ts) returns it -
  *  `Config` plus where it came from, if anywhere. */
 type ResolvedConfig = Config & { source?: string | null };
 

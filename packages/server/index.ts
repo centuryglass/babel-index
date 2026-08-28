@@ -33,7 +33,7 @@ import { context } from 'esbuild';
 import { scanDirectory } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
-import { loadConfig } from '../config/load.mjs';
+import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
 import type { Express } from 'express';
 

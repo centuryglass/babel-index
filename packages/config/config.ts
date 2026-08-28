@@ -10,7 +10,7 @@
  * `DEFAULTS` below is the surface. Every value carries the reasoning that
  * justifies it, the way `pyramid.js` does, because a number without its argument
  * is a number nobody dares change. A `config.json` beside the repo root can
- * override any subset of it - see `load.mjs` - but it is an overlay and is not
+ * override any subset of it - see `load.ts` - but it is an overlay and is not
  * committed, so this object stays the single statement of every default.
  *
  * The overlay itself (`raw` below) is deliberately typed `unknown`: it's
@@ -33,7 +33,7 @@
  * is the failure this asymmetry exists to make impossible.
  *
  * No side effects and no filesystem: this is defaults plus validation, so it can
- * be exercised at any limits without a disk or a server. `load.mjs` is the part
+ * be exercised at any limits without a disk or a server. `load.ts` is the part
  * that reads a file.
  */
 import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
