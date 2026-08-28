@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLruCache, createLimiter } from './search-cache.mjs';
+import { createLruCache, createLimiter } from './search-cache.ts';
 
 // --- createLruCache -----------------------------------------------------
 

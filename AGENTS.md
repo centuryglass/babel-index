@@ -84,7 +84,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `app.mjs`: Express setup, manifest/rescan/search/images endpoints
   * `scan.mjs`: Image tile directory loading
   * `port.ts`: portInUse helper function
-  * `search-cache.mjs`: LRU cache and concurrency limiter backing `/api/search`'s
+  * `search-cache.ts`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
@@ -141,7 +141,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `load.mjs`: Load an optional config.json
 - `packages/map`: Map and room data handling
   * `ordering.js`: Room placement, search density gradient, rank by embedding, pan resistance
-  * `nextRoom.js`: Find the next non-default room on the map in a given direction
+  * `nextRoom.ts`: Find the next non-default room on the map in a given direction
   * `metadata.js`: Normalizing and joining per-room keyword/story data
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
@@ -161,7 +161,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `shelf_geometry.svg`: Center tile geometry.
   * `lib/geometry.js`: Book and search box placement structure
   * `lib/measured.js`: Auto-generated svg geometry data
-  * `lib/prng.js`: RNG utility function currently only used by web/src/lib/center.js,
+  * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.js,
                    should probably be moved elsewhere.
 - `tools/embed/embed.mjs`: Compute and store CLIP image embeddings for all rooms.
 - `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,
