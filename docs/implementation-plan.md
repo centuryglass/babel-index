@@ -83,12 +83,14 @@ serve as completed task history.
     `checkJs` earns the most, cheaply, for the size of file it clears.
 - **Decided: migrating to TypeScript, file by file.** See AGENTS.md's
   TypeScript bullet for the two file kinds (pure type contract vs. real
-  module) and how each runs. `packages/map/manifest.ts` (the `Manifest`
-  contract) and `packages/server/port.ts` (a first real-module conversion,
-  proving out `build/`'s Node loader hook) are done; `Room`, `Metadata`,
-  `SearchResult`, `MapLayout`, `Move`, `Rearrangement`, `Config` are the
-  remaining data protocols worth typing early, same reasoning as before -
-  they're where a bare `object` currently swallows the most real bugs.
+  module) and how each runs. All of the data protocols called out early on -
+  `Manifest`/`Room` (`packages/map/manifest.ts`), `Config`
+  (`packages/config/config.ts`), `Move`/`Rearrangement`
+  (`packages/map/moves.ts`), and `SearchResult` (`packages/map/searchResult.ts`,
+  `rankHybrid`'s return shape plus `useSearch.js`'s `result` state) - are now
+  typed, alongside `RoomMeta` (`packages/map/metadata.js`) and `MapLayout`
+  (`packages/map/ordering.js`) as JSDoc typedefs. `packages/server/port.ts`
+  proved out the real-module conversion path (`build/`'s Node loader hook).
   Application logic converts opportunistically, not on a schedule; the
   deliberately loose shapes called out in AGENTS.md (metadata sidecar
   parsing, `center.js`'s `RUNS`, the animation state in `slide.js`/`camera.js`)

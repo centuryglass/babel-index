@@ -38,7 +38,7 @@ import {
  * @param {object} opts
  * @param {number} opts.total                     corpus size
  * @param {object} opts.searchConfig               `config.search`
- * @param {ReturnType<typeof import('../../../map/scoring.js').buildSearchIndex>|null} opts.searchIndex
+ * @param {import('../../../map/searchResult.ts').SearchIndex|null} opts.searchIndex
  * @param {{current: {data: Int8Array, dim: number}|null}} opts.embeddings
  * @param {{current: Function}} opts.requestAnimationRef
  *   filled in by `main.jsx` once `useRearrangement` exists - see the file
@@ -51,7 +51,7 @@ import {
  * @returns {{
  *   query: string,
  *   setQuery: Function,
- *   result: object|null,
+ *   result: import('../../../map/searchResult.ts').SearchResult|null,
  *   search: (term: string) => Promise<void>,
  *   runSearch: (e: Event) => void,
  *   clearSearch: () => void,
@@ -204,6 +204,9 @@ export function useSearch({
  * `signals` reports which of the three found anything for this query, not
  * which were available - a corpus full of keywords that none of them matched
  * should not claim the ranking was keyword-driven.
+ *
+ * @param {import('../../../map/searchResult.ts').RankSignals} signals
+ * @param {boolean} hasText
  */
 export function describeSignals({ clip, keyword, story }, hasText) {
   const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);

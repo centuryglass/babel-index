@@ -207,8 +207,8 @@ export function tokenise(text, { minLength = 3, stopwords = true } = {}) {
  * lookups. Rooms without metadata stay null, so the array is still indexed by
  * room id.
  *
- * @param {(object|null)[]} joined output of `joinMetadata()`
- * @returns {({keywords: string[], story: Set<string>}|null)[]}
+ * @param {(import('./metadata.js').RoomMeta|null)[]} joined output of `joinMetadata()`
+ * @returns {import('./searchResult.ts').SearchIndex}
  */
 export function buildSearchIndex(joined) {
   return (joined ?? []).map((entry) => {
@@ -339,8 +339,8 @@ export function storyScore(queryTokens, storyStems) {
  * `artists`), and nested or duplicated `<mark>` elements are not what anyone
  * wants to render or to read out.
  *
- * @param {{start: number, end: number}[]} ranges
- * @returns {{start: number, end: number}[]}
+ * @param {import('./searchResult.ts').MatchRange[]} ranges
+ * @returns {import('./searchResult.ts').MatchRange[]}
  */
 function mergeRanges(ranges) {
   const sorted = ranges.filter((r) => r.end > r.start).sort((a, b) => a.start - b.start);
@@ -389,7 +389,7 @@ function occurrences(hay, needle) {
  * @param {string} text the keyword as written, unfolded
  * @param {string} foldedQuery
  * @param {string[]} queryTokens
- * @returns {{start: number, end: number}[]} ranges into `text`
+ * @returns {import('./searchResult.ts').MatchRange[]} ranges into `text`
  */
 export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
   const src = String(text ?? '');
@@ -426,7 +426,7 @@ export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
  * @param {string[]} queryTokens
  * @param {object} [opts]
  * @param {number} [opts.minLength] must match what built the story index
- * @returns {{start: number, end: number}[]} ranges into `text`
+ * @returns {import('./searchResult.ts').MatchRange[]} ranges into `text`
  */
 export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {}) {
   const src = String(text ?? '');
@@ -520,14 +520,10 @@ const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
  * @param {Int8Array} [opts.embeddings] the blob, roomCount * dim row-major
  * @param {number} [opts.dim]
  * @param {Float32Array|number[]} [opts.vector] the query vector, L2-normalised
- * @param {({keywords: string[], story: Set<string>}|null)[]} [opts.index]
+ * @param {import('./searchResult.ts').SearchIndex} [opts.index]
  * @param {{low: number, high: number}} [opts.clipCertainty] raw-cosine bounds
  *   for CLIP's share of certainty
- * @returns {{order: number[], certainty: Float32Array,
- *            breakdown: {score: Float32Array, keyword: Float32Array,
- *                        story: Float32Array, clip: Float32Array,
- *                        cosine: Float32Array},
- *            signals: {clip: boolean, keyword: boolean, story: boolean}}}
+ * @returns {import('./searchResult.ts').RankHybridResult}
  *   `certainty` is parallel to `order`, i.e. by rank, which is how the map's
  *   density gradient wants it - and `breakdown` follows the same convention,
  *   every array indexed by rank rather than by room id.
@@ -657,8 +653,7 @@ export function rankHybrid({
  * @param {object} opts.breakdown from `rankHybrid`
  * @param {Float32Array} opts.certainty from `rankHybrid`
  * @param {{keyword: number, story: number, clip: number}} opts.weights
- * @returns {{rows: Array<{key: string, label: string, weighted: number,
- *            raw: number, note: string|null}>, total: number, certainty: number}}
+ * @returns {import('./searchResult.ts').ScoreExplanation}
  */
 export function explainScore(rank, { breakdown, certainty, weights }) {
   const at = (arr) => (arr && rank < arr.length ? arr[rank] : 0);
