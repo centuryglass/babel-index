@@ -38,6 +38,15 @@ export default [
     }
   },
   {
+    // render.mjs runs in Node, but most of its code is function source shipped
+    // into Playwright's `page.evaluate` and executed in the browser - it
+    // legitimately references document/window/Image/FontFace.
+    files: ['tools/font-lab/render.mjs'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     files: ['packages/web/src/**/*.{js,jsx}'],
     plugins: { 'react-hooks': reactHooks },
     languageOptions: {
