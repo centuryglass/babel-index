@@ -228,8 +228,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **TypeScript is the default for every new file, full stop.** A new module is
   `.ts`, a new React file is `.tsx`, a new script is a `.ts` run through the
   loader hook (see Commands above) rather than a bare `.mjs` - the same is true
-  of new tests (`*.test.ts`, not `*.test.mjs`; `node --test` discovers both, see
-  below). Write `.js`/`.mjs`/`.jsx` only when there is a concrete reason a given
+  of new tests (`*.test.ts`, not `*.test.mjs`; the `test` script enumerates both,
+  see below). Write `.js`/`.mjs`/`.jsx` only when there is a concrete reason a given
   file can't be `.ts`/`.tsx` yet, not out of habit or to match a neighbor that
   hasn't been converted.
 
@@ -271,7 +271,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Tests sit next to the code**, using `node:test` + `node:assert/strict`.
   New tests are `*.test.ts` per the TypeScript-by-default rule above; existing
   `*.test.mjs` files are untouched until something else brings a reason to
-  convert them. `node --test` discovers both extensions with no wiring needed.
+  convert them. The `test` script `find`s both extensions under `packages`/`tools`
+  and passes them to `node --test` explicitly: `--test`'s own auto-discovery skips
+  `.ts`, and its glob expansion only exists on Node 22+, so on the Node 20 floor a
+  bare `'**/*.test.ts'` is taken literally and fails to match. Enumerating the
+  files in the shell sidesteps both.
   e2e files are `*.e2e.ts`, intentionally skipping the `*.test.*` pattern.
 - **`@huggingface/transformers` is OPTIONAL.** `onnxruntime-node` only supports win32/darwin/linux, testing
   through Android/Termux happens occasionally, and base functionality
