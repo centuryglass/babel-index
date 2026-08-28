@@ -3,7 +3,7 @@
  * (docs/accessibility-plan.md phase C) - the keyboard cursor, arrow panning,
  * the boundary announcement, PageUp/PageDown zoom, and the `/`/`?` shortcuts.
  * One of five files split out of the original `smoke.e2e.mjs` (see
- * `docs/implementation-plan.md`); see `map-gestures.e2e.mjs` for the shared
+ * `docs/implementation-plan.md`); see `map-gestures.e2e.ts` for the shared
  * header comment on why and how.
  *
  * `role="application"` on the canvas turns off a screen reader's browse-mode
@@ -21,7 +21,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import AxeBuilder from '@axe-core/playwright';
-import { SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, waitFor } from './support.mjs';
+import { SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, waitFor } from './support.ts';
 
 describe('the library, in a browser: the keyboard cursor', { concurrency: false }, () => {
   let session;
@@ -46,7 +46,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
     await page.locator('canvas').focus();
     // Home for the same reason as the application-region test in
-    // `accessibility.e2e.mjs`: the cursor follows a rearrangement now, not
+    // `accessibility.e2e.ts`: the cursor follows a rearrangement now, not
     // only a keypress, so where a fresh page load leaves it is not a
     // precondition to lean on.
     await page.keyboard.press('Home');
