@@ -11,9 +11,17 @@
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { resolveConfig } from './config.ts';
+import { resolveConfig, type Config, type ZoomLimits } from './config.ts';
 
 export const CONFIG_FILE = 'config.json';
+
+export interface LoadConfigOptions {
+  /** overlay path; defaults to `config.json` in cwd */
+  path?: string;
+  zoomLimits?: ZoomLimits;
+}
+
+export type LoadedConfig = Config & { source: string | null };
 
 /**
  * Load and resolve the config.
@@ -22,23 +30,21 @@ export const CONFIG_FILE = 'config.json';
  * cannot be read or parsed *does* say something - it was meant to take effect
  * and did not - so it lands in `notes` rather than being swallowed.
  *
- * @param {object} [opts]
- * @param {string} [opts.path] overlay path; defaults to `config.json` in cwd
- * @param {{min: number, max: number}} [opts.zoomLimits]
- * @returns {Promise<import('./config.ts').Config & {source: string|null}>} the
- *   resolved config, plus `source` (where the overlay came from, if anywhere)
+ * @returns the resolved config, plus `source` (where the overlay came from, if anywhere)
  */
-export async function loadConfig({ path, zoomLimits } = {}) {
+export async function loadConfig({ path, zoomLimits }: LoadConfigOptions = {}): Promise<LoadedConfig> {
   const file = resolve(process.cwd(), path ?? CONFIG_FILE);
 
-  let raw = {};
-  let source = null;
-  const problems = [];
+  let raw: unknown = {};
+  let source: string | null = null;
+  const problems: string[] = [];
   try {
     raw = JSON.parse(await readFile(file, 'utf8'));
     source = file;
   } catch (err) {
-    if (err.code !== 'ENOENT') problems.push(`could not read ${file}: ${err.message}; using defaults`);
+    const code = (err as NodeJS.ErrnoException).code;
+    const message = (err as Error).message;
+    if (code !== 'ENOENT') problems.push(`could not read ${file}: ${message}; using defaults`);
     // An explicitly requested file that is not there is worth saying, since the
     // caller asked for it by name. The default path being absent is not.
     else if (path) problems.push(`no such config file: ${file}; using defaults`);
