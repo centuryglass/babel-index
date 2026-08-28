@@ -120,6 +120,7 @@ export function CatalogView({
   metadata,
   result,
   highlight,
+  tagLinks,
   query,
   setQuery,
   onSearch,
@@ -372,6 +373,7 @@ export function CatalogView({
               onKeyword={onKeyword}
               onExpand={onExpand}
               highlight={highlight}
+              tagLinks={tagLinks}
               result={result}
               weights={config.search.weights}
             />
@@ -417,7 +419,7 @@ export function CatalogView({
  */
 function CatalogRow({
   id, rank, total, file, entry, src, thumbPx, cell,
-  onShowOnMap, onKeyword, onExpand, highlight, result, weights,
+  onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights,
 }) {
   const storyRef = useRef(null);
   const [clipped, setClipped] = useState(false);
@@ -496,6 +498,7 @@ function CatalogRow({
             desc={desc}
             onKeyword={onKeyword}
             highlight={highlight}
+            tagLinks={tagLinks}
             rank={rank}
             result={result}
             weights={weights}

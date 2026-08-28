@@ -38,6 +38,7 @@ function sampleManifest() {
     count: 1,
     embeddings: { url: '/images/embeddings.bin', dim: 512, count: 1, model: 'x' },
     metadata: { url: '/images/metadata.json', matched: 1, entries: 1 },
+    tagLinks: { url: '/images/tagLinks.json', count: 1 },
     levels: [{ level: 0, w: 512, h: 512, dir: null }],
   };
 }
@@ -67,6 +68,7 @@ test('scanRemote points every url directly at the remote host, not through this 
       assert.equal(manifest.rooms[0].url, `${base}/corpus-sample/001.jpg`);
       assert.equal(manifest.embeddings.url, `${base}/corpus-sample/embeddings.bin`);
       assert.equal(manifest.metadata.url, `${base}/corpus-sample/metadata.json`);
+      assert.equal(manifest.tagLinks.url, `${base}/corpus-sample/tagLinks.json`);
       assert.equal(manifest.shared.center.url, `${base}/shared/center.png`);
       assert.equal(manifest.shared.generic[0].url, `${base}/shared/generic/g1.png`);
     }
