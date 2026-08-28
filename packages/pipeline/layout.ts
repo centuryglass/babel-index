@@ -21,6 +21,21 @@
  */
 import { LEVELS } from '../web/src/lib/pyramid.js';
 
+export interface Size {
+  w: number;
+  h: number;
+}
+
+export interface LevelStep {
+  level: number;
+  divisor: number;
+}
+
+export interface MipStep extends Size {
+  level: number;
+  dir: string | null;
+}
+
 /**
  * What levels a source image of these dimensions should produce.
  *
@@ -32,13 +47,11 @@ import { LEVELS } from '../web/src/lib/pyramid.js';
  * than duplicate ones: two divisors that round to the same width would name the
  * same directory twice, which is a silent corruption of the ladder.
  *
- * @param {{w: number, h: number}} source
- * @param {{level: number, divisor: number}[]} [levels]
- * @returns {{level: number, w: number, h: number, dir: string|null}[]} finest first
+ * Returns the plan finest first.
  */
-export function mipPlan({ w, h }, levels = LEVELS) {
-  const plan = [];
-  const seen = new Set();
+export function mipPlan({ w, h }: Size, levels: LevelStep[] = LEVELS): MipStep[] {
+  const plan: MipStep[] = [];
+  const seen = new Set<number>();
   for (const { level, divisor } of levels) {
     const size = {
       w: Math.max(1, Math.round(w / divisor)),

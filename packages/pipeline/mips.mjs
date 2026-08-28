@@ -48,11 +48,11 @@ import { join, extname, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/lib/pyramid.js';
-import { mipPlan } from './layout.mjs';
+import { mipPlan } from './layout.ts';
 
 // Re-exported because this is where callers have always looked for it. It lives
-// in layout.mjs so scan.mjs can read the layout without importing sharp.
-export { mipPlan } from './layout.mjs';
+// in layout.ts so scan.ts can read the layout without importing sharp.
+export { mipPlan } from './layout.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
