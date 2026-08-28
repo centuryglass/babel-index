@@ -12,7 +12,7 @@
     "generate:mips": "node --import ./build/register.mjs packages/pipeline/index.mjs",
     "generate:embeddings": "node --import ./build/register.mjs tools/embed/embed.ts",
     "upload:r2": "node --import ./build/register.mjs tools/upload/upload-r2.ts",
-    "test": "node --import ./build/register.mjs --test",
+    "test": "node --import ./build/register.mjs --test $(find packages tools -name '*.test.mjs' -o -name '*.test.ts')",
     "test:e2e": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.e2e.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p jsconfig.json",
