@@ -10,10 +10,10 @@
   "scripts": {
     "generate:figures": "node --import ./build/register.mjs tools/center-placement/hexagon-plan.mjs",
     "generate:mips": "node --import ./build/register.mjs packages/pipeline/index.mjs",
-    "generate:embeddings": "node --import ./build/register.mjs tools/embed/embed.mjs",
-    "upload:r2": "node --import ./build/register.mjs tools/upload/upload-r2.mjs",
+    "generate:embeddings": "node --import ./build/register.mjs tools/embed/embed.ts",
+    "upload:r2": "node --import ./build/register.mjs tools/upload/upload-r2.ts",
     "test": "node --import ./build/register.mjs --test",
-    "test:e2e": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.e2e.mjs",
+    "test:e2e": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.e2e.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p jsconfig.json",
     "demo": "node --import ./build/register.mjs packages/server/index.ts",

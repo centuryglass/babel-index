@@ -17,7 +17,7 @@ import type { Config } from '../config/config.ts';
  *  `Config` plus where it came from, if anywhere. */
 type ResolvedConfig = Config & { source?: string | null };
 
-// Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
+// Must be the same CLIP as tools/embed/embed.ts used for the images, or the
 // text and image towers point into different spaces and every ranking is quiet
 // nonsense. The image side is fixed the moment embeddings.bin is written; this
 // is the matching text side.
