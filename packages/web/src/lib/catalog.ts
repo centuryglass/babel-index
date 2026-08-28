@@ -31,6 +31,30 @@
  */
 import { BASE_TILE, idealLevel } from './pyramid.js';
 
+export interface RankedRoom {
+  id: number;
+  rank: number;
+}
+
+export interface PageRange {
+  first: number;
+  last: number;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface FlipTransform {
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+}
+
 /**
  * The rooms on one page, as `{ id, rank }` pairs.
  *
@@ -42,21 +66,19 @@ import { BASE_TILE, idealLevel } from './pyramid.js';
  * The last page is short rather than padded, and a page past the end is empty
  * rather than an error - a corpus can shrink under a stored page number.
  *
- * @param {number[]} order room ids, best first
- * @param {number} page 0-based
- * @param {number} perPage
- * @returns {{id: number, rank: number}[]}
+ * @param order room ids, best first
+ * @param page 0-based
  */
-export function pageOf(order, page, perPage) {
+export function pageOf(order: number[], page: number, perPage: number): RankedRoom[] {
   const start = Math.max(0, page) * perPage;
   const end = Math.min(order.length, start + perPage);
-  const out = [];
+  const out: RankedRoom[] = [];
   for (let rank = start; rank < end; rank++) out.push({ id: order[rank], rank });
   return out;
 }
 
 /** How many pages a ranking of `total` rooms takes. At least one, even empty. */
-export function pageCount(total, perPage) {
+export function pageCount(total: number, perPage: number): number {
   return Math.max(1, Math.ceil(total / perPage));
 }
 
@@ -68,9 +90,9 @@ export function pageCount(total, perPage) {
  * difference between the two modes, and stating it as a parameter rather than a
  * branch is what stops them drifting apart.
  *
- * @returns {{first: number, last: number}} inclusive
+ * Inclusive.
  */
-export function mountedPages(active, pages, window = 1) {
+export function mountedPages(active: number, pages: number, window = 1): PageRange {
   const at = Math.min(Math.max(0, active), pages - 1);
   return {
     first: Math.max(0, at - window),
@@ -85,13 +107,18 @@ export function mountedPages(active, pages, window = 1) {
  * that reaches the end of the list has to count the rows that are actually
  * there rather than `pages * perPage` of them.
  *
- * @param {number} from first unmounted page, inclusive
- * @param {number} to last unmounted page, inclusive
- * @param {number} total rooms in the whole list
- * @param {number} perPage
- * @param {number} rowPx height of one row
+ * @param from first unmounted page, inclusive
+ * @param to last unmounted page, inclusive
+ * @param total rooms in the whole list
+ * @param rowPx height of one row
  */
-export function spacerHeight(from, to, total, perPage, rowPx) {
+export function spacerHeight(
+  from: number,
+  to: number,
+  total: number,
+  perPage: number,
+  rowPx: number,
+): number {
   if (to < from) return 0;
   const start = Math.min(total, from * perPage);
   const end = Math.min(total, (to + 1) * perPage);
@@ -105,7 +132,7 @@ export function spacerHeight(from, to, total, perPage, rowPx) {
  * every other size in this app is: the tile is 1024x768 today and the shape is
  * not settled, and a literal here would silently stop matching the art.
  */
-export function tileHeight(thumbWidth) {
+export function tileHeight(thumbWidth: number): number {
   return Math.round(thumbWidth * (BASE_TILE.h / BASE_TILE.w));
 }
 
@@ -123,11 +150,11 @@ export function tileHeight(thumbWidth) {
  * `textMin` changes when a search starts and ends, and every row changes with
  * it together.
  *
- * @param {number} thumbWidth css pixels
- * @param {number} [padding] the row's vertical padding, both halves
- * @param {number} [textMin] what the text column needs at minimum
+ * @param thumbWidth css pixels
+ * @param padding the row's vertical padding, both halves
+ * @param textMin what the text column needs at minimum
  */
-export function rowHeight(thumbWidth, padding = 0, textMin = 0) {
+export function rowHeight(thumbWidth: number, padding = 0, textMin = 0): number {
   return Math.max(tileHeight(thumbWidth), Math.round(textMin)) + padding;
 }
 
@@ -143,11 +170,11 @@ export function rowHeight(thumbWidth, padding = 0, textMin = 0) {
  * damp - and passing a `current` level would make the answer depend on history
  * for no benefit.
  *
- * @param {number} cssWidth the width the image is displayed at
- * @param {number} [dpr] device pixel ratio, capped as the renderer caps it
- * @returns {number} a level, which `rooms.js` may still resolve to null
+ * @param cssWidth the width the image is displayed at
+ * @param dpr device pixel ratio, capped as the renderer caps it
+ * @returns a level, which `rooms.js` may still resolve to null
  */
-export function thumbLevel(cssWidth, dpr = 1) {
+export function thumbLevel(cssWidth: number, dpr = 1): number {
   const drawn = Math.max(1, cssWidth) * Math.min(2, Math.max(1, dpr));
   return idealLevel({ w: drawn, h: drawn * (BASE_TILE.h / BASE_TILE.w) });
 }
@@ -160,13 +187,12 @@ export function thumbLevel(cssWidth, dpr = 1) {
  * `scrollTop / (perPage * rowPx)`, once the lead - the center room's row, which
  * sits outside the paging - is taken off.
  *
- * @param {number} scrollTop
- * @param {object} opts
- * @param {number} opts.perPage
- * @param {number} opts.rowPx
- * @param {number} [opts.leadPx] height of anything above the paged rows
+ * @param opts.leadPx height of anything above the paged rows
  */
-export function pageAtScroll(scrollTop, { perPage, rowPx, leadPx = 0 }) {
+export function pageAtScroll(
+  scrollTop: number,
+  { perPage, rowPx, leadPx = 0 }: { perPage: number; rowPx: number; leadPx?: number },
+): number {
   const per = Math.max(1, perPage * rowPx);
   return Math.max(0, Math.floor((scrollTop - leadPx) / per));
 }
@@ -183,7 +209,10 @@ export function pageAtScroll(scrollTop, { perPage, rowPx, leadPx = 0 }) {
  * Pagination passes `viewportPx: 0`, which leaves its window at 0 - one page,
  * as it must be, whatever the display is doing.
  */
-export function windowFor(configured, { viewportPx, perPage, rowPx }) {
+export function windowFor(
+  configured: number,
+  { viewportPx, perPage, rowPx }: { viewportPx: number; perPage: number; rowPx: number },
+): number {
   if (!viewportPx) return configured;
   const needed = Math.ceil(viewportPx / Math.max(1, perPage * rowPx));
   return Math.max(configured, needed);
@@ -201,10 +230,10 @@ export function windowFor(configured, { viewportPx, perPage, rowPx }) {
  * `.sort()` of the same filenames - two different orderings of one file list
  * would be its own bug.
  *
- * @param {{file: string}[]} rooms manifest.rooms, indexed by id
- * @returns {number[]} room ids
+ * @param rooms manifest.rooms, indexed by id
+ * @returns room ids
  */
-export function alphabeticalOrder(rooms) {
+export function alphabeticalOrder(rooms: { file: string }[]): number[] {
   return rooms
     .map((room, id) => id)
     .sort((a, b) => {
@@ -226,7 +255,7 @@ export function alphabeticalOrder(rooms) {
  * still translated correctly, so it looked like a working transition that had
  * simply forgotten to scale. Found by logging the numbers, not by watching it.
  */
-export function rectOf(domRect) {
+export function rectOf(domRect: { x: number; y: number; width: number; height: number }): Rect {
   return { x: domRect.x, y: domRect.y, w: domRect.width, h: domRect.height };
 }
 
@@ -244,12 +273,8 @@ export function rectOf(domRect) {
  * by watching it.
  *
  * Assumes `transform-origin: 0 0`, so the scale does not also move the corner.
- *
- * @param {{x: number, y: number, w: number, h: number}} from
- * @param {{x: number, y: number, w: number, h: number}} to
- * @returns {{x: number, y: number, scaleX: number, scaleY: number}}
  */
-export function flipTransform(from, to) {
+export function flipTransform(from: Rect, to: Rect): FlipTransform {
   return {
     x: from.x - to.x,
     y: from.y - to.y,
@@ -259,7 +284,7 @@ export function flipTransform(from, to) {
 }
 
 /** `flipTransform` as a css transform string. */
-export function flipCss(t) {
+export function flipCss(t: FlipTransform): string {
   return `translate(${t.x}px, ${t.y}px) scale(${t.scaleX}, ${t.scaleY})`;
 }
 
@@ -276,11 +301,10 @@ export function flipCss(t) {
  * than shortening it - and on a display narrow enough to leave no room, one
  * clipped line is still the honest answer.
  *
- * @param {number} rowPx        the row's height
- * @param {number} reservedPx   the name row, chips, score strip and padding
- * @param {number} lineHeightPx
+ * @param rowPx        the row's height
+ * @param reservedPx   the name row, chips, score strip and padding
  */
-export function storyLines(rowPx, reservedPx, lineHeightPx) {
+export function storyLines(rowPx: number, reservedPx: number, lineHeightPx: number): number {
   // A line height of zero means nothing has been measured yet, and dividing by
   // the 1px floor a `Math.max` would give returns a clamp of a hundred lines -
   // which is not "unclamped", it is a wrong number that happens to look

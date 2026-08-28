@@ -6,7 +6,7 @@ import { MapView } from './components/MapView.jsx';
 import { CatalogView } from './components/CatalogView.jsx';
 import { RoomOverlay } from './components/RoomOverlay.jsx';
 import { HelpDialog } from './components/HelpDialog.jsx';
-import { alphabeticalOrder } from './lib/catalog.js';
+import { alphabeticalOrder } from './lib/catalog.ts';
 import { load, save, clear, KEYS } from './lib/persist.ts';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
 import { roomAtPoint } from './lib/picking.ts';
