@@ -56,12 +56,4 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
-  {
-    // Runs under Node via Playwright, but its page.evaluate() callbacks
-    // execute in-browser and reference browser globals directly.
-    files: ['packages/web/e2e/**/*.mjs'],
-    languageOptions: {
-      globals: { ...globals.node, ...globals.browser },
-    },
-  },
 ];

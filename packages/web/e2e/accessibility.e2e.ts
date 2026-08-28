@@ -3,10 +3,10 @@
  * sweeps, the panel's accessible names, the card's focus handling, the live
  * region, reduced motion, and the sidecar's optional `alt` caption. One of
  * five files split out of the original `smoke.e2e.mjs` (see
- * `docs/implementation-plan.md`); see `map-gestures.e2e.mjs` for the shared
+ * `docs/implementation-plan.md`); see `map-gestures.e2e.ts` for the shared
  * header comment on why and how. The map's own keyboard interface (phase C)
- * is `keyboard-cursor.e2e.mjs`, and the center room's shelf (phase D) is
- * `shelf.e2e.mjs`.
+ * is `keyboard-cursor.e2e.ts`, and the center room's shelf (phase D) is
+ * `shelf.e2e.ts`.
  *
  * The accessibility block asserts what only a browser can compute: an
  * accessible name comes from labels, roles and content together, so checking
@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import AxeBuilder from '@axe-core/playwright';
 import {
   SEARCH_TIMEOUT, axFind, axNodes, closeLibrary, landed, openLibrary, settled, waitFor,
-} from './support.mjs';
+} from './support.ts';
 
 describe('the library, in a browser: accessibility', { concurrency: false }, () => {
   let session;
@@ -77,7 +77,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // needed to be.
     try {
       // "brass" is a confirmed hit in the sample corpus's own metadata - see
-      // `map-gestures.e2e.mjs`'s keyword chips test, which reads real keywords
+      // `map-gestures.e2e.ts`'s keyword chips test, which reads real keywords
       // off a real card. Anything that finds zero matches would test the empty
       // state instead of this one, so a query known to match is not a
       // convenience, it is the point. This search is also what several tests
