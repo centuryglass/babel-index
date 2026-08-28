@@ -144,7 +144,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `debug.js`: Gates the dev panel behind `?debug`
 - `packages/config`: Central definition for numbers tuned by feel
   * `config.ts`: Defaults and validation (no fs)
-  * `load.mjs`: Load an optional config.json
+  * `load.ts`: Load an optional config.json
 - `packages/map`: Map and room data handling
   * `ordering.ts`: Room placement, search density gradient, rank by embedding, pan resistance
   * `nextRoom.ts`: Find the next non-default room on the map in a given direction
@@ -162,7 +162,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
   * `index.mjs`: CLI
   * `mips.mjs`: Generate+fill alternate image size directories
-  * `layout.mjs`: Import resolution steps from pyramid.js, define expected directory structure
+  * `layout.ts`: Import resolution steps from pyramid.js, define expected directory structure
   
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
