@@ -64,16 +64,15 @@ export function normaliseDistance(d, n) {
 /**
  * Plan a legal transformation of one board into another.
  *
- * @param {{width: number, height: number, cells: Array}} start
- * @param {{width: number, height: number, cells: Array}} end   a reordering of
- *   `start` - the two must agree as multisets, which `board.js` is responsible
- *   for arranging
- * @param {{xmin: number, xmax: number, ymin: number, ymax: number}} bounds
- *   the on-camera rectangle, inclusive. Must lie strictly inside the board and
- *   cover less than a quarter of it
- * @param {{x: number, y: number}} fixed a cell that must never move, holding
- *   the same value in both boards
- * @returns {Array<object>} moves, in order:
+ * @param {import('./moves.ts').Board} start
+ * @param {import('./moves.ts').Board} end   a reordering of `start` - the two
+ *   must agree as multisets, which `board.js` is responsible for arranging
+ * @param {import('./moves.ts').Bounds} bounds the on-camera rectangle,
+ *   inclusive. Must lie strictly inside the board and cover less than a
+ *   quarter of it
+ * @param {import('./moves.ts').Point} fixed a cell that must never move,
+ *   holding the same value in both boards
+ * @returns {import('./moves.ts').Move[]} moves, in order:
  *   `{type: 'shiftRow', row, distance}` - the value at column x moves to
  *      column (x + distance) mod width; positive is rightward
  *   `{type: 'shiftCol', col, distance}` - the value at row y moves to
@@ -94,6 +93,7 @@ export function planMoves(start, end, bounds, fixed) {
   // supply logic ask live questions instead of tracking a permutation.
   const board = start.cells.slice();
   const target = end.cells;
+  /** @type {import('./moves.ts').Move[]} */
   const moves = [];
 
   const at = (x, y) => y * W + x;
@@ -163,6 +163,7 @@ export function planMoves(start, end, bounds, fixed) {
   // parity means a phase can be reshaped without the animation quietly
   // mis-scheduling it.
   let stage = 0;
+  /** @type {import('./moves.ts').LineRef | null} */
   let line = null;
   let wave = false;
 
@@ -510,6 +511,10 @@ export function planMoves(start, end, bounds, fixed) {
  * Exported for the renderer, which advances the board a move at a time as the
  * animation reaches each one. The test carries its own independent replay, so
  * this is never the thing that decides whether a plan is correct.
+ *
+ * @param {import('./moves.ts').Board} board mutated in place
+ * @param {import('./moves.ts').Move} move
+ * @returns {import('./moves.ts').Board}
  */
 export function applyMove(board, move) {
   const { width: W, height: H, cells } = board;
@@ -532,7 +537,10 @@ export function applyMove(board, move) {
     cells[p] = cells[q];
     cells[q] = tmp;
   } else {
-    throw new Error(`unknown move ${move.type}`);
+    // The three branches above are exhaustive over `Move` - tsc proves `move`
+    // is `never` here, so this only fires if a caller passes something the
+    // type contract doesn't allow.
+    throw new Error(`unknown move ${JSON.stringify(move)}`);
   }
   return board;
 }
@@ -544,6 +552,11 @@ export function applyMove(board, move) {
  * mode is silent if it is not caught here: a region touching an edge makes the
  * "just outside" cells wrap around to the far side of the board, and a region
  * covering too much of it starves the parking pool mid-plan.
+ *
+ * @param {import('./moves.ts').Board} start
+ * @param {import('./moves.ts').Board} end
+ * @param {import('./moves.ts').Bounds} bounds
+ * @param {import('./moves.ts').Point} fixed
  */
 function validate(start, end, bounds, fixed) {
   const { width: W, height: H } = start;
