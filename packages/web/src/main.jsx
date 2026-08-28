@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createLayout, shuffledOrder } from '../../map/ordering.js';
+import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { RoomCard } from './components/RoomCard.jsx';
 import { MapView } from './components/MapView.jsx';
 import { CatalogView } from './components/CatalogView.jsx';
@@ -10,7 +10,7 @@ import { alphabeticalOrder } from './lib/catalog.js';
 import { load, save, clear, KEYS } from './lib/persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.js';
 import { roomAtPoint } from './lib/picking.ts';
-import { describeCell, describeRoom, describeCatalog } from '../../map/describe.js';
+import { describeCell, describeRoom, describeCatalog } from '../../map/describe.ts';
 import {
   bookAtPoint,
   centerCellRect,

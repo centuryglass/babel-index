@@ -4,7 +4,7 @@
  * This is what a screen reader announces on arrival at a cell, and it is the
  * label the room card and the ranked listbox both reuse - one implementation,
  * more than one consumer (accessibility-plan.md phase B), the same split
- * `picking.js` and `center.js` already make for hit-testing. Pure, no DOM, no
+ * `picking.ts` and `center.js` already make for hit-testing. Pure, no DOM, no
  * imports, so the words a reader hears can be asserted without a browser.
  *
  * Two things get named here: a cell (`describeCell`) and a whole arrangement
@@ -29,18 +29,25 @@
  * unindexed room.
  */
 
-/**
- * @param {number} x world cell x
- * @param {number} y world cell y
- * @param {object} opts
- * @param {object} opts.layout from `packages/map/ordering.js`'s `createLayout()`
- * @param {number[]} opts.order room ids, best first - the ranking on the map
- * @param {(object|null)[]} [opts.metadata] indexed by room id, as
- *   `joinMetadata()` returns; omitted or a miss both read as "no metadata"
- * @returns {{kind: 'center'|'generic'|'room', name: string, description: string|null,
- *   picture: string|null}}
- */
-export function describeCell(x, y, { layout, order, metadata = null }) {
+import type { MapLayout } from './ordering.ts';
+import type { RoomMeta } from './metadata.ts';
+
+export interface Description {
+  kind: 'center' | 'generic' | 'room';
+  name: string;
+  description: string | null;
+  picture: string | null;
+}
+
+export interface DescribeCellOptions {
+  layout: MapLayout;
+  /** room ids, best first - the ranking on the map */
+  order: number[];
+  /** indexed by room id, as `joinMetadata()` returns; omitted or a miss both read as "no metadata" */
+  metadata?: (RoomMeta | null)[] | null;
+}
+
+export function describeCell(x: number, y: number, { layout, order, metadata = null }: DescribeCellOptions): Description {
   const at = layout.roomAt(x, y, order);
 
   if (at.center)
@@ -69,13 +76,12 @@ export function describeCell(x, y, { layout, order, metadata = null }) {
  * - the premise this whole file rests on. Nothing about a cell, a layout or a
  * board reaches in here.
  *
- * @param {number} id room id
- * @param {number} rank position in the ranking, 0-based
- * @param {number} total how many rooms are ranked
- * @param {object|null} entry the room's metadata, as `joinMetadata()` returns
- * @returns {{kind: 'room', name: string, description: string|null, picture: string|null}}
+ * @param id room id
+ * @param rank position in the ranking, 0-based
+ * @param total how many rooms are ranked
+ * @param entry the room's metadata, as `joinMetadata()` returns
  */
-export function describeRoom(id, rank, total, entry = null) {
+export function describeRoom(id: number, rank: number, total: number, entry: RoomMeta | null = null): Description {
   const keywords = entry?.keywords?.length ? entry.keywords.map((k) => k.text).join(', ') : null;
 
   return {
@@ -109,15 +115,21 @@ export function describeRoom(id, rank, total, entry = null) {
  * one: reduced motion rebuilds the map at once and the outcome is identical,
  * so an announcement that mentioned sliding would be describing the half of
  * this that is optional.
- *
- * @param {object} layout from `createLayout()`
- * @returns {string}
  */
-export function describeArrangement(layout) {
+export function describeArrangement(layout: Pick<MapLayout, 'roomCount' | 'gradedCount'>): string {
   const rooms = `${layout.roomCount} rooms on the map`;
   return layout.gradedCount
     ? `rearranged - ${rooms}, ${layout.gradedCount} clustered near the center`
     : `rearranged - ${rooms}, spread evenly`;
+}
+
+export interface DescribeCatalogOptions {
+  /** rooms in the list */
+  total: number;
+  /** the search the list is ordered by, if any */
+  query?: string;
+  /** `describeSignals`' account of what ranked it */
+  note?: string;
 }
 
 /**
@@ -129,14 +141,8 @@ export function describeArrangement(layout) {
  * catalog answers a different question - the map is where you are standing, the
  * catalog is the ranking - so it gets its own sentence rather than a borrowed
  * one that would be subtly false.
- *
- * @param {object} opts
- * @param {number} opts.total rooms in the list
- * @param {string} [opts.query] the search the list is ordered by, if any
- * @param {string} [opts.note] `describeSignals`' account of what ranked it
- * @returns {string}
  */
-export function describeCatalog({ total, query = '', note = '' }) {
+export function describeCatalog({ total, query = '', note = '' }: DescribeCatalogOptions): string {
   const head = query.trim()
     ? `the catalog, ${total} rooms ranked for “${query.trim()}”`
     : `the catalog, ${total} rooms in alphabetical order`;

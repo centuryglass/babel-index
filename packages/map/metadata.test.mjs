@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { joinMetadata, metadataCoverage, normaliseEntry } from './metadata.js';
+import { joinMetadata, metadataCoverage, normaliseEntry } from './metadata.ts';
 
 const rooms = [
   { id: 0, file: '001.jpg' },
@@ -48,10 +48,10 @@ test('an entry carrying only an alt still counts as an entry', () => {
   assert.equal(metadataCoverage(rooms, { '001.jpg': { alt: 'A shelved wall.' } }).matched, 1);
 });
 
-test('plain-string keywords are accepted, with no type', () => {
+test('a keyword with no type still normalises', () => {
   // The generator may not record which category a keyword came from, and losing
   // the keyword because of that would be the wrong trade.
-  const e = normaliseEntry({ keywords: ['brutalism', 'mezzotint'] });
+  const e = normaliseEntry({ keywords: [{ text: 'brutalism' }, { text: 'mezzotint' }] });
   assert.deepEqual(e.keywords, [
     { text: 'brutalism', type: null },
     { text: 'mezzotint', type: null },
@@ -61,8 +61,12 @@ test('plain-string keywords are accepted, with no type', () => {
 
 test('the keyword count is not enforced', () => {
   // "Exactly three" is a fact about generation, not a constraint the map needs.
-  assert.equal(normaliseEntry({ keywords: ['one'] }).keywords.length, 1);
-  assert.equal(normaliseEntry({ keywords: ['a', 'b', 'c', 'd', 'e'] }).keywords.length, 5);
+  assert.equal(normaliseEntry({ keywords: [{ text: 'one' }] }).keywords.length, 1);
+  assert.equal(
+    normaliseEntry({ keywords: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }, { text: 'e' }] }).keywords
+      .length,
+    5
+  );
 });
 
 test('empty and malformed entries come back as null, not as empty records', () => {
@@ -72,14 +76,17 @@ test('empty and malformed entries come back as null, not as empty records', () =
 });
 
 test('junk inside a keyword list is dropped, and the rest survives', () => {
-  const e = normaliseEntry({ keywords: ['  spalted maple  ', null, 42, { type: 'movement' }, { text: '' }] });
-  assert.deepEqual(e.keywords, [{ text: 'spalted maple', type: null }]);
+  // A plain string is junk now too - the generator always writes {text, type}.
+  const e = normaliseEntry({
+    keywords: ['spalted maple', null, 42, { type: 'movement' }, { text: '' }, { text: '  oak burl  ' }],
+  });
+  assert.deepEqual(e.keywords, [{ text: 'oak burl', type: null }]);
 });
 
 test('the join is by filename and indexed by room id', () => {
   const joined = joinMetadata(rooms, {
-    '003.jpg': { keywords: ['third'] },
-    '001.jpg': { keywords: ['first'] },
+    '003.jpg': { keywords: [{ text: 'third' }] },
+    '001.jpg': { keywords: [{ text: 'first' }] },
   });
   assert.equal(joined.length, 3);
   assert.equal(joined[0].keywords[0].text, 'first');
