@@ -25,8 +25,8 @@
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';
 import { describeBook, BOOK_RECTS } from '../lib/center.js';
-import { TOUCH_DEBUG } from '../lib/touchDebug.js';
-import { DEBUG } from '../lib/debug.js';
+import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
+import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.jsx';
 
 /**

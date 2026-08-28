@@ -11,7 +11,7 @@
  * says which mode is current, never whether `MapView` is in the tree.
  */
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { flipTransform, flipCss, rectOf } from '../lib/catalog.js';
+import { flipTransform, flipCss, rectOf } from '../lib/catalog.ts';
 import { centerCellRect, overlapsViewport } from '../lib/center.js';
 import { prefersReducedMotion } from './useMapCamera.js';
 
