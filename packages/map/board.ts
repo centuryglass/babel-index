@@ -1,7 +1,7 @@
 /**
  * Cutting a finite board out of an infinite map, so the illusion can be planned.
  *
- * `illusion.js` rearranges values in a rectangle and knows nothing about rooms.
+ * `illusion.ts` rearranges values in a rectangle and knows nothing about rooms.
  * This is the half that knows: it turns "the map looked like *this* and must now
  * look like *that*" into the two boards, the on-camera rectangle and the fixed
  * cell that the planner takes, and it is where every assumption connecting the
@@ -53,6 +53,9 @@
  * else, which is the one thing this whole approach exists to avoid.
  */
 
+import type { BoardValue, Rearrangement } from './moves.ts';
+import type { MapLayout } from './ordering.ts';
+
 /**
  * The center room's value. Distinct from the wallpaper so the board is
  * self-describing. Must agree with `BoardValue` in `moves.ts` - that type
@@ -63,24 +66,49 @@ export const CENTER = 'center';
 /** Every generic room. One value, repeated across most of the board, on purpose. */
 export const GENERIC = 'generic';
 
+/** One arrangement of the map: its layout and the ranking poured into it. */
+interface Arrangement {
+  layout: MapLayout;
+  order: number[];
+}
+
+/** Visible cell bounds, inclusive, in map coordinates - the renderer's own bounds. */
+interface View {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+export interface BuildRearrangementOptions {
+  /** what is on screen now */
+  before: Arrangement;
+  /** what it must become */
+  after: Arrangement;
+  view: View;
+  /** cell height / cell width, so the board is as round as the map is */
+  aspect: number;
+  /**
+   * cells of slack around the viewport. Must be at least 1: the planner swaps
+   * into the cell just outside the region and then slides it inward, so a
+   * region hugging the viewport would put that swap on a partially visible
+   * cell and the illusion would break at the edge of the screen
+   */
+  margin?: number;
+}
+
 /**
  * Build the planner's inputs for a rearrangement.
  *
- * @param {object} opts
- * @param {{layout: object, order: number[]}} opts.before what is on screen now
- * @param {{layout: object, order: number[]}} opts.after  what it must become
- * @param {{x0: number, x1: number, y0: number, y1: number}} opts.view visible
- *   cell bounds, inclusive, in map coordinates - the renderer's own bounds
- * @param {number} [opts.aspect] cell height / cell width, so the board is as
- *   round as the map is
- * @param {number} [opts.margin] cells of slack around the viewport. Must be at
- *   least 1: the planner swaps into the cell just outside the region and then
- *   slides it inward, so a region hugging the viewport would put that swap on a
- *   partially visible cell and the illusion would break at the edge of the screen
- * @returns {import('./moves.ts').Rearrangement | null} null when the
- *   rearrangement cannot be animated legally
+ * @returns null when the rearrangement cannot be animated legally
  */
-export function buildRearrangement({ before, after, view, aspect, margin = 1 }) {
+export function buildRearrangement({
+  before,
+  after,
+  view,
+  aspect,
+  margin = 1,
+}: BuildRearrangementOptions): Rearrangement | null {
   if (!(margin >= 1)) throw new RangeError('margin must be at least 1 - see the doc comment');
 
   // The on-camera rectangle, in map coordinates.
@@ -106,10 +134,9 @@ export function buildRearrangement({ before, after, view, aspect, margin = 1 }) 
 
   const width = 2 * halfW + 1;
   const height = 2 * halfH + 1;
-  const at = (mx, my) => (my + halfH) * width + (mx + halfW);
+  const at = (mx: number, my: number) => (my + halfH) * width + (mx + halfW);
 
-  /** @type {import('./moves.ts').BoardValue[]} */
-  const start = new Array(width * height);
+  const start: BoardValue[] = new Array(width * height);
   for (let by = 0; by < height; by++)
     for (let bx = 0; bx < width; bx++)
       start[by * width + bx] = valueAt(before, bx - halfW, by - halfH);
@@ -118,8 +145,8 @@ export function buildRearrangement({ before, after, view, aspect, margin = 1 }) 
   // arrangement puts there. Everything outside is still the start board, which
   // is what keeps the repair below - and the planner's last phase - small.
   const end = start.slice();
-  const delta = new Map();
-  const bump = (v, n) => delta.set(v, (delta.get(v) ?? 0) + n);
+  const delta = new Map<BoardValue, number>();
+  const bump = (v: BoardValue, n: number) => delta.set(v, (delta.get(v) ?? 0) + n);
   for (let my = ry0; my <= ry1; my++)
     for (let mx = rx0; mx <= rx1; mx++) {
       const p = at(mx, my);
@@ -128,7 +155,7 @@ export function buildRearrangement({ before, after, view, aspect, margin = 1 }) 
       bump(end[p], 1);
     }
 
-  if (!repairMultiset(start, end, delta, { width, height, rx0, rx1, ry0, ry1, halfW, halfH }))
+  if (!repairMultiset(start, end, delta, { width, rx0, rx1, ry0, ry1, halfW, halfH }))
     return null;
 
   return {
@@ -138,22 +165,28 @@ export function buildRearrangement({ before, after, view, aspect, margin = 1 }) 
     end: { width, height, cells: end },
     bounds: { xmin: rx0 + halfW, xmax: rx1 + halfW, ymin: ry0 + halfH, ymax: ry1 + halfH },
     // The center room, which never moves. It is cell (0, 0) on the map and is
-    // reserved by `ordering.js`, so it holds the same value in both boards for
+    // reserved by `ordering.ts`, so it holds the same value in both boards for
     // free - the planner's precondition is satisfied by the map's own design.
     fixed: { x: halfW, y: halfH },
     origin: { x: halfW, y: halfH },
   };
 }
 
-/**
- * What one arrangement puts at a map cell.
- *
- * @returns {import('./moves.ts').BoardValue}
- */
-function valueAt({ layout, order }, mx, my) {
+/** What one arrangement puts at a map cell. */
+function valueAt({ layout, order }: Arrangement, mx: number, my: number): BoardValue {
   const cell = layout.roomAt(mx, my, order);
   if (cell.center) return CENTER;
   return cell.generic ? GENERIC : cell.id;
+}
+
+interface RepairGeometry {
+  width: number;
+  rx0: number;
+  rx1: number;
+  ry0: number;
+  ry1: number;
+  halfW: number;
+  halfH: number;
 }
 
 /**
@@ -169,15 +202,18 @@ function valueAt({ layout, order }, mx, my) {
  * anywhere: a room the new arrangement wants on camera that is not on the board
  * at all. See the module comment on when that happens.
  *
- * @param {import('./moves.ts').BoardValue[]} start
- * @param {import('./moves.ts').BoardValue[]} end mutated in place
- * @param {Map<import('./moves.ts').BoardValue, number>} delta
- * @returns {boolean} whether the repair was possible
+ * @param end mutated in place
+ * @returns whether the repair was possible
  */
-function repairMultiset(start, end, delta, geom) {
+function repairMultiset(
+  start: BoardValue[],
+  end: BoardValue[],
+  delta: Map<BoardValue, number>,
+  geom: RepairGeometry
+): boolean {
   const { width, rx0, rx1, ry0, ry1, halfW, halfH } = geom;
 
-  const short = [];
+  const short: BoardValue[] = [];
   for (const [v, d] of delta) for (let i = 0; i < -d; i++) short.push(v);
   if (short.length === 0) return true;
 
@@ -191,7 +227,7 @@ function repairMultiset(start, end, delta, geom) {
 
     const v = end[p];
     if ((delta.get(v) ?? 0) <= 0) continue; // not a surplus occurrence
-    delta.set(v, delta.get(v) - 1);
+    delta.set(v, (delta.get(v) as number) - 1);
     end[p] = short[taken++];
   }
 

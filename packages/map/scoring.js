@@ -67,7 +67,7 @@
 // does not statically discover its named exports.
 import winkLemmatizer from 'wink-lemmatizer';
 import anyAscii from 'any-ascii';
-import { embeddingScores } from './ordering.js';
+import { embeddingScores } from './ordering.ts';
 
 const { noun, verb, adjective } = winkLemmatizer;
 
@@ -207,7 +207,7 @@ export function tokenise(text, { minLength = 3, stopwords = true } = {}) {
  * lookups. Rooms without metadata stay null, so the array is still indexed by
  * room id.
  *
- * @param {(import('./metadata.js').RoomMeta|null)[]} joined output of `joinMetadata()`
+ * @param {(import('./metadata.ts').RoomMeta|null)[]} joined output of `joinMetadata()`
  * @returns {import('./searchResult.ts').SearchIndex}
  */
 export function buildSearchIndex(joined) {

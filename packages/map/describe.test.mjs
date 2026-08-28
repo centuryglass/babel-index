@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeCell, describeRoom, describeArrangement, describeCatalog } from './describe.js';
-import { createLayout } from './ordering.js';
+import { describeCell, describeRoom, describeArrangement, describeCatalog } from './describe.ts';
+import { createLayout } from './ordering.ts';
 
 const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1 });
 const order = Array.from({ length: 40 }, (_, i) => i);

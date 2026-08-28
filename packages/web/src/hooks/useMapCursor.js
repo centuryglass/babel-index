@@ -13,16 +13,16 @@
  * in `docs/design-history.md` that made the point the hard way.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cellDistance } from '../../../map/ordering.js';
-import { describeCell, describeRoom, describeArrangement } from '../../../map/describe.js';
+import { cellDistance } from '../../../map/ordering.ts';
+import { describeCell, describeRoom, describeArrangement } from '../../../map/describe.ts';
 import { nextRoom } from '../../../map/nextRoom.ts';
 import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from '../lib/camera.js';
 
 /**
  * @param {object} opts
- * @param {object} opts.layout            the current `createLayout` result
+ * @param {import('../../../map/ordering.ts').MapLayout} opts.layout the current `createLayout` result
  * @param {number[]} opts.order           room ids by rank
- * @param {object[]|null} opts.metadata   joined per-room keywords and story
+ * @param {(import('../../../map/metadata.ts').RoomMeta|null)[]|null} opts.metadata joined per-room keywords and story
  * @param {{current: object}} opts.cam    the live camera ref
  * @param {{current: HTMLCanvasElement|null}} opts.canvasRef
  * @param {Function} opts.flyTo

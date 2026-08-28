@@ -143,19 +143,19 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `config.ts`: Defaults and validation (no fs)
   * `load.mjs`: Load an optional config.json
 - `packages/map`: Map and room data handling
-  * `ordering.js`: Room placement, search density gradient, rank by embedding, pan resistance
+  * `ordering.ts`: Room placement, search density gradient, rank by embedding, pan resistance
   * `nextRoom.ts`: Find the next non-default room on the map in a given direction
-  * `metadata.js`: Normalizing and joining per-room keyword/story data
+  * `metadata.ts`: Normalizing and joining per-room keyword/story data
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
   * `moves.ts`: The rearrangement animation's type contract (`Move` and its
                `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
-               ...), type-only, shared by `illusion.js`, `board.js` and
+               ...), type-only, shared by `illusion.ts`, `board.ts` and
                `packages/web/src/lib/slide.js`
   * `scoring.js`: Find room rank and match certainty for a search, searh tokenization
-  * `illusion.js`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.js`
-  * `board.js`: Sliding animation illusion's board data structure
-  * `describe.js`: Build screen reader messages
+  * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.js`
+  * `board.ts`: Sliding animation illusion's board data structure
+  * `describe.ts`: Build screen reader messages
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
   * `index.mjs`: CLI
   * `mips.mjs`: Generate+fill alternate image size directories
@@ -229,12 +229,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
   Good early candidates: files with little duck-typing and a fixed shape
   (`port.ts` was one - one function, two primitive params). Defer files whose
-  data is *deliberately* loose - `metadata.js`'s "liberal about shape" sidecar
-  parsing, `center.js`'s runtime-computed `RUNS`, `slide.js`/`camera.js`'s
-  animation state shapes - until there's a real type worth writing that
-  doesn't just paper over the looseness with `any` or a lying assertion. A
-  strict type that fights the code's actual tolerance is worse than an honest
-  `object`/JSDoc.
+  data is *deliberately* loose - `scoring.js`'s duck-typed ranking arrays,
+  `center.js`'s runtime-computed `RUNS`, `slide.js`/`camera.js`'s animation
+  state shapes - until there's a real type worth writing that doesn't just
+  paper over the looseness with `any` or a lying assertion. A strict type
+  that fights the code's actual tolerance is worse than an honest
+  `object`/JSDoc. (`metadata.js`'s sidecar parsing looked like one of these
+  until the keyword shape was tightened to `{text, type}` only - dropping the
+  plain-string form it used to also accept - at which point `RoomMeta` was
+  already a real, fixed shape and converting it cost nothing.)
 
   `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local signal, not
   yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't
@@ -322,7 +325,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Which generic tile a cell shows is positional and order-independent, and
   that is load-bearing.** `layout.genericIndexAt(x, y)` is a seeded hash of the
   coordinate alone — a reorder never changes a generic cell's face. That is the
-  whole reason `board.js` and `illusion.js` still see one interchangeable
+  whole reason `board.ts` and `illusion.ts` still see one interchangeable
   `GENERIC` value and the rearrangement planner did not have to learn about
   individual generic tiles. `roomAt` is unchanged; only the two renderers
   (`render.js`, `slide.js`) resolve a cell to a tile id. `slide.js` reads the
@@ -448,11 +451,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### The reorder animation
 
 - **A rearrangement is a sliding-tile illusion; the wallpaper is not a gap.**
-  Rooms travel only as part of a whole row or column rotating — `illusion.js`
+  Rooms travel only as part of a whole row or column rotating — `illusion.ts`
   rejects a `swap` (which reads as teleportation) if either end is on camera.
   Don't add a move type that moves one cell.
 - **The illusion bounds are the viewport plus one cell.** The planner swaps a
-  value into the cell just outside the region and slides it inward; `board.js`
+  value into the cell just outside the region and slides it inward; `board.ts`
   refuses a margin under 1 because a tighter one lands that swap somewhere
   visible.
 - **The center room is the planner's fixed tile**, holding the same value in
@@ -461,7 +464,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The board is finite only because the camera is parked** on the center for
   the whole animation. Anything that moves the camera mid-rearrangement (pan,
   zoom, `flyTo`) must end the animation instead.
-- **`board.js` returning null is a real answer, not a failure.** With the
+- **`board.ts` returning null is a real answer, not a failure.** With the
   rooms-on-the-map slider pulled back, a room the new order wants on camera may
   never have been on the old board; the caller falls back to an instant
   rebuild rather than sliding in a tile that changes face mid-ride.

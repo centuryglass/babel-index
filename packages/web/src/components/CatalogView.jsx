@@ -34,7 +34,7 @@
  * "3 of 511" part by hand.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { describeRoom } from '../../../map/describe.js';
+import { describeRoom } from '../../../map/describe.ts';
 import { describeBook } from '../lib/center.js';
 import { RoomDetails } from './RoomDetails.jsx';
 import { SearchForm } from './SearchForm.jsx';

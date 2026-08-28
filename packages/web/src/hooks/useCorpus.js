@@ -12,13 +12,13 @@
  * time it arrives would be paid for nothing anyone reads from it synchronously.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { joinMetadata } from '../../../map/metadata.js';
+import { joinMetadata } from '../../../map/metadata.ts';
 import { buildSearchIndex } from '../../../map/scoring.js';
 
 /**
  * @param {import('../../../map/manifest.ts').ManifestResponse} manifest  the loaded `/api/manifest` response
  * @returns {{
- *   metadata: (import('../../../map/metadata.js').RoomMeta|null)[] | null,
+ *   metadata: (import('../../../map/metadata.ts').RoomMeta|null)[] | null,
  *   embeddings: {current: {data: Int8Array, dim: number} | null},
  *   searchIndex: ReturnType<typeof buildSearchIndex> | null,
  *   described: number,

@@ -39,7 +39,7 @@
  *
  * The map is infinite; a board is not. The caller cuts a finite window out of
  * the map and hands it over, and the rotations are toroidal within that window.
- * That is sound only because the wrap happens off camera - see `board.js`,
+ * That is sound only because the wrap happens off camera - see `board.ts`,
  * which is the half that knows about rooms, layouts and viewports. This file
  * knows about values in a rectangle and nothing else, which is what keeps it
  * testable against an independent replay.
@@ -49,6 +49,8 @@
  * emitted list rather than trusting this file's own bookkeeping.
  */
 
+import type { Board, BoardValue, Bounds, LineRef, Move, Point } from './moves.ts';
+
 /**
  * Reduce a cyclic distance to the shorter signed direction.
  *
@@ -56,7 +58,7 @@
  * one of them animates sensibly. Correctness is unaffected either way, which is
  * why this is a presentation detail applied on the way out.
  */
-export function normaliseDistance(d, n) {
+export function normaliseDistance(d: number, n: number): number {
   const m = ((d % n) + n) % n;
   return m > n >> 1 ? m - n : m;
 }
@@ -64,22 +66,21 @@ export function normaliseDistance(d, n) {
 /**
  * Plan a legal transformation of one board into another.
  *
- * @param {import('./moves.ts').Board} start
- * @param {import('./moves.ts').Board} end   a reordering of `start` - the two
- *   must agree as multisets, which `board.js` is responsible for arranging
- * @param {import('./moves.ts').Bounds} bounds the on-camera rectangle,
- *   inclusive. Must lie strictly inside the board and cover less than a
- *   quarter of it
- * @param {import('./moves.ts').Point} fixed a cell that must never move,
- *   holding the same value in both boards
- * @returns {import('./moves.ts').Move[]} moves, in order:
+ * @param start
+ * @param end   a reordering of `start` - the two must agree as multisets,
+ *   which `board.ts` is responsible for arranging
+ * @param bounds the on-camera rectangle, inclusive. Must lie strictly inside
+ *   the board and cover less than a quarter of it
+ * @param fixed a cell that must never move, holding the same value in both
+ *   boards
+ * @returns moves, in order:
  *   `{type: 'shiftRow', row, distance}` - the value at column x moves to
  *      column (x + distance) mod width; positive is rightward
  *   `{type: 'shiftCol', col, distance}` - the value at row y moves to
  *      row (y + distance) mod height; positive is downward
  *   `{type: 'swap', a: {x, y}, b: {x, y}}` - both ends outside `bounds`
  */
-export function planMoves(start, end, bounds, fixed) {
+export function planMoves(start: Board, end: Board, bounds: Bounds, fixed: Point): Move[] {
   const { width: W, height: H } = start;
   const { xmin, xmax, ymin, ymax } = bounds;
   const fx = fixed.x;
@@ -93,15 +94,14 @@ export function planMoves(start, end, bounds, fixed) {
   // supply logic ask live questions instead of tracking a permutation.
   const board = start.cells.slice();
   const target = end.cells;
-  /** @type {import('./moves.ts').Move[]} */
-  const moves = [];
+  const moves: Move[] = [];
 
-  const at = (x, y) => y * W + x;
-  const xOf = (p) => p % W;
-  const yOf = (p) => (p - (p % W)) / W;
-  const inside = (x, y) => x >= xmin && x <= xmax && y >= ymin && y <= ymax;
-  const insideAt = (p) => inside(xOf(p), yOf(p));
-  const outsideColumn = (p) => {
+  const at = (x: number, y: number) => y * W + x;
+  const xOf = (p: number) => p % W;
+  const yOf = (p: number) => (p - (p % W)) / W;
+  const inside = (x: number, y: number) => x >= xmin && x <= xmax && y >= ymin && y <= ymax;
+  const insideAt = (p: number) => inside(xOf(p), yOf(p));
+  const outsideColumn = (p: number) => {
     const x = xOf(p);
     return x < xmin || x > xmax;
   };
@@ -117,18 +117,18 @@ export function planMoves(start, end, bounds, fixed) {
   const locked = new Uint8Array(W * H);
   const lockedInRow = new Int32Array(H);
   const lockedInCol = new Int32Array(W);
-  const index = new Map();
+  const index = new Map<BoardValue, Set<number>>();
 
-  const idxAdd = (p) => {
+  const idxAdd = (p: number) => {
     let bucket = index.get(board[p]);
     if (!bucket) index.set(board[p], (bucket = new Set()));
     bucket.add(p);
   };
-  const idxDel = (p) => index.get(board[p])?.delete(p);
+  const idxDel = (p: number) => index.get(board[p])?.delete(p);
 
   for (let p = 0; p < board.length; p++) idxAdd(p);
 
-  function lock(p) {
+  function lock(p: number) {
     idxDel(p);
     locked[p] = 1;
     lockedInRow[yOf(p)]++;
@@ -163,12 +163,10 @@ export function planMoves(start, end, bounds, fixed) {
   // parity means a phase can be reshaped without the animation quietly
   // mis-scheduling it.
   let stage = 0;
-  /** @type {import('./moves.ts').LineRef | null} */
-  let line = null;
+  let line: LineRef | null = null;
   let wave = false;
 
-
-  function shiftRow(r, d) {
+  function shiftRow(r: number, d: number) {
     const dist = ((d % W) + W) % W;
     if (dist === 0) return;
     if (lockedInRow[r] !== 0) throw new Error('shiftRow would displace a finalized tile');
@@ -183,11 +181,11 @@ export function planMoves(start, end, bounds, fixed) {
     });
   }
 
-  function shiftCol(c, d) {
+  function shiftCol(c: number, d: number) {
     const dist = ((d % H) + H) % H;
     if (dist === 0) return;
     if (lockedInCol[c] !== 0) throw new Error('shiftCol would displace a finalized tile');
-    const old = new Array(H);
+    const old: BoardValue[] = new Array(H);
     for (let y = 0; y < H; y++) old[y] = board[at(c, y)];
     for (let y = 0; y < H; y++) idxDel(at(c, y));
     for (let y = 0; y < H; y++) board[at(c, y)] = old[(y - dist + H) % H];
@@ -198,7 +196,7 @@ export function planMoves(start, end, bounds, fixed) {
     });
   }
 
-  function swap(p, q) {
+  function swap(p: number, q: number) {
     if (p === q) return;
     if (insideAt(p) || insideAt(q)) throw new Error('swap inside the illusion bounds');
     if (locked[p] || locked[q]) throw new Error('swap would move a finalized tile');
@@ -227,7 +225,7 @@ export function planMoves(start, end, bounds, fixed) {
    * With duplicate values there is no correct choice among candidates - the
    * invariant guarantees any of them serves - so first match wins.
    */
-  function find(v, pred) {
+  function find(v: BoardValue, pred: (p: number) => boolean): number {
     const bucket = index.get(v);
     if (!bucket) return -1;
     for (const p of bucket) if (pred(p)) return p;
@@ -245,7 +243,7 @@ export function planMoves(start, end, bounds, fixed) {
    * cells into row-crossing positions; the row route serves phase 1, where no
    * region column is locked yet.
    */
-  function makeAvailable(v) {
+  function makeAvailable(v: BoardValue): number {
     // Never a cell already staged for something else. Without this a copy that
     // is standing by for another slot can be handed back as a source, and the
     // caller swaps it away into a fresh cell - leaving the earlier reservation
@@ -295,12 +293,12 @@ export function planMoves(start, end, bounds, fixed) {
    */
   const reserved = new Uint8Array(W * H);
 
-  function makeParker(parkable) {
-    const pool = [];
+  function makeParker(parkable: (p: number) => boolean) {
+    const pool: number[] = [];
     for (let p = 0; p < W * H; p++) if (parkable(p)) pool.push(p);
     let cursor = 0;
 
-    function free() {
+    function free(): number {
       for (let i = 0; i < pool.length; i++) {
         const p = pool[(cursor + i) % pool.length];
         if (!locked[p] && !reserved[p]) {
@@ -321,7 +319,7 @@ export function planMoves(start, end, bounds, fixed) {
      */
     return {
       capacity: pool.length,
-      park(v) {
+      park(v: BoardValue): number {
         let p = find(v, (q) => parkable(q) && !reserved[q]);
         if (p === -1) {
           const src = makeAvailable(v);
@@ -354,11 +352,11 @@ export function planMoves(start, end, bounds, fixed) {
    * behaviour, and is what a region wide enough to crowd out its own parking
    * degrades to rather than failing.
    */
-  function batched(lines, perLine, capacity) {
+  function batched(lines: number[], perLine: number, capacity: number): number[][] {
     // A margin, because `locked` and `reserved` both eat into the pool as the
     // plan proceeds and `capacity` is counted once, up front.
     const size = Math.max(1, Math.floor((capacity * 0.9) / Math.max(1, perLine)));
-    const out = [];
+    const out: number[][] = [];
     for (let i = 0; i < lines.length; i += size) out.push(lines.slice(i, i + size));
     return out;
   }
@@ -377,7 +375,7 @@ export function planMoves(start, end, bounds, fixed) {
     const entryX = xmin - 1;
     // Which rows actually need feeding. A row already holding the right value
     // costs nothing and is simply locked with the rest.
-    const rows = [];
+    const rows: number[] = [];
     for (let r = ymin; r <= ymax; r++)
       if (r !== fy && board[at(fx, r)] !== target[at(fx, r)]) rows.push(r);
 
@@ -452,16 +450,16 @@ export function planMoves(start, end, bounds, fixed) {
   // behaviour - is what a region too wide to leave room for its own parking
   // degrades to.
   const k = ymax - ymin + 1;
-  const cols = [];
+  const cols: number[] = [];
   for (let c = xmin; c <= xmax; c++) if (c !== fx) cols.push(c);
   cols.sort((a, b) => Math.abs(a - fx) - Math.abs(b - fx));
 
   for (const batch of batched(cols, k, conveyorPark.capacity)) {
     stage++;
     line = null;
-    const parked = new Map();
+    const parked = new Map<number, number[]>();
     for (const c of batch) {
-      const forColumn = new Array(k);
+      const forColumn: number[] = new Array(k);
       for (let i = 0; i < k; i++) forColumn[i] = conveyorPark.park(target[at(c, ymin + i)]);
       parked.set(c, forColumn);
     }
@@ -471,8 +469,9 @@ export function planMoves(start, end, bounds, fixed) {
     for (const c of batch) {
       line = { kind: 'col', index: c };
       const entry = at(c, ymax + 1);
+      const forColumn = parked.get(c) as number[];
       for (let i = 0; i < k; i++) {
-        const src = parked.get(c)[i];
+        const src = forColumn[i];
         if (src !== entry) swap(src, entry);
         reserved[src] = 0; // that parking cell is free again
         shiftCol(c, -1);
@@ -512,11 +511,9 @@ export function planMoves(start, end, bounds, fixed) {
  * animation reaches each one. The test carries its own independent replay, so
  * this is never the thing that decides whether a plan is correct.
  *
- * @param {import('./moves.ts').Board} board mutated in place
- * @param {import('./moves.ts').Move} move
- * @returns {import('./moves.ts').Board}
+ * @param board mutated in place
  */
-export function applyMove(board, move) {
+export function applyMove(board: Board, move: Move): Board {
   const { width: W, height: H, cells } = board;
   if (move.type === 'shiftRow') {
     const d = ((move.distance % W) + W) % W;
@@ -527,7 +524,7 @@ export function applyMove(board, move) {
   } else if (move.type === 'shiftCol') {
     const d = ((move.distance % H) + H) % H;
     if (d === 0) return board;
-    const old = new Array(H);
+    const old: BoardValue[] = new Array(H);
     for (let y = 0; y < H; y++) old[y] = cells[y * W + move.col];
     for (let y = 0; y < H; y++) cells[y * W + move.col] = old[(y - d + H) % H];
   } else if (move.type === 'swap') {
@@ -548,17 +545,12 @@ export function applyMove(board, move) {
 /**
  * The preconditions the algorithm leans on, checked once and loudly.
  *
- * Every one of these is a thing `board.js` has to arrange, and each failure
+ * Every one of these is a thing `board.ts` has to arrange, and each failure
  * mode is silent if it is not caught here: a region touching an edge makes the
  * "just outside" cells wrap around to the far side of the board, and a region
  * covering too much of it starves the parking pool mid-plan.
- *
- * @param {import('./moves.ts').Board} start
- * @param {import('./moves.ts').Board} end
- * @param {import('./moves.ts').Bounds} bounds
- * @param {import('./moves.ts').Point} fixed
  */
-function validate(start, end, bounds, fixed) {
+function validate(start: Board, end: Board, bounds: Bounds, fixed: Point): void {
   const { width: W, height: H } = start;
   if (!Number.isInteger(W) || !Number.isInteger(H) || W < 10 || H < 10)
     throw new RangeError(`board must be at least 10x10; got ${W}x${H}`);
