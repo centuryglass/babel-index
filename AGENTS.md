@@ -107,6 +107,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.jsx`: Shared search box component
     * `SearchIcon.jsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.jsx`: The "READ ME" book's dialog
+    * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
+                             Meant as an easter egg for the (not yet existing)
+                             artist statement page, not wired in yet
   - `src/hooks/`: the subsystems `main.jsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
