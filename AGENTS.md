@@ -107,6 +107,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.jsx`: Shared search box component
     * `SearchIcon.jsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.jsx`: The "READ ME" book's dialog
+    * `PagedTextOverlay.tsx`: Standalone paged-text-overlay experiment, not wired
+                             into the app
   - `src/hooks/`: the subsystems `main.jsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
