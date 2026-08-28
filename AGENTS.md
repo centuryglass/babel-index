@@ -145,7 +145,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `packages/map`: Map and room data handling
   * `ordering.ts`: Room placement, search density gradient, rank by embedding, pan resistance
   * `nextRoom.ts`: Find the next non-default room on the map in a given direction
-  * `metadata.js`: Normalizing and joining per-room keyword/story data
+  * `metadata.ts`: Normalizing and joining per-room keyword/story data
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
   * `moves.ts`: The rearrangement animation's type contract (`Move` and its
@@ -229,12 +229,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
   Good early candidates: files with little duck-typing and a fixed shape
   (`port.ts` was one - one function, two primitive params). Defer files whose
-  data is *deliberately* loose - `metadata.js`'s "liberal about shape" sidecar
-  parsing, `center.js`'s runtime-computed `RUNS`, `slide.js`/`camera.js`'s
-  animation state shapes - until there's a real type worth writing that
-  doesn't just paper over the looseness with `any` or a lying assertion. A
-  strict type that fights the code's actual tolerance is worse than an honest
-  `object`/JSDoc.
+  data is *deliberately* loose - `scoring.js`'s duck-typed ranking arrays,
+  `center.js`'s runtime-computed `RUNS`, `slide.js`/`camera.js`'s animation
+  state shapes - until there's a real type worth writing that doesn't just
+  paper over the looseness with `any` or a lying assertion. A strict type
+  that fights the code's actual tolerance is worse than an honest
+  `object`/JSDoc. (`metadata.js`'s sidecar parsing looked like one of these
+  until the keyword shape was tightened to `{text, type}` only - dropping the
+  plain-string form it used to also accept - at which point `RoomMeta` was
+  already a real, fixed shape and converting it cost nothing.)
 
   `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local signal, not
   yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't

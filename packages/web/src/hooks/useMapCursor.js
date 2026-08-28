@@ -22,7 +22,7 @@ import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from '../lib/came
  * @param {object} opts
  * @param {import('../../../map/ordering.ts').MapLayout} opts.layout the current `createLayout` result
  * @param {number[]} opts.order           room ids by rank
- * @param {(import('../../../map/metadata.js').RoomMeta|null)[]|null} opts.metadata joined per-room keywords and story
+ * @param {(import('../../../map/metadata.ts').RoomMeta|null)[]|null} opts.metadata joined per-room keywords and story
  * @param {{current: object}} opts.cam    the live camera ref
  * @param {{current: HTMLCanvasElement|null}} opts.canvasRef
  * @param {Function} opts.flyTo

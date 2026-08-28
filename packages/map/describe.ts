@@ -30,9 +30,7 @@
  */
 
 import type { MapLayout } from './ordering.ts';
-
-/** metadata.js's per-room entry - see its "liberal about shape" doc comment. */
-type RoomMeta = import('./metadata.js').RoomMeta;
+import type { RoomMeta } from './metadata.ts';
 
 export interface Description {
   kind: 'center' | 'generic' | 'room';

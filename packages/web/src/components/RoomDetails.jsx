@@ -128,7 +128,7 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
 
 /**
  * @param {object} props
- * @param {import('../../../map/metadata.js').RoomMeta|null} props.entry the room's metadata, from `joinMetadata()`
+ * @param {import('../../../map/metadata.ts').RoomMeta|null} props.entry the room's metadata, from `joinMetadata()`
  * @param {object|null} props.desc from `describeRoom` / `describeCell`
  * @param {(text: string) => void} props.onKeyword a chip runs this search
  * @param {number} [props.chipTabIndex] -1 inside the canvas, 0 everywhere else

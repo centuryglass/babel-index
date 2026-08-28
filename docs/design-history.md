@@ -145,7 +145,7 @@ shapes considered and dropped, because each is the obvious first idea.
   two things to keep in sync, and the one nobody looks at is the one that rots.
   What replaced it is one DOM tree with two orderings over it - a spatial grid
   and a ranked list - sharing handlers and one naming module (`describeCell`),
-  the same "one implementation, two consumers" rule `metadata.js` already
+  the same "one implementation, two consumers" rule `metadata.ts` already
   follows.
 
 - **Alt text generated at runtime from the images.** The demo's data layer is a
