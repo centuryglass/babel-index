@@ -354,7 +354,7 @@ export const DEFAULTS: Defaults = {
      * the memory (one byte per parameter instead of four) at some cost to
      * embedding accuracy, which is the tradeoff a memory-constrained host
      * (a cheap VPS) wants and a normal one does not. Server-side only - it
-     * governs `packages/server/app.mjs`'s text tower, not the vision tower
+     * governs `packages/server/app.ts`'s text tower, not the vision tower
      * `tools/embed/embed.mjs` runs offline, which stays fp32 since it runs
      * once per corpus rather than per request.
      */

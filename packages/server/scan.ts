@@ -2,11 +2,12 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, basename, resolve } from 'node:path';
 import { mipPlan } from '../pipeline/layout.mjs';
 import { metadataCoverage } from '../map/metadata.js';
+import type { ImageSize, Manifest, Room, SharedAsset, SharedAssets, LevelInfo } from '../map/manifest.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 /**
- * Where a local scan's urls are rooted. `remote.mjs` rewrites both the
+ * Where a local scan's urls are rooted. `remote.ts` rewrites both the
  * manifest's `imagesBase`/`sharedBase` fields and every url built from these
  * constants when serving a corpus from R2/Cloudflare instead of disk, so this
  * is the one place "what does a room/shared/blob url look like" is decided -
@@ -33,7 +34,7 @@ export const GENERIC_DIR = 'generic';
  * natural size once the image loads, so this is an optimisation, not a
  * requirement.
  */
-export async function imageSize(path) {
+export async function imageSize(path: string): Promise<ImageSize | null> {
   const buf = await readFile(path);
 
   // PNG: IHDR is always the first chunk.
@@ -88,16 +89,14 @@ export async function imageSize(path) {
  * level, so per-file probing would be thousands of stat calls to learn
  * something the fallback handles anyway.
  *
- * @param {string} dir
- * @param {{w: number, h: number}|null} source  level-0 dimensions
- * @returns {Promise<{level: number, w: number, h: number, dir: string|null}[]>}
+ * @param source level-0 dimensions
  */
-export async function discoverLevels(dir, source) {
+export async function discoverLevels(dir: string, source: ImageSize | null): Promise<LevelInfo[]> {
   // Without a source size there is no ladder to look for, only the flat files.
   if (!source?.w || !source?.h) return [{ level: 0, w: source?.w ?? null, h: source?.h ?? null, dir: null }];
 
   const plan = mipPlan(source);
-  const found = [];
+  const found: LevelInfo[] = [];
   for (const step of plan) {
     if (step.level === 0) {
       found.push({ ...step, dir: null });
@@ -113,13 +112,13 @@ export async function discoverLevels(dir, source) {
 }
 
 /** Image filenames in a directory, sorted. Rejects if the directory is missing. */
-async function listImages(dir) {
+async function listImages(dir: string): Promise<string[]> {
   const entries = await readdir(dir);
   return entries.filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort();
 }
 
 /** One shared asset: its file, a `/shared/`-rooted url, and its size if readable. */
-async function describeShared(sharedDir, sub, file) {
+async function describeShared(sharedDir: string, sub: string, file: string): Promise<SharedAsset> {
   const size = await imageSize(join(sharedDir, sub, file)).catch(() => null);
   return { file, url: `${SHARED_BASE}/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
 }
@@ -137,12 +136,11 @@ async function describeShared(sharedDir, sub, file) {
  * The generic tiles are every image in the `generic/` subdirectory, sorted.
  * There may be none (an empty or absent folder), which is the "only the
  * center tile" case the renderers fall back to.
- *
- * @param {string} sharedDir
- * @param {{center?: string, allowFirst?: boolean}} opts
- * @returns {Promise<{center: object|null, generic: object[]}>}
  */
-async function scanShared(sharedDir, { center, allowFirst = false } = {}) {
+async function scanShared(
+  sharedDir: string,
+  { center, allowFirst = false }: { center?: string; allowFirst?: boolean } = {}
+): Promise<SharedAssets> {
   const files = await listImages(sharedDir).catch(() => []);
   const centerFile =
     (center && files.find((f) => f === center || basename(f, extname(f)) === center)) ??
@@ -157,7 +155,7 @@ async function scanShared(sharedDir, { center, allowFirst = false } = {}) {
     genericFiles.map((f) => describeShared(sharedDir, GENERIC_DIR, f))
   );
 
-  return { center: centerAsset, generic };
+  return { center: centerAsset ?? null, generic };
 }
 
 /**
@@ -174,13 +172,13 @@ async function scanShared(sharedDir, { center, allowFirst = false } = {}) {
  * usually pointed at the repo's `assets/` so the center render can be shared
  * across corpora and reached from outside `--images`.
  *
- * @param {string} dir
- * @param {{center?: string, sharedDir?: string}} [opts] center names the
- *   center tile; sharedDir is where the shared tiles live (default: the
- *   corpus directory)
- * @returns {Promise<import('../map/manifest.ts').Manifest>}
+ * @param opts.center names the center tile; opts.sharedDir is where the
+ *   shared tiles live (default: the corpus directory)
  */
-export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
+export async function scanDirectory(
+  dir: string,
+  { center, sharedDir = dir }: { center?: string; sharedDir?: string } = {}
+): Promise<Manifest> {
   const files = await listImages(dir);
 
   if (!files.length) throw new Error(`no images found in ${dir}`);
@@ -196,7 +194,7 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   const excluded = sameDir && sharedAssets.center ? sharedAssets.center.file : null;
   const corpus = files.filter((f) => f !== excluded);
 
-  const rooms = await Promise.all(
+  const rooms: Room[] = await Promise.all(
     corpus.map(async (file, id) => {
       const path = join(dir, file);
       const [size, st] = await Promise.all([imageSize(path).catch(() => null), stat(path)]);
@@ -211,14 +209,14 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
     rooms.find((r) => r.w && r.h) ??
     [sharedAssets.center, ...sharedAssets.generic].find((b) => b?.w && b?.h) ??
     null;
-  const levels = await discoverLevels(dir, source && source.w ? { w: source.w, h: source.h } : null);
+  const levels = await discoverLevels(dir, source && source.w && source.h ? { w: source.w, h: source.h } : null);
 
   // If tools/embed has left a blob alongside the images, surface its metadata so
   // the client can fetch it and rank in the browser. A stale blob - one whose
   // count no longer matches the corpus - is ignored rather than trusted: its
   // rows are keyed on room ids that have since moved, so it would rank the wrong
   // rooms. Missing or unreadable, search simply falls back to the stub.
-  let embeddings = null;
+  let embeddings: Manifest['embeddings'] = null;
   try {
     const meta = JSON.parse(await readFile(join(dir, 'embeddings.json'), 'utf8'));
     if (meta.count === rooms.length && meta.dim > 0)
@@ -232,7 +230,7 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
   // - it is joined per file and a miss is just a room without keywords. What is
   // worth surfacing is the pair (matched, entries): a sidecar describing files
   // this corpus does not have looks exactly like no sidecar at all from the map.
-  let metadata = null;
+  let metadata: Manifest['metadata'] = null;
   try {
     const sidecar = JSON.parse(await readFile(join(dir, METADATA_FILE), 'utf8'));
     const { matched, entries } = metadataCoverage(rooms, sidecar);
@@ -246,7 +244,7 @@ export async function scanDirectory(dir, { center, sharedDir = dir } = {}) {
     directory: dir,
     /**
      * Where every url in this manifest is rooted - `rooms.js`'s `createUrlFor`
-     * reads these instead of hardcoding the paths, so `remote.mjs` can point a
+     * reads these instead of hardcoding the paths, so `remote.ts` can point a
      * remotely-served corpus's urls (and every url already baked into this
      * manifest) at R2/Cloudflare directly without the client needing a second
      * "how do I build a url" implementation.

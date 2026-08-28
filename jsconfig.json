@@ -7,6 +7,7 @@
     "moduleResolution": "bundler",
     "target": "esnext",
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "strict": false,
     "skipLibCheck": true
   },

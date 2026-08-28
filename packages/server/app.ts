@@ -1,15 +1,21 @@
 /**
  * The demo server's routes, separated from the CLI that starts it.
  *
- * `index.mjs` owns argv, the esbuild bundle and the listening socket; this file
+ * `index.ts` owns argv, the esbuild bundle and the listening socket; this file
  * owns the four endpoints. Split so the API can be exercised with a plain
  * `fetch` against an ephemeral port - no browser, no bundler, no fixtures on
  * disk beyond the images directory under test.
  */
 import { availableParallelism } from 'node:os';
-import express from 'express';
+import express, { type Express, type Response } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
+import type { Manifest } from '../map/manifest.ts';
+import type { Config } from '../config/config.ts';
+
+/** A resolved config as `loadConfig()` (packages/config/load.mjs) returns it -
+ *  `Config` plus where it came from, if anywhere. */
+type ResolvedConfig = Config & { source?: string | null };
 
 // Must be the same CLIP as tools/embed/embed.mjs used for the images, or the
 // text and image towers point into different spaces and every ranking is quiet
@@ -34,33 +40,33 @@ const LIVE_RELOAD_CLIENT = `(function () {
 })();
 `;
 
-/**
- * Build the app.
- *
- * @param {object} opts
- * @param {import('../map/manifest.ts').Manifest} opts.manifest the initial scan
- *                                     (see scan.mjs or remote.mjs)
- * @param {string} [opts.imagesDir]    directory the corpus is served from (local mode);
- *                                     omit in remote mode, where the manifest's urls
- *                                     already point directly at R2/Cloudflare and this
- *                                     server never serves images at all (see remote.mjs)
- * @param {string} [opts.sharedDir]    directory the shared tiles are served from,
- *                                     under /shared (local mode default: the images directory)
- * @param {() => Promise<import('../map/manifest.ts').Manifest>} opts.rescan
- *                                     re-read the corpus (directory or remote manifest)
- * @param {object} [opts.config]       resolved config (see packages/config); the
- *                                     defaults when absent
- * @param {string} [opts.bundleJs]     the built client, fixed for the process's
- *                                     lifetime
- * @param {() => string} [opts.getBundleJs] the built client, read on each
- *                                     request instead - how `watch` mode serves
- *                                     a bundle that gets rebuilt in place
- * @param {() => Promise<string>} [opts.readIndexHtml] read on each request, so
- *                                     editing the page needs no restart
- * @param {boolean} [opts.watch]       dev convenience: serve the live-reload
- *                                     client and expose `app.locals.broadcastReload`
- *                                     for a rebuild to call
- */
+interface CreateAppOptions {
+  /** the initial scan (see scan.ts or remote.ts) */
+  manifest: Manifest;
+  /** directory the corpus is served from (local mode); omit in remote mode,
+   *  where the manifest's urls already point directly at R2/Cloudflare and
+   *  this server never serves images at all (see remote.ts) */
+  imagesDir?: string | null;
+  /** directory the shared tiles are served from, under /shared (local mode
+   *  default: the images directory) */
+  sharedDir?: string | null;
+  /** re-read the corpus (directory or remote manifest) */
+  rescan: () => Promise<Manifest>;
+  /** resolved config (see packages/config); the defaults when absent */
+  config?: ResolvedConfig;
+  /** the built client, fixed for the process's lifetime */
+  bundleJs?: string;
+  /** the built client, read on each request instead - how `watch` mode
+   *  serves a bundle that gets rebuilt in place */
+  getBundleJs?: () => string;
+  /** read on each request, so editing the page needs no restart */
+  readIndexHtml?: () => Promise<string>;
+  /** dev convenience: serve the live-reload client and expose
+   *  `app.locals.broadcastReload` for a rebuild to call */
+  watch?: boolean;
+}
+
+/** Build the app. */
 export function createApp({
   manifest,
   imagesDir,
@@ -71,15 +77,15 @@ export function createApp({
   getBundleJs,
   readIndexHtml,
   watch = false,
-}) {
+}: CreateAppOptions): Express {
   const app = express();
 
   // Config rides on the manifest rather than getting an endpoint of its own:
   // the client already blocks on this fetch before it can render, and a second
   // round trip for a hundred bytes would only add a state where the map exists
   // and does not yet know its own zoom range. `notes` is for the operator, not
-  // the browser, so it is stripped here - index.mjs prints it at startup.
-  const { notes: _notes, source: _source, ...clientConfig } = config ?? resolveConfig();
+  // the browser, so it is stripped here - index.ts prints it at startup.
+  const { notes: _notes, source: _source, ...clientConfig } = config ?? (resolveConfig() as ResolvedConfig);
   const clipTextDtype = clientConfig.search?.clipTextDtype ?? 'fp32';
 
   app.get('/api/manifest', (_req, res) => res.json({ ...manifest, config: clientConfig }));
@@ -135,7 +141,7 @@ export function createApp({
   });
 
   // In remote mode there is no local directory to serve at all: the manifest's
-  // urls (rewritten by remote.mjs's scanRemote) already point the browser
+  // urls (rewritten by remote.ts's scanRemote) already point the browser
   // directly at R2/Cloudflare, so this server never sees an /images or
   // /shared request in the first place.
   if (imagesDir) {
@@ -172,7 +178,7 @@ export function createApp({
       res.type('application/javascript').send(LIVE_RELOAD_CLIENT);
     });
 
-    const clients = new Set();
+    const clients = new Set<Response>();
     app.get('/api/live-reload', (req, res) => {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -198,8 +204,7 @@ export function createApp({
  * actually runs - the stub path, and every test that never sets up a blob,
  * stays free of it. The promise is memoised, so concurrent first requests share
  * one load rather than racing two model downloads.
- */
-/**
+ *
  * Whether the CLIP text tower could be loaded at all.
  *
  * `import.meta.resolve` asks the resolver where the package IS without
@@ -214,10 +219,8 @@ export function createApp({
  * everything else installs, and the demo runs - ranking by keywords and story
  * instead of by CLIP. This is how the server says so out loud rather than
  * leaving it to be discovered on the first search.
- *
- * @returns {boolean}
  */
-export function hasTextModel() {
+export function hasTextModel(): boolean {
   try {
     import.meta.resolve('@huggingface/transformers');
     return true;
@@ -248,8 +251,8 @@ const embedLimiter = createLimiter(Math.max(1, availableParallelism()));
 // than once in a process (tests do this) with different config, and reusing
 // a model loaded at the wrong precision would be silently wrong rather than
 // slow.
-const textTowerPromises = new Map();
-function textTower(dtype) {
+const textTowerPromises = new Map<string, Promise<{ tokenizer: any; model: any }>>();
+function textTower(dtype: string): Promise<{ tokenizer: any; model: any }> {
   if (!textTowerPromises.has(dtype))
     textTowerPromises.set(
       dtype,
@@ -257,12 +260,12 @@ function textTower(dtype) {
         const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
         const [tokenizer, model] = await Promise.all([
           AutoTokenizer.from_pretrained(TEXT_MODEL),
-          CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype }),
+          CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype: dtype as any }),
         ]);
         return { tokenizer, model };
       })()
     );
-  return textTowerPromises.get(dtype);
+  return textTowerPromises.get(dtype) as Promise<{ tokenizer: any; model: any }>;
 }
 
 /**
@@ -271,11 +274,9 @@ function textTower(dtype) {
  * L2-normalised here so the client's int8 dot product is a cosine directly -
  * the image rows were normalised the same way when the blob was written.
  *
- * @param {string} q
- * @param {string} dtype transformers.js precision to load the text tower at
- * @returns {Promise<number[]>}
+ * @param dtype transformers.js precision to load the text tower at
  */
-async function embedQuery(q, dtype) {
+async function embedQuery(q: string, dtype: string): Promise<number[]> {
   const { tokenizer, model } = await textTower(dtype);
   const inputs = tokenizer([q], { padding: true, truncation: true });
   const { text_embeds } = await model(inputs);
@@ -294,11 +295,9 @@ async function embedQuery(q, dtype) {
  * same order (so the map does not reshuffle when you search twice) and that
  * different queries give different ones (so the mechanic is visible).
  *
- * @param {{id: number}[]} rooms
- * @param {string} query
- * @returns {number[]} room ids, best first
+ * @returns room ids, best first
  */
-export function stubRanking(rooms, query) {
+export function stubRanking(rooms: { id: number }[], query: string): number[] {
   let h = 2166136261;
   for (let i = 0; i < query.length; i++) h = Math.imul(h ^ query.charCodeAt(i), 16777619);
 

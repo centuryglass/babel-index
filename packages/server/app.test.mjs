@@ -4,10 +4,10 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
-import { createApp, stubRanking, hasTextModel } from './app.mjs';
-import { scanDirectory } from './scan.mjs';
+import { createApp, stubRanking, hasTextModel } from './app.ts';
+import { scanDirectory } from './scan.ts';
 import { DEFAULTS, resolveConfig } from '../config/config.ts';
-import * as fixture from './image-fixtures.mjs';
+import * as fixture from './image-fixtures.ts';
 
 /**
  * Bring up the real app on an ephemeral port against a throwaway corpus.

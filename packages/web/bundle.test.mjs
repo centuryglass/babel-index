@@ -23,7 +23,7 @@ test('the client bundles', async () => {
     write: false,
     logLevel: 'silent',
     define: { 'process.env.NODE_ENV': '"development"' },
-    // Kept in sync with packages/server/index.mjs's build call - both bundle
+    // Kept in sync with packages/server/index.ts's build call - both bundle
     // main.jsx, and the SVG-as-text loader is why (see SearchIcon.jsx).
     loader: { '.svg': 'text' },
   });
