@@ -76,18 +76,27 @@ export function buildUploadList(
  * - is deliberate: it also catches a pyramid level re-encoded at a different
  * quality setting, which shares its source hash with the old level but isn't
  * the same bytes.
+ *
+ * A matching hash alone isn't enough: `upload-manifest.json` only records what
+ * a *previous run believed it wrote*, not what's actually in the bucket right
+ * now. An object deleted out-of-band, or lost to a run that crashed after the
+ * manifest write but is somehow still recorded, would read as "unchanged"
+ * forever with no way to notice. `existingKeys` - a live listing of the bucket
+ * - closes that gap: a key missing from it uploads regardless of what the
+ * manifest says.
  */
 export function diffAgainstManifest(
   uploads: UploadEntry[],
   hashes: Map<string, string>,
-  remoteManifest: Record<string, string>
+  remoteManifest: Record<string, string>,
+  existingKeys: Set<string>
 ): { toUpload: HashedUploadEntry[]; unchanged: HashedUploadEntry[] } {
   const toUpload: HashedUploadEntry[] = [];
   const unchanged: HashedUploadEntry[] = [];
   for (const { local, key } of uploads) {
     const hash = hashes.get(local);
     const entry = { local, key, hash };
-    if (remoteManifest[key] === hash) unchanged.push(entry);
+    if (remoteManifest[key] === hash && existingKeys.has(key)) unchanged.push(entry);
     else toUpload.push(entry);
   }
   return { toUpload, unchanged };
