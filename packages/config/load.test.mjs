@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from './load.mjs';
+import { loadConfig } from './load.ts';
 import { DEFAULTS } from './config.ts';
 
 /** A throwaway directory with the given files, cleaned up afterwards. */
