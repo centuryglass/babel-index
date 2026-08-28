@@ -8,7 +8,7 @@ It is Node, not Python: it uses the same `@huggingface/transformers` CLIP model
 (`Xenova/clip-vit-base-patch32`) the demo server loads for the **text** tower, so
 image vectors and query vectors land in the same space and are directly
 comparable. That shared model is the whole reason the ranking means anything —
-change it here and you must change it in `packages/server/app.mjs`, then
+change it here and you must change it in `packages/server/app.ts`, then
 regenerate this blob.
 
 ## Run

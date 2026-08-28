@@ -6,7 +6,7 @@
  * already being close enough to the center tile to see it.
  *
  * The badge and its arrow are imported as raw markup (`loader: { '.svg':
- * 'text' }` in packages/server/index.mjs and bundle.test.mjs) rather than
+ * 'text' }` in packages/server/index.ts and bundle.test.mjs) rather than
  * traced into JSX by hand, so `assets/search_button.svg`/`search_arrow.svg`
  * stay the one copy of that path data - editing them in Inkscape is enough,
  * with no second copy here to fall out of step.

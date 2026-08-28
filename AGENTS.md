@@ -38,7 +38,7 @@ node tools/center-placement/import-shelf-svg.mjs tools/center-placement/shelf_ge
 ```
 
 No compiled output ever hits disk. The demo server bundles the client with
-esbuild in-process at startup (`packages/server/index.mjs`), so editing web
+esbuild in-process at startup (`packages/server/index.ts`), so editing web
 sources means restarting `npm run demo`. Demo run will fail if its port is in
 use.
 
@@ -80,12 +80,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 ### Client/Server code:
 - `packages/server`: the demo server
-  * `index.mjs`: CLI
-  * `app.mjs`: Express setup, manifest/rescan/search/images endpoints
-  * `scan.mjs`: Image tile directory loading
+  * `index.ts`: CLI
+  * `app.ts`: Express setup, manifest/rescan/search/images endpoints
+  * `scan.ts`: Image tile directory loading
+  * `remote.ts`: Reading a corpus manifest from a remote host (R2/Cloudflare)
+                 instead of a local directory
   * `port.ts`: portInUse helper function
   * `search-cache.ts`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
+  * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
@@ -243,11 +246,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **`@huggingface/transformers` is OPTIONAL.** `onnxruntime-node` only supports win32/darwin/linux, testing
   through Android/Termux happens occasionally, and base functionality
   shouldn't require CLIP. Never import it statically, see `tools/embed` and
-  `packages/server/app.mjs` for dynamic import conventions.
+  `packages/server/app.ts` for dynamic import conventions.
 - **`esbuild` is a runtime dependency,** in `dependencies` rather than
-  `devDependencies` because `packages/server/index.mjs` bundles the client
+  `devDependencies` because `packages/server/index.ts` bundles the client
   at startup (no separate build phase).
-- **Fixtures are synthesised, not committed.** `packages/server/image-fixtures.mjs`
+- **Fixtures are synthesised, not committed.** `packages/server/image-fixtures.ts`
   builds PNG/JPEG/WebP headers byte by byte. Don't make tests depend on
   `assets/corpus-sample/`.
 - **Comments generally explain why, not what.** Files open with a block comment

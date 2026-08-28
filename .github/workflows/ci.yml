@@ -47,7 +47,7 @@ jobs:
           # on the browser's import graph - `tools/center-placement/lib` is
           # imported by `packages/web/src/center.js` directly, and
           # `packages/pipeline/layout.mjs` is imported by
-          # `packages/server/scan.mjs`, so both count even though "tools" and
+          # `packages/server/scan.ts`, so both count even though "tools" and
           # "pipeline" sound offline. `tools/embed` and `tools/upload` are
           # genuinely offline (see AGENTS.md) and stay out on purpose.
           pattern='^(packages/(web|server|config|map|pipeline)/|tools/center-placement/lib/|assets/|package(-lock)?\.json$|\.github/workflows/(ci|e2e)\.yml$)'

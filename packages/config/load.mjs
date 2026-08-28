@@ -25,7 +25,8 @@ export const CONFIG_FILE = 'config.json';
  * @param {object} [opts]
  * @param {string} [opts.path] overlay path; defaults to `config.json` in cwd
  * @param {{min: number, max: number}} [opts.zoomLimits]
- * @returns {Promise<object>} the resolved config, plus `source` and `notes`
+ * @returns {Promise<import('./config.ts').Config & {source: string|null}>} the
+ *   resolved config, plus `source` (where the overlay came from, if anywhere)
  */
 export async function loadConfig({ path, zoomLimits } = {}) {
   const file = resolve(process.cwd(), path ?? CONFIG_FILE);

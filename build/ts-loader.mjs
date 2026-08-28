@@ -4,7 +4,7 @@
  * `AGENTS.md`'s Layout section describes.
  *
  * `esbuild` already does exactly this transform for the browser bundle
- * (`packages/server/index.mjs` bundles the client in-process at startup), so
+ * (`packages/server/index.ts` bundles the client in-process at startup), so
  * this reuses the same dependency and the same idea for everything Node runs
  * directly: strip types, leave the module graph and every other semantic
  * (top-level await, dynamic `import()`, ESM/CJS interop) alone. Output is
