@@ -4,11 +4,21 @@
  *
  *   npm run demo -- --images /path/to/rooms [--center center.png] [--port 5173]
  *                    [--config config.json] [--shared-dir assets]
+ *                    [--base-path /babel-index/]
  *
  * Point it at a directory of images and it serves a browsable library. No
  * database, no bucket, no upload step - the directory *is* the corpus. That is
  * the whole point of offline mode: get a working local demo before hosting is
  * worth thinking about.
+ *
+ * `--base-path` is for serving this under a subpath of a shared domain
+ * (`https://centuryglass.us/babel-index/`) instead of its own subdomain -
+ * paired with a reverse proxy that strips the prefix before forwarding (see
+ * `server-nginx.conf`), so this process's own routes are untouched by it.
+ * What it changes is every url this server hands the browser: `<base href>`
+ * in the served HTML, and `images`/`shared` in the manifest (`scan.ts`'s
+ * `IMAGES_BASE`/`SHARED_BASE`) - see `packages/server/base-path.ts`. Defaults
+ * to `/`, the plain own-origin case this app has always run as.
  *
  * Or point it at a corpus already uploaded with tools/upload/upload-r2.ts:
  *
@@ -35,6 +45,7 @@ import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
 import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
+import { normalizeBasePath } from './base-path.ts';
 import type { Express } from 'express';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,6 +53,7 @@ const webDir = resolve(here, '../web');
 
 const argv = parseArgs(process.argv.slice(2));
 const port = Number(argv.port ?? 5173);
+const basePath = normalizeBasePath(argv['base-path'] as string | undefined);
 
 const remoteBase = (argv.remote as string | undefined) ?? null;
 if (remoteBase && argv.images) {
@@ -170,14 +182,22 @@ app = createApp({
   getBundleJs: () => bundleJs,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
   watch,
+  basePath,
 });
 
 const server = app.listen(port, () => {
+  // Express itself always serves from root - server-nginx.conf's
+  // prefix-stripping proxy_pass is what makes basePath true for anyone
+  // arriving through it - so this box's own address is unprefixed even when
+  // --base-path is set. Hitting it directly here would 404 against
+  // <base href>'s prefix; that's expected, not a bug to chase.
   console.log(`\n  the library is open at http://localhost:${port}`);
   // Express binds every interface, so the demo is already reachable from a
   // phone on the same network - but only if you know which address to type.
   // Printing them is the difference between "it is exposed" and "it is usable".
   for (const addr of lanAddresses()) console.log(`                       http://${addr}:${port}`);
+  if (basePath !== '/')
+    console.log(`  --base-path ${basePath}: <base href> is set for a reverse proxy that strips it - see server-nginx.conf`);
   if (watch) console.log('  watch mode: client edits rebuild in place, the browser reloads itself');
   console.log();
 });

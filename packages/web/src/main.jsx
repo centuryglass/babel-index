@@ -42,7 +42,7 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch('/api/manifest')
+    fetch('api/manifest')
       .then((r) => r.json())
       .then(setManifest)
       .catch((e) => setError(String(e)));
