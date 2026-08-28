@@ -12,5 +12,5 @@
     "skipLibCheck": true
   },
   "include": ["packages/**/*.js", "packages/**/*.jsx", "packages/**/*.mjs", "packages/**/*.ts", "packages/**/*.tsx", "tools/**/*.mjs", "tools/**/*.js", "tools/**/*.ts", "build/**/*.mjs"],
-  "exclude": ["node_modules", "packages/web/e2e/**", "**/*.test.mjs"]
+  "exclude": ["node_modules", "**/*.test.mjs"]
 }

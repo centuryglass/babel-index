@@ -245,7 +245,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   welcome; it's what the next conversion reads from.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so new files need no
-  wiring. e2e files are `*.e2e.mjs`, intentionally skipping the pattern.
+  wiring. e2e files are `*.e2e.ts`, intentionally skipping the pattern.
 - **`@huggingface/transformers` is OPTIONAL.** `onnxruntime-node` only supports win32/darwin/linux, testing
   through Android/Termux happens occasionally, and base functionality
   shouldn't require CLIP. Never import it statically, see `tools/embed` and
@@ -557,7 +557,7 @@ code, not a standing invariant.
   `canvasRef.current` once and depends on the ref OBJECT, so a canvas that
   remounts comes back with no pointer listeners bound at all - the camera still
   holds the right numbers, the HUD still reads correctly, and the map silently
-  never pans again. `catalog.e2e.mjs`'s "the map is where it was left when the
+  never pans again. `catalog.e2e.ts`'s "the map is where it was left when the
   catalog closes" test drags after a mode switch precisely because every
   cheaper assertion passes under that bug. Hiding also keeps the tile cache
   and the pyramid's LRU warm, so returning is a repaint, not a rebuild.
@@ -648,7 +648,7 @@ code, not a standing invariant.
   Where genuine settling is needed, poll for two *agreeing* reads with a real
   gap between them — two reads taken back to back with nothing elapsed proves
   nothing.
-- **Test cleanup belongs in `finally`.** Each `packages/web/e2e/*.e2e.mjs`
+- **Test cleanup belongs in `finally`.** Each `packages/web/e2e/*.e2e.ts`
   file's tests share one `page` across that file; a failed assertion skipping
   cleanup strands slider/camera state for every test after it in the same
   file, turning one flake into several unrelated
@@ -665,7 +665,7 @@ code, not a standing invariant.
   /%/, got 26" can't distinguish a missing attribute from an ignored one, and
   the failing run is usually on a machine you can't open a browser on.
 - **CDP touch injection bypasses real gesture arbitration.** The touch/pinch
-  tests in `packages/web/e2e/map-gestures.e2e.mjs` can't see `touch-action`,
+  tests in `packages/web/e2e/map-gestures.e2e.ts` can't see `touch-action`,
   `pointercancel`, or the real capture lifecycle — treat it as a known blind
   spot. Simulate suspected gesture bugs explicitly and confirm on a device
   with `?touchdebug`.

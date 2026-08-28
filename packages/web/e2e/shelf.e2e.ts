@@ -3,7 +3,7 @@
  * (docs/accessibility-plan.md phase D) - the diegetic search controls painted
  * into the center tile, and their keyboard interface. One of five files split
  * out of the original `smoke.e2e.mjs` (see `docs/implementation-plan.md`);
- * see `map-gestures.e2e.mjs` for the shared header comment on why and how.
+ * see `map-gestures.e2e.ts` for the shared header comment on why and how.
  *
  * The center room's forty spines were painted pixels behind a hit-test - the
  * application's PRIMARY interface reachable only by mouse or finger.
@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 import AxeBuilder from '@axe-core/playwright';
 import {
   SEARCH_TIMEOUT, axFind, axNodes, closeLibrary, landed, openLibrary, settled, waitFor,
-} from './support.mjs';
+} from './support.ts';
 
 describe('the library, in a browser: the center shelf', { concurrency: false }, () => {
   let session;
@@ -72,7 +72,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       await page.keyboard.press('Tab');
       const inShelf = () =>
         page.evaluate(() => {
-          const el = document.activeElement;
+          const el = document.activeElement as HTMLElement | null;
           return el?.closest('.center-books') ? el.dataset.book : null;
         });
       const first = await inShelf();
@@ -114,7 +114,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       // reaches through the canvas, which is the point of there being one.
       const term = book.name.split(' - ')[0];
       await page.evaluate((want) => {
-        const el = [...document.querySelectorAll('.center-books button')].find(
+        const el = [...document.querySelectorAll<HTMLElement>('.center-books button')].find(
           (b) => b.getAttribute('aria-label')?.startsWith(want)
         );
         el.focus();
