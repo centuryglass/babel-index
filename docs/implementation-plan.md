@@ -11,12 +11,12 @@ serve as completed task history.
    doesn't bother trying the same on a unique room.
 
 ## Search:
-- The rules of search ranking and certainty are very approximate, and differ
-  from unstated expectations in a lot of subtle ways. Establish a basic set of
-  conditions that define how search should act, making sure to cover all the
-  odd edge cases.
+- The target behavior is now specified in `search_rules.md`; the gap between it
+  and the code, and the steps to close it, are in `search-plan.md`. Work the
+  search rework from there rather than restating it here.
 - Decide on a user-friendly way to present search ranking and certainty to
-  users in the catalog mode.
+  users in the catalog mode (`search-plan.md` §5.4 covers the signed-certainty
+  rendering; this is the broader "what does the catalog show" question).
 
 
 ## A11y:
