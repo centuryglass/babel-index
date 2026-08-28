@@ -97,7 +97,7 @@ const idFor = (value, homeMx, homeMy, genericIndexAt) =>
  *     the same direction, with the swaps that feed them attached. This is what
  *     turns a column's ten separate rotations into one ride upward.
  *
- * @param {Array<object>} moves from `planMoves`, carrying `stage`, `line`, `wave`
+ * @param {import('../../../map/moves.ts').Move[]} moves from `planMoves`
  * @param {{base, perCell, gap, stagger, cascade}} timing from `packages/config`
  * @returns {{stages: Array<object>, totalMs: number}}
  */
@@ -170,6 +170,8 @@ export function buildTimeline(moves, timing) {
  * that shift's COMPLETION rather than at the next run's start. The distinction
  * is invisible while runs play strictly in sequence and load-bearing the
  * moment they overlap - see the cascade in `buildTimeline`.
+ *
+ * @param {import('../../../map/moves.ts').Move} move
  */
 function pushMove(lane, move) {
   let run = lane.runs[lane.runs.length - 1];
@@ -209,9 +211,10 @@ const ease = (t) => t * t * (3 - 2 * t);
  * never overlap on screen, because a wave stage's lines are all the same kind.
  *
  * @param {object} opts
- * @param {{width: number, height: number, cells: Array}} opts.board mutated in place
- * @param {Array<object>} opts.moves
- * @param {(board: object, move: object) => void} opts.apply usually `applyMove`
+ * @param {import('../../../map/moves.ts').Board} opts.board mutated in place
+ * @param {import('../../../map/moves.ts').Move[]} opts.moves
+ * @param {(board: import('../../../map/moves.ts').Board, move: import('../../../map/moves.ts').Move) => void} opts.apply
+ *   usually `applyMove`
  * @param {object} opts.timing from `packages/config`
  */
 export function createSlideshow({ board, moves, apply, timing }) {
@@ -230,6 +233,7 @@ export function createSlideshow({ board, moves, apply, timing }) {
     return false;
   }
 
+  /** @returns {import('../../../map/moves.ts').Motion | null} */
   const motionOf = (run) =>
     run.cells === 0
       ? null
@@ -238,7 +242,7 @@ export function createSlideshow({ board, moves, apply, timing }) {
   /**
    * Bring the board up to `elapsed`, and report the motion to draw.
    *
-   * @returns {{done: boolean, motions: Array<object>}}
+   * @returns {{done: boolean, motions: import('../../../map/moves.ts').Motion[]}}
    */
   function advanceTo(elapsed) {
     while (stageIndex < stages.length) {
@@ -291,11 +295,13 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
    * @param {number} opts.height css pixels
    * @param {number} opts.dpr
    * @param {{x: number, y: number, zoom: number}} opts.cam parked on the center
-   * @param {{width: number, height: number, cells: Array}} opts.board
-   * @param {{x: number, y: number}} opts.origin board index of map cell (0, 0)
-   * @param {Array<object>} opts.motions from `advanceTo` - several at once
-   *   during a wave. They can never overlap on screen: a wave stage's lines are
-   *   all rows or all columns, and two rows share no cell
+   * @param {import('../../../map/moves.ts').Board} opts.board
+   * @param {import('../../../map/moves.ts').Point} opts.origin board index of
+   *   map cell (0, 0)
+   * @param {import('../../../map/moves.ts').Motion[]} [opts.motions] from
+   *   `advanceTo` - several at once during a wave. They can never overlap on
+   *   screen: a wave stage's lines are all rows or all columns, and two rows
+   *   share no cell
    * @param {(x: number, y: number) => number} [opts.genericIndexAt] which generic
    *   tile a generic cell shows, by map coordinate (the same positional chooser
    *   the main renderer uses, so the tile matches across the handoff)

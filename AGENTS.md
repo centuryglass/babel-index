@@ -145,6 +145,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `metadata.js`: Normalizing and joining per-room keyword/story data
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
+  * `moves.ts`: The rearrangement animation's type contract (`Move` and its
+               `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
+               ...), type-only, shared by `illusion.js`, `board.js` and
+               `packages/web/src/lib/slide.js`
   * `scoring.js`: Find room rank and match certainty for a search, searh tokenization
   * `illusion.js`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.js`
   * `board.js`: Sliding animation illusion's board data structure
