@@ -1,22 +1,25 @@
 /**
- * A minimal paged overlay for showing a long block of text a screenful at a
- * time. Not wired into the app - this exists to try out the pagination
- * mechanics on a body of text large enough to need them, before deciding
- * whether/how a paged text view belongs anywhere real.
+ * Shows a random book from the Library of Babel: an endless wall of
+ * (mostly) meaningless text, paged a screenful at a time, in the spirit of
+ * Borges's library where every possible book already exists on some shelf.
+ *
+ * Meant as an easter egg on the artist statement page, once that page
+ * exists - not wired into the app yet.
  */
 import { useMemo, useState } from 'react';
 
-const SAMPLE_CHARSET = 'abcdefghijklmnoprstuvy, .';
+const BOOK_CHARSET = 'abcdefghijklmnoprstuvy, .';
 
 /**
- * A block of random lines, in the same shape as prose: fixed-width lines
- * grouped into paragraphs (a blank line every `linesPerParagraph` lines).
+ * The text of one random "book": fixed-width lines grouped into paragraphs
+ * (a blank line every `linesPerParagraph` lines), drawn from a restricted
+ * charset the way the Library of Babel's books are.
  */
-export function generateSampleText(
+export function generateRandomBookText(
   lineCount = 16400,
   lineLength = 80,
   linesPerParagraph = 40,
-  charset = SAMPLE_CHARSET
+  charset = BOOK_CHARSET
 ) {
   const lines = [];
   for (let i = 0; i < lineCount; i++) {
@@ -30,8 +33,8 @@ export function generateSampleText(
   return lines.join('\n');
 }
 
-/** Split text into pages of `linesPerPage` lines each. */
-export function paginateText(text: string, linesPerPage = 40): string[] {
+/** Split a book's text into pages of `linesPerPage` lines each. */
+export function paginateBookText(text: string, linesPerPage = 40): string[] {
   const lines = text.split('\n');
   const pages: string[] = [];
   for (let i = 0; i < lines.length; i += linesPerPage) {
@@ -40,15 +43,15 @@ export function paginateText(text: string, linesPerPage = 40): string[] {
   return pages.length > 0 ? pages : [''];
 }
 
-interface PagedTextOverlayProps {
+interface BabelBookOverlayProps {
   text?: string;
   linesPerPage?: number;
   onClose?: () => void;
 }
 
-export function PagedTextOverlay({ text, linesPerPage = 40, onClose }: PagedTextOverlayProps) {
-  const body = useMemo(() => text ?? generateSampleText(), [text]);
-  const pages = useMemo(() => paginateText(body, linesPerPage), [body, linesPerPage]);
+export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBookOverlayProps) {
+  const book = useMemo(() => text ?? generateRandomBookText(), [text]);
+  const pages = useMemo(() => paginateBookText(book, linesPerPage), [book, linesPerPage]);
   const [page, setPage] = useState(0);
 
   const clamped = Math.min(page, pages.length - 1);
@@ -57,7 +60,7 @@ export function PagedTextOverlay({ text, linesPerPage = 40, onClose }: PagedText
 
   return (
     <div className="overlay-scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className="overlay" role="dialog" aria-modal="true" aria-label="paged text">
+      <div className="overlay" role="dialog" aria-modal="true" aria-label="a random book">
         <div className="card-head">
           <span className="card-id">
             page {clamped + 1} / {pages.length}
