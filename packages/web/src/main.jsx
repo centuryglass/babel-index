@@ -121,7 +121,7 @@ function Library({ manifest }) {
 
   // Everything the corpus IS - the sidecar, the embedding blob, the search
   // index built over them. See useCorpus.js.
-  const { metadata, embeddings, searchIndex, described } = useCorpus(manifest);
+  const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
 
   // `requestAnimation` doesn't exist yet - it comes back from `useRearrangement`
   // below, which itself needs `announce`, which needs this hook's `result` to
@@ -642,6 +642,7 @@ function Library({ manifest }) {
         cursorEntry={cursorEntry}
         cursorDesc={cursorDesc}
         highlight={highlight}
+        tagLinks={tagLinks}
         onMapKeyDown={onMapKeyDown}
         onKeyword={searchKeyword}
         centreSlots={centreSlots}
@@ -672,6 +673,7 @@ function Library({ manifest }) {
           metadata={metadata}
           result={result}
           highlight={highlight}
+          tagLinks={tagLinks}
           query={query}
           setQuery={setQuery}
           onSearch={runSearch}
@@ -729,6 +731,7 @@ function Library({ manifest }) {
           onClose={() => setOverlay(null)}
           onKeyword={searchKeyword}
           highlight={highlight}
+          tagLinks={tagLinks}
           result={result}
           weights={config.search.weights}
         />
@@ -745,6 +748,7 @@ function Library({ manifest }) {
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
           highlight={highlight}
+          tagLinks={tagLinks}
           result={result}
           weights={config.search.weights}
         />

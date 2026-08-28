@@ -20,7 +20,6 @@
  * One order, so a reader who meets a room both ways meets it the same way.
  */
 import { explainScore } from '../../../map/scoring.js';
-import { tagLink } from '../lib/tagLinks.ts';
 
 /**
  * Text with the matched spans marked.
@@ -132,6 +131,9 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
  * @param {import('../../../map/metadata.ts').RoomMeta|null} props.entry the room's metadata, from `joinMetadata()`
  * @param {object|null} props.desc from `describeRoom` / `describeCell`
  * @param {(text: string) => void} props.onKeyword a chip runs this search
+ * @param {Record<string, string>|null} [props.tagLinks] keyword -> external
+ *   link, from the corpus's optional tagLinks.json (see useCorpus.js) - a
+ *   keyword with an entry grows a second "more about this" pill fused to it
  * @param {number} [props.chipTabIndex] -1 inside the canvas, 0 everywhere else
  * @param {{keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
  *          story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null} [props.highlight]
@@ -146,6 +148,7 @@ export function RoomDetails({
   entry,
   desc,
   onKeyword,
+  tagLinks = null,
   chipTabIndex = 0,
   highlight = null,
   rank = null,
@@ -158,7 +161,7 @@ export function RoomDetails({
       {entry?.keywords?.length > 0 && (
         <div className="chips">
           {entry.keywords.map((k) => {
-            const href = tagLink(k.text);
+            const href = tagLinks?.[k.text] ?? null;
             return (
               <span key={k.text} className={href ? 'chip-group' : undefined}>
                 <button

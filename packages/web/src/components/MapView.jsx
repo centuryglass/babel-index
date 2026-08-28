@@ -65,6 +65,7 @@ export function MapView({
   cursorEntry,
   cursorDesc,
   highlight,
+  tagLinks,
   onMapKeyDown,
   onKeyword,
   centreSlots,
@@ -150,6 +151,7 @@ export function MapView({
             onKeyword={onKeyword}
             chipTabIndex={-1}
             highlight={highlight}
+            tagLinks={tagLinks}
           />
         )}
       </canvas>

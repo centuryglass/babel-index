@@ -494,3 +494,43 @@ test('a malformed sidecar degrades to no metadata rather than throwing', async (
     }
   );
 });
+
+// --- tag links ---------------------------------------------------------
+
+test('a corpus without a tagLinks.json reports no tagLinks', async () => {
+  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+    assert.equal((await scanDirectory(dir)).tagLinks, null);
+  });
+});
+
+test('a tagLinks.json is surfaced with a servable url and its count', async () => {
+  await corpus(
+    {
+      'center.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      'tagLinks.json': JSON.stringify({
+        Cubism: 'https://en.wikipedia.org/wiki/Cubism',
+        magma: 'https://en.wikipedia.org/wiki/Magma',
+      }),
+    },
+    async (dir) => {
+      assert.deepEqual((await scanDirectory(dir)).tagLinks, {
+        url: '/images/tagLinks.json',
+        count: 2,
+      });
+    }
+  );
+});
+
+test('a malformed tagLinks.json degrades to no tagLinks rather than throwing', async () => {
+  await corpus(
+    {
+      'center.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      'tagLinks.json': '[ "not", "an", "object" ]',
+    },
+    async (dir) => {
+      assert.equal((await scanDirectory(dir)).tagLinks, null);
+    }
+  );
+});

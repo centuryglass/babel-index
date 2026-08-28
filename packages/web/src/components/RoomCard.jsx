@@ -16,7 +16,7 @@ import { RoomDetails } from './RoomDetails.jsx';
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
 
-export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highlight, result, weights }) {
+export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highlight, tagLinks, result, weights }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
 
@@ -106,6 +106,7 @@ export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highligh
         desc={desc}
         onKeyword={onKeyword}
         highlight={highlight}
+        tagLinks={tagLinks}
         rank={card.rank}
         result={result}
         weights={weights}
