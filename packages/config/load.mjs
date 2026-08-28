@@ -1,6 +1,6 @@
 /**
  * Reading `config.json` off disk, kept apart from the defaults and validation in
- * `config.mjs` so that file needs no filesystem to be tested.
+ * `config.ts` so that file needs no filesystem to be tested.
  *
  * The overlay is optional and partial. Absent, the app runs on `DEFAULTS`
  * exactly; present, it need only carry the keys being changed - which is what
@@ -11,7 +11,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { resolveConfig } from './config.mjs';
+import { resolveConfig } from './config.ts';
 
 export const CONFIG_FILE = 'config.json';
 

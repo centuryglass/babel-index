@@ -17,7 +17,7 @@ import {
   tokenise,
 } from './scoring.js';
 import { CERTAINTY_FLOOR } from './ordering.js';
-import { DEFAULTS } from '../config/config.mjs';
+import { DEFAULTS } from '../config/config.ts';
 
 const WEIGHTS = DEFAULTS.search.weights;
 
