@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, basename, resolve } from 'node:path';
-import { mipPlan } from '../pipeline/layout.mjs';
+import { mipPlan } from '../pipeline/layout.ts';
 import { metadataCoverage } from '../map/metadata.ts';
 import type { ImageSize, Manifest, Room, SharedAsset, SharedAssets, LevelInfo } from '../map/manifest.ts';
 

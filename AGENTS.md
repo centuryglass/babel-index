@@ -162,7 +162,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
   * `index.mjs`: CLI
   * `mips.mjs`: Generate+fill alternate image size directories
-  * `layout.mjs`: Import resolution steps from pyramid.js, define expected directory structure
+  * `layout.ts`: Import resolution steps from pyramid.js, define expected directory structure
   
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
