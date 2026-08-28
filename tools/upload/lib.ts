@@ -1,9 +1,21 @@
 /**
  * Pure logic for the R2 upload tool: which files need uploading, and under
  * what keys. No filesystem, no network - so it can be tested without a
- * corpus on disk or a bucket to talk to. `upload-r2.mjs` does the I/O and
+ * corpus on disk or a bucket to talk to. `upload-r2.ts` does the I/O and
  * calls in here for the decisions.
  */
+import type { Manifest } from '../../packages/map/manifest.ts';
+
+export interface UploadEntry {
+  local: string;
+  key: string;
+}
+
+export interface HashedUploadEntry extends UploadEntry {
+  hash: string | undefined;
+}
+
+export type JoinPath = (...parts: string[]) => string;
 
 /**
  * Every (local path, remote key) pair a corpus upload touches, derived from a
@@ -18,14 +30,15 @@
  * demo server mounts them (`/shared/`) - multiple corpora can point at the
  * same shared tiles without re-uploading them.
  *
- * @param {object} manifest a `scanDirectory()` result
- * @param {{imagesDir: string, sharedDir: string, prefix: string}} opts
- * @param {(...parts: string[]) => string} join path.join, injected so this
- *   stays free of node:path and testable with plain strings
- * @returns {{local: string, key: string}[]}
+ * `join` is path.join, injected so this stays free of node:path and testable
+ * with plain strings.
  */
-export function buildUploadList(manifest, { imagesDir, sharedDir, prefix }, join) {
-  const uploads = [];
+export function buildUploadList(
+  manifest: Manifest,
+  { imagesDir, sharedDir, prefix }: { imagesDir: string; sharedDir: string; prefix: string },
+  join: JoinPath
+): UploadEntry[] {
+  const uploads: UploadEntry[] = [];
 
   for (const room of manifest.rooms) uploads.push({ local: join(imagesDir, room.file), key: `${prefix}/${room.file}` });
 
@@ -61,17 +74,14 @@ export function buildUploadList(manifest, { imagesDir, sharedDir, prefix }, join
  * - is deliberate: it also catches a pyramid level re-encoded at a different
  * quality setting, which shares its source hash with the old level but isn't
  * the same bytes.
- *
- * @param {{local: string, key: string}[]} uploads
- * @param {Map<string, string>} hashes local path -> content hash
- * @param {Record<string, string>} remoteManifest key -> content hash, from the
- *   last upload
- * @returns {{toUpload: {local: string, key: string, hash: string}[],
- *   unchanged: {local: string, key: string, hash: string}[]}}
  */
-export function diffAgainstManifest(uploads, hashes, remoteManifest) {
-  const toUpload = [];
-  const unchanged = [];
+export function diffAgainstManifest(
+  uploads: UploadEntry[],
+  hashes: Map<string, string>,
+  remoteManifest: Record<string, string>
+): { toUpload: HashedUploadEntry[]; unchanged: HashedUploadEntry[] } {
+  const toUpload: HashedUploadEntry[] = [];
+  const unchanged: HashedUploadEntry[] = [];
   for (const { local, key } of uploads) {
     const hash = hashes.get(local);
     const entry = { local, key, hash };
@@ -82,7 +92,7 @@ export function diffAgainstManifest(uploads, hashes, remoteManifest) {
 }
 
 /** Guess a Content-Type from a key's extension, for the objects this tool writes. */
-export function guessContentType(key) {
+export function guessContentType(key: string): string {
   if (key.endsWith('.json')) return 'application/json';
   if (key.endsWith('.bin')) return 'application/octet-stream';
   if (key.endsWith('.png')) return 'image/png';

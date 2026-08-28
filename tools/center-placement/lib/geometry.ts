@@ -1,4 +1,4 @@
-import { MEASURED } from './measured.js';
+import { MEASURED } from './measured.ts';
 
 /**
  * Layout of one tile.
@@ -16,7 +16,7 @@ import { MEASURED } from './measured.js';
  * TWO CLASSES OF NUMBER LIVE HERE, and the difference matters:
  *
  *   MEASURED - the opening, the search box and every book rectangle come from
- *   measured.js, traced off the Blender render in Inkscape and imported by
+ *   measured.ts, traced off the Blender render in Inkscape and imported by
  *   import-shelf-svg.mjs. These are exact. Shelf boards, case uprights and the
  *   lamp used to be traced too; they no longer are; only books and the search
  *   box are read from the SVG.
@@ -36,7 +36,7 @@ const PROVISIONAL = {
   ceiling: 0.055,
 };
 
-const round = (n) => Math.round(n * 1e4) / 1e4;
+const round = (n: number) => Math.round(n * 1e4) / 1e4;
 
 /**
  * The tile's shape, from the trace itself.
@@ -53,22 +53,61 @@ const round = (n) => Math.round(n * 1e4) / 1e4;
  */
 export const TILE_ASPECT = MEASURED.tile.aspect;
 
-/**
- * @param {{width?: number, height?: number}} opts
- * @returns {object} every rectangle the renderer and the web app need
- */
-export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) } = {}) {
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface Book extends Rect {
+  index: number;
+}
+
+export interface Shelf {
+  index: number;
+  books: Book[];
+}
+
+export interface SideReturn {
+  side: 'left' | 'right';
+  outer: { x: number; top: number; bottom: number };
+  inner: { x: number; top: number; bottom: number };
+}
+
+export interface TileLayout {
+  width: number;
+  height: number;
+  measured: true;
+  opening: Rect;
+  searchBox: Rect;
+  shelves: Shelf[];
+  floorLine: number;
+  sideReturn: number;
+  sideReturns: SideReturn[];
+  ceiling: Rect;
+  cornice: Rect;
+  floor: Rect;
+}
+
+/** Every rectangle the renderer and the web app need. */
+export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) } = {}): TileLayout {
   const W = width;
   const H = height;
   // Rects carry no aspect of their own - the importer normalised x against the
   // traced width and y against the traced height separately - so each axis
   // scales by its own edge and a tile of any shape comes out right.
-  const r = ([x, y, w, h]) => ({ x: round(x * W), y: round(y * H), w: round(w * W), h: round(h * H) });
+  const r = ([x, y, w, h]: [number, number, number, number]): Rect => ({
+    x: round(x * W),
+    y: round(y * H),
+    w: round(w * W),
+    h: round(h * H),
+  });
 
   const opening = r(MEASURED.opening);
-  const searchBox = r(MEASURED.searchBox);
+  const searchBox = r(MEASURED.searchBox!);
 
-  const shelves = MEASURED.shelves.map((s, index) => ({
+  const shelves: Shelf[] = MEASURED.shelves.map((s, index) => ({
     index,
     books: s.books.map((b, i) => ({ index: i, ...r(b) })),
   }));

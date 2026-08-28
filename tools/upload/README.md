@@ -26,8 +26,8 @@ you need something else (a custom domain, a local S3-compatible test server).
 ## Run
 
 ```sh
-node tools/upload/upload-r2.mjs                          # assets/corpus-sample/, prefix "corpus-sample"
-node tools/upload/upload-r2.mjs --images <dir> [--shared-dir assets] \
+node tools/upload/upload-r2.ts                          # assets/corpus-sample/, prefix "corpus-sample"
+node tools/upload/upload-r2.ts --images <dir> [--shared-dir assets] \
   [--prefix <name>] [--bucket <name>] [--center center.jpg] [--dry-run]
 ```
 
@@ -69,5 +69,5 @@ re-encoded at a different JPEG quality, which shares its source hash with the
 old level but isn't the same bytes.
 
 The pure decision logic (which files make up a corpus upload, and which of
-those are new/changed) lives in `lib.mjs`, tested without any real corpus or
+those are new/changed) lives in `lib.ts`, tested without any real corpus or
 bucket in `lib.test.mjs`.
