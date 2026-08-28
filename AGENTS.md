@@ -209,6 +209,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                      apart, and what is deliberately left alone.
 - `docs/design-history.md`: Record of all the dead ends we went down because
                             of incomplete specifications.
+- `docs/search_rules.md`: The full end-state spec of search - parsing, scoring,
+                          ranking-vs-certainty, and every reporting rule. The
+                          target, not the current code.
+- `docs/search-plan.md`: The gap between `search_rules.md` and the code today,
+                         and the steps to close it. Delete steps as they land.
   
 ## Conventions
 
