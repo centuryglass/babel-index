@@ -161,7 +161,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `shelf_geometry.svg`: Center tile geometry.
   * `lib/geometry.js`: Book and search box placement structure
   * `lib/measured.js`: Auto-generated svg geometry data
-  * `lib/prng.js`: RNG utility function currently only used by web/src/lib/center.js,
+  * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.js,
                    should probably be moved elsewhere.
 - `tools/embed/embed.mjs`: Compute and store CLIP image embeddings for all rooms.
 - `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,

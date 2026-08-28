@@ -36,7 +36,7 @@
  * No DOM (the compositing takes a 2d context but reads nothing back).
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.js';
-import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.js';
+import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
 import { pxPerCell, worldToScreen } from './camera.js';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
