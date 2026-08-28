@@ -128,14 +128,15 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
 
 /**
  * @param {object} props
- * @param {object|null} props.entry the room's metadata, from `joinMetadata()`
+ * @param {import('../../../map/metadata.js').RoomMeta|null} props.entry the room's metadata, from `joinMetadata()`
  * @param {object|null} props.desc from `describeRoom` / `describeCell`
  * @param {(text: string) => void} props.onKeyword a chip runs this search
  * @param {number} [props.chipTabIndex] -1 inside the canvas, 0 everywhere else
- * @param {{keyword: (text: string) => object[], story: (text: string) => object[]}|null} [props.highlight]
+ * @param {{keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
+ *          story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null} [props.highlight]
  *   the two range finders, already bound to the submitted query
  * @param {number|null} [props.rank] for the score breakdown
- * @param {object|null} [props.result] the current search, for the breakdown
+ * @param {import('../../../map/searchResult.ts').SearchResult|null} [props.result] the current search, for the breakdown
  * @param {object} [props.weights]
  * @param {'table'|'strip'} [props.scoreLayout] a card has room for the table; a
  *   catalog row needs the one-line strip, or it clips
