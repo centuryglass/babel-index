@@ -65,35 +65,42 @@ image match beats a lone partial tag" does not hold today.
 contiguous run* of matched query words is the thing that outranks everything,
 and a quoted phrase matches the story as a contiguous run too.
 
-**Now:** `buildSearchIndex` stores the story as a lemmatised `Set<string>` —
-order and adjacency are gone. Any absolute matched-length read off a set can only
-be the *sum of matched query-word lengths*, so four scattered one-word hits look
-identical to one long phrase, and "contiguous run" (`storyLongChars` in the spec)
-cannot be measured at all. Quoted phrases fall back to per-word matching for the
-same reason.
+**Landed:** `buildSearchIndex` now stores the story as `{sequence, set}` —
+`sequence` is the lemmatised token *sequence* with `{lemma, start, end}` spans
+into the folded story (still built once at load), `set` is the same lemmas for
+`storyScore`'s O(1) ratio lookup (unchanged behaviour, just reading the new
+shape). Two new pure functions in `scoring.js` measure what `storyLongChars`
+needs: `longestMatchRun(sequence, matchLemmas)` (unordered — the longest run of
+*consecutive story tokens* whose lemma is in the query's lemma set) and
+`storyPhraseRun(sequence, phraseLemmas)` (ordered — a quoted phrase's words
+found consecutively, in order). Both are unit-tested in `scoring.test.mjs`
+but **not yet called from `rankHybrid`** — that wiring is §1/§2's job, since
+it means replacing `storyScore`'s ratio-only reading in the weighted sum.
 
-**Steps:**
-1. Change the story index from a `Set` to the lemmatised token *sequence* with
-   positions (still built once at load). Keep lemma matching — that assertion
-   (lemmas over stems/prefixes, `animation` ≠ `animal`) stays exactly as is.
-2. Measure the longest contiguous run of consecutive query words found in the
-   story, and feed its character length to the `storyLong` bonus — this is what
-   makes "most of a sentence" mean contiguity rather than volume.
-3. Match a quoted phrase against that sequence as an ordered run, closing the
-   tag-only limitation the spec currently carries.
+**Steps left:**
+1. In the §1/§2 rewrite, feed `longestMatchRun`'s result (character length) to
+   the `storyLong` ranking bonus and to certainty's `storyLongBonus01` term.
+2. In the same rewrite, use `storyPhraseRun` to give a quoted term story credit
+   — it needs the term's `words` lemmatised, from `parseQuery` (§4).
 
 ## 4. Quoted-phrase parsing does not exist
 
 **Ideal** (`search_rules.md` "The parsed query"): a query is an ordered list of
 terms, a quoted phrase being one term matched whole.
 
-**Now:** the query is folded and split flat by `tokenise`; there is no term list
-and quotes are inert.
+**Landed:** `parseQuery(raw)` in `scoring.js` produces the `Term[]`/`ParsedQuery`
+shape the spec defines (types in `searchResult.ts`) — quoted spans found first,
+the remainder split on whitespace, `words` set per the spec (`[folded]` for an
+unquoted term, `tokenise(phrase)` for a quoted one). `classifyTagTerm(term,
+keywords)` gives the one-classification-per-term reading tag matching needs
+(`{exact, partial}`), tested including the "phrase matches whole, not split"
+and "quoting a bare word changes nothing" cases.
 
-**Steps:** add the quote-aware parse (find quoted spans first, split the rest on
-whitespace) producing the `Term[]` shape the spec defines, and thread it through
-tag matching (whole-phrase substring/equality, one classification per term) and,
-after §3, story matching.
+**Steps left:** neither `parseQuery` nor `classifyTagTerm` is called from
+`rankHybrid` yet — `keywordScore` still reads the flat `foldedQuery`/
+`queryTokens` pair. Threading them through is §1/§2's `tagExact`/
+`tagPartialSum` rewrite, not a separate pass, since a per-term classification
+*is* that split.
 
 ## 5. CLIP certainty is mapped off theoretical extremes, not the distribution
 
