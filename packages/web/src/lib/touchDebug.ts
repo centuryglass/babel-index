@@ -17,9 +17,9 @@ export const TOUCH_DEBUG =
   typeof location !== 'undefined' && new URLSearchParams(location.search).has('touchdebug');
 
 const TOUCH_LOG_LINES = 14;
-const touchLog = [];
+const touchLog: string[] = [];
 
-export function appendTouchLog(line) {
+export function appendTouchLog(line: string): void {
   touchLog.push(line);
   if (touchLog.length > TOUCH_LOG_LINES) touchLog.shift();
   const el = document.getElementById('touchlog');

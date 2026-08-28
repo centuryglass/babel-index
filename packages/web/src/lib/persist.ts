@@ -45,7 +45,7 @@ export const KEYS = {
  * Reading `window.localStorage` can itself throw, which is why this is a
  * function call in a try rather than a module-scope constant.
  */
-function storage(override) {
+function storage(override?: Storage | null): Storage | null {
   if (override !== undefined) return override;
   try {
     return globalThis.localStorage ?? null;
@@ -62,13 +62,14 @@ function storage(override) {
  * same as "it is what this release expects". A value that fails it is treated
  * exactly like a value that was never written.
  *
- * @param {string} key one of `KEYS`
- * @param {*} fallback
- * @param {object} [opts]
- * @param {(value: *) => boolean} [opts.validate]
- * @param {Storage|null} [opts.store] injected, for tests
+ * @param key one of `KEYS`
+ * @param opts.store injected, for tests
  */
-export function load(key, fallback, { validate = () => true, store } = {}) {
+export function load<T>(
+  key: string,
+  fallback: T,
+  { validate = () => true, store }: { validate?: (value: unknown) => boolean; store?: Storage | null } = {},
+): T {
   const s = storage(store);
   if (!s) return fallback;
   try {
@@ -88,9 +89,8 @@ export function load(key, fallback, { validate = () => true, store } = {}) {
  * app does today, because there is no useful thing to tell a reader whose
  * browser declines to remember their paging preference.
  *
- * @returns {boolean}
  */
-export function save(key, value, { store } = {}) {
+export function save(key: string, value: unknown, { store }: { store?: Storage | null } = {}): boolean {
   const s = storage(store);
   if (!s) return false;
   try {
@@ -102,7 +102,7 @@ export function save(key, value, { store } = {}) {
 }
 
 /** Forget one stored value. Used by the panel's "forget searches" control. */
-export function clear(key, { store } = {}) {
+export function clear(key: string, { store }: { store?: Storage | null } = {}): boolean {
   const s = storage(store);
   if (!s) return false;
   try {
