@@ -3,8 +3,8 @@
  * and search's rearrangement of the map. One of five files split out of the
  * original `smoke.e2e.mjs` (see `docs/implementation-plan.md`) along the
  * seams that file's own section comments already marked - this one covers
- * everything that isn't accessibility-plan work (that's `accessibility.e2e.mjs`,
- * `keyboard-cursor.e2e.mjs`, `shelf.e2e.mjs`) or the catalog (`catalog.e2e.mjs`).
+ * everything that isn't accessibility-plan work (that's `accessibility.e2e.ts`,
+ * `keyboard-cursor.e2e.ts`, `shelf.e2e.ts`) or the catalog (`catalog.e2e.ts`).
  *
  * This is the only layer that catches "the canvas renders nothing" - the
  * failure no unit test can see, because every piece can be correct while the
@@ -31,7 +31,7 @@ import assert from 'node:assert/strict';
 import {
   SEARCH_TIMEOUT, closeLibrary, fingerprint, hud, landed, openLibrary,
   pinch, sampleCamera, settled, touchDrag, waitFor,
-} from './support.mjs';
+} from './support.ts';
 
 describe('the library, in a browser: map and gestures', { concurrency: false }, () => {
   let session;
@@ -481,7 +481,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // note in useMapCamera.js - but it is cheap to hold shut.
     await page.evaluate(() => {
       const proto = HTMLCanvasElement.prototype;
-      window.__capture = {
+      (window as any).__capture = {
         set: proto.setPointerCapture,
         release: proto.releasePointerCapture,
       };
@@ -518,8 +518,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
         );
     } finally {
       await page.evaluate(() => {
-        HTMLCanvasElement.prototype.setPointerCapture = window.__capture.set;
-        HTMLCanvasElement.prototype.releasePointerCapture = window.__capture.release;
+        const { __capture } = window as any;
+        HTMLCanvasElement.prototype.setPointerCapture = __capture.set;
+        HTMLCanvasElement.prototype.releasePointerCapture = __capture.release;
       });
     }
   });

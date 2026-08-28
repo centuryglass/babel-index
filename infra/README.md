@@ -1,6 +1,6 @@
 # infra — Cloudflare R2, applied locally
 
-Terraform for the R2 bucket `tools/upload/upload-r2.mjs` syncs the corpus
+Terraform for the R2 bucket `tools/upload/upload-r2.ts` syncs the corpus
 into, plus the abuse protection in front of it. There is deliberately no
 CI/CD wiring here: this is applied by hand, from your own machine, with
 credentials that never touch a GitHub Actions runner or secret store.
@@ -55,7 +55,7 @@ terraform apply
 
 Leave `enable_zone_protections = false` (the default) for the first apply.
 It only needs `cloudflare_api_token` and `cloudflare_account_id` and creates
-just the R2 bucket - enough to point `tools/upload/upload-r2.mjs` at
+just the R2 bucket - enough to point `tools/upload/upload-r2.ts` at
 (`R2_BUCKET` = the `r2_bucket_name` you set, `R2_ACCOUNT_ID` = the same
 account id) and test a real upload before anything else is in front of it.
 

@@ -44,8 +44,10 @@ const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 const QUANT_SCALE = 127; // int8 half-range; see file header
 const BATCH = 16;
 
-function parseArgs(args) {
-  const out = {};
+type Args = Record<string, string | undefined>;
+
+function parseArgs(args: string[]): Args {
+  const out: Args = {};
   for (let i = 0; i < args.length; i++) {
     if (!args[i].startsWith('--')) continue;
     const eq = args[i].indexOf('=');
@@ -56,9 +58,9 @@ function parseArgs(args) {
 }
 
 /** L2-normalise a row in place, then symmetric int8 quantise into `out`. */
-function quantiseInto(row, out, base) {
+function quantiseInto(row: ArrayLike<number>, out: Int8Array, base: number): void {
   let norm = 0;
-  for (const x of row) norm += x * x;
+  for (let d = 0; d < row.length; d++) norm += row[d] * row[d];
   norm = Math.sqrt(norm) || 1;
   for (let d = 0; d < row.length; d++) {
     const q = Math.round((row[d] / norm) * QUANT_SCALE);
@@ -77,10 +79,10 @@ function quantiseInto(row, out, base) {
  * useful thing to say is which machine can do the job instead - not that a
  * specifier could not be resolved.
  */
-async function loadVisionTower() {
+async function loadVisionTower(): Promise<typeof import('@huggingface/transformers')> {
   try {
     return await import('@huggingface/transformers');
-  } catch (err) {
+  } catch (err: any) {
     if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
     // Tagged, so the top-level handler can print this as a message rather than
     // as a stack. Sniffing the shape of the error there instead would swallow
@@ -103,7 +105,13 @@ async function loadVisionTower() {
  * isn't one, it's unreadable, or its model doesn't match MODEL_ID (in which
  * case every row it holds is incomparable to what this run produces).
  */
-async function loadCache(binPath, jsonPath) {
+interface EmbeddingCache {
+  dim: number;
+  bin: Buffer;
+  rows: Map<string, { hash: string; offset: number }>;
+}
+
+async function loadCache(binPath: string, jsonPath: string): Promise<EmbeddingCache | null> {
   let sidecar;
   try {
     sidecar = JSON.parse(await readFile(jsonPath, 'utf8'));
@@ -120,8 +128,8 @@ async function loadCache(binPath, jsonPath) {
   }
   if (bin.byteLength !== sidecar.order.length * sidecar.dim) return null;
 
-  const rows = new Map();
-  sidecar.order.forEach((file, i) => {
+  const rows = new Map<string, { hash: string; offset: number }>();
+  sidecar.order.forEach((file: string, i: number) => {
     const hash = sidecar.hashes?.[file];
     if (hash) rows.set(file, { hash, offset: i * sidecar.dim });
   });
@@ -148,8 +156,8 @@ async function main() {
   const cache = await loadCache(binPath, jsonPath);
 
   const indexOf = new Map(files.map((f, i) => [f, i]));
-  const hashes = new Map(); // filename -> content hash, for this run's sidecar
-  const stale = []; // filenames needing a fresh inference
+  const hashes = new Map<string, string>(); // filename -> content hash, for this run's sidecar
+  const stale: string[] = []; // filenames needing a fresh inference
   for (const file of files) {
     const hash = await contentHash(join(imagesDir, file));
     hashes.set(file, hash);
@@ -158,15 +166,15 @@ async function main() {
   const staleSet = new Set(stale);
 
   const dim = cache?.dim ?? 0;
-  let quant = dim ? new Int8Array(files.length * dim) : null; // sized once dim is known
+  let quant: Int8Array | null = dim ? new Int8Array(files.length * dim) : null; // sized once dim is known
 
   // Rows carried over untouched: copy the bytes, no re-inference.
   let cached = 0;
   if (quant) {
     for (const file of files) {
       if (staleSet.has(file)) continue;
-      const row = cache.rows.get(file);
-      quant.set(cache.bin.subarray(row.offset, row.offset + dim), indexOf.get(file) * dim);
+      const row = cache!.rows.get(file)!;
+      quant.set(cache!.bin.subarray(row.offset, row.offset + dim), indexOf.get(file)! * dim);
       cached++;
     }
   }
@@ -182,19 +190,20 @@ async function main() {
       const images = await Promise.all(chunk.map((f) => RawImage.read(join(imagesDir, f))));
       const inputs = await processor(images);
       const { image_embeds } = await model(inputs);
-      const rows = image_embeds.tolist(); // [chunk.length][dim]
+      const rows: number[][] = image_embeds.tolist(); // [chunk.length][dim]
 
       if (!quant) quant = new Int8Array(files.length * rows[0].length);
-      const rowDim = quant.byteLength / files.length;
-      rows.forEach((row, i) => quantiseInto(row, quant, indexOf.get(chunk[i]) * rowDim));
+      const finalQuant = quant;
+      const rowDim = finalQuant.byteLength / files.length;
+      rows.forEach((row, i) => quantiseInto(row, finalQuant, indexOf.get(chunk[i])! * rowDim));
       console.log(`  ${Math.min(start + BATCH, stale.length)}/${stale.length}`);
     }
   } else {
     console.log(`all ${files.length} rows unchanged, nothing to embed`);
   }
 
-  const finalDim = quant.byteLength / files.length;
-  await writeFile(binPath, Buffer.from(quant.buffer, quant.byteOffset, quant.byteLength));
+  const finalDim = quant!.byteLength / files.length;
+  await writeFile(binPath, Buffer.from(quant!.buffer, quant!.byteOffset, quant!.byteLength));
   await writeFile(
     jsonPath,
     JSON.stringify(
@@ -213,11 +222,11 @@ async function main() {
     ) + '\n'
   );
 
-  const kb = (quant.byteLength / 1024).toFixed(1);
+  const kb = (quant!.byteLength / 1024).toFixed(1);
   console.log(`wrote ${binPath} (${kb} KB) and ${jsonPath} (${cached} cached, ${stale.length} embedded)`);
 }
 
-main().catch((err) => {
+main().catch((err: any) => {
   // A missing optional dependency is a message, not a stack: the reader has not
   // hit a bug, they are on a platform onnxruntime does not publish for.
   console.error(err?.expected ? err.message : err);

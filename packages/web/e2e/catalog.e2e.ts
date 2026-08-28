@@ -2,7 +2,7 @@
  * The browser smoke test: the catalog interface (docs/catalog-plan.md) - the
  * conventional web search UI and linear tile list that swaps in for the map.
  * One of five files split out of the original `smoke.e2e.mjs` (see
- * `docs/implementation-plan.md`); see `map-gestures.e2e.mjs` for the shared
+ * `docs/implementation-plan.md`); see `map-gestures.e2e.ts` for the shared
  * header comment on why and how.
  *
  * None of the files in this directory are part of `npm test`; run them on
@@ -13,7 +13,7 @@
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, settled, waitFor } from './support.mjs';
+import { SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, settled, waitFor } from './support.ts';
 
 describe('the library, in a browser: the catalog', { concurrency: false }, () => {
   let session;

@@ -1,10 +1,10 @@
 /**
  * Shared harness for the browser smoke suite, split across this directory's
- * `*.e2e.mjs` files (see `docs/implementation-plan.md`'s note on why - one
+ * `*.e2e.ts` files (see `docs/implementation-plan.md`'s note on why - one
  * 2440-line file sharing one `page` meant a single stranded piece of state
  * turned one failure into several unrelated ones).
  *
- * Each `*.e2e.mjs` file keeps the original design of ONE shared `page` across
+ * Each `*.e2e.ts` file keeps the original design of ONE shared `page` across
  * ITS OWN tests (real gesture state, camera position and cache warmth are
  * cheaper to carry forward than to rebuild every test), but no longer across
  * the whole suite: every file calls `openLibrary()` in its own `before` and
@@ -13,7 +13,7 @@
  * its own server boot and browser launch - worth it for the isolation, and
  * `node --test` runs files in parallel processes by default anyway.
  *
- * This module is deliberately not itself a test file (no `.e2e.mjs` suffix,
+ * This module is deliberately not itself a test file (no `.e2e.ts` suffix,
  * no `describe`/`test`), so `node --test`'s glob never picks it up.
  */
 import assert from 'node:assert/strict';
@@ -39,12 +39,13 @@ export const BOOT_TIMEOUT = 90_000;
 export const SEARCH_TIMEOUT = 60_000;
 
 /** Ask the OS for a port nobody is using, so parallel runs do not collide. */
-export function freePort() {
+export function freePort(): Promise<number> {
   return new Promise((res, rej) => {
     const s = createServer();
     s.on('error', rej);
     s.listen(0, '127.0.0.1', () => {
-      const { port } = s.address();
+      const address = s.address();
+      const port = address && typeof address !== 'string' ? address.port : Number(address);
       s.close(() => res(port));
     });
   });

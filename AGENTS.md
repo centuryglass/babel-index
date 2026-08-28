@@ -34,7 +34,7 @@ npm run test:e2e                   # browser smoke test; needs `npx playwright i
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
-node tools/center-placement/import-shelf-svg.mjs tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
+node tools/center-placement/import-shelf-svg.ts tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
 ```
 
 No compiled output ever hits disk. The demo server bundles the client with
@@ -107,6 +107,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.jsx`: Shared search box component
     * `SearchIcon.jsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.jsx`: The "READ ME" book's dialog
+    * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
+                             Meant as an easter egg for the (not yet existing)
+                             artist statement page, not wired in yet
   - `src/hooks/`: the subsystems `main.jsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
@@ -164,17 +167,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
                             from an svg.
-  * `import-shelf-svg.mjs`: Import Inkscape tile tracing into exact geometry.
+  * `import-shelf-svg.ts`: Import Inkscape tile tracing into exact geometry.
   * `shelf_geometry.svg`: Center tile geometry.
-  * `lib/geometry.js`: Book and search box placement structure
-  * `lib/measured.js`: Auto-generated svg geometry data
+  * `lib/geometry.ts`: Book and search box placement structure
+  * `lib/measured.ts`: Auto-generated svg geometry data
   * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.js,
                    should probably be moved elsewhere.
-- `tools/embed/embed.mjs`: Compute and store CLIP image embeddings for all rooms.
+  * `lib/svg.ts`: Minimal SVG element builder; currently unused elsewhere.
+- `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
 - `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,
                   shared tiles) to Cloudflare R2, incrementally by content hash.
-  * `upload-r2.mjs`: CLI, credentials from env.
-  * `lib.mjs`: Pure upload-list/diff logic, no filesystem or network.
+  * `upload-r2.ts`: CLI, credentials from env.
+  * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
 
 ### Infra:
 - `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the
@@ -245,7 +249,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   welcome; it's what the next conversion reads from.
 - **Tests sit next to the code** as `*.test.mjs` and use `node:test` +
   `node:assert/strict`. `node --test` discovers them, so new files need no
-  wiring. e2e files are `*.e2e.mjs`, intentionally skipping the pattern.
+  wiring. e2e files are `*.e2e.ts`, intentionally skipping the pattern.
 - **`@huggingface/transformers` is OPTIONAL.** `onnxruntime-node` only supports win32/darwin/linux, testing
   through Android/Termux happens occasionally, and base functionality
   shouldn't require CLIP. Never import it statically, see `tools/embed` and
@@ -268,9 +272,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 ### Tile geometry
 
-- **`tools/center-placement/lib/measured.js` is generated.** Never hand-edit it.
+- **`tools/center-placement/lib/measured.ts` is generated.** Never hand-edit it.
   Changes to center-tile geometry are human-managed, parsed with
-  `import-shelf-svg.mjs`, validated with `npm test`. If tile aspect ratio
+  `import-shelf-svg.ts`, validated with `npm test`. If tile aspect ratio
   ever changes, the change needs to be applied to `BASE_TILE` in `pyramid.js`
   and to `shelf_geometry.svg`, then import-shelf-svg should be re-run. 
 - **Don't assume tile aspect ratio,** read it from `BASE_TILE`. Aspect ratio
@@ -357,7 +361,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   contiguous run - art can break it into more than one, and `center.js`'s
   `RUNS` (not `GEOMETRY.shelves` directly) is what the hit-test walks, so a gap
   wider than a book resolves to nothing rather than a phantom book. The rects come from
-  `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.js`, the
+  `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.ts`, the
   one module the tile trace feeds, so there is no second copy to drift.
 - **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
   the center tile width→`cellPx.x` and height→`cellPx.y` independently, so a
@@ -557,7 +561,7 @@ code, not a standing invariant.
   `canvasRef.current` once and depends on the ref OBJECT, so a canvas that
   remounts comes back with no pointer listeners bound at all - the camera still
   holds the right numbers, the HUD still reads correctly, and the map silently
-  never pans again. `catalog.e2e.mjs`'s "the map is where it was left when the
+  never pans again. `catalog.e2e.ts`'s "the map is where it was left when the
   catalog closes" test drags after a mode switch precisely because every
   cheaper assertion passes under that bug. Hiding also keeps the tile cache
   and the pyramid's LRU warm, so returning is a repaint, not a rebuild.
@@ -648,7 +652,7 @@ code, not a standing invariant.
   Where genuine settling is needed, poll for two *agreeing* reads with a real
   gap between them — two reads taken back to back with nothing elapsed proves
   nothing.
-- **Test cleanup belongs in `finally`.** Each `packages/web/e2e/*.e2e.mjs`
+- **Test cleanup belongs in `finally`.** Each `packages/web/e2e/*.e2e.ts`
   file's tests share one `page` across that file; a failed assertion skipping
   cleanup strands slider/camera state for every test after it in the same
   file, turning one flake into several unrelated
@@ -665,7 +669,7 @@ code, not a standing invariant.
   /%/, got 26" can't distinguish a missing attribute from an ignored one, and
   the failing run is usually on a machine you can't open a browser on.
 - **CDP touch injection bypasses real gesture arbitration.** The touch/pinch
-  tests in `packages/web/e2e/map-gestures.e2e.mjs` can't see `touch-action`,
+  tests in `packages/web/e2e/map-gestures.e2e.ts` can't see `touch-action`,
   `pointercancel`, or the real capture lifecycle — treat it as a known blind
   spot. Simulate suspected gesture bugs explicitly and confirm on a device
   with `?touchdebug`.
