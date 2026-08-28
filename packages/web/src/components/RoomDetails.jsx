@@ -20,6 +20,7 @@
  * One order, so a reader who meets a room both ways meets it the same way.
  */
 import { explainScore } from '../../../map/scoring.js';
+import { tagLink } from '../lib/tagLinks.ts';
 
 /**
  * Text with the matched spans marked.
@@ -156,18 +157,36 @@ export function RoomDetails({
     <>
       {entry?.keywords?.length > 0 && (
         <div className="chips">
-          {entry.keywords.map((k) => (
-            <button
-              key={k.text}
-              className="chip"
-              type="button"
-              tabIndex={chipTabIndex}
-              title={k.type ? `${k.type} — search for this` : 'search for this'}
-              onClick={() => onKeyword(k.text)}
-            >
-              <Highlight text={k.text} ranges={highlight?.keyword(k.text)} />
-            </button>
-          ))}
+          {entry.keywords.map((k) => {
+            const href = tagLink(k.text);
+            return (
+              <span key={k.text} className={href ? 'chip-group' : undefined}>
+                <button
+                  className="chip"
+                  type="button"
+                  tabIndex={chipTabIndex}
+                  title={k.type ? `${k.type} — search for this` : 'search for this'}
+                  onClick={() => onKeyword(k.text)}
+                >
+                  <Highlight text={k.text} ranges={highlight?.keyword(k.text)} />
+                </button>
+                {href && (
+                  <a
+                    className="chip-link"
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    tabIndex={chipTabIndex}
+                    title={`more about ${k.text}`}
+                    aria-label={`more about ${k.text}, opens in a new tab`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    ↗
+                  </a>
+                )}
+              </span>
+            );
+          })}
         </div>
       )}
 
