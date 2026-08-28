@@ -1,0 +1,4 @@
+# Regenerable experiment scratch: fonts come from download-fonts.mjs, images
+# from render.mjs. Keep the source (*.mjs, README) in git, not the artefacts.
+fonts/
+out/
