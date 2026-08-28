@@ -687,7 +687,11 @@ function Library({ manifest }) {
           cellOfId={(id) => cellById.get(id) ?? null}
           history={history}
           onForgetSearches={forgetSearches}
-          note={result ? describeSignals(result.signals ?? {}, Boolean(searchIndex)) : ''}
+          note={
+            result
+              ? describeSignals(result.signals ?? { clip: false, keyword: false, story: false }, Boolean(searchIndex))
+              : ''
+          }
           scrollRef={catalogScrollRef}
           firstTileRef={firstTileRef}
           leaving={leaving}
