@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { scanRemote } from './remote.mjs';
+import { scanRemote } from './remote.ts';
 
 /**
  * A throwaway HTTP server standing in for the bucket - just enough to answer

@@ -30,7 +30,7 @@ needs a paid plan.
 `cloudflare_r2_bucket_cors` is a separate, bucket-level resource (not gated
 behind `enable_zone_protections` - it works even against the bare `*.r2.dev`
 url) that has nothing to do with abuse protection. It exists because
-`packages/server/remote.mjs` points a `--remote`-mode manifest's urls directly
+`packages/server/remote.ts` points a `--remote`-mode manifest's urls directly
 at this bucket, and `packages/web/src/main.jsx` reads two of them
 (`embeddings.bin`, `metadata.json`) with `fetch()` rather than an `<img>` tag -
 `fetch()` enforces CORS cross-origin, so those two requests fail silently

@@ -35,7 +35,7 @@
  *
  * Separately, the `scanDirectory()` result itself - the same shape
  * `/api/manifest` serves locally - is written to `<prefix>/manifest.json` on
- * every run, changed or not. `packages/server/remote.mjs` fetches this when
+ * every run, changed or not. `packages/server/remote.ts` fetches this when
  * the demo server is started with `--remote`, so a bucket holding a corpus
  * needs no listing API: the one local scan that ran here is the only place
  * "what files make up this corpus" gets decided.
@@ -43,8 +43,8 @@
 import { readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { scanDirectory } from '../../packages/server/scan.mjs';
-import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.mjs';
+import { scanDirectory } from '../../packages/server/scan.ts';
+import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.ts';
 import { contentHash } from '../../packages/pipeline/mips.mjs';
 import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.mjs';
 
@@ -172,7 +172,7 @@ async function main() {
     console.log('nothing to upload, manifest unchanged');
   }
 
-  // The public manifest - what packages/server/remote.mjs fetches to serve
+  // The public manifest - what packages/server/remote.ts fetches to serve
   // this corpus with --remote. Written every run, not diffed against a hash:
   // it is small, and it must reflect this scan even when the room bytes it
   // describes didn't change (a metadata-only or embeddings-only rerun still
