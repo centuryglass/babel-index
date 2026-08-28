@@ -34,7 +34,7 @@ npm run test:e2e                   # browser smoke test; needs `npx playwright i
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
-node tools/center-placement/import-shelf-svg.mjs tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
+node tools/center-placement/import-shelf-svg.ts tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
 ```
 
 No compiled output ever hits disk. The demo server bundles the client with
@@ -164,17 +164,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
                             from an svg.
-  * `import-shelf-svg.mjs`: Import Inkscape tile tracing into exact geometry.
+  * `import-shelf-svg.ts`: Import Inkscape tile tracing into exact geometry.
   * `shelf_geometry.svg`: Center tile geometry.
-  * `lib/geometry.js`: Book and search box placement structure
-  * `lib/measured.js`: Auto-generated svg geometry data
+  * `lib/geometry.ts`: Book and search box placement structure
+  * `lib/measured.ts`: Auto-generated svg geometry data
   * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.js,
                    should probably be moved elsewhere.
-- `tools/embed/embed.mjs`: Compute and store CLIP image embeddings for all rooms.
+  * `lib/svg.ts`: Minimal SVG element builder; currently unused elsewhere.
+- `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
 - `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,
                   shared tiles) to Cloudflare R2, incrementally by content hash.
-  * `upload-r2.mjs`: CLI, credentials from env.
-  * `lib.mjs`: Pure upload-list/diff logic, no filesystem or network.
+  * `upload-r2.ts`: CLI, credentials from env.
+  * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
 
 ### Infra:
 - `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the
@@ -268,9 +269,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 ### Tile geometry
 
-- **`tools/center-placement/lib/measured.js` is generated.** Never hand-edit it.
+- **`tools/center-placement/lib/measured.ts` is generated.** Never hand-edit it.
   Changes to center-tile geometry are human-managed, parsed with
-  `import-shelf-svg.mjs`, validated with `npm test`. If tile aspect ratio
+  `import-shelf-svg.ts`, validated with `npm test`. If tile aspect ratio
   ever changes, the change needs to be applied to `BASE_TILE` in `pyramid.js`
   and to `shelf_geometry.svg`, then import-shelf-svg should be re-run. 
 - **Don't assume tile aspect ratio,** read it from `BASE_TILE`. Aspect ratio
@@ -357,7 +358,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   contiguous run - art can break it into more than one, and `center.js`'s
   `RUNS` (not `GEOMETRY.shelves` directly) is what the hit-test walks, so a gap
   wider than a book resolves to nothing rather than a phantom book. The rects come from
-  `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.js`, the
+  `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.ts`, the
   one module the tile trace feeds, so there is no second copy to drift.
 - **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
   the center tile width→`cellPx.x` and height→`cellPx.y` independently, so a

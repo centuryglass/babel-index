@@ -10,7 +10,7 @@
  * the whole point of offline mode: get a working local demo before hosting is
  * worth thinking about.
  *
- * Or point it at a corpus already uploaded with tools/upload/upload-r2.mjs:
+ * Or point it at a corpus already uploaded with tools/upload/upload-r2.ts:
  *
  *   npm run demo -- --remote https://assets.example.com --prefix corpus-sample
  *

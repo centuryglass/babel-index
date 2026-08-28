@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layout, TILE_ASPECT } from './lib/geometry.js';
-import { MEASURED, SHELF_COUNT, BOOK_COUNT } from './lib/measured.js';
+import { layout, TILE_ASPECT } from './lib/geometry.ts';
+import { MEASURED, SHELF_COUNT, BOOK_COUNT } from './lib/measured.ts';
 import { BASE_TILE } from '../../packages/web/src/lib/pyramid.js';
 
 test('measured rects are normalised and inside the tile', () => {
