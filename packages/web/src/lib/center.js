@@ -25,7 +25,7 @@
  * assignment, the hit-test and the compositing; the hook decides WHEN a tap
  * happened and `main.jsx` owns the history state.
  *
- * The geometry comes from the SINGLE SOURCE - `tools/center-placement/lib/geometry.js`,
+ * The geometry comes from the SINGLE SOURCE - `tools/center-placement/lib/geometry.ts`,
  * the same pure module the tile trace is imported into. `layout({ width: 1,
  * height: 1 })` returns every rect as raw per-axis fractions (x, w against width;
  * y, h against height), which is exactly the space the map draws the center tile
@@ -35,7 +35,7 @@
  *
  * No DOM (the compositing takes a 2d context but reads nothing back).
  */
-import { layout } from '../../../../tools/center-placement/lib/geometry.js';
+import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
 import { pxPerCell, worldToScreen } from './camera.js';
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.mjs';
+import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const join = (...parts) => parts.join('/');
 

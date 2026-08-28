@@ -14,8 +14,8 @@
  *   R2_SECRET_ACCESS_KEY
  *   R2_BUCKET              overridden by --bucket
  *
- *   node tools/upload/upload-r2.mjs
- *   node tools/upload/upload-r2.mjs --images <dir> [--shared-dir assets] \
+ *   node tools/upload/upload-r2.ts
+ *   node tools/upload/upload-r2.ts --images <dir> [--shared-dir assets] \
  *     [--prefix <name>] [--bucket <name>] [--center center.jpg] [--dry-run]
  *
  * ### Incremental by content hash
@@ -29,7 +29,7 @@
  * hash matches the manifest's record for its key is skipped. Nothing is
  * deleted from R2, and no other tool reads that upload manifest - it exists
  * only so a rerun after touching a handful of images costs a handful of PUTs,
- * not the whole corpus. See tools/upload/lib.mjs for the pure decision logic.
+ * not the whole corpus. See tools/upload/lib.ts for the pure decision logic.
  *
  * ### The public manifest
  *
@@ -46,12 +46,14 @@ import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3
 import { scanDirectory } from '../../packages/server/scan.ts';
 import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.ts';
 import { contentHash } from '../../packages/pipeline/mips.mjs';
-import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.mjs';
+import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const MANIFEST_NAME = 'upload-manifest.json';
 
-function parseArgs(args) {
-  const out = {};
+type Args = Record<string, string | boolean>;
+
+function parseArgs(args: string[]): Args {
+  const out: Args = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (!a.startsWith('--')) continue;
@@ -63,7 +65,7 @@ function parseArgs(args) {
   return out;
 }
 
-function requireEnv(name) {
+function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value)
     throw Object.assign(new Error(`missing required environment variable ${name}`), { expected: true });
@@ -83,19 +85,19 @@ function makeClient() {
 }
 
 /** The previous run's manifest, or {} if there isn't one yet (first run). */
-async function fetchRemoteManifest(client, bucket, key) {
+async function fetchRemoteManifest(client: S3Client, bucket: string, key: string): Promise<Record<string, string>> {
   try {
     const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    const body = await res.Body.transformToString();
+    const body = await res.Body!.transformToString();
     const parsed = JSON.parse(body);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch (err) {
+  } catch (err: any) {
     if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) return {};
     throw err;
   }
 }
 
-async function putFile(client, bucket, key, path) {
+async function putFile(client: S3Client, bucket: string, key: string, path: string): Promise<void> {
   await client.send(
     new PutObjectCommand({
       Bucket: bucket,
@@ -108,18 +110,18 @@ async function putFile(client, bucket, key, path) {
 
 async function main() {
   const argv = parseArgs(process.argv.slice(2));
-  const imagesDir = resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
-  const sharedDir = resolve(process.cwd(), argv['shared-dir'] ?? 'assets');
-  const prefix = argv.prefix ?? basename(imagesDir);
+  const imagesDir = resolve(process.cwd(), (argv.images as string) ?? 'assets/corpus-sample');
+  const sharedDir = resolve(process.cwd(), (argv['shared-dir'] as string) ?? 'assets');
+  const prefix = (argv.prefix as string) ?? basename(imagesDir);
   const dryRun = Boolean(argv['dry-run']);
-  const bucket = argv.bucket ?? requireEnv('R2_BUCKET');
+  const bucket = (argv.bucket as string) ?? requireEnv('R2_BUCKET');
 
-  const manifest = await scanDirectory(imagesDir, { center: argv.center, sharedDir });
+  const manifest = await scanDirectory(imagesDir, { center: argv.center as string | undefined, sharedDir });
   const uploads = buildUploadList(manifest, { imagesDir, sharedDir, prefix }, join);
   console.log(`${uploads.length} file(s) make up this corpus (prefix "${prefix}")`);
 
-  const hashes = new Map();
-  const missing = [];
+  const hashes = new Map<string, string>();
+  const missing: string[] = [];
   for (const { local } of uploads) {
     try {
       hashes.set(local, await contentHash(local));
@@ -192,9 +194,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().catch((err: any) => {
   // A missing credential or a real transfer failure is a message, not a
-  // stack, in the common case - see tools/embed/embed.mjs for the same split.
+  // stack, in the common case - see tools/embed/embed.ts for the same split.
   console.error(err?.expected ? err.message : err);
   process.exit(1);
 });

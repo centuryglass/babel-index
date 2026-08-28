@@ -2,7 +2,7 @@
  * Reading a corpus from a remote host (R2 behind a public domain, e.g.
  * assets.centuryglass.us) instead of a local directory.
  *
- * `tools/upload/upload-r2.mjs` writes the exact `scanDirectory()` result to
+ * `tools/upload/upload-r2.ts` writes the exact `scanDirectory()` result to
  * `<prefix>/manifest.json` on every run, so there is no second "list what's
  * in the bucket" implementation here - the real scan runs once, at upload
  * time, and this only fetches what it already computed.
@@ -28,7 +28,7 @@
  */
 import type { Manifest } from '../map/manifest.ts';
 
-/** The manifest filename `upload-r2.mjs` writes under a corpus's prefix. */
+/** The manifest filename `upload-r2.ts` writes under a corpus's prefix. */
 export const REMOTE_MANIFEST_NAME = 'manifest.json';
 
 /**
