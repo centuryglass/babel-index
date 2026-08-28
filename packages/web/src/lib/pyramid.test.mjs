@@ -18,6 +18,7 @@ import {
   bestAvailable,
   warmLevels,
   prefetchBounds,
+  SHEETS,
 } from './pyramid.js';
 
 /** The largest viewport the budgets are sized against, in device pixels. */
@@ -322,6 +323,17 @@ test('the memory cost of a full pyramid is derived, and finite', () => {
   const sum = LEVELS.reduce((n, l) => n + budgetOf(l.level) * bytesOf(l.level), 0);
   assert.equal(total, sum);
   assert.ok(total > 0);
+});
+
+// --- sheet-packed levels -----------------------------------------------------
+
+test('the sheet grid actually holds roomsPerSheet, and fromLevel is on the ladder', () => {
+  // Hand-edited config: a mismatch here silently packs a partial grid
+  // (packages/pipeline/layout.ts's sheetPlan throws on it at write/discover
+  // time, but that is a runtime surprise this test catches for free).
+  assert.equal(SHEETS.cols * SHEETS.rows, SHEETS.roomsPerSheet);
+  assert.ok(LEVELS.some((l) => l.level === SHEETS.fromLevel), 'fromLevel must name a real level');
+  assert.ok(SHEETS.cacheBudget >= 1, 'a budget of zero would disable every sheet-packed level');
 });
 
 test('CACHE_SCALE moves every budget together and never reaches zero', () => {

@@ -66,20 +66,28 @@ export const BASE_TILE = { w: 1024, h: 768 };
  * `divisor` is what BASE_TILE is divided by, so the ladder is a statement about
  * ratios and survives any change to the tile. Level 0 is the source art.
  *
- * `budget` is the maximum number of decoded images held at that level. It is a
- * ceiling, not a reservation - entries appear only as cells are visited.
+ * `budget` is the maximum number of entries held at that level. For a
+ * per-file level (below `SHEETS.fromLevel`) that is still literally "decoded
+ * images held" - it is a ceiling, not a reservation; entries appear only as
+ * cells are visited. For a sheet-packed level it counts cheap per-room
+ * pointers `{sheetUrl, rect}` instead (see tiles.js) - the actual decoded
+ * bytes for those levels are bounded separately by `SHEETS.cacheBudget`,
+ * shared across every sheet-packed level, since one decoded sheet image now
+ * serves hundreds of rooms. The table below states real decoded-byte cost
+ * only for levels 0-1; treat its rows for 2-4 as "budget bytes" no longer
+ * meaning real memory.
  *
  * At the current BASE_TILE of 1024x768 that works out as (bytes/tile being
  * w x h x 4, decoded RGBA - what the browser actually holds; the encoded JPEG
  * is ~20x smaller and is not the constraint):
  *
  *   level      size  bytes/tile  budget  budget bytes  worst-case visible*
- *       0  1024x768        3 MB     240        720 MB                  30
- *       1   512x384      768 KB     400        300 MB                  99
- *       2   256x192      192 KB     900        169 MB                 336
- *       3    128x96       48 KB    1600         75 MB                1271
- *       4     64x48       12 KB    8200         96 MB                7500
- *                                            ~1.3 GB total
+ *       0  1024x768        3 MB     480      1,440 MB                  30
+ *       1   512x384      768 KB     800        600 MB                  99
+ *       2   256x192      192 KB    1800        338 MB†                336
+ *       3    128x96       48 KB    3200        150 MB†                1271
+ *       4     64x48       12 KB   16400        192 MB†                7500
+ *                                          ~1.7 GB nominal, ~2.5 GB real*
  *
  * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
  * zoom in that level's band which shows the most of them. Every budget is
@@ -90,18 +98,26 @@ export const BASE_TILE = { w: 1024, h: 768 };
  * Going 4:3 is what last moved it: a shorter tile fits more rows on the same
  * screen, so the coarsest level's worst case rose past its old 7000 budget.
  *
- * Note how far above its worst case level 0 is - 240 against 30. That is rule
- * 3 buying revisits, not screens: you can tour eight rooms up close and come
+ * †Not real bytes - see above. Real bytes for levels 2-4 come from
+ * `SHEETS.cacheBudget` sheets instead, at their own (much larger) per-image
+ * size; "~2.5 GB real" adds a 2048-room corpus's full complement of sheets
+ * (SHEETS's own docblock) on top of levels 0-1's real cost, which is the
+ * actual ceiling to budget a machine against, not the nominal table total.
+ *
+ * Note how far above its worst case level 0 is - 480 against 30. That is rule
+ * 3 buying revisits, not screens: you can tour many rooms up close and come
  * back to the first without a refetch. Lower CACHE_SCALE if the total is more
  * than the machine can spare; the ratios between levels are the part worth
- * keeping.
+ * keeping. Levels 0-1 were doubled (240->480, 400->800) once sheets took
+ * levels 2-4's real byte cost off this budget's plate, freeing room to hold
+ * more revisits of the levels that are still one file per room.
  */
 export const LEVELS = [
-  { level: 0, divisor: 1, budget: 240 },
-  { level: 1, divisor: 2, budget: 400 },
-  { level: 2, divisor: 4, budget: 900 },
-  { level: 3, divisor: 8, budget: 1600 },
-  { level: 4, divisor: 16, budget: 8200 },
+  { level: 0, divisor: 1, budget: 480 },
+  { level: 1, divisor: 2, budget: 800 },
+  { level: 2, divisor: 4, budget: 1800 },
+  { level: 3, divisor: 8, budget: 3200 },
+  { level: 4, divisor: 16, budget: 16400 },
 ];
 
 /**
@@ -141,6 +157,48 @@ export const PREFETCH = {
   margin: 2,
   concurrency: 4,
   warmCoarser: true,
+};
+
+/**
+ * Which coarse levels get packed into shared fixed-grid tilesheets, and how.
+ *
+ * A zoomed-out scroll session requests distinct tiles at these levels the
+ * fastest - level 4's worst-case-visible is ~7500 cells on one screen - so
+ * these are what turn a scroll into thousands of never-before-seen URLs and
+ * trip Cloudflare's per-IP rate limit even for one real visitor (see
+ * infra/README.md and docs/design-history.md). Packing `roomsPerSheet` rooms
+ * into one grid image cuts that to one request per sheet, letting the edge
+ * cache actually warm instead of perpetually seeing cold URLs.
+ *
+ * Levels below `fromLevel` stay one file per room: fewer of them are ever
+ * visible at once (level 0's worst case is 30), and every room a sheet
+ * contains re-uploads as a unit whenever any one of them changes (see
+ * tools/upload/lib.ts) - the fewer rooms per sheet, the smaller that blast
+ * radius, so leaving the request-cheap levels unpacked costs nothing and
+ * avoids paying that tradeoff where it isn't needed.
+ *
+ * `cols * rows` must equal `roomsPerSheet` - `packages/pipeline/sheets.ts`
+ * and `packages/server/scan.ts` both assert this rather than deriving one
+ * from the other, so a bad edit fails loudly instead of packing a partial
+ * grid.
+ */
+export const SHEETS = {
+  fromLevel: 2,
+  roomsPerSheet: 256,
+  cols: 16,
+  rows: 16,
+  /**
+   * Decoded sheet images held at once, across every sheet-packed level
+   * combined (`tiles.js`'s `sheetImages`, a budget on top of - not instead
+   * of - the per-level room-pointer budgets in `LEVELS`). A corpus of N
+   * rooms has `ceil(N / roomsPerSheet)` sheets per sheet-packed level, so
+   * once this is at least (sheet-packed levels) x (sheets per level), the
+   * whole coarse end of the pyramid fits in memory at once and a full scroll
+   * of the map costs zero further sheet requests, ever, however far the
+   * corpus grows past that point. 64 comfortably covers a 2048-room corpus
+   * (24 sheets total across levels 2-4); raise it for a much larger one.
+   */
+  cacheBudget: 64,
 };
 
 /**

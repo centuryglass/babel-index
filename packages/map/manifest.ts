@@ -37,11 +37,34 @@ export interface SharedAssets {
   generic: SharedAsset[];
 }
 
-/** One rung of the resolution pyramid, as actually found on disk. */
+/**
+ * A sheet-packed level's grid geometry: `roomsPerSheet` rooms live in each
+ * `<dir>/sheet-NNNN.<ext>`, addressed by a formula from room order
+ * (`packages/pipeline/sheets.ts`'s `sheetPosition()`), not a per-room lookup
+ * table - `rooms[].url`/`file` are unchanged and unused for these levels.
+ */
+export interface SheetLayout {
+  tileW: number;
+  tileH: number;
+  cols: number;
+  rows: number;
+  roomsPerSheet: number;
+  sheetCount: number;
+  dir: string;
+  ext: string;
+}
+
+/**
+ * One rung of the resolution pyramid, as actually found on disk. Either
+ * `dir` names a per-file directory (one image per room), or `sheet` names a
+ * grid of shared sheet images - never both for the same level.
+ */
 export interface LevelInfo extends Partial<ImageSize> {
   level: number;
-  /** Subdirectory holding this level's files; null for the flat level 0. */
+  /** Subdirectory holding this level's per-file images; null for the flat level 0 or a sheet-packed level. */
   dir: string | null;
+  /** Present only for a sheet-packed level (see SheetLayout). */
+  sheet?: SheetLayout;
 }
 
 /** The image-embedding blob's metadata, if `tools/embed` has produced one. */
