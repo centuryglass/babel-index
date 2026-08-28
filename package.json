@@ -16,8 +16,8 @@
     "test:e2e": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.e2e.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p jsconfig.json",
-    "demo": "node --import ./build/register.mjs packages/server/index.mjs",
-    "demo:watch": "node --watch --import ./build/register.mjs packages/server/index.mjs --watch"
+    "demo": "node --import ./build/register.mjs packages/server/index.ts",
+    "demo:watch": "node --watch --import ./build/register.mjs packages/server/index.ts --watch"
   },
   "dependencies": {
     "any-ascii": "^0.3.3",

@@ -74,7 +74,15 @@ export async function openLibrary() {
 
   const server = spawn(
     process.execPath,
-    ['packages/server/index.mjs', '--port', String(port), '--images', 'assets/corpus-sample'],
+    [
+      '--import',
+      './build/register.mjs',
+      'packages/server/index.ts',
+      '--port',
+      String(port),
+      '--images',
+      'assets/corpus-sample',
+    ],
     { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] }
   );
   let log = '';

@@ -37,7 +37,7 @@
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { scanDirectory } from '../../packages/server/scan.mjs';
+import { scanDirectory } from '../../packages/server/scan.ts';
 import { contentHash } from '../../packages/pipeline/mips.mjs';
 
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';

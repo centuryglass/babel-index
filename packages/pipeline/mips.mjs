@@ -56,7 +56,7 @@ export { mipPlan } from './layout.mjs';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
-// Mirrors packages/server/scan.mjs's METADATA_FILE constant. Not imported from
+// Mirrors packages/server/scan.ts's METADATA_FILE constant. Not imported from
 // there - that module pulls in the server's directory-scan machinery, and this
 // is a name, not behaviour, so restating it is cheaper than the coupling.
 const METADATA_FILE = 'metadata.json';

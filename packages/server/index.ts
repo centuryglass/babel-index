@@ -15,11 +15,11 @@
  *   npm run demo -- --remote https://assets.example.com --prefix corpus-sample
  *
  * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the corpus
- * and shared tiles both come from the remote host (see remote.mjs), and the
+ * and shared tiles both come from the remote host (see remote.ts), and the
  * manifest's urls point the browser there directly rather than this server
  * serving or proxying anything under `/images`/`/shared`.
  *
- * The routes live in app.mjs; this file is the CLI around them, and the place
+ * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
  * the client against precomputed embeddings, so /api/search stays a text tower
  * and nothing else.
@@ -30,11 +30,12 @@ import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { context } from 'esbuild';
-import { scanDirectory } from './scan.mjs';
-import { scanRemote } from './remote.mjs';
-import { createApp, hasTextModel } from './app.mjs';
+import { scanDirectory } from './scan.ts';
+import { scanRemote } from './remote.ts';
+import { createApp, hasTextModel } from './app.ts';
 import { loadConfig } from '../config/load.mjs';
 import { portInUse } from './port.ts';
+import type { Express } from 'express';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, '../web');
@@ -42,7 +43,7 @@ const webDir = resolve(here, '../web');
 const argv = parseArgs(process.argv.slice(2));
 const port = Number(argv.port ?? 5173);
 
-const remoteBase = argv.remote ?? null;
+const remoteBase = (argv.remote as string | undefined) ?? null;
 if (remoteBase && argv.images) {
   console.error('--remote and --images are mutually exclusive - the corpus comes from one place or the other.');
   process.exit(1);
@@ -54,21 +55,21 @@ if (remoteBase && !argv.prefix) {
 
 // Defaults to the sample corpus committed to the repo, so `npm run demo` works
 // with no arguments and no external files. Unused entirely in --remote mode.
-const imagesDir = remoteBase ? null : resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
+const imagesDir = remoteBase ? null : resolve(process.cwd(), (argv.images as string | undefined) ?? 'assets/corpus-sample');
 if (!remoteBase && !existsSync(imagesDir)) {
   console.error(`no such directory: ${imagesDir}`);
   process.exit(1);
 }
 // The shared tiles (center + generic tiles) live outside the corpus, in the
 // repo's assets by default, so the center render can be shared across corpora
-// and changed without touching --images. See scan.mjs.
-const sharedDir = remoteBase ? null : resolve(process.cwd(), argv['shared-dir'] ?? 'assets');
+// and changed without touching --images. See scan.ts.
+const sharedDir = remoteBase ? null : resolve(process.cwd(), (argv['shared-dir'] as string | undefined) ?? 'assets');
 // Optional debugging convenience, off by default: `npm run demo:watch` runs
 // this under `node --watch` (restarts the whole process on a server-side
 // edit) AND passes --watch through to us here, which switches the esbuild
 // call below from a one-shot build to a watching one (rebuilds on a
 // client-side edit without a restart). Either kind of change reaches the
-// browser through the same live-reload connection - see app.mjs.
+// browser through the same live-reload connection - see app.ts.
 const watch = Boolean(argv.watch);
 
 // Checked before anything is scanned or bundled, because the failure mode
@@ -88,13 +89,13 @@ if (await portInUse(port)) {
 }
 
 // Load optional JSON config if provided, announcing invalid data:
-const config = await loadConfig({ path: argv.config });
+const config = await loadConfig({ path: argv.config as string | undefined });
 if (config.source) console.log(`config: ${config.source}`);
 for (const note of config.notes) console.warn(`config: ${note}`);
 
 const rescan = remoteBase
-  ? () => scanRemote(remoteBase, argv.prefix)
-  : () => scanDirectory(imagesDir, { center: argv.center, sharedDir });
+  ? () => scanRemote(remoteBase, argv.prefix as string)
+  : () => scanDirectory(imagesDir as string, { center: argv.center as string | undefined, sharedDir: sharedDir as string | undefined });
 
 console.log(remoteBase ? `fetching manifest from ${remoteBase}/${argv.prefix} ...` : `scanning ${imagesDir} ...`);
 const manifest = await rescan();
@@ -128,7 +129,7 @@ if (!hasTextModel())
 console.log(watch ? 'bundling client (watch mode) ...' : 'bundling client ...');
 // `app` is assigned below, after this closure is built - referenced here only
 // from onEnd, which never fires before then.
-let app;
+let app: Express | undefined;
 let bundleJs = '';
 const ctx = await context({
   entryPoints: [join(webDir, 'src/main.jsx')],
@@ -185,7 +186,7 @@ const server = app.listen(port, () => {
 // moment between, and it is the only thing standing between a failed bind and
 // an exit code of 0 - an unhandled 'error' here would otherwise be reported
 // after the success banner has already been printed.
-server.on('error', (err) => {
+server.on('error', (err: NodeJS.ErrnoException) => {
   console.error(
     err.code === 'EADDRINUSE'
       ? `\nport ${port} was taken before this server could bind it. Nothing is being served.`
@@ -202,8 +203,8 @@ function lanAddresses() {
     .map((n) => n.address);
 }
 
-function parseArgs(args) {
-  const out = {};
+function parseArgs(args: string[]): Record<string, string | boolean> {
+  const out: Record<string, string | boolean> = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (!a.startsWith('--')) continue;

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { imageSize, scanDirectory, discoverLevels } from './scan.mjs';
-import * as fixture from './image-fixtures.mjs';
+import { imageSize, scanDirectory, discoverLevels } from './scan.ts';
+import * as fixture from './image-fixtures.ts';
 
 /**
  * A throwaway corpus in a temp directory. Names may contain a `/`, which is how

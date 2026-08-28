@@ -8,7 +8,7 @@
  * time, and this only fetches what it already computed.
  *
  * The manifest's urls come out of that scan rooted at the LOCAL mount paths
- * (`scan.mjs`'s `IMAGES_BASE`/`SHARED_BASE`, `/images` and `/shared`), because
+ * (`scan.ts`'s `IMAGES_BASE`/`SHARED_BASE`, `/images` and `/shared`), because
  * the scan has no idea it will ever be served remotely. `rebase` below
  * rewrites every one of them - `imagesBase`/`sharedBase` themselves, and every
  * url already baked into `rooms`/`shared`/`embeddings`/`metadata` - to point
@@ -26,30 +26,27 @@
  * allowing this app's origin - `embeddings.bin` and `metadata.json` are read
  * via `fetch()` in main.jsx, which enforces CORS unlike a plain `<img>` tag.
  */
+import type { Manifest } from '../map/manifest.ts';
 
 /** The manifest filename `upload-r2.mjs` writes under a corpus's prefix. */
 export const REMOTE_MANIFEST_NAME = 'manifest.json';
 
 /**
  * Rewrite every url in a manifest from one base to another. Every url this
- * module touches is exactly `${oldBase}/...` (scan.mjs's contract), so a
+ * module touches is exactly `${oldBase}/...` (scan.ts's contract), so a
  * prefix swap is safe and does not need to parse the url.
- *
- * @param {string} url
- * @param {string} oldBase
- * @param {string} newBase
  */
-function rebase(url, oldBase, newBase) {
+function rebase(url: string, oldBase: string, newBase: string): string {
   return url.startsWith(`${oldBase}/`) ? `${newBase}${url.slice(oldBase.length)}` : url;
 }
 
 /**
- * @param {string} baseUrl  e.g. https://assets.centuryglass.us
- * @param {string} prefix   the corpus prefix used at upload time
- * @returns {Promise<import('../map/manifest.ts').Manifest>} a manifest shaped
- *   like scanDirectory()'s, with every url pointing directly at the remote host
+ * @param baseUrl e.g. https://assets.centuryglass.us
+ * @param prefix  the corpus prefix used at upload time
+ * @returns a manifest shaped like scanDirectory()'s, with every url pointing
+ *   directly at the remote host
  */
-export async function scanRemote(baseUrl, prefix) {
+export async function scanRemote(baseUrl: string, prefix: string): Promise<Manifest> {
   const root = baseUrl.replace(/\/+$/, '');
   const url = `${root}/${prefix}/${REMOTE_MANIFEST_NAME}`;
   const res = await fetch(url);
@@ -63,8 +60,8 @@ export async function scanRemote(baseUrl, prefix) {
   const oldSharedBase = manifest.sharedBase ?? '/shared';
   const imagesBase = `${root}/${prefix}`;
   const sharedBase = `${root}/shared`;
-  const toImages = (u) => rebase(u, oldImagesBase, imagesBase);
-  const toShared = (u) => rebase(u, oldSharedBase, sharedBase);
+  const toImages = (u: string) => rebase(u, oldImagesBase, imagesBase);
+  const toShared = (u: string) => rebase(u, oldSharedBase, sharedBase);
 
   return {
     ...manifest,

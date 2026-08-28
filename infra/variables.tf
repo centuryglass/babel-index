@@ -91,7 +91,7 @@ variable "billing_alert_limit_usd" {
 #
 # Bucket-level, so this applies regardless of enable_zone_protections and
 # works even against the bare *.r2.dev url - unlike the WAF/cache rules above,
-# it needs no zone. It exists because packages/server/remote.mjs points the
+# it needs no zone. It exists because packages/server/remote.ts points the
 # --remote-mode manifest's urls straight at this bucket, and two of them
 # (embeddings.bin, metadata.json) are read with `fetch()` in
 # packages/web/src/main.jsx rather than an <img> tag - fetch() enforces CORS
