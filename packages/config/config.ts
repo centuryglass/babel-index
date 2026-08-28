@@ -37,7 +37,7 @@
  * that reads a file.
  */
 import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
-import { CERTAINTY_FLOOR } from '../map/ordering.js';
+import { CERTAINTY_FLOOR } from '../map/ordering.ts';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
 export interface ZoomLimits {
@@ -211,7 +211,7 @@ export const DEFAULTS: Defaults = {
      * only lines that cross the on-camera rectangle, and everything else is an
      * invisible swap - so these numbers set the whole duration and the corpus
      * size does not enter into it. See `packages/web/src/lib/slide.js` for how a
-     * plan is laid out in time, and `packages/map/illusion.js` for why the
+     * plan is laid out in time, and `packages/map/illusion.ts` for why the
      * lines of a wave are free to move at once.
      *
      * Lowering all five proportionally makes the same animation faster; the
@@ -362,7 +362,7 @@ export const DEFAULTS: Defaults = {
 
     /**
      * How a search's certainty becomes map density - see the gradient section
-     * of `packages/map/ordering.js`. `map.contentRatio` above is the baseline
+     * of `packages/map/ordering.ts`. `map.contentRatio` above is the baseline
      * these numbers lift the middle of the map away from.
      */
     density: {

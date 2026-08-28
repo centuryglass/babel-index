@@ -74,7 +74,7 @@
  */
 
 /** 32-bit spatial hash -> [0, 1). Stable across platforms. */
-export function cellHash(x, y, seed = 0) {
+export function cellHash(x: number, y: number, seed = 0): number {
   let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1);
   h = Math.imul(h ^ (h >>> 15), 0x9e3779b1);
   h = Math.imul(h ^ (h >>> 13), 0x85ebca6b);
@@ -87,11 +87,14 @@ export function cellHash(x, y, seed = 0) {
  * the hidden controls painted into it (concept.md steps 5-6). It is never a
  * corpus slot, so ranked rooms begin in the ring around it.
  */
-export const isCenter = (x, y) => x === 0 && y === 0;
+export const isCenter = (x: number, y: number): boolean => x === 0 && y === 0;
 
 /** Is this cell allowed to hold a ranked corpus room? */
-export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
-  !isCenter(x, y) && cellHash(x, y, seed) < contentRatio;
+export const isContentSlot = (
+  x: number,
+  y: number,
+  { seed = 0, contentRatio = 0.2 }: { seed?: number; contentRatio?: number } = {}
+): boolean => !isCenter(x, y) && cellHash(x, y, seed) < contentRatio;
 
 /**
  * Which generic tile a generic cell shows.
@@ -101,20 +104,21 @@ export const isContentSlot = (x, y, { seed = 0, contentRatio = 0.2 } = {}) =>
  * correlate the pattern of generic tiles with the pattern of content slots, and
  * the two would be visible in each other. The choice depends only on the cell,
  * not on the search order, so a reorder never changes a generic cell's face -
- * which is exactly why the rearrangement animation can leave `board.js` treating
+ * which is exactly why the rearrangement animation can leave `board.ts` treating
  * every generic as one interchangeable value.
  *
  * Returns -1 when there are no generic tiles to choose from (an empty
  * `generic/` dir), which the renderers read as "fall back to the center tile"
  * so the map still draws.
  *
- * @param {number} x
- * @param {number} y
- * @param {{seed?: number, count?: number}} [opts] count is how many generic tiles exist
- * @returns {number} generic tile index in [0, count), or -1
+ * @param count how many generic tiles exist
+ * @returns generic tile index in [0, count), or -1
  */
-export const genericIndexAt = (x, y, { seed = 0, count = 0 } = {}) =>
-  count > 0 ? Math.min(count - 1, Math.floor(cellHash(x, y, seed) * count)) : -1;
+export const genericIndexAt = (
+  x: number,
+  y: number,
+  { seed = 0, count = 0 }: { seed?: number; count?: number } = {}
+): number => (count > 0 ? Math.min(count - 1, Math.floor(cellHash(x, y, seed) * count)) : -1);
 
 /**
  * Certainty below this is a hunch rather than a match, and clusters nothing.
@@ -139,13 +143,17 @@ export const CERTAINTY_FLOOR = 0.05;
  *   - anything under `floor` becomes exactly the baseline, not slightly above
  *     it. See CERTAINTY_FLOOR.
  *
- * @param {ArrayLike<number>|null} certainty per rank, in [0, 1]
- * @param {number} contentRatio the baseline density
- * @param {number} peak         density offered to a rank of certainty 1
- * @param {number} floor
- * @returns {(rank: number) => number} threshold for the rank being placed
+ * @param certainty per rank, in [0, 1]
+ * @param contentRatio the baseline density
+ * @param peak         density offered to a rank of certainty 1
+ * @returns threshold for the rank being placed
  */
-function densityRamp(certainty, contentRatio, peak, floor) {
+function densityRamp(
+  certainty: ArrayLike<number> | null | undefined,
+  contentRatio: number,
+  peak: number,
+  floor: number
+): (rank: number) => number {
   if (!certainty?.length) return () => contentRatio;
 
   // Never below the baseline: the gradient adds density near the center, it
@@ -168,51 +176,80 @@ function densityRamp(certainty, contentRatio, peak, floor) {
  * Distance from the origin in units of cell WIDTHS - the metric everything in
  * this file sorts and clamps by. With a square cell it is plain `hypot`.
  */
-export const cellDistance = (x, y, aspect = 1) => Math.hypot(x, y * aspect);
+export const cellDistance = (x: number, y: number, aspect = 1): number => Math.hypot(x, y * aspect);
 
-/**
- * @typedef {object} MapLayout
- * @property {{x: number, y: number, d: number}[]} slots content slots, nearest first
- * @property {number} boundaryRadius distance to the outermost occupied slot
- * @property {number} gradedCount leading ranks the density gradient lifts above baseline
- * @property {number} contentRatio
- * @property {number} seed
- * @property {number} roomCount
- * @property {number} aspect
- * @property {number} genericCount
- * @property {number} genericSeed
- * @property {(x: number, y: number) => number} genericIndexAt which generic tile a cell shows, or -1
- * @property {(x: number, y: number) => number} rankOf rank position of a cell, or -1 if generic
- * @property {(x: number, y: number, order: number[]) =>
- *   {center: true} | {generic: true} | {generic: false, id: number, rank: number}} roomAt
- * @property {(rank: number) => {x: number, y: number}|null} cellOfRank
- * @property {(x: number, y: number, softness?: number) => number} resistanceAt pan resistance, 1 to 0
- */
+/** One content slot, nearest first. */
+export interface Slot {
+  x: number;
+  y: number;
+  d: number;
+}
 
-/**
- * Build the map layout.
- *
- * @param {object} opts
- * @param {number} opts.roomCount     how many distinct rooms are in play
- * @param {number} [opts.contentRatio] fraction of cells that may hold one
- *                                     (0.2 => the concept's "80% generic")
- * @param {number} [opts.seed]        scatter seed for slot placement
- * @param {number} [opts.aspect]      cell height / cell width; 1 for a square
- *                                    cell. Makes the library round on screen
- *                                    rather than round in the index.
- * @param {number} [opts.genericCount] how many generic tiles exist, so a
- *                                    generic cell can be given one. 0 means the
- *                                    map has only the center tile to fall back on.
- * @param {number} [opts.genericSeed] salt for the generic tile choice, kept
- *                                    separate from `seed` - see `genericIndexAt`.
- * @param {object} [opts.density]     the search's density gradient, if a search
- *                                    is running. Absent - or with no certainty
- *                                    in it - is the uniform map, cell for cell.
- * @param {ArrayLike<number>} [opts.density.certainty] per rank, in [0, 1]
- * @param {number} [opts.density.peak]  density offered to a rank of certainty 1
- * @param {number} [opts.density.floor] certainty under which nothing clusters
- * @returns {MapLayout}
- */
+/** The search's density gradient, if a search is running. */
+export interface DensityOptions {
+  /** per rank, in [0, 1] */
+  certainty?: ArrayLike<number>;
+  /** density offered to a rank of certainty 1 */
+  peak?: number;
+  /** certainty under which nothing clusters */
+  floor?: number;
+}
+
+/** What is drawn at a cell. */
+export type RoomAtResult =
+  | { center: true; generic?: undefined; id?: undefined; rank?: undefined }
+  | { generic: true; center?: undefined; id?: undefined; rank?: undefined }
+  | { generic: false; id: number; rank: number; center?: undefined };
+
+/** The map layout `createLayout()` builds. */
+export interface MapLayout {
+  /** content slots, nearest first */
+  slots: Slot[];
+  /** distance to the outermost occupied slot */
+  boundaryRadius: number;
+  /** leading ranks the density gradient lifts above baseline */
+  gradedCount: number;
+  contentRatio: number;
+  seed: number;
+  roomCount: number;
+  aspect: number;
+  genericCount: number;
+  genericSeed: number;
+  /** which generic tile a cell shows, or -1 */
+  genericIndexAt(x: number, y: number): number;
+  /** rank position of a cell, or -1 if generic */
+  rankOf(x: number, y: number): number;
+  roomAt(x: number, y: number, order: number[]): RoomAtResult;
+  /** cell for a given rank, for "fly to the best match" */
+  cellOfRank(rank: number): { x: number; y: number } | null;
+  /** pan resistance, 1 to 0 */
+  resistanceAt(x: number, y: number, softness?: number): number;
+}
+
+export interface CreateLayoutOptions {
+  /** how many distinct rooms are in play */
+  roomCount: number;
+  /** fraction of cells that may hold one (0.2 => the concept's "80% generic") */
+  contentRatio?: number;
+  /** scatter seed for slot placement */
+  seed?: number;
+  /**
+   * cell height / cell width; 1 for a square cell. Makes the library round on
+   * screen rather than round in the index.
+   */
+  aspect?: number;
+  /**
+   * how many generic tiles exist, so a generic cell can be given one. 0 means
+   * the map has only the center tile to fall back on.
+   */
+  genericCount?: number;
+  /** salt for the generic tile choice, kept separate from `seed` - see `genericIndexAt`. */
+  genericSeed?: number;
+  /** absent - or with no certainty in it - is the uniform map, cell for cell. */
+  density?: DensityOptions | null;
+}
+
+/** Build the map layout. */
 export function createLayout({
   roomCount,
   contentRatio = 0.2,
@@ -221,7 +258,7 @@ export function createLayout({
   genericCount = 0,
   genericSeed = 0,
   density = null,
-} = {}) {
+}: CreateLayoutOptions): MapLayout {
   if (!Number.isInteger(roomCount) || roomCount < 0)
     throw new RangeError('roomCount must be a non-negative integer');
   if (!Number.isInteger(genericCount) || genericCount < 0)
@@ -241,7 +278,7 @@ export function createLayout({
   const slots = collectSlots(roomCount, contentRatio, seed, aspect, ramp);
 
   // Reverse index: cell -> rank position. Bounded by roomCount, so small.
-  const rankAt = new Map();
+  const rankAt = new Map<string, number>();
   slots.forEach((s, i) => rankAt.set(key(s.x, s.y), i));
 
   // Radius of the outermost occupied slot: the edge the user is discouraged
@@ -281,12 +318,8 @@ export function createLayout({
       return r === undefined ? -1 : r;
     },
 
-    /**
-     * What is drawn at this cell.
-     * @param {number[]} order room ids, best-first (from search, score, shuffle)
-     * @returns {{center: true} | {generic: true} | {generic: false, id: number, rank: number}}
-     */
-    roomAt(x, y, order) {
+    /** What is drawn at this cell, given `order` (room ids, best-first). */
+    roomAt(x, y, order): RoomAtResult {
       if (isCenter(x, y)) return { center: true };
       const rank = this.rankOf(x, y);
       if (rank === -1 || rank >= order.length) return { generic: true };
@@ -307,7 +340,7 @@ export function createLayout({
      * at the same apparent distance whichever way you drag - that uniformity is
      * the whole reason this file knows the aspect at all.
      *
-     * @param {number} softness how far the falloff spans, in cell widths
+     * @param softness how far the falloff spans, in cell widths
      */
     resistanceAt(x, y, softness = 12) {
       const d = cellDistance(x, y, aspect);
@@ -334,9 +367,15 @@ export function createLayout({
  * one waits for a cell the baseline hash lets through. With a flat ramp every
  * candidate is accepted and this is the old scan, cell for cell.
  *
- * @param {(rank: number) => number} ramp acceptance threshold per rank
+ * @param ramp acceptance threshold per rank
  */
-function collectSlots(count, contentRatio, seed, aspect = 1, ramp = () => contentRatio) {
+function collectSlots(
+  count: number,
+  contentRatio: number,
+  seed: number,
+  aspect = 1,
+  ramp: (rank: number) => number = () => contentRatio
+): Slot[] {
   if (count === 0) return [];
 
   // Placing a rank costs about 1/density cells, so the whole run costs the sum
@@ -353,7 +392,7 @@ function collectSlots(count, contentRatio, seed, aspect = 1, ramp = () => conten
     // them, which is what makes the tally a sound bound below.
     const rings = Math.ceil(radius) + 2;
     const reached = new Int32Array(rings + 1);
-    const candidates = [];
+    const candidates: { x: number; y: number; d: number; h: number; a: number }[] = [];
     sweep(radius, aspect, (x, y, d) => {
       const h = cellHash(x, y, seed);
       if (h >= contentRatio) return;
@@ -390,7 +429,7 @@ function collectSlots(count, contentRatio, seed, aspect = 1, ramp = () => conten
     // once per cell rather than twice per comparison.
     candidates.sort((p, q) => p.d - q.d || p.a - q.a);
 
-    const found = [];
+    const found: Slot[] = [];
     for (const c of candidates) {
       if (c.h >= ramp(found.length)) continue;
       found.push({ x: c.x, y: c.y, d: c.d });
@@ -407,7 +446,8 @@ function collectSlots(count, contentRatio, seed, aspect = 1, ramp = () => conten
  * re-sweep. A circle of radius r spans r x r/aspect cells, so it contains
  * pi * r^2 / aspect of them; this inverts that.
  */
-const radiusFor = (cells, aspect) => Math.ceil(Math.sqrt((cells * aspect) / Math.PI) * 1.35) + 4;
+const radiusFor = (cells: number, aspect: number): number =>
+  Math.ceil(Math.sqrt((cells * aspect) / Math.PI) * 1.35) + 4;
 
 /**
  * Visit every non-center cell within `radius`, in no particular order.
@@ -415,7 +455,7 @@ const radiusFor = (cells, aspect) => Math.ceil(Math.sqrt((cells * aspect) / Math
  * A screen-circle of radius r spans r cells across and r / aspect up and down,
  * so a short cell means more rows for the same apparent distance.
  */
-function sweep(radius, aspect, visit) {
+function sweep(radius: number, aspect: number, visit: (x: number, y: number, d: number) => void): void {
   const xMax = Math.ceil(radius);
   const yMax = Math.ceil(radius / aspect);
   for (let y = -yMax; y <= yMax; y++)
@@ -433,19 +473,20 @@ function sweep(radius, aspect, visit) {
  * reached an ungraded rank every ring beyond it has too, and the answer is the
  * first such ring. 0 when there is no gradient at all.
  */
-function gradedRadius(reached, ramp, contentRatio, rings) {
+function gradedRadius(
+  reached: Int32Array,
+  ramp: (rank: number) => number,
+  contentRatio: number,
+  rings: number
+): number {
   for (let k = 0; k <= rings; k++) if (ramp(reached[k]) <= contentRatio) return k;
   return rings + 1;
 }
 
-const key = (x, y) => `${x},${y}`;
+const key = (x: number, y: number): string => `${x},${y}`;
 
-/**
- * A shuffled ordering, for the "reorder the library" control.
- * @param {number} n number of rooms
- * @param {number} seed
- */
-export function shuffledOrder(n, seed = 1) {
+/** A shuffled ordering, for the "reorder the library" control. */
+export function shuffledOrder(n: number, seed = 1): number[] {
   const order = Array.from({ length: n }, (_, i) => i);
   let s = seed >>> 0;
   const rand = () => {
@@ -478,12 +519,11 @@ export const EMBEDDING_SCALE = 127;
  * the numbers to normalise before weighting. `rankByEmbedding` is the CLIP-only
  * ordering built on top, so the dot product has one implementation.
  *
- * @param {Int8Array} embeddings  roomCount * dim, row-major
- * @param {number} dim
- * @param {Float32Array} query    length dim, already L2-normalised
- * @returns {Float32Array} one cosine per room, indexed by id
+ * @param embeddings  roomCount * dim, row-major
+ * @param query    length dim, already L2-normalised
+ * @returns one cosine per room, indexed by id
  */
-export function embeddingScores(embeddings, dim, query) {
+export function embeddingScores(embeddings: Int8Array, dim: number, query: Float32Array): Float32Array {
   const n = Math.floor(embeddings.length / dim);
   const scores = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -501,12 +541,11 @@ export function embeddingScores(embeddings, dim, query) {
 /**
  * Rank rooms against a query vector, best first.
  *
- * @param {Int8Array} embeddings  roomCount * dim, row-major
- * @param {number} dim
- * @param {Float32Array} query    length dim, already L2-normalised
- * @returns {number[]} room ids, best first
+ * @param embeddings  roomCount * dim, row-major
+ * @param query    length dim, already L2-normalised
+ * @returns room ids, best first
  */
-export function rankByEmbedding(embeddings, dim, query) {
+export function rankByEmbedding(embeddings: Int8Array, dim: number, query: Float32Array): number[] {
   const scores = embeddingScores(embeddings, dim, query);
   const scored = Array.from(scores, (score, id) => ({ id, score }));
   scored.sort((a, b) => b.score - a.score);

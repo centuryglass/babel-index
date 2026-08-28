@@ -38,7 +38,7 @@ cached row, since vectors from different models aren't comparable.
 Row order **is** the interface. The file order comes straight from
 `scanDirectory()` — the same scan the server assigns room ids from — so row _i_
 is room id _i_ by construction, not by a re-implementation that could drift. The
-map keys slot placement and `rankByEmbedding()` (`packages/map/ordering.js`) on
+map keys slot placement and `rankByEmbedding()` (`packages/map/ordering.ts`) on
 that id, so a wrong order would rank the wrong rooms with no error. Pass the same
 `--center` you run the demo server with.
 

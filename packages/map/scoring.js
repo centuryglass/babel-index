@@ -67,7 +67,7 @@
 // does not statically discover its named exports.
 import winkLemmatizer from 'wink-lemmatizer';
 import anyAscii from 'any-ascii';
-import { embeddingScores } from './ordering.js';
+import { embeddingScores } from './ordering.ts';
 
 const { noun, verb, adjective } = winkLemmatizer;
 

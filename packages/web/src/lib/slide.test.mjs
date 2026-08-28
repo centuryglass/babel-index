@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLayout, shuffledOrder } from '../../../map/ordering.js';
-import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.js';
-import { planMoves, applyMove } from '../../../map/illusion.js';
+import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
+import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
+import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
 import { DEFAULTS } from '../../../config/config.ts';
 import { createTileCache, CENTER as CENTER_TILE } from './tiles.js';
