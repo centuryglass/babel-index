@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
 import { createApp, stubRanking, hasTextModel } from './app.mjs';
 import { scanDirectory } from './scan.mjs';
-import { DEFAULTS, resolveConfig } from '../config/config.mjs';
+import { DEFAULTS, resolveConfig } from '../config/config.ts';
 import * as fixture from './image-fixtures.mjs';
 
 /**

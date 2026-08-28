@@ -13,6 +13,11 @@
  * override any subset of it - see `load.mjs` - but it is an overlay and is not
  * committed, so this object stays the single statement of every default.
  *
+ * The overlay itself (`raw` below) is deliberately typed `unknown`: it's
+ * parsed JSON from a file nothing validates before it gets here, so every
+ * value handled below is exactly as loose as the input actually is - a
+ * stricter type on `raw` would just be a lying assertion.
+ *
  * ### Zoom config narrows, and never widens
  *
  * `camera.js` states the hard zoom limits; this file can only tighten them.
@@ -35,7 +40,89 @@ import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
 import { CERTAINTY_FLOOR } from '../map/ordering.js';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
-export const DEFAULTS = {
+export interface ZoomLimits {
+  min: number;
+  max: number;
+}
+
+interface CameraDefaults {
+  minZoom: number | null;
+  maxZoom: number | null;
+  defaultZoom: number;
+  flightMs: number;
+  keyboardMoveMs: number;
+}
+
+interface MapConfig {
+  contentRatio: number;
+  slotSeed: number;
+  genericSeed: number;
+}
+
+interface SlideConfig {
+  base: number;
+  perCell: number;
+  gap: number;
+  stagger: number;
+  cascade: number;
+}
+
+interface CatalogConfig {
+  perPage: number;
+  windowPages: number;
+  transitionMs: number;
+  paging: 'scroll' | 'pages';
+}
+
+interface SearchWeights {
+  keyword: number;
+  story: number;
+  clip: number;
+}
+
+interface SearchDensity {
+  peak: number;
+  floor: number;
+  clipLow: number;
+  clipHigh: number;
+}
+
+interface SearchDefaults {
+  weights: SearchWeights;
+  minTokenLength: number;
+  maxQueryLength: number;
+  clipTextDtype: string;
+  density: SearchDensity;
+}
+
+interface Defaults {
+  camera: CameraDefaults;
+  map: MapConfig;
+  slide: SlideConfig;
+  catalog: CatalogConfig;
+  search: SearchDefaults;
+}
+
+/** The resolved config `resolveConfig` returns - every value present and validated. */
+export interface Config {
+  camera: {
+    minZoom: number;
+    maxZoom: number;
+    defaultZoom: number;
+    flightMs: number;
+    keyboardMoveMs: number;
+  };
+  slide: SlideConfig;
+  catalog: CatalogConfig;
+  map: MapConfig;
+  search: SearchDefaults;
+  notes: string[];
+}
+
+/** An overlay section once pulled out of the raw object - still unvalidated. */
+type Section = Record<string, unknown>;
+
+export const DEFAULTS: Defaults = {
   camera: {
     /**
      * The zoom range actually offered, as pixels per cell WIDTH.
@@ -316,16 +403,13 @@ export const DEFAULTS = {
  * prints at startup - silence about a value that did not take effect is the
  * failure mode worth avoiding here.
  *
- * @param {object} [raw] the overlay, typically parsed `config.json`
- * @param {object} [opts]
- * @param {{min: number, max: number}} [opts.zoomLimits] the hard range this
- *   config may narrow but not widen. Injected so the whole policy can be
- *   exercised at limits the app is not currently using.
- * @returns {{camera: object, slide: object, catalog: object, map: object,
- *   search: object, notes: string[]}}
+ * @param raw the overlay, typically parsed `config.json`
+ * @param opts.zoomLimits the hard range this config may narrow but not widen.
+ *   Injected so the whole policy can be exercised at limits the app is not
+ *   currently using.
  */
-export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
-  const notes = [];
+export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: { zoomLimits?: ZoomLimits } = {}): Config {
+  const notes: string[] = [];
   const src = asSection(raw, '', notes);
 
   const camIn = asSection(src.camera, 'camera', notes);
@@ -339,37 +423,37 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
   // is a request that cannot be granted, not a corrupt file.
   let minZoom = numberOrNull(camIn.minZoom, DEFAULTS.camera.minZoom, 'camera.minZoom', notes);
   let maxZoom = numberOrNull(camIn.maxZoom, DEFAULTS.camera.maxZoom, 'camera.maxZoom', notes);
-  minZoom = minZoom ?? zoomLimits.min;
-  maxZoom = maxZoom ?? zoomLimits.max;
+  let minZoomResolved = minZoom ?? zoomLimits.min;
+  let maxZoomResolved = maxZoom ?? zoomLimits.max;
 
-  if (minZoom < zoomLimits.min) {
-    notes.push(`camera.minZoom ${minZoom} widens the range; clamped to ${zoomLimits.min}`);
-    minZoom = zoomLimits.min;
+  if (minZoomResolved < zoomLimits.min) {
+    notes.push(`camera.minZoom ${minZoomResolved} widens the range; clamped to ${zoomLimits.min}`);
+    minZoomResolved = zoomLimits.min;
   }
-  if (maxZoom > zoomLimits.max) {
-    notes.push(`camera.maxZoom ${maxZoom} widens the range; clamped to ${zoomLimits.max}`);
-    maxZoom = zoomLimits.max;
+  if (maxZoomResolved > zoomLimits.max) {
+    notes.push(`camera.maxZoom ${maxZoomResolved} widens the range; clamped to ${zoomLimits.max}`);
+    maxZoomResolved = zoomLimits.max;
   }
-  if (minZoom > maxZoom) {
+  if (minZoomResolved > maxZoomResolved) {
     notes.push(
-      `camera.minZoom ${minZoom} is above camera.maxZoom ${maxZoom}; ` +
+      `camera.minZoom ${minZoomResolved} is above camera.maxZoom ${maxZoomResolved}; ` +
         `using the full range ${zoomLimits.min}-${zoomLimits.max}`
     );
-    minZoom = zoomLimits.min;
-    maxZoom = zoomLimits.max;
+    minZoomResolved = zoomLimits.min;
+    maxZoomResolved = zoomLimits.max;
   }
 
   let defaultZoom = number(camIn.defaultZoom, DEFAULTS.camera.defaultZoom, 'camera.defaultZoom', notes);
-  if (defaultZoom < minZoom || defaultZoom > maxZoom) {
-    const clamped = Math.min(maxZoom, Math.max(minZoom, defaultZoom));
-    notes.push(`camera.defaultZoom ${defaultZoom} is outside ${minZoom}-${maxZoom}; using ${clamped}`);
+  if (defaultZoom < minZoomResolved || defaultZoom > maxZoomResolved) {
+    const clamped = Math.min(maxZoomResolved, Math.max(minZoomResolved, defaultZoom));
+    notes.push(`camera.defaultZoom ${defaultZoom} is outside ${minZoomResolved}-${maxZoomResolved}; using ${clamped}`);
     defaultZoom = clamped;
   }
 
   return {
     camera: {
-      minZoom,
-      maxZoom,
+      minZoom: minZoomResolved,
+      maxZoom: maxZoomResolved,
       defaultZoom,
       flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
       keyboardMoveMs: duration(
@@ -414,7 +498,7 @@ export function resolveConfig(raw = {}, { zoomLimits = ZOOM_LIMITS } = {}) {
  * when the honest reading is obvious. `windowPages` of 0 is legal and
  * meaningful - it is exactly what pagination passes.
  */
-function catalog(src, notes) {
+function catalog(src: Section, notes: string[]): CatalogConfig {
   const d = DEFAULTS.catalog;
 
   const perPage = atLeast(
@@ -435,12 +519,12 @@ function catalog(src, notes) {
     perPage,
     windowPages,
     transitionMs: duration(src.transitionMs, d.transitionMs, 'catalog.transitionMs', notes),
-    paging,
+    paging: paging as 'scroll' | 'pages',
   };
 }
 
 /** Floor a value with a note, for the two counts above. */
-function atLeast(n, min, path, notes) {
+function atLeast(n: number, min: number, path: string, notes: string[]): number {
   if (n >= min) return n;
   notes.push(`${path} must be at least ${min}; using ${min}`);
   return min;
@@ -455,7 +539,7 @@ function atLeast(n, min, path, notes) {
  * inverted cosine band is worth a note: it would silently mean "CLIP never
  * contributes certainty", which looks exactly like a corpus with no blob.
  */
-function density(src, notes) {
+function density(src: Section, notes: string[]): SearchDensity {
   const d = DEFAULTS.search.density;
   const out = {
     peak: ratio(src.peak, d.peak, 'search.density.peak', notes),
@@ -487,26 +571,26 @@ function density(src, notes) {
  * schedule a run to start before the one it follows, and the animation applies
  * its plan in completion order.
  */
-function slideTiming(src, notes) {
+function slideTiming(src: Section, notes: string[]): SlideConfig {
   const d = DEFAULTS.slide;
-  const out = {};
-  for (const key of ['base', 'perCell', 'gap', 'stagger', 'cascade'])
+  const out = {} as SlideConfig;
+  for (const key of ['base', 'perCell', 'gap', 'stagger', 'cascade'] as const)
     out[key] = duration(src[key], d[key], `slide.${key}`, notes, { composed: true });
   return out;
 }
 
 /** A section of the overlay, or an empty one. Anything else is reported and ignored. */
-function asSection(value, path, notes) {
+function asSection(value: unknown, path: string, notes: string[]): Section {
   if (value === undefined || value === null) return {};
   if (typeof value !== 'object' || Array.isArray(value)) {
     notes.push(`${path || 'config'} should be an object; ignoring it`);
     return {};
   }
-  return value;
+  return value as Section;
 }
 
 /** A finite number, or the fallback with a note. */
-function number(value, fallback, path, notes) {
+function number(value: unknown, fallback: number, path: string, notes: string[]): number {
   if (value === undefined) return fallback;
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     notes.push(`${path} should be a finite number; using ${fallback}`);
@@ -516,12 +600,12 @@ function number(value, fallback, path, notes) {
 }
 
 /** Like `number`, but `null` is meaningful rather than an error. */
-function numberOrNull(value, fallback, path, notes) {
+function numberOrNull(value: unknown, fallback: number | null, path: string, notes: string[]): number | null {
   if (value === null) return null;
   return number(value, fallback, path, notes);
 }
 
-function integer(value, fallback, path, notes) {
+function integer(value: unknown, fallback: number, path: string, notes: string[]): number {
   const n = number(value, fallback, path, notes);
   if (!Number.isInteger(n)) {
     notes.push(`${path} should be a whole number; using ${Math.round(n)}`);
@@ -531,7 +615,7 @@ function integer(value, fallback, path, notes) {
 }
 
 /** A fraction in (0, 1], matching what `createLayout()` will accept. */
-function ratio(value, fallback, path, notes) {
+function ratio(value: unknown, fallback: number, path: string, notes: string[]): number {
   const n = number(value, fallback, path, notes);
   if (!(n > 0 && n <= 1)) {
     notes.push(`${path} should be in (0, 1]; using ${fallback}`);
@@ -541,7 +625,7 @@ function ratio(value, fallback, path, notes) {
 }
 
 /** At least one character, since a zero-length token matches everything. */
-function tokenLength(value, fallback, path, notes) {
+function tokenLength(value: unknown, fallback: number, path: string, notes: string[]): number {
   const n = integer(value, fallback, path, notes);
   if (n < 1) {
     notes.push(`${path} must be at least 1; using 1`);
@@ -570,7 +654,9 @@ function tokenLength(value, fallback, path, notes) {
 const DURATION_MAX_MS = 5000;
 const ONE_FRAME_MS = 1000 / 60;
 
-function duration(value, fallback, path, notes, { composed = false } = {}) {
+function duration(
+  value: unknown, fallback: number, path: string, notes: string[], { composed = false }: { composed?: boolean } = {}
+): number {
   const n = number(value, fallback, path, notes);
   if (n < 0) {
     notes.push(`${path} should not be negative; using ${fallback}`);
@@ -595,7 +681,7 @@ function duration(value, fallback, path, notes, { composed = false } = {}) {
  */
 const CLIP_TEXT_DTYPES = ['fp32', 'fp16', 'q8', 'q4', 'int8', 'uint8', 'q4f16', 'bnb4'];
 
-function clipTextDtype(value, notes) {
+function clipTextDtype(value: unknown, notes: string[]): string {
   const d = DEFAULTS.search.clipTextDtype;
   if (value === undefined) return d;
   if (typeof value !== 'string' || !CLIP_TEXT_DTYPES.includes(value)) {
@@ -606,7 +692,7 @@ function clipTextDtype(value, notes) {
 }
 
 /** A search weight: any non-negative number. Zero is a legitimate "ignore this signal". */
-function weight(value, fallback, path, notes) {
+function weight(value: unknown, fallback: number, path: string, notes: string[]): number {
   const n = number(value, fallback, path, notes);
   if (n < 0) {
     notes.push(`${path} should not be negative; using ${fallback}`);
