@@ -197,6 +197,27 @@ test('the metadata sidecar is advertised and actually serves', async () => {
   );
 });
 
+test('tagLinks.json is advertised and actually serves', async () => {
+  const tagLinks = { brutalism: 'https://en.wikipedia.org/wiki/Brutalist_architecture' };
+  await serving(
+    async ({ get }) => {
+      const m = await (await get('/api/manifest')).json();
+      assert.equal(m.tagLinks.count, 1);
+
+      const res = await get(m.tagLinks.url);
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), tagLinks);
+    },
+    {
+      files: {
+        'center.png': fixture.png(64, 64),
+        '001.jpg': fixture.jpeg(64, 64),
+        'tagLinks.json': JSON.stringify(tagLinks),
+      },
+    }
+  );
+});
+
 test('/api/rescan picks up new rooms', async () => {
   await serving(async ({ get, dir, base }) => {
     await writeFile(join(dir, '004.jpg'), fixture.jpeg(64, 64));

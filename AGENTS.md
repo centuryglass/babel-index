@@ -192,7 +192,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           search controls.
 - `assets/generic`: Non-unique generic "default" tile images.
 - `assets/corpus-sample`: Minimal tile set for demo use, with metadata,
-                          embeddings, and image pyramid included.
+                          embeddings, image pyramid, and tag links included.
 
 ### Docs:
 - `docs/implementation-plan.md`: TODO list, temporary holding place for
@@ -451,6 +451,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   above the story as a visibly different thing and it never feeds the search
   index. Don't write one into `assets/corpus-sample/` — a placeholder caption
   is the padded sentence the plan says to omit.
+- **`tagLinks.json` is a flat keyword -> url map, not joined to anything.**
+  Unlike `metadata.json` it has no per-room coverage to report — `scan.ts`
+  only counts its keys (`TagLinksInfo.count`). It is hand-edited, not
+  generated, and optional exactly like the sidecar: a corpus without one just
+  renders chips with no "more about this" link. `RoomDetails.jsx` takes it as
+  a `tagLinks` prop rather than importing it — see `useCorpus.js`.
 
 ### The reorder animation
 

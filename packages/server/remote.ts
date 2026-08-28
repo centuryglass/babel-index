@@ -72,6 +72,7 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
     rooms: manifest.rooms.map((room) => ({ ...room, url: toImages(room.url) })),
     embeddings: manifest.embeddings && { ...manifest.embeddings, url: toImages(manifest.embeddings.url) },
     metadata: manifest.metadata && { ...manifest.metadata, url: toImages(manifest.metadata.url) },
+    tagLinks: manifest.tagLinks && { ...manifest.tagLinks, url: toImages(manifest.tagLinks.url) },
     shared: {
       center: manifest.shared?.center && { ...manifest.shared.center, url: toShared(manifest.shared.center.url) },
       generic: (manifest.shared?.generic ?? []).map((g) => ({ ...g, url: toShared(g.url) })),

@@ -1,9 +1,9 @@
 # tools/upload — Cloudflare R2 sync
 
 Uploads a corpus - room images at every generated pyramid level, the
-keyword/story sidecar, the CLIP embeddings blob, and the shared
-center/generic tiles - to Cloudflare R2. See `docs/implementation-plan.md`'s
-Hosting section.
+keyword/story sidecar, the optional keyword -> external-link map, the CLIP
+embeddings blob, and the shared center/generic tiles - to Cloudflare R2. See
+`docs/implementation-plan.md`'s Hosting section.
 
 R2 is S3-compatible, so this uses `@aws-sdk/client-s3` rather than a bespoke
 client.
@@ -43,6 +43,7 @@ room's url the same way `packages/web/src/rooms.js` does locally:
 <prefix>/001.jpg                  level 0 (flat)
 <prefix>/512/001.jpg              level 1
 <prefix>/metadata.json
+<prefix>/tagLinks.json          only if the corpus has one
 <prefix>/embeddings.bin
 <prefix>/embeddings.json
 <prefix>/upload-manifest.json     this tool's own bookkeeping (below)

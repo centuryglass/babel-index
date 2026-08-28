@@ -8,6 +8,7 @@
     "target": "esnext",
     "noEmit": true,
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "strict": false,
     "skipLibCheck": true
   },

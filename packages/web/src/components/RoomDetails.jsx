@@ -131,6 +131,9 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
  * @param {import('../../../map/metadata.ts').RoomMeta|null} props.entry the room's metadata, from `joinMetadata()`
  * @param {object|null} props.desc from `describeRoom` / `describeCell`
  * @param {(text: string) => void} props.onKeyword a chip runs this search
+ * @param {Record<string, string>|null} [props.tagLinks] keyword -> external
+ *   link, from the corpus's optional tagLinks.json (see useCorpus.js) - a
+ *   keyword with an entry grows a second "more about this" pill fused to it
  * @param {number} [props.chipTabIndex] -1 inside the canvas, 0 everywhere else
  * @param {{keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
  *          story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null} [props.highlight]
@@ -145,6 +148,7 @@ export function RoomDetails({
   entry,
   desc,
   onKeyword,
+  tagLinks = null,
   chipTabIndex = 0,
   highlight = null,
   rank = null,
@@ -156,18 +160,36 @@ export function RoomDetails({
     <>
       {entry?.keywords?.length > 0 && (
         <div className="chips">
-          {entry.keywords.map((k) => (
-            <button
-              key={k.text}
-              className="chip"
-              type="button"
-              tabIndex={chipTabIndex}
-              title={k.type ? `${k.type} — search for this` : 'search for this'}
-              onClick={() => onKeyword(k.text)}
-            >
-              <Highlight text={k.text} ranges={highlight?.keyword(k.text)} />
-            </button>
-          ))}
+          {entry.keywords.map((k) => {
+            const href = tagLinks?.[k.text] ?? null;
+            return (
+              <span key={k.text} className={href ? 'chip-group' : undefined}>
+                <button
+                  className="chip"
+                  type="button"
+                  tabIndex={chipTabIndex}
+                  title={k.type ? `${k.type} — search for this` : 'search for this'}
+                  onClick={() => onKeyword(k.text)}
+                >
+                  <Highlight text={k.text} ranges={highlight?.keyword(k.text)} />
+                </button>
+                {href && (
+                  <a
+                    className="chip-link"
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    tabIndex={chipTabIndex}
+                    title={`more about ${k.text}`}
+                    aria-label={`more about ${k.text}, opens in a new tab`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    ↗
+                  </a>
+                )}
+              </span>
+            );
+          })}
         </div>
       )}
 
