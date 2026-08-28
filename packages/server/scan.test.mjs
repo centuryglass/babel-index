@@ -95,11 +95,11 @@ test('scans a directory into a manifest', async () => {
     );
     assert.deepEqual(m.rooms.map((r) => r.id), [0, 1, 2]);
     for (const room of m.rooms) {
-      assert.equal(room.url, `/images/${room.file}`);
+      assert.equal(room.url, `images/${room.file}`);
       assert.ok(room.bytes > 0);
     }
     assert.deepEqual(m.rooms[0], {
-      id: 0, file: '001.jpg', url: '/images/001.jpg', bytes: m.rooms[0].bytes, w: 512, h: 512,
+      id: 0, file: '001.jpg', url: 'images/001.jpg', bytes: m.rooms[0].bytes, w: 512, h: 512,
     });
   });
 });
@@ -109,7 +109,7 @@ test('the center tile is center.* by default, and is not also a corpus room', as
     const m = await scanDirectory(dir);
     assert.equal(m.shared.center.file, 'center.png');
     // Served from /shared, even when the shared directory is the corpus directory.
-    assert.deepEqual(m.shared.center, { file: 'center.png', url: '/shared/center.png', w: 1024, h: 1024 });
+    assert.deepEqual(m.shared.center, { file: 'center.png', url: 'shared/center.png', w: 1024, h: 1024 });
     // Being both the generic wallpaper and a search result would put the same
     // picture everywhere and in the ranking too.
     assert.ok(!m.rooms.some((r) => r.file === 'center.png'));
@@ -156,8 +156,8 @@ test('the generic tiles are the sorted generic folder, served from /shared', asy
       assert.deepEqual(
         m.shared.generic.map((v) => [v.file, v.url]),
         [
-          ['v1.webp', '/shared/generic/v1.webp'],
-          ['v2.webp', '/shared/generic/v2.webp'],
+          ['v1.webp', 'shared/generic/v1.webp'],
+          ['v2.webp', 'shared/generic/v2.webp'],
         ]
       );
       // The generic tiles are wallpaper, not corpus - they never become rooms.
@@ -241,10 +241,10 @@ test('filenames that need escaping survive the round trip into a url', async () 
     async (dir) => {
       const m = await scanDirectory(dir);
       const byFile = Object.fromEntries(m.rooms.map((r) => [r.file, r.url]));
-      assert.equal(byFile['a room #1.jpg'], '/images/a%20room%20%231.jpg');
-      assert.equal(byFile['x&y=2.png'], '/images/x%26y%3D2.png');
+      assert.equal(byFile['a room #1.jpg'], 'images/a%20room%20%231.jpg');
+      assert.equal(byFile['x&y=2.png'], 'images/x%26y%3D2.png');
       for (const [file, url] of Object.entries(byFile))
-        assert.equal(decodeURIComponent(url.slice('/images/'.length)), file);
+        assert.equal(decodeURIComponent(url.slice('images/'.length)), file);
     }
   );
 });
@@ -392,7 +392,7 @@ test('an embeddings sidecar is surfaced with a servable url', async () => {
     async (dir) => {
       const { embeddings } = await scanDirectory(dir);
       assert.deepEqual(embeddings, {
-        url: '/images/embeddings.bin',
+        url: 'images/embeddings.bin',
         dim: 512,
         count: 2,
         model: 'Xenova/clip-vit-base-patch32',
@@ -437,7 +437,7 @@ test('a metadata sidecar is surfaced with a servable url and its coverage', asyn
     },
     async (dir) => {
       assert.deepEqual((await scanDirectory(dir)).metadata, {
-        url: '/images/metadata.json',
+        url: 'images/metadata.json',
         matched: 1,
         entries: 1,
       });
@@ -515,7 +515,7 @@ test('a tagLinks.json is surfaced with a servable url and its count', async () =
     },
     async (dir) => {
       assert.deepEqual((await scanDirectory(dir)).tagLinks, {
-        url: '/images/tagLinks.json',
+        url: 'images/tagLinks.json',
         count: 2,
       });
     }

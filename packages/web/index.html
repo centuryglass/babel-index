@@ -15,6 +15,10 @@
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Indexing of Babel</title>
+    <!-- Relative so a subpath deployment resolves it under <base href>
+         instead of the browser's default same-origin /favicon.ico guess,
+         which the reverse-proxied prefix never sees - see base-path.ts. -->
+    <link rel="icon" href="favicon.ico" />
     <style>
       :root {
         color-scheme: dark;
@@ -603,6 +607,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/bundle.js"></script>
+    <script type="module" src="bundle.js"></script>
   </body>
 </html>

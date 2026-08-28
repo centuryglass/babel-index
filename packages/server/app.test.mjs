@@ -35,7 +35,11 @@ async function serving(run, { files, ...opts } = {}) {
   const base = `http://127.0.0.1:${server.address().port}`;
 
   try {
-    return await run({ base, dir, port: server.address().port, get: (p) => fetch(base + p) });
+    // Accepts both an Express-route path ('/api/manifest') and a manifest
+    // url (relative, no leading slash, since app.ts's urls resolve against
+    // <base href> in the browser - see base-path.ts) without the caller
+    // having to know which kind it was handed.
+    return await run({ base, dir, port: server.address().port, get: (p) => fetch(`${base}/${p.replace(/^\//, '')}`) });
   } finally {
     await new Promise((r) => server.close(r));
     await rm(dir, { recursive: true, force: true });
@@ -78,7 +82,7 @@ test('/api/manifest serves the scan', async () => {
     // ids must be exactly the array positions.
     m.rooms.forEach((room, i) => {
       assert.equal(room.id, i);
-      assert.ok(room.url.startsWith('/images/'));
+      assert.ok(room.url.startsWith('images/'));
       assert.equal(typeof room.bytes, 'number');
     });
   });
@@ -158,10 +162,10 @@ test('shared tiles are served from a shared directory outside the corpus', async
     try {
       const m = await (await fetch(`${origin}/api/manifest`)).json();
       assert.equal(m.count, 2, 'the shared tiles are not corpus rooms');
-      assert.equal(m.shared.center.url, '/shared/center_tile.png');
-      assert.deepEqual(m.shared.generic.map((v) => v.url), ['/shared/generic/v1.webp']);
+      assert.equal(m.shared.center.url, 'shared/center_tile.png');
+      assert.deepEqual(m.shared.generic.map((v) => v.url), ['shared/generic/v1.webp']);
       for (const { url } of [m.shared.center, ...m.shared.generic]) {
-        const res = await fetch(origin + url);
+        const res = await fetch(`${origin}/${url}`);
         assert.equal(res.status, 200, url);
         assert.ok((await res.arrayBuffer()).byteLength > 0, url);
       }
@@ -370,6 +374,42 @@ test('/ serves the page, re-read each request so edits need no restart', async (
       assert.equal(reads, 2);
     },
     { readIndexHtml: async () => (reads++, '<canvas></canvas>') }
+  );
+});
+
+test('basePath defaults to "/" - no <base> tag lands to change existing behaviour', async () => {
+  await serving(
+    async ({ get }) => {
+      const html = await (await get('/')).text();
+      assert.match(html, /<base href="\/">/);
+    },
+    { readIndexHtml: async () => '<head></head><canvas></canvas>' }
+  );
+});
+
+test('--base-path lands as <base href>, ahead of anything that resolves against it', async () => {
+  await serving(
+    async ({ get }) => {
+      const html = await (await get('/')).text();
+      // Express itself is still unprefixed (server-nginx.conf strips the
+      // prefix before this request arrives) - '/' is still the route that
+      // answers. Only the tag changes.
+      const headIndex = html.indexOf('<head>');
+      const baseIndex = html.indexOf('<base href="/babel-index/">');
+      assert.ok(baseIndex > headIndex, 'expected <base> right after <head>');
+      assert.ok(baseIndex < html.indexOf('<script'), 'expected <base> before anything that resolves against it');
+    },
+    { basePath: '/babel-index/', readIndexHtml: async () => '<head></head><script src="bundle.js"></script>' }
+  );
+});
+
+test('--base-path normalizes a bare name to a leading and trailing slash', async () => {
+  await serving(
+    async ({ get }) => {
+      const html = await (await get('/')).text();
+      assert.match(html, /<base href="\/babel-index\/">/);
+    },
+    { basePath: 'babel-index', readIndexHtml: async () => '<head></head>' }
   );
 });
 

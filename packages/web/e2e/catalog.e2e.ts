@@ -61,7 +61,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       // Every room row names its rank and points at a real tile.
       const first = rows.nth(1);
       assert.match(await first.locator('.catalog-rank').textContent(), /^1$/);
-      assert.match(await first.locator('.catalog-tile').getAttribute('src'), /^\/images\//);
+      assert.match(await first.locator('.catalog-tile').getAttribute('src'), /^images\//);
     } finally {
       await closeCatalog();
     }
@@ -323,7 +323,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
         'the overlay clipped the story it exists to show in full'
       );
       // And the tile is the full-resolution one, not the row's thumbnail.
-      assert.match(await overlay.locator('.overlay-tile').getAttribute('src'), /^\/images\/[^/]+$/);
+      assert.match(await overlay.locator('.overlay-tile').getAttribute('src'), /^images\/[^/]+$/);
 
       await page.keyboard.press('Escape');
       await overlay.waitFor({ state: 'detached', timeout: 5000 });
