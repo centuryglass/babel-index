@@ -21,24 +21,26 @@
  * is a later step.)
  */
 import { CENTER, genericId } from './tiles.js';
+import type { Manifest } from '../../../map/manifest.ts';
 
-/**
- * @param {import('../../../map/manifest.ts').Manifest} manifest  as served by /api/manifest
- * @returns {(id: number|string, level: number) => string|null}
- */
-export function createUrlFor(manifest) {
+export type UrlFor = (id: number | string, level: number) => string | null;
+
+/** @param manifest as served by /api/manifest */
+export function createUrlFor(manifest: Manifest): UrlFor {
   // Older manifests have no `levels`; a flat level 0 is the honest reading.
-  const dirs = new Map((manifest.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l.dir]));
+  const dirs = new Map(
+    (manifest.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l.dir]),
+  );
   // Older manifests (and any manifest.imagesBase omission) fall back to the
   // local mount path - see scan.mjs's IMAGES_BASE.
   const imagesBase = manifest.imagesBase ?? '/images';
 
   // Every shared-tile id to its (flat) url, so resolving one is a lookup rather
   // than string-parsing an index back out of the id.
-  const shared = manifest.shared ?? {};
-  const sharedUrls = new Map();
+  const shared = manifest.shared;
+  const sharedUrls = new Map<number | string, string>();
   if (shared.center?.url) sharedUrls.set(CENTER, shared.center.url);
-  (shared.generic ?? []).forEach((v, i) => sharedUrls.set(genericId(i), v.url));
+  shared.generic.forEach((v, i) => sharedUrls.set(genericId(i), v.url));
 
   return (id, level) => {
     if (sharedUrls.has(id)) return level === 0 ? sharedUrls.get(id) : null;

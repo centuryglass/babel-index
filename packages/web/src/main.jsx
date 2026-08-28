@@ -7,8 +7,8 @@ import { CatalogView } from './components/CatalogView.jsx';
 import { RoomOverlay } from './components/RoomOverlay.jsx';
 import { HelpDialog } from './components/HelpDialog.jsx';
 import { alphabeticalOrder } from './lib/catalog.js';
-import { load, save, clear, KEYS } from './lib/persist.js';
-import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.js';
+import { load, save, clear, KEYS } from './lib/persist.ts';
+import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
 import { roomAtPoint } from './lib/picking.ts';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.ts';
 import {
@@ -24,7 +24,7 @@ import {
 } from './lib/center.js';
 import { CELL_ASPECT, fitZoom } from './lib/camera.js';
 import { createTileCache, CENTER, genericId } from './lib/tiles.js';
-import { createUrlFor } from './lib/rooms.js';
+import { createUrlFor } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.js';
 import { createSlideRenderer } from './lib/slide.js';
 import { BASE_TILE } from './lib/pyramid.js';
