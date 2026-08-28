@@ -9,7 +9,7 @@ import { HelpDialog } from './components/HelpDialog.jsx';
 import { alphabeticalOrder } from './lib/catalog.js';
 import { load, save, clear, KEYS } from './lib/persist.js';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.js';
-import { roomAtPoint } from './lib/picking.js';
+import { roomAtPoint } from './lib/picking.ts';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.js';
 import {
   bookAtPoint,

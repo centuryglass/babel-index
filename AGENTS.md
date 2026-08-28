@@ -128,7 +128,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `camera.js`: Pure-math mapping functions for the map camera
     * `render.js`: Render a single map frame
     * `slide.js`: Room rearrangement animation renderer
-    * `picking.js`: Defines the roomAtPoint function
+    * `picking.ts`: Defines the roomAtPoint function
     * `catalog.js`: Catalog pagination and geometry helpers
     * `pyramid.js`: Manage room tile resolution options and cache budgets
     * `tiles.js`: Load, cache, and unload room images
@@ -345,7 +345,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **`center.js` is the pure half, and the geometry comes from the tools tree.**
   The book layout, `assignTitles`, the hit-test and `pickTags` live in
   `packages/web/src/lib/center.js` and are asserted browser-free in `center.test.mjs`
-  — the same split as `picking.js`. Every book is lettered; a book is one
+  — the same split as `picking.ts`. Every book is lettered; a book is one
   flat slot id (`BOOK_COUNT` of them), assigned top left to bottom right, so
   there is no (shelf, index) pair to keep in step. A shelf need not be one
   contiguous run - art can break it into more than one, and `center.js`'s
