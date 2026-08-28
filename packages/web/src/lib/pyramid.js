@@ -53,7 +53,7 @@
  * `packages/map` takes it to measure distance in cell widths. Change the shape
  * and the world changes shape with it, which is the point.
  *
- * The trace that produced `tools/center-placement/lib/measured.js` records the
+ * The trace that produced `tools/center-placement/lib/measured.ts` records the
  * shape it was made at, and `geometry.test.mjs` asserts it against this
  * object - so this and the `viewBox` of `shelf_geometry.svg` cannot drift apart
  * silently.

@@ -355,7 +355,7 @@ export const DEFAULTS: Defaults = {
      * embedding accuracy, which is the tradeoff a memory-constrained host
      * (a cheap VPS) wants and a normal one does not. Server-side only - it
      * governs `packages/server/app.ts`'s text tower, not the vision tower
-     * `tools/embed/embed.mjs` runs offline, which stays fp32 since it runs
+     * `tools/embed/embed.ts` runs offline, which stays fp32 since it runs
      * once per corpus rather than per request.
      */
     clipTextDtype: 'fp32',

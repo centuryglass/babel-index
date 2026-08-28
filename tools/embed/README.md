@@ -14,8 +14,8 @@ regenerate this blob.
 ## Run
 
 ```sh
-node tools/embed/embed.mjs                        # against assets/corpus-sample/
-node tools/embed/embed.mjs --images <dir> [--center center.jpg] [--out <dir>]
+node tools/embed/embed.ts                        # against assets/corpus-sample/
+node tools/embed/embed.ts --images <dir> [--center center.jpg] [--out <dir>]
 ```
 
 First run downloads the model (cached under `~/.cache/huggingface` afterwards).
