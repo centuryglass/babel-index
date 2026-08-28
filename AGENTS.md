@@ -28,7 +28,7 @@ search UI and linear tile list.
 
 ```sh
 npm run demo                       # http://localhost:5173, against assets/corpus-sample/
-npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--port 5173] [--config config.json]
+npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--port 5173] [--config config.json] [--base-path /babel-index/]
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run lint                       # config in eslint.config.js
@@ -89,6 +89,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `search-cache.ts`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
   * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
+  * `base-path.ts`: Normalizes `--base-path`, for a subpath deployment behind
+                    a prefix-stripping reverse proxy (`server-nginx.conf`)
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
@@ -584,6 +586,44 @@ code, not a standing invariant.
   `tiles.js` stamps entries with `beginFrame()`'s counter and won't evict
   anything from the current or previous frame — the render loop must call
   `beginFrame()` once per frame for that to mean anything.
+
+### Deployment and the base path
+
+- **`--base-path` does not change how Express routes anything.** Every route
+  in `app.ts` is mounted at its normal unprefixed path regardless of the
+  flag. What makes a subpath deployment (`https://centuryglass.us/babel-index/`)
+  work is `server-nginx.conf`'s `location /babel-index/ { proxy_pass
+  http://localhost:5173/; }` — the trailing slash on both sides strips the
+  prefix before the request reaches this process, so from Express's point of
+  view every request already looks like it arrived at `/`. Adding a second,
+  Express-side mount at the same prefix would double-strip and 404 everything.
+- **Every url this server hands the browser is RELATIVE, and that is the
+  actual fix.** A root-absolute url (`/bundle.js`, `/api/manifest`,
+  `/images/foo.jpg`) resolves against the true origin root — one level above
+  the subpath — and never reaches the proxy block that would have stripped
+  it. `scan.ts`'s `IMAGES_BASE`/`SHARED_BASE` (`images`, `shared`, no leading
+  slash) and the two client-side `fetch()` calls (`main.jsx`, `useSearch.js`)
+  are relative for exactly this reason; a new one added with a leading slash
+  is a subpath regression even though it works fine at the root deployment
+  this app has always defaulted to.
+- **`<base href>` is what makes a relative url mean the right thing**, and it
+  has to land before anything that uses one — `app.ts` injects it
+  immediately after `<head>`. `base-path.ts`'s `normalizeBasePath` is the one
+  place the flag's leading/trailing slash gets decided; every consumer reads
+  its output rather than re-deriving its own idea of what `--base-path` looks
+  like normalized.
+- **A bare visit to the subpath must redirect to add the trailing slash.**
+  `server-nginx.conf`'s `location = /babel-index { return 301
+  .../babel-index/; }` exists because a relative url resolves against the
+  last `/`-terminated segment of the CURRENT document location, not against
+  `<base href>`, until the page has actually loaded and set it — the redirect
+  is what guarantees the browser is at a trailing-slash URL before that first
+  load even starts.
+- **Testing this locally without the proxy in front is testing the wrong
+  thing.** Hitting `http://localhost:5173/` directly with `--base-path` set
+  serves a page whose `<base href>` points at a prefix Express never mounted,
+  so every relative fetch 404s — that is expected, not a regression to chase;
+  the flag is meaningless without the reverse proxy that strips it.
 
 ### The catalog, and the two modes
 

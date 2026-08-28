@@ -109,7 +109,7 @@ export function useSearch({
 
     let res;
     try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
+      const response = await fetch(`api/search?q=${encodeURIComponent(term)}`);
       // fetch only rejects on a network failure; a 500 arrives as an ordinary
       // response whose body is not the JSON this expects.
       if (!response.ok) throw new Error(`the library answered ${response.status}`);

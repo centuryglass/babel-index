@@ -10,6 +10,7 @@ import { availableParallelism } from 'node:os';
 import express, { type Express, type Response } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
+import { normalizeBasePath } from './base-path.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
 
@@ -30,10 +31,13 @@ const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
 // auto-reconnect then re-opens it, and `onopen` after a prior error is
 // indistinguishable from "the server just came back", which is exactly the
 // signal we want.
-const LIVE_RELOAD_TAG = '<script src="/__live-reload.js"></script>';
+// Relative, like every other url this file hands the browser (see
+// base-path.ts) - resolved against the `<base href>` injected into
+// index.html below, so watch mode works the same under a subpath as at root.
+const LIVE_RELOAD_TAG = '<script src="__live-reload.js"></script>';
 const LIVE_RELOAD_CLIENT = `(function () {
   let sawError = false;
-  const es = new EventSource('/api/live-reload');
+  const es = new EventSource('api/live-reload');
   es.onmessage = () => location.reload();
   es.onerror = () => { sawError = true; };
   es.onopen = () => { if (sawError) location.reload(); };
@@ -64,6 +68,11 @@ interface CreateAppOptions {
   /** dev convenience: serve the live-reload client and expose
    *  `app.locals.broadcastReload` for a rebuild to call */
   watch?: boolean;
+  /** where the app is reverse-proxied to, e.g. '/babel-index/' (default '/').
+   *  Every route below stays mounted at its own unprefixed path - see
+   *  base-path.ts - this only sets the `<base href>` the served HTML carries,
+   *  so the browser resolves this file's relative urls under the subpath. */
+  basePath?: string;
 }
 
 /** Build the app. */
@@ -77,8 +86,10 @@ export function createApp({
   getBundleJs,
   readIndexHtml,
   watch = false,
+  basePath = '/',
 }: CreateAppOptions): Express {
   const app = express();
+  const base = normalizeBasePath(basePath);
 
   // Config rides on the manifest rather than getting an endpoint of its own:
   // the client already blocks on this fetch before it can render, and a second
@@ -166,6 +177,10 @@ export function createApp({
     app.get('/', async (_req, res, next) => {
       try {
         let html = await readIndexHtml();
+        // Must land before any relative url the page itself contains
+        // (bundle.js's script tag, any future stylesheet/icon link) - `<base
+        // href>` only affects resolution for markup that follows it.
+        html = html.replace('<head>', `<head>\n    <base href="${base}">`);
         if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
         res.type('html').send(html);
       } catch (err) {
