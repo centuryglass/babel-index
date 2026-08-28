@@ -20,8 +20,9 @@
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import sharp from 'sharp';
-import { LEVELS } from '../web/src/lib/pyramid.js';
+import { LEVELS, SHEETS } from '../web/src/lib/pyramid.js';
 import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes } from './mips.mjs';
+import { writeSheets } from './sheets.ts';
 
 const argv = parseArgs(process.argv.slice(2));
 const imagesDir = resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
@@ -86,6 +87,26 @@ for (const file of files) {
 }
 
 console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across ${plan.length} levels\n`);
+
+// Pack the coarse levels into shared sheets so a scroll session at that zoom
+// needs a handful of requests instead of one per room (see SHEETS's docblock
+// in packages/web/src/lib/pyramid.js for why this exists and which levels).
+const sheetSteps = plan.filter((step) => step.level >= SHEETS.fromLevel);
+if (sheetSteps.length) {
+  console.log(`  packing ${sheetSteps.length} level(s) into ${SHEETS.roomsPerSheet}-room sheets ...\n`);
+  for (const step of sheetSteps) {
+    const result = await writeSheets({
+      levelDir: join(outDir, step.dir),
+      files,
+      tileSize: { w: step.w, h: step.h },
+      quality,
+    });
+    console.log(
+      `    level ${step.level}  ${result.sheetCount} sheet(s), ${result.written} written, ${result.cached} unchanged`
+    );
+  }
+  console.log('');
+}
 
 // Recorded alongside the keyword/story sidecar so that once the corpus is
 // hosted, a local regeneration's metadata.json can be diffed against the last
