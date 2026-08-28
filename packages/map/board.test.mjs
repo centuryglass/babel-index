@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLayout, shuffledOrder } from './ordering.js';
-import { buildRearrangement, CENTER, GENERIC } from './board.js';
-import { planMoves, applyMove } from './illusion.js';
+import { createLayout, shuffledOrder } from './ordering.ts';
+import { buildRearrangement, CENTER, GENERIC } from './board.ts';
+import { planMoves, applyMove } from './illusion.ts';
 
 const ASPECT = 0.75; // the 4:3 tile's cell
 const VIEW = { x0: -4, y0: -3, x1: 5, y1: 4 }; // ~1920x1080 at the default zoom

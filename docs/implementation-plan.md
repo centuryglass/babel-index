@@ -88,14 +88,17 @@ serve as completed task history.
   (`packages/config/config.ts`), `Move`/`Rearrangement`
   (`packages/map/moves.ts`), and `SearchResult` (`packages/map/searchResult.ts`,
   `rankHybrid`'s return shape plus `useSearch.js`'s `result` state) - are now
-  typed, alongside `RoomMeta` (`packages/map/metadata.js`) and `MapLayout`
-  (`packages/map/ordering.js`) as JSDoc typedefs. `packages/server/port.ts`
-  proved out the real-module conversion path (`build/`'s Node loader hook).
-  Application logic converts opportunistically, not on a schedule; the
-  deliberately loose shapes called out in AGENTS.md (metadata sidecar
-  parsing, `center.js`'s `RUNS`, the animation state in `slide.js`/`camera.js`)
-  are the ones to leave for last, once there's a real type worth writing for
-  them.
+  typed. `packages/server/port.ts` proved out the real-module conversion path
+  (`build/`'s Node loader hook); `packages/server` is now fully converted, and
+  so is `packages/map` except for the two files below. `ordering.js`,
+  `board.js`, `illusion.js` and `describe.js` converted to `.ts` alongside
+  that package's existing type contracts, with `MapLayout` now a real
+  interface (`ordering.ts`) rather than a JSDoc typedef. Application logic
+  converts opportunistically, not on a schedule; the deliberately loose
+  shapes called out in AGENTS.md (`metadata.js`'s sidecar parsing, `scoring.js`'s
+  duck-typed ranking arrays, `center.js`'s `RUNS`, the animation state in
+  `slide.js`/`camera.js`) are the ones to leave for last, once there's a real
+  type worth writing for them.
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.
 - Fonts and text rendering are unpolished, try some alternatives. The

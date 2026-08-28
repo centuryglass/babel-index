@@ -16,7 +16,7 @@ import {
   storyScore,
   tokenise,
 } from './scoring.js';
-import { CERTAINTY_FLOOR } from './ordering.js';
+import { CERTAINTY_FLOOR } from './ordering.ts';
 import { DEFAULTS } from '../config/config.ts';
 
 const WEIGHTS = DEFAULTS.search.weights;

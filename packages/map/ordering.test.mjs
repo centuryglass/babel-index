@@ -9,7 +9,7 @@ import {
   isContentSlot,
   rankByEmbedding,
   shuffledOrder,
-} from './ordering.js';
+} from './ordering.ts';
 
 test('slot density tracks contentRatio', () => {
   for (const ratio of [0.05, 0.2, 0.5]) {

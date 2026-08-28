@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planMoves, applyMove, normaliseDistance } from './illusion.js';
+import { planMoves, applyMove, normaliseDistance } from './illusion.ts';
 
 /**
  * The verifier is deliberately a second implementation.
