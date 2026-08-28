@@ -69,6 +69,21 @@ The hash compared is the uploaded file's own bytes, not the source-image hash
 re-encoded at a different JPEG quality, which shares its source hash with the
 old level but isn't the same bytes.
 
+A matching hash alone doesn't prove the object is still in the bucket - the
+manifest only records what a past run *believed* it wrote, and a manual
+delete or any other out-of-band loss would otherwise read as "unchanged"
+forever. Every run also lists the bucket (scoped to this corpus's prefix and
+to `shared/`) and re-uploads any key missing from that listing regardless of
+its recorded hash.
+
 The pure decision logic (which files make up a corpus upload, and which of
 those are new/changed) lives in `lib.ts`, tested without any real corpus or
 bucket in `lib.test.mjs`.
+
+## Concurrency
+
+Hashing and uploading both run up to 16 files at once, through the same
+bounded-concurrency `createLimiter` used for CLIP inference
+(`packages/server/search-cache.ts`) - each file is a separate network or disk
+round trip, and running them one at a time pays full latency per file for no
+reason.
