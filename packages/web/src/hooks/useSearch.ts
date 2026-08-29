@@ -32,7 +32,7 @@ import {
   tokenise,
   keywordMatchRanges,
   storyMatchRanges,
-} from '../../../map/scoring.js';
+} from '../../../map/scoring.ts';
 import type { Config } from '../../../config/config.ts';
 import type { SearchIndex, SearchResult, RankSignals, MatchRange } from '../../../map/searchResult.ts';
 
@@ -176,7 +176,7 @@ export function useSearch({
   //
   // Bound rather than called with the query at each site: every consumer would
   // otherwise have to remember which of the two rules applies to the text it is
-  // holding, and the whole point of `scoring.js` owning them is that the answer
+  // holding, and the whole point of `scoring.ts` owning them is that the answer
   // is decided once. A keyword matches by substring, a story word by prefix;
   // handing out two functions named for the thing they mark keeps that from
   // being a decision anyone makes twice.

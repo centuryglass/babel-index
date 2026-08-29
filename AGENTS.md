@@ -160,7 +160,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
                ...), type-only, shared by `illusion.ts`, `board.ts` and
                `packages/web/src/lib/slide.ts`
-  * `scoring.js`: Find room rank and match certainty for a search, searh tokenization
+  * `scoring.ts`: Find room rank and match certainty for a search, searh tokenization
   * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
   * `board.ts`: Sliding animation illusion's board data structure
   * `describe.ts`: Build screen reader messages
@@ -262,10 +262,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
   Good early candidates: files with little duck-typing and a fixed shape
   (`port.ts` was one - one function, two primitive params). Defer files whose
-  data is *deliberately* loose - `scoring.js`'s duck-typed ranking arrays are
-  the standing example - until there's a real type worth writing that doesn't
-  just paper over the looseness with `any` or a lying assertion. A strict type
-  that fights the code's actual tolerance is worse than an honest
+  data is *deliberately* loose until there's a real type worth writing that
+  doesn't just paper over the looseness with `any` or a lying assertion. A
+  strict type that fights the code's actual tolerance is worse than an honest
   `object`/JSDoc. (`metadata.js`'s sidecar parsing looked like one of these
   until the keyword shape was tightened to `{text, type}` only - dropping the
   plain-string form it used to also accept - at which point `RoomMeta` was
@@ -273,7 +272,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `RUNS` and `slide.ts`'s animation state turned out to be the same story:
   runtime-*computed*, from a traced SVG and a planned move list respectively,
   but not runtime-*loose* - every field they carry is fixed by the code that
-  builds them, so both converted cleanly once actually looked at.)
+  builds them, so both converted cleanly once actually looked at. `scoring.ts`
+  was the same story again, and was for a while this bullet's standing example
+  of deliberate looseness: `rankHybrid`'s `scored` rows, `breakdown`, `ranks`
+  and `ties` only looked duck-typed because nothing had named them, and
+  `searchResult.ts` already named every shape crossing the module's boundary
+  before the module itself converted.)
 
   `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local signal, not
   yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't
@@ -678,7 +682,7 @@ code, not a standing invariant.
   than the budget mounts, so a tall display cannot scroll into a spacer.
 - **Highlighting mirrors the two match rules, including their asymmetry.** A
   keyword matches by SUBSTRING and a story word by PREFIX, so there are two
-  range finders in `scoring.js` beside the two scorers, taking the same folded
+  range finders in `scoring.ts` beside the two scorers, taking the same folded
   query and tokens the ranking used - a token dropped as a stopword or for being
   too short cannot mark, because it did not score. Do not re-derive "what
   matched" in a component; the drift would be silent.

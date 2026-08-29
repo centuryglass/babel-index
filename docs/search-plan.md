@@ -14,7 +14,7 @@ restatement; the point here is the "Now" and the "Steps".
 per room, a soft-OR of three absolute readings, story read by *absolute matched
 length* and exact tags scaled by *query coverage*.
 
-**Landed:** `matchCertainty` in `scoring.js` takes `{tagCoverage, storyLongChars,
+**Landed:** `matchCertainty` in `scoring.ts` takes `{tagCoverage, storyLongChars,
 storyMatched, cosine}` and computes the signed `[-1, 1]` coverage-scaled soft-OR
 the spec names — `tagCoverage` and `storyLongBonus01(storyLongChars)` (shared
 with §2's `storyLong` ranking bonus) replace the old ratio-only reads, and the
@@ -29,7 +29,7 @@ L=2`, chosen so every ranking inequality holds by construction.
 
 **Landed:** `config.search.weights` is now the five-key shape
 `{tagExact, tagPartial, story, storyLong, clip}` at the spec's defaults
-(`config.ts`), and `rankHybrid` (`scoring.js`) sums exactly those five terms —
+(`config.ts`), and `rankHybrid` (`scoring.ts`) sums exactly those five terms —
 `tagExact` count, `tagPartialSum` clamped through `TAG_PARTIAL_SATURATION`,
 `story`/`storyLong` off the shared `storyLongBonus01` ramp, and `clip`. Tests in
 `scoring.test.mjs` assert the spec's cross-signal inequalities directly against
@@ -45,7 +45,7 @@ and a quoted phrase matches the story as a contiguous run too.
 `sequence` is the lemmatised token *sequence* with `{lemma, start, end}` spans
 into the folded story (still built once at load), `set` is the same lemmas for
 `storyScore`'s O(1) ratio lookup (unchanged behaviour, just reading the new
-shape). Two new pure functions in `scoring.js` measure what `storyLongChars`
+shape). Two new pure functions in `scoring.ts` measure what `storyLongChars`
 needs: `longestMatchRun(sequence, matchLemmas)` (unordered — the longest run of
 *consecutive story tokens* whose lemma is in the query's lemma set) and
 `storyPhraseRun(sequence, phraseLemmas)` (ordered — a quoted phrase's words
@@ -60,7 +60,7 @@ a quoted term story credit against its lemmatised `words` from `parseQuery`.
 **Ideal** (`search_rules.md` "The parsed query"): a query is an ordered list of
 terms, a quoted phrase being one term matched whole.
 
-**Landed:** `parseQuery(raw)` in `scoring.js` produces the `Term[]`/`ParsedQuery`
+**Landed:** `parseQuery(raw)` in `scoring.ts` produces the `Term[]`/`ParsedQuery`
 shape the spec defines (types in `searchResult.ts`) — quoted spans found first,
 the remainder split on whitespace, `words` set per the spec (`[folded]` for an
 unquoted term, `tokenise(phrase)` for a quoted one). `classifyTagTerm(term,
@@ -81,7 +81,7 @@ distribution is where CLIP has *no opinion*; above it, rising confidence the
 image matches; below it, rising confidence it does *not*. Displayed as a signed
 percentage, "N% certain the image content does not match" for the negative side.
 
-**Landed:** `CLIP_CERTAINTY` (`scoring.js`) is now the three-anchor
+**Landed:** `CLIP_CERTAINTY` (`scoring.ts`) is now the three-anchor
 `{centre, high, low}` shape, and `signedClipCertainty` is a genuine monotone
 signed curve — two linear segments meeting at `centre`, `0` there, `+1` at
 `high`, `−1` at `low` — replacing the old two-point `clamp01` band that could
@@ -112,7 +112,7 @@ compositional coincidence) and `--nonsense` with nine keysmash queries as a
 validation-only check. `low` is `irrelevant.ceiling` (the median p50 across
 those concepts' own best match, ≈0.171, the same `summarizeUniversal` math
 `--universal` uses for `high`) — dropped into `CLIP_CERTAINTY.low`
-(`packages/map/scoring.js`), which `config.ts`'s `clipLow` default reads
+(`packages/map/scoring.ts`), which `config.ts`'s `clipLow` default reads
 straight off. `--nonsense` came back at mean 0.212 against `centre`'s 0.205
 (drift 0.008, well inside noise), so `centre` needed no re-read.
 
@@ -132,7 +132,7 @@ reads as more confidently wrong than noise does, not merely as absent signal.
 **Ideal** (`search_rules.md` "Data structures" §4, reporting assertions): every
 room readable on each axis alone — "#4 by tag, tied with 2 others".
 
-**Landed:** `rankHybrid` (`scoring.js`) now returns `ranks`/`ties`, each
+**Landed:** `rankHybrid` (`scoring.ts`) now returns `ranks`/`ties`, each
 `{tag, story, clip}`, parallel to `order` like `breakdown` - three more
 independent sorts of the numbers already computed (`tagExact`/`tagPartialSum`
 for tag, `storyRatio`/`storyLongChars` for story, raw `cosine` for clip), run
