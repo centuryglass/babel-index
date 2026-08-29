@@ -4,7 +4,7 @@
  * THIS FILE IS THE TUNING SURFACE. Every number that decides what gets fetched,
  * what gets held and what gets thrown away is a constant at the top of this
  * file, with the arithmetic that justifies it written next to it. Nothing else
- * in the codebase should contain a pyramid number - `tiles.js` reads the ladder
+ * in the codebase should contain a pyramid number - `tiles.ts` reads the ladder
  * and the budgets, the render loop reads pickLevel() and PREFETCH. Tune here.
  *
  * The problem being solved: the map draws full-resolution images at every zoom,
@@ -106,7 +106,7 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
  * per-file level (below `SHEETS.fromLevel`) that is still literally "decoded
  * images held" - it is a ceiling, not a reservation; entries appear only as
  * cells are visited. For a sheet-packed level it counts cheap per-room
- * pointers `{sheetUrl, rect}` instead (see tiles.js) - the actual decoded
+ * pointers `{sheetUrl, rect}` instead (see tiles.ts) - the actual decoded
  * bytes for those levels are bounded separately by `SHEETS.cacheBudget`,
  * shared across every sheet-packed level, since one decoded sheet image now
  * serves hundreds of rooms. The table below states real decoded-byte cost
@@ -236,7 +236,7 @@ export const SHEETS: SheetsConfig = {
   rows: 16,
   /**
    * Decoded sheet images held at once, across every sheet-packed level
-   * combined (`tiles.js`'s `sheetImages`, a budget on top of - not instead
+   * combined (`tiles.ts`'s `sheetImages`, a budget on top of - not instead
    * of - the per-level room-pointer budgets in `LEVELS`). A corpus of N
    * rooms has `ceil(N / roomsPerSheet)` sheets per sheet-packed level, so
    * once this is at least (sheet-packed levels) x (sheets per level), the

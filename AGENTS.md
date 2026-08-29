@@ -142,7 +142,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `picking.ts`: Defines the roomAtPoint function
     * `catalog.js`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
-    * `tiles.js`: Load, cache, and unload room images
+    * `tiles.ts`: Load, cache, and unload room images
     * `rooms.js`: Map room data in the manifest to image URLs
     * `persist.js`: Persistent data management (search history, pagination settings)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
@@ -584,12 +584,12 @@ code, not a standing invariant.
 - **The configured range rides on the camera as `limits`**, same as `aspect` —
   rebuild a camera instead of spreading it and the range is lost mid-gesture.
 - **Every pyramid number (tile dimensions, ladder, cache budgets, prefetch
-  ring) lives in `packages/web/src/lib/pyramid.ts`.** `tiles.js` and the render
+  ring) lives in `packages/web/src/lib/pyramid.ts`.** `tiles.ts` and the render
   loop read the policy, they don't restate it. `BASE_TILE` is the only place
   size/shape is stated — don't assume square or compute a size from a literal.
 - **Tile eviction is frame-aware.** The renderer walks cells row by row, so a
   plain LRU would evict the top of the screen to make room for its own bottom.
-  `tiles.js` stamps entries with `beginFrame()`'s counter and won't evict
+  `tiles.ts` stamps entries with `beginFrame()`'s counter and won't evict
   anything from the current or previous frame — the render loop must call
   `beginFrame()` once per frame for that to mean anything.
 

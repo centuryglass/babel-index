@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTileCache, CENTER } from './tiles.js';
+import { createTileCache, CENTER } from './tiles.ts';
 import { createPyramid } from './pyramid.ts';
 
 /**

@@ -58,7 +58,7 @@
  */
 import { PYRAMID } from './pyramid.ts';
 import { pxPerCell } from './camera.js';
-import { CENTER, genericId } from './tiles.js';
+import { CENTER, genericId } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 
 /**
