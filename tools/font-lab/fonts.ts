@@ -13,9 +13,16 @@
  * better a touch heavier - tiny light strokes on a bright spine tend to vanish.
  *
  * The system sans baseline (what the app ships today) needs no download; it is
- * declared in variants.mjs by family string alone.
+ * declared in variants.ts by family string alone.
  */
-export const FONTS = [
+export interface FontEntry {
+  slug: string;
+  family: string;
+  /** Weights to fetch; DEFAULT_WEIGHTS when absent. */
+  weights?: number[];
+}
+
+export const FONTS: FontEntry[] = [
   // The six the brief asked for.
   { slug: 'literata', family: 'Literata' },
   { slug: 'libre-baskerville', family: 'Libre Baskerville', weights: [400, 700] },

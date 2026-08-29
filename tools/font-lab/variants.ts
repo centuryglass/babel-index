@@ -15,11 +15,44 @@
  * fields mirror composeSpines in packages/web/src/center.js one-for-one so a
  * winner can be ported back by copying numbers, not translating them.
  */
-import { FONTS } from './fonts.mjs';
+import { FONTS } from './fonts.ts';
+import type { FontEntry } from './fonts.ts';
+
+export interface FaceRef {
+  family: string;
+  weight: number;
+}
+
+/** Mirrors composeSpines' styling options in packages/web/src/lib/center.ts one-for-one. */
+export interface SpineStyle {
+  weight: number;
+  style: string;
+  sizeScale: number; //   fontPx = clamp(minPx, maxPx, floor(spineWidthPx * sizeScale))
+  minPx: number;
+  maxPx: number;
+  ink: string; //         font colour; any rgba
+  halo: string | null; // dark outline; null disables it
+  haloScale: number; //   lineWidth = max(haloFloor ?? 1.5, fontPx * haloScale)
+  haloFloor?: number;
+  letterSpacing: number; // px, added between glyphs
+  caps: boolean; //       ALL CAPS the titles
+  backdrop: boolean; //   draw a rounded black plate per book instead of the outline
+  backdropColor: string; // the plate's fill (any rgba)
+}
+
+/** One labelled composite the renderer draws. */
+export interface Variant extends SpineStyle {
+  id: string;
+  group: string;
+  label: string;
+  sub: string;
+  fontFamily: string;
+  face: FaceRef | null;
+}
 
 // The app's current spine styling, from center.js. Every variant starts here and
 // overrides a subset, so "baseline" is stated once.
-const BASE = {
+const BASE: SpineStyle = {
   weight: 400,
   style: 'normal',
   sizeScale: 0.82, //   fontPx = clamp(minPx, maxPx, floor(spineWidthPx * sizeScale))
@@ -38,7 +71,7 @@ const BASE = {
 const SERIF = 'Georgia, serif';
 
 /** The font sweep: one composite per candidate, plus the shipping baseline. */
-const fontSweep = [
+const fontSweep: Variant[] = [
   {
     id: 'baseline-system-sans',
     group: 'fonts',
@@ -65,19 +98,26 @@ const fontSweep = [
 // set-07) want a non-400 weight; most faces have 600 downloaded (DEFAULT_WEIGHTS),
 // but a few (Libre Baskerville, PT Serif, Domine) only ship 400/700, so the bold
 // weight is read off the font's own `weights` list rather than assumed.
-function boldWeight(weights) {
+function boldWeight(weights: number[]): number {
   if (weights.includes(600)) return 600;
   return weights.find((w) => w !== 400) ?? 400;
 }
 
-const settingsFonts = [
+interface SweepFont {
+  slug: string;
+  family: string | null;
+  fontFamily: string;
+  bold: number;
+}
+
+const settingsFonts: SweepFont[] = [
   {
     slug: 'baseline-system-sans',
     family: null,
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     bold: 600,
   },
-  ...FONTS.map((f) => ({
+  ...FONTS.map((f: FontEntry) => ({
     slug: f.slug,
     family: f.family,
     fontFamily: `'${f.family}', ${SERIF}`,
@@ -86,8 +126,8 @@ const settingsFonts = [
 ];
 
 /** One-axis-at-a-time variations off the baseline, for a single sweep face. */
-function buildSettingsSweep(sf) {
-  const face = (weight) => (sf.family ? { family: sf.family, weight } : null);
+function buildSettingsSweep(sf: SweepFont): Variant[] {
+  const face = (weight: number): FaceRef | null => (sf.family ? { family: sf.family, weight } : null);
   const label = sf.family ?? 'System sans';
   return [
     {
@@ -202,8 +242,8 @@ const settingsSweep = settingsFonts.flatMap(buildSettingsSweep);
 export const VARIANTS = [...fontSweep, ...settingsSweep];
 
 /** Every (family, weight) the page must load as a FontFace before rendering. */
-export const REQUIRED_FACES = (() => {
-  const seen = new Map();
+export const REQUIRED_FACES: FaceRef[] = (() => {
+  const seen = new Map<string, FaceRef>();
   for (const v of VARIANTS) {
     if (!v.face) continue;
     const key = `${v.face.family}-${v.face.weight}`;

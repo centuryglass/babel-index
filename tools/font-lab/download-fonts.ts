@@ -10,7 +10,7 @@
 import { mkdir, writeFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { FONTS, DEFAULT_WEIGHTS } from './fonts.mjs';
+import { FONTS, DEFAULT_WEIGHTS } from './fonts.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = join(HERE, 'fonts');
@@ -19,7 +19,7 @@ const UA =
   '(KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 /** Pull the latin-subset woff2 url out of a CSS2 API response. */
-function latinWoff2(css) {
+function latinWoff2(css: string): string {
   // Blocks are `/* subset */\n@font-face { ... }`. Grab each, keep the latin one.
   const blocks = css.split('/*').map((b) => '/*' + b);
   const latin = blocks.find((b) => b.startsWith('/* latin */'));
@@ -29,7 +29,7 @@ function latinWoff2(css) {
   return m[1];
 }
 
-async function exists(p) {
+async function exists(p: string): Promise<boolean> {
   try {
     await access(p);
     return true;
@@ -38,7 +38,7 @@ async function exists(p) {
   }
 }
 
-async function fetchFace(family, weight) {
+async function fetchFace(family: string, weight: number): Promise<Buffer> {
   const fam = family.replace(/ /g, '+');
   const url = `https://fonts.googleapis.com/css2?family=${fam}:wght@${weight}`;
   const res = await fetch(url, { headers: { 'User-Agent': UA } });
@@ -64,7 +64,7 @@ async function main() {
         await writeFile(out, buf);
         console.log(`ok    ${font.slug}-${weight}  (${(buf.length / 1024).toFixed(0)} KB)`);
       } catch (err) {
-        console.error(`FAIL  ${font.slug}-${weight}: ${err.message}`);
+        console.error(`FAIL  ${font.slug}-${weight}: ${err instanceof Error ? err.message : err}`);
       }
     }
   }
