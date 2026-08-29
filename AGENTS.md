@@ -107,8 +107,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `MapView.jsx`: The 2D map canvas view
     * `CatalogView.jsx`: Alternate catalog list view
     * `RoomCard.tsx`: RoomDetails popup, shown on right-click/long press
-    * `RoomOverlay.jsx`: Modal showing full-size room image along with story content
-    * `RoomDetails.jsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
+    * `RoomOverlay.tsx`: Modal showing full-size room image along with story content
+    * `RoomDetails.tsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.tsx`: The "READ ME" book's dialog
@@ -490,7 +490,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   Unlike `metadata.json` it has no per-room coverage to report — `scan.ts`
   only counts its keys (`TagLinksInfo.count`). It is hand-edited, not
   generated, and optional exactly like the sidecar: a corpus without one just
-  renders chips with no "more about this" link. `RoomDetails.jsx` takes it as
+  renders chips with no "more about this" link. `RoomDetails.tsx` takes it as
   a `tagLinks` prop rather than importing it — see `useCorpus.js`.
 
 ### The reorder animation

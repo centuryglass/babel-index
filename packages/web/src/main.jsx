@@ -5,7 +5,7 @@ import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../ma
 import { RoomCard } from './components/RoomCard.tsx';
 import { MapView } from './components/MapView.jsx';
 import { CatalogView } from './components/CatalogView.jsx';
-import { RoomOverlay } from './components/RoomOverlay.jsx';
+import { RoomOverlay } from './components/RoomOverlay.tsx';
 import { HelpDialog } from './components/HelpDialog.tsx';
 import { alphabeticalOrder } from './lib/catalog.ts';
 import { load, save, clear, KEYS } from './lib/persist.ts';
