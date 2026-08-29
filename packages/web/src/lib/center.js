@@ -37,7 +37,7 @@
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
-import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.js';
+import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.ts';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 

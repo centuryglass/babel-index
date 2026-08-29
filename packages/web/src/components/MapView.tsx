@@ -4,7 +4,7 @@
  * A presenter, not an owner: every piece of state it renders lives in
  * `Library`, because the catalog reads the same state and two copies would be
  * two chances to disagree. What is here is the markup and nothing else - the
- * frame loop is `useMapRenderer.js`, the camera is `useMapCamera.js`, and the
+ * frame loop is `useMapRenderer.js`, the camera is `useMapCamera.ts`, and the
  * search, the ranking and the rearrangement are all still in `main.jsx`.
  *
  * ### `display: contents`, and never unmounted

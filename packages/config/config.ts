@@ -36,7 +36,7 @@
  * be exercised at any limits without a disk or a server. `load.ts` is the part
  * that reads a file.
  */
-import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
 import { CERTAINTY_FLOOR } from '../map/ordering.ts';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
@@ -180,7 +180,7 @@ export const DEFAULTS: Defaults = {
      * as a glide rather than a snap.
      *
      * Zero means arrive at once, the same `prefers-reduced-motion` escape hatch
-     * `flightMs` has - and for the same reason, since `useMapCamera.js` routes
+     * `flightMs` has - and for the same reason, since `useMapCamera.ts` routes
      * every keyboard move through `flyTo` with this as the duration override.
      */
     keyboardMoveMs: 140,

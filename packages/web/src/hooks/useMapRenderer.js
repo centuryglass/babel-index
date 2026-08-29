@@ -1,7 +1,7 @@
 /**
  * The map's frame loop: one effect, rebuilt whenever what it draws changes.
  *
- * A hook in its own file for the same reason `useMapCamera.js` is one - it owns
+ * A hook in its own file for the same reason `useMapCamera.ts` is one - it owns
  * a listener lifetime and a cancellable animation frame, and reading `main.jsx`
  * should not mean reading a hundred and forty lines of canvas plumbing to find
  * the state everything else shares.
@@ -23,7 +23,7 @@
  *     interrupt is not a map.
  */
 import { useEffect } from 'react';
-import { cursorCell } from '../lib/camera.js';
+import { cursorCell } from '../lib/camera.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 
 /**

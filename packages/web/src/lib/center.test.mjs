@@ -22,7 +22,7 @@ import {
   BOOK_RECTS,
   minZoomForSearchBox,
 } from './center.js';
-import { CELL_ASPECT, fitZoom } from './camera.js';
+import { CELL_ASPECT, fitZoom } from './camera.ts';
 
 const GEO = layout({ width: 1, height: 1 });
 
