@@ -397,6 +397,7 @@ test('sheetBudget evicts the least-recently-used sheet once exceeded', () => {
     pyramid: LADDER,
     createImage: images.createImage,
     sheetBudget: 1,
+    neverEvictSheetLevels: [], // isolate ordinary budget eviction from the coarsest-level exemption below
   });
   cache.get(0, 2); // sheet 0
   images.settleAll();
@@ -415,6 +416,7 @@ test('a sheet still in use this frame survives budget pressure', () => {
     pyramid: LADDER,
     createImage: images.createImage,
     sheetBudget: 1,
+    neverEvictSheetLevels: [], // isolate frame protection from the coarsest-level exemption below
   });
   cache.beginFrame();
   cache.get(0, 2); // sheet 0
@@ -443,6 +445,79 @@ test('prefetching many rooms from one sheet costs one concurrency slot, not one 
 
   images.settleAll();
   for (let id = 0; id < 4; id++) assert.notEqual(cache.get(id, 2), null, `room ${id} never resolved`);
+});
+
+test('the coarsest level’s sheets are never evicted, even under heavy budget pressure', () => {
+  // A pan at the most-zoomed-out level crosses the whole map in a couple of
+  // gestures; the whole level's sheets are few and cheap, so they should
+  // cache in full and stay, rather than being warmed and dropped repeatedly.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4), // level 2 is LADDER's coarsest - the default exemption applies
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 1, // would evict everything down to one sheet, if not exempt
+  });
+  cache.get(0, 2); // sheet 0
+  images.settleAll();
+  cache.get(4, 2); // sheet 1 - would evict sheet 0 under an ordinary budget of 1
+  images.settleAll();
+  cache.get(8, 2); // sheet 2
+  images.settleAll();
+
+  assert.equal(cache.sheetCount(), 3, 'every sheet at the coarsest level stays resident');
+  for (const [id, url] of [[0, '/sheet-l2-0.jpg'], [4, '/sheet-l2-1.jpg'], [8, '/sheet-l2-2.jpg']]) {
+    assert.notEqual(cache.get(id, 2), null, `room ${id} must still resolve`);
+    assert.equal(images.count(url), 1, `${url} must not have been refetched`);
+  }
+});
+
+test('an ordinary sheet-packed level (not the coarsest) still evicts under pressure', () => {
+  // The exemption is specific to the coarsest level, not sheets in general -
+  // a middle sheet-packed level must still obey its budget.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(1, 4), // level 1 is NOT LADDER's coarsest level (2 is)
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 1,
+  });
+  cache.get(0, 1); // sheet 0
+  images.settleAll();
+  cache.get(4, 1); // sheet 1 - evicts sheet 0 under a budget of 1
+  images.settleAll();
+
+  assert.equal(cache.sheetCount(), 1);
+  cache.get(0, 1);
+  assert.equal(images.count('/sheet-l1-0.jpg'), 2, 'the non-coarsest level must still evict');
+});
+
+test('sheetBudget evicts strictly oldest-first across more than two sheets', () => {
+  // A queue, not "evict whatever is over budget in whatever order" - three
+  // sheets touched in order, over a budget of two, must drop exactly the
+  // one nobody has touched since.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4),
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 2,
+    neverEvictSheetLevels: [],
+  });
+  cache.get(0, 2); // sheet 0 - oldest
+  images.settleAll();
+  cache.get(4, 2); // sheet 1
+  images.settleAll();
+  cache.get(8, 2); // sheet 2 - pushes sheet count to 3, over budget of 2
+
+  assert.equal(cache.sheetCount(), 2, 'exactly one sheet was evicted to get back to budget');
+  assert.equal(images.count('/sheet-l2-0.jpg'), 1, 'sheet 0 (oldest) was evicted, not refetched yet');
+  images.settleAll();
+  cache.get(0, 2); // now sheet 0 must be fetched again
+  assert.equal(images.count('/sheet-l2-0.jpg'), 2, 'the oldest sheet was the one dropped');
+  // The two more recently touched sheets survived untouched.
+  assert.equal(images.count('/sheet-l2-1.jpg'), 1);
+  assert.equal(images.count('/sheet-l2-2.jpg'), 1);
 });
 
 test('clear drops sheets too', () => {

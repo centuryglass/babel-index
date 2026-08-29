@@ -54,6 +54,15 @@
  * and `overBudget()` says by how much. Holding is the lesser evil; picking a
  * coarser level is the actual answer, and that is the renderer's job.
  *
+ * The coarsest level (`pyramid.fallbackLevel`) is a further exception, by
+ * default: its sheets, once loaded, are never evicted at all (see
+ * `neverEvictSheetLevels`). A pan at that zoom crosses the whole map in a
+ * couple of gestures - constantly warming and dropping sheets there would
+ * mean visibly thrashing rather than caching. The whole level's sheets are
+ * few and cheap (see SHEETS's docblock), so holding all of them forever,
+ * loaded lazily as each is first asked for, is strictly better than evicting
+ * any of them.
+ *
  * `createImage` exists so all of this can be tested without a DOM; the browser
  * never passes it.
  */
@@ -80,6 +89,8 @@ const QUEUE_LIMIT = 256;
  *        image if it is packed into one; null if that level does not exist
  * @param {object} [opts.pyramid]      the ladder and its budgets
  * @param {number} [opts.sheetBudget]  decoded sheet images held at once, across every sheet-packed level
+ * @param {number[]} [opts.neverEvictSheetLevels] sheet-packed levels whose sheets, once loaded,
+ *        are never evicted regardless of `sheetBudget` - defaults to just the coarsest level
  * @param {() => void} [opts.onLoad]   ask for a redraw
  * @param {number} [opts.concurrency]  in-flight prefetches allowed
  * @param {() => object} [opts.createImage]
@@ -88,6 +99,7 @@ export function createTileCache({
   locateTile,
   pyramid = PYRAMID,
   sheetBudget = SHEETS.cacheBudget,
+  neverEvictSheetLevels = [pyramid.fallbackLevel],
   onLoad,
   concurrency = PREFETCH.concurrency,
   createImage = () => new Image(),
@@ -96,8 +108,9 @@ export function createTileCache({
   // a sheet-backed entry is { sheetUrl, rect, lastUsed, frame } - its readiness
   // and image come from `sheetImages`, not from a state field of its own.
   const levels = new Map(pyramid.levels.map((l) => [l.level, new Map()]));
-  // url -> { img, state, lastUsed, frame }, shared across every entry backed by that sheet.
+  // url -> { img, level, state, lastUsed, frame }, shared across every entry backed by that sheet.
   const sheetImages = new Map();
+  const neverEvict = new Set(neverEvictSheetLevels);
   const pinned = new Set();
   const queue = [];
   // Urls with a fetch genuinely in flight right now, so many queued rooms that
@@ -137,7 +150,7 @@ export function createTileCache({
   }
 
   /** Register (or find) the shared decoded image for a sheet url. */
-  function requestSheet(url) {
+  function requestSheet(url, level) {
     const found = sheetImages.get(url);
     if (found) {
       found.lastUsed = ++clock;
@@ -145,7 +158,7 @@ export function createTileCache({
       return found;
     }
     const img = createImage();
-    const fresh = { img, state: 'loading', lastUsed: ++clock, frame };
+    const fresh = { img, level, state: 'loading', lastUsed: ++clock, frame };
     sheetImages.set(url, fresh);
     img.onload = () => {
       fresh.state = 'ready';
@@ -168,7 +181,7 @@ export function createTileCache({
     if (found) {
       found.lastUsed = ++clock;
       found.frame = frame;
-      if (found.rect) requestSheet(found.sheetUrl); // touches the sheet's own lastUsed/frame too
+      if (found.rect) requestSheet(found.sheetUrl, level); // touches the sheet's own lastUsed/frame too
       return entryReady(found) ? { img: entryImg(found), rect: found.rect } : null;
     }
 
@@ -181,7 +194,7 @@ export function createTileCache({
     if (!store) return null;
 
     if (loc.rect) {
-      const sheet = requestSheet(loc.url);
+      const sheet = requestSheet(loc.url, level);
       const fresh = { sheetUrl: loc.url, rect: loc.rect, lastUsed: ++clock, frame };
       store.set(id, fresh);
       evict(level);
@@ -326,12 +339,22 @@ export function createTileCache({
     for (const [id] of spare.slice(0, store.size - budget)) store.delete(id);
   }
 
+  /**
+   * A capacity-gated LRU, exactly like `evict()` for per-file entries: nothing
+   * is dropped just because it is off screen this frame - only once the total
+   * held exceeds `sheetBudget`, and then only the least-recently-used sheets
+   * among those not currently in use, oldest first, until back at budget.
+   * A level in `neverEvictSheetLevels` (the coarsest by default - see its
+   * docblock) is exempt entirely: once loaded, its sheets stay for the life
+   * of the cache, which is what makes zooming all the way out and panning
+   * freely there cost nothing after the first full pass.
+   */
   function evictSheets() {
     const budget = Math.max(1, Math.round(sheetBudget));
     if (sheetImages.size <= budget) return;
 
     const spare = [...sheetImages.entries()]
-      .filter(([, s]) => s.state !== 'loading' && !inUse(s))
+      .filter(([, s]) => !neverEvict.has(s.level) && s.state !== 'loading' && !inUse(s))
       .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
 
     for (const [url] of spare.slice(0, sheetImages.size - budget)) sheetImages.delete(url);

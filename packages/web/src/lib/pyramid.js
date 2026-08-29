@@ -140,9 +140,19 @@ export const HYSTERESIS = 0.15;
 /**
  * Rule 2, in numbers.
  *
- * `margin` is how many cells beyond the viewport edge to warm, so a pan has
- * somewhere to go. Two cells is roughly a third of a second of a brisk drag at
- * the zooms where cells are large, and cheap at the zooms where they are not.
+ * `margin` is the FLOOR on how many cells beyond the viewport edge to warm, so
+ * a pan always has somewhere to go even at the tightest zoom. Two cells is
+ * roughly a third of a second of a brisk drag at the zooms where cells are
+ * large, and cheap at the zooms where they are not.
+ *
+ * `marginRatio` is what actually governs the ring at anything but the closest
+ * zoom - see `marginFor()`. A fixed cell count is a shrinking fraction of the
+ * screen the further the camera zooms out (the same 2 cells is 20% of a
+ * 10-cell-wide screen but 0.1% of an 2000-cell-wide one), which is backwards:
+ * a fast pan at a coarse zoom crosses many more cells per gesture, exactly
+ * where warming further ahead is closest to free, because those levels are
+ * sheet-packed (see SHEETS) - most of a wider ring resolves to a sheet
+ * already resident rather than a new request.
  *
  * `concurrency` caps in-flight prefetches. Browsers allow ~6 connections per
  * host; leaving headroom is deliberate, because a prefetch that queues ahead of
@@ -155,6 +165,7 @@ export const HYSTERESIS = 0.15;
  */
 export const PREFETCH = {
   margin: 2,
+  marginRatio: 0.15,
   concurrency: 4,
   warmCoarser: true,
 };
@@ -376,14 +387,29 @@ export const {
 } = PYRAMID;
 
 /**
+ * How wide a ring to warm around a given viewport: the larger of the flat
+ * floor (`PREFETCH.margin`) and a fraction (`PREFETCH.marginRatio`) of the
+ * viewport's own cell span - so the ring grows with how far out the camera
+ * is, not just a fixed cell count. See `PREFETCH`'s docblock for why.
+ *
+ * @param {{x0: number, y0: number, x1: number, y1: number}} bounds inclusive
+ */
+export function marginFor({ x0, y0, x1, y1 }, { margin, marginRatio } = PREFETCH) {
+  const span = Math.max(x1 - x0 + 1, y1 - y0 + 1);
+  return Math.max(margin, Math.round(span * marginRatio));
+}
+
+/**
  * Rule 2: the cell rectangle to load, viewport plus margin.
  *
  * The renderer draws `bounds` and loads `prefetchBounds(bounds)`, with
  * everything outside `bounds` queued behind everything inside it. Cells, not
- * pixels, so this is independent of the tile's size and shape.
+ * pixels, so this is independent of the tile's size and shape. `margin`
+ * defaults to `marginFor(bounds)` rather than a flat constant - see its
+ * docblock.
  *
  * @param {{x0: number, y0: number, x1: number, y1: number}} bounds inclusive
  */
-export function prefetchBounds({ x0, y0, x1, y1 }, margin = PREFETCH.margin) {
+export function prefetchBounds({ x0, y0, x1, y1 }, margin = marginFor({ x0, y0, x1, y1 })) {
   return { x0: x0 - margin, y0: y0 - margin, x1: x1 + margin, y1: y1 + margin };
 }
