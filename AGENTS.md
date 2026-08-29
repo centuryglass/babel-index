@@ -128,7 +128,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                          hears about it, and every key over the map
     * `useCenterShelf.js`: The center room's bookshelf - titles, roving
                            tabindex focus, and what a tap or arrow key does
-    * `useModeTransition.js`: Switching between the map and catalog readings,
+    * `useModeTransition.ts`: Switching between the map and catalog readings,
                               the FLIP animation between them
     * `useRearrangement.js`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said

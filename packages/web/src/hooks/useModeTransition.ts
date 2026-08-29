@@ -11,38 +11,50 @@
  * says which mode is current, never whether `MapView` is in the tree.
  */
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { flipTransform, flipCss, rectOf } from '../lib/catalog.ts';
+import { flipTransform, flipCss, rectOf, type Rect } from '../lib/catalog.ts';
 import { centerCellRect, overlapsViewport } from '../lib/center.js';
 import { prefersReducedMotion } from './useMapCamera.js';
+import type { Config } from '../../../config/config.ts';
 
-/**
- * @param {object} opts
- * @param {{current: HTMLCanvasElement|null}} opts.canvasRef
- * @param {{current: {x: number, y: number, zoom: number}}} opts.cam
- * @param {object} opts.catalogConfig  config.catalog - transitionMs and friends
- * @param {Function} [opts.onModeChange]  called before a mode switch commits
- *   (e.g. to close an open room card) - fired synchronously from
- *   `enterCatalog`/`exitCatalog`, before `setMode`/`setLeaving`.
- * @param {'map'|'catalog'} [opts.initialMode]  which reading the page opens
- *   on - `main.jsx`'s `INITIAL_MODE`, read once from the url.
- */
+interface Camera {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export type Mode = 'map' | 'catalog';
+
+interface UseModeTransitionOpts {
+  canvasRef: { current: HTMLCanvasElement | null };
+  cam: { current: Camera };
+  /** config.catalog - transitionMs and friends */
+  catalogConfig: Config['catalog'];
+  /** called before a mode switch commits (e.g. to close an open room card) -
+   * fired synchronously from `enterCatalog`/`exitCatalog`, before
+   * `setMode`/`setLeaving`. */
+  onModeChange?: () => void;
+  /** which reading the page opens on - `main.jsx`'s `INITIAL_MODE`, read once
+   * from the url. */
+  initialMode?: Mode;
+}
+
 export function useModeTransition({
   canvasRef, cam, catalogConfig, onModeChange, initialMode = 'map',
-}) {
-  const [mode, setMode] = useState(initialMode);
+}: UseModeTransitionOpts) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   // Mounted through the exit animation, so the catalog can fold back into the
   // center tile rather than vanishing. Cleared when the animation lands.
   const [leaving, setLeaving] = useState(false);
 
-  const firstTileRef = useRef(null);
+  const firstTileRef = useRef<HTMLElement | null>(null);
   // Where the center tile was on the map when the switch began, or null if it
   // was off screen - a reader who panned away has nothing to fold from, and
   // the transition degrades to a cross-fade rather than flying in from a
   // corner.
-  const flipFrom = useRef(null);
+  const flipFrom = useRef<Rect | null>(null);
 
   /** The center cell's screen rect, or null if none of it is in view. */
-  const centreRectNow = useCallback(() => {
+  const centreRectNow = useCallback((): Rect | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const w = canvas.clientWidth;
@@ -89,7 +101,7 @@ export function useModeTransition({
     const tile = firstTileRef.current;
     const anchor = flipFrom.current;
     const ms = catalogConfig.transitionMs;
-    let timer = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     // Nothing to fold from or to: cross-fade, which the stylesheet does on
     // its own, and just land.
