@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterBlockedIds, isBlocked, joinMetadata, metadataCoverage, normaliseEntry } from './metadata.ts';
+import {
+  availableSensitiveTags,
+  countBlocked,
+  filterBlockedIds,
+  isBlocked,
+  joinMetadata,
+  metadataCoverage,
+  normaliseEntry,
+} from './metadata.ts';
 
 const rooms = [
   { id: 0, file: '001.jpg' },
@@ -160,4 +168,28 @@ test('filterBlockedIds is a no-op with nothing blocked, or no metadata loaded ye
   const metadata = [normaliseEntry({ story: 'a', sensitive_content_tags: ['gore'] })];
   assert.deepEqual(filterBlockedIds([0], metadata, new Set()), [0]);
   assert.deepEqual(filterBlockedIds([0], null, new Set(['gore'])), [0]);
+});
+
+test('countBlocked counts rooms, not tags', () => {
+  const metadata = [
+    normaliseEntry({ story: 'a', sensitive_content_tags: ['gore', 'nudity'] }),
+    normaliseEntry({ story: 'b' }),
+    normaliseEntry({ story: 'c', sensitive_content_tags: ['nudity'] }),
+  ];
+  // Room 0 carries both blocked tags but is one room, not two.
+  assert.equal(countBlocked(metadata, new Set(['gore', 'nudity'])), 2);
+  assert.equal(countBlocked(metadata, new Set()), 0);
+  assert.equal(countBlocked(null, new Set(['gore'])), 0);
+});
+
+test('availableSensitiveTags is every tag in the corpus, deduped and sorted', () => {
+  const metadata = [
+    normaliseEntry({ story: 'a', sensitive_content_tags: ['nudity', 'gore'] }),
+    null,
+    normaliseEntry({ story: 'c', sensitive_content_tags: ['gore'] }),
+    normaliseEntry({ story: 'd' }),
+  ];
+  assert.deepEqual(availableSensitiveTags(metadata), ['gore', 'nudity']);
+  assert.deepEqual(availableSensitiveTags([]), []);
+  assert.deepEqual(availableSensitiveTags(null), []);
 });

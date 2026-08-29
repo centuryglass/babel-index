@@ -8,12 +8,15 @@
  * (`fitZoom` in main.jsx) precisely so it is right on whatever device is in
  * front of them rather than right on the one they used last.
  *
- * Two things earn an exception, both of them the reader's own choices rather
- * than the map's state: which way they page the catalog, and what they have
- * searched for. The second is the consequential one - the search history titles
- * the center room's shelf, so persisting it means the wall of books becomes a
- * record of what this reader has asked the library instead of resetting to
- * keyword tags every session.
+ * Three things earn an exception, all of them the reader's own choices rather
+ * than the map's state: which way they page the catalog, what they have
+ * searched for, and which sensitive-content tags they have blocked. The
+ * second is the consequential one - the search history titles the center
+ * room's shelf, so persisting it means the wall of books becomes a record of
+ * what this reader has asked the library instead of resetting to keyword tags
+ * every session. Blocked tags are consequential in the other direction: they
+ * are a standing choice about what a reader does not want to see, so it has
+ * to survive a reload the same way the choice to see it again would.
  *
  * ### Why every call is wrapped
  *
@@ -37,6 +40,8 @@ export const KEYS = {
   history: `${PREFIX}history`,
   /** 'scroll' or 'pages' - how the catalog advances. */
   paging: `${PREFIX}paging`,
+  /** Sensitive-content tags a reader has chosen to block, from HelpDialog's panel. */
+  blockedTags: `${PREFIX}blockedTags`,
 };
 
 /**

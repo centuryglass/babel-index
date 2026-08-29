@@ -37,6 +37,7 @@ import { sizeOf as pyramidSizeOf } from '../lib/pyramid.js';
  * @param {object} opts.keyboardUsed   gates the cursor ring - see render.js
  * @param {object} opts.cam            the live camera, a ref
  * @param {string} opts.mode           'map' or 'catalog'; hidden means no frames
+ * @param {number} opts.blockedCount   rooms the reader's blocked tags removed, for the HUD
  */
 export function useMapRenderer({
   canvasRef,
@@ -55,6 +56,7 @@ export function useMapRenderer({
   cache,
   centreSlots,
   centreOverlay,
+  blockedCount = 0,
 }) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -172,7 +174,8 @@ export function useMapRenderer({
         const pct = Math.round((100 * Math.min(running.show.totalMs, performance.now() - running.t0)) / running.show.totalMs);
         hud.textContent =
           `rearranging · ${pct}% · ${running.motions.length} lines moving · ` +
-          `level ${stats.level} · ${stats.blank} blank · ${cache.size()} cached`;
+          `level ${stats.level} · ${stats.blank} blank · ${cache.size()} cached` +
+          (blockedCount ? ` · ${blockedCount} blocked` : '');
       } else if (hud) {
         const size = pyramidSizeOf(stats.level);
         const over = cache.overBudget();
@@ -184,7 +187,8 @@ export function useMapRenderer({
           `zoom ${Math.round(stats.zoom)} · ` +
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
           `edge at r=${layout.boundaryRadius.toFixed(1)}` +
-          (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '');
+          (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '') +
+          (blockedCount ? ` · ${blockedCount} blocked` : '');
       }
     };
 
@@ -218,6 +222,6 @@ export function useMapRenderer({
     };
   }, [
     canvasRef, searchFormRef, booksRef, searchArrowRef, draw, anim, keyboardUsed,
-    layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode,
+    layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode, blockedCount,
   ]);
 }

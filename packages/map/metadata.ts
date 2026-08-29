@@ -169,3 +169,24 @@ export function filterBlockedIds(
   if (!metadata || !blocked.size) return ids;
   return ids.filter((id) => !isBlocked(metadata[id], blocked));
 }
+
+/** How many rooms `blocked` actually removes - what the debug HUD reports. */
+export function countBlocked(metadata: (RoomMeta | null)[] | null, blocked: ReadonlySet<string>): number {
+  if (!metadata || !blocked.size) return 0;
+  let n = 0;
+  for (const m of metadata) if (isBlocked(m, blocked)) n++;
+  return n;
+}
+
+/**
+ * Every sensitive-content tag actually present in the corpus, sorted for a
+ * stable checklist. The block-tags panel offers exactly these - not a fixed
+ * vocabulary - so a corpus with none of these tags renders no panel at all
+ * rather than a list of checkboxes with nothing behind them.
+ */
+export function availableSensitiveTags(metadata: (RoomMeta | null)[] | null): string[] {
+  if (!metadata) return [];
+  const tags = new Set<string>();
+  for (const m of metadata) if (m) for (const t of m.sensitiveContentTags) tags.add(t);
+  return [...tags].sort();
+}
