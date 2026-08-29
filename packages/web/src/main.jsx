@@ -33,11 +33,11 @@ import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.js';
 import { useMapRenderer } from './hooks/useMapRenderer.js';
 import { useMapCursor } from './hooks/useMapCursor.js';
-import { useCenterShelf } from './hooks/useCenterShelf.js';
-import { useModeTransition } from './hooks/useModeTransition.js';
-import { useCorpus } from './hooks/useCorpus.js';
+import { useCenterShelf } from './hooks/useCenterShelf.ts';
+import { useModeTransition } from './hooks/useModeTransition.ts';
+import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.js';
-import { useSearch, describeSignals } from './hooks/useSearch.js';
+import { useSearch, describeSignals } from './hooks/useSearch.ts';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -143,7 +143,7 @@ function Library({ manifest }) {
   const blockedTagSet = useMemo(() => new Set(blockedTags), [blockedTags]);
 
   // Everything the corpus IS - the sidecar, the embedding blob, the search
-  // index built over them. See useCorpus.js.
+  // index built over them. See useCorpus.ts.
   const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
 
   // Every sensitive-content tag the corpus actually has, for the panel's
@@ -157,7 +157,7 @@ function Library({ manifest }) {
   // below, which itself needs `announce`, which needs this hook's `result` to
   // say what a change was for. `useSearch` has to run before that circle closes,
   // so it takes a ref and `main.jsx` fills it in once `useRearrangement` has
-  // returned - see useSearch.js's file comment.
+  // returned - see useSearch.ts's file comment.
   const requestAnimationRef = useRef(() => {});
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
@@ -289,7 +289,7 @@ function Library({ manifest }) {
   const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
 
   // A reserved book on the center shelf opens this instead of running a
-  // search - see useCenterShelf.js's CENTER_OVERRIDES and onOverride.
+  // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
   const [helpOpen, setHelpOpen] = useState(false);
 
   // Right-click or long press opens the room's card. The pick is anchored to
@@ -499,7 +499,7 @@ function Library({ manifest }) {
   // anything: the camera is exactly where it was left, the tile cache is
   // warm, and `useMapCamera`'s pointer listeners - bound once against a ref
   // object rather than an element - are still attached to a canvas that
-  // never went away. See `useModeTransition.js` for the FLIP itself.
+  // never went away. See `useModeTransition.ts` for the FLIP itself.
   const { mode, leaving, enterCatalog, exitCatalog, firstTileRef } = useModeTransition({
     canvasRef,
     cam,
@@ -862,7 +862,7 @@ const URL_BLOCKED_TAGS =
  *
  * Sentence construction over already-tested primitives (`nextRoom`,
  * `cellDistance`) rather than a new pure module of its own - the same kind of
- * job `describeSignals` (useSearch.js) does for a search. Simplified from the
+ * job `describeSignals` (useSearch.ts) does for a search. Simplified from the
  * plan's own example on purpose: four cardinal directions via straight-line
  * `nextRoom` walks, not eight - a true diagonal nearest-room search is more
  * geometry than a `?` press needs to earn its keep.

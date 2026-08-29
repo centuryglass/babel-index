@@ -104,8 +104,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                          `loader: { '.svg': 'text' }` produces, for `.ts`/`.tsx`
                          files that import one as raw markup
   - `src/components/`: presentational React components
-    * `MapView.jsx`: The 2D map canvas view
-    * `CatalogView.jsx`: Alternate catalog list view
+    * `MapView.tsx`: The 2D map canvas view
+    * `CatalogView.tsx`: Alternate catalog list view
     * `RoomCard.tsx`: RoomDetails popup, shown on right-click/long press
     * `RoomOverlay.tsx`: Modal showing full-size room image along with story content
     * `RoomDetails.tsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
@@ -118,17 +118,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/hooks/`: the subsystems `main.jsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
-    * `useCorpus.js`: Load the metadata sidecar and embedding blob, build the search index
-    * `useSearch.js`: The query box, the `/api/search` fetch, blending the
+    * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
+    * `useSearch.ts`: The query box, the `/api/search` fetch, blending the
                       reply into one ranking, the highlight range-finders
     * `useMapCamera.js`: React hook for camera changes, inputs entangled with
                          camera controls
     * `useMapRenderer.js`: Map frame loop/redraw hook
     * `useMapCursor.js`: The keyboard cursor - where it is, what a reader
                          hears about it, and every key over the map
-    * `useCenterShelf.js`: The center room's bookshelf - titles, roving
+    * `useCenterShelf.ts`: The center room's bookshelf - titles, roving
                            tabindex focus, and what a tap or arrow key does
-    * `useModeTransition.js`: Switching between the map and catalog readings,
+    * `useModeTransition.ts`: Switching between the map and catalog readings,
                               the FLIP animation between them
     * `useRearrangement.js`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said
@@ -491,7 +491,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   only counts its keys (`TagLinksInfo.count`). It is hand-edited, not
   generated, and optional exactly like the sidecar: a corpus without one just
   renders chips with no "more about this" link. `RoomDetails.tsx` takes it as
-  a `tagLinks` prop rather than importing it — see `useCorpus.js`.
+  a `tagLinks` prop rather than importing it — see `useCorpus.ts`.
 
 ### The reorder animation
 
@@ -608,7 +608,7 @@ code, not a standing invariant.
   `/images/foo.jpg`) resolves against the true origin root — one level above
   the subpath — and never reaches the proxy block that would have stripped
   it. `scan.ts`'s `IMAGES_BASE`/`SHARED_BASE` (`images`, `shared`, no leading
-  slash) and the two client-side `fetch()` calls (`main.jsx`, `useSearch.js`)
+  slash) and the two client-side `fetch()` calls (`main.jsx`, `useSearch.ts`)
   are relative for exactly this reason; a new one added with a leading slash
   is a subpath regression even though it works fine at the root deployment
   this app has always defaulted to.
