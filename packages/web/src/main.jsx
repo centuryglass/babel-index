@@ -34,7 +34,7 @@ import { useMapCamera } from './hooks/useMapCamera.js';
 import { useMapRenderer } from './hooks/useMapRenderer.js';
 import { useMapCursor } from './hooks/useMapCursor.js';
 import { useCenterShelf } from './hooks/useCenterShelf.js';
-import { useModeTransition } from './hooks/useModeTransition.js';
+import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.js';
 import { useSearch, describeSignals } from './hooks/useSearch.js';
@@ -499,7 +499,7 @@ function Library({ manifest }) {
   // anything: the camera is exactly where it was left, the tile cache is
   // warm, and `useMapCamera`'s pointer listeners - bound once against a ref
   // object rather than an element - are still attached to a canvas that
-  // never went away. See `useModeTransition.js` for the FLIP itself.
+  // never went away. See `useModeTransition.ts` for the FLIP itself.
   const { mode, leaving, enterCatalog, exitCatalog, firstTileRef } = useModeTransition({
     canvasRef,
     cam,
