@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
+import type { RoomMeta } from '../../map/metadata.ts';
+import type { ManifestResponse } from '../../map/manifest.ts';
+import type { Config } from '../../config/config.ts';
 import { RoomCard } from './components/RoomCard.tsx';
 import { MapView } from './components/MapView.tsx';
 import { CatalogView } from './components/CatalogView.tsx';
@@ -10,7 +13,7 @@ import { HelpDialog } from './components/HelpDialog.tsx';
 import { alphabeticalOrder } from './lib/catalog.ts';
 import { load, save, clear, KEYS } from './lib/persist.ts';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
-import { roomAtPoint } from './lib/picking.ts';
+import { roomAtPoint, type RoomPick } from './lib/picking.ts';
 import { describeCell, describeRoom, describeCatalog } from '../../map/describe.ts';
 import {
   bookAtPoint,
@@ -24,7 +27,7 @@ import {
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
 } from './lib/center.ts';
-import { CELL_ASPECT, fitZoom } from './lib/camera.ts';
+import { CELL_ASPECT, fitZoom, type Camera } from './lib/camera.ts';
 import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
@@ -40,8 +43,8 @@ import { useRearrangement } from './hooks/useRearrangement.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
 
 function App() {
-  const [manifest, setManifest] = useState(null);
-  const [error, setError] = useState(null);
+  const [manifest, setManifest] = useState<ManifestResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('api/manifest')
@@ -55,34 +58,37 @@ function App() {
   return <Library manifest={manifest} />;
 }
 
-function Library({ manifest }) {
-  const canvasRef = useRef(null);
+/** The card's open picking result, anchored to where the pick happened. */
+type CardState = RoomPick & { at: { x: number; y: number } };
+
+function Library({ manifest }: { manifest: ManifestResponse }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   // The live search field lives on the center tile, not in the panel; its
   // position is driven imperatively from the render loop below, the same way
   // the canvas itself is - see `positionSearchBox`.
-  const searchFormRef = useRef(null);
+  const searchFormRef = useRef<HTMLFormElement>(null);
   // The book buttons' container - one absolutely-positioned box matching the
   // center cell, positioned imperatively from the render loop exactly as the
   // search field is. The forty buttons inside it are laid out in percentages,
   // so this is the only per-frame geometry the shelf costs.
-  const booksRef = useRef(null);
+  const booksRef = useRef<HTMLDivElement>(null);
   // The search badge's orbiting arrow - not diegetic content, but it still
   // moves every frame with the camera (it points at wherever the center tile
   // currently is on screen), so it gets the same imperative-ref treatment as
   // the two center-tile overlays above rather than being React state.
-  const searchArrowRef = useRef(null);
+  const searchArrowRef = useRef<HTMLSpanElement>(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
   // than from a literal here - see packages/config. The sliders still move
   // freely afterwards; config decides where they start.
-  const config = manifest.config;
+  const config = manifest.config as unknown as Config;
 
   // How the catalog advances, and one of the two things that survive a reload.
   // Config supplies the DEFAULT for a reader who has never chosen; a stored
   // choice wins over it.
   const [paging, setPaging] = useState(() =>
-    load(KEYS.paging, manifest.config.catalog.paging, {
+    load(KEYS.paging, config.catalog.paging, {
       validate: (v) => v === 'scroll' || v === 'pages',
     })
   );
@@ -107,11 +113,11 @@ function Library({ manifest }) {
   // "it is a list of search terms". Capped at the wall's size, because the wall
   // is the only place it is ever shown.
   const [history, setHistory] = useState(() =>
-    load(KEYS.history, [], {
+    load<string[]>(KEYS.history, [], {
       validate: (v) => Array.isArray(v) && v.every((term) => typeof term === 'string'),
     }).slice(0, HISTORY_SLOT_COUNT)
   );
-  const pushHistory = useCallback((term) => {
+  const pushHistory = useCallback((term: string) => {
     setHistory((prev) => [term, ...prev.filter((t) => t !== term)].slice(0, HISTORY_SLOT_COUNT));
   }, []);
   // Cleared rather than stored empty, so forgetting really does leave nothing
@@ -129,11 +135,11 @@ function Library({ manifest }) {
   // session state, and forgetting it on reload would mean re-blocking by hand
   // every time.
   const [blockedTags, setBlockedTags] = useState(() =>
-    load(KEYS.blockedTags, URL_BLOCKED_TAGS, {
+    load<string[]>(KEYS.blockedTags, URL_BLOCKED_TAGS, {
       validate: (v) => Array.isArray(v) && v.every((t) => typeof t === 'string'),
     })
   );
-  const toggleBlockedTag = useCallback((tag) => {
+  const toggleBlockedTag = useCallback((tag: string) => {
     setBlockedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   }, []);
   useEffect(() => {
@@ -156,9 +162,9 @@ function Library({ manifest }) {
   // `requestAnimation` doesn't exist yet - it comes back from `useRearrangement`
   // below, which itself needs `announce`, which needs this hook's `result` to
   // say what a change was for. `useSearch` has to run before that circle closes,
-  // so it takes a ref and `main.jsx` fills it in once `useRearrangement` has
+  // so it takes a ref and `main.tsx` fills it in once `useRearrangement` has
   // returned - see useSearch.ts's file comment.
-  const requestAnimationRef = useRef(() => {});
+  const requestAnimationRef = useRef<(note: string) => void>(() => {});
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
     searchConfig: config.search,
@@ -227,7 +233,7 @@ function Library({ manifest }) {
   // `order` are the same number only while a search is active, so "show on
   // the map" has to look a room up by what it IS, not by its row position.
   const cellById = useMemo(() => {
-    const cells = new Map();
+    const cells = new Map<number, { x: number; y: number }>();
     order.forEach((id, rank) => {
       const cell = layout.cellOfRank(rank);
       if (cell) cells.set(id, cell);
@@ -280,13 +286,13 @@ function Library({ manifest }) {
   // however the live camera has been nudged since.
   const anim = useRef(null);
 
-  const resistanceAt = useCallback((x, y) => layout.resistanceAt(x, y), [layout]);
+  const resistanceAt = useCallback((x: number, y: number) => layout.resistanceAt(x, y), [layout]);
 
   // The catalog's expanded room: the tile at full size and the whole story.
   // A row is a fixed height and its thumbnail is a thumbnail, so this is how a
   // reader sees either without going back to the map - see `RoomOverlay`.
-  const [overlay, setOverlay] = useState(null);
-  const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
+  const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(null);
+  const expandRoom = useCallback((id: number, rank: number) => setOverlay({ id, rank }), []);
 
   // A reserved book on the center shelf opens this instead of running a
   // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
@@ -296,9 +302,9 @@ function Library({ manifest }) {
   // where it happened rather than tracking the tile: the card names its room,
   // so a pan underneath it is harmless, and a panel that chases a moving cell
   // would be the more distracting of the two.
-  const [card, setCard] = useState(null);
+  const [card, setCard] = useState<CardState | null>(null);
   const onPick = useCallback(
-    (px, py, camera) => {
+    (px: number, py: number, camera: Camera) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
@@ -361,8 +367,8 @@ function Library({ manifest }) {
   // listeners are not re-bound every render - over a ref that always holds the
   // latest logic, since the handler closes over `search` and `centreSlots`,
   // which are redefined below and on every render.
-  const tapRef = useRef(() => {});
-  const onTap = useCallback((px, py, camera) => tapRef.current(px, py, camera), []);
+  const tapRef = useRef((_px: number, _py: number, _camera: Camera) => {});
+  const onTap = useCallback((px: number, py: number, camera: Camera) => tapRef.current(px, py, camera), []);
 
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
   // really be judged on a device, and a phone has no console you can read with
@@ -417,7 +423,7 @@ function Library({ manifest }) {
   // the animation's own board at a camera this function knows nothing about, so
   // an overlay placed from the live camera would sit over the wrong pixels.
   const centreOverlay = useCallback(
-    (w, h) => {
+    (w: number, h: number) => {
       const cellRect = centerCellRect(cam.current, { width: w, height: h });
       const box = searchBoxScreenRect(cellRect);
       const settled = !anim.current;
@@ -550,7 +556,7 @@ function Library({ manifest }) {
   // it says what happened in its own voice instead - the arrangement sentence
   // talks about clustering near a center that reading does not have.
   const announce = useCallback(
-    (note) => {
+    (note: string) => {
       if (mode !== 'map') {
         setStatus(describeCatalog({ total: order.length, query: result?.term ?? '', note }));
         return;
@@ -584,7 +590,7 @@ function Library({ manifest }) {
   // through the library rather than a dead end. The card closes because the map
   // is about to rearrange under it, and it would be describing a cell that no
   // longer holds that room.
-  const searchKeyword = (text) => {
+  const searchKeyword = (text: string) => {
     setQuery(text);
     setCard(null);
     // The overlay names a rank, and a search rebuilds the ranking - leaving it
@@ -601,7 +607,7 @@ function Library({ manifest }) {
   // precondition for anyone else's access. This is the touch/VoiceOver path
   // into a room's content that right-click and long-press never gave them.
   const openRoom = useCallback(
-    (x, y, id, rank) => {
+    (x: number, y: number, id: number, rank: number) => {
       const canvas = canvasRef.current;
       const at = canvas
         ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
@@ -614,11 +620,11 @@ function Library({ manifest }) {
 
   // The catalog's own scroll position - not part of the mode transition, so
   // it stays here rather than moving into `useModeTransition`.
-  const catalogScrollRef = useRef(null);
+  const catalogScrollRef = useRef<HTMLDivElement>(null);
 
   /** A row's "show on the map" - aim the camera, then go and look. */
   const showOnMap = useCallback(
-    (x, y) => {
+    (x: number, y: number) => {
       flyTo(x, y, config.camera.defaultZoom);
       exitCatalog();
     },
@@ -796,8 +802,8 @@ function Library({ manifest }) {
         <RoomCard
           card={card}
           desc={cardDescription}
-          entry={metadata?.[card.id] ?? null}
-          file={manifest.rooms[card.id]?.file}
+          entry={'id' in card ? metadata?.[card.id] ?? null : null}
+          file={'id' in card ? manifest.rooms[card.id]?.file : undefined}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
           highlight={highlight}
@@ -847,7 +853,7 @@ const INITIAL_MODE =
  * visit rather than having a stale link silently override it, but a fresh
  * browser following a shared link starts blocked as the link asks.
  */
-const URL_BLOCKED_TAGS =
+const URL_BLOCKED_TAGS: string[] =
   (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('blockTags') : null)
     ?.split(',')
     .map((t) => t.trim())
@@ -868,4 +874,5 @@ const URL_BLOCKED_TAGS =
  * geometry than a `?` press needs to earn its keep.
  */
 
-createRoot(document.getElementById('root')).render(<App />);
+const rootEl = document.getElementById('root');
+if (rootEl) createRoot(rootEl).render(<App />);

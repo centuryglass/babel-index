@@ -112,6 +112,47 @@ serve as completed task history.
   in the same file and in `main.jsx`'s call site along the way (untyped
   `object` params/refs coming back as real shapes).
 
+## TypeScript migration - application code:
+`main.jsx` (now `main.tsx`) was the last file in the "remaining" list below -
+every application module (`packages/server`, `packages/map`, `packages/config`,
+`packages/web/src` outside its `*.test.mjs` files) is `.ts`/`.tsx` now. It
+turned out not to need the "deliberately loose, convert last" treatment it was
+filed under either: every hook and lib it wires together (`useCorpus.ts`,
+`useSearch.ts`, `useMapCamera.ts`, `useMapCursor.ts`, `useCenterShelf.ts`,
+`useModeTransition.ts`, `useMapRenderer.ts`, `useRearrangement.ts`, `center.ts`,
+`ordering.ts`, `metadata.ts`, `catalog.ts`, `picking.ts`, `describe.ts`) was
+already typed, so converting was mostly adding `useState`/`useRef` generics and
+callback parameter types and letting `tsc` find the rest. Two real
+cross-module bugs turned up doing that, both now fixed rather than papered
+over with a cast: `tapRef`'s initial `useRef(() => {})` inferred a zero-arg
+function, so every real assignment to it (`(px, py, camera) => ...`) was
+arity-mismatched - it now seeds with the right signature explicitly. And
+`useModeTransition.ts`'s `firstTileRef` was `HTMLElement | null` while
+`CatalogView.tsx` types the same ref `Ref<HTMLImageElement>` (it is always the
+first catalog row's `<img>`) - narrowed to `HTMLImageElement | null` at the
+source instead of adding a cast at the one call site. `manifest.config` stays
+`Record<string, unknown>` on `ManifestResponse` (see `manifest.ts`), so
+`main.tsx` casts it once to `Config` (`as unknown as Config`, the codebase's
+existing pattern for a type-level assertion with no structural overlap for
+`tsc` to check) rather than widening the manifest type for one reader.
+`packages/server/index.ts`'s and `packages/web/bundle.test.mjs`'s esbuild
+`entryPoints` both point at `main.tsx` now.
+
+Next: the lingering `*.test.mjs` files whose own module already converted
+without them - `packages/config/{config,load}.test.mjs`,
+`packages/map/{board,describe,illusion,metadata,nextRoom,ordering}.test.mjs`,
+`packages/server/{app,remote,scan,search-cache}.test.mjs`,
+`packages/web/src/lib/{persist,picking,pyramid}.test.mjs`,
+`packages/web/src/components/BabelBookOverlay.test.mjs`,
+`tools/center-placement/geometry.test.mjs`, `tools/upload/lib.test.mjs` - are
+`.mjs` testing a `.ts` module, which AGENTS.md's paired-test rule says should
+have converted alongside it. `packages/web/bundle.test.mjs` and
+`packages/web/src/lib/catalog.test.mjs` test files that are (`main.tsx`) or
+became (`catalog.ts`) TypeScript too, for the same reason. None of this is
+urgent - `node --test` runs `.test.mjs` and `.test.ts` identically - but it is
+real drift from the stated convention and worth closing file-by-file the same
+opportunistic way the application code did, rather than in one large PR.
+
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
 opportunity, per AGENTS.md. Roughly ordered easiest/most-isolated first,
@@ -243,10 +284,9 @@ only ever reads those two fields, and `RoomMeta` is structurally compatible
 so nothing at the real call site changed. `scoring.test.mjs` converted
 alongside it, per the paired-test rule.
 
-Deliberately loose today (see AGENTS.md) - convert once there's a real type
-worth writing rather than an `any`/`object` that just papers over it, last
-since it wires every hook above together and is only as typeable as they are:
- - `packages/web/src/main.jsx`
+Nothing left in this bucket - `main.jsx` (see the "TypeScript migration -
+application code" section above) converted cleanly too, and was the last file
+this list named.
 
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.

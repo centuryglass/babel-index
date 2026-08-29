@@ -97,7 +97,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
   `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
-    * `src/main.jsx`: React entry point - loads the corpus, derives the layout
+    * `src/main.tsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.
     * `src/assets.d.ts`: Declares the `.svg` import shape esbuild's
@@ -115,7 +115,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
                              Meant as an easter egg for the (not yet existing)
                              artist statement page, not wired in yet
-  - `src/hooks/`: the subsystems `main.jsx` wires together - see
+  - `src/hooks/`: the subsystems `main.tsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
     * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
@@ -140,7 +140,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `render.ts`: Render a single map frame
     * `slide.ts`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
-    * `catalog.js`: Catalog pagination and geometry helpers
+    * `catalog.ts`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images
     * `rooms.js`: Map room data in the manifest to image URLs
@@ -390,7 +390,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The shared tiles are served flat (level 0) for now.** `rooms.js` resolves a
   shared id to its url at level 0 only; every coarser request falls back
   through `servableLevel`. Bounded, because the cache keys on id not cell, but
-  it means `main.jsx` pins each shared id at level 0 rather than at the
+  it means `main.tsx` pins each shared id at level 0 rather than at the
   coarsest rung — so the "12 KB pinned generic" is a full-res download until
   the shared assets get their own pyramid (plan §8). Do not pin a shared id at
   `FALLBACK_LEVEL`; there is no tile there.
@@ -444,7 +444,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   override → history (newest first) → tags, and override books are reserved
   first. Titles read top-to-bottom, as printed spines do.
 - **Two opening views, and they are not interchangeable.** The page-load view is
-  DERIVED, not configured: `main.jsx` computes it once at mount with `fitZoom`
+  DERIVED, not configured: `main.tsx` computes it once at mount with `fitZoom`
   (camera.ts), framing the center room's book-bounding box (`GEOMETRY.opening`,
   exported as `CENTRE_SHELF_RECT` from `center.ts`) on the display so the spines are legible,
   centered on the shelf and capped at the tile's NATIVE width so a page never
@@ -457,14 +457,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The zoom cap is `MAX_ZOOM_FACTOR` × the tile's native width** (2× = 2048 at
   1024w), derived in `ZOOM_LIMITS` so it tracks the tile, not a literal. Past 1×
   the flat center tile is upscaled and softens; the OPENING view is separately
-  capped at 1× in `main.jsx` so a load is never blurry, while a reader may zoom to
+  capped at 1× in `main.tsx` so a load is never blurry, while a reader may zoom to
   2× by hand to read a spine. Raising the cap breaks the "tile too large to reach"
   example in `pyramid.test.mjs` (its base scales with `MAX_ZOOM_FACTOR`); that is
   the test working, not a regression. Config's `camera.maxZoom` may only narrow
   this, never widen it.
 - **`CENTRE_SEARCH_RECT` is traced but not wired up.** The SVG's `search_box`
   rect reserves where the live search field belongs on the center tile, in the
-  same cell fractions as `CENTRE_SHELF_RECT`. The DOM search form in `main.jsx`
+  same cell fractions as `CENTRE_SHELF_RECT`. The DOM search form in `main.tsx`
   does not read it yet - it still lives in the fixed side panel - so a change
   here is reserved space for a future pass, not a live feature.
 
@@ -618,7 +618,7 @@ code, not a standing invariant.
   `/images/foo.jpg`) resolves against the true origin root — one level above
   the subpath — and never reaches the proxy block that would have stripped
   it. `scan.ts`'s `IMAGES_BASE`/`SHARED_BASE` (`images`, `shared`, no leading
-  slash) and the two client-side `fetch()` calls (`main.jsx`, `useSearch.ts`)
+  slash) and the two client-side `fetch()` calls (`main.tsx`, `useSearch.ts`)
   are relative for exactly this reason; a new one added with a leading slash
   is a subpath regression even though it works fine at the root deployment
   this app has always defaulted to.
