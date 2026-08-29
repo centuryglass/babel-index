@@ -23,7 +23,7 @@
  * hysteresis band is what stops a zoom held near a boundary from flickering
  * between two levels, and it can only apply if it knows what is on screen now.
  */
-import { PYRAMID, prefetchBounds } from './pyramid.js';
+import { PYRAMID, prefetchBounds } from './pyramid.ts';
 import { pxPerCell } from './camera.js';
 import { CENTER, genericId } from './tiles.js';
 import { composeSpines } from './center.js';

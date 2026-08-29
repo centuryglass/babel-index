@@ -66,7 +66,7 @@
  * `createImage` exists so all of this can be tested without a DOM; the browser
  * never passes it.
  */
-import { PYRAMID, PREFETCH, SHEETS } from './pyramid.js';
+import { PYRAMID, PREFETCH, SHEETS } from './pyramid.ts';
 
 /**
  * The shared-tile ids. Strings, so they can never collide with a numeric room id.

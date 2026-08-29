@@ -1,7 +1,7 @@
 /**
  * THIS FILE IS THE TUNING SURFACE for everything decided by feel.
  *
- * The pyramid has its own (`packages/web/src/lib/pyramid.js`) and keeps it: tile
+ * The pyramid has its own (`packages/web/src/lib/pyramid.ts`) and keeps it: tile
  * size, the ladder, per-level budgets, the hysteresis band and the prefetch ring
  * are *derived and asserted*, not tuned - restating any of them here would be a
  * second statement of a fact that already has one. What lives here is the other
