@@ -137,7 +137,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                geometry, and rendering
     * `center.js`: Geometry and content management for the center tile interface
     * `camera.ts`: Pure-math mapping functions for the map camera
-    * `render.js`: Render a single map frame
+    * `render.ts`: Render a single map frame
     * `slide.js`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
     * `catalog.js`: Catalog pagination and geometry helpers
@@ -370,7 +370,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   whole reason `board.ts` and `illusion.ts` still see one interchangeable
   `GENERIC` value and the rearrangement planner did not have to learn about
   individual generic tiles. `roomAt` is unchanged; only the two renderers
-  (`render.js`, `slide.js`) resolve a cell to a tile id. `slide.js` reads the
+  (`render.ts`, `slide.js`) resolve a cell to a tile id. `slide.js` reads the
   generic index at each tile's *home* board cell so a sliding line carries its
   own face instead of flipping mid-ride.
 - **The shared tiles live outside `--images`.** `scan.mjs` discovers them in
@@ -401,7 +401,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   wider than a book resolves to nothing rather than a phantom book. The rects come from
   `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.ts`, the
   one module the tile trace feeds, so there is no second copy to drift.
-- **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
+- **The fractions are per-axis, and that is load-bearing.** `render.ts` stretches
   the center tile width→`cellPx.x` and height→`cellPx.y` independently, so a
   spine rect is `{x,w}` against the cell width and `{y,h}` against its height —
   `layout({width:1,height:1})` returns exactly that. One divisor for both axes is

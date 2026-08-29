@@ -1,44 +1,59 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
-import { createRenderer } from './render.js';
-import { createTileCache, CENTER } from './tiles.ts';
+import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
+import { createTileCache, CENTER, type LoadableImage } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
+
+interface DrawnCall {
+  img: LoadableImage;
+  rect: { sx: number; sy: number; sw: number; sh: number } | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface FillCall { x: number; y: number; w: number; h: number }
+interface StrokeCall extends FillCall { colour: string | CanvasGradient | CanvasPattern }
+
+interface FakeCtx extends DrawContext {
+  drawn: DrawnCall[];
+  fills: FillCall[];
+  strokes: StrokeCall[];
+}
 
 /**
  * A 2d context that records instead of painting. The renderer's job is a
  * sequence of decisions - which level, which image, how many requests - and
  * every one of them is observable here without a browser.
  */
-function fakeCtx() {
-  const drawn = [];
-  const fills = [];
-  const strokes = [];
+function fakeCtx(): FakeCtx {
+  const drawn: DrawnCall[] = [];
+  const fills: FillCall[] = [];
+  const strokes: StrokeCall[] = [];
   return {
     drawn,
     fills,
     strokes,
-    set fillStyle(v) { this._fill = v; },
-    get fillStyle() { return this._fill; },
-    strokeStyle: null, lineWidth: 0, font: null,
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '',
     // Either drawImage(img, dx, dy, dw, dh) or the 9-arg source-rect form
     // (img, sx, sy, sw, sh, dx, dy, dw, dh) - a sheet-backed tile uses the
     // latter, so both must be distinguishable to the test asserting on it.
-    drawImage: (...args) => {
-      if (args.length === 9) {
-        const [img, sx, sy, sw, sh, x, y, w, h] = args;
+    drawImage(img: LoadableImage, ...rest: number[]) {
+      if (rest.length === 8) {
+        const [sx, sy, sw, sh, x, y, w, h] = rest;
         drawn.push({ img, rect: { sx, sy, sw, sh }, x, y, w, h });
       } else {
-        const [img, x, y, w, h] = args;
+        const [x, y, w, h] = rest;
         drawn.push({ img, rect: null, x, y, w, h });
       }
     },
     fillRect: (x, y, w, h) => fills.push({ x, y, w, h }),
-    // A regular function, not an arrow: `this` has to bind to the ctx object
-    // itself (the caller `ctx.strokeRect(...)`) to read the strokeStyle that
-    // was set just before the call, and an arrow function here would close
-    // over the module's `this` instead and read `undefined` every time.
+    // Reads its own `strokeStyle` at call time, so the colour recorded is
+    // whatever the caller last set - just as a real context's stroke colour
+    // is read when the stroke is drawn, not when the shape is described.
     strokeRect(x, y, w, h) {
       strokes.push({ x, y, w, h, colour: this.strokeStyle });
     },
@@ -46,12 +61,16 @@ function fakeCtx() {
   };
 }
 
+interface FakeImage extends LoadableImage {
+  src: string;
+}
+
 function fakeImages() {
-  const made = [];
+  const made: FakeImage[] = [];
   return {
     made,
-    createImage: () => {
-      const img = { src: null, onload: null, onerror: null };
+    createImage: (): LoadableImage => {
+      const img: FakeImage = { src: '', onload: null, onerror: null };
       made.push(img);
       return img;
     },
@@ -64,7 +83,7 @@ function fakeImages() {
 
 const ROOMS = 400;
 
-function world({ only = null, concurrency = 4 } = {}) {
+function world({ only = null, concurrency = 4 }: { only?: number[] | null; concurrency?: number } = {}) {
   const images = fakeImages();
   const cache = createTileCache({
     locateTile: (id, level) =>
@@ -85,7 +104,12 @@ function world({ only = null, concurrency = 4 } = {}) {
   };
 }
 
-const frame = (w, { zoom, x = 0, y = 0, dpr = 1, ctx = fakeCtx() }) =>
+type World = ReturnType<typeof world>;
+
+const frame = (
+  w: World,
+  { zoom, x = 0, y = 0, dpr = 1, ctx = fakeCtx() }: { zoom: number; x?: number; y?: number; dpr?: number; ctx?: FakeCtx }
+): DrawResult =>
   w.renderer.draw({
     ctx, width: 1600, height: 900, dpr,
     cam: { x, y, zoom }, layout: w.layout, order: w.order,
@@ -220,7 +244,7 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
   });
   const renderer = createRenderer({ cache });
   const order = shuffledOrder(ROOMS, 1);
-  const drawOnce = (ctx) =>
+  const drawOnce = (ctx: DrawContext) =>
     renderer.draw({ ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order });
 
   drawOnce(fakeCtx());

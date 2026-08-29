@@ -152,20 +152,44 @@ Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
 already exist as types to write these against; `useCorpus.js`, `useSearch.js`,
 `useModeTransition.js`, `useCenterShelf.js`, `useMapCamera.js`,
 `useMapCursor.js`, `useMapRenderer.js` and `useRearrangement.js` already
-converted - `useMapRenderer.ts` names `RoomRenderer`/`SlideRenderer` and their
-draw-opts/stats shapes locally rather than importing types from
-`render.js`/`slide.js`, which stay untyped; `RunningAnim` (the shape
-`useRearrangement.ts` builds into the `anim` ref) is exported from
-`useMapRenderer.ts` instead of restated, since that hook already named it and
-both read/write the same ref). None left in this bucket - the rest are the
-deliberately-loose files below.
+converted - `useMapRenderer.ts` names `SlideRenderer`/`SlideStats` locally
+since `slide.js` stays untyped, but now imports `RoomRenderer`/`DrawResult`
+from `render.ts` directly rather than restating them, now that the file is
+typed; `RunningAnim` (the shape `useRearrangement.ts` builds into the `anim`
+ref) is exported from `useMapRenderer.ts` instead of restated, since that hook
+already named it and both read/write the same ref). None left in this bucket -
+the rest are the deliberately-loose files below.
+
+`render.js` also converted, once a look at it turned up that its remaining
+ambiguity wasn't deliberate looseness so much as convenience predating the
+TypeScript decision - `RoomAtResult` (`ordering.ts`) and `Camera` (`camera.ts`)
+already existed to type its `layout`/`cam` params, and the two real gaps were
+small: `RoomId` (`number | string`) was declared but not exported from
+`tiles.ts` (now `export type`), and its own 2d-context parameter had never had
+any type at all. Rather than pull in the whole DOM `CanvasRenderingContext2D`
+- which `render.test.mjs`'s recording fake was never going to implement in
+full - `render.ts` names `DrawContext`, the narrow slice of the 2d context API
+this file actually calls (`fillStyle`/`strokeStyle`/`lineWidth`/`font` plus
+`fillRect`/`strokeRect`/`fillText`/`drawImage`), with `fillStyle`/`strokeStyle`
+typed as the real context's `string | CanvasGradient | CanvasPattern` and
+`drawImage`'s image parameter as `LoadableImage | CanvasImageSource` - both
+purely so a real context still satisfies the interface structurally, since
+this file only ever assigns/passes the narrower half of each union. A real
+`CanvasRenderingContext2D` and the test's fake both satisfy `DrawContext`
+as-is, so nothing changed at either call site. `centreSlots` keeps the same
+`ReturnType<typeof assignTitles>[number]` local-derivation trick
+`useMapRenderer.ts`/`useCenterShelf.ts` already use for the same reason
+(`center.js`'s `assignTitles` is one of the deliberately-loose files below,
+not itself converted here). `render.test.mjs` converted alongside it, per the
+paired-test rule - the fake context and fake image objects are now typed
+against `DrawContext`/`LoadableImage` explicitly rather than left for `tsc` to
+infer, which is what surfaced the two union-widening fixes above.
 
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
 worth writing rather than an `any`/`object` that just papers over it;
 `main.jsx` last since it wires every hook above together and is only as
 typeable as they are (`camera.js` converted - see above; it wasn't actually
 one of these):
- - `packages/web/src/lib/render.js`
  - `packages/web/src/lib/slide.js`
  - `packages/web/src/lib/center.js`
  - `packages/map/scoring.js`

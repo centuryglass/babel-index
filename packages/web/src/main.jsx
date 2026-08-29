@@ -27,7 +27,7 @@ import {
 import { CELL_ASPECT, fitZoom } from './lib/camera.ts';
 import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
-import { createRenderer } from './lib/render.js';
+import { createRenderer } from './lib/render.ts';
 import { createSlideRenderer } from './lib/slide.js';
 import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
