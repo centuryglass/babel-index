@@ -21,6 +21,7 @@ import {
   overlapsViewport,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
+  minZoomForSearchBox,
 } from './lib/center.js';
 import { CELL_ASPECT, fitZoom } from './lib/camera.js';
 import { createTileCache, CENTER, genericId } from './lib/tiles.js';
@@ -422,7 +423,14 @@ function Library({ manifest }) {
     // index. `opening` is already a raw camera target, not a cell index (see
     // useMapCamera's mount-time use of it, unmodified), so that offset has to
     // be cancelled here or the flight lands half a cell short on each axis.
-    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
+    //
+    // `opening.zoom` alone is not enough: it fits the shelf+box UNION to the
+    // viewport, and on a narrow/portrait screen that fit binds on the wide
+    // shelf, landing a zoom where the box itself - gated on height, not
+    // width - is still under its usable minimum. Floor the landing zoom at
+    // what the box alone needs so this flight actually reaches a usable field.
+    const zoom = Math.max(opening.zoom, minZoomForSearchBox());
+    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, zoom);
     if (landed) input.focus();
   }, [flyTo, opening, centreOverlay]);
 
