@@ -25,7 +25,7 @@
  * panel's forget button writes it, and it survives a reload - a search is a
  * consumer of history, not its owner.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type FormEventHandler } from 'react';
 import {
   rankHybrid,
   fold,
@@ -33,32 +33,26 @@ import {
   keywordMatchRanges,
   storyMatchRanges,
 } from '../../../map/scoring.js';
+import type { Config } from '../../../config/config.ts';
+import type { SearchIndex, SearchResult, RankSignals, MatchRange } from '../../../map/searchResult.ts';
 
-/**
- * @param {object} opts
- * @param {number} opts.total                     corpus size
- * @param {object} opts.searchConfig               `config.search`
- * @param {import('../../../map/searchResult.ts').SearchIndex|null} opts.searchIndex
- * @param {{current: {data: Int8Array, dim: number}|null}} opts.embeddings
- * @param {{current: Function}} opts.requestAnimationRef
- *   filled in by `main.jsx` once `useRearrangement` exists - see the file
- *   comment above.
- * @param {(term: string) => void} opts.pushHistory
- * @param {Function} opts.setStatus
- *   the live region, for the one path a search cannot route through
- *   `requestAnimation`'s announcement: a fetch that fails rearranges
- *   nothing, so it has to speak for itself.
- * @returns {{
- *   query: string,
- *   setQuery: (query: string) => void,
- *   result: import('../../../map/searchResult.ts').SearchResult|null,
- *   search: (term: string) => Promise<void>,
- *   runSearch: import('react').FormEventHandler<HTMLFormElement>,
- *   clearSearch: () => void,
- *   highlight: {keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
- *               story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null,
- * }}
- */
+interface UseSearchOpts {
+  /** corpus size */
+  total: number;
+  /** `config.search` */
+  searchConfig: Config['search'];
+  searchIndex: SearchIndex | null;
+  embeddings: { current: { data: Int8Array; dim: number } | null };
+  /** filled in by `main.jsx` once `useRearrangement` exists - see the file
+   * comment above. */
+  requestAnimationRef: { current: (note: string) => void };
+  pushHistory: (term: string) => void;
+  /** the live region, for the one path a search cannot route through
+   * `requestAnimation`'s announcement: a fetch that fails rearranges
+   * nothing, so it has to speak for itself. */
+  setStatus: (message: string) => void;
+}
+
 export function useSearch({
   total,
   searchConfig,
@@ -67,12 +61,12 @@ export function useSearch({
   requestAnimationRef,
   pushHistory,
   setStatus,
-}) {
+}: UseSearchOpts) {
   const [query, setQuery] = useState('');
   // One piece of state, not two: the ranking and its certainty profile
   // describe the same search, and a frame that paired one search's order with
   // another's densities would put the wrong rooms in the cluster.
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<SearchResult | null>(null);
 
   // Which search is the newest one asked for. `search` awaits the server, and
   // nothing stops a second query being submitted while the first is still in
@@ -90,7 +84,7 @@ export function useSearch({
   // tests on the main thread, which does not degrade, it stops. The input has
   // a `maxLength` too, but that only covers typing: a chip, a book and a
   // restored history entry all reach this without touching the box.
-  const search = async (rawTerm) => {
+  const search = async (rawTerm: string) => {
     const term = String(rawTerm ?? '').slice(0, searchConfig.maxQueryLength);
     // Claiming the sequence is what makes this the current search, and it is
     // done before the first await so that a clear - which needs none of what
@@ -120,7 +114,7 @@ export function useSearch({
       // Nothing rearranged - no `requestAnimation` was ever made for this
       // search - so this is the one path that has to write the live region
       // itself.
-      setStatus(`the search could not be run - ${e.message}. The library is unchanged.`);
+      setStatus(`the search could not be run - ${(e as Error).message}. The library is unchanged.`);
       return;
     }
     // Past here the reply is this search's to act on, and a newer query has
@@ -165,7 +159,7 @@ export function useSearch({
     }
   };
 
-  const runSearch = (e) => {
+  const runSearch: FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
     search(query);
   };
@@ -195,8 +189,8 @@ export function useSearch({
     const tokens = tokenise(term, { minLength: searchConfig.minTokenLength });
     if (!foldedQuery && !tokens.length) return null;
     return {
-      keyword: (text) => keywordMatchRanges(text, foldedQuery, tokens),
-      story: (text) => storyMatchRanges(text, tokens),
+      keyword: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, tokens),
+      story: (text: string): MatchRange[] => storyMatchRanges(text, tokens),
     };
   }, [result, searchConfig]);
 
@@ -209,11 +203,8 @@ export function useSearch({
  * `signals` reports which of the three found anything for this query, not
  * which were available - a corpus full of keywords that none of them matched
  * should not claim the ranking was keyword-driven.
- *
- * @param {import('../../../map/searchResult.ts').RankSignals} signals
- * @param {boolean} hasText
  */
-export function describeSignals({ clip, keyword, story }, hasText) {
+export function describeSignals({ clip, keyword, story }: RankSignals, hasText: boolean): string {
   const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
   // Nothing matched and no CLIP means every score is zero, so the sort falls
   // back to index order - which is a real rearrangement, not a no-op, and

@@ -18,8 +18,11 @@
  * which keeps "what does book i do" to one implementation - a second copy
  * here would make it two.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
 import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from '../lib/center.js';
+import type { RoomMeta } from '../../../map/metadata.ts';
+
+type Slot = ReturnType<typeof assignTitles>[number];
 
 /**
  * Books on the center shelf with a fixed distinct function, reserved by slot
@@ -28,23 +31,31 @@ import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from '../lib/center
  * rather than folded in here, because this list has nothing to react to and
  * that slot does.
  */
-const CENTER_OVERRIDES = {
+const CENTER_OVERRIDES: Record<number, { text: string; action: string }> = {
   0: { text: 'READ ME', action: 'help' },
   1: { text: 'The Catalog', action: 'catalog' },
 };
 
-/**
- * @param {object} opts
- * @param {object[]|null} opts.metadata   joined per-room keywords and story
- * @param {number} opts.slotSeed          config.map.slotSeed - seeds which tags fill the wall
- * @param {string[]} opts.history         search history, newest first
- * @param {{current: HTMLElement|null}} opts.booksRef
- * @param {Function} opts.setQuery        fills the search box to match a pressed book
- * @param {Function} opts.search          a history/tag book repeats its search
- * @param {Function} opts.enterCatalog    the reserved "The Catalog" book
- * @param {Function} opts.setHelpOpen     the reserved "READ ME" book
- * @param {Function} opts.forgetSearches  the reserved "forget searches" book
- */
+interface UseCenterShelfOpts {
+  /** joined per-room keywords and story */
+  metadata: (RoomMeta | null)[] | null;
+  /** config.map.slotSeed - seeds which tags fill the wall */
+  slotSeed: number;
+  /** search history, newest first */
+  history: string[];
+  booksRef: { current: HTMLElement | null };
+  /** fills the search box to match a pressed book */
+  setQuery: (term: string) => void;
+  /** a history/tag book repeats its search */
+  search: (term: string) => void;
+  /** the reserved "The Catalog" book */
+  enterCatalog: () => void;
+  /** the reserved "READ ME" book */
+  setHelpOpen: (open: boolean) => void;
+  /** the reserved "forget searches" book */
+  forgetSearches: () => void;
+}
+
 export function useCenterShelf({
   metadata,
   slotSeed,
@@ -55,7 +66,7 @@ export function useCenterShelf({
   enterCatalog,
   setHelpOpen,
   forgetSearches,
-}) {
+}: UseCenterShelfOpts) {
   // The center room's book titles. Every book shows a stable random corpus
   // keyword until history reaches it: past searches fill the wall newest
   // first, top left to bottom right. Reserved override books are never
@@ -97,10 +108,10 @@ export function useCenterShelf({
    * shelf was built; the catalog is the first thing to claim a slot.
    */
   const onOverride = useCallback(
-    (slot) => {
-      if (slot.action === 'catalog') enterCatalog();
-      else if (slot.action === 'help') setHelpOpen(true);
-      else if (slot.action === 'forgetHistory') forgetSearches();
+    (slot: Slot) => {
+      if (slot?.action === 'catalog') enterCatalog();
+      else if (slot?.action === 'help') setHelpOpen(true);
+      else if (slot?.action === 'forgetHistory') forgetSearches();
     },
     [enterCatalog, setHelpOpen, forgetSearches]
   );
@@ -116,7 +127,7 @@ export function useCenterShelf({
    * function; an untitled book does nothing, and has no button.
    */
   const onBook = useCallback(
-    (i) => {
+    (i: number) => {
       const slot = centreSlots[i];
       if (!slot) return;
       if (slot.term) {
@@ -135,11 +146,11 @@ export function useCenterShelf({
   // without a browser. Home and End reuse it from outside the wall rather than
   // being a second way to say "first" and "last".
   const onBooksKeyDown = useCallback(
-    (e) => {
-      const dir = {
+    (e: KeyboardEvent<HTMLElement>) => {
+      const dir = ({
         ArrowLeft: { dx: -1 }, ArrowRight: { dx: 1 },
         ArrowUp: { dy: -1 }, ArrowDown: { dy: 1 },
-      }[e.key];
+      } as Record<string, { dx?: number; dy?: number }>)[e.key];
       const next = dir
         ? bookNeighbour(bookFocus, dir, centreSlots)
         : e.key === 'Home'
@@ -150,7 +161,7 @@ export function useCenterShelf({
       if (next === null) return;
       e.preventDefault();
       setBookFocus(next);
-      booksRef.current?.querySelector(`[data-book="${next}"]`)?.focus();
+      (booksRef.current?.querySelector(`[data-book="${next}"]`) as HTMLElement | null)?.focus();
     },
     [bookFocus, centreSlots, booksRef]
   );
