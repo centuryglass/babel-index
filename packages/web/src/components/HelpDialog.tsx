@@ -21,11 +21,23 @@
  */
 import { useEffect, useRef } from 'react';
 
-export function HelpDialog({ onClose, availableTags = [], blockedTags = [], onToggleTag, blockedCount = 0 }) {
-  const ref = useRef(null);
+export function HelpDialog({
+  onClose,
+  availableTags = [],
+  blockedTags = [],
+  onToggleTag,
+  blockedCount = 0,
+}: {
+  onClose: () => void;
+  availableTags?: string[];
+  blockedTags?: string[];
+  onToggleTag: (tag: string) => void;
+  blockedCount?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const opener = document.activeElement;
+    const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     return () => {
       if (!opener || opener === document.body || !opener.isConnected) return;
@@ -37,14 +49,14 @@ export function HelpDialog({ onClose, availableTags = [], blockedTags = [], onTo
   }, []);
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.key !== 'Tab') return;
       // `summary` is included because the content-blocking panel below is a
       // native `<details>` - it is focusable and in the real tab order
       // whether or not it is expanded, and a trap that does not know about it
       // would let Tab walk past the dialog's actual last stop.
-      const focusable = ref.current?.querySelectorAll(
+      const focusable = ref.current?.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'
       );
       if (!focusable?.length) return;
