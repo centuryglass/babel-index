@@ -11,7 +11,7 @@
  * dismissed, and where focus goes.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { RoomDetails } from './RoomDetails.jsx';
+import { RoomDetails } from './RoomDetails.tsx';
 import type { RoomPick } from '../lib/picking.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';

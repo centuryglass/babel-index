@@ -19,7 +19,12 @@
  * the fallback now follows it rather than the reverse order it used to have.
  * One order, so a reader who meets a room both ways meets it the same way.
  */
+import type { ReactNode } from 'react';
 import { explainScore } from '../../../map/scoring.js';
+import type { RoomMeta } from '../../../map/metadata.ts';
+import type { Description } from '../../../map/describe.ts';
+import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { Config } from '../../../config/config.ts';
 
 /**
  * Text with the matched spans marked.
@@ -30,10 +35,10 @@ import { explainScore } from '../../../map/scoring.js';
  * carries the meaning natively, so a reader who cannot see the highlight still
  * has some chance of being told about it.
  */
-export function Highlight({ text, ranges }) {
+export function Highlight({ text, ranges }: { text: string; ranges?: MatchRange[] | null }): ReactNode {
   if (!ranges?.length) return text;
 
-  const out = [];
+  const out: ReactNode[] = [];
   let at = 0;
   ranges.forEach((r, i) => {
     if (r.start > at) out.push(text.slice(at, r.start));
@@ -49,7 +54,7 @@ export function Highlight({ text, ranges }) {
  * "Reporting" describes - a distinct style for the negative reading so it is
  * never mistaken for a positive, if weaker, match.
  */
-function ClipCertainty({ percent }) {
+function ClipCertainty({ percent }: { percent: number }) {
   const mismatch = percent < 0;
   return (
     <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>
@@ -69,7 +74,17 @@ function ClipCertainty({ percent }) {
  * tell a reader the library was certain about a wall it has nothing to say
  * about. See `explainScore`.
  */
-function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
+function ScoreBreakdown({
+  rank,
+  result,
+  weights,
+  layout = 'table',
+}: {
+  rank: number | null;
+  result: SearchResult | null;
+  weights: Config['search']['weights'];
+  layout?: 'table' | 'strip';
+}) {
   if (!result?.breakdown || rank == null || rank < 0) return null;
   const { rows, total, certainty } = explainScore(rank, {
     breakdown: result.breakdown,
@@ -143,24 +158,6 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
   );
 }
 
-/**
- * @param {object} props
- * @param {import('../../../map/metadata.ts').RoomMeta|null} props.entry the room's metadata, from `joinMetadata()`
- * @param {object|null} props.desc from `describeRoom` / `describeCell`
- * @param {(text: string) => void} props.onKeyword a chip runs this search
- * @param {Record<string, string>|null} [props.tagLinks] keyword -> external
- *   link, from the corpus's optional tagLinks.json (see useCorpus.js) - a
- *   keyword with an entry grows a second "more about this" pill fused to it
- * @param {number} [props.chipTabIndex] -1 inside the canvas, 0 everywhere else
- * @param {{keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
- *          story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null} [props.highlight]
- *   the two range finders, already bound to the submitted query
- * @param {number|null} [props.rank] for the score breakdown
- * @param {import('../../../map/searchResult.ts').SearchResult|null} [props.result] the current search, for the breakdown
- * @param {object} [props.weights]
- * @param {'table'|'strip'} [props.scoreLayout] a card has room for the table; a
- *   catalog row needs the one-line strip, or it clips
- */
 export function RoomDetails({
   entry,
   desc,
@@ -172,10 +169,31 @@ export function RoomDetails({
   result = null,
   weights = null,
   scoreLayout = 'table',
+}: {
+  /** the room's metadata, from `joinMetadata()` */
+  entry: RoomMeta | null;
+  /** from `describeRoom` / `describeCell` */
+  desc: Description | null;
+  /** a chip runs this search */
+  onKeyword: (keyword: string) => void;
+  /** keyword -> external link, from the corpus's optional tagLinks.json (see useCorpus.js) -
+   * a keyword with an entry grows a second "more about this" pill fused to it */
+  tagLinks?: Record<string, string> | null;
+  /** -1 inside the canvas, 0 everywhere else */
+  chipTabIndex?: number;
+  /** the two range finders, already bound to the submitted query */
+  highlight?: { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+  /** for the score breakdown */
+  rank?: number | null;
+  /** the current search, for the breakdown */
+  result?: SearchResult | null;
+  weights?: Config['search']['weights'] | null;
+  /** a card has room for the table; a catalog row needs the one-line strip, or it clips */
+  scoreLayout?: 'table' | 'strip';
 }) {
   return (
     <>
-      {entry?.keywords?.length > 0 && (
+      {entry?.keywords && entry.keywords.length > 0 && (
         <div className="chips">
           {entry.keywords.map((k) => {
             const href = tagLinks?.[k.text] ?? null;
