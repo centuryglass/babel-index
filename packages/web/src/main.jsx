@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
-import { filterBlockedIds } from '../../map/metadata.ts';
+import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
 import { RoomCard } from './components/RoomCard.jsx';
 import { MapView } from './components/MapView.jsx';
 import { CatalogView } from './components/CatalogView.jsx';
@@ -121,9 +121,37 @@ function Library({ manifest }) {
     else clear(KEYS.history);
   }, [history]);
 
+  // Sensitive-content tags a reader has chosen to block, from HelpDialog's
+  // collapsible panel. Seeded from `?blockTags` on first visit only - once
+  // there is a stored choice it wins, the same "read once, then the reader
+  // owns it" rule `paging` and `history` already follow. Persisted for the
+  // same reason `history` is: it is a standing choice about the library, not
+  // session state, and forgetting it on reload would mean re-blocking by hand
+  // every time.
+  const [blockedTags, setBlockedTags] = useState(() =>
+    load(KEYS.blockedTags, URL_BLOCKED_TAGS, {
+      validate: (v) => Array.isArray(v) && v.every((t) => typeof t === 'string'),
+    })
+  );
+  const toggleBlockedTag = useCallback((tag) => {
+    setBlockedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+  }, []);
+  useEffect(() => {
+    if (blockedTags.length) save(KEYS.blockedTags, blockedTags);
+    else clear(KEYS.blockedTags);
+  }, [blockedTags]);
+  const blockedTagSet = useMemo(() => new Set(blockedTags), [blockedTags]);
+
   // Everything the corpus IS - the sidecar, the embedding blob, the search
   // index built over them. See useCorpus.js.
   const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
+
+  // Every sensitive-content tag the corpus actually has, for the panel's
+  // checklist - not a fixed vocabulary, so a corpus with none renders no
+  // panel at all. And how many rooms the current choice actually removes,
+  // for the panel itself and the debug HUD (`useMapRenderer`).
+  const availableTags = useMemo(() => availableSensitiveTags(metadata), [metadata]);
+  const blockedCount = useMemo(() => countBlocked(metadata, blockedTagSet), [metadata, blockedTagSet]);
 
   // `requestAnimation` doesn't exist yet - it comes back from `useRearrangement`
   // below, which itself needs `announce`, which needs this hook's `result` to
@@ -180,8 +208,8 @@ function Library({ manifest }) {
     const base = result ? result.order : shuffledOrder(total, orderSeed);
     // A blocked room drops out of the ranking entirely - not hidden behind a
     // cell, absent from it - so it never gets a slot on the map at all.
-    return filterBlockedIds(base, metadata, BLOCKED_TAGS);
-  }, [total, orderSeed, result, metadata]);
+    return filterBlockedIds(base, metadata, blockedTagSet);
+  }, [total, orderSeed, result, metadata, blockedTagSet]);
 
   // The catalog's own order: a shuffle is not a list order anyone can read by
   // eye, so its idle default is alphabetical rather than a second read of the
@@ -191,8 +219,8 @@ function Library({ manifest }) {
   // catalog row, exactly as they are the only things that move it on the map.
   const catalogOrder = useMemo(() => {
     const base = result ? result.order : alphabeticalOrder(manifest.rooms);
-    return filterBlockedIds(base, metadata, BLOCKED_TAGS);
-  }, [manifest, result, metadata]);
+    return filterBlockedIds(base, metadata, blockedTagSet);
+  }, [manifest, result, metadata, blockedTagSet]);
 
   // Which cell a room id sits in on the map right now, keyed by id rather
   // than by rank - the catalog's rank in `catalogOrder` and the map's rank in
@@ -509,7 +537,7 @@ function Library({ manifest }) {
   // exist before the hook that fulfils it - one ref, and the cycle is broken.
   useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, draw, anim, keyboardUsed, cam, mode,
-    layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay,
+    layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay, blockedCount,
   });
 
   // --- the rearrangement animation -----------------------------------------
@@ -754,7 +782,15 @@ function Library({ manifest }) {
         />
       )}
 
-      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {helpOpen && (
+        <HelpDialog
+          onClose={() => setHelpOpen(false)}
+          availableTags={availableTags}
+          blockedTags={blockedTags}
+          onToggleTag={toggleBlockedTag}
+          blockedCount={blockedCount}
+        />
+      )}
 
       {card && cardDescription && (
         <RoomCard
@@ -805,17 +841,17 @@ const INITIAL_MODE =
 
 /**
  * `?blockTags=a,b,c` - sensitive-content tags to exclude from the map and
- * catalog, read once at module scope exactly as `INITIAL_MODE` is. A UI and
- * local-storage persistence come later (see AGENTS.md); this is deliberately
- * the whole feature for now, so a room carrying a blocked tag is unreachable
- * behind a link rather than needing a setting to be found first.
+ * catalog, read once at module scope exactly as `INITIAL_MODE` is. This only
+ * ever SEEDS the stored choice (`KEYS.blockedTags`, below): a reader who has
+ * already picked tags in HelpDialog's panel keeps that choice on their next
+ * visit rather than having a stale link silently override it, but a fresh
+ * browser following a shared link starts blocked as the link asks.
  */
-const BLOCKED_TAGS = new Set(
+const URL_BLOCKED_TAGS =
   (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('blockTags') : null)
     ?.split(',')
     .map((t) => t.trim())
-    .filter(Boolean) ?? []
-);
+    .filter(Boolean) ?? [];
 
 
 /**

@@ -481,6 +481,24 @@
       .help-overlay { width: min(520px, 100%); }
       .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
       .help-body p:last-child { margin-bottom: 0; }
+      /*
+        Collapsed by default (see HelpDialog.jsx) - a reader who never opens
+        this should see one quiet line, not a checklist. `summary` gets its
+        own focus ring because a native `<details>` disclosure triangle is
+        otherwise the only visual cue that it is interactive at all.
+      */
+      .help-block-panel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--edge); }
+      .help-block-panel summary {
+        font-size: 11px; color: var(--dim); letter-spacing: 0.04em;
+        text-transform: uppercase; cursor: pointer;
+      }
+      .help-block-panel summary:focus-visible { outline: 2px solid #c8a95f; outline-offset: 2px; }
+      .help-block-panel[open] summary { margin-bottom: 8px; }
+      .help-block-note { margin: 0 0 8px; font-size: 11px; line-height: 1.5; color: var(--dim); }
+      .help-block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      .help-block-list label {
+        display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); cursor: pointer;
+      }
       .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
       /*
         The room's identity and the way out to the map share one row, with real
