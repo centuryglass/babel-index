@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planMoves, applyMove, normaliseDistance } from './illusion.ts';
+import type { BoardValue } from './moves.ts';
 
 /**
  * The verifier is deliberately a second implementation.
@@ -75,7 +76,7 @@ function rng(seed) {
 
 const randInt = (r, lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
 
-const board = (W, H, cells) => ({ width: W, height: H, cells });
+const board = (W: number, H: number, cells: BoardValue[]) => ({ width: W, height: H, cells });
 
 /**
  * A valid (start, end) pair.
@@ -196,7 +197,7 @@ test('a board that is mostly one value is the easy case, not a special one', () 
   const W = 30;
   const H = 24;
   const fixed = { x: 15, y: 12 };
-  const cells = Array.from({ length: W * H }, () => (r() < 0.2 ? Math.floor(r() * 40) : 'generic'));
+  const cells: BoardValue[] = Array.from({ length: W * H }, () => (r() < 0.2 ? Math.floor(r() * 40) : 'generic'));
   const movable = [...Array(W * H).keys()].filter((p) => p !== fixed.y * W + fixed.x);
   const vals = movable.map((p) => cells[p]);
   for (let i = vals.length - 1; i > 0; i--) {

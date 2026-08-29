@@ -5,15 +5,20 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
 import { createApp, stubRanking, hasTextModel } from './app.ts';
+import type { CreateAppOptions } from './app.ts';
 import { scanDirectory } from './scan.ts';
 import { DEFAULTS, resolveConfig } from '../config/config.ts';
 import * as fixture from './image-fixtures.ts';
+import type { AddressInfo } from 'node:net';
 
 /**
  * Bring up the real app on an ephemeral port against a throwaway corpus.
  * No browser and no bundler: the endpoints are the thing under test.
  */
-async function serving(run, { files, ...opts } = {}) {
+async function serving(
+  run: (ctx: { base: string; dir: string; port: number; get: (p: string) => Promise<Response> }) => Promise<void>,
+  { files, ...opts }: { files?: Record<string, Buffer | string> } & Partial<CreateAppOptions> = {}
+) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-api-'));
   const contents = files ?? {
     'center.png': fixture.png(1024, 1024),
@@ -31,15 +36,16 @@ async function serving(run, { files, ...opts } = {}) {
     ...opts,
   });
   const server = app.listen(0);
-  await new Promise((r) => server.once('listening', r));
-  const base = `http://127.0.0.1:${server.address().port}`;
+  await new Promise<void>((r) => server.once('listening', () => r()));
+  const port = (server.address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
 
   try {
     // Accepts both an Express-route path ('/api/manifest') and a manifest
     // url (relative, no leading slash, since app.ts's urls resolve against
     // <base href> in the browser - see base-path.ts) without the caller
     // having to know which kind it was handed.
-    return await run({ base, dir, port: server.address().port, get: (p) => fetch(`${base}/${p.replace(/^\//, '')}`) });
+    return await run({ base, dir, port, get: (p) => fetch(`${base}/${p.replace(/^\//, '')}`) });
   } finally {
     await new Promise((r) => server.close(r));
     await rm(dir, { recursive: true, force: true });
@@ -52,7 +58,7 @@ async function serving(run, { files, ...opts } = {}) {
  * `fetch` normalises `..` out of a URL before it reaches the wire, so it
  * cannot express the attack this is checking for.
  */
-function rawGet(port, path) {
+function rawGet(port: number, path: string): Promise<{ status: number; text: string }> {
   return new Promise((resolve, reject) => {
     const sock = connect(port, '127.0.0.1', () => {
       sock.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`);
@@ -157,8 +163,8 @@ test('shared tiles are served from a shared directory outside the corpus', async
       rescan: () => scanDirectory(imagesDir, { sharedDir: root }),
     });
     const server = app.listen(0);
-    await new Promise((r) => server.once('listening', r));
-    const origin = `http://127.0.0.1:${server.address().port}`;
+    await new Promise<void>((r) => server.once('listening', () => r()));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
       const m = await (await fetch(`${origin}/api/manifest`)).json();
       assert.equal(m.count, 2, 'the shared tiles are not corpus rooms');

@@ -32,6 +32,13 @@
  * with an injected stub.
  */
 
+/** The slice of the `Storage` interface this module actually calls, so a test stub need not fake the rest. */
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
 /** Everything this app stores is under one prefix, so it is greppable and clearable. */
 const PREFIX = 'babel:';
 
@@ -50,7 +57,7 @@ export const KEYS = {
  * Reading `window.localStorage` can itself throw, which is why this is a
  * function call in a try rather than a module-scope constant.
  */
-function storage(override?: Storage | null): Storage | null {
+function storage(override?: StorageLike | null): StorageLike | null {
   if (override !== undefined) return override;
   try {
     return globalThis.localStorage ?? null;
@@ -73,7 +80,7 @@ function storage(override?: Storage | null): Storage | null {
 export function load<T>(
   key: string,
   fallback: T,
-  { validate = () => true, store }: { validate?: (value: unknown) => boolean; store?: Storage | null } = {},
+  { validate = () => true, store }: { validate?: (value: unknown) => boolean; store?: StorageLike | null } = {},
 ): T {
   const s = storage(store);
   if (!s) return fallback;
@@ -95,7 +102,7 @@ export function load<T>(
  * browser declines to remember their paging preference.
  *
  */
-export function save(key: string, value: unknown, { store }: { store?: Storage | null } = {}): boolean {
+export function save(key: string, value: unknown, { store }: { store?: StorageLike | null } = {}): boolean {
   const s = storage(store);
   if (!s) return false;
   try {
@@ -107,7 +114,7 @@ export function save(key: string, value: unknown, { store }: { store?: Storage |
 }
 
 /** Forget one stored value. Used by the panel's "forget searches" control. */
-export function clear(key: string, { store }: { store?: Storage | null } = {}): boolean {
+export function clear(key: string, { store }: { store?: StorageLike | null } = {}): boolean {
   const s = storage(store);
   if (!s) return false;
   try {

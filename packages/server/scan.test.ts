@@ -9,9 +9,8 @@ import * as fixture from './image-fixtures.ts';
 /**
  * A throwaway corpus in a temp directory. Names may contain a `/`, which is how
  * a test builds the pyramid's `<width>/` level directories.
- * @param {Record<string, Buffer|string>} files
  */
-async function corpus(files, run) {
+async function corpus<T>(files: Record<string, Buffer | string>, run: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), 'babel-scan-'));
   try {
     for (const [name, body] of Object.entries(files)) {
@@ -261,7 +260,7 @@ test('a room whose header cannot be read still appears, without a size', async (
 
 test('an empty directory fails with a message naming it', async () => {
   await corpus({}, async (dir) => {
-    await assert.rejects(scanDirectory(dir), (err) => err.message.includes(dir));
+    await assert.rejects(scanDirectory(dir), (err) => err instanceof Error && err.message.includes(dir));
   });
   await corpus({ 'readme.txt': 'no images here' }, async (dir) => {
     await assert.rejects(scanDirectory(dir), /no images found/);
