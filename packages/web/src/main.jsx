@@ -24,13 +24,13 @@ import {
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
 } from './lib/center.js';
-import { CELL_ASPECT, fitZoom } from './lib/camera.js';
+import { CELL_ASPECT, fitZoom } from './lib/camera.ts';
 import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.js';
 import { createSlideRenderer } from './lib/slide.js';
 import { BASE_TILE } from './lib/pyramid.ts';
-import { useMapCamera } from './hooks/useMapCamera.js';
+import { useMapCamera } from './hooks/useMapCamera.ts';
 import { useMapRenderer } from './hooks/useMapRenderer.js';
 import { useMapCursor } from './hooks/useMapCursor.js';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';

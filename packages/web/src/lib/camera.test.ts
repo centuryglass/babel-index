@@ -22,7 +22,7 @@ import {
   worldToScreen,
   zoomAt,
   zoomBy,
-} from './camera.js';
+} from './camera.ts';
 
 const rect = { width: 1280, height: 720 };
 const cam = { x: 3.25, y: -7.5, zoom: 220 };

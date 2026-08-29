@@ -6,7 +6,7 @@ import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
 import { DEFAULTS } from '../../../config/config.ts';
 import { createTileCache, CENTER as CENTER_TILE } from './tiles.ts';
-import { CELL_ASPECT } from './camera.js';
+import { CELL_ASPECT } from './camera.ts';
 
 // The shipped defaults, so these tests exercise what the demo actually runs.
 const TIMING = DEFAULTS.slide;

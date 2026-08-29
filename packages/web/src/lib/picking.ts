@@ -13,7 +13,7 @@
  *
  * No DOM.
  */
-import { screenToWorld } from './camera.js';
+import { screenToWorld } from './camera.ts';
 
 interface Camera {
   x: number;

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULTS, resolveConfig } from './config.ts';
-import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
 
 /**
  * The limits are injected everywhere below rather than assumed, both because

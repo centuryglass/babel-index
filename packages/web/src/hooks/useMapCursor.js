@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cellDistance } from '../../../map/ordering.ts';
 import { describeCell, describeRoom, describeArrangement } from '../../../map/describe.ts';
 import { nextRoom } from '../../../map/nextRoom.ts';
-import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from '../lib/camera.js';
+import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from '../lib/camera.ts';
 
 /**
  * @param {object} opts

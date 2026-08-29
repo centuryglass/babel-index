@@ -24,7 +24,7 @@
  * between two levels, and it can only apply if it knows what is on screen now.
  */
 import { PYRAMID, prefetchBounds } from './pyramid.ts';
-import { pxPerCell } from './camera.js';
+import { pxPerCell } from './camera.ts';
 import { CENTER, genericId } from './tiles.ts';
 import { composeSpines } from './center.js';
 
