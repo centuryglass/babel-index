@@ -8,7 +8,7 @@
  * Writes every level below 0 as <out>/<width>/<file>. With no --out it works in
  * place, leaving the source files where they are as level 0 - so running it on
  * a corpus directory adds the smaller levels and changes nothing that was
- * already there. Levels already current for their source (see mips.mjs's
+ * already there. Levels already current for their source (see mips.ts's
  * content-hash caching) are left alone, so a rerun after touching a handful of
  * images only re-resizes those.
  *
@@ -22,7 +22,7 @@ import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import sharp from 'sharp';
 import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
-import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes } from './mips.mjs';
+import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes, type SourceSize } from './mips.ts';
 import { writeSheets } from './sheets.ts';
 
 const argv = parseArgs(process.argv.slice(2));
@@ -44,15 +44,15 @@ if (!files.length) {
 
 // Aspect first: a corpus that cannot agree on a shape cannot tile, and finding
 // that out after resizing 10,000 rooms is finding it out too late.
-const sizes = [];
+const sizes: SourceSize[] = [];
 for (const file of files) {
   const meta = await sharp(join(imagesDir, file)).metadata();
-  sizes.push({ file, w: meta.width, h: meta.height });
+  sizes.push({ file, w: meta.width ?? 0, h: meta.height ?? 0 });
 }
 
 const { aspect, outliers } = checkAspects(sizes);
 if (outliers.length) {
-  console.error(`\n  ${outliers.length} image(s) do not share the corpus aspect of ${aspect.toFixed(4)}:`);
+  console.error(`\n  ${outliers.length} image(s) do not share the corpus aspect of ${(aspect ?? 0).toFixed(4)}:`);
   for (const o of outliers.slice(0, 10))
     console.error(`    ${o.file}  ${o.w}x${o.h}  (${(o.w / o.h).toFixed(4)})`);
   if (outliers.length > 10) console.error(`    ... and ${outliers.length - 10} more`);
@@ -63,7 +63,7 @@ if (outliers.length) {
 
 const plan = mipPlan(sizes[0], LEVELS);
 console.log(`\n  ${files.length} rooms in ${imagesDir}`);
-console.log(`  source ${sizes[0].w}x${sizes[0].h}, aspect ${aspect.toFixed(4)}`);
+console.log(`  source ${sizes[0].w}x${sizes[0].h}, aspect ${(aspect ?? 0).toFixed(4)}`);
 if (plan.length < LEVELS.length)
   console.log(`  ${plan.length} of ${LEVELS.length} levels - the source is too small for the rest`);
 for (const step of plan)
@@ -76,7 +76,7 @@ console.log(inPlace ? '\n  writing in place ...\n' : `\n  writing to ${outDir} .
 let written = 0;
 let cached = 0;
 let done = 0;
-const hashes = new Map();
+const hashes = new Map<string, string>();
 for (const file of files) {
   const result = await writeMips({ file: join(imagesDir, file), outDir, inPlace, quality });
   written += result.written;
@@ -104,7 +104,7 @@ const sheetSteps = plan.filter((step) => step.level >= SHEETS.fromLevel);
 if (sheetSteps.length) {
   console.log(`  packing ${sheetSteps.length} level(s) into ${SHEETS.roomsPerSheet}-room sheets ...\n`);
   for (const step of sheetSteps) {
-    const levelDir = join(outDir, step.dir);
+    const levelDir = join(outDir, step.dir ?? '');
     const result = await writeSheets({ levelDir, files, tileSize: { w: step.w, h: step.h }, quality });
     console.log(
       `    level ${step.level}  ${result.sheetCount} sheet(s), ${result.written} written, ${result.cached} unchanged`
@@ -120,8 +120,8 @@ if (sheetSteps.length) {
 await updateMetadataHashes(imagesDir, hashes);
 console.log(`  metadata.json: ${hashes.size} content hash(es) recorded\n`);
 
-function parseArgs(args) {
-  const out = {};
+function parseArgs(args: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (!a.startsWith('--')) continue;

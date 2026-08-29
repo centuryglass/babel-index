@@ -25,7 +25,7 @@
  * local file this corpus touches (room images at every level, metadata.json,
  * the embeddings blob and sidecar, the shared tiles) is hashed fresh, with
  * the same `contentHash()` the pyramid generator uses (packages/pipeline/
- * mips.mjs) rather than a second sha256-of-bytes implementation; a file whose
+ * mips.ts) rather than a second sha256-of-bytes implementation; a file whose
  * hash matches the manifest's record for its key is skipped. Nothing is
  * deleted from R2, and no other tool reads that upload manifest - it exists
  * only so a rerun after touching a handful of images costs a handful of PUTs,
@@ -61,7 +61,7 @@ import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } fr
 import { scanDirectory } from '../../packages/server/scan.ts';
 import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.ts';
 import { createLimiter } from '../../packages/server/search-cache.ts';
-import { contentHash } from '../../packages/pipeline/mips.mjs';
+import { contentHash } from '../../packages/pipeline/mips.ts';
 import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const MANIFEST_NAME = 'upload-manifest.json';

@@ -12,12 +12,39 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RoomDetails } from './RoomDetails.jsx';
+import type { RoomPick } from '../lib/picking.ts';
+import type { RoomMeta } from '../../../map/metadata.ts';
+import type { Description } from '../../../map/describe.ts';
+import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { Config } from '../../../config/config.ts';
 
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
 
-export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highlight, tagLinks, result, weights }) {
-  const ref = useRef(null);
+export function RoomCard({
+  card,
+  desc,
+  entry,
+  file,
+  onClose,
+  onKeyword,
+  highlight,
+  tagLinks,
+  result,
+  weights,
+}: {
+  card: RoomPick & { at: { x: number; y: number } };
+  desc: Description;
+  entry: RoomMeta | null;
+  file?: string;
+  onClose: () => void;
+  onKeyword: (keyword: string) => void;
+  highlight?: { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+  tagLinks?: Record<string, string> | null;
+  result?: SearchResult | null;
+  weights?: Config['search']['weights'] | null;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
 
   // Clamp against the card's REAL height, not an assumed one: it grows with the
@@ -45,7 +72,7 @@ export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highligh
   // or has fallen to the body, which are exactly the cases where nobody else
   // has claimed it.
   useEffect(() => {
-    const opener = document.activeElement;
+    const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     return () => {
       // The body is not somewhere focus can be "put back" - it is where focus
@@ -62,11 +89,11 @@ export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highligh
   }, []);
 
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     // `pointerdown` rather than `click`: the canvas would otherwise start a pan
     // under a dismissing click, and the map would lurch as the card vanished.
-    const onDown = (e) => {
-      if (!ref.current?.contains(e.target)) onClose();
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onDown, true);
@@ -94,7 +121,7 @@ export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highligh
     >
       <div className="card-head">
         <span className="card-id">
-          {card.generic ? 'blank wall' : `room ${card.id}${file ? ` · ${file}` : ''}`}
+          {'generic' in card ? 'blank wall' : `room ${card.id}${file ? ` · ${file}` : ''}`}
         </span>
         <button className="card-close" onClick={onClose} aria-label="close">
           ×
@@ -107,7 +134,7 @@ export function RoomCard({ card, desc, entry, file, onClose, onKeyword, highligh
         onKeyword={onKeyword}
         highlight={highlight}
         tagLinks={tagLinks}
-        rank={card.rank}
+        rank={'generic' in card ? undefined : card.rank}
         result={result}
         weights={weights}
       />

@@ -11,11 +11,11 @@
  * The addressing arithmetic (`sheetPlan`, `sheetPosition`, `sheetDirName`,
  * `sheetFileName`) lives in `layout.ts`, not here, so `packages/server/scan.ts`
  * can discover and validate what this file writes without depending on
- * `sharp` - same split as `mipPlan`/`mips.mjs`. This module only adds the
+ * `sharp` - same split as `mipPlan`/`mips.ts`. This module only adds the
  * actual compositing.
  *
  * Incremental rebuilds: a sheet has no single source file to stamp with an
- * EXIF hash the way a per-file mip level does (mips.mjs), so each sheet
+ * EXIF hash the way a per-file mip level does (mips.ts), so each sheet
  * directory instead carries a small `hashes.json` sidecar mapping sheet index
  * -> a combined hash of its member tiles' own content hashes, in order. A
  * rebuild only recomposites a sheet whose combined hash changed - bounded to
@@ -28,7 +28,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { SHEETS } from '../web/src/lib/pyramid.ts';
-import { contentHash } from './mips.mjs';
+import { contentHash } from './mips.ts';
 import { sheetPlan, sheetFileName, type Size, type SheetConfig } from './layout.ts';
 
 export { sheetPlan, sheetPosition, sheetDirName, sheetFileName } from './layout.ts';
@@ -42,7 +42,7 @@ const HASHES_FILE = 'hashes.json';
  * sheets under `<levelDir>-sheets/`.
  *
  * `files` must be in the same order as the room ids the manifest assigns
- * (`packages/pipeline/mips.mjs`'s `sourceImages()` order) - sheet addressing
+ * (`packages/pipeline/mips.ts`'s `sourceImages()` order) - sheet addressing
  * is positional, so a reordering here silently mislabels every sheet after
  * the change.
  */

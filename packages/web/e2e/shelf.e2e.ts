@@ -60,7 +60,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       );
 
       // Reached from the search field. The clear button only mounts once
-      // there is something to clear (SearchForm.jsx), so it takes typing a
+      // there is something to clear (SearchForm.tsx), so it takes typing a
       // query - not merely submitting one - to put it right after the input
       // and give it the first Tab; the shelf is the stop after that.
       await page.locator('input[type=search]').fill('brass');

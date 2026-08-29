@@ -23,11 +23,11 @@
  * warm. See `docs/catalog-plan.md` §2.
  */
 import { RoomDetails } from './RoomDetails.jsx';
-import { SearchForm } from './SearchForm.jsx';
+import { SearchForm } from './SearchForm.tsx';
 import { describeBook, BOOK_RECTS } from '../lib/center.js';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
-import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.jsx';
+import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.tsx';
 
 /**
  * Each book's position inside the shelf container, as percentages.
@@ -221,7 +221,7 @@ export function MapView({
       {/*
         The search affordance - not part of the dev panel below (it has to
         survive `?debug` being off, since the panel does not) and not
-        diegetic either; see `SearchIcon.jsx`. The arrow is a separate layer
+        diegetic either; see `SearchIcon.tsx`. The arrow is a separate layer
         so `useMapRenderer` can rotate it every frame to point at wherever the
         center tile actually is on screen, which is why it needs its own ref.
       */}
