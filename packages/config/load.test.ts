@@ -7,7 +7,7 @@ import { loadConfig } from './load.ts';
 import { DEFAULTS } from './config.ts';
 
 /** A throwaway directory with the given files, cleaned up afterwards. */
-async function withFiles(files, run) {
+async function withFiles(files: Record<string, string>, run: (dir: string) => Promise<void>) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-config-'));
   for (const [name, body] of Object.entries(files)) await writeFile(join(dir, name), body);
   try {
@@ -32,7 +32,7 @@ test('a partial overlay changes only what it names', async () => {
     const c = await loadConfig({ path: join(dir, 'config.json') });
     assert.equal(c.map.contentRatio, 0.5);
     assert.equal(c.map.slotSeed, DEFAULTS.map.slotSeed, 'untouched keys keep their defaults');
-    assert.equal(c.search.weights.keyword, DEFAULTS.search.weights.keyword);
+    assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
     assert.deepEqual(c.notes, []);
     assert.equal(c.source, join(dir, 'config.json'));
   });

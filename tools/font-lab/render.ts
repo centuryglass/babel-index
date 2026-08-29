@@ -15,16 +15,17 @@
  *
  * Output: tools/font-lab/out/<group>/<id>.png, plus an index.html contact sheet.
  *
- *   node tools/font-lab/render.mjs
+ *   node --import ./build/register.mjs tools/font-lab/render.ts
  */
 import { chromium } from 'playwright';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { layout } from '../center-placement/lib/geometry.js';
-import { FONTS } from './fonts.mjs';
-import { VARIANTS, REQUIRED_FACES } from './variants.mjs';
+import { layout } from '../center-placement/lib/geometry.ts';
+import { FONTS } from './fonts.ts';
+import { VARIANTS, REQUIRED_FACES } from './variants.ts';
+import type { Variant, FaceRef } from './variants.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -79,14 +80,14 @@ function parseCli() {
     },
   });
   const dpr = Math.max(1, Number(values.dpr) || 1);
-  const overrides = {};
+  const overrides: Partial<Pick<Variant, 'caps' | 'ink' | 'backdrop' | 'backdropColor'>> = {};
   if (values.caps) overrides.caps = true;
   if (values.ink) overrides.ink = values.ink;
   if (values.backdrop || values['backdrop-color']) overrides.backdrop = true;
   if (values['backdrop-color']) overrides.backdropColor = values['backdrop-color'];
 
   // A directory-safe suffix naming the active conditions, for the output path.
-  const parts = [];
+  const parts: string[] = [];
   if (dpr !== 1) parts.push(`dpr${dpr}`);
   if (overrides.caps) parts.push('caps');
   if (overrides.backdrop) parts.push('backdrop');
@@ -354,7 +355,7 @@ async function main() {
     // sees it as the ambient lib.dom Window, which has no `__env`, so stash it
     // through an untyped alias rather than fight the ambient type for a bridge
     // variable that only ever exists in the page.
-    const win = /** @type {any} */ (window);
+    const win = window as any;
     win.__env = { _img: img };
   }, { faces, centerUri });
 
@@ -365,7 +366,7 @@ async function main() {
     await mkdir(dir, { recursive: true });
     const url = await page.evaluate(
       ({ variant, shared, renderSrc }) => {
-        const win = /** @type {any} */ (window);
+        const win = window as any;
         const env = { ...shared, _img: win.__env._img };
         // Re-hydrate the render function from its source (functions don't cross
         // the bridge). It closes over `variant` and `env` as normal args.
@@ -392,10 +393,15 @@ async function main() {
 }
 
 /** A single scrollable page linking every composite, grouped by sweep. */
-async function writeContactSheet(runDir, written, banner) {
-  const groups = {};
+interface Written {
+  variant: Variant;
+  rel: string;
+}
+
+async function writeContactSheet(runDir: string, written: Written[], banner: string) {
+  const groups: Record<string, Written[]> = {};
   for (const w of written) (groups[w.variant.group] ??= []).push(w);
-  const section = (name, items) => `
+  const section = (name: string, items: Written[]) => `
     <h2>${name}</h2>
     ${items
       .map(

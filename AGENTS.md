@@ -194,6 +194,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                   shared tiles) to Cloudflare R2, incrementally by content hash.
   * `upload-r2.ts`: CLI, credentials from env.
   * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
+- `tools/font-lab`: Ad hoc design-exploration lab for the center shelf's spine
+                    titles - not wired into any npm script, not covered by
+                    tests. Run directly, e.g.
+                    `node --import ./build/register.mjs tools/font-lab/render.ts`.
+  * `fonts.ts`: The candidate typefaces and where to fetch them from Google Fonts.
+  * `download-fonts.ts`: Fetch each candidate's latin woff2 into `fonts/`.
+  * `variants.ts`: The font/settings sweep matrix `render.ts` draws.
+  * `render.ts`: Composite each variant onto the real center tile via Playwright
+                 Chromium, three zooms to a labelled contact-sheet PNG.
 
 ### Infra:
 - `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the

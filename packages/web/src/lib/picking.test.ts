@@ -19,8 +19,8 @@ test('a point inside a content slot picks that slot', () => {
   assert.ok(hit, 'expected a hit on a known content slot');
   assert.equal(hit.x, slot.x);
   assert.equal(hit.y, slot.y);
-  assert.equal(hit.rank, 7);
-  assert.equal(hit.id, order[7]);
+  assert.equal((hit as any).rank, 7);
+  assert.equal((hit as any).id, order[7]);
 });
 
 test('the picked room follows the ranking, not the cell', () => {
@@ -29,8 +29,8 @@ test('the picked room follows the ranking, not the cell', () => {
   const slot = layout.slots[3];
   const p = centreOf(slot.x, slot.y);
   const reversed = [...order].reverse();
-  assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, order).id, order[3]);
-  assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, reversed).id, reversed[3]);
+  assert.equal((roomAtPoint(p.x, p.y, cam, rect, layout, order) as any).id, order[3]);
+  assert.equal((roomAtPoint(p.x, p.y, cam, rect, layout, reversed) as any).id, reversed[3]);
 });
 
 test('the center room is never picked', () => {
@@ -49,10 +49,10 @@ test('a generic cell is picked as generic, not as a room', () => {
       const p = centreOf(x, y);
       const hit = roomAtPoint(p.x, p.y, cam, rect, layout, order);
       assert.ok(hit, `expected a hit on generic cell ${x},${y}`);
-      assert.equal(hit.generic, true);
+      assert.equal((hit as any).generic, true);
       assert.equal(hit.x, x);
       assert.equal(hit.y, y);
-      assert.equal(hit.id, undefined);
+      assert.equal((hit as any).id, undefined);
       checked++;
     }
   assert.ok(checked > 0, 'no generic cells were available to check');
@@ -64,7 +64,7 @@ test('a rank beyond the end of the order is generic, not a crash', () => {
   const p = centreOf(slot.x, slot.y);
   const hit = roomAtPoint(p.x, p.y, cam, rect, layout, order.slice(0, 10));
   assert.ok(hit);
-  assert.equal(hit.generic, true);
+  assert.equal((hit as any).generic, true);
 });
 
 test('picking is exact at cell edges rather than rounding into the neighbour', () => {
