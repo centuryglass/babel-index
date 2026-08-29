@@ -173,7 +173,7 @@ async function loadTextTower(model: string): Promise<{ tokenizer: any; textModel
 /** L2-normalise one row, matching how both `embed.ts` and `app.ts` prepare a vector. */
 function normalise(row: ArrayLike<number>): Float32Array {
   let norm = 0;
-  for (const x of row) norm += x * x;
+  for (let i = 0; i < row.length; i++) norm += row[i] * row[i];
   norm = Math.sqrt(norm) || 1;
   const out = Float32Array.from(row);
   for (let i = 0; i < out.length; i++) out[i] /= norm;

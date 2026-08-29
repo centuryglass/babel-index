@@ -350,7 +350,12 @@ async function main() {
       im.onerror = rej;
       im.src = centerUri;
     });
-    window.__env = { _img: img };
+    // `window` here is the Playwright page's DOM, not this process's - tsc only
+    // sees it as the ambient lib.dom Window, which has no `__env`, so stash it
+    // through an untyped alias rather than fight the ambient type for a bridge
+    // variable that only ever exists in the page.
+    const win = /** @type {any} */ (window);
+    win.__env = { _img: img };
   }, { faces, centerUri });
 
   const written = [];
@@ -360,7 +365,8 @@ async function main() {
     await mkdir(dir, { recursive: true });
     const url = await page.evaluate(
       ({ variant, shared, renderSrc }) => {
-        const env = { ...shared, _img: window.__env._img };
+        const win = /** @type {any} */ (window);
+        const env = { ...shared, _img: win.__env._img };
         // Re-hydrate the render function from its source (functions don't cross
         // the bridge). It closes over `variant` and `env` as normal args.
         const fn = new Function('return (' + renderSrc + ')')();
