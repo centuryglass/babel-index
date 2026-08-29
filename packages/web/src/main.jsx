@@ -32,7 +32,7 @@ import { createSlideRenderer } from './lib/slide.js';
 import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
 import { useMapRenderer } from './hooks/useMapRenderer.js';
-import { useMapCursor } from './hooks/useMapCursor.js';
+import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';

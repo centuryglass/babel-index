@@ -150,9 +150,8 @@ their module when it converts and aren't listed separately.
 
 Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
 already exist as types to write these against; `useCorpus.js`, `useSearch.js`,
-`useModeTransition.js`, `useCenterShelf.js` and `useMapCamera.js` already
-converted):
- - `packages/web/src/hooks/useMapCursor.js`
+`useModeTransition.js`, `useCenterShelf.js`, `useMapCamera.js` and
+`useMapCursor.js` already converted):
  - `packages/web/src/hooks/useMapRenderer.js`
  - `packages/web/src/hooks/useRearrangement.js`
 
