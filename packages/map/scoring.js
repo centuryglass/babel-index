@@ -87,18 +87,34 @@ export function lemmatise(word) {
 }
 
 /**
- * Raw-cosine bounds for CLIP's share of certainty: at or below `low` it is
- * saying nothing, at or above `high` it is as sure as it gets.
+ * The three anchors of CLIP's signed certainty curve (docs/search_rules.md
+ * "Image-content (CLIP) matching" + "Computing certainty"): `centre` is the
+ * no-opinion point (0), `high` is a genuine match's typical confidence (+1),
+ * `low` is a genuinely-irrelevant query's typical confidence (-1). Continuous
+ * and monotone between them - see `signedClipCertainty`.
  *
- * Measured against the real corpus (1901 rooms x 2149 generation keywords,
- * CLIP ViT-B/32): every observed cosine fell inside -0.060 to 0.346, so these
- * sit just outside that span rather than at the true min/max. That keeps
- * certainty from ever hitting exactly 0 or 1 - CLIP is never quite that sure,
- * in either direction - while still spending nearly the whole [0, 1] range on
- * the spread that's actually there, instead of the sliver it would get if the
- * bounds were the theoretical cosine range of -1 to 1.
+ * `centre` and `high` are read straight off `cosine-range-report.json`
+ * (2048 rooms x 2149 generation keywords, CLIP ViT-B/32, via
+ * `tools/embed/cosine-range.ts`): `centre` is the *median* of the overall
+ * keyword x room distribution (mostly-unrelated pairs - `overall.p50`), `high`
+ * is the *median* ceiling across near-universal keywords true of nearly every
+ * room (`bookshelf`, `book`, `library`, ... - `universal.ceiling`), chosen over
+ * the raw distribution max because a single outlier pair should not define
+ * "as sure as it gets".
+ *
+ * `low` is still provisional: docs/search-plan.md §5 calls for measuring it
+ * from known-irrelevant strong concepts (a query CLIP should recognise but
+ * that has nothing to do with this corpus - "swimming pool", "race car" -
+ * expected to land low-positive, not negative, per the spec). That measurement
+ * needs a real corpus and network access to the CLIP text tower, neither
+ * available in every environment this runs in, so until it lands `low` is the
+ * mirror of `high` across `centre` (`centre - (high - centre)`) - a
+ * data-grounded placeholder, not a guess pulled from nowhere, that keeps the
+ * curve continuous and gives a reasonable negative reading rather than none at
+ * all. `tools/embed/cosine-range.ts --irrelevant <file>` computes the real
+ * anchor the same way `--universal` computes `high`; swap it in here once run.
  */
-export const CLIP_CERTAINTY = { low: -0.08, high: 0.37 };
+export const CLIP_CERTAINTY = { centre: 0.205, high: 0.279, low: 0.131 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -677,34 +693,48 @@ function storyLongBonus01(chars) {
 export const STORY_FLOOR = 0.5;
 
 /**
- * CLIP's raw cosine placed against the absolute match band, as a SIGNED
- * certainty in [-1, 1] - or rather, as much of that curve as the current
- * calibration can support. `docs/search_rules.md` ("Computing certainty")
- * defines this from THREE measured anchors: a no-opinion CENTRE, a high
- * extreme, and a low extreme, with 0/+1/-1 at each. `CLIP_CERTAINTY` today
- * (`{low, high}`) is still the OLD hand-set linear band, which only ever had
- * two points - `low` was calibrated to mean "at or below here CLIP is saying
- * nothing" (the no-opinion centre), `high` to mean "as sure as it gets".
- * There is no measured low extreme yet (that measurement is
- * docs/search-plan.md §5), so this reads `band.low` as the no-opinion centre
- * and leaves the negative half genuinely at 0 - not fabricated by mirroring
- * the positive half - until a real low extreme is measured and threaded in.
+ * CLIP's raw cosine placed against the three-anchor band, as a SIGNED
+ * certainty in [-1, 1] (`docs/search_rules.md` "Computing certainty" and
+ * "Image-content (CLIP) matching"): 0 at `band.centre` (the no-opinion point),
+ * rising to +1 at `band.high` (a genuine match's typical confidence), falling
+ * to -1 at `band.low` (a genuinely-irrelevant query's typical confidence).
+ * Two linear segments, continuous at the centre - not one band either side of
+ * a single hand-set floor.
  *
- * `clipCertaintyGate` - the ranking/certainty term docs/search_rules.md calls
- * for - is exactly this function's positive output: a query the band is not
- * yet sure about (`cosine <= band.low`) contributes nothing to either ranking
- * or certainty, rather than the token amount the old linear-from-`low` gate
- * gave it.
+ * `clipCertaintyGate` - the ranking term docs/search_rules.md calls for - is
+ * this function's output clamped to its positive half: `Math.max(0, ...)`,
+ * done by the caller (`rankHybrid`), not here, because certainty's negative
+ * half (`Cneg` in `matchCertainty`) needs the same call's negative half too.
  *
  * @param {number|null} cosine
- * @param {{low: number, high: number}} band
- * @returns {number} in [0, 1] until a real low extreme lands in §5, then [-1, 1]
+ * @param {{centre: number, high: number, low: number}} band
+ * @returns {number} in [-1, 1]
  */
 export function signedClipCertainty(cosine, band = CLIP_CERTAINTY) {
   if (cosine === null || cosine === undefined || !Number.isFinite(cosine)) return 0;
-  const span = band.high - band.low;
+  const { centre, high, low } = band;
+  if (cosine >= centre) {
+    const span = high - centre;
+    if (!(span > 0)) return 0;
+    return clamp01((cosine - centre) / span);
+  }
+  const span = centre - low;
   if (!(span > 0)) return 0;
-  return clamp01((cosine - band.low) / span);
+  return -clamp01((centre - cosine) / span);
+}
+
+/**
+ * `signedClipCertainty`'s output as the signed percentage docs/search_rules.md
+ * "Reporting" wants: same sign, magnitude clamped to `0.01`-`99.99` so CLIP
+ * never reads as completely certain in either direction - not even for the
+ * anchor cosines themselves.
+ *
+ * @param {number} signed in [-1, 1]
+ * @returns {number} in [-99.99, -0.01] union [0.01, 99.99]
+ */
+function clipCertaintyPercent(signed) {
+  const magnitude = Math.min(99.99, Math.max(0.01, Math.abs(signed) * 100));
+  return signed < 0 ? -magnitude : magnitude;
 }
 
 /**
@@ -743,7 +773,7 @@ export function signedClipCertainty(cosine, band = CLIP_CERTAINTY) {
  *   single matched word's `storyLongChars` can sit under the ramp's floor and
  *   read as the same "zero" a non-match would, so this is passed explicitly
  * @param {number|null} [parts.cosine] raw CLIP cosine, or null/undefined
- * @param {{low: number, high: number}} [clip] raw-cosine bounds
+ * @param {{centre: number, high: number, low: number}} [clip] raw-cosine anchors
  * @returns {number} signed, in [-1, 1]
  */
 export function matchCertainty(
@@ -786,8 +816,8 @@ export function matchCertainty(
  * @param {number} [opts.dim]
  * @param {Float32Array|number[]} [opts.vector] the query vector, L2-normalised
  * @param {import('./searchResult.ts').SearchIndex} [opts.index]
- * @param {{low: number, high: number}} [opts.clipCertainty] raw-cosine bounds
- *   for CLIP's share of certainty
+ * @param {{centre: number, high: number, low: number}} [opts.clipCertainty]
+ *   raw-cosine anchors for CLIP's share of certainty
  * @returns {import('./searchResult.ts').RankHybridResult}
  *   `certainty` is parallel to `order`, i.e. by rank, which is how the map's
  *   density gradient wants it - and `breakdown` follows the same convention,
@@ -874,7 +904,8 @@ export function rankHybrid({
 
     const cosine = cosines ? (cosines[id] ?? null) : null;
     const clipNorm = clipNormAll ? (clipNormAll[id] ?? 0) : 0;
-    const clipCertaintyGate = signedClipCertainty(cosine, clipCertainty);
+    const clipSigned = signedClipCertainty(cosine, clipCertainty);
+    const clipCertaintyGate = Math.max(0, clipSigned);
     const storyLongBonus = storyLongBonus01(storyLongChars);
     const tagCoverage = hasTerms ? tagCoverageSum / tagTerms.length : 0;
 
@@ -894,6 +925,7 @@ export function rankHybrid({
       storyLongChars,
       clipNorm,
       clipCertaintyGate,
+      clipSigned,
       cosine,
       certainty: matchCertainty({ tagCoverage, storyLongChars, storyMatched, cosine }, clipCertainty),
     };
@@ -912,6 +944,7 @@ export function rankHybrid({
     storyLongChars: new Float32Array(count),
     clip: new Float32Array(count),
     clipCertaintyGate: new Float32Array(count),
+    clipSigned: new Float32Array(count),
     cosine: new Float32Array(count),
   };
   for (let rank = 0; rank < count; rank++) {
@@ -924,6 +957,7 @@ export function rankHybrid({
     breakdown.storyLongChars[rank] = row.storyLongChars;
     breakdown.clip[rank] = row.clipNorm;
     breakdown.clipCertaintyGate[rank] = row.clipCertaintyGate;
+    breakdown.clipSigned[rank] = row.clipSigned;
     breakdown.cosine[rank] = row.cosine ?? NaN;
   }
 
@@ -1018,6 +1052,7 @@ export function explainScore(rank, { breakdown, certainty, weights }) {
       weighted: weights.clip * at(breakdown?.clip) * at(breakdown?.clipCertaintyGate),
       raw: cosine,
       note: 'relative to this query’s best and worst; the raw cosine is absolute',
+      signedPercent: clipCertaintyPercent(at(breakdown?.clipSigned)),
     });
 
   return { rows, total: at(breakdown?.score), certainty: at(certainty) };

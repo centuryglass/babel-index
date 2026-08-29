@@ -45,6 +45,21 @@ export function Highlight({ text, ranges }) {
 }
 
 /**
+ * CLIP's own signed certainty, as the compact phrase docs/search_rules.md
+ * "Reporting" describes - a distinct style for the negative reading so it is
+ * never mistaken for a positive, if weaker, match.
+ */
+function ClipCertainty({ percent }) {
+  const mismatch = percent < 0;
+  return (
+    <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>
+      {' '}
+      {Math.abs(percent).toFixed(2)}% certain the image content {mismatch ? 'does not match' : 'matches'}
+    </span>
+  );
+}
+
+/**
  * Why this room ranked where it did.
  *
  * Shown only under a search, and only for a room the search actually ranked.
@@ -79,6 +94,7 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
         {rows.map((r) => (
           <li key={r.key} title={r.note ?? undefined}>
             {r.label} <b>{r.weighted.toFixed(3)}</b> <span>{r.raw.toFixed(2)}</span>
+            {r.signedPercent !== undefined && <ClipCertainty percent={r.signedPercent} />}
           </li>
         ))}
         <li className="total">
@@ -102,6 +118,7 @@ function ScoreBreakdown({ rank, result, weights, layout = 'table' }) {
               <td className="num">{r.weighted.toFixed(3)}</td>
               <td className="raw" title={r.note ?? undefined}>
                 {r.raw.toFixed(2)}
+                {r.signedPercent !== undefined && <ClipCertainty percent={r.signedPercent} />}
               </td>
             </tr>
           ))}
