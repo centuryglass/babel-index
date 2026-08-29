@@ -37,7 +37,7 @@ import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.js';
-import { useSearch, describeSignals } from './hooks/useSearch.js';
+import { useSearch, describeSignals } from './hooks/useSearch.ts';
 
 function App() {
   const [manifest, setManifest] = useState(null);
@@ -157,7 +157,7 @@ function Library({ manifest }) {
   // below, which itself needs `announce`, which needs this hook's `result` to
   // say what a change was for. `useSearch` has to run before that circle closes,
   // so it takes a ref and `main.jsx` fills it in once `useRearrangement` has
-  // returned - see useSearch.js's file comment.
+  // returned - see useSearch.ts's file comment.
   const requestAnimationRef = useRef(() => {});
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
@@ -862,7 +862,7 @@ const URL_BLOCKED_TAGS =
  *
  * Sentence construction over already-tested primitives (`nextRoom`,
  * `cellDistance`) rather than a new pure module of its own - the same kind of
- * job `describeSignals` (useSearch.js) does for a search. Simplified from the
+ * job `describeSignals` (useSearch.ts) does for a search. Simplified from the
  * plan's own example on purpose: four cardinal directions via straight-line
  * `nextRoom` walks, not eight - a true diagonal nearest-room search is more
  * geometry than a `?` press needs to earn its keep.
