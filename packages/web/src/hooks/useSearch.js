@@ -142,7 +142,11 @@ export function useSearch({
         dim: blob?.dim,
         vector: res.vector,
         index: searchIndex,
-        clipCertainty: { low: searchConfig.density.clipLow, high: searchConfig.density.clipHigh },
+        clipCertainty: {
+          centre: searchConfig.density.clipCentre,
+          high: searchConfig.density.clipHigh,
+          low: searchConfig.density.clipLow,
+        },
       });
       requestAnimationRef.current(describeSignals(signals, Boolean(searchIndex)));
       // `term`, not the live `query`: the box changes on every keystroke and

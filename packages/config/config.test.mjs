@@ -255,9 +255,21 @@ test('an inverted cosine band is reported rather than silently disabling CLIP', 
     { search: { density: { clipLow: 0.4, clipHigh: 0.2 } } },
     { zoomLimits: LIMITS }
   );
+  assert.equal(c.search.density.clipCentre, DEFAULTS.search.density.clipCentre);
   assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
   assert.equal(c.search.density.clipHigh, DEFAULTS.search.density.clipHigh);
   assert.ok(c.notes.some((n) => n.includes('clipHigh')), c.notes.join('; '));
+});
+
+test('an out-of-order centre falls back together with high/low', () => {
+  const c = resolveConfig(
+    { search: { density: { clipCentre: 0.5, clipHigh: 0.4, clipLow: 0.1 } } },
+    { zoomLimits: LIMITS }
+  );
+  assert.equal(c.search.density.clipCentre, DEFAULTS.search.density.clipCentre);
+  assert.equal(c.search.density.clipHigh, DEFAULTS.search.density.clipHigh);
+  assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
+  assert.ok(c.notes.some((n) => n.includes('clipCentre')), c.notes.join('; '));
 });
 
 test('a nonsense peak or floor falls back and says so', () => {
@@ -274,8 +286,8 @@ test('the default gradient bounds bracket a real CLIP cosine', () => {
   // Not a preference but a measurement, and the one number here most likely to
   // move: image-text cosines have to be able to land inside the band for the
   // gradient to grade anything at all.
-  const { clipLow, clipHigh } = DEFAULTS.search.density;
-  assert.ok(clipHigh > clipLow, `${clipLow}-${clipHigh}`);
+  const { clipLow, clipCentre, clipHigh } = DEFAULTS.search.density;
+  assert.ok(clipHigh > clipCentre && clipCentre > clipLow, `${clipLow}-${clipCentre}-${clipHigh}`);
   assert.ok(clipLow > -1 && clipHigh < 1, 'a cosine, not a normalised score');
 });
 
