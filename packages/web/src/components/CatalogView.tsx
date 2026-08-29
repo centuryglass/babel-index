@@ -42,7 +42,7 @@ import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 import type { Config } from '../../../config/config.ts';
 import type { UrlFor } from '../lib/rooms.ts';
-import { describeBook } from '../lib/center.js';
+import { describeBook, type Slot as CentreSlot } from '../lib/center.ts';
 import { RoomDetails } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import {
@@ -59,8 +59,8 @@ import {
 } from '../lib/catalog.ts';
 import { CENTER } from '../lib/tiles.ts';
 
-/** One slot on the center shelf, as `assignTitles()` (center.js) returns it. */
-type Slot = { kind: string; text: string; term?: string; action?: string } | null;
+/** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
+type Slot = CentreSlot | null;
 
 type Highlight = { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
 

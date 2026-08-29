@@ -35,9 +35,10 @@
  *
  * No DOM (the compositing takes a 2d context but reads nothing back).
  */
-import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
+import { layout, type Rect } from '../../../../tools/center-placement/lib/geometry.ts';
 import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
-import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.ts';
+import { CELL_ASPECT, pxPerCell, worldToScreen, type Camera, type ViewportRect } from './camera.ts';
+import type { DrawContext } from './render.ts';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
@@ -50,13 +51,13 @@ const GEOMETRY = layout({ width: 1, height: 1 });
  * `main.jsx` fits and centers on it. Sourced from the one geometry module, so
  * it tracks any re-trace of the tile.
  */
-export const CENTER_SHELF_RECT = GEOMETRY.opening;
+export const CENTER_SHELF_RECT: Rect = GEOMETRY.opening;
 
 /**
  * Where the live search field belongs on the center tile, in the same cell
  * fractions as `CENTER_SHELF_RECT`. Traced from the SVG's `search_box` rect.
  */
-export const CENTER_SEARCH_RECT = GEOMETRY.searchBox;
+export const CENTER_SEARCH_RECT: Rect = GEOMETRY.searchBox;
 
 /**
  * The opening view's real framing target: the bounding-box union of the
@@ -65,7 +66,7 @@ export const CENTER_SEARCH_RECT = GEOMETRY.searchBox;
  * field off the top edge depending on viewport aspect. `main.jsx` fits and
  * centers the opening camera on this rect instead.
  */
-export const CENTER_OPENING_RECT = (() => {
+export const CENTER_OPENING_RECT: Rect = (() => {
   const a = CENTER_SHELF_RECT;
   const b = CENTER_SEARCH_RECT;
   const x0 = Math.min(a.x, b.x);
@@ -82,7 +83,7 @@ export const CENTER_OPENING_RECT = (() => {
  * and the overrides - so there is one address for a book, not a (shelf, index)
  * pair to keep in step.
  */
-const BOOKS = GEOMETRY.shelves.flatMap((s) => s.books.map(({ x, y, w, h }) => ({ x, y, w, h })));
+const BOOKS: Rect[] = GEOMETRY.shelves.flatMap((s) => s.books.map(({ x, y, w, h }) => ({ x, y, w, h })));
 
 /** How many books the wall has in total. */
 export const BOOK_COUNT = BOOKS.length;
@@ -102,10 +103,16 @@ export const BOOK_COUNT = BOOKS.length;
  * its height, and one divisor for both axes would put the focus ring on the
  * wrong book.
  */
-export const BOOK_RECTS = BOOKS;
+export const BOOK_RECTS: Rect[] = BOOKS;
 
 /** How many searches the history queue can show at once - the whole wall. */
 export const HISTORY_SLOT_COUNT = BOOK_COUNT;
+
+/** One shelf's books, as a flat-index band - see `ROWS` below. */
+interface Row {
+  start: number;
+  count: number;
+}
 
 /**
  * The wall's books grouped by SHELF, as flat-index bands.
@@ -116,7 +123,7 @@ export const HISTORY_SLOT_COUNT = BOOK_COUNT;
  * point really can land in the gap; rows exist for the arrow keys, which move
  * between books and never between the spaces around them.
  */
-const ROWS = (() => {
+const ROWS: Row[] = (() => {
   let flat = 0;
   return GEOMETRY.shelves.map((s) => {
     const row = { start: flat, count: s.books.length };
@@ -124,6 +131,16 @@ const ROWS = (() => {
     return row;
   });
 })();
+
+/** A contiguous group of books on one shelf - see `RUNS` below. */
+interface Run {
+  start: number;
+  count: number;
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
 
 // Per-run bands, in fractions: a run is a CONTIGUOUS group of books on one
 // shelf, and a shelf may hold more than one - the trace is free to leave a gap
@@ -134,15 +151,16 @@ const ROWS = (() => {
 // the hit-test floors a point into the run's columns so a click there still
 // resolves to a book - the same "addressed by a pitch" discipline
 // `picking.js` uses for cells. Runs, not shelves, are what the hit-test walks.
-const RUNS = (() => {
-  const runs = [];
+const RUNS: Run[] = (() => {
+  interface Building { start: number; books: Rect[]; x1: number }
+  const runs: Building[] = [];
   let flat = 0;
   for (const s of GEOMETRY.shelves) {
-    let run = null;
+    let run: Building | null = null;
     for (const b of s.books) {
       if (run && b.x - run.x1 > b.w) run = null;
       if (!run) {
-        run = { start: flat, books: [] };
+        run = { start: flat, books: [], x1: 0 };
         runs.push(run);
       }
       run.books.push(b);
@@ -180,11 +198,8 @@ const HALO = 'rgba(12,9,6,0.85)';
  * The cell is addressed by its lower corner and spans one unit, so it runs from
  * world (0, 0) to (1, 1); its screen position is `worldToScreen(0, 0)` and its
  * size is one cell in each axis.
- *
- * @param {{x:number,y:number,zoom:number,aspect?:number}} cam
- * @param {{width:number,height:number}} canvasRect
  */
-export function centerCellRect(cam, canvasRect) {
+export function centerCellRect(cam: Camera, canvasRect: ViewportRect): Rect {
   const tl = worldToScreen(0, 0, cam, canvasRect);
   const per = pxPerCell(cam);
   return { x: tl.x, y: tl.y, w: per.x, h: per.y };
@@ -199,7 +214,7 @@ export function centerCellRect(cam, canvasRect) {
  * so this is the half of "usable" that is about WHERE the cell is rather than
  * how big it is.
  */
-export function overlapsViewport(rect, width, height) {
+export function overlapsViewport(rect: Rect, width: number, height: number): boolean {
   return rect.x + rect.w > 0 && rect.x < width && rect.y + rect.h > 0 && rect.y < height;
 }
 
@@ -210,7 +225,7 @@ export function overlapsViewport(rect, width, height) {
  * overlay in `main.jsx`: the buttons exist exactly while the titles do, so a
  * reader tabbing into the shelf is reaching books they can also see named.
  */
-export function areSpinesLegible(cellRect) {
+export function areSpinesLegible(cellRect: Rect): boolean {
   return BOOKS.length > 0 && BOOKS[0].w * cellRect.w >= MIN_SPINE_PX;
 }
 
@@ -233,12 +248,16 @@ export function areSpinesLegible(cellRect) {
  * titled book", `BOOK_COUNT` with `dx: -1` is the last, which is what Home and
  * End want and saves them a second entry point.
  *
- * @param {number} from flat slot id
- * @param {{dx?: number, dy?: number}} dir one step, as the keyboard handler has it
- * @param {Array<{text?:string}|null>} slots `assignTitles` output
+ * @param from flat slot id
+ * @param dir one step, as the keyboard handler has it
+ * @param slots `assignTitles` output
  */
-export function bookNeighbour(from, { dx = 0, dy = 0 }, slots) {
-  const titled = (i) => i >= 0 && i < BOOK_COUNT && Boolean(slots?.[i]?.text);
+export function bookNeighbour(
+  from: number,
+  { dx = 0, dy = 0 }: { dx?: number; dy?: number },
+  slots: (Slot | null)[] | null
+): number {
+  const titled = (i: number) => i >= 0 && i < BOOK_COUNT && Boolean(slots?.[i]?.text);
 
   if (dx) {
     for (let i = from + Math.sign(dx); i >= 0 && i < BOOK_COUNT; i += Math.sign(dx))
@@ -265,7 +284,7 @@ export function bookNeighbour(from, { dx = 0, dy = 0 }, slots) {
 }
 
 /** Every book rect in screen pixels, scaled onto a center-cell rect. */
-export function bookScreenRects(cellRect) {
+export function bookScreenRects(cellRect: Rect): Rect[] {
   return BOOKS.map((b) => ({
     x: cellRect.x + b.x * cellRect.w,
     y: cellRect.y + b.y * cellRect.h,
@@ -275,7 +294,7 @@ export function bookScreenRects(cellRect) {
 }
 
 /** The live search field's rect in screen pixels, scaled onto a center-cell rect. */
-export function searchBoxScreenRect(cellRect) {
+export function searchBoxScreenRect(cellRect: Rect): Rect {
   const b = CENTER_SEARCH_RECT;
   return {
     x: cellRect.x + b.x * cellRect.w,
@@ -290,7 +309,7 @@ export function searchBoxScreenRect(cellRect) {
  * Gated on height, the box's thin axis - the same idea as `MIN_SPINE_PX`, but
  * a wide short strip is limited by how tall it is on screen, not how wide.
  */
-export function isSearchBoxUsable(cellRect) {
+export function isSearchBoxUsable(cellRect: Rect): boolean {
   return searchBoxScreenRect(cellRect).h >= MIN_SEARCH_BOX_PX;
 }
 
@@ -304,7 +323,7 @@ export function isSearchBoxUsable(cellRect) {
  * height alone, under `MIN_SEARCH_BOX_PX` even though the union itself
  * "fits". This is the zoom the box alone needs, independent of the shelf.
  */
-export function minZoomForSearchBox(aspect = CELL_ASPECT) {
+export function minZoomForSearchBox(aspect: number = CELL_ASPECT): number {
   return MIN_SEARCH_BOX_PX / (aspect * CENTER_SEARCH_RECT.h);
 }
 
@@ -317,7 +336,7 @@ export function minZoomForSearchBox(aspect = CELL_ASPECT) {
  * gesture that merely crosses its screen rect keeps panning or zooming - no
  * separate arbitration needed here.
  */
-export function searchBoxAtPoint(px, py, cellRect) {
+export function searchBoxAtPoint(px: number, py: number, cellRect: Rect): boolean {
   if (!isSearchBoxUsable(cellRect)) return false;
   const b = searchBoxScreenRect(cellRect);
   return px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
@@ -333,7 +352,7 @@ export function searchBoxAtPoint(px, py, cellRect) {
  * matches - a point between two runs on the same shelf must fall through to
  * null, not snap into whichever run happened to be checked first.
  */
-export function bookAtPoint(px, py, cellRect) {
+export function bookAtPoint(px: number, py: number, cellRect: Rect): number | null {
   for (const run of RUNS) {
     const y0 = cellRect.y + run.y0 * cellRect.h;
     const y1 = cellRect.y + run.y1 * cellRect.h;
@@ -345,6 +364,25 @@ export function bookAtPoint(px, py, cellRect) {
     return run.start + Math.max(0, Math.min(run.count - 1, local));
   }
   return null;
+}
+
+/** What `assignTitles` fills every book on the wall with. */
+export interface Slot {
+  kind: 'override' | 'history' | 'tag' | 'empty';
+  text: string;
+  /** the history/tag book's search term */
+  term?: string;
+  /** the override book's action to dispatch */
+  action?: string;
+}
+
+export interface AssignTitlesOpts {
+  /** past searches, newest first */
+  history?: string[];
+  /** a stable random selection of corpus keywords - see `pickTags` */
+  tags?: string[];
+  /** reserved books with a distinct function, keyed by flat book id */
+  overrides?: Record<number, { text: string; action: string }>;
 }
 
 /**
@@ -364,13 +402,12 @@ export function bookAtPoint(px, py, cellRect) {
  *      on the tiny sample corpus.
  *
  * Pure and deterministic in its inputs. A `history`/`tag` book carries a `term`
- * to search; an `override` book carries an `action` to dispatch.
- *
- * @param {{history?:string[], tags?:string[], overrides?:Record<number,{text:string,action:string}>}} opts
- * @returns {Array<{kind:string,text:string,term?:string,action?:string}|null>}
+ * to search; an `override` book carries an `action` to dispatch. Every slot is
+ * filled - never left null - by construction: the tag loop below runs across
+ * every remaining index.
  */
-export function assignTitles({ history = [], tags = [], overrides = {} } = {}) {
-  const slots = new Array(BOOK_COUNT).fill(null);
+export function assignTitles({ history = [], tags = [], overrides = {} }: AssignTitlesOpts = {}): Slot[] {
+  const slots: (Slot | null)[] = new Array(BOOK_COUNT).fill(null);
 
   for (const [key, value] of Object.entries(overrides)) {
     const i = Number(key);
@@ -395,7 +432,7 @@ export function assignTitles({ history = [], tags = [], overrides = {} } = {}) {
     }
   }
 
-  return slots;
+  return slots as Slot[];
 }
 
 /**
@@ -410,11 +447,16 @@ export function assignTitles({ history = [], tags = [], overrides = {} } = {}) {
  * Naming, so it lives beside `describeCell` in spirit and here in fact - pure,
  * and assertable without a browser.
  */
-export function describeBook(slot) {
+export function describeBook(slot: Slot | null | undefined): string {
   if (!slot?.text) return '';
   if (slot.kind === 'history') return `${slot.text} - repeat this search`;
   if (slot.kind === 'override') return slot.text;
   return `${slot.text} - search the library for this`;
+}
+
+/** The slice of a room's metadata `pickTags` actually reads - not the full `RoomMeta`. */
+interface KeywordSource {
+  keywords?: { text: string }[];
 }
 
 /**
@@ -424,13 +466,10 @@ export function describeBook(slot) {
  * "Random" but reproducible: seeded, so the wall does not reshuffle on every
  * render. Deduped, because the same keyword on many rooms is one tag. Bounded at
  * the book count; `assignTitles` cycles a shorter pool to fill the rest.
- *
- * @param {Array<{keywords?:{text:string}[]}|null>|null} metadata indexed by room id
- * @param {number} seed
  */
-export function pickTags(metadata, seed = 1) {
+export function pickTags(metadata: (KeywordSource | null)[] | null, seed = 1): string[] {
   if (!metadata) return [];
-  const texts = new Set();
+  const texts = new Set<string>();
   for (const entry of metadata)
     for (const k of entry?.keywords ?? []) if (k.text) texts.add(k.text);
 
@@ -441,6 +480,32 @@ export function pickTags(metadata, seed = 1) {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   return pool.slice(0, BOOK_COUNT);
+}
+
+/**
+ * The 2d-context surface `composeSpines` needs, beyond `render.ts`'s own
+ * `DrawContext` - the text/path operations render.js's cell-blitting never
+ * touches. Kept as its own interface rather than folded into `DrawContext`:
+ * `render.test.mjs` deliberately never passes `centreSlots` (AGENTS.md), so
+ * its recording fake never implements `save`/`rotate`/etc, and widening
+ * `DrawContext` itself would force it to grow stubs it has no use for.
+ * `render.ts`'s `draw()` casts its own `ctx` to this at the one call site,
+ * which is sound because that `ctx` is always a real 2d context in practice.
+ */
+export interface SpineContext extends DrawContext {
+  save(): void;
+  restore(): void;
+  textAlign: CanvasTextAlign;
+  textBaseline: CanvasTextBaseline;
+  translate(x: number, y: number): void;
+  rotate(angle: number): void;
+  lineJoin: CanvasLineJoin;
+  strokeText(text: string, x: number, y: number): void;
+  measureText(text: string): { width: number };
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  stroke(): void;
 }
 
 /**
@@ -460,7 +525,7 @@ export function pickTags(metadata, seed = 1) {
  * keyword until it is pressed. Placeholder styling for the font/text pass; the
  * requirement it meets is only that the difference is visible.
  */
-export function composeSpines(ctx, cellRect, slots) {
+export function composeSpines(ctx: SpineContext, cellRect: Rect, slots: (Slot | null)[]): void {
   if (!areSpinesLegible(cellRect)) return;
   const rects = bookScreenRects(cellRect);
 
@@ -518,7 +583,7 @@ export function composeSpines(ctx, cellRect, slots) {
 }
 
 /** Shorten `text` with an ellipsis until it fits `maxWidth` at the current font. */
-function fitText(ctx, text, maxWidth) {
+function fitText(ctx: Pick<SpineContext, 'measureText'>, text: string, maxWidth: number): string {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let s = text;
   while (s.length > 1 && ctx.measureText(`${s}…`).width > maxWidth) s = s.slice(0, -1);

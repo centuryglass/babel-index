@@ -95,7 +95,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
-  `useRearrangement.ts` / `lib/slide.js`) without living in the same directory.
+  `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
     * `src/main.jsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
@@ -135,10 +135,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              once it lands
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
-    * `center.js`: Geometry and content management for the center tile interface
+    * `center.ts`: Geometry and content management for the center tile interface
     * `camera.ts`: Pure-math mapping functions for the map camera
     * `render.ts`: Render a single map frame
-    * `slide.js`: Room rearrangement animation renderer
+    * `slide.ts`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
     * `catalog.js`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
@@ -159,9 +159,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `moves.ts`: The rearrangement animation's type contract (`Move` and its
                `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
                ...), type-only, shared by `illusion.ts`, `board.ts` and
-               `packages/web/src/lib/slide.js`
+               `packages/web/src/lib/slide.ts`
   * `scoring.js`: Find room rank and match certainty for a search, searh tokenization
-  * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.js`
+  * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
   * `board.ts`: Sliding animation illusion's board data structure
   * `describe.ts`: Build screen reader messages
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
@@ -176,7 +176,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `shelf_geometry.svg`: Center tile geometry.
   * `lib/geometry.ts`: Book and search box placement structure
   * `lib/measured.ts`: Auto-generated svg geometry data
-  * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.js,
+  * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.ts,
                    should probably be moved elsewhere.
   * `lib/svg.ts`: Minimal SVG element builder; currently unused elsewhere.
 - `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
@@ -262,15 +262,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
   Good early candidates: files with little duck-typing and a fixed shape
   (`port.ts` was one - one function, two primitive params). Defer files whose
-  data is *deliberately* loose - `scoring.js`'s duck-typed ranking arrays,
-  `center.js`'s runtime-computed `RUNS`, `slide.js`'s animation
-  state shapes - until there's a real type worth writing that doesn't just
-  paper over the looseness with `any` or a lying assertion. A strict type
+  data is *deliberately* loose - `scoring.js`'s duck-typed ranking arrays are
+  the standing example - until there's a real type worth writing that doesn't
+  just paper over the looseness with `any` or a lying assertion. A strict type
   that fights the code's actual tolerance is worse than an honest
   `object`/JSDoc. (`metadata.js`'s sidecar parsing looked like one of these
   until the keyword shape was tightened to `{text, type}` only - dropping the
   plain-string form it used to also accept - at which point `RoomMeta` was
-  already a real, fixed shape and converting it cost nothing.)
+  already a real, fixed shape and converting it cost nothing. `center.ts`'s
+  `RUNS` and `slide.ts`'s animation state turned out to be the same story:
+  runtime-*computed*, from a traced SVG and a planned move list respectively,
+  but not runtime-*loose* - every field they carry is fixed by the code that
+  builds them, so both converted cleanly once actually looked at.)
 
   `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local signal, not
   yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't
@@ -370,7 +373,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   whole reason `board.ts` and `illusion.ts` still see one interchangeable
   `GENERIC` value and the rearrangement planner did not have to learn about
   individual generic tiles. `roomAt` is unchanged; only the two renderers
-  (`render.ts`, `slide.js`) resolve a cell to a tile id. `slide.js` reads the
+  (`render.ts`, `slide.ts`) resolve a cell to a tile id. `slide.ts` reads the
   generic index at each tile's *home* board cell so a sliding line carries its
   own face instead of flipping mid-ride.
 - **The shared tiles live outside `--images`.** `scan.mjs` discovers them in
@@ -390,13 +393,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 ### The center room's controls
 
-- **`center.js` is the pure half, and the geometry comes from the tools tree.**
+- **`center.ts` is the pure half, and the geometry comes from the tools tree.**
   The book layout, `assignTitles`, the hit-test and `pickTags` live in
-  `packages/web/src/lib/center.js` and are asserted browser-free in `center.test.mjs`
+  `packages/web/src/lib/center.ts` and are asserted browser-free in `center.test.ts`
   — the same split as `picking.ts`. Every book is lettered; a book is one
   flat slot id (`BOOK_COUNT` of them), assigned top left to bottom right, so
   there is no (shelf, index) pair to keep in step. A shelf need not be one
-  contiguous run - art can break it into more than one, and `center.js`'s
+  contiguous run - art can break it into more than one, and `center.ts`'s
   `RUNS` (not `GEOMETRY.shelves` directly) is what the hit-test walks, so a gap
   wider than a book resolves to nothing rather than a phantom book. The rects come from
   `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.ts`, the
@@ -439,7 +442,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Two opening views, and they are not interchangeable.** The page-load view is
   DERIVED, not configured: `main.jsx` computes it once at mount with `fitZoom`
   (camera.ts), framing the center room's book-bounding box (`GEOMETRY.opening`,
-  exported as `CENTRE_SHELF_RECT` from `center.js`) on the display so the spines are legible,
+  exported as `CENTRE_SHELF_RECT` from `center.ts`) on the display so the spines are legible,
   centered on the shelf and capped at the tile's NATIVE width so a page never
   loads upscaled. It is passed to `useMapCamera` as `opening` — do not restate it
   as a config number, and do not read the viewport inside the hook. `defaultZoom`
@@ -578,7 +581,7 @@ code, not a standing invariant.
   spelling out every value would become the real surface; every adjustment
   instead lands in `notes` (printed by the server) because a value silently
   not taking effect is the only failure mode a tuning file has.
-- **Consuming files state no fallback defaults** — `slide.js`/`useMapCamera.ts`
+- **Consuming files state no fallback defaults** — `slide.ts`/`useMapCamera.ts`
   read durations from config with nothing restated locally, so there's no
   second copy to drift.
 - **Zoom config narrows, never widens.** `ZOOM_LIMITS` in `camera.ts` is the

@@ -23,7 +23,7 @@ import {
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
-} from './lib/center.js';
+} from './lib/center.ts';
 import { CELL_ASPECT, fitZoom } from './lib/camera.ts';
 import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';

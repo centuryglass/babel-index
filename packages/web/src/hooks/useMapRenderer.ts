@@ -28,12 +28,9 @@ import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
-import { assignTitles } from '../lib/center.js';
+import type { Slot } from '../lib/center.ts';
 import { createRenderer, type DrawResult } from '../lib/render.ts';
 import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
-
-/** See `useCenterShelf.ts` - `center.js`'s `assignTitles` stays untyped, so both files name the shape locally. */
-type Slot = ReturnType<typeof assignTitles>[number];
 
 /**
  * `RoomRenderer`/`SlideRenderer` read their shape off the real `createRenderer`/
