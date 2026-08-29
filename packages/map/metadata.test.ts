@@ -11,9 +11,9 @@ import {
 } from './metadata.ts';
 
 const rooms = [
-  { id: 0, file: '001.jpg' },
-  { id: 1, file: '002.jpg' },
-  { id: 2, file: '003.jpg' },
+  { id: 0, file: '001.jpg', url: 'images/001.jpg', bytes: 0 },
+  { id: 1, file: '002.jpg', url: 'images/002.jpg', bytes: 0 },
+  { id: 2, file: '003.jpg', url: 'images/003.jpg', bytes: 0 },
 ];
 
 test('a full entry normalises to keywords and a story', () => {
@@ -106,7 +106,7 @@ test('a renamed or added room loses only its own entry', () => {
   // The whole reason this is keyed on filename rather than on row order: the
   // embedding blob has to be thrown away when the corpus moves, and this does
   // not. Room 1 is new and undescribed; everything else still lands.
-  const grown = [...rooms, { id: 3, file: '004.jpg' }];
+  const grown = [...rooms, { id: 3, file: '004.jpg', url: 'images/004.jpg', bytes: 0 }];
   const joined = joinMetadata(grown, { '001.jpg': { story: 'a' }, '004.jpg': { story: 'd' } });
   assert.equal(joined[0].story, 'a');
   assert.equal(joined[3].story, 'd');

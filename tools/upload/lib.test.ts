@@ -1,14 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildUploadList, crossOriginFetchedKeys, diffAgainstManifest, guessContentType } from './lib.ts';
+import type { Manifest } from '../../packages/map/manifest.ts';
 
-const join = (...parts) => parts.join('/');
+const join = (...parts: string[]) => parts.join('/');
 
-function manifest() {
+function manifest(): Manifest {
   return {
+    mode: 'offline',
+    imagesBase: 'images',
+    sharedBase: 'shared',
+    count: 2,
     rooms: [
-      { id: 0, file: '001.jpg' },
-      { id: 1, file: '002.jpg' },
+      { id: 0, file: '001.jpg', url: 'images/001.jpg', bytes: 0 },
+      { id: 1, file: '002.jpg', url: 'images/002.jpg', bytes: 0 },
     ],
     levels: [
       { level: 0, w: 1024, h: 1024, dir: null },
@@ -103,7 +108,7 @@ test('diffAgainstManifest uploads new and changed files, skips matching hashes p
 test('diffAgainstManifest treats an empty remote manifest as upload-everything', () => {
   const uploads = [{ local: '/a', key: 'k/a' }];
   const hashes = new Map([['/a', 'hash-a']]);
-  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, {}, new Set());
+  const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, {}, new Set<string>());
   assert.equal(toUpload.length, 1);
   assert.equal(unchanged.length, 0);
 });
@@ -112,7 +117,7 @@ test('diffAgainstManifest re-uploads a key whose hash matches but is missing fro
   const uploads = [{ local: '/a', key: 'k/a' }];
   const hashes = new Map([['/a', 'hash-a']]);
   const remoteManifest = { 'k/a': 'hash-a' }; // recorded as uploaded before...
-  const existingKeys = new Set(); // ...but not actually present in the bucket (deleted, or lost)
+  const existingKeys = new Set<string>(); // ...but not actually present in the bucket (deleted, or lost)
 
   const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest, existingKeys);
   assert.deepEqual(
