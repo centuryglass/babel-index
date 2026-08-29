@@ -21,7 +21,7 @@ import {
   overlapsViewport,
   BOOK_RECTS,
   minZoomForSearchBox,
-} from './center.js';
+} from './center.ts';
 import { CELL_ASPECT, fitZoom } from './camera.ts';
 
 const GEO = layout({ width: 1, height: 1 });

@@ -56,10 +56,13 @@
  * on-camera rectangle ever slide - so the duration is set by the viewport and
  * corpus size does not enter into it.
  */
-import { PYRAMID } from './pyramid.ts';
-import { pxPerCell } from './camera.ts';
-import { CENTER, genericId } from './tiles.ts';
+import { PYRAMID, type Pyramid } from './pyramid.ts';
+import { pxPerCell, type Camera } from './camera.ts';
+import { CENTER, genericId, type RoomId, type TileCache } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
+import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
+import type { Config } from '../../../config/config.ts';
+import type { DrawContext } from './render.ts';
 
 /**
  * The cache id for a board value at its HOME map cell.
@@ -70,18 +73,67 @@ import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/b
  * cell the value lives at. A generic tile therefore carries its own face as
  * its line slides: `genericIndexAt` is read at the value's board home, not at
  * wherever the slide has pushed it to, so nothing flips face mid-ride.
- *
- * @param {*} value board value: CENTER, GENERIC, or a numeric room id
- * @param {number} homeMx home map x of the board cell holding it
- * @param {number} homeMy home map y
- * @param {(x: number, y: number) => number} genericIndexAt positional generic tile chooser
  */
-const idFor = (value, homeMx, homeMy, genericIndexAt) =>
+const idFor = (
+  value: BoardValue,
+  homeMx: number,
+  homeMy: number,
+  genericIndexAt: (x: number, y: number) => number
+): RoomId =>
   value === BOARD_CENTER
     ? CENTER
     : value === BOARD_GENERIC
       ? genericId(genericIndexAt(homeMx, homeMy))
       : value;
+
+/** One step of a run: the move it carries and where along the run it applies. */
+interface Step {
+  move: Move;
+  /** cells travelled before this step may be applied. */
+  at: number;
+  /** whether this step counts toward the run's absorbed distance - see `pushMove`. */
+  absorbs?: boolean;
+}
+
+/**
+ * One continuous slide: consecutive shifts of the same line in the same
+ * direction, with the swaps that feed them attached. `kind: 'none'` is a lane
+ * that has only ever seen swaps (no shift has opened a real run yet).
+ */
+interface Run {
+  kind: 'row' | 'col' | 'none';
+  index: number;
+  dir: number;
+  cells: number;
+  steps: Step[];
+  stepIndex: number;
+  absorbed: number;
+  durMs: number;
+  startMs: number;
+  progress: number;
+}
+
+/** A line's worth of work within a stage - see `buildTimeline`. */
+interface Lane {
+  runs: Run[];
+  endMs: number;
+}
+
+/** A barrier: nothing in a later stage is guaranteed until this one has landed. */
+interface Stage {
+  stage: number;
+  wave: boolean;
+  moves: Move[];
+  startMs: number;
+  lanes: Lane[];
+  endMs: number;
+}
+
+/** A move list laid out in time - `buildTimeline`'s return. */
+export interface Timeline {
+  stages: Stage[];
+  totalMs: number;
+}
 
 /**
  * Lay a move list out in time.
@@ -97,16 +149,15 @@ const idFor = (value, homeMx, homeMy, genericIndexAt) =>
  *     the same direction, with the swaps that feed them attached. This is what
  *     turns a column's ten separate rotations into one ride upward.
  *
- * @param {import('../../../map/moves.ts').Move[]} moves from `planMoves`
- * @param {{base, perCell, gap, stagger, cascade}} timing from `packages/config`
- * @returns {{stages: Array<object>, totalMs: number}}
+ * @param moves from `planMoves`
+ * @param timing from `packages/config`
  */
-export function buildTimeline(moves, timing) {
-  const stages = [];
+export function buildTimeline(moves: Move[], timing: Config['slide']): Timeline {
+  const stages: Stage[] = [];
   for (const move of moves) {
     const last = stages[stages.length - 1];
     if (!last || last.stage !== move.stage)
-      stages.push({ stage: move.stage, wave: Boolean(move.wave), moves: [move] });
+      stages.push({ stage: move.stage, wave: Boolean(move.wave), moves: [move], startMs: 0, lanes: [], endMs: 0 });
     else last.moves.push(move);
   }
 
@@ -115,12 +166,12 @@ export function buildTimeline(moves, timing) {
     // One lane per line when the stage says its lines are independent; a single
     // lane otherwise, which is the sequential case and also what a stage of
     // pure off-camera swaps collapses to.
-    const lanes = [];
-    const byLine = new Map();
+    const lanes: Lane[] = [];
+    const byLine = new Map<string, Lane>();
     for (const move of stage.moves) {
       const key = stage.wave && move.line ? `${move.line.kind}${move.line.index}` : '';
       let lane = byLine.get(key);
-      if (!lane) byLine.set(key, (lane = { runs: [] }));
+      if (!lane) byLine.set(key, (lane = { runs: [], endMs: 0 }));
       pushMove(lane, move);
     }
     lanes.push(...byLine.values());
@@ -170,17 +221,15 @@ export function buildTimeline(moves, timing) {
  * that shift's COMPLETION rather than at the next run's start. The distinction
  * is invisible while runs play strictly in sequence and load-bearing the
  * moment they overlap - see the cascade in `buildTimeline`.
- *
- * @param {import('../../../map/moves.ts').Move} move
  */
-function pushMove(lane, move) {
+function pushMove(lane: Lane, move: Move): void {
   let run = lane.runs[lane.runs.length - 1];
 
   if (move.type === 'swap') {
     // A swap has no motion of its own. Before the lane's first shift it lands
     // at once; after one, it lands when that shift finishes.
     if (!run) {
-      run = { kind: 'none', index: -1, dir: 0, cells: 0, steps: [], stepIndex: 0, absorbed: 0 };
+      run = { kind: 'none', index: -1, dir: 0, cells: 0, steps: [], stepIndex: 0, absorbed: 0, durMs: 0, startMs: 0, progress: 0 };
       lane.runs.push(run);
     }
     run.steps.push({ move, at: run.cells });
@@ -191,7 +240,7 @@ function pushMove(lane, move) {
   const index = move.type === 'shiftRow' ? move.row : move.col;
   const dir = Math.sign(move.distance);
   if (!run || run.kind !== kind || run.index !== index || run.dir !== dir) {
-    run = { kind, index, dir, cells: 0, steps: [], stepIndex: 0, absorbed: 0 };
+    run = { kind, index, dir, cells: 0, steps: [], stepIndex: 0, absorbed: 0, durMs: 0, startMs: 0, progress: 0 };
     lane.runs.push(run);
   }
   run.cells += Math.abs(move.distance);
@@ -199,7 +248,17 @@ function pushMove(lane, move) {
 }
 
 /** Smooth the ends of a run so a line does not start and stop dead. */
-const ease = (t) => t * t * (3 - 2 * t);
+const ease = (t: number): number => t * t * (3 - 2 * t);
+
+export interface CreateSlideshowOpts {
+  /** mutated in place */
+  board: Board;
+  moves: Move[];
+  /** usually `applyMove` */
+  apply: (board: Board, move: Move) => void;
+  /** from `packages/config` */
+  timing: Config['slide'];
+}
 
 /**
  * Drive a plan over a board.
@@ -209,20 +268,13 @@ const ease = (t) => t * t * (3 - 2 * t);
  * the board should have absorbed by then, and answers with every line currently
  * in motion. There can be several, which is the point of a wave - and they can
  * never overlap on screen, because a wave stage's lines are all the same kind.
- *
- * @param {object} opts
- * @param {import('../../../map/moves.ts').Board} opts.board mutated in place
- * @param {import('../../../map/moves.ts').Move[]} opts.moves
- * @param {(board: import('../../../map/moves.ts').Board, move: import('../../../map/moves.ts').Move) => void} opts.apply
- *   usually `applyMove`
- * @param {object} opts.timing from `packages/config`
  */
-export function createSlideshow({ board, moves, apply, timing }) {
+export function createSlideshow({ board, moves, apply, timing }: CreateSlideshowOpts) {
   const { stages, totalMs } = buildTimeline(moves, timing);
   let stageIndex = 0;
 
   /** Absorb every step this run has travelled past. Returns true if it is blocked. */
-  function absorb(run, progress) {
+  function absorb(run: Run, progress: number): boolean {
     while (run.stepIndex < run.steps.length) {
       const step = run.steps[run.stepIndex];
       if (progress < step.at - 1e-9) return true;
@@ -233,18 +285,18 @@ export function createSlideshow({ board, moves, apply, timing }) {
     return false;
   }
 
-  /** @returns {import('../../../map/moves.ts').Motion | null} */
-  const motionOf = (run) =>
+  // Only reached with `run.cells > 0`, which by construction of `pushMove`
+  // means the run carries at least one shift and so `kind` is 'row' or 'col',
+  // never the swap-only 'none'.
+  const motionOf = (run: Run): Motion | null =>
     run.cells === 0
       ? null
-      : { kind: run.kind, index: run.index, dir: run.dir, offset: run.progress - run.absorbed };
+      : { kind: run.kind as 'row' | 'col', index: run.index, dir: run.dir, offset: run.progress - run.absorbed };
 
   /**
    * Bring the board up to `elapsed`, and report the motion to draw.
-   *
-   * @returns {{done: boolean, motions: import('../../../map/moves.ts').Motion[]}}
    */
-  function advanceTo(elapsed) {
+  function advanceTo(elapsed: number): { done: boolean; motions: Motion[] } {
     while (stageIndex < stages.length) {
       const stage = stages[stageIndex];
       if (elapsed >= stage.endMs) {
@@ -259,7 +311,7 @@ export function createSlideshow({ board, moves, apply, timing }) {
         continue;
       }
 
-      const motions = [];
+      const motions: Motion[] = [];
       for (const lane of stage.lanes)
         for (const run of lane.runs) {
           const t = run.durMs === 0 ? 1 : Math.min(1, Math.max(0, (elapsed - run.startMs) / run.durMs));
@@ -280,6 +332,46 @@ export function createSlideshow({ board, moves, apply, timing }) {
   return { advanceTo, totalMs, stages };
 }
 
+export interface CreateSlideRendererOpts {
+  cache: TileCache;
+  pyramid?: Pyramid;
+}
+
+export interface SlideDrawOpts {
+  ctx: DrawContext;
+  /** css pixels */
+  width: number;
+  /** css pixels */
+  height: number;
+  dpr: number;
+  /** parked on the center */
+  cam: Camera;
+  board: Board;
+  /** board index of map cell (0, 0) */
+  origin: Point;
+  /**
+   * from `advanceTo` - several at once during a wave. They can never overlap
+   * on screen: a wave stage's lines are all rows or all columns, and two rows
+   * share no cell
+   */
+  motions?: Motion[];
+  /**
+   * which generic tile a generic cell shows, by map coordinate (the same
+   * positional chooser the main renderer uses, so the tile matches across
+   * the handoff)
+   */
+  genericIndexAt?: (x: number, y: number) => number;
+  /** the center-room marker */
+  chrome?: boolean;
+}
+
+export interface SlideDrawResult {
+  drawn: number;
+  blank: number;
+  level: number;
+  cells: number;
+}
+
 /**
  * Draw one frame of the animation.
  *
@@ -287,27 +379,10 @@ export function createSlideshow({ board, moves, apply, timing }) {
  * one and the state of the world - so a frame's decisions are assertable
  * without a browser.
  */
-export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
-  /**
-   * @param {object} opts
-   * @param {CanvasRenderingContext2D} opts.ctx
-   * @param {number} opts.width  css pixels
-   * @param {number} opts.height css pixels
-   * @param {number} opts.dpr
-   * @param {{x: number, y: number, zoom: number}} opts.cam parked on the center
-   * @param {import('../../../map/moves.ts').Board} opts.board
-   * @param {import('../../../map/moves.ts').Point} opts.origin board index of
-   *   map cell (0, 0)
-   * @param {import('../../../map/moves.ts').Motion[]} [opts.motions] from
-   *   `advanceTo` - several at once during a wave. They can never overlap on
-   *   screen: a wave stage's lines are all rows or all columns, and two rows
-   *   share no cell
-   * @param {(x: number, y: number) => number} [opts.genericIndexAt] which generic
-   *   tile a generic cell shows, by map coordinate (the same positional chooser
-   *   the main renderer uses, so the tile matches across the handoff)
-   * @param {boolean} [opts.chrome] the center-room marker
-   */
-  function draw({ ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true }) {
+export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
+  function draw({
+    ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
+  }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -325,19 +400,20 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
 
     const W = board.width;
     const H = board.height;
-    const valueAt = (bx, by) => board.cells[(((by % H) + H) % H) * W + (((bx % W) + W) % W)];
+    const valueAt = (bx: number, by: number): BoardValue =>
+      board.cells[(((by % H) + H) % H) * W + (((bx % W) + W) % W)];
     // +1 on each axis kills hairline gaps from rounding, exactly as render.js does.
     const cw = cellPx.x + 1;
     const ch = cellPx.y + 1;
 
     let drawn = 0;
     let blank = 0;
-    const wanted = [];
+    const wanted: RoomId[] = [];
 
     // A value's generic tile is read at its HOME map cell, which is not always where
     // it is drawn: a sliding line reads its board home but paints at the shifted
     // position, so the tile carries its own face across the ride.
-    const paint = (value, homeMx, homeMy, drawMx, drawMy) => {
+    const paint = (value: BoardValue, homeMx: number, homeMy: number, drawMx: number, drawMy: number): void => {
       const sx = (drawMx - cam.x) * cellPx.x + w / 2;
       const sy = (drawMy - cam.y) * cellPx.y + h / 2;
       const id = idFor(value, homeMx, homeMy, genericIndexAt);
@@ -360,8 +436,8 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
 
     // The still field. Lines in motion are skipped here and drawn after, so
     // their tiles land on top of their neighbours rather than under them.
-    const movingRows = new Set();
-    const movingCols = new Set();
+    const movingRows = new Set<number>();
+    const movingCols = new Set<number>();
     for (const m of motions)
       (m.kind === 'row' ? movingRows : movingCols).add(
         m.kind === 'row' ? m.index - origin.y : m.index - origin.x

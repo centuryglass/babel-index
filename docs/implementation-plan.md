@@ -185,13 +185,47 @@ paired-test rule - the fake context and fake image objects are now typed
 against `DrawContext`/`LoadableImage` explicitly rather than left for `tsc` to
 infer, which is what surfaced the two union-widening fixes above.
 
+`slide.js` turned out not to be one of the deliberately-loose ones either,
+once looked at closely: its animation state (`Run`/`Lane`/`Stage`/`Timeline`)
+looked duck-typed only because nothing had named it yet - every field is
+fixed by `buildTimeline`/`pushMove`, not duck-typed the way `scoring.js`'s
+ranking arrays are. Converting it let `useMapRenderer.ts` drop the
+`SlideStats` interface and the `object` cast it existed only to work around,
+and `RunningAnim.show` in the same file now reads
+`ReturnType<typeof createSlideshow>` instead of restating a narrower copy of
+the same shape. Its `DrawContext` param reuses `render.ts`'s existing narrow
+2d-context interface rather than restating a third copy. `slide.test.mjs`
+converted alongside it, per the paired-test rule.
+
+`center.js` was the same story again: `RUNS`/`ROWS`/`BOOK_RECTS` are
+computed once at module load from the traced SVG (`tools/center-placement`'s
+`geometry.ts`, itself already typed - `Rect`/`Book`/`Shelf`/`TileLayout`),
+but every element has a fixed shape, so `center.ts` reuses `geometry.ts`'s
+`Rect` rather than restating it. `assignTitles`'s return was the real find:
+its JSDoc already described a closed shape (`{kind, text, term?, action?}`),
+just never named - now `Slot`, exported, and every file that had derived it
+locally (`useMapRenderer.ts`, `useCenterShelf.ts`, `render.ts` via
+`ReturnType<typeof assignTitles>[number]`, and `CatalogView.tsx`/`MapView.tsx`
+via an inline duplicate) imports the one type instead. `composeSpines`
+needed its own `SpineContext` rather than widening `render.ts`'s
+`DrawContext` to cover it - `DrawContext` is deliberately narrow to what
+`render.js`'s own cell-blitting calls, and `render.test.mjs` deliberately
+never exercises `composeSpines` (AGENTS.md), so widening `DrawContext` would
+force its fake to grow `save`/`rotate` stubs it has no use for; `render.ts`'s
+one call site casts its real `ctx` to `SpineContext` instead, which is sound
+because that `ctx` is always a genuine 2d context outside tests.
+`pickTags`'s metadata parameter stayed a narrow local `KeywordSource`
+(`{keywords?: {text}[]}`) rather than the full `RoomMeta` - the function only
+ever reads `.keywords[].text`, and typing it against all of `RoomMeta` would
+have forced every test fixture to carry `story`/`alt`/`sensitiveContentTags`
+it never uses. `center.test.mjs` converted alongside it, per the paired-test
+rule.
+
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
 worth writing rather than an `any`/`object` that just papers over it;
 `main.jsx` last since it wires every hook above together and is only as
 typeable as they are (`camera.js` converted - see above; it wasn't actually
 one of these):
- - `packages/web/src/lib/slide.js`
- - `packages/web/src/lib/center.js`
  - `packages/map/scoring.js`
  - `packages/web/src/main.jsx`
 

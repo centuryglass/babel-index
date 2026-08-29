@@ -25,7 +25,7 @@
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
-import { describeBook, BOOK_RECTS } from '../lib/center.js';
+import { describeBook, BOOK_RECTS, type Slot as CentreSlot } from '../lib/center.ts';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.tsx';
@@ -34,8 +34,8 @@ import type { RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 
-/** One slot on the center shelf, as `assignTitles()` (center.js) returns it. */
-type Slot = { kind: string; text: string; term?: string; action?: string } | null;
+/** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
+type Slot = CentreSlot | null;
 
 /** The ranked listbox's own rows - `main.jsx`'s `searchResults`, not `SearchResult`. */
 type SearchResultsList = { total: number; rooms: { id: number; x: number; y: number; rank: number; name: string }[] } | null;

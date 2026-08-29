@@ -80,7 +80,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
 
       // Arrows move WITHIN the shelf: right along the wall's flat queue, down
       // by a shelf. Both are `bookNeighbour`, which is asserted exactly in
-      // center.test.mjs - what only a browser can say is that the key actually
+      // center.test.ts - what only a browser can say is that the key actually
       // reaches it and focus actually follows.
       await page.keyboard.press('ArrowRight');
       const right = await inShelf();

@@ -19,10 +19,8 @@
  * here would make it two.
  */
 import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
-import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT } from '../lib/center.js';
+import { assignTitles, pickTags, bookNeighbour, BOOK_COUNT, type Slot } from '../lib/center.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
-
-type Slot = ReturnType<typeof assignTitles>[number];
 
 /**
  * Books on the center shelf with a fixed distinct function, reserved by slot

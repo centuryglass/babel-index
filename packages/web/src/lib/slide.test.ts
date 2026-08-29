@@ -3,39 +3,56 @@ import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
 import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
-import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
+import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.ts';
 import { DEFAULTS } from '../../../config/config.ts';
-import { createTileCache, CENTER as CENTER_TILE } from './tiles.ts';
+import { createTileCache, CENTER as CENTER_TILE, type LoadableImage } from './tiles.ts';
 import { CELL_ASPECT } from './camera.ts';
+import type { DrawContext } from './render.ts';
 
 // The shipped defaults, so these tests exercise what the demo actually runs.
 const TIMING = DEFAULTS.slide;
 const VIEW = { x0: -4, y0: -3, x1: 5, y1: 4 };
 const ZOOM = 220;
 
-function fakeCtx() {
-  const drawn = [];
-  const fills = [];
+interface DrawnCall { img: unknown; x: number; y: number; w: number; h: number }
+interface FillCall { x: number; y: number; w: number; h: number }
+
+interface FakeCtx extends DrawContext {
+  drawn: DrawnCall[];
+  fills: FillCall[];
+}
+
+function fakeCtx(): FakeCtx {
+  const drawn: DrawnCall[] = [];
+  const fills: FillCall[] = [];
   return {
     drawn,
     fills,
-    set fillStyle(v) { this._fill = v; },
-    get fillStyle() { return this._fill; },
-    strokeStyle: null, lineWidth: 0, font: null,
-    drawImage: (img, x, y, w, h) => drawn.push({ img, x, y, w, h }),
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '',
+    // Either drawImage(img, dx, dy, dw, dh) or the 9-arg source-rect form -
+    // the test's cache never produces a sheet rect, so only the 4-arg form is
+    // ever actually exercised, but the type still has to admit both.
+    drawImage(img: unknown, ...rest: number[]) {
+      const [x, y, w, h] = rest.length === 8 ? rest.slice(4) : rest;
+      drawn.push({ img, x, y, w, h });
+    },
     fillRect: (x, y, w, h) => fills.push({ x, y, w, h }),
     strokeRect: () => {},
     fillText: () => {},
   };
 }
 
+interface FakeImage extends LoadableImage {
+  src: string;
+}
+
 /** A cache whose images are always ready, so a frame's geometry is what is under test. */
 function readyCache() {
-  const made = [];
+  const made: FakeImage[] = [];
   const cache = createTileCache({
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
-    createImage: () => {
-      const img = { src: null, onload: null, onerror: null };
+    createImage: (): LoadableImage => {
+      const img: FakeImage = { src: '', onload: null, onerror: null };
       made.push(img);
       return img;
     },
