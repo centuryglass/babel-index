@@ -85,8 +85,9 @@ interface SearchWeights {
 interface SearchDensity {
   peak: number;
   floor: number;
-  clipLow: number;
+  clipCentre: number;
   clipHigh: number;
+  clipLow: number;
 }
 
 interface SearchDefaults {
@@ -390,13 +391,16 @@ export const DEFAULTS: Defaults = {
       floor: CERTAINTY_FLOOR,
 
       /**
-       * Raw cosines bounding CLIP's share of certainty: at `clipLow` it is
-       * saying nothing, at `clipHigh` it is as sure as it gets. The one part of
-       * the gradient that is a measurement rather than a preference, and it
-       * wants the real corpus - see `CLIP_CERTAINTY` for where these come from.
+       * The three anchors of CLIP's signed certainty curve: `clipCentre` is
+       * the no-opinion point (0), `clipHigh` a genuine match's typical
+       * confidence (+1), `clipLow` a genuinely-irrelevant query's (-1). The
+       * one part of the gradient that is a measurement rather than a
+       * preference - see `CLIP_CERTAINTY` for where these come from, and why
+       * `clipLow` is still a provisional placeholder.
        */
-      clipLow: CLIP_CERTAINTY.low,
+      clipCentre: CLIP_CERTAINTY.centre,
       clipHigh: CLIP_CERTAINTY.high,
+      clipLow: CLIP_CERTAINTY.low,
     },
   },
 };
@@ -557,16 +561,18 @@ function density(src: Section, notes: string[]): SearchDensity {
   const out = {
     peak: ratio(src.peak, d.peak, 'search.density.peak', notes),
     floor: ratio(src.floor, d.floor, 'search.density.floor', notes),
-    clipLow: number(src.clipLow, d.clipLow, 'search.density.clipLow', notes),
+    clipCentre: number(src.clipCentre, d.clipCentre, 'search.density.clipCentre', notes),
     clipHigh: number(src.clipHigh, d.clipHigh, 'search.density.clipHigh', notes),
+    clipLow: number(src.clipLow, d.clipLow, 'search.density.clipLow', notes),
   };
-  if (!(out.clipHigh > out.clipLow)) {
+  if (!(out.clipHigh > out.clipCentre && out.clipCentre > out.clipLow)) {
     notes.push(
-      `search.density.clipHigh ${out.clipHigh} is not above clipLow ${out.clipLow}; ` +
-        `using ${d.clipLow}-${d.clipHigh}`
+      `search.density.clipHigh ${out.clipHigh} / clipCentre ${out.clipCentre} / clipLow ${out.clipLow} ` +
+        `are not in high > centre > low order; using ${d.clipHigh}/${d.clipCentre}/${d.clipLow}`
     );
-    out.clipLow = d.clipLow;
+    out.clipCentre = d.clipCentre;
     out.clipHigh = d.clipHigh;
+    out.clipLow = d.clipLow;
   }
   return out;
 }

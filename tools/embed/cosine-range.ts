@@ -1,28 +1,37 @@
 /**
  * Measure where CLIP's raw cosine range actually sits on a real corpus.
  *
- * `search.density.clipLow/clipHigh` and `CLIP_CERTAINTY` (`packages/map/scoring.js`)
- * want numbers read off this corpus's own behaviour, not guessed. This script
- * embeds every line of a keyword list with the same text tower
- * `packages/server/app.ts` uses at search time, scores each one against every
- * row of a corpus's `embeddings.bin` with the exact `embeddingScores()` the app
- * ranks with, and reports the distribution: overall (mostly unrelated pairs,
- * the noise band), per keyword (each keyword's own best match), and - if
- * `--universal` is given - a separate calibration against keywords that are
- * known, not merely assumed, to be true of nearly every room in the corpus. See
- * `cosine-stats.ts` for what each of the three answers and why they need to be
- * different distributions.
+ * `search.density.clipLow/clipCentre/clipHigh` and `CLIP_CERTAINTY`
+ * (`packages/map/scoring.js`) want numbers read off this corpus's own
+ * behaviour, not guessed. This script embeds every line of a keyword list
+ * with the same text tower `packages/server/app.ts` uses at search time,
+ * scores each one against every row of a corpus's `embeddings.bin` with the
+ * exact `embeddingScores()` the app ranks with, and reports the distribution:
+ * overall (mostly unrelated pairs, the noise band and its centre), per
+ * keyword (each keyword's own best match), and - if given - two more
+ * calibrations docs/search-plan.md §5 names: `--universal` (the high extreme,
+ * keywords known to be true of nearly every room) and `--irrelevant` (the low
+ * extreme, keywords known to have nothing to do with the corpus). `--nonsense`
+ * is a third, validation-only list (keysmash queries, expected to land near
+ * the overall centre - not a formula input). See `cosine-stats.ts` for what
+ * each of the first three answers and why they need to be different
+ * distributions.
  *
- * Two inputs, both prepared elsewhere:
- *   --embeddings <dir>  a directory holding embeddings.bin + embeddings.json,
- *                       as written by tools/embed/embed.ts
- *   --keywords <file>   a text file, one keyword or phrase per line
- *   --universal <file>  optional: another such file, of keywords true of
- *                       nearly every room (e.g. "bookshelf" for a library corpus)
+ * Two required inputs, both prepared elsewhere, plus three optional probe
+ * lists:
+ *   --embeddings <dir>   a directory holding embeddings.bin + embeddings.json,
+ *                        as written by tools/embed/embed.ts
+ *   --keywords <file>    a text file, one keyword or phrase per line
+ *   --universal <file>   optional: keywords true of nearly every room
+ *                        (e.g. "bookshelf" for a library corpus) - the high extreme
+ *   --irrelevant <file>  optional: keywords with nothing to do with the corpus
+ *                        (e.g. "race car", "swimming pool") - the low extreme
+ *   --nonsense <file>    optional: keysmash/nonsense queries - validation only
  *
  * Run:
  *   node --import ./build/register.mjs tools/embed/cosine-range.ts \
- *     --embeddings <dir> --keywords <file> [--universal <file>]
+ *     --embeddings <dir> --keywords <file> \
+ *     [--universal <file>] [--irrelevant <file>] [--nonsense <file>] \
  *     [--out report.json] [--low-percentile 90] [--high-percentile 50]
  *
  * Emits a JSON report (--out, default ./cosine-range-report.json) with the full
@@ -69,6 +78,23 @@ interface Report {
   keywordRange: Summary;
   suggestion: ClipBoundsSuggestion;
   universal: UniversalCalibration | null;
+  /**
+   * The low-extreme calibration docs/search-plan.md §5 calls for: known
+   * concepts CLIP should recognise but that have nothing to do with this
+   * corpus (a "swimming pool" query against a library). Same shape and same
+   * min-p10/median-p50 math as `universal` - `summarizeUniversal` is generic,
+   * it is only the semantic label that changes - because "how high does a
+   * genuinely irrelevant concept's best match get" wants the same robustness
+   * against a single phrasing's absolute cosine scale.
+   */
+  irrelevant: UniversalCalibration | null;
+  /**
+   * Validation only, not a formula input: nonsense/keysmash queries should
+   * land in the same band as `overall`'s centre (`overall.percentiles.p50`) -
+   * both are readings of "no real signal". Reported alongside `overall` so
+   * that agreement (or disagreement) is visible without extra arithmetic.
+   */
+  nonsense: Summary | null;
   perKeyword: KeywordSummary[];
 }
 
@@ -238,6 +264,30 @@ function printSummary(report: Report) {
     console.log(`  floor=${u.floor.toFixed(3)}  ceiling=${u.ceiling.toFixed(3)}`);
     for (const note of u.notes) console.log(`  ! ${note}`);
   }
+
+  if (report.irrelevant) {
+    const i = report.irrelevant;
+    console.log('');
+    console.log('Irrelevant-concept calibration (known-to-have-nothing-to-do-with-this-corpus terms) - the low extreme:');
+    for (const k of i.byKeyword)
+      console.log(`  ${k.keyword}: p${i.floorPercentile}=${k.floor.toFixed(3)}  p${i.ceilingPercentile}=${k.ceiling.toFixed(3)}`);
+    console.log(`  floor=${i.floor.toFixed(3)}  ceiling=${i.ceiling.toFixed(3)}`);
+    if (i.ceiling < report.overall.percentiles.p50)
+      console.log(`  ! ceiling ${i.ceiling.toFixed(3)} sits BELOW the overall centre - unexpected, expected low-positive`);
+    for (const note of i.notes) console.log(`  ! ${note}`);
+  }
+
+  if (report.nonsense) {
+    const n = report.nonsense;
+    console.log('');
+    console.log('Nonsense/keysmash validation (should agree with the overall centre, not calibrate anything):');
+    printPercentiles('  nonsense', n);
+    const centre = report.overall.percentiles.p50;
+    const drift = Math.abs(n.mean - centre);
+    console.log(`  overall centre p50=${centre.toFixed(3)}, nonsense mean=${n.mean.toFixed(3)} (drift ${drift.toFixed(3)})`);
+    if (drift > 0.02) console.log('  ! nonsense drifts more than 0.02 from the overall centre - worth a closer look');
+  }
+
   console.log('A starting point - read the percentile tables above before trusting it.');
 }
 
@@ -254,9 +304,13 @@ async function main() {
   const keywords = await loadKeywords(keywordsFile);
   if (!keywords.length) throw new Error(`no keywords found in ${keywordsFile}`);
   const universalWords = argv.universal ? await loadKeywords(argv.universal) : [];
+  const irrelevantWords = argv.irrelevant ? await loadKeywords(argv.irrelevant) : [];
+  const nonsenseWords = argv.nonsense ? await loadKeywords(argv.nonsense) : [];
   console.log(
     `${count} rooms, ${keywords.length} keywords` +
       (universalWords.length ? ` + ${universalWords.length} universal` : '') +
+      (irrelevantWords.length ? ` + ${irrelevantWords.length} irrelevant` : '') +
+      (nonsenseWords.length ? ` + ${nonsenseWords.length} nonsense` : '') +
       `, model ${model}`
   );
 
@@ -278,6 +332,29 @@ async function main() {
     universal = summarizeUniversal(universalPerKeyword);
   }
 
+  // The low-extreme calibration (docs/search-plan.md §5 step 1): same
+  // min-p10/median-p50 read `universal` uses for the high extreme, just off a
+  // list of concepts known to have nothing to do with this corpus instead of
+  // ones known to be true of nearly every room.
+  let irrelevant: UniversalCalibration | null = null;
+  if (irrelevantWords.length) {
+    const { perKeyword: irrelevantPerKeyword } = await scoreList(
+      tokenizer, textModel, embeddings, dim, count, irrelevantWords, 'irrelevant'
+    );
+    irrelevant = summarizeUniversal(irrelevantPerKeyword);
+  }
+
+  // Validation, not calibration: a nonsense/keysmash query has no real
+  // signal either, so its cosines should land in the same band as `overall`'s
+  // centre - agreement is the check, there is no separate suggestion to read.
+  let nonsense: Summary | null = null;
+  if (nonsenseWords.length) {
+    const { overall: nonsenseOverall } = await scoreList(
+      tokenizer, textModel, embeddings, dim, count, nonsenseWords, 'nonsense'
+    );
+    nonsense = summarize(nonsenseOverall);
+  }
+
   const report: Report = {
     generatedAt: new Date().toISOString(),
     model,
@@ -289,6 +366,8 @@ async function main() {
     keywordRange: summarize(keywordRange),
     suggestion,
     universal,
+    irrelevant,
+    nonsense,
     perKeyword,
   };
 
