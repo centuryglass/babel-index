@@ -93,7 +93,7 @@ function Library({ manifest }) {
   const [roomCount, setRoomCount] = useState(total);
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
   const [seed, setSeed] = useState(config.map.slotSeed);
-  const [orderSeed, setOrderSeed] = useState(1);
+  const [orderSeed, setOrderSeed] = useState(() => Date.now());
   const [status, setStatus] = useState('');
   // Search history, newest first, one book per entry - and one of the two
   // things in this app that survives a reload (see `persist.js` for why so few
