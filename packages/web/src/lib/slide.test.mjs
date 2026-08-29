@@ -5,7 +5,7 @@ import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../../m
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.js';
 import { DEFAULTS } from '../../../config/config.ts';
-import { createTileCache, CENTER as CENTER_TILE } from './tiles.js';
+import { createTileCache, CENTER as CENTER_TILE } from './tiles.ts';
 import { CELL_ASPECT } from './camera.js';
 
 // The shipped defaults, so these tests exercise what the demo actually runs.

@@ -22,7 +22,7 @@
  * those few in memory. (Giving the shared assets their own resolution pyramid
  * is a later step.)
  */
-import { CENTER, genericId } from './tiles.js';
+import { CENTER, genericId } from './tiles.ts';
 import { sheetPosition, sheetFileName } from '../../../pipeline/layout.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 
@@ -38,7 +38,7 @@ export type UrlFor = (id: number | string, level: number) => string | null;
 /**
  * The full locator: resolves `(id, level)` to a url and, for a sheet-packed
  * level, the rectangle within that sheet's image the room occupies. This is
- * what the canvas render path (`tiles.js`/`render.js`/`slide.js`) uses, since
+ * what the canvas render path (`tiles.ts`/`render.js`/`slide.js`) uses, since
  * a canvas can cheaply draw a sub-rect of a shared, already-decoded image.
  *
  * @param manifest as served by /api/manifest
