@@ -13,27 +13,56 @@
  * in `docs/design-history.md` that made the point the hard way.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cellDistance } from '../../../map/ordering.ts';
+import { cellDistance, type MapLayout } from '../../../map/ordering.ts';
 import { describeCell, describeRoom, describeArrangement } from '../../../map/describe.ts';
-import { nextRoom } from '../../../map/nextRoom.ts';
-import { CELL_ASPECT, pxPerCell, cursorCell, pickGranularity } from '../lib/camera.ts';
+import { nextRoom, type Cell } from '../../../map/nextRoom.ts';
+import {
+  CELL_ASPECT,
+  pxPerCell,
+  cursorCell,
+  pickGranularity,
+  type Camera,
+  type CursorGranularity,
+} from '../lib/camera.ts';
+import type { RoomMeta } from '../../../map/metadata.ts';
+import type { Config } from '../../../config/config.ts';
 
-/**
- * @param {object} opts
- * @param {import('../../../map/ordering.ts').MapLayout} opts.layout the current `createLayout` result
- * @param {number[]} opts.order           room ids by rank
- * @param {(import('../../../map/metadata.ts').RoomMeta|null)[]|null} opts.metadata joined per-room keywords and story
- * @param {{current: object}} opts.cam    the live camera ref
- * @param {{current: HTMLCanvasElement|null}} opts.canvasRef
- * @param {Function} opts.flyTo
- * @param {Function} opts.nudgeBy
- * @param {Function} opts.flightTarget
- * @param {object} opts.camera            `config.camera`, not the whole config
- * @param {Function} opts.setStatus       writes the one live region
- * @param {Function} opts.requestDraw
- * @param {Function} opts.onOpenCard      Enter over a room opens its card
- * @param {Function} opts.goToSearch      `/` reaches the live search field
- */
+interface OpenCardArgs {
+  id: number;
+  rank: number;
+  x: number;
+  y: number;
+  at: { x: number; y: number };
+}
+
+interface FlyOpts {
+  ms?: number;
+}
+
+interface UseMapCursorOpts {
+  /** the current `createLayout` result */
+  layout: MapLayout;
+  /** room ids by rank */
+  order: number[];
+  /** joined per-room keywords and story */
+  metadata: (RoomMeta | null)[] | null;
+  /** the live camera ref */
+  cam: { current: Camera };
+  canvasRef: { current: HTMLCanvasElement | null };
+  flyTo: (x: number, y: number, zoom?: number, opts?: FlyOpts) => Promise<boolean>;
+  nudgeBy: (dx: number, dy: number, opts?: FlyOpts) => Promise<boolean>;
+  flightTarget: () => Camera;
+  /** `config.camera`, not the whole config */
+  camera: Config['camera'];
+  /** writes the one live region */
+  setStatus: (status: string) => void;
+  requestDraw: () => void;
+  /** Enter over a room opens its card */
+  onOpenCard: (args: OpenCardArgs) => void;
+  /** `/` reaches the live search field */
+  goToSearch: () => void;
+}
+
 export function useMapCursor({
   layout,
   order,
@@ -48,7 +77,7 @@ export function useMapCursor({
   requestDraw,
   onOpenCard,
   goToSearch,
-}) {
+}: UseMapCursorOpts) {
   // --- the keyboard cursor ---------------------------------------------------
   //
   // The cell under the camera center (accessibility-plan.md §4.2), and
@@ -66,7 +95,7 @@ export function useMapCursor({
   // does NOT read it (see `cursorNow` below), for the same reason `cam` is a
   // ref: a re-render per keypress is fine, a torn-down and rebuilt render
   // EFFECT per keypress is not.
-  const [cursor, setCursor] = useState(() => cursorCell(cam.current));
+  const [cursor, setCursor] = useState<Cell>(() => cursorCell(cam.current));
 
   /**
    * Where the cursor is RIGHT NOW, for the keyboard's own next move.
@@ -99,7 +128,7 @@ export function useMapCursor({
   // near the threshold does not flicker between naming a cell and naming a
   // region (the same hysteresis `pickLevel` uses for the pyramid, applied to
   // what is SAID rather than to what is drawn - §3.1).
-  const granularityRef = useRef('cell');
+  const granularityRef = useRef<CursorGranularity>('cell');
 
   // Whether the cursor is past the ranked content's edge, tracked so the
   // boundary is announced on the move that CROSSES it rather than on every
@@ -122,7 +151,7 @@ export function useMapCursor({
    * a polite region queues them rather than merging them.
    */
   const announceCursorMove = useCallback(
-    (cell, lead = '') => {
+    (cell: Cell, lead = '') => {
       setCursor(cell);
 
       const canvas = canvasRef.current;
@@ -192,13 +221,14 @@ export function useMapCursor({
   // exactly one tab stop - while leaving them real, interactive elements a
   // touch screen reader's swipe navigation reaches regardless of tabindex.
   const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
-  const cursorEntry = cursorRoom.center || cursorRoom.generic ? null : metadata?.[cursorRoom.id] ?? null;
+  const cursorEntry = cursorRoom.center || cursorRoom.generic ? null : (metadata?.[cursorRoom.id] ?? null);
   // Named here rather than in the view, so `describeRoom` has exactly one
   // caller per reading of the corpus and the map cannot drift from the catalog
   // about what a room is called.
-  const cursorDesc = cursorEntry
-    ? describeRoom(cursorRoom.id, cursorRoom.rank, order.length, cursorEntry)
-    : null;
+  const cursorDesc =
+    cursorEntry && !cursorRoom.center && !cursorRoom.generic
+      ? describeRoom(cursorRoom.id, cursorRoom.rank, order.length, cursorEntry)
+      : null;
 
   // The canvas's own accessible name - what a reader hears landing on it for
   // the FIRST time, before any move has run `announceCursorMove` and pushed
@@ -211,11 +241,15 @@ export function useMapCursor({
   );
 
   const onMapKeyDown = useCallback(
-    (e) => {
-      const dir = {
-        ArrowLeft: { dx: -1, dy: 0 }, ArrowRight: { dx: 1, dy: 0 },
-        ArrowUp: { dx: 0, dy: -1 }, ArrowDown: { dx: 0, dy: 1 },
-      }[e.key];
+    (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+      const dir = (
+        {
+          ArrowLeft: { dx: -1, dy: 0 },
+          ArrowRight: { dx: 1, dy: 0 },
+          ArrowUp: { dx: 0, dy: -1 },
+          ArrowDown: { dx: 0, dy: 1 },
+        } as Record<string, { dx: number; dy: number }>
+      )[e.key];
 
       if (dir) {
         e.preventDefault();
@@ -355,15 +389,22 @@ export function useMapCursor({
  * the edge is. Module scope and pure, so it is one function of its arguments
  * rather than something that reads the hook's closure.
  */
-function describeSurroundings(layout, order, metadata, cursor) {
+function describeSurroundings(
+  layout: MapLayout,
+  order: number[],
+  metadata: (RoomMeta | null)[] | null,
+  cursor: Cell
+): string {
   const here = describeCell(cursor.x, cursor.y, { layout, order, metadata }).name;
 
-  const nearby = [
-    ['east', { dx: 1, dy: 0 }],
-    ['west', { dx: -1, dy: 0 }],
-    ['south', { dx: 0, dy: 1 }],
-    ['north', { dx: 0, dy: -1 }],
-  ]
+  const nearby = (
+    [
+      ['east', { dx: 1, dy: 0 }],
+      ['west', { dx: -1, dy: 0 }],
+      ['south', { dx: 0, dy: 1 }],
+      ['north', { dx: 0, dy: -1 }],
+    ] as [string, { dx: number; dy: number }][]
+  )
     .map(([label, dir]) => {
       const found = nextRoom(layout, cursor, dir);
       if (!found) return null;
@@ -371,7 +412,7 @@ function describeSurroundings(layout, order, metadata, cursor) {
       const id = layout.roomAt(found.x, found.y, order).id;
       return `Room ${id} ${steps} ${label}`;
     })
-    .filter(Boolean);
+    .filter((s): s is string => Boolean(s));
 
   const edge = Math.max(0, layout.boundaryRadius - cellDistance(cursor.x, cursor.y, CELL_ASPECT));
 
