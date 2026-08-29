@@ -108,8 +108,6 @@ Test files (`*.test.mjs`) travel with their module when it converts and
 aren't listed separately.
 
 Small, mostly presentational, few or no loose shapes:
- - `packages/pipeline/mips.mjs`
- - `packages/pipeline/index.mjs`
  - `packages/web/src/components/SearchIcon.jsx`
  - `packages/web/src/components/SearchForm.jsx`
  - `packages/web/src/components/HelpDialog.jsx`
