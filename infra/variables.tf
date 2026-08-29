@@ -52,7 +52,7 @@ variable "assets_hostname" {
 variable "rate_limit_requests_per_period" {
   description = "Requests per IP per rate_limit_period_seconds before the WAF rule starts blocking."
   type        = number
-  default     = 50
+  default     = 200
 }
 
 # The Free plan is only entitled to a 10-second counting period (a

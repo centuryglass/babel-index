@@ -80,6 +80,38 @@ The pure decision logic (which files make up a corpus upload, and which of
 those are new/changed) lives in `lib.ts`, tested without any real corpus or
 bucket in `lib.test.mjs`.
 
+## Cache purge
+
+If the bucket is fronted by a Cloudflare zone with `enable_zone_protections`
+(see `infra/`), every object under `assets_hostname` - including
+`manifest.json` itself - is edge-cached for `cache_edge_ttl_seconds` (24h by
+default). Replacing a file under an existing key, or overwriting
+`manifest.json` in place, leaves the edge serving the old copy until that TTL
+expires. This tool purges exactly the keys it just wrote, if you set:
+
+```sh
+export CLOUDFLARE_API_TOKEN=...        # needs Zone.Cache Purge on the zone below
+export CLOUDFLARE_ZONE_ID=...          # the zone fronting the bucket
+export CLOUDFLARE_ASSETS_HOSTNAME=...  # matches terraform's assets_hostname
+```
+
+All three unset skips the purge with a note - the common case for a bucket
+with no zone protections, or a purely local demo. Purges go out at most 30
+URLs per Cloudflare API call; past 1000 keys in one run, a single
+`purge_everything` call replaces the whole batch instead.
+
+A Cloudflare `purge_cache` call can return `success: true` and still not
+evict a given object - observed in practice on `metadata.json`/`tagLinks.json`
+after a real CORS-config change, confirmed stale by comparing a normal
+request against one with a cache-busting query string (which reaches the
+origin directly and proved R2 itself was already correct). Retrying the same
+by-URL purge did nothing; a `purge_everything` call for the zone, or a manual
+purge from the Cloudflare dashboard, is what actually cleared it. If a page
+still shows stale data (or CORS errors on a request that used to work) after
+this tool prints `cache purged: N key(s)`, don't assume the purge script is
+broken - check the object directly with a cache-busting query string first,
+and fall back to a dashboard purge if the API-driven one didn't take.
+
 ## Concurrency
 
 Hashing and uploading both run up to 16 files at once, through the same
