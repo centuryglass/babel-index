@@ -347,6 +347,60 @@ test('a directory that is not on the ladder is ignored', async () => {
   });
 });
 
+// --- sheet-packed levels -----------------------------------------------------
+
+test('a complete sheets directory is discovered as a sheet-packed level', async () => {
+  // 2 rooms need only sheet-0000 at the default roomsPerSheet=256.
+  await corpus(
+    pyramid({
+      '512/001.jpg': fixture.jpeg(512, 384),
+      '256-sheets/sheet-0000.jpg': fixture.jpeg(256, 192),
+      '128-sheets/sheet-0000.jpg': fixture.jpeg(128, 96),
+      '64-sheets/sheet-0000.jpg': fixture.jpeg(64, 48),
+    }),
+    async (dir) => {
+      const { levels } = await scanDirectory(dir);
+      const level2 = levels.find((l) => l.level === 2);
+      assert.equal(level2.dir, null, 'a sheet-packed level has no per-file directory');
+      assert.deepEqual(level2.sheet, {
+        tileW: 256,
+        tileH: 192,
+        cols: 16,
+        rows: 16,
+        roomsPerSheet: 256,
+        sheetCount: 1,
+        dir: '256-sheets',
+        ext: 'jpg',
+      });
+      assert.deepEqual(levels.map((l) => l.level), [0, 1, 2, 3, 4]);
+    }
+  );
+});
+
+test('an incomplete sheets directory falls back to a per-file directory', async () => {
+  // Mid-rollout: mips written per-file, sheets not yet fully packed for this
+  // level - the directory exists but is missing the sheet the corpus needs.
+  await corpus(
+    pyramid({
+      '256/001.jpg': fixture.jpeg(256, 192),
+      '256-sheets/notes.txt': 'not a sheet yet',
+    }),
+    async (dir) => {
+      const { levels } = await scanDirectory(dir);
+      const level2 = levels.find((l) => l.level === 2);
+      assert.equal(level2.dir, '256', 'falls back to the per-file directory');
+      assert.equal(level2.sheet, undefined);
+    }
+  );
+});
+
+test('a missing sheets directory with no per-file fallback is not a level', async () => {
+  await corpus(pyramid({}), async (dir) => {
+    const { levels } = await scanDirectory(dir);
+    assert.deepEqual(levels.map((l) => l.level), [0], 'level 2 has neither sheets nor per-file tiles');
+  });
+});
+
 test('level directories are not mistaken for rooms', async () => {
   await corpus(pyramid({ '512/001.jpg': fixture.jpeg(512, 384) }), async (dir) => {
     const m = await scanDirectory(dir);

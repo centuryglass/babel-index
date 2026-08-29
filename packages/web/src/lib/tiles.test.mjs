@@ -38,14 +38,25 @@ function fakeImages() {
   };
 }
 
-/** Every level of every room exists, unless `only` says otherwise. */
-const urls = (only = null) => (id, level) =>
-  only && !only.includes(level) ? null : `/l${level}/${id}.jpg`;
+/** Every level of every room exists as its own per-file tile, unless `only` says otherwise. */
+const locate = (only = null) => (id, level) =>
+  only && !only.includes(level) ? null : { url: `/l${level}/${id}.jpg`, rect: null };
+
+/** N rooms per sheet at one level; every other level is per-file (`locate`). */
+const sheetLocate = (level, roomsPerSheet) => (id, lvl) => {
+  if (lvl !== level) return locate()(id, lvl);
+  const sheetIndex = Math.floor(id / roomsPerSheet);
+  const posInSheet = id % roomsPerSheet;
+  return {
+    url: `/sheet-l${level}-${sheetIndex}.jpg`,
+    rect: { sx: posInSheet * 10, sy: 0, sw: 10, sh: 10 },
+  };
+};
 
 const build = (opts = {}) => {
   const images = fakeImages();
   const cache = createTileCache({
-    urlFor: urls(opts.only),
+    locateTile: locate(opts.only),
     pyramid: LADDER,
     createImage: images.createImage,
     ...opts,
@@ -59,7 +70,7 @@ test('a miss starts one load and returns nothing until it finishes', () => {
   const { images, cache } = build();
   let loads = 0;
   const c = createTileCache({
-    urlFor: urls(), pyramid: LADDER, createImage: images.createImage, onLoad: () => loads++,
+    locateTile: locate(), pyramid: LADDER, createImage: images.createImage, onLoad: () => loads++,
   });
   assert.equal(c.get(7, 0), null);
   assert.equal(images.made.length, 1);
@@ -68,7 +79,7 @@ test('a miss starts one load and returns nothing until it finishes', () => {
 
   images.settleAll();
   assert.equal(loads, 1, 'a finished load must ask for a redraw');
-  assert.deepEqual(c.get(7, 0), { img: images.made[0], level: 0 });
+  assert.deepEqual(c.get(7, 0), { img: images.made[0], rect: null, level: 0 });
   assert.equal(images.made.length, 1, 'a hit must not re-request');
   assert.equal(cache.size(), 0, 'caches do not share state');
 });
@@ -111,7 +122,7 @@ test('the wanted level is used when it is ready, and reported as itself', () => 
   const { images, cache } = build();
   cache.get(5, 1);
   images.settleAll();
-  assert.deepEqual(cache.get(5, 1), { img: images.made[0], level: 1 });
+  assert.deepEqual(cache.get(5, 1), { img: images.made[0], rect: null, level: 1 });
 });
 
 test('a missing level falls back to a coarser one, and says which', () => {
@@ -315,4 +326,207 @@ test('clear drops everything', () => {
   cache.clear();
   assert.equal(cache.size(), 0);
   assert.equal(cache.get(0, 0), null, 'a cleared tile must be fetched afresh');
+});
+
+// --- sheet-packed levels -----------------------------------------------------
+
+test('many rooms in one sheet share exactly one fetch and one decoded image', () => {
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4),
+    pyramid: LADDER,
+    createImage: images.createImage,
+  });
+
+  for (let id = 0; id < 4; id++) assert.equal(cache.get(id, 2), null); // same sheet, all miss together
+  assert.equal(images.made.length, 1, 'four rooms in one sheet cost one Image');
+  assert.equal(images.urls()[0], '/sheet-l2-0.jpg');
+
+  images.settleAll();
+  for (let id = 0; id < 4; id++) {
+    const hit = cache.get(id, 2);
+    assert.equal(hit.img, images.made[0], `room ${id} draws from the shared sheet image`);
+  }
+  assert.equal(images.made.length, 1, 'settling must not have triggered a second fetch');
+});
+
+test('get() reports each room’s own rect within the shared sheet', () => {
+  const images = fakeImages();
+  const cache = createTileCache({ locateTile: sheetLocate(2, 4), pyramid: LADDER, createImage: images.createImage });
+  cache.get(0, 2);
+  cache.get(3, 2);
+  images.settleAll();
+
+  assert.deepEqual(cache.get(0, 2).rect, { sx: 0, sy: 0, sw: 10, sh: 10 });
+  assert.deepEqual(cache.get(3, 2).rect, { sx: 30, sy: 0, sw: 10, sh: 10 });
+});
+
+test('a second sheet is a second fetch, independent of the first', () => {
+  const images = fakeImages();
+  const cache = createTileCache({ locateTile: sheetLocate(2, 4), pyramid: LADDER, createImage: images.createImage });
+  cache.get(0, 2); // sheet 0
+  cache.get(4, 2); // sheet 1
+  assert.equal(images.made.length, 2);
+  assert.deepEqual(images.urls().sort(), ['/sheet-l2-0.jpg', '/sheet-l2-1.jpg']);
+});
+
+test('evicting a sheet-backed room pointer does not refetch the still-resident sheet', () => {
+  // Unlike a per-file entry, a sheet-backed pointer owns no request - dropping
+  // it under per-level budget pressure must not cost a second fetch once the
+  // room is asked for again, as long as the underlying sheet is still cached.
+  const images = fakeImages();
+  const cache = createTileCache({ locateTile: sheetLocate(2, 4), pyramid: LADDER, createImage: images.createImage });
+  cache.get(0, 2);
+  images.settleAll();
+
+  // Level 2's budget is 8 room-pointers; blow well past it with rooms from
+  // OTHER sheets so room 0's pointer entry is evicted, while its sheet stays
+  // referenced by nothing here (only the sheet cache's own budget governs it).
+  for (let id = 100; id < 140; id += 4) cache.get(id, 2);
+  images.settleAll();
+
+  const hit = cache.get(0, 2);
+  assert.notEqual(hit, null, 'room 0 must still resolve - its sheet is still cached');
+  assert.equal(images.count('/sheet-l2-0.jpg'), 1, 'no second fetch for a sheet already resident');
+});
+
+test('sheetBudget evicts the least-recently-used sheet once exceeded', () => {
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4),
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 1,
+    neverEvictSheetLevels: [], // isolate ordinary budget eviction from the coarsest-level exemption below
+  });
+  cache.get(0, 2); // sheet 0
+  images.settleAll();
+  cache.get(4, 2); // sheet 1 - evicts sheet 0 under a budget of 1
+  images.settleAll();
+  assert.equal(cache.sheetCount(), 1);
+
+  cache.get(0, 2); // sheet 0 must be fetched again
+  assert.equal(images.count('/sheet-l2-0.jpg'), 2, 'the evicted sheet was refetched');
+});
+
+test('a sheet still in use this frame survives budget pressure', () => {
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4),
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 1,
+    neverEvictSheetLevels: [], // isolate frame protection from the coarsest-level exemption below
+  });
+  cache.beginFrame();
+  cache.get(0, 2); // sheet 0
+  images.settleAll();
+
+  cache.beginFrame();
+  cache.get(0, 2); // still on screen this frame
+  cache.get(4, 2); // sheet 1 arrives too
+  images.settleAll();
+
+  cache.beginFrame(); // eviction runs here, at the top of the frame
+  assert.notEqual(cache.get(0, 2), null, 'a sheet drawn last frame must not be dropped');
+  assert.equal(images.count('/sheet-l2-0.jpg'), 1, 'no refetch for the still-in-use sheet');
+});
+
+test('prefetching many rooms from one sheet costs one concurrency slot, not one per room', () => {
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4),
+    pyramid: LADDER,
+    createImage: images.createImage,
+    concurrency: 1,
+  });
+  for (let id = 0; id < 4; id++) cache.prefetch(id, 2); // all four rooms, one sheet
+  assert.equal(images.made.length, 1, 'one sheet fetch serves every room queued for it');
+
+  images.settleAll();
+  for (let id = 0; id < 4; id++) assert.notEqual(cache.get(id, 2), null, `room ${id} never resolved`);
+});
+
+test('the coarsest level’s sheets are never evicted, even under heavy budget pressure', () => {
+  // A pan at the most-zoomed-out level crosses the whole map in a couple of
+  // gestures; the whole level's sheets are few and cheap, so they should
+  // cache in full and stay, rather than being warmed and dropped repeatedly.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4), // level 2 is LADDER's coarsest - the default exemption applies
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 1, // would evict everything down to one sheet, if not exempt
+  });
+  cache.get(0, 2); // sheet 0
+  images.settleAll();
+  cache.get(4, 2); // sheet 1 - would evict sheet 0 under an ordinary budget of 1
+  images.settleAll();
+  cache.get(8, 2); // sheet 2
+  images.settleAll();
+
+  assert.equal(cache.sheetCount(), 3, 'every sheet at the coarsest level stays resident');
+  for (const [id, url] of [[0, '/sheet-l2-0.jpg'], [4, '/sheet-l2-1.jpg'], [8, '/sheet-l2-2.jpg']]) {
+    assert.notEqual(cache.get(id, 2), null, `room ${id} must still resolve`);
+    assert.equal(images.count(url), 1, `${url} must not have been refetched`);
+  }
+});
+
+test('an ordinary sheet-packed level (not the coarsest) still evicts under pressure', () => {
+  // The exemption is specific to the coarsest level, not sheets in general -
+  // a middle sheet-packed level must still obey its budget.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(1, 4), // level 1 is NOT LADDER's coarsest level (2 is)
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 1,
+  });
+  cache.get(0, 1); // sheet 0
+  images.settleAll();
+  cache.get(4, 1); // sheet 1 - evicts sheet 0 under a budget of 1
+  images.settleAll();
+
+  assert.equal(cache.sheetCount(), 1);
+  cache.get(0, 1);
+  assert.equal(images.count('/sheet-l1-0.jpg'), 2, 'the non-coarsest level must still evict');
+});
+
+test('sheetBudget evicts strictly oldest-first across more than two sheets', () => {
+  // A queue, not "evict whatever is over budget in whatever order" - three
+  // sheets touched in order, over a budget of two, must drop exactly the
+  // one nobody has touched since.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: sheetLocate(2, 4),
+    pyramid: LADDER,
+    createImage: images.createImage,
+    sheetBudget: 2,
+    neverEvictSheetLevels: [],
+  });
+  cache.get(0, 2); // sheet 0 - oldest
+  images.settleAll();
+  cache.get(4, 2); // sheet 1
+  images.settleAll();
+  cache.get(8, 2); // sheet 2 - pushes sheet count to 3, over budget of 2
+
+  assert.equal(cache.sheetCount(), 2, 'exactly one sheet was evicted to get back to budget');
+  assert.equal(images.count('/sheet-l2-0.jpg'), 1, 'sheet 0 (oldest) was evicted, not refetched yet');
+  images.settleAll();
+  cache.get(0, 2); // now sheet 0 must be fetched again
+  assert.equal(images.count('/sheet-l2-0.jpg'), 2, 'the oldest sheet was the one dropped');
+  // The two more recently touched sheets survived untouched.
+  assert.equal(images.count('/sheet-l2-1.jpg'), 1);
+  assert.equal(images.count('/sheet-l2-2.jpg'), 1);
+});
+
+test('clear drops sheets too', () => {
+  const images = fakeImages();
+  const cache = createTileCache({ locateTile: sheetLocate(2, 4), pyramid: LADDER, createImage: images.createImage });
+  cache.get(0, 2);
+  images.settleAll();
+  assert.equal(cache.sheetCount(), 1);
+  cache.clear();
+  assert.equal(cache.sheetCount(), 0);
+  assert.equal(cache.get(0, 2), null, 'a cleared sheet must be fetched afresh');
 });

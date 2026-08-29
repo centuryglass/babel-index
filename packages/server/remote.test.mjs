@@ -91,3 +91,30 @@ test('scanRemote raises a clear error when the manifest is missing', async () =>
     await assert.rejects(() => scanRemote(base, 'corpus-sample'), /404/);
   });
 });
+
+test('a sheet-packed level round-trips through rebase untouched - it carries no url of its own', async () => {
+  // rebase() only rewrites literal stored urls (rooms/shared/embeddings/...).
+  // A sheet-packed level's `sheet.dir` is a bare relative path, addressed the
+  // same formula-based way `dir` always has been, resolved client-side against
+  // the already-rebased `imagesBase` - so this must survive verbatim.
+  const manifest = sampleManifest();
+  manifest.levels.push({
+    level: 2,
+    w: 256,
+    h: 192,
+    dir: null,
+    sheet: { tileW: 256, tileH: 192, cols: 16, rows: 16, roomsPerSheet: 256, sheetCount: 1, dir: '256-sheets', ext: 'jpg' },
+  });
+
+  await remoteHost(
+    { '/corpus-sample/manifest.json': { body: JSON.stringify(manifest), type: 'application/json' } },
+    async (base) => {
+      const remote = await scanRemote(base, 'corpus-sample');
+      const level2 = remote.levels.find((l) => l.level === 2);
+      assert.deepEqual(level2.sheet, manifest.levels[1].sheet, 'sheet geometry must pass through unchanged');
+      // The only thing that changed is imagesBase, which the client combines
+      // with sheet.dir itself - proving the full url a room resolves to.
+      assert.equal(`${remote.imagesBase}/${level2.sheet.dir}/sheet-0000.jpg`, `${base}/corpus-sample/256-sheets/sheet-0000.jpg`);
+    }
+  );
+});

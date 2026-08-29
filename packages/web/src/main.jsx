@@ -21,10 +21,11 @@ import {
   overlapsViewport,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
+  minZoomForSearchBox,
 } from './lib/center.js';
 import { CELL_ASPECT, fitZoom } from './lib/camera.js';
 import { createTileCache, CENTER, genericId } from './lib/tiles.js';
-import { createUrlFor } from './lib/rooms.ts';
+import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.js';
 import { createSlideRenderer } from './lib/slide.js';
 import { BASE_TILE } from './lib/pyramid.js';
@@ -208,18 +209,20 @@ function Library({ manifest }) {
     draw.current();
   }, []);
 
-  // The cache asks `urlFor` where a level of a room lives; the manifest is the
-  // only thing that knows, because it is the scan that discovered which levels
-  // the corpus actually has.
-  // Where a room's tile lives, at a level. The canvas cache asks it for tiles
-  // to draw; the catalog puts the same answer in an `<img src>`. One resolver,
-  // because the manifest is the only thing that knows which levels the corpus
-  // actually has and two readings of that would be two chances to be wrong.
+  // Where a room's tile lives, at a level. `createTileLocator` is the full
+  // answer - a url plus a source rect when the level is packed into a shared
+  // sheet - which the canvas cache needs to draw sub-rects cheaply.
+  // `createUrlFor` is the same lookup narrowed to a bare url (null for a
+  // sheet-packed level, which an `<img src>` cannot address), for the catalog
+  // and the overlay. Both read the manifest, because it is the scan that
+  // discovered which levels the corpus actually has and two readings of that
+  // would be two chances to be wrong.
+  const locateTile = useMemo(() => createTileLocator(manifest), [manifest]);
   const urlFor = useMemo(() => createUrlFor(manifest), [manifest]);
 
   const cache = useMemo(() => {
     const tiles = createTileCache({
-      urlFor,
+      locateTile,
       onLoad: () => requestDraw(),
     });
     // The shared tiles are rule 1's floor: pinned and preloaded so every cell has
@@ -232,7 +235,7 @@ function Library({ manifest }) {
       tiles.request(id, 0);
     }
     return tiles;
-  }, [manifest, requestDraw, urlFor]);
+  }, [manifest, requestDraw, locateTile]);
 
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
   const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
@@ -422,7 +425,14 @@ function Library({ manifest }) {
     // index. `opening` is already a raw camera target, not a cell index (see
     // useMapCamera's mount-time use of it, unmodified), so that offset has to
     // be cancelled here or the flight lands half a cell short on each axis.
-    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
+    //
+    // `opening.zoom` alone is not enough: it fits the shelf+box UNION to the
+    // viewport, and on a narrow/portrait screen that fit binds on the wide
+    // shelf, landing a zoom where the box itself - gated on height, not
+    // width - is still under its usable minimum. Floor the landing zoom at
+    // what the box alone needs so this flight actually reaches a usable field.
+    const zoom = Math.max(opening.zoom, minZoomForSearchBox());
+    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, zoom);
     if (landed) input.focus();
   }, [flyTo, opening, centreOverlay]);
 
