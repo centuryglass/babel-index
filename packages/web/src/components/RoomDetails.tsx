@@ -20,7 +20,7 @@
  * One order, so a reader who meets a room both ways meets it the same way.
  */
 import type { ReactNode } from 'react';
-import { explainRanking } from '../../../map/scoring.js';
+import { explainRanking } from '../../../map/scoring.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange, RankingExplanation } from '../../../map/searchResult.ts';

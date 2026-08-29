@@ -68,15 +68,35 @@
 import winkLemmatizer from 'wink-lemmatizer';
 import anyAscii from 'any-ascii';
 import { embeddingScores } from './ordering.ts';
+import type { Config } from '../config/config.ts';
+import type {
+  MatchRange,
+  ParsedQuery,
+  RankHybridResult,
+  RankingExplanation,
+  ScoreBreakdown,
+  SearchIndex,
+  SignalRanks,
+  StoryIndex,
+  StorySequenceEntry,
+  Term,
+} from './searchResult.ts';
 
 const { noun, verb, adjective } = winkLemmatizer;
+
+/** The three-anchor band `signedClipCertainty`/`matchCertainty` read a raw cosine against. */
+export interface ClipBand {
+  centre: number;
+  high: number;
+  low: number;
+}
 
 /**
  * A word's base form, trying noun then verb then adjective rules and keeping
  * the first that changes it. Unknown words come back unchanged - matching
  * still falls through to whole-word equality, it just doesn't stem.
  */
-export function lemmatise(word) {
+export function lemmatise(word: string): string {
   const n = noun(word);
   if (n !== word) return n;
   const v = verb(word);
@@ -120,7 +140,7 @@ export function lemmatise(word) {
  * dissimilar to library imagery, pushing it past the noise floor rather than
  * just sitting in it.
  */
-export const CLIP_CERTAINTY = { centre: 0.205, high: 0.279, low: 0.171 };
+export const CLIP_CERTAINTY: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -148,7 +168,7 @@ export const STOPWORDS = new Set([
  * fallback for exactly that remainder: a per-code-point transliteration table,
  * so `Zdzisław` and `Zdzislaw` fold to the same string.
  */
-export function fold(text) {
+export function fold(text: unknown): string {
   return foldWithMap(text).folded.trim();
 }
 
@@ -185,11 +205,8 @@ const COMBINING = /[\u0300-\u036f]/g;
  *
  * Deliberately does NOT trim: `fold` trims its own result, and trimming inside
  * this would shift every recorded index off the text it describes.
- *
- * @param {string} text
- * @returns {{folded: string, map: number[]}}
  */
-export function foldWithMap(text) {
+export function foldWithMap(text: unknown): { folded: string; map: number[] } {
   const src = String(text ?? '');
   const map = [];
   let folded = '';
@@ -206,16 +223,16 @@ export function foldWithMap(text) {
   return { folded, map };
 }
 
-/**
- * Fold and split into searchable tokens.
- *
- * @param {string} text
- * @param {object} [opts]
- * @param {number} [opts.minLength] tokens shorter than this are dropped, or `a`
- *   matches most keywords in the corpus by substring
- * @param {boolean} [opts.stopwords] drop stopwords (true by default)
- */
-export function tokenise(text, { minLength = 3, stopwords = true } = {}) {
+/** Options shared by `tokenise` and `tokeniseWithPositions`. */
+export interface TokeniseOpts {
+  /** tokens shorter than this are dropped, or `a` matches most keywords in the corpus by substring */
+  minLength?: number;
+  /** drop stopwords (true by default) */
+  stopwords?: boolean;
+}
+
+/** Fold and split into searchable tokens. */
+export function tokenise(text: unknown, { minLength = 3, stopwords = true }: TokeniseOpts = {}): string[] {
   return fold(text)
     .split(/[^\p{L}\p{N}]+/u)
     .filter((t) => t.length >= minLength && !(stopwords && STOPWORDS.has(t)));
@@ -237,14 +254,12 @@ export function tokenise(text, { minLength = 3, stopwords = true } = {}) {
  * `storyScore` and friends), same as before quoting existed. Quoting changes
  * how a term is matched, not the vocabulary floor.
  *
- * @param {string} raw
- * @returns {import('./searchResult.ts').ParsedQuery}
  */
-export function parseQuery(raw) {
+export function parseQuery(raw: unknown): ParsedQuery {
   const text = String(raw ?? '');
-  const terms = [];
+  const terms: Term[] = [];
 
-  const pushWords = (chunk) => {
+  const pushWords = (chunk: string) => {
     for (const word of chunk.split(/\s+/)) {
       if (!word) continue;
       const folded = fold(word);
@@ -280,13 +295,14 @@ export function parseQuery(raw) {
  * nothing" (docs/search_rules.md, Feature additions) true for free - the two
  * cases share this one code path rather than being handled separately.
  *
- * @param {import('./searchResult.ts').Term} term
- * @param {string[]} keywords folded room keywords
- * @returns {{exact: boolean, partial: number}} `partial` is the best
- *   substring fraction found, 0 when there is no match at all (exact implies
- *   `partial` is meaningless and left at 0)
+ * @param keywords folded room keywords
+ * @returns `partial` is the best substring fraction found, 0 when there is no
+ *   match at all (exact implies `partial` is meaningless and left at 0)
  */
-export function classifyTagTerm(term, keywords) {
+export function classifyTagTerm(
+  term: Term | null | undefined,
+  keywords: string[] | null | undefined
+): { exact: boolean; partial: number } {
   if (!term?.folded || !keywords?.length) return { exact: false, partial: 0 };
 
   let partial = 0;
@@ -308,15 +324,27 @@ export function classifyTagTerm(term, keywords) {
  * Walking the same word-boundary regex `storyMatchRanges` already uses keeps
  * this in agreement with what counts as a word everywhere else in the file.
  */
-function tokeniseWithPositions(text, { minLength = 3, stopwords = true } = {}) {
+interface WordSpan {
+  word: string;
+  start: number;
+  end: number;
+}
+
+function tokeniseWithPositions(text: unknown, { minLength = 3, stopwords = true }: TokeniseOpts = {}): WordSpan[] {
   const folded = fold(text);
-  const out = [];
+  const out: WordSpan[] = [];
   for (const m of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
     const word = m[0];
     if (word.length < minLength || (stopwords && STOPWORDS.has(word))) continue;
     out.push({ word, start: m.index, end: m.index + word.length });
   }
   return out;
+}
+
+/** The slice of a room's metadata `buildSearchIndex` actually reads - `RoomMeta` satisfies it. */
+export interface SearchIndexSource {
+  keywords?: { text: string }[] | null;
+  story?: string | null;
 }
 
 /**
@@ -336,10 +364,9 @@ function tokeniseWithPositions(text, { minLength = 3, stopwords = true } = {}) {
  * original for highlighting) re-walks the source text itself rather than reading
  * this index.
  *
- * @param {(import('./metadata.ts').RoomMeta|null)[]} joined output of `joinMetadata()`
- * @returns {import('./searchResult.ts').SearchIndex}
+ * @param joined output of `joinMetadata()`
  */
-export function buildSearchIndex(joined) {
+export function buildSearchIndex(joined: (SearchIndexSource | null)[] | null | undefined): SearchIndex {
   return (joined ?? []).map((entry) => {
     if (!entry) return null;
     // Lemmatised, not just tokenised: a search matches a story word by base
@@ -377,7 +404,7 @@ export function buildSearchIndex(joined) {
  * The mean rather than the sum keeps the result in [0, 1] without clamping, and
  * rewards matching more *of the query* rather than rewarding longer queries.
  */
-export function keywordScore(foldedQuery, queryTokens, keywords) {
+export function keywordScore(foldedQuery: string, queryTokens: string[], keywords: string[] | null | undefined): number {
   if (!keywords?.length) return 0;
 
   let whole = 0;
@@ -426,10 +453,10 @@ export function keywordScore(foldedQuery, queryTokens, keywords) {
  * tokens are lemmatised here, and weighting stays keyed to the ORIGINAL token
  * length so the query-normalisation above still holds.
  *
- * @param {string[]} queryTokens raw (folded, untokenised-past-splitting) tokens
- * @param {import('./searchResult.ts').StoryIndex} storyIndex the room's story
+ * @param queryTokens raw (folded, untokenised-past-splitting) tokens
+ * @param storyIndex the room's story
  */
-export function storyScore(queryTokens, storyIndex) {
+export function storyScore(queryTokens: string[], storyIndex: StoryIndex | null | undefined): number {
   const set = storyIndex?.set;
   if (!set?.size || !queryTokens.length) return 0;
 
@@ -454,11 +481,12 @@ export function storyScore(queryTokens, storyIndex) {
  * a sentence matched", not "matched in the order the query gave it" - that
  * stricter, ordered test is `storyPhraseRun`, for a quoted phrase.
  *
- * @param {import('./searchResult.ts').StorySequenceEntry[]} sequence
- * @param {Set<string>} matchLemmas
- * @returns {number} characters spanned by the longest run, 0 if none
+ * @returns characters spanned by the longest run, 0 if none
  */
-export function longestMatchRun(sequence, matchLemmas) {
+export function longestMatchRun(
+  sequence: StorySequenceEntry[] | null | undefined,
+  matchLemmas: Set<string> | null | undefined
+): number {
   if (!sequence?.length || !matchLemmas?.size) return 0;
 
   let best = 0;
@@ -482,11 +510,10 @@ export function longestMatchRun(sequence, matchLemmas) {
  * Unlike `longestMatchRun`, order matters: `"glass room"` must not match a
  * story where only `room glass` appears.
  *
- * @param {import('./searchResult.ts').StorySequenceEntry[]} sequence
- * @param {string[]} phraseLemmas the phrase's own words, lemmatised, in order
- * @returns {number} characters spanned by the match, 0 if the phrase is not found
+ * @param phraseLemmas the phrase's own words, lemmatised, in order
+ * @returns characters spanned by the match, 0 if the phrase is not found
  */
-export function storyPhraseRun(sequence, phraseLemmas) {
+export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined, phraseLemmas: string[] | null | undefined): number {
   if (!sequence?.length || !phraseLemmas?.length) return 0;
 
   outer: for (let i = 0; i + phraseLemmas.length <= sequence.length; i++) {
@@ -530,12 +557,10 @@ export function storyPhraseRun(sequence, phraseLemmas) {
  * `artists`), and nested or duplicated `<mark>` elements are not what anyone
  * wants to render or to read out.
  *
- * @param {import('./searchResult.ts').MatchRange[]} ranges
- * @returns {import('./searchResult.ts').MatchRange[]}
  */
-function mergeRanges(ranges) {
+function mergeRanges(ranges: MatchRange[]): MatchRange[] {
   const sorted = ranges.filter((r) => r.end > r.start).sort((a, b) => a.start - b.start);
-  const out = [];
+  const out: MatchRange[] = [];
   for (const r of sorted) {
     const last = out[out.length - 1];
     if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
@@ -551,7 +576,7 @@ function mergeRanges(ranges) {
  * span - `map[end]` when there is one, and the string's length when the span
  * runs to the end.
  */
-function toSource(map, srcLength, start, end) {
+function toSource(map: number[], srcLength: number, start: number, end: number): MatchRange {
   return {
     start: map[start] ?? srcLength,
     end: end < map.length ? map[end] : srcLength,
@@ -559,8 +584,8 @@ function toSource(map, srcLength, start, end) {
 }
 
 /** Every occurrence of `needle` in `hay`, as folded-space ranges. */
-function occurrences(hay, needle) {
-  const found = [];
+function occurrences(hay: string, needle: string): MatchRange[] {
+  const found: MatchRange[] = [];
   if (!needle) return found;
   for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + 1))
     found.push({ start: i, end: i + needle.length });
@@ -577,12 +602,10 @@ function occurrences(hay, needle) {
  * the question the reader is asking ("why is this chip here?") rather than to
  * the narrower "which arithmetic produced the number".
  *
- * @param {string} text the keyword as written, unfolded
- * @param {string} foldedQuery
- * @param {string[]} queryTokens
- * @returns {import('./searchResult.ts').MatchRange[]} ranges into `text`
+ * @param text the keyword as written, unfolded
+ * @returns ranges into `text`
  */
-export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
+export function keywordMatchRanges(text: unknown, foldedQuery: string, queryTokens: string[] = []): MatchRange[] {
   const src = String(text ?? '');
   if (!src) return [];
   const { folded, map } = foldWithMap(src);
@@ -613,13 +636,15 @@ export function keywordMatchRanges(text, foldedQuery, queryTokens = []) {
  *     marking the word reads as "this is why this room is here", which is the
  *     question being asked.
  *
- * @param {string} text the story as written, unfolded
- * @param {string[]} queryTokens
- * @param {object} [opts]
- * @param {number} [opts.minLength] must match what built the story index
- * @returns {import('./searchResult.ts').MatchRange[]} ranges into `text`
+ * @param text the story as written, unfolded
+ * @param opts.minLength must match what built the story index
+ * @returns ranges into `text`
  */
-export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {}) {
+export function storyMatchRanges(
+  text: unknown,
+  queryTokens: string[] = [],
+  { minLength = 3 }: { minLength?: number } = {}
+): MatchRange[] {
   const src = String(text ?? '');
   if (!src || !queryTokens.length) return [];
   const { folded, map } = foldWithMap(src);
@@ -645,10 +670,8 @@ export function storyMatchRanges(text, queryTokens = [], { minLength = 3 } = {})
  * to all-one or a divide by zero: a signal that cannot distinguish anything
  * should not contribute a constant that outweighs one that can.
  *
- * @param {ArrayLike<number>} scores
- * @returns {Float32Array}
  */
-export function normaliseScores(scores) {
+export function normaliseScores(scores: ArrayLike<number>): Float32Array {
   const out = new Float32Array(scores.length);
   if (!scores.length) return out;
 
@@ -665,7 +688,7 @@ export function normaliseScores(scores) {
   return out;
 }
 
-const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+const clamp01 = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
 /**
  * Formula constants that are not user-tunable weights - unlike
@@ -684,7 +707,7 @@ export const TAG_PARTIAL_SATURATION = 2;
 export const STORY_LONG_RANGE = { low: 16, high: 40 };
 
 /** The saturating curve `storyLongChars` feeds, shared by the ranking bonus and certainty's `S` term. */
-function storyLongBonus01(chars) {
+function storyLongBonus01(chars: number): number {
   const { low, high } = STORY_LONG_RANGE;
   return clamp01((chars - low) / (high - low));
 }
@@ -697,6 +720,14 @@ function storyLongBonus01(chars) {
  * timings in `packages/config/config.ts`.
  */
 export const STORY_FLOOR = 0.5;
+
+/** The named parts `matchCertainty` combines into one signed reading. */
+export interface CertaintyParts {
+  tagCoverage?: number;
+  storyLongChars?: number;
+  storyMatched?: boolean;
+  cosine?: number | null;
+}
 
 /**
  * CLIP's raw cosine placed against the three-anchor band, as a SIGNED
@@ -712,11 +743,9 @@ export const STORY_FLOOR = 0.5;
  * done by the caller (`rankHybrid`), not here, because certainty's negative
  * half (`Cneg` in `matchCertainty`) needs the same call's negative half too.
  *
- * @param {number|null} cosine
- * @param {{centre: number, high: number, low: number}} band
- * @returns {number} in [-1, 1]
+ * @returns in [-1, 1]
  */
-export function signedClipCertainty(cosine, band = CLIP_CERTAINTY) {
+export function signedClipCertainty(cosine: number | null | undefined, band: ClipBand = CLIP_CERTAINTY): number {
   if (cosine === null || cosine === undefined || !Number.isFinite(cosine)) return 0;
   const { centre, high, low } = band;
   if (cosine >= centre) {
@@ -736,10 +765,10 @@ export function signedClipCertainty(cosine, band = CLIP_CERTAINTY) {
  * certain in either direction, not even at the anchor cosines themselves
  * (docs/search_rules.md "Reporting").
  *
- * @param {number} signed in [-1, 1]
- * @returns {number} in [-99.99, -0.01] union [0.01, 99.99]
+ * @param signed in [-1, 1]
+ * @returns in [-99.99, -0.01] union [0.01, 99.99]
  */
-export function signedPercent(signed) {
+export function signedPercent(signed: number): number {
   const magnitude = Math.min(99.99, Math.max(0.01, Math.abs(signed) * 100));
   return signed < 0 ? -magnitude : magnitude;
 }
@@ -773,20 +802,19 @@ export function signedPercent(signed) {
  * room with real text evidence is never reported as a mismatch just because
  * CLIP is cool on its picture.
  *
- * @param {object} parts
- * @param {number} [parts.tagCoverage] K, already in [0, 1]
- * @param {number} [parts.storyLongChars] longest contiguous matched run, chars
- * @param {boolean} [parts.storyMatched] did any story word match at all - a
- *   single matched word's `storyLongChars` can sit under the ramp's floor and
- *   read as the same "zero" a non-match would, so this is passed explicitly
- * @param {number|null} [parts.cosine] raw CLIP cosine, or null/undefined
- * @param {{centre: number, high: number, low: number}} [clip] raw-cosine anchors
- * @returns {number} signed, in [-1, 1]
+ * @param parts.tagCoverage K, already in [0, 1]
+ * @param parts.storyLongChars longest contiguous matched run, chars
+ * @param parts.storyMatched did any story word match at all - a single
+ *   matched word's `storyLongChars` can sit under the ramp's floor and read as
+ *   the same "zero" a non-match would, so this is passed explicitly
+ * @param parts.cosine raw CLIP cosine, or null/undefined
+ * @param clip raw-cosine anchors
+ * @returns signed, in [-1, 1]
  */
 export function matchCertainty(
-  { tagCoverage = 0, storyLongChars = 0, storyMatched = false, cosine = null } = {},
-  clip = CLIP_CERTAINTY
-) {
+  { tagCoverage = 0, storyLongChars = 0, storyMatched = false, cosine = null }: CertaintyParts = {},
+  clip: ClipBand = CLIP_CERTAINTY
+): number {
   const K = clamp01(tagCoverage);
   const S = storyMatched ? STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01(storyLongChars) : 0;
   const signed = signedClipCertainty(cosine, clip);
@@ -800,14 +828,30 @@ export function matchCertainty(
   return pos > 0 ? pos : Cneg > 0 ? -Cneg : 0;
 }
 
+/** One room's row in `rankHybrid`'s working set, before the composite sort reorders it. */
+interface ScoredRow {
+  id: number;
+  score: number;
+  tagExact: number;
+  tagPartialSum: number;
+  tagPartialCount: number;
+  storyRatio: number;
+  storyLongChars: number;
+  clipNorm: number;
+  clipCertaintyGate: number;
+  clipSigned: number;
+  cosine: number | null;
+  certainty: number;
+}
+
 /** Ascending per-room comparators `rankAxis` sorts by - one per independent axis. */
-function compareTagAxis(x, y) {
+function compareTagAxis(x: ScoredRow, y: ScoredRow): number {
   return x.tagExact - y.tagExact || x.tagPartialSum - y.tagPartialSum;
 }
-function compareStoryAxis(x, y) {
+function compareStoryAxis(x: ScoredRow, y: ScoredRow): number {
   return x.storyRatio - y.storyRatio || x.storyLongChars - y.storyLongChars;
 }
-function compareClipAxis(x, y) {
+function compareClipAxis(x: ScoredRow, y: ScoredRow): number {
   return (x.cosine ?? -Infinity) - (y.cosine ?? -Infinity);
 }
 
@@ -819,12 +863,11 @@ function compareClipAxis(x, y) {
  * `1, 2, 2, 3`): a tie shares the rank the group's best position would have
  * gotten, so "#4" always means "3 rooms score higher", tie or no tie.
  *
- * @param {{ [key: string]: any }[]} byId one row per room, indexed by id
- * @param {(x: object, y: object) => number} compare ascending on this axis
- * @returns {{ rank: Int32Array, ties: Int32Array }} both indexed by id;
- *   `rank` is 1-based, `ties` is how many OTHER rooms share it
+ * @param byId one row per room, indexed by id
+ * @param compare ascending on this axis
+ * @returns both indexed by id; `rank` is 1-based, `ties` is how many OTHER rooms share it
  */
-function rankAxis(byId, compare) {
+function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => number): { rank: Int32Array; ties: Int32Array } {
   const ids = byId.map((_, i) => i);
   ids.sort((a, b) => compare(byId[b], byId[a]));
   const rank = new Int32Array(byId.length);
@@ -857,19 +900,13 @@ function rankAxis(byId, compare) {
  * CLIP-only. Both are real rankings. Only the case where neither exists needs
  * the server's stub.
  *
- * @param {object} opts
- * @param {string} opts.query          the raw query string
- * @param {number} opts.count          rooms in the corpus
- * @param {object} opts.weights        `config.search.weights` - the five-constant shape
- * @param {number} [opts.minTokenLength]
- * @param {Int8Array} [opts.embeddings] the blob, roomCount * dim row-major
- * @param {number} [opts.dim]
- * @param {Float32Array|number[]} [opts.vector] the query vector, L2-normalised
- * @param {import('./searchResult.ts').SearchIndex} [opts.index]
- * @param {{centre: number, high: number, low: number}} [opts.clipCertainty]
- *   raw-cosine anchors for CLIP's share of certainty
- * @returns {import('./searchResult.ts').RankHybridResult}
- *   `certainty` is parallel to `order`, i.e. by rank, which is how the map's
+ * @param opts.query          the raw query string
+ * @param opts.count          rooms in the corpus
+ * @param opts.weights        `config.search.weights` - the five-constant shape
+ * @param opts.embeddings the blob, roomCount * dim row-major
+ * @param opts.vector the query vector, L2-normalised
+ * @param opts.clipCertainty raw-cosine anchors for CLIP's share of certainty
+ * @returns `certainty` is parallel to `order`, i.e. by rank, which is how the map's
  *   density gradient wants it - and `breakdown` follows the same convention,
  *   every array indexed by rank rather than by room id.
  *
@@ -885,6 +922,18 @@ function rankAxis(byId, compare) {
  *   ranks #4 by tag, tied with 2 others" without the composite `order` ever
  *   being touched by a single-axis re-sort.
  */
+export interface RankHybridOpts {
+  query: string;
+  count: number;
+  weights: Config['search']['weights'];
+  minTokenLength?: number;
+  embeddings?: Int8Array | null;
+  dim?: number;
+  vector?: Float32Array | number[] | null;
+  index?: SearchIndex | null;
+  clipCertainty?: ClipBand;
+}
+
 export function rankHybrid({
   query,
   count,
@@ -895,7 +944,7 @@ export function rankHybrid({
   vector = null,
   index = null,
   clipCertainty = CLIP_CERTAINTY,
-}) {
+}: RankHybridOpts): RankHybridResult {
   const parsed = parseQuery(query);
   const queryTokens = tokenise(query, { minLength: minTokenLength });
   const queryLemmas = new Set(queryTokens.map(lemmatise));
@@ -925,7 +974,7 @@ export function rankHybrid({
   const hasTerms = tagTerms.length > 0;
   const hasText = Boolean(index?.some(Boolean)) && (hasTerms || queryTokens.length > 0);
 
-  const scored = new Array(count);
+  const scored: ScoredRow[] = new Array(count);
   let sawKeyword = false;
   let sawStory = false;
 
@@ -1006,7 +1055,7 @@ export function rankHybrid({
   scored.sort((a, b) => b.score - a.score);
 
   const certainty = new Float32Array(count);
-  const breakdown = {
+  const breakdown: ScoreBreakdown = {
     score: new Float32Array(count),
     tagExact: new Float32Array(count),
     tagPartialSum: new Float32Array(count),
@@ -1018,12 +1067,12 @@ export function rankHybrid({
     clipSigned: new Float32Array(count),
     cosine: new Float32Array(count),
   };
-  const ranks = {
+  const ranks: SignalRanks = {
     tag: new Int32Array(count),
     story: new Int32Array(count),
     clip: new Int32Array(count),
   };
-  const ties = {
+  const ties: SignalRanks = {
     tag: new Int32Array(count),
     story: new Int32Array(count),
     clip: new Int32Array(count),
@@ -1083,19 +1132,29 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', story: 
  * something"), sorted greatest first, an axis that contributed nothing
  * omitted rather than shown as `0%`.
  *
- * @param {number} rank position in `order`
- * @param {object} opts
- * @param {object} opts.breakdown from `rankHybrid`
- * @param {Float32Array} opts.certainty from `rankHybrid`
- * @param {{tag: Int32Array, story: Int32Array, clip: Int32Array}} opts.ranks from `rankHybrid`
- * @param {{tag: Int32Array, story: Int32Array, clip: Int32Array}} opts.ties from `rankHybrid`
- * @param {object} opts.weights the five-constant `config.search.weights` shape
- * @param {number} opts.total rooms in the corpus (`result.order.length`)
- * @returns {import('./searchResult.ts').RankingExplanation | null} `null` when
- *   nothing at all matched this room - no tag, no story, no CLIP data.
+ * @param rank position in `order`
+ * @param opts.breakdown from `rankHybrid`
+ * @param opts.certainty from `rankHybrid`
+ * @param opts.ranks from `rankHybrid`
+ * @param opts.ties from `rankHybrid`
+ * @param opts.weights the five-constant `config.search.weights` shape
+ * @param opts.total rooms in the corpus (`result.order.length`)
+ * @returns `null` when nothing at all matched this room - no tag, no story, no CLIP data.
  */
-export function explainRanking(rank, { breakdown, certainty, ranks, ties, weights, total }) {
-  const at = (arr) => (arr && rank < arr.length ? arr[rank] : 0);
+export interface ExplainRankingOpts {
+  breakdown: ScoreBreakdown;
+  certainty: Float32Array;
+  ranks: SignalRanks;
+  ties: SignalRanks;
+  weights: Config['search']['weights'];
+  total: number;
+}
+
+export function explainRanking(
+  rank: number,
+  { breakdown, certainty, ranks, ties, weights, total }: ExplainRankingOpts
+): RankingExplanation | null {
+  const at = (arr: ArrayLike<number> | null | undefined): number => (arr && rank < arr.length ? arr[rank] : 0);
 
   const tagExact = at(breakdown?.tagExact);
   const tagPartialSum = at(breakdown?.tagPartialSum);
@@ -1114,8 +1173,7 @@ export function explainRanking(rank, { breakdown, certainty, ranks, ties, weight
   const clipWeighted = hasClip ? weights.clip * at(breakdown?.clip) * at(breakdown?.clipCertaintyGate) : 0;
   const totalScore = at(breakdown?.score);
 
-  /** @type {{key: 'clip'|'tag'|'story', weighted: number}[]} */
-  const contributionTerms = [
+  const contributionTerms: { key: 'clip' | 'tag' | 'story'; weighted: number }[] = [
     { key: 'clip', weighted: clipWeighted },
     { key: 'tag', weighted: tagWeighted },
     { key: 'story', weighted: storyWeighted },

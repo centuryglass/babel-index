@@ -3,7 +3,7 @@
 This is the full specification of what a search does: what a query is parsed into,
 what one room's evaluation against that query looks like, how that evaluation
 becomes an order and a set of displayed numbers, and every assertion about
-behavior that the implementation (`packages/map/scoring.js`, `packages/map/ordering.ts`,
+behavior that the implementation (`packages/map/scoring.ts`, `packages/map/ordering.ts`,
 `packages/config/config.ts`) has to satisfy. It supersedes every earlier draft of
 this file.
 

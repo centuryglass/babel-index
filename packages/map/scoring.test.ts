@@ -23,23 +23,26 @@ import {
   storyScore,
   TAG_PARTIAL_SATURATION,
   tokenise,
-} from './scoring.js';
+} from './scoring.ts';
 import { CERTAINTY_FLOOR } from './ordering.ts';
 import { DEFAULTS } from '../config/config.ts';
 
 const WEIGHTS = DEFAULTS.search.weights;
 
+/** One fixture room: `[keywords, story]`, or `null` for a room with no metadata at all. */
+type RoomFixture = [string[] | null | undefined, string | null | undefined] | null;
+
 /**
  * An index over rooms given as `[keywords, story]` pairs, in id order.
  * A bare `null` is a room with no metadata at all.
  */
-const indexOf = (...rooms) =>
+const indexOf = (...rooms: RoomFixture[]) =>
   buildSearchIndex(
     rooms.map((room) => {
       if (!room) return null;
       const [keywords, story] = room;
       if (!keywords?.length && !story) return null;
-      return { keywords: (keywords ?? []).map((text) => ({ text, type: null })), story };
+      return { keywords: (keywords ?? []).map((text) => ({ text })), story };
     })
   );
 
@@ -868,7 +871,7 @@ test('rankHybrid reports the components it sorted on, by rank', () => {
     query: 'oak',
     count: 3,
     weights: WEIGHTS,
-    index: indexOf([['oak'], null, ['gilt']], null, null),
+    index: indexOf([['oak'], null], null, null),
   });
 
   // Parallel to `order`, i.e. by RANK - the same convention `certainty` uses.

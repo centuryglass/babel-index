@@ -38,7 +38,7 @@
  */
 import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
 import { CERTAINTY_FLOOR } from '../map/ordering.ts';
-import { CLIP_CERTAINTY } from '../map/scoring.js';
+import { CLIP_CERTAINTY } from '../map/scoring.ts';
 
 export interface ZoomLimits {
   min: number;
@@ -311,7 +311,7 @@ export const DEFAULTS: Defaults = {
      * story match), `L` (the saturating long-story bonus), `C` (CLIP). Every
      * non-CLIP signal is already an absolute ratio or count; CLIP is min-max
      * normalised across the corpus *for this query* before this weight is
-     * applied - see `packages/map/scoring.js`'s header for why a raw cosine
+     * applied - see `packages/map/scoring.ts`'s header for why a raw cosine
      * cannot be weighted directly.
      *
      * Each value is chosen so its rule's inequality
