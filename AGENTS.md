@@ -94,7 +94,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
-  belong to the same subsystem (`useMapCamera.js` / `lib/camera.ts`,
+  belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
   `useRearrangement.js` / `lib/slide.js`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
     * `src/main.jsx`: React entry point - loads the corpus, derives the layout
@@ -121,7 +121,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
     * `useSearch.ts`: The query box, the `/api/search` fetch, blending the
                       reply into one ranking, the highlight range-finders
-    * `useMapCamera.js`: React hook for camera changes, inputs entangled with
+    * `useMapCamera.ts`: React hook for camera changes, inputs entangled with
                          camera controls
     * `useMapRenderer.js`: Map frame loop/redraw hook
     * `useMapCursor.js`: The keyboard cursor - where it is, what a reader
@@ -578,7 +578,7 @@ code, not a standing invariant.
   spelling out every value would become the real surface; every adjustment
   instead lands in `notes` (printed by the server) because a value silently
   not taking effect is the only failure mode a tuning file has.
-- **Consuming files state no fallback defaults** — `slide.js`/`useMapCamera.js`
+- **Consuming files state no fallback defaults** — `slide.js`/`useMapCamera.ts`
   read durations from config with nothing restated locally, so there's no
   second copy to drift.
 - **Zoom config narrows, never widens.** `ZOOM_LIMITS` in `camera.ts` is the

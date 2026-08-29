@@ -180,7 +180,7 @@ export const DEFAULTS: Defaults = {
      * as a glide rather than a snap.
      *
      * Zero means arrive at once, the same `prefers-reduced-motion` escape hatch
-     * `flightMs` has - and for the same reason, since `useMapCamera.js` routes
+     * `flightMs` has - and for the same reason, since `useMapCamera.ts` routes
      * every keyboard move through `flyTo` with this as the duration override.
      */
     keyboardMoveMs: 140,

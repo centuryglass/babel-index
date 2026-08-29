@@ -16,7 +16,7 @@
  * for one purpose only - measuring distance the way it looks, so the boundary
  * is round on screen rather than round in the index.
  *
- * None of this touches the DOM. `useMapCamera.js` owns the pointer events and
+ * None of this touches the DOM. `useMapCamera.ts` owns the pointer events and
  * the ref that holds the live camera; everything that can be stated as an
  * equation lives here instead, because the interesting properties - the
  * screen/world round-trip, and zoom keeping the point under the cursor fixed -

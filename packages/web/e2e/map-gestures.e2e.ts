@@ -478,7 +478,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // bookkeeping runs, leaving the finger in the pointer map, after which every
     // gesture is read as a pinch against a finger no longer on the glass. That
     // is a hazard the spec allows rather than one observed in the wild - see the
-    // note in useMapCamera.js - but it is cheap to hold shut.
+    // note in useMapCamera.ts - but it is cheap to hold shut.
     await page.evaluate(() => {
       const proto = HTMLCanvasElement.prototype;
       (window as any).__capture = {
