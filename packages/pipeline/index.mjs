@@ -19,6 +19,7 @@
  */
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import sharp from 'sharp';
 import { LEVELS, SHEETS } from '../web/src/lib/pyramid.js';
 import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes } from './mips.mjs';
@@ -91,19 +92,24 @@ console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across $
 // Pack the coarse levels into shared sheets so a scroll session at that zoom
 // needs a handful of requests instead of one per room (see SHEETS's docblock
 // in packages/web/src/lib/pyramid.js for why this exists and which levels).
+// writeMips above always writes every level per-file first - sheets are
+// composited FROM those files, not from the source directly - so the
+// per-file directory for a sheet-packed level is deleted once its sheets are
+// current: it is pure scratch at that point, absorbed into the sheets and
+// never read by anything downstream (discoverLevels checks sheets for these
+// levels, not the per-file directory). A future rerun just re-resizes into
+// it again before repacking - cheap, and the sheets themselves still skip
+// recompositing via their own hash sidecar since the resize is deterministic.
 const sheetSteps = plan.filter((step) => step.level >= SHEETS.fromLevel);
 if (sheetSteps.length) {
   console.log(`  packing ${sheetSteps.length} level(s) into ${SHEETS.roomsPerSheet}-room sheets ...\n`);
   for (const step of sheetSteps) {
-    const result = await writeSheets({
-      levelDir: join(outDir, step.dir),
-      files,
-      tileSize: { w: step.w, h: step.h },
-      quality,
-    });
+    const levelDir = join(outDir, step.dir);
+    const result = await writeSheets({ levelDir, files, tileSize: { w: step.w, h: step.h }, quality });
     console.log(
       `    level ${step.level}  ${result.sheetCount} sheet(s), ${result.written} written, ${result.cached} unchanged`
     );
+    await rm(levelDir, { recursive: true, force: true });
   }
   console.log('');
 }
