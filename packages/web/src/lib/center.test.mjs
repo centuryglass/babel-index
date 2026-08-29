@@ -20,8 +20,9 @@ import {
   areSpinesLegible,
   overlapsViewport,
   BOOK_RECTS,
+  minZoomForSearchBox,
 } from './center.js';
-import { CELL_ASPECT } from './camera.js';
+import { CELL_ASPECT, fitZoom } from './camera.js';
 
 const GEO = layout({ width: 1, height: 1 });
 
@@ -90,6 +91,29 @@ test('searchBoxAtPoint hits the box only when it is usable, and misses outside i
   const tiny = { x: 0, y: 0, w: 100, h: 100 };
   const tinyBox = searchBoxScreenRect(tiny);
   assert.equal(searchBoxAtPoint(tinyBox.x + tinyBox.w / 2, tinyBox.y + tinyBox.h / 2, tiny), false);
+});
+
+test('minZoomForSearchBox floors a portrait opening fit that would leave the box unusable', () => {
+  // A narrow, tall viewport: fitting CENTER_OPENING_RECT (the shelf+box
+  // union, wide relative to the box alone) to a portrait phone screen binds
+  // on width, landing a zoom the box's own height minimum does not survive -
+  // this is the reported bug. Flooring at minZoomForSearchBox must recover it.
+  const portrait = { width: 360, height: 780 };
+  const openingZoom = fitZoom({ ...portrait, target: CENTER_OPENING_RECT, margin: 0.94 });
+  const cellFromOpeningAlone = { x: 0, y: 0, w: openingZoom, h: openingZoom * CELL_ASPECT };
+  assert.equal(isSearchBoxUsable(cellFromOpeningAlone), false);
+
+  const floored = Math.max(openingZoom, minZoomForSearchBox());
+  const cellFloored = { x: 0, y: 0, w: floored, h: floored * CELL_ASPECT };
+  assert.equal(isSearchBoxUsable(cellFloored), true);
+});
+
+test('minZoomForSearchBox is exactly the zoom where the box screen height hits its minimum', () => {
+  const z = minZoomForSearchBox();
+  const justUnder = { x: 0, y: 0, w: z - 0.01, h: (z - 0.01) * CELL_ASPECT };
+  const justOver = { x: 0, y: 0, w: z + 0.01, h: (z + 0.01) * CELL_ASPECT };
+  assert.equal(isSearchBoxUsable(justUnder), false);
+  assert.equal(isSearchBoxUsable(justOver), true);
 });
 
 test('centerCellRect places cell (0,0) and sizes it one cell each axis', () => {

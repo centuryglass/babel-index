@@ -33,7 +33,7 @@ function fakeCtx() {
 function readyCache() {
   const made = [];
   const cache = createTileCache({
-    urlFor: (id, level) => `/l${level}/${id}.jpg`,
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: () => {
       const img = { src: null, onload: null, onerror: null };
       made.push(img);

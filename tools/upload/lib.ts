@@ -5,6 +5,7 @@
  * calls in here for the decisions.
  */
 import type { Manifest } from '../../packages/map/manifest.ts';
+import { sheetFileName } from '../../packages/pipeline/layout.ts';
 
 export interface UploadEntry {
   local: string;
@@ -43,7 +44,17 @@ export function buildUploadList(
   for (const room of manifest.rooms) uploads.push({ local: join(imagesDir, room.file), key: `${prefix}/${room.file}` });
 
   for (const level of manifest.levels) {
-    if (level.level === 0 || !level.dir) continue; // level 0 is the flat files above
+    if (level.level === 0) continue; // level 0 is the flat files above
+    if (level.sheet) {
+      // A sheet-packed level uploads one object per sheet file, not per room -
+      // the whole point is fewer, larger objects.
+      for (let i = 0; i < level.sheet.sheetCount; i++) {
+        const file = sheetFileName(i, level.sheet.ext);
+        uploads.push({ local: join(imagesDir, level.sheet.dir, file), key: `${prefix}/${level.sheet.dir}/${file}` });
+      }
+      continue;
+    }
+    if (!level.dir) continue;
     for (const room of manifest.rooms)
       uploads.push({ local: join(imagesDir, level.dir, room.file), key: `${prefix}/${level.dir}/${room.file}` });
   }

@@ -343,7 +343,12 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID } = {}) {
       const id = idFor(value, homeMx, homeMy, genericIndexAt);
       const hit = cache.get(id, level);
       if (hit) {
-        ctx.drawImage(hit.img, sx, sy, cw, ch);
+        if (hit.rect) {
+          const { sx: rx, sy: ry, sw, sh } = hit.rect;
+          ctx.drawImage(hit.img, rx, ry, sw, sh, sx, sy, cw, ch);
+        } else {
+          ctx.drawImage(hit.img, sx, sy, cw, ch);
+        }
         drawn++;
       } else {
         ctx.fillStyle = '#15120f';
