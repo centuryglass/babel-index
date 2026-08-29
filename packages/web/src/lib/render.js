@@ -25,7 +25,7 @@
  */
 import { PYRAMID, prefetchBounds } from './pyramid.ts';
 import { pxPerCell } from './camera.js';
-import { CENTER, genericId } from './tiles.js';
+import { CENTER, genericId } from './tiles.ts';
 import { composeSpines } from './center.js';
 
 /**

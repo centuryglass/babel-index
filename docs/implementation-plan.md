@@ -150,7 +150,6 @@ Deliberately loose today (see AGENTS.md) - convert once there's a real type
 worth writing rather than an `any`/`object` that just papers over it;
 `main.jsx` last since it wires every hook above together and is only as
 typeable as they are:
- - `packages/web/src/lib/tiles.js`
  - `packages/web/src/lib/render.js`
  - `packages/web/src/lib/camera.js`
  - `packages/web/src/lib/slide.js`

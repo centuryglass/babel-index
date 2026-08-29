@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTileLocator, createUrlFor } from './rooms.ts';
-import { CENTER, genericId } from './tiles.js';
+import { CENTER, genericId } from './tiles.ts';
 
 function manifest(extraLevels: any[] = []): any {
   return {
