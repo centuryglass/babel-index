@@ -102,14 +102,12 @@ serve as completed task history.
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
 opportunity, per AGENTS.md. Roughly ordered easiest/most-isolated first,
-deliberately-loose shapes last; `pyramid.ts` (fixed shape, no DOM, no
-duck-typing, converted from `pyramid.js`) was the most recent conversion.
-Test files (`*.test.mjs`) travel with their module when it converts and
-aren't listed separately.
+deliberately-loose shapes last; `packages/pipeline/mips.ts`/`index.ts`
+(converted from `.mjs`, types from `layout.ts`'s existing `Size`/`LevelStep`/
+`MipStep`) was the most recent conversion. Test files (`*.test.mjs`) travel
+with their module when it converts and aren't listed separately.
 
 Small, mostly presentational, few or no loose shapes:
- - `packages/web/src/components/SearchIcon.jsx`
- - `packages/web/src/components/SearchForm.jsx`
  - `packages/web/src/components/HelpDialog.jsx`
  - `packages/web/src/components/RoomCard.jsx`
  - `packages/web/src/components/RoomOverlay.jsx`

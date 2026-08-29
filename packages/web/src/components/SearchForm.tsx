@@ -1,3 +1,4 @@
+import type { Ref, FormEventHandler } from 'react';
 import clearSvg from '../../../../assets/clear_search.svg';
 
 /**
@@ -22,6 +23,15 @@ export function SearchForm({
   formRef = null,
   label = 'search the library',
   maxLength,
+}: {
+  query: string;
+  setQuery: (query: string) => void;
+  onSubmit: FormEventHandler<HTMLFormElement>;
+  onClear: () => void;
+  className?: string;
+  formRef?: Ref<HTMLFormElement> | null;
+  label?: string;
+  maxLength?: number;
 }) {
   return (
     <form ref={formRef} onSubmit={onSubmit} className={className} role="search">

@@ -18,11 +18,11 @@
  * frame from the live camera, so the arrow always points at wherever the
  * center tile currently is on screen - including off it.
  */
-import { forwardRef } from 'react';
+import { forwardRef, type ComponentPropsWithoutRef } from 'react';
 import buttonSvg from '../../../../assets/search_button.svg';
 import arrowSvg from '../../../../assets/search_arrow.svg';
 
-export function SearchGlyph(props) {
+export function SearchGlyph(props: ComponentPropsWithoutRef<'span'>) {
   return <span aria-hidden="true" {...props} dangerouslySetInnerHTML={{ __html: buttonSvg }} />;
 }
 
@@ -31,7 +31,7 @@ export function SearchGlyph(props) {
 // loop already uses for `.center-search` and `.center-books`, and for the
 // same reason: this rotates every frame with the camera, which is not
 // something a React re-render should be doing sixty times a second.
-export const SearchOrbitArrow = forwardRef(function SearchOrbitArrow(props, ref) {
+export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithoutRef<'span'>>(function SearchOrbitArrow(props, ref) {
   return (
     <span
       ref={ref}
