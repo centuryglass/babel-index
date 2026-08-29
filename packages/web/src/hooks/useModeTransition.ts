@@ -46,7 +46,7 @@ export function useModeTransition({
   // center tile rather than vanishing. Cleared when the animation lands.
   const [leaving, setLeaving] = useState(false);
 
-  const firstTileRef = useRef<HTMLElement | null>(null);
+  const firstTileRef = useRef<HTMLImageElement | null>(null);
   // Where the center tile was on the map when the switch began, or null if it
   // was off screen - a reader who panned away has nothing to fold from, and
   // the transition degrades to a cross-fade rather than flying in from a
