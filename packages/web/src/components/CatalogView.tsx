@@ -33,8 +33,15 @@
  * primary control, and `aria-setsize`/`aria-posinset` on the `<li>` do the
  * "3 of 511" part by hand.
  */
+import type { CSSProperties, FormEventHandler, Ref, RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { describeRoom } from '../../../map/describe.ts';
+import type { Description } from '../../../map/describe.ts';
+import type { RoomMeta } from '../../../map/metadata.ts';
+import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { Manifest } from '../../../map/manifest.ts';
+import type { Config } from '../../../config/config.ts';
+import type { UrlFor } from '../lib/rooms.ts';
 import { describeBook } from '../lib/center.js';
 import { RoomDetails } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
@@ -52,6 +59,11 @@ import {
 } from '../lib/catalog.ts';
 import { CENTER } from '../lib/tiles.js';
 
+/** One slot on the center shelf, as `assignTitles()` (center.js) returns it. */
+type Slot = { kind: string; text: string; term?: string; action?: string } | null;
+
+type Highlight = { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+
 /**
  * How wide a thumbnail is, from the width the list has to spend.
  *
@@ -60,7 +72,8 @@ import { CENTER } from '../lib/tiles.js';
  * squeezed into a column too narrow to read. Between those it tracks the
  * display, so a phone gets a smaller tile and more words.
  */
-const thumbWidth = (available) => Math.round(Math.min(240, Math.max(120, available * 0.26)));
+const thumbWidth = (available: number): number =>
+  Math.round(Math.min(240, Math.max(120, available * 0.26)));
 
 /** A row's vertical padding, both halves - the one number CSS and JS must agree on. */
 const ROW_PAD = 22;
@@ -106,7 +119,7 @@ const STORY_LINE_PX = 19;
  */
 const SHELF_MIN_CH = 9;
 const SHELF_MAX_CH = 18;
-const shelfColumnCh = (slots) =>
+const shelfColumnCh = (slots: Slot[]): number =>
   Math.min(
     SHELF_MAX_CH,
     Math.max(SHELF_MIN_CH, ...slots.map((s) => (s?.text ? s.text.length : 0)))
@@ -140,9 +153,37 @@ export function CatalogView({
   scrollRef,
   firstTileRef,
   leaving = false,
+}: {
+  manifest: Manifest;
+  config: Config;
+  urlFor: UrlFor;
+  order: number[];
+  metadata: (RoomMeta | null)[] | null;
+  result: SearchResult | null;
+  highlight: Highlight;
+  tagLinks: Record<string, string> | null;
+  query: string;
+  setQuery: (query: string) => void;
+  onSearch: FormEventHandler<HTMLFormElement>;
+  onClearSearch: () => void;
+  paging: 'scroll' | 'pages';
+  setPaging: (paging: 'scroll' | 'pages') => void;
+  onExit: () => void;
+  onShowOnMap: (x: number, y: number) => void;
+  onKeyword: (keyword: string) => void;
+  onExpand: (id: number, rank: number) => void;
+  centreSlots: Slot[];
+  onBook: (index: number) => void;
+  cellOfId: (id: number) => { x: number; y: number } | null;
+  history: string[];
+  onForgetSearches: () => void;
+  note?: string;
+  scrollRef: RefObject<HTMLDivElement | null>;
+  firstTileRef: Ref<HTMLImageElement>;
+  leaving?: boolean;
 }) {
-  const hostRef = useRef(null);
-  const centreRowRef = useRef(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const centreRowRef = useRef<HTMLLIElement>(null);
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
   // The center row's real height. It is the ONE row allowed to size itself -
@@ -202,7 +243,7 @@ export function CatalogView({
   );
 
   const onScroll = useCallback(
-    (e) => {
+    (e: { currentTarget: { scrollTop: number } }) => {
       if (paging === 'pages') return;
       const next = pageAtScroll(e.currentTarget.scrollTop, { perPage, rowPx, leadPx });
       setActive((prev) => (prev === next ? prev : Math.min(next, pages - 1)));
@@ -241,7 +282,7 @@ export function CatalogView({
         '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
         '--catalog-line': `${STORY_LINE_PX}px`,
         '--catalog-out': `${config.catalog.transitionMs}ms`,
-      }}
+      } as CSSProperties}
     >
       <div className="catalog-bar">
         <div className="catalog-bar-row">
@@ -292,10 +333,12 @@ export function CatalogView({
             than meeting two unrelated controls.
           */}
           <div className="paging" role="radiogroup" aria-label="how the catalog advances">
-            {[
-              ['scroll', 'scroll'],
-              ['pages', 'pages'],
-            ].map(([value, label]) => (
+            {(
+              [
+                ['scroll', 'scroll'],
+                ['pages', 'pages'],
+              ] as const
+            ).map(([value, label]) => (
               <button
                 key={value}
                 role="radio"
@@ -420,10 +463,26 @@ export function CatalogView({
 function CatalogRow({
   id, rank, total, file, entry, src, thumbPx, cell,
   onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights,
+}: {
+  id: number;
+  rank: number;
+  total: number;
+  file?: string;
+  entry: RoomMeta | null;
+  src: string;
+  thumbPx: number;
+  cell: { x: number; y: number } | null;
+  onShowOnMap: (x: number, y: number) => void;
+  onKeyword: (keyword: string) => void;
+  onExpand: (id: number, rank: number) => void;
+  highlight: Highlight;
+  tagLinks: Record<string, string> | null;
+  result: SearchResult | null;
+  weights: Config['search']['weights'];
 }) {
-  const storyRef = useRef(null);
+  const storyRef = useRef<HTMLDivElement>(null);
   const [clipped, setClipped] = useState(false);
-  const desc = describeRoom(id, rank, total, entry);
+  const desc: Description = describeRoom(id, rank, total, entry);
 
   // After layout, and again whenever what is in the row changes: the clamp moves
   // with the row height, so a resize can uncover the rest of a story or bury it.
