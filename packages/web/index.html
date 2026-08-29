@@ -537,18 +537,20 @@
         margin-bottom: 5px; max-height: 48px; overflow: hidden; align-content: flex-start;
       }
       /*
-        The score, as one line: the composite rank and its certainty, nothing
-        else - the per-axis detail (tag/story/clip) lives entirely in this
-        line's tooltip (tap-and-hold on mobile), same as `.score`'s composite
-        line does. Never wraps, so every row is exactly as tall as every
-        other whatever each room matched on - what the sliding window's
-        spacers are computed from.
+        The score, as up to four SHORT lines (composite, tag, story, clip) -
+        `CatalogView.tsx`'s `SCORE_STRIP_PX` reserves room for all four on
+        every row, whether or not this room's own search found that many, so
+        every row stays exactly as tall as every other - what the sliding
+        window's spacers are computed from. Each line never wraps and clips
+        with an ellipsis rather than growing a second visual line, which is
+        what would actually break that uniform height.
       */
-      .score-strip {
-        margin: 6px 0 0; padding: 6px 0 0; white-space: nowrap; overflow: hidden;
-        text-overflow: ellipsis; border-top: 1px solid var(--edge);
-        font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums;
+      .score-strip { margin: 6px 0 0; padding: 6px 0 0; border-top: 1px solid var(--edge); font-size: 10px; color: var(--dim); }
+      .score-strip p {
+        margin: 1px 0; font-variant-numeric: tabular-nums;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
+      .score-strip .score-composite { color: var(--ink); font-weight: 500; }
       .score-strip .clip-certainty { color: #8a7c66; }
       .score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
       .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }

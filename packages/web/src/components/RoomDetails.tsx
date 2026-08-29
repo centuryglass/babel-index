@@ -77,19 +77,13 @@ function storyLine(story: RankingExplanation['story']): string | null {
   return `#${story.rank} by story, match length ${story.length}${tie}`;
 }
 
-/** "#1 by image content, 82.30% certain image matches" - `null` when the corpus has no embeddings at all. */
-function clipLine(clip: RankingExplanation['clip']): string | null {
-  if (!clip) return null;
-  return `#${clip.rank} by image content, ${signedCertaintyText(clip.percent, 'image').text}`;
-}
-
 /**
- * The clip line, styled: the same text `clipLine` renders as plain text for
- * the strip's tooltip, but with the certainty phrase set apart (a different
+ * The clip line, styled: the certainty phrase is set apart (a different
  * color, italic when it reads as a mismatch) so it is never mistaken for a
- * positive, if weaker, match. The raw cosine moves to ITS OWN tooltip here -
- * "reasonably certain" already reads off the calibrated curve, and the raw
- * number is for whoever wants to check that calibration, not the main read.
+ * positive, if weaker, match. The raw cosine lives in ITS OWN tooltip
+ * (tap-and-hold on mobile) - "reasonably certain" already reads off the
+ * calibrated curve on the visible line, and the raw number is for whoever
+ * wants to check that calibration, not the main read.
  */
 function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
   const { mismatch, text } = signedCertaintyText(clip.percent, 'image');
@@ -101,15 +95,42 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
 }
 
 /**
- * Why this room ranked where it did: one composite line - "#4 of 2048, 73%
- * match certainty" - whose tooltip (tap-and-hold on mobile) breaks that
- * percentage into each signal's SHARE of the total score, greatest first,
- * omitting anything that contributed nothing (docs/search_rules.md
- * "Reporting"). Below it, one line per axis that actually found something -
- * tag, story, and (whenever the corpus has embeddings at all) CLIP - each
- * carrying that axis's OWN independent rank/tie count (`result.ranks`/
- * `ties`), not the composite's. See `explainRanking`.
+ * The lines `ScoreBreakdown` shows, identically whether it is a card or a
+ * catalog row - only the wrapping element's class differs between the two.
+ * One composite line - "#4 of 2048, 73% match certainty" - whose tooltip
+ * (tap-and-hold on mobile) breaks that percentage into each signal's SHARE
+ * of the total score, greatest first, omitting anything that contributed
+ * nothing (docs/search_rules.md "Reporting"). Then one VISIBLE line per axis
+ * that actually found something - tag, story, and (whenever the corpus has
+ * embeddings at all) CLIP - each carrying that axis's OWN independent
+ * rank/tie count (`result.ranks`/`ties`), not the composite's. A tooltip is
+ * for something hidden, and only two things are: the composite's per-signal
+ * split, and the clip line's raw cosine - the tag/story lines already say
+ * everything they have to say.
  */
+function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
+  const { contributions, tag, story, clip } = explanation;
+  const compositeTooltip = contributions.map((c) => `${c.percent}% by ${c.label}`).join(', ');
+  const composite = signedCertaintyText(explanation.percent, 'this');
+  const compositeText = composite.mismatch
+    ? `#${explanation.rank} of ${explanation.total}, ${composite.text}.`
+    : `#${explanation.rank} of ${explanation.total}, ${Math.abs(explanation.percent).toFixed(2)}% match certainty.`;
+  const tagText = tagLine(tag);
+  const storyText = storyLine(story);
+
+  return (
+    <>
+      <p className="score-composite" title={compositeTooltip}>
+        {compositeText}
+      </p>
+      {tagText && <p className="score-line">{tagText}</p>}
+      {storyText && <p className="score-line">{storyText}</p>}
+      {clip && <ClipLine clip={clip} />}
+    </>
+  );
+}
+
+/** Why this room ranked where it did - see `ScoreLines`, `explainRanking`. */
 function ScoreBreakdown({
   rank,
   result,
@@ -132,40 +153,9 @@ function ScoreBreakdown({
   });
   if (!explanation) return null;
 
-  const { contributions, tag, story, clip } = explanation;
-  const compositeTooltip = contributions.map((c) => `${c.percent}% by ${c.label}`).join(', ');
-  const composite = signedCertaintyText(explanation.percent, 'this');
-  const compositeText = composite.mismatch
-    ? `#${explanation.rank} of ${explanation.total}, ${composite.text}.`
-    : `#${explanation.rank} of ${explanation.total}, ${Math.abs(explanation.percent).toFixed(2)}% match certainty.`;
-
-  const tagText = tagLine(tag);
-  const storyText = storyLine(story);
-  const clipText = clipLine(clip);
-
-  // Two presentations of ONE computation (`explainRanking`). A card has the
-  // room to itself and can show every line; a catalog row is one line in a
-  // list of hundreds and must stay exactly as tall as every other, so the
-  // strip shows only the composite line and folds everything else - the
-  // contribution breakdown AND the tag/story/clip lines - into its tooltip
-  // rather than wrapping or scrolling a second line into existence.
-  if (layout === 'strip') {
-    const tooltip = [compositeTooltip, tagText, storyText, clipText].filter(Boolean).join('\n');
-    return (
-      <p className="score-strip" title={tooltip}>
-        {compositeText}
-      </p>
-    );
-  }
-
   return (
-    <div className="score">
-      <p className="score-composite" title={compositeTooltip}>
-        {compositeText}
-      </p>
-      {tagText && <p className="score-line">{tagText}</p>}
-      {storyText && <p className="score-line">{storyText}</p>}
-      {clip && <ClipLine clip={clip} />}
+    <div className={layout === 'strip' ? 'score-strip' : 'score'}>
+      <ScoreLines explanation={explanation} />
     </div>
   );
 }
