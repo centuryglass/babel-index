@@ -20,7 +20,7 @@ import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { CELL_ASPECT, pxPerCell } from '../lib/camera.ts';
 import { createSlideshow } from '../lib/slide.js';
-import { prefersReducedMotion } from './useMapCamera.js';
+import { prefersReducedMotion } from './useMapCamera.ts';
 
 /**
  * @param {object} opts

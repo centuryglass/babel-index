@@ -105,7 +105,12 @@ serve as completed task history.
   of restating a subset inline (`picking.ts` and `useModeTransition.ts` still
   carry their own narrower local `Camera` interfaces; unifying those is a
   follow-up, not required for this conversion since they're structurally
-  compatible).
+  compatible). `useMapCamera.js` converted right after, for the same reason -
+  the pointer plumbing is DOM-typed (`PointerEvent`/`WheelEvent`/
+  `HTMLCanvasElement`) rather than duck-typed, and it consumes `camera.ts`'s
+  new `Camera` type directly. Fixed twelve pre-existing `checkJs` diagnostics
+  in the same file and in `main.jsx`'s call site along the way (untyped
+  `object` params/refs coming back as real shapes).
 
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
@@ -145,9 +150,9 @@ their module when it converts and aren't listed separately.
 
 Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
 already exist as types to write these against; `useCorpus.js`, `useSearch.js`,
-`useModeTransition.js` and `useCenterShelf.js` already converted):
+`useModeTransition.js`, `useCenterShelf.js` and `useMapCamera.js` already
+converted):
  - `packages/web/src/hooks/useMapCursor.js`
- - `packages/web/src/hooks/useMapCamera.js`
  - `packages/web/src/hooks/useMapRenderer.js`
  - `packages/web/src/hooks/useRearrangement.js`
 

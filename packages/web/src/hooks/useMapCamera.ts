@@ -10,12 +10,14 @@ import {
   panByPixels,
   zoomAt,
   zoomBy,
+  type Camera,
 } from '../lib/camera.ts';
+import type { Config } from '../../../config/config.ts';
 
 /**
  * Pan/zoom camera over an unbounded tile grid.
  *
- * This hook owns the pointer plumbing only; the maths lives in `camera.js` as
+ * This hook owns the pointer plumbing only; the maths lives in `camera.ts` as
  * pure functions, where it can be tested without a DOM.
  *
  * The camera is held in a ref rather than in state. It changes on every pointer
@@ -37,7 +39,7 @@ import {
  * has to LOSE to a pan - a press that turns into a drag must not also open a
  * card, or panning on a phone becomes unusable. That means the press timer has
  * to watch the same pointer stream the drag does, which is this one. What is
- * picked is `picking.js`; when, is here.
+ * picked is `picking.ts`; when, is here.
  *
  * Left-click stays free: `§5` reserves it for "focus this room", and a map whose
  * primary button opens a modal is a map you cannot explore.
@@ -47,7 +49,7 @@ import {
  * `flyTo` eases rather than teleports, because a teleport loses the reader's
  * sense of where they were - and after a search, the flight home is carrying
  * the meaning: it shows the top result's location relative to where you were
- * standing. The step is `flightAt` in `camera.js`; what is here is the frame
+ * standing. The step is `flightAt` in `camera.ts`; what is here is the frame
  * clock and the interruption.
  *
  * It rides the glide's rAF loop rather than starting one of its own. There is
@@ -73,50 +75,99 @@ const PRESS_SLOP_PX = 8;
  * a second `matchMedia` call there would be a second statement of one fact -
  * the two would drift the first time the query string needed changing.
  */
-export const prefersReducedMotion = () =>
+export const prefersReducedMotion = (): boolean =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+interface PointerPoint {
+  x: number;
+  y: number;
+}
 
 /**
  * Every pointer currently down, in the order it arrived, so a second finger can
  * be told from a jittery first one. Insertion order matters: a pinch is always
  * between the first two fingers, and a third does not hijack it.
  */
-const firstTwo = (pointers) => {
+const firstTwo = (pointers: Map<number, PointerPoint>): [PointerPoint, PointerPoint] => {
   const it = pointers.values();
-  return [it.next().value, it.next().value];
+  return [it.next().value as PointerPoint, it.next().value as PointerPoint];
 };
 
 /** Distance and midpoint between two pointers - the whole state a pinch needs. */
-const spanOf = (a, b) => ({
+const spanOf = (a: PointerPoint, b: PointerPoint) => ({
   dist: Math.hypot(b.x - a.x, b.y - a.y),
   cx: (a.x + b.x) / 2,
   cy: (a.y + b.y) / 2,
 });
 
-/**
- * @param {object} opts
- * @param {{minZoom: number, maxZoom: number, defaultZoom: number, flightMs: number}} opts.camera
- *   resolved `config.camera`, from the manifest
- * @param {{x: number, y: number, zoom: number}} opts.opening
- *   the page-load camera - where the map opens and how far in. Derived from the
- *   viewport and the center room's geometry by the caller, not configured, so it
- *   is handed in whole rather than read from `camera`. See `fitZoom` in camera.js.
- * @param {(px: number, py: number, cam: object) => void} [opts.onPick]
- *   canvas-relative point of a right-click or a completed long press, with the
- *   live camera - which the hook owns, so the consumer does not have to reach
- *   back for a ref this hook has not returned yet
- * @param {(px: number, py: number, cam: object) => void} [opts.onTap]
- *   canvas-relative point of a left-click / tap that neither panned nor stopped
- *   a flight. The center room's book spines are what this selects.
- * @param {(line: string) => void} [opts.onDebug] one line per pointer event.
- *   Off unless asked for. Touch gestures can only really be judged on a device,
- *   and a phone has no console you can read while both thumbs are busy - so
- *   this exists to make "what did the browser actually send" answerable from
- *   the glass. See `?touchdebug` in main.jsx.
- */
-export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, opening, onPick, onTap, onDebug }) {
+type ResistanceAt = (x: number, y: number) => number;
+type OnPick = (px: number, py: number, cam: Camera) => void;
+type OnTap = (px: number, py: number, cam: Camera) => void;
+type OnDebug = (line: string) => void;
+type FlyOpts = { ms?: number };
+
+interface UseMapCameraOpts {
+  canvasRef: { current: HTMLCanvasElement | null };
+  /** resistance in [0, 1] at a world point - 1 inside the content region. */
+  resistanceAt: ResistanceAt;
+  onChange?: () => void;
+  /** resolved `config.camera`, from the manifest */
+  camera: Config['camera'];
+  /**
+   * the page-load camera - where the map opens and how far in. Derived from the
+   * viewport and the center room's geometry by the caller, not configured, so it
+   * is handed in whole rather than read from `camera`. See `fitZoom` in camera.ts.
+   */
+  opening: Camera;
+  /**
+   * canvas-relative point of a right-click or a completed long press, with the
+   * live camera - which the hook owns, so the consumer does not have to reach
+   * back for a ref this hook has not returned yet
+   */
+  onPick?: OnPick;
+  /**
+   * canvas-relative point of a left-click / tap that neither panned nor stopped
+   * a flight. The center room's book spines are what this selects.
+   */
+  onTap?: OnTap;
+  /**
+   * one line per pointer event. Off unless asked for. Touch gestures can only
+   * really be judged on a device, and a phone has no console you can read while
+   * both thumbs are busy - so this exists to make "what did the browser
+   * actually send" answerable from the glass. See `?touchdebug` in main.jsx.
+   */
+  onDebug?: OnDebug;
+}
+
+interface TapCandidate extends PointerPoint {
+  moved: boolean;
+  interruptedFlight: boolean;
+}
+
+interface PressCandidate extends PointerPoint {
+  timer: ReturnType<typeof setTimeout>;
+}
+
+interface LiveFlight {
+  from: Camera;
+  to: Camera;
+  t0: number;
+  ms: number;
+  settle: (landed: boolean) => void;
+}
+
+export function useMapCamera({
+  canvasRef,
+  resistanceAt,
+  onChange,
+  camera,
+  opening,
+  onPick,
+  onTap,
+  onDebug,
+}: UseMapCameraOpts) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
-  const cam = useRef({
+  const cam = useRef<Camera>({
     // The PAGE-LOAD camera: centered on the center room's bookshelf and zoomed to
     // fit the display, computed by the caller from the viewport. Not the
     // return-to-center view - `defaultZoom` (wider) is where the "center" button
@@ -127,15 +178,15 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
     zoom: clampZoom(opening.zoom, limits),
     limits,
   });
-  const drag = useRef(null);
-  const press = useRef(null);
-  const pointers = useRef(new Map());
-  const pinch = useRef(null);
-  const flight = useRef(null);
+  const drag = useRef<PointerPoint | null>(null);
+  const press = useRef<PressCandidate | null>(null);
+  const pointers = useRef(new Map<number, PointerPoint>());
+  const pinch = useRef<{ dist: number; cx: number; cy: number } | null>(null);
+  const flight = useRef<LiveFlight | null>(null);
   // A candidate left-click tap, tracked from its pointerdown so pointerup can
   // tell a tap from a pan. Left as null the moment it becomes anything else - a
   // drag, a pinch, or the press that stopped a flight.
-  const tap = useRef(null);
+  const tap = useRef<TapCandidate | null>(null);
 
   /**
    * End whatever is in the air, telling the caller whether it arrived.
@@ -145,7 +196,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * got there, or a hand landed on the map. Anything waiting to happen "after
    * the flight home" must not happen when the reader has taken the map instead.
    */
-  const endFlight = useCallback((landed) => {
+  const endFlight = useCallback((landed: boolean) => {
     const settle = flight.current?.settle;
     flight.current = null;
     settle?.(landed);
@@ -155,7 +206,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const pick = (clientX, clientY) => {
+    const pick = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
       onPick?.(clientX - rect.left, clientY - rect.top, cam.current);
     };
@@ -181,14 +232,14 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
      * `pointercancel` reaches this path with capture already dropped and the
      * cost is a try/catch.
      */
-    const capture = (id) => {
+    const capture = (id: number) => {
       try {
         canvas.setPointerCapture(id);
       } catch {
         // Implicit capture already covers touch; nothing here depends on it.
       }
     };
-    const release = (id) => {
+    const release = (id: number) => {
       try {
         canvas.releasePointerCapture(id);
       } catch {
@@ -198,13 +249,13 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
     };
 
     /** One line per pointer event, when someone is watching. */
-    const report = (what, e) =>
+    const report = (what: string, e: PointerEvent) =>
       onDebug?.(
         `${what} id=${e.pointerId ?? '-'} ${e.pointerType ?? '-'} ` +
           `down=${pointers.current.size} ${pinch.current ? 'pinch' : drag.current ? 'drag' : 'idle'}`
       );
 
-    const onPointerDown = (e) => {
+    const onPointerDown = (e: PointerEvent) => {
       // Secondary buttons are the context menu's, not the map's; starting a drag
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
@@ -260,7 +311,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
       }
     };
 
-    const onPointerMove = (e) => {
+    const onPointerMove = (e: PointerEvent) => {
       const tracked = pointers.current.get(e.pointerId);
       if (!tracked) return;
       tracked.x = e.clientX;
@@ -322,7 +373,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
       onChange?.();
     };
 
-    const onPointerUp = (e) => {
+    const onPointerUp = (e: PointerEvent) => {
       release(e.pointerId);
       pointers.current.delete(e.pointerId);
       cancelPress();
@@ -364,7 +415,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
       report(e.type, e);
     };
 
-    const onWheel = (e) => {
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       // Same rule as a drag: the wheel is the reader steering, and a flight
       // still easing its own zoom underneath would fight every notch.
@@ -376,7 +427,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
 
     // Right-click on desktop, and the menu some browsers raise at the end of a
     // touch long-press - suppressed either way, since the card is the response.
-    const onContextMenu = (e) => {
+    const onContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       cancelPress();
       pick(e.clientX, e.clientY);
@@ -407,8 +458,8 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   // when the map was released outside it, so the edge pushes back rather than
   // trapping. One loop, one `else`, and no way for them to overlap.
   useEffect(() => {
-    let raf;
-    const tick = (now) => {
+    let raf: number;
+    const tick = (now: number) => {
       if (flight.current) {
         const { cam: next, done } = flightAt(flight.current, now);
         cam.current = next;
@@ -477,7 +528,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * questions - where the camera IS versus where it was last told to go.
    */
   const beginFlightTo = useCallback(
-    (to, ms) => {
+    (to: Camera, ms?: number): Promise<boolean> => {
       const duration = prefersReducedMotion() ? 0 : ms ?? camera.flightMs;
       // A second flight replaces the first, and the first did not arrive.
       endFlight(false);
@@ -489,14 +540,15 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
   );
 
   const flyTo = useCallback(
-    (x, y, zoom, { ms } = {}) => beginFlightTo(cameraAtCell(cam.current, x, y, zoom), ms),
+    (x: number, y: number, zoom?: number, { ms }: FlyOpts = {}) =>
+      beginFlightTo(cameraAtCell(cam.current, x, y, zoom), ms),
     [beginFlightTo]
   );
 
   /**
    * Move by a cell delta, damped by the map's resistance - the keyboard's
    * equivalent of a pointer drag. Same resistance, deliberately DIFFERENT
-   * curve: see `panByCells` in `camera.js` for why a drag can afford a floor
+   * curve: see `panByCells` in `camera.ts` for why a drag can afford a floor
    * and a held key cannot.
    *
    * Without this the keyboard had no resistance at all: a held arrow key
@@ -513,7 +565,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * than collapse, exactly as in `flyTo`'s callers.
    */
   const nudgeBy = useCallback(
-    (dx, dy, { ms } = {}) => {
+    (dx: number, dy: number, { ms }: FlyOpts = {}) => {
       const from = flight.current?.to ?? cam.current;
       const to = panByCells(from, dx, dy, resistanceAt(from.x, from.y));
       return beginFlightTo(to, ms);
@@ -536,7 +588,7 @@ export function useMapCamera({ canvasRef, resistanceAt, onChange, camera, openin
    * what a chained press should build on instead; idle, this is just
    * `cam.current`.
    */
-  const flightTarget = useCallback(() => flight.current?.to ?? cam.current, []);
+  const flightTarget = useCallback((): Camera => flight.current?.to ?? cam.current, []);
 
   return { cam, flyTo, nudgeBy, flightTarget };
 }
