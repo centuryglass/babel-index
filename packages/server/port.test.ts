@@ -1,17 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:net';
+import type { AddressInfo } from 'node:net';
 import { portInUse } from './port.ts';
 
 /** A server on an ephemeral port, closed again afterwards. */
-async function holding(run) {
+async function holding<T>(run: (port: number) => Promise<T>): Promise<T> {
   const server = createServer();
-  await new Promise((done) => server.listen(0, done));
-  const { port } = server.address();
+  await new Promise<void>((done) => server.listen(0, done));
+  const { port } = server.address() as AddressInfo;
   try {
     return await run(port);
   } finally {
-    await new Promise((done) => server.close(done));
+    await new Promise<void>((done) => server.close(() => done()));
   }
 }
 
@@ -39,21 +40,21 @@ test('the probe does not leave the port held behind it', async () => {
   assert.equal(await portInUse(port), false);
   assert.equal(await portInUse(port), false, 'a second check must agree with the first');
 
-  await new Promise((done, fail) => {
+  await new Promise<void>((done, fail) => {
     const server = createServer();
     server.once('error', fail);
-    server.listen(port, () => server.close(done));
+    server.listen(port, () => server.close(() => done()));
   });
 });
 
 test('a port held only on loopback still counts as taken for a loopback bind', async () => {
   // The demo binds every interface, so anything holding one of them stops it.
   const server = createServer();
-  await new Promise((done) => server.listen(0, '127.0.0.1', done));
-  const { port } = server.address();
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+  const { port } = server.address() as AddressInfo;
   try {
     assert.equal(await portInUse(port, '127.0.0.1'), true);
   } finally {
-    await new Promise((done) => server.close(done));
+    await new Promise<void>((done) => server.close(() => done()));
   }
 });

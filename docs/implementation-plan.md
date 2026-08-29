@@ -221,12 +221,31 @@ have forced every test fixture to carry `story`/`alt`/`sensitiveContentTags`
 it never uses. `center.test.mjs` converted alongside it, per the paired-test
 rule.
 
+`scoring.js` turned out not to be one of the deliberately-loose files either,
+once looked at closely: `rankHybrid`'s `scored` rows, `breakdown`, `ranks` and
+`ties` only ever looked duck-typed because nothing had named them - every
+field is fixed by the loop that builds it, and `searchResult.ts` already
+named every shape that crosses the module's boundary (`ParsedQuery`/`Term`,
+`SearchIndex`/`StoryIndex`, `ScoreBreakdown`, `SignalRanks`,
+`RankHybridResult`, `RankingExplanation`) since it was written specifically to
+type this file's exports without converting it. Converting was mostly
+mechanical once that was seen: a local `ScoredRow` interface for the
+per-room working row `compareTagAxis`/`compareStoryAxis`/`compareClipAxis`/
+`rankAxis` sort, a local `ClipBand` for the three-anchor
+`{centre, high, low}` shape (`CLIP_CERTAINTY`, `signedClipCertainty`,
+`matchCertainty`, `rankHybrid`'s `clipCertainty` option), and
+`Config['search']['weights']` (the same indexed-access pattern
+`RoomDetails.tsx` already used) for `weights` rather than restating the
+five-constant shape a third time. `buildSearchIndex` took a narrow
+`SearchIndexSource` (`{keywords?: {text}[], story?: string}`) instead of the
+full `RoomMeta` its one real caller (`useCorpus.ts`) passes - the function
+only ever reads those two fields, and `RoomMeta` is structurally compatible
+so nothing at the real call site changed. `scoring.test.mjs` converted
+alongside it, per the paired-test rule.
+
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
-worth writing rather than an `any`/`object` that just papers over it;
-`main.jsx` last since it wires every hook above together and is only as
-typeable as they are (`camera.js` converted - see above; it wasn't actually
-one of these):
- - `packages/map/scoring.js`
+worth writing rather than an `any`/`object` that just papers over it, last
+since it wires every hook above together and is only as typeable as they are:
  - `packages/web/src/main.jsx`
 
 ## Other:

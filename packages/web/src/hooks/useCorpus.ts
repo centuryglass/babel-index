@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinMetadata, type RoomMeta } from '../../../map/metadata.ts';
-import { buildSearchIndex } from '../../../map/scoring.js';
+import { buildSearchIndex } from '../../../map/scoring.ts';
 import type { ManifestResponse } from '../../../map/manifest.ts';
 
 export function useCorpus(manifest: ManifestResponse) {
