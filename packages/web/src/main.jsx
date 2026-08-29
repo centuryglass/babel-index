@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
+import { filterBlockedIds } from '../../map/metadata.ts';
 import { RoomCard } from './components/RoomCard.jsx';
 import { MapView } from './components/MapView.jsx';
 import { CatalogView } from './components/CatalogView.jsx';
@@ -176,9 +177,11 @@ function Library({ manifest }) {
 
   const order = useMemo(() => {
     // A search ranks the whole corpus; the layout takes as many as it has slots.
-    if (result) return result.order;
-    return shuffledOrder(total, orderSeed);
-  }, [total, orderSeed, result]);
+    const base = result ? result.order : shuffledOrder(total, orderSeed);
+    // A blocked room drops out of the ranking entirely - not hidden behind a
+    // cell, absent from it - so it never gets a slot on the map at all.
+    return filterBlockedIds(base, metadata, BLOCKED_TAGS);
+  }, [total, orderSeed, result, metadata]);
 
   // The catalog's own order: a shuffle is not a list order anyone can read by
   // eye, so its idle default is alphabetical rather than a second read of the
@@ -187,9 +190,9 @@ function Library({ manifest }) {
   // why a search and a clear are the only things that can move a room's
   // catalog row, exactly as they are the only things that move it on the map.
   const catalogOrder = useMemo(() => {
-    if (result) return result.order;
-    return alphabeticalOrder(manifest.rooms);
-  }, [manifest, result]);
+    const base = result ? result.order : alphabeticalOrder(manifest.rooms);
+    return filterBlockedIds(base, metadata, BLOCKED_TAGS);
+  }, [manifest, result, metadata]);
 
   // Which cell a room id sits in on the map right now, keyed by id rather
   // than by rank - the catalog's rank in `catalogOrder` and the map's rank in
@@ -314,6 +317,10 @@ function Library({ manifest }) {
     for (let rank = 0; rank < total; rank++) {
       const cell = layout.cellOfRank(rank);
       if (!cell) continue;
+      // Blocking can leave `order` shorter than the layout's own slot count -
+      // a rank past the end of a filtered order holds no room, generic or
+      // otherwise, so it is skipped rather than listed with no id.
+      if (order[rank] === undefined) continue;
       rooms.push({
         id: order[rank], rank, x: cell.x, y: cell.y,
         name: describeCell(cell.x, cell.y, { layout, order, metadata }).name,
@@ -795,6 +802,20 @@ const INITIAL_MODE =
   typeof location !== 'undefined' && new URLSearchParams(location.search).has('catalog')
     ? 'catalog'
     : 'map';
+
+/**
+ * `?blockTags=a,b,c` - sensitive-content tags to exclude from the map and
+ * catalog, read once at module scope exactly as `INITIAL_MODE` is. A UI and
+ * local-storage persistence come later (see AGENTS.md); this is deliberately
+ * the whole feature for now, so a room carrying a blocked tag is unreachable
+ * behind a link rather than needing a setting to be found first.
+ */
+const BLOCKED_TAGS = new Set(
+  (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('blockTags') : null)
+    ?.split(',')
+    .map((t) => t.trim())
+    .filter(Boolean) ?? []
+);
 
 
 /**
