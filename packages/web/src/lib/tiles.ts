@@ -95,7 +95,7 @@ export interface LoadableImage {
   onerror: (() => void) | null;
 }
 
-type RoomId = number | string;
+export type RoomId = number | string;
 type ImageState = 'loading' | 'ready' | 'error';
 
 interface PerFileEntry {

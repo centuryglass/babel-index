@@ -95,7 +95,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
-  `useRearrangement.js` / `lib/slide.js`) without living in the same directory.
+  `useRearrangement.ts` / `lib/slide.js`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
     * `src/main.jsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
@@ -130,14 +130,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                            tabindex focus, and what a tap or arrow key does
     * `useModeTransition.ts`: Switching between the map and catalog readings,
                               the FLIP animation between them
-    * `useRearrangement.js`: The sliding-tile rearrangement animation - whether
+    * `useRearrangement.ts`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said
                              once it lands
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.js`: Geometry and content management for the center tile interface
     * `camera.ts`: Pure-math mapping functions for the map camera
-    * `render.js`: Render a single map frame
+    * `render.ts`: Render a single map frame
     * `slide.js`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
     * `catalog.js`: Catalog pagination and geometry helpers
@@ -370,7 +370,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   whole reason `board.ts` and `illusion.ts` still see one interchangeable
   `GENERIC` value and the rearrangement planner did not have to learn about
   individual generic tiles. `roomAt` is unchanged; only the two renderers
-  (`render.js`, `slide.js`) resolve a cell to a tile id. `slide.js` reads the
+  (`render.ts`, `slide.js`) resolve a cell to a tile id. `slide.js` reads the
   generic index at each tile's *home* board cell so a sliding line carries its
   own face instead of flipping mid-ride.
 - **The shared tiles live outside `--images`.** `scan.mjs` discovers them in
@@ -401,7 +401,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   wider than a book resolves to nothing rather than a phantom book. The rects come from
   `layout({ width: 1, height: 1 })` in `tools/center-placement/lib/geometry.ts`, the
   one module the tile trace feeds, so there is no second copy to drift.
-- **The fractions are per-axis, and that is load-bearing.** `render.js` stretches
+- **The fractions are per-axis, and that is load-bearing.** `render.ts` stretches
   the center tile width→`cellPx.x` and height→`cellPx.y` independently, so a
   spine rect is `{x,w}` against the cell width and `{y,h}` against its height —
   `layout({width:1,height:1})` returns exactly that. One divisor for both axes is
