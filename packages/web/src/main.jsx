@@ -35,7 +35,7 @@ import { useMapRenderer } from './hooks/useMapRenderer.js';
 import { useMapCursor } from './hooks/useMapCursor.js';
 import { useCenterShelf } from './hooks/useCenterShelf.js';
 import { useModeTransition } from './hooks/useModeTransition.js';
-import { useCorpus } from './hooks/useCorpus.js';
+import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.js';
 import { useSearch, describeSignals } from './hooks/useSearch.js';
 
@@ -143,7 +143,7 @@ function Library({ manifest }) {
   const blockedTagSet = useMemo(() => new Set(blockedTags), [blockedTags]);
 
   // Everything the corpus IS - the sidecar, the embedding blob, the search
-  // index built over them. See useCorpus.js.
+  // index built over them. See useCorpus.ts.
   const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
 
   // Every sensitive-content tag the corpus actually has, for the panel's
