@@ -176,7 +176,7 @@ export function RoomDetails({
   desc: Description | null;
   /** a chip runs this search */
   onKeyword: (keyword: string) => void;
-  /** keyword -> external link, from the corpus's optional tagLinks.json (see useCorpus.js) -
+  /** keyword -> external link, from the corpus's optional tagLinks.json (see useCorpus.ts) -
    * a keyword with an entry grows a second "more about this" pill fused to it */
   tagLinks?: Record<string, string> | null;
   /** -1 inside the canvas, 0 everywhere else */

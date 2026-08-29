@@ -118,7 +118,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/hooks/`: the subsystems `main.jsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
-    * `useCorpus.js`: Load the metadata sidecar and embedding blob, build the search index
+    * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
     * `useSearch.js`: The query box, the `/api/search` fetch, blending the
                       reply into one ranking, the highlight range-finders
     * `useMapCamera.js`: React hook for camera changes, inputs entangled with
@@ -491,7 +491,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   only counts its keys (`TagLinksInfo.count`). It is hand-edited, not
   generated, and optional exactly like the sidecar: a corpus without one just
   renders chips with no "more about this" link. `RoomDetails.tsx` takes it as
-  a `tagLinks` prop rather than importing it — see `useCorpus.js`.
+  a `tagLinks` prop rather than importing it — see `useCorpus.ts`.
 
 ### The reorder animation
 

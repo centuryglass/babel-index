@@ -16,35 +16,26 @@
  * the ref treatment `embeddings` needs.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { joinMetadata } from '../../../map/metadata.ts';
+import { joinMetadata, type RoomMeta } from '../../../map/metadata.ts';
 import { buildSearchIndex } from '../../../map/scoring.js';
+import type { ManifestResponse } from '../../../map/manifest.ts';
 
-/**
- * @param {import('../../../map/manifest.ts').ManifestResponse} manifest  the loaded `/api/manifest` response
- * @returns {{
- *   metadata: (import('../../../map/metadata.ts').RoomMeta|null)[] | null,
- *   embeddings: {current: {data: Int8Array, dim: number} | null},
- *   searchIndex: ReturnType<typeof buildSearchIndex> | null,
- *   described: number,
- *   tagLinks: Record<string, string> | null,
- * }}
- */
-export function useCorpus(manifest) {
-  const [metadata, setMetadata] = useState(null);
-  const [tagLinks, setTagLinks] = useState(null);
+export function useCorpus(manifest: ManifestResponse) {
+  const [metadata, setMetadata] = useState<(RoomMeta | null)[] | null>(null);
+  const [tagLinks, setTagLinks] = useState<Record<string, string> | null>(null);
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a
   // frame, so a search - and every re-rank off the same vector - stays on the
   // client.
-  const embeddings = useRef(null);
+  const embeddings = useRef<{ data: Int8Array; dim: number } | null>(null);
   useEffect(() => {
     if (!manifest.embeddings) return;
     let cancelled = false;
     fetch(manifest.embeddings.url)
       .then((r) => r.arrayBuffer())
       .then((buf) => {
-        if (!cancelled) embeddings.current = { data: new Int8Array(buf), dim: manifest.embeddings.dim };
+        if (!cancelled) embeddings.current = { data: new Int8Array(buf), dim: manifest.embeddings!.dim };
       })
       .catch(() => {});
     return () => {
