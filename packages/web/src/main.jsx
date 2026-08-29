@@ -33,7 +33,7 @@ import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.js';
 import { useMapRenderer } from './hooks/useMapRenderer.js';
 import { useMapCursor } from './hooks/useMapCursor.js';
-import { useCenterShelf } from './hooks/useCenterShelf.js';
+import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.js';
@@ -289,7 +289,7 @@ function Library({ manifest }) {
   const expandRoom = useCallback((id, rank) => setOverlay({ id, rank }), []);
 
   // A reserved book on the center shelf opens this instead of running a
-  // search - see useCenterShelf.js's CENTER_OVERRIDES and onOverride.
+  // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
   const [helpOpen, setHelpOpen] = useState(false);
 
   // Right-click or long press opens the room's card. The pick is anchored to
