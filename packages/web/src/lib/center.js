@@ -37,7 +37,7 @@
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
-import { pxPerCell, worldToScreen } from './camera.js';
+import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.js';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
@@ -292,6 +292,20 @@ export function searchBoxScreenRect(cellRect) {
  */
 export function isSearchBoxUsable(cellRect) {
   return searchBoxScreenRect(cellRect).h >= MIN_SEARCH_BOX_PX;
+}
+
+/**
+ * The zoom below which the search field cannot be usable, whatever else the
+ * camera is framed on - the floor `goToSearch` (main.jsx) applies on top of
+ * `CENTER_OPENING_RECT`'s fit. That fit binds on whichever axis of the
+ * shelf+box union would overflow first, which on a narrow/portrait viewport
+ * is the width - the shelf is wide relative to the screen, so the landing
+ * zoom is picked to keep IT on screen and can leave the box, gated on
+ * height alone, under `MIN_SEARCH_BOX_PX` even though the union itself
+ * "fits". This is the zoom the box alone needs, independent of the shelf.
+ */
+export function minZoomForSearchBox(aspect = CELL_ASPECT) {
+  return MIN_SEARCH_BOX_PX / (aspect * CENTER_SEARCH_RECT.h);
 }
 
 /**
