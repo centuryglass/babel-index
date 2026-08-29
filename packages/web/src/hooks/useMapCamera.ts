@@ -10,6 +10,7 @@ import {
   panByPixels,
   zoomAt,
   zoomBy,
+  ZOOM_STEP_FACTOR,
   type Camera,
 } from '../lib/camera.ts';
 import type { Config } from '../../../config/config.ts';
@@ -64,6 +65,29 @@ import type { Config } from '../../../config/config.ts';
 /** How long a press must be held, and how far it may wander before it is a drag. */
 const LONG_PRESS_MS = 500;
 const PRESS_SLOP_PX = 8;
+
+/**
+ * How soon a second tap must land, and how close to the first, to read as a
+ * double tap rather than two unrelated ones. Wider than `PRESS_SLOP_PX`
+ * because a second tap lands wherever the same finger comes back down, not
+ * wherever the first one drifted to.
+ */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP_PX = 40;
+
+/**
+ * Two-finger tap: zoom out one step, centered where the fingers were - the
+ * touch equivalent of the keyboard's PageDown. A tap rather than a pinch
+ * means both fingers came down and lifted again without drifting -
+ * `TWO_FINGER_TAP_SLOP_PX` bounds that drift, the same role `PRESS_SLOP_PX`
+ * plays for a one-finger tap. The two liftoffs need not be simultaneous -
+ * `TWO_FINGER_TAP_GAP_MS` is how far apart they may land - but the whole
+ * gesture must be quick, not a two-finger hold - `TWO_FINGER_TAP_MS` bounds
+ * touchdown to the first liftoff.
+ */
+const TWO_FINGER_TAP_MS = 400;
+const TWO_FINGER_TAP_GAP_MS = 250;
+const TWO_FINGER_TAP_SLOP_PX = 12;
 
 /**
  * Someone who has asked for less motion gets the old teleport.
@@ -131,6 +155,15 @@ interface UseMapCameraOpts {
    */
   onTap?: OnTap;
   /**
+   * canvas-relative point of a second tap landing within `DOUBLE_TAP_MS` and
+   * `DOUBLE_TAP_SLOP_PX` of a qualifying first one. Fires in addition to
+   * `onTap` (both fire for the second tap), never instead of it - a single
+   * tap must not wait to find out whether a second one is coming, or every
+   * ordinary tap (selecting a book, focusing the search field) picks up a
+   * `DOUBLE_TAP_MS` delay it never used to have.
+   */
+  onDoubleTap?: OnTap;
+  /**
    * one line per pointer event. Off unless asked for. Touch gestures can only
    * really be judged on a device, and a phone has no console you can read while
    * both thumbs are busy - so this exists to make "what did the browser
@@ -142,6 +175,20 @@ interface UseMapCameraOpts {
 interface TapCandidate extends PointerPoint {
   moved: boolean;
   interruptedFlight: boolean;
+}
+
+/**
+ * A candidate two-finger tap, tracked from the moment a second finger lands
+ * to `firstLiftAt` (still `null` while both fingers are down) to the second
+ * liftoff, which is what commits it. `cx`/`cy` are the midpoint at
+ * touchdown, fixed rather than tracked, because ANY drift beyond
+ * `TWO_FINGER_TAP_SLOP_PX` cancels the candidate outright - see the pinch
+ * branch of `onPointerMove`.
+ */
+interface TwoTapCandidate extends PointerPoint {
+  dist0: number;
+  downAt: number;
+  firstLiftAt: number | null;
 }
 
 interface PressCandidate extends PointerPoint {
@@ -164,6 +211,7 @@ export function useMapCamera({
   opening,
   onPick,
   onTap,
+  onDoubleTap,
   onDebug,
 }: UseMapCameraOpts) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
@@ -187,6 +235,14 @@ export function useMapCamera({
   // tell a tap from a pan. Left as null the moment it becomes anything else - a
   // drag, a pinch, or the press that stopped a flight.
   const tap = useRef<TapCandidate | null>(null);
+  // The last completed tap, for double-tap detection - cleared once it has
+  // paired with a second tap, so a stray third tap does not pair with a
+  // double tap that already fired.
+  const lastTap = useRef<(PointerPoint & { time: number }) | null>(null);
+  // A candidate two-finger tap, tracked the same way `tap` is - cleared the
+  // moment it becomes anything else (movement, a third finger, running out
+  // the clock).
+  const twoTap = useRef<TwoTapCandidate | null>(null);
 
   /**
    * End whatever is in the air, telling the caller whether it arrived.
@@ -201,6 +257,33 @@ export function useMapCamera({
     flight.current = null;
     settle?.(landed);
   }, []);
+
+  /**
+   * Start an eased flight to a whole target camera - the shared half of
+   * `flyTo` and `nudgeBy`, so the reduced-motion collapse and the
+   * interrupt-the-previous-flight rule are stated once rather than twice.
+   *
+   * The flight begins at the LIVE camera (so a second flight during a first
+   * picks up smoothly from wherever it had got to) even when the caller
+   * computed `to` from `flightTarget()`; those are deliberately different
+   * questions - where the camera IS versus where it was last told to go.
+   *
+   * Declared ahead of the pointer effect below (rather than beside `flyTo`,
+   * which stays where it was written) because a two-finger tap needs it too -
+   * a zoom step is a whole-camera flight the same way `flyTo`/`nudgeBy` are,
+   * not a fourth, separate way of moving the camera.
+   */
+  const beginFlightTo = useCallback(
+    (to: Camera, ms?: number): Promise<boolean> => {
+      const duration = prefersReducedMotion() ? 0 : ms ?? camera.flightMs;
+      // A second flight replaces the first, and the first did not arrive.
+      endFlight(false);
+      return new Promise((settle) => {
+        flight.current = { ...beginFlight(cam.current, to, performance.now(), duration), settle };
+      });
+    },
+    [camera.flightMs, endFlight]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -287,7 +370,15 @@ export function useMapCamera({
         const [a, b] = firstTwo(pointers.current);
         pinch.current = spanOf(a, b);
         drag.current = null;
-        tap.current = null; // two fingers is a pinch, never a tap
+        tap.current = null; // two fingers is a pinch, never a (one-finger) tap
+
+        // Exactly two fingers just landed: a candidate for a two-finger tap,
+        // cancelled the moment either drifts or a third one joins (a third
+        // finger down is never a tap of any kind).
+        twoTap.current =
+          pointers.current.size === 2
+            ? { x: pinch.current.cx, y: pinch.current.cy, dist0: pinch.current.dist, downAt: performance.now(), firstLiftAt: null }
+            : null;
         report('down', e);
         return;
       }
@@ -332,6 +423,19 @@ export function useMapCamera({
       if (pinch.current && pointers.current.size >= 2) {
         const [a, b] = firstTwo(pointers.current);
         const span = spanOf(a, b);
+
+        // Drift past the slop, on either the span or the midpoint, rules out
+        // a two-finger tap - measured from touchdown, not frame to frame, so
+        // a slow drift cannot sneak under the threshold one small step at a
+        // time the way it would if this compared each move to the last.
+        if (
+          twoTap.current &&
+          (Math.abs(span.dist - twoTap.current.dist0) > TWO_FINGER_TAP_SLOP_PX ||
+            Math.hypot(span.cx - twoTap.current.x, span.cy - twoTap.current.y) > TWO_FINGER_TAP_SLOP_PX)
+        ) {
+          twoTap.current = null;
+        }
+
         // A degenerate span would divide by zero and send the zoom to infinity;
         // two fingers at the same point is a real thing a hand can do.
         if (!(span.dist > 0) || !(pinch.current.dist > 0)) {
@@ -395,6 +499,11 @@ export function useMapCamera({
         pinch.current = null;
         drag.current = { x: remaining.x, y: remaining.y };
         tap.current = null; // a pinch was in progress; the release is not a tap
+
+        // The FIRST of a two-finger tap's two liftoffs - still a candidate,
+        // just waiting on the second one now (checked below, once the last
+        // finger is off the glass).
+        if (twoTap.current) twoTap.current.firstLiftAt = performance.now();
         report(e.type, e);
         return;
       }
@@ -403,14 +512,56 @@ export function useMapCamera({
       drag.current = null;
       pinch.current = null;
 
+      // The last finger up: settle any two-finger tap candidate one way or
+      // the other before falling through to the one-finger tap below (they
+      // never both apply - two fingers down cleared `tap.current`).
+      const two = twoTap.current;
+      twoTap.current = null;
+      if (
+        two &&
+        e.type !== 'pointercancel' &&
+        two.firstLiftAt != null &&
+        two.firstLiftAt - two.downAt <= TWO_FINGER_TAP_MS &&
+        performance.now() - two.firstLiftAt <= TWO_FINGER_TAP_GAP_MS
+      ) {
+        // A hand back on the map beats anything the map was doing to itself -
+        // same rule `onPointerDown` applies to a flight already in the air.
+        endFlight(false);
+        const rect = canvas.getBoundingClientRect();
+        const to = zoomBy(cam.current, two.x - rect.left, two.y - rect.top, 1 / ZOOM_STEP_FACTOR, rect);
+        beginFlightTo(to);
+        report(e.type, e);
+        return;
+      }
+
       // A clean tap: the last finger up, having not wandered and not stopped a
       // flight, and not a cancel. Left-click/tap is otherwise unclaimed, so this
       // is what selects a book on the center room.
       const t = tap.current;
       tap.current = null;
-      if (onTap && t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {
+      if (t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {
         const rect = canvas.getBoundingClientRect();
-        onTap(t.x - rect.left, t.y - rect.top, cam.current);
+        const px = t.x - rect.left;
+        const py = t.y - rect.top;
+        onTap?.(px, py, cam.current);
+
+        // Double tap: a second qualifying tap landing soon enough and close
+        // enough to the last one. Checked in addition to `onTap`, not instead
+        // of it - see `onDoubleTap`'s doc comment for why the single tap must
+        // never wait around to find out.
+        const now = performance.now();
+        const prior = lastTap.current;
+        if (
+          onDoubleTap &&
+          prior &&
+          now - prior.time <= DOUBLE_TAP_MS &&
+          Math.hypot(t.x - prior.x, t.y - prior.y) <= DOUBLE_TAP_SLOP_PX
+        ) {
+          lastTap.current = null;
+          onDoubleTap(px, py, cam.current);
+        } else {
+          lastTap.current = { x: t.x, y: t.y, time: now };
+        }
       }
       report(e.type, e);
     };
@@ -444,6 +595,7 @@ export function useMapCamera({
       pointers.current.clear();
       pinch.current = null;
       drag.current = null;
+      twoTap.current = null;
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
@@ -451,7 +603,7 @@ export function useMapCamera({
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDebug, endFlight]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDoubleTap, onDebug, endFlight, beginFlightTo]);
 
   // Step whichever of the two things is moving the camera on its own: a flight
   // while one is in the air, otherwise the glide back toward the content region
@@ -517,28 +669,6 @@ export function useMapCamera({
    * WHETHER it stopped where it was aimed, because a reader who has grabbed the
    * map is not asking to watch the library rebuild itself.
    */
-  /**
-   * Start an eased flight to a whole target camera - the shared half of
-   * `flyTo` and `nudgeBy`, so the reduced-motion collapse and the
-   * interrupt-the-previous-flight rule are stated once rather than twice.
-   *
-   * The flight begins at the LIVE camera (so a second flight during a first
-   * picks up smoothly from wherever it had got to) even when the caller
-   * computed `to` from `flightTarget()`; those are deliberately different
-   * questions - where the camera IS versus where it was last told to go.
-   */
-  const beginFlightTo = useCallback(
-    (to: Camera, ms?: number): Promise<boolean> => {
-      const duration = prefersReducedMotion() ? 0 : ms ?? camera.flightMs;
-      // A second flight replaces the first, and the first did not arrive.
-      endFlight(false);
-      return new Promise((settle) => {
-        flight.current = { ...beginFlight(cam.current, to, performance.now(), duration), settle };
-      });
-    },
-    [camera.flightMs, endFlight]
-  );
-
   const flyTo = useCallback(
     (x: number, y: number, zoom?: number, { ms }: FlyOpts = {}) =>
       beginFlightTo(cameraAtCell(cam.current, x, y, zoom), ms),

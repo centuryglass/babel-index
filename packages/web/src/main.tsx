@@ -370,6 +370,21 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const tapRef = useRef((_px: number, _py: number, _camera: Camera) => {});
   const onTap = useCallback((px: number, py: number, camera: Camera) => tapRef.current(px, py, camera), []);
 
+  // A double tap zooms to fit the tapped room, and a second double tap on the
+  // same room returns to the camera it had before - the map's equivalent of a
+  // photo viewer's double-tap zoom. Same ref-indirection as `onTap`/`tapRef`
+  // above, and for the same reason: the handler needs `flyTo`, which does not
+  // exist until `useMapCamera` below returns it.
+  const doubleTapRef = useRef((_px: number, _py: number, _camera: Camera) => {});
+  const onDoubleTap = useCallback(
+    (px: number, py: number, camera: Camera) => doubleTapRef.current(px, py, camera),
+    []
+  );
+  // The camera to return to on the next double tap of the SAME room, and which
+  // room that is - `null` once there is nothing to return to (no zoom pending,
+  // or the reader has moved on to a different room).
+  const zoomToggle = useRef<{ cellKey: string; from: Camera } | null>(null);
+
   // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
   // really be judged on a device, and a phone has no console you can read with
   // both thumbs busy - so this is how "what did the browser actually send"
@@ -409,6 +424,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     opening,
     onPick,
     onTap,
+    onDoubleTap,
     onDebug,
   });
 
@@ -669,6 +685,40 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
     const slotIndex = bookAtPoint(px, py, cell);
     if (slotIndex != null) onBook(slotIndex);
+  };
+
+  // Double-tapping a room zooms to fit it; double-tapping the same room again
+  // flies back to the camera it had before. `roomAtPoint` returns null for the
+  // center cell - it is the controls, not a room - so double-tapping the
+  // shelf is left alone rather than fighting the book taps above.
+  doubleTapRef.current = (px, py, camera) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
+    const hit = roomAtPoint(px, py, camera, rect, layout, order);
+    if (!hit) return;
+
+    const cellKey = `${hit.x},${hit.y}`;
+    const toggle = zoomToggle.current;
+    if (toggle && toggle.cellKey === cellKey) {
+      zoomToggle.current = null;
+      // Undo the +0.5 `flyTo`/`cameraAtCell` add to aim at a cell's middle -
+      // `toggle.from` is a raw camera target, not a cell index. Same fix
+      // `goToSearch` applies above, and for the same reason.
+      flyTo(toggle.from.x - 0.5, toggle.from.y - 0.5, toggle.from.zoom);
+      return;
+    }
+
+    zoomToggle.current = { cellKey, from: camera };
+    const zoom = fitZoom({
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+      target: { w: 1, h: 1 },
+      aspect: camera.aspect ?? CELL_ASPECT,
+      limits: camera.limits ?? { min: config.camera.minZoom, max: config.camera.maxZoom },
+      margin: 0.92,
+    });
+    flyTo(hit.x, hit.y, zoom);
   };
 
   return (

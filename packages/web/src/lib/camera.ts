@@ -224,6 +224,13 @@ export function zoomBy(cam: Camera, px: number, py: number, factor: number, rect
 export const WHEEL_ZOOM_RATE = 0.0014;
 
 /**
+ * How much one discrete zoom "step" scales the camera - PageUp/PageDown on the
+ * keyboard, and a two-finger tap on the map. One constant so a step means the
+ * same ratio regardless of which input asked for it.
+ */
+export const ZOOM_STEP_FACTOR = 1.6;
+
+/**
  * Zoom about a viewport point from a wheel delta; positive `deltaY` zooms out.
  *
  * @param px viewport-relative pointer x

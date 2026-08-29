@@ -21,6 +21,7 @@ import {
   pxPerCell,
   cursorCell,
   pickGranularity,
+  ZOOM_STEP_FACTOR,
   type Camera,
   type CursorGranularity,
 } from '../lib/camera.ts';
@@ -318,7 +319,7 @@ export function useMapCursor({
         // the SAME target and the second would silently cancel the first's
         // effect rather than compounding it - `flightTarget()` chains off the
         // fully-resolved target of whatever is already in flight instead.
-        const factor = e.key === 'PageUp' ? 1.6 : 1 / 1.6;
+        const factor = e.key === 'PageUp' ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
         const zoom = flightTarget().zoom * factor;
         const here = cursorNow();
         flyTo(here.x, here.y, zoom, { ms: camera.keyboardMoveMs });
