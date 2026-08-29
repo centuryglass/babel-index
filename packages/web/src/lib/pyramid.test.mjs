@@ -18,6 +18,8 @@ import {
   bestAvailable,
   warmLevels,
   prefetchBounds,
+  marginFor,
+  SHEETS,
 } from './pyramid.js';
 
 /** The largest viewport the budgets are sized against, in device pixels. */
@@ -279,6 +281,30 @@ test('the prefetch ring surrounds the viewport on every side', () => {
   assert.ok(wide(ring) > wide(bounds), 'the ring must be larger than what it surrounds');
 });
 
+test('marginFor holds the floor at a tight zoom, where cells are few', () => {
+  const bounds = { x0: 0, y0: 0, x1: 2, y1: 1 }; // 3x2 cells
+  assert.equal(marginFor(bounds), PREFETCH.margin);
+});
+
+test('marginFor grows with the viewport once it is wide enough to matter', () => {
+  const narrow = marginFor({ x0: 0, y0: 0, x1: 9, y1: 9 }); // 10x10
+  const wide = marginFor({ x0: 0, y0: 0, x1: 99, y1: 99 }); // 100x100
+  assert.ok(wide > narrow, 'a coarser zoom must warm a wider ring');
+  assert.equal(wide, Math.round(100 * PREFETCH.marginRatio));
+});
+
+test('marginFor tracks the longer axis, not just width', () => {
+  const tall = marginFor({ x0: 0, y0: 0, x1: 2, y1: 199 }); // 3 wide, 200 tall
+  assert.equal(tall, Math.round(200 * PREFETCH.marginRatio));
+});
+
+test('prefetchBounds without an explicit margin scales with the viewport it is given', () => {
+  const small = prefetchBounds({ x0: 0, y0: 0, x1: 4, y1: 4 });
+  const big = prefetchBounds({ x0: 0, y0: 0, x1: 199, y1: 199 });
+  const marginOf = (b, original) => b.x1 - original.x1;
+  assert.ok(marginOf(big, { x1: 199 }) > marginOf(small, { x1: 4 }), 'a bigger viewport gets a bigger margin');
+});
+
 // --- rule 3: budgets -------------------------------------------------------
 
 test('every budget holds at least one worst-case screen, plus its prefetch ring', () => {
@@ -322,6 +348,17 @@ test('the memory cost of a full pyramid is derived, and finite', () => {
   const sum = LEVELS.reduce((n, l) => n + budgetOf(l.level) * bytesOf(l.level), 0);
   assert.equal(total, sum);
   assert.ok(total > 0);
+});
+
+// --- sheet-packed levels -----------------------------------------------------
+
+test('the sheet grid actually holds roomsPerSheet, and fromLevel is on the ladder', () => {
+  // Hand-edited config: a mismatch here silently packs a partial grid
+  // (packages/pipeline/layout.ts's sheetPlan throws on it at write/discover
+  // time, but that is a runtime surprise this test catches for free).
+  assert.equal(SHEETS.cols * SHEETS.rows, SHEETS.roomsPerSheet);
+  assert.ok(LEVELS.some((l) => l.level === SHEETS.fromLevel), 'fromLevel must name a real level');
+  assert.ok(SHEETS.cacheBudget >= 1, 'a budget of zero would disable every sheet-packed level');
 });
 
 test('CACHE_SCALE moves every budget together and never reaches zero', () => {

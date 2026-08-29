@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, basename, resolve } from 'node:path';
-import { mipPlan } from '../pipeline/layout.ts';
+import { mipPlan, sheetPlan, sheetDirName, sheetFileName } from '../pipeline/layout.ts';
+import { SHEETS } from '../web/src/lib/pyramid.js';
 import { metadataCoverage } from '../map/metadata.ts';
 import type { ImageSize, Manifest, Room, SharedAsset, SharedAssets, LevelInfo } from '../map/manifest.ts';
 
@@ -100,14 +101,27 @@ export async function imageSize(path: string): Promise<ImageSize | null> {
  * what keeps "point it at a directory of images" true for a corpus that has
  * never been near the pipeline.
  *
- * Deliberately not checked: whether every room has every level. A room missing
- * one 404s, and the client already remembers a 404 and falls back to another
- * level, so per-file probing would be thousands of stat calls to learn
- * something the fallback handles anyway.
+ * A level at or above `SHEETS.fromLevel` is checked as a sheet-packed level
+ * first - `<dir>/<width>-sheets/` holding every `sheet-NNNN.jpg` the corpus's
+ * room count requires (`sheetPlan`, from `packages/pipeline/layout.ts`, the
+ * same formula the pipeline used to write them). A level is one or the
+ * other, never both: an incomplete or missing sheets directory falls back to
+ * looking for the old per-file `<width>/` directory instead, which is what
+ * lets a corpus mid-rollout (mips written, sheets not yet packed) still serve
+ * that level per-file rather than not at all.
+ *
+ * Deliberately not checked for a per-file level: whether every room has every
+ * level. A room missing one 404s, and the client already remembers a 404 and
+ * falls back to another level, so per-file probing would be thousands of stat
+ * calls to learn something the fallback handles anyway. A sheet-packed level
+ * has no such fallback (a missing sheet is a hole for every room in it), which
+ * is why sheets ARE checked for completeness here.
  *
  * @param source level-0 dimensions
+ * @param roomCount how many rooms the corpus has, to know how many sheets a
+ *   sheet-packed level should hold
  */
-export async function discoverLevels(dir: string, source: ImageSize | null): Promise<LevelInfo[]> {
+export async function discoverLevels(dir: string, source: ImageSize | null, roomCount = 0): Promise<LevelInfo[]> {
   // Without a source size there is no ladder to look for, only the flat files.
   if (!source?.w || !source?.h) return [{ level: 0, w: source?.w ?? null, h: source?.h ?? null, dir: null }];
 
@@ -118,6 +132,37 @@ export async function discoverLevels(dir: string, source: ImageSize | null): Pro
       found.push({ ...step, dir: null });
       continue;
     }
+
+    if (step.level >= SHEETS.fromLevel) {
+      const layout = sheetPlan(roomCount);
+      const sheetDir = sheetDirName(step.dir);
+      const complete = await readdir(join(dir, sheetDir))
+        .then((names) => {
+          const files = new Set(names);
+          return layout.sheetCount > 0 && Array.from({ length: layout.sheetCount }, (_, i) => sheetFileName(i)).every((f) => files.has(f));
+        })
+        .catch(() => false);
+      if (complete) {
+        found.push({
+          level: step.level,
+          w: step.w,
+          h: step.h,
+          dir: null,
+          sheet: {
+            tileW: step.w,
+            tileH: step.h,
+            cols: layout.cols,
+            rows: layout.rows,
+            roomsPerSheet: layout.roomsPerSheet,
+            sheetCount: layout.sheetCount,
+            dir: sheetDir,
+            ext: 'jpg',
+          },
+        });
+        continue;
+      }
+    }
+
     const path = join(dir, step.dir);
     const holds = await readdir(path)
       .then((names) => names.some((n) => IMAGE_EXT.has(extname(n).toLowerCase())))
@@ -225,7 +270,11 @@ export async function scanDirectory(
     rooms.find((r) => r.w && r.h) ??
     [sharedAssets.center, ...sharedAssets.generic].find((b) => b?.w && b?.h) ??
     null;
-  const levels = await discoverLevels(dir, source && source.w && source.h ? { w: source.w, h: source.h } : null);
+  const levels = await discoverLevels(
+    dir,
+    source && source.w && source.h ? { w: source.w, h: source.h } : null,
+    rooms.length
+  );
 
   // If tools/embed has left a blob alongside the images, surface its metadata so
   // the client can fetch it and rank in the browser. A stale blob - one whose
@@ -301,7 +350,9 @@ export async function scanDirectory(
     tagLinks,
     /**
      * The pyramid as it exists on disk, finest first. Clients build a level's
-     * url as `images/<dir>/<file>`, or `images/<file>` where `dir` is null.
+     * url as `images/<dir>/<file>`, or `images/<file>` where `dir` is null,
+     * or - for a sheet-packed level (`level.sheet` present) - address a room
+     * by formula into `images/<sheet.dir>/sheet-NNNN.<sheet.ext>` instead.
      */
     levels,
   };

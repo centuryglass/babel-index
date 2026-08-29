@@ -19,7 +19,7 @@
  * pipeline still reads as a valid level 0, and running in place costs no
  * duplicated bytes.
  */
-import { LEVELS } from '../web/src/lib/pyramid.js';
+import { LEVELS, SHEETS } from '../web/src/lib/pyramid.js';
 
 export interface Size {
   w: number;
@@ -34,6 +34,22 @@ export interface LevelStep {
 export interface MipStep extends Size {
   level: number;
   dir: string | null;
+}
+
+export interface SheetConfig {
+  roomsPerSheet: number;
+  cols: number;
+  rows: number;
+}
+
+export interface SheetPlan extends SheetConfig {
+  sheetCount: number;
+}
+
+export interface SheetPosition {
+  sheetIndex: number;
+  col: number;
+  row: number;
 }
 
 /**
@@ -62,4 +78,41 @@ export function mipPlan({ w, h }: Size, levels: LevelStep[] = LEVELS): MipStep[]
     plan.push({ level, ...size, dir: String(size.w) });
   }
   return plan;
+}
+
+/**
+ * Sheet-packing arithmetic, kept here (rather than in sheets.ts, which
+ * imports `sharp`) so the server can discover and validate what the pipeline
+ * wrote without paying for an image library it never needs - same split as
+ * `mipPlan` above.
+ *
+ * The sheet directory for a per-file level directory named for its width.
+ */
+export function sheetDirName(width: number | string): string {
+  return `${width}-sheets`;
+}
+
+/** The file name for one sheet, zero-padded so a directory listing sorts in order. */
+export function sheetFileName(sheetIndex: number, ext = 'jpg'): string {
+  return `sheet-${String(sheetIndex).padStart(4, '0')}.${ext}`;
+}
+
+/**
+ * How many sheets a corpus of this size needs, and the grid each one holds.
+ * Pure arithmetic - the pipeline (which writes sheets) and the server (which
+ * discovers them) both call this and agree on the answer.
+ */
+export function sheetPlan(roomCount: number, config: SheetConfig = SHEETS): SheetPlan {
+  if (config.cols * config.rows !== config.roomsPerSheet)
+    throw new Error(`sheet grid ${config.cols}x${config.rows} does not hold roomsPerSheet=${config.roomsPerSheet}`);
+  const sheetCount = roomCount === 0 ? 0 : Math.ceil(roomCount / config.roomsPerSheet);
+  return { ...config, sheetCount };
+}
+
+/** Where room `roomIndex` (0-based, in the same order as room ids) lives within its sheet. */
+export function sheetPosition(roomIndex: number, plan: SheetConfig = SHEETS): SheetPosition {
+  const { roomsPerSheet, cols } = plan;
+  const sheetIndex = Math.floor(roomIndex / roomsPerSheet);
+  const posInSheet = roomIndex % roomsPerSheet;
+  return { sheetIndex, col: posInSheet % cols, row: Math.floor(posInSheet / cols) };
 }
