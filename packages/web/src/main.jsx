@@ -36,7 +36,7 @@ import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
-import { useRearrangement } from './hooks/useRearrangement.js';
+import { useRearrangement } from './hooks/useRearrangement.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
 
 function App() {

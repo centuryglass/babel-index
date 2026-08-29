@@ -95,7 +95,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
-  `useRearrangement.js` / `lib/slide.js`) without living in the same directory.
+  `useRearrangement.ts` / `lib/slide.js`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
     * `src/main.jsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
@@ -130,7 +130,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                            tabindex focus, and what a tap or arrow key does
     * `useModeTransition.ts`: Switching between the map and catalog readings,
                               the FLIP animation between them
-    * `useRearrangement.js`: The sliding-tile rearrangement animation - whether
+    * `useRearrangement.ts`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said
                              once it lands
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
