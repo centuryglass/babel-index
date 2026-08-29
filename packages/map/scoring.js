@@ -799,6 +799,49 @@ export function matchCertainty(
   return pos > 0 ? pos : Cneg > 0 ? -Cneg : 0;
 }
 
+/** Ascending per-room comparators `rankAxis` sorts by - one per independent axis. */
+function compareTagAxis(x, y) {
+  return x.tagExact - y.tagExact || x.tagPartialSum - y.tagPartialSum;
+}
+function compareStoryAxis(x, y) {
+  return x.storyRatio - y.storyRatio || x.storyLongChars - y.storyLongChars;
+}
+function compareClipAxis(x, y) {
+  return (x.cosine ?? -Infinity) - (y.cosine ?? -Infinity);
+}
+
+/**
+ * One signal's own ranking over `byId` (id-indexed, same shape `scored` has
+ * before the composite sort below reorders it) - "this room ranks #4 by tag,
+ * tied with 2 others" (docs/search_rules.md "Reporting"), independent of
+ * whatever the weighted sum decides. Competition ranking (`1, 2, 2, 4`, not
+ * `1, 2, 2, 3`): a tie shares the rank the group's best position would have
+ * gotten, so "#4" always means "3 rooms score higher", tie or no tie.
+ *
+ * @param {{ [key: string]: any }[]} byId one row per room, indexed by id
+ * @param {(x: object, y: object) => number} compare ascending on this axis
+ * @returns {{ rank: Int32Array, ties: Int32Array }} both indexed by id;
+ *   `rank` is 1-based, `ties` is how many OTHER rooms share it
+ */
+function rankAxis(byId, compare) {
+  const ids = byId.map((_, i) => i);
+  ids.sort((a, b) => compare(byId[b], byId[a]));
+  const rank = new Int32Array(byId.length);
+  const ties = new Int32Array(byId.length);
+  let i = 0;
+  while (i < ids.length) {
+    let j = i + 1;
+    while (j < ids.length && compare(byId[ids[j]], byId[ids[i]]) === 0) j++;
+    const size = j - i;
+    for (let k = i; k < j; k++) {
+      rank[ids[k]] = i + 1;
+      ties[ids[k]] = size - 1;
+    }
+    i = j;
+  }
+  return { rank, ties };
+}
+
 /**
  * Rank the whole corpus by the blend of whatever signals are available.
  *
@@ -834,6 +877,12 @@ export function matchCertainty(
  *   that recomputed these for display could disagree with the one that sorted,
  *   and a scoring explanation that does not match the scoring is worse than
  *   none.
+ *
+ *   `ranks`/`ties` are three more independent sorts of `breakdown`'s own
+ *   numbers (tag: `tagExact`/`tagPartialSum`; story: `story`/`storyLongChars`;
+ *   clip: `cosine`), each parallel to `order` like `breakdown` - "this room
+ *   ranks #4 by tag, tied with 2 others" without the composite `order` ever
+ *   being touched by a single-axis re-sort.
  */
 export function rankHybrid({
   query,
@@ -937,6 +986,15 @@ export function rankHybrid({
     };
   }
 
+  // Independent per-signal sorts of the same numbers just computed, run
+  // BEFORE the main sort below while `scored` is still id-indexed - so
+  // `rank`/`ties` come back indexed by room id, same as `scored` itself, and
+  // re-sorting for one display column never touches the composite `order`
+  // (docs/search_rules.md "Data structures" §4, "Reporting").
+  const tagRanking = rankAxis(scored, compareTagAxis);
+  const storyRanking = rankAxis(scored, compareStoryAxis);
+  const clipRanking = rankAxis(scored, compareClipAxis);
+
   // Stable sort, so rooms that every signal is silent about keep their id order
   // rather than shuffling for no reason the reader can see.
   scored.sort((a, b) => b.score - a.score);
@@ -953,6 +1011,16 @@ export function rankHybrid({
     clipSigned: new Float32Array(count),
     cosine: new Float32Array(count),
   };
+  const ranks = {
+    tag: new Int32Array(count),
+    story: new Int32Array(count),
+    clip: new Int32Array(count),
+  };
+  const ties = {
+    tag: new Int32Array(count),
+    story: new Int32Array(count),
+    clip: new Int32Array(count),
+  };
   for (let rank = 0; rank < count; rank++) {
     const row = scored[rank];
     certainty[rank] = row.certainty;
@@ -965,12 +1033,20 @@ export function rankHybrid({
     breakdown.clipCertaintyGate[rank] = row.clipCertaintyGate;
     breakdown.clipSigned[rank] = row.clipSigned;
     breakdown.cosine[rank] = row.cosine ?? NaN;
+    ranks.tag[rank] = tagRanking.rank[row.id];
+    ties.tag[rank] = tagRanking.ties[row.id];
+    ranks.story[rank] = storyRanking.rank[row.id];
+    ties.story[rank] = storyRanking.ties[row.id];
+    ranks.clip[rank] = clipRanking.rank[row.id];
+    ties.clip[rank] = clipRanking.ties[row.id];
   }
 
   return {
     order: scored.map((s) => s.id),
     certainty,
     breakdown,
+    ranks,
+    ties,
     signals: { clip: Boolean(clipNormAll), keyword: sawKeyword, story: sawStory },
   };
 }

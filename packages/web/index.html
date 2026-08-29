@@ -309,6 +309,12 @@
         border-top: 1px solid var(--edge); padding-top: 4px; color: var(--ink);
       }
       /*
+        docs/search_rules.md "Reporting": each row's independent axis rank
+        ("this room ranks #4 by tag, tied with 2 others"), separate from the
+        row's own weighted contribution to the composite score above it.
+      */
+      .axis-rank { font-size: 9px; opacity: 0.7; }
+      /*
         Set apart from the sum above it on purpose: every row in that sum is
         relative to this query's corpus, and this one is measured against
         absolute bounds. Reading it as another term would be reading it wrong.

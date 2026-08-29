@@ -881,6 +881,68 @@ test('rankHybrid reports the components it sorted on, by rank', () => {
   for (const arr of Object.values(breakdown)) assert.equal(arr.length, 3);
 });
 
+test('ranks/ties are independent per-signal sorts, parallel to order like breakdown', () => {
+  // Room 0: a weak partial tag hit, nothing else. Room 1: no text at all, but
+  // the corpus's strongest CLIP cosine (weights.clip's full 1.0 clears
+  // weights.tagPartial's 0.45 ceiling outright, whatever the partial fraction
+  // is) - so the COMPOSITE score puts room 1 first. The tag axis must still
+  // put room 0 first, since it is the only one of the two with any tag signal
+  // at all - that divergence from `order` is the whole reason a per-axis rank
+  // exists separately from it.
+  const { order, ranks, ties } = rankHybrid({
+    query: 'oak',
+    count: 3,
+    weights: WEIGHTS,
+    index: indexOf([['oakenwood'], null], null, null),
+    embeddings: atCosines(0.05, 0.3, -0.5),
+    dim: 2,
+    vector: CLIP_QUERY,
+  });
+
+  assert.equal(order[0], 1, 'the composite score favors the maxed-out clip term');
+  const rankOfRoom = (axis, id) => ranks[axis][order.indexOf(id)];
+  const tiesOfRoom = (axis, id) => ties[axis][order.indexOf(id)];
+
+  assert.equal(rankOfRoom('tag', 0), 1, 'room 0 is the only one with any tag signal at all');
+  assert.equal(tiesOfRoom('tag', 0), 0);
+  // Rooms 1 and 2 both score zero on the tag axis - genuinely tied there, even
+  // though the composite score (reading CLIP) puts them at opposite ends.
+  assert.equal(rankOfRoom('tag', 1), 2);
+  assert.equal(rankOfRoom('tag', 2), 2);
+  assert.equal(tiesOfRoom('tag', 1), 1);
+  assert.equal(tiesOfRoom('tag', 2), 1);
+});
+
+test('a tie on one axis is reported as tied, even when the composite score is not', () => {
+  // Same tag signal (one exact match each), different CLIP cosines - so the
+  // composite order separates them, but the tag axis must call it a tie.
+  const { order, ranks, ties } = rankHybrid({
+    query: 'oak',
+    count: 3,
+    weights: WEIGHTS,
+    index: indexOf([['oak'], null], [['oak'], null], null),
+    embeddings: atCosines(0.3, 0.1, -0.5),
+    dim: 2,
+    vector: CLIP_QUERY,
+  });
+
+  const rankOfRoom = (axis, id) => ranks[axis][order.indexOf(id)];
+  const tiesOfRoom = (axis, id) => ties[axis][order.indexOf(id)];
+  assert.equal(rankOfRoom('tag', 0), 1);
+  assert.equal(rankOfRoom('tag', 1), 1, 'competition ranking: a tie shares the better rank, not the worse');
+  assert.equal(tiesOfRoom('tag', 0), 1);
+  assert.equal(tiesOfRoom('tag', 1), 1);
+  // Room 2 has no tag match at all - not tied with the two that share one.
+  assert.equal(rankOfRoom('tag', 2), 3);
+  assert.equal(tiesOfRoom('tag', 2), 0);
+
+  // The CLIP axis, meanwhile, has no ties: three distinct cosines.
+  for (const id of [0, 1, 2]) assert.equal(tiesOfRoom('clip', id), 0);
+  assert.equal(rankOfRoom('clip', 0), 1, 'highest cosine (0.3)');
+  assert.equal(rankOfRoom('clip', 1), 2);
+  assert.equal(rankOfRoom('clip', 2), 3, 'lowest cosine (-0.5)');
+});
+
 test('explainScore omits a silent signal rather than printing it as zero', () => {
   const { breakdown, certainty } = rankHybrid({
     query: 'oak',

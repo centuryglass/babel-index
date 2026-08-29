@@ -127,16 +127,24 @@ either way), while a coherent-but-wrong concept has its own specific direction
 that is actively dissimilar to library imagery — so genuine off-topic content
 reads as more confidently wrong than noise does, not merely as absent signal.
 
-## 6. Per-signal ranks and ties are not computed
+## 6. Per-signal ranks and ties are not computed — landed
 
 **Ideal** (`search_rules.md` "Data structures" §4, reporting assertions): every
 room readable on each axis alone — "#4 by tag, tied with 2 others".
 
-**Now:** `rankHybrid` returns `order`/`certainty`/`breakdown`/`signals` only.
-
-**Steps:** add the three independent per-signal sorts of the existing
-`breakdown` arrays (`ranks`/`ties`), and surface them in the breakdown UI. No new
-scoring — just sorting numbers the pass already produced.
+**Landed:** `rankHybrid` (`scoring.js`) now returns `ranks`/`ties`, each
+`{tag, story, clip}`, parallel to `order` like `breakdown` - three more
+independent sorts of the numbers already computed (`tagExact`/`tagPartialSum`
+for tag, `storyRatio`/`storyLongChars` for story, raw `cosine` for clip), run
+once via `rankAxis` before the composite sort reorders `scored`. No new
+scoring. `rank` is 1-based competition ranking (`1, 2, 2, 4`, ties share the
+better position) and `ties` is how many *other* rooms share it.
+`RoomDetails.tsx`'s `ScoreBreakdown` surfaces this as the axis note the spec
+names, attached to the first row of each axis group (`tagExact`/`tagPartial`
+share the tag axis, `story`/`storyLong` share the story axis) so a tied pair
+of rows never repeats the same note twice. `searchResult.ts`'s `SignalRanks`
+type and `useSearch.ts`'s pass-through complete the plumbing; the no-signal
+stub keeps `ranks`/`ties` `null` alongside `breakdown`.
 
 ## 7. Distribution-mapping experiment — after the core lands
 

@@ -64,6 +64,27 @@ function ClipCertainty({ percent }: { percent: number }) {
   );
 }
 
+/** Which independent axis (`result.ranks`/`ties`) each `explainScore` row belongs to. */
+const AXIS_BY_ROW_KEY: Record<string, 'tag' | 'story' | 'clip'> = {
+  tagExact: 'tag',
+  tagPartial: 'tag',
+  story: 'story',
+  storyLong: 'story',
+  clip: 'clip',
+};
+
+/**
+ * "this room ranks #4 by tag, tied with 2 others" (docs/search_rules.md
+ * "Reporting") - `result.ranks`/`ties` read independently of the row's own
+ * weighted contribution, which is why this takes the axis rather than the row.
+ */
+function axisRankNote(axis: 'tag' | 'story' | 'clip', rank: number, result: SearchResult | null): string | null {
+  const r = result?.ranks?.[axis]?.[rank];
+  const t = result?.ties?.[axis]?.[rank];
+  if (r == null) return null;
+  return t > 0 ? `#${r} by ${axis}, tied with ${t} others` : `#${r} by ${axis}`;
+}
+
 /**
  * Why this room ranked where it did.
  *
@@ -73,6 +94,11 @@ function ClipCertainty({ percent }: { percent: number }) {
  * for this query - some room scores 1.00 for `cghjj` too, and a bare 1.00 would
  * tell a reader the library was certain about a wall it has nothing to say
  * about. See `explainScore`.
+ *
+ * Each row also carries its own axis's independent rank the first time that
+ * axis appears (tag rows share one rank, `tagExact`/`tagPartial` are the same
+ * axis; likewise `story`/`storyLong`) - a second identical "#4 by tag" on the
+ * partial-tag row would just repeat the exact-tag row's, not add information.
  */
 function ScoreBreakdown({
   rank,
@@ -93,6 +119,14 @@ function ScoreBreakdown({
   });
   if (!rows.length) return null;
 
+  const shownAxes = new Set<string>();
+  const rowsWithRank = rows.map((r) => {
+    const axis = AXIS_BY_ROW_KEY[r.key];
+    if (!axis || shownAxes.has(axis)) return { ...r, axisNote: null as string | null };
+    shownAxes.add(axis);
+    return { ...r, axisNote: axisRankNote(axis, rank, result) };
+  });
+
   // Two presentations of ONE computation. A card has the room to itself and can
   // afford a table; a catalog row is one line in a list of hundreds, and the
   // table there was 108px tall in a 202px row and clipped its own last line.
@@ -106,10 +140,11 @@ function ScoreBreakdown({
   if (layout === 'strip') {
     return (
       <ul className="score-strip">
-        {rows.map((r) => (
+        {rowsWithRank.map((r) => (
           <li key={r.key} title={r.note ?? undefined}>
             {r.label} <b>{r.weighted.toFixed(3)}</b> <span>{r.raw.toFixed(2)}</span>
             {r.signedPercent !== undefined && <ClipCertainty percent={r.signedPercent} />}
+            {r.axisNote && <span className="axis-rank"> · {r.axisNote}</span>}
           </li>
         ))}
         <li className="total">
@@ -127,9 +162,12 @@ function ScoreBreakdown({
       <table>
         <caption>why this ranked {rank + 1}</caption>
         <tbody>
-          {rows.map((r) => (
+          {rowsWithRank.map((r) => (
             <tr key={r.key}>
-              <th scope="row">{r.label}</th>
+              <th scope="row">
+                {r.label}
+                {r.axisNote && <span className="axis-rank"> {r.axisNote}</span>}
+              </th>
               <td className="num">{r.weighted.toFixed(3)}</td>
               <td className="raw" title={r.note ?? undefined}>
                 {r.raw.toFixed(2)}

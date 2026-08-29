@@ -128,7 +128,7 @@ export function useSearch({
     // than implying more than the corpus can support.
     const blob = res.vector ? embeddings.current : null;
     if (blob || searchIndex) {
-      const { order, certainty, breakdown, signals } = rankHybrid({
+      const { order, certainty, breakdown, ranks, ties, signals } = rankHybrid({
         query: term,
         count: total,
         weights: searchConfig.weights,
@@ -148,14 +148,14 @@ export function useSearch({
       // the ranking does not, so anything derived from "what was searched for"
       // - the highlight ranges especially - has to read the submitted term or
       // it would mark text against a query nobody has run yet.
-      setResult({ order, certainty, breakdown, signals, term });
+      setResult({ order, certainty, breakdown, ranks, ties, signals, term });
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
       requestAnimationRef.current('stub ranking — no embeddings and no keywords in this corpus');
       // No breakdown: a hash-ordered stub has no signals to explain, and an
       // explanation of a ranking nothing decided would be an invented one.
-      setResult({ order: res.order, certainty: null, breakdown: null, signals: null, term });
+      setResult({ order: res.order, certainty: null, breakdown: null, ranks: null, ties: null, signals: null, term });
     }
   };
 
