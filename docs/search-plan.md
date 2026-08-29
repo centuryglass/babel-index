@@ -73,7 +73,7 @@ Since §1/§2 landed, both `parseQuery` and `classifyTagTerm` are called from
 `classifyTagTerm`'s classification, replacing the old flat `foldedQuery`/
 `queryTokens` reads.
 
-## 5. CLIP certainty is mapped off theoretical extremes, not the distribution
+## 5. CLIP certainty is mapped off theoretical extremes, not the distribution — landed
 
 **Ideal** (`search_rules.md` "Image-content matching" + "Computing certainty"):
 one continuous, distribution-anchored curve. The centre of the measured cosine
@@ -100,31 +100,51 @@ distinctly (a different color, italic) when negative. `config.search.density`
 carries the three anchors as `clipCentre`/`clipHigh`/`clipLow`, narrowing-only
 validated as `clipHigh > clipCentre > clipLow`.
 
-**Steps left:** `low` is still a provisional placeholder — the mirror of
-`high` across `centre` (`centre - (high - centre)`) — not the real measurement
-the spec calls for. That needs scoring known-irrelevant strong concepts
-(`race car`, `swimming pool` — things CLIP recognises but that have nothing to
-do with this corpus) against the real corpus, which needs both the full
-embeddings blob and network access to the CLIP text tower; neither was
-available in the environment this landed in. `tools/embed/cosine-range.ts` now
-supports it directly: `--irrelevant <file>` computes the low extreme the same
-way `--universal` computes the high one (reusing `summarizeUniversal` — same
-min-p10/median-p50 math, different semantic list), and `--nonsense <file>`
-scores keysmash queries as a validation-only check that they land near
-`overall`'s centre. Once run on the real corpus, drop the measured `low` (and,
-if `--nonsense` disagreed with the centre by more than a hair, a re-read of
-`centre` too) into `CLIP_CERTAINTY` and `config.ts`'s `clipLow` default.
+**`low` is now measured too — landed.** Ran `tools/embed/cosine-range.ts`
+against the full corpus (2048 rooms x 2149 generation keywords) with
+`--irrelevant` against ten known-irrelevant strong concepts (`race car`,
+`swimming pool`, `sandy beach`, `city traffic jam`, `snow-capped mountain`,
+`underwater coral reef`, `rock concert crowd`, `hot air balloon festival`,
+`herd of cattle grazing`, `lightning storm over the ocean` — picked to share
+no visual structure, repeating-grid or otherwise, with shelved library walls,
+so a match would have to be genuine semantic confusion rather than a
+compositional coincidence) and `--nonsense` with nine keysmash queries as a
+validation-only check. `low` is `irrelevant.ceiling` (the median p50 across
+those concepts' own best match, ≈0.171, the same `summarizeUniversal` math
+`--universal` uses for `high`) — dropped into `CLIP_CERTAINTY.low`
+(`packages/map/scoring.js`), which `config.ts`'s `clipLow` default reads
+straight off. `--nonsense` came back at mean 0.212 against `centre`'s 0.205
+(drift 0.008, well inside noise), so `centre` needed no re-read.
 
-## 6. Per-signal ranks and ties are not computed
+The result inverted the placeholder's own prediction: the mirror-across-centre
+guess assumed a real `low` would land low-*positive* (irrelevant-but-real
+concepts read as weak evidence, not counter-evidence), but the measured
+ceiling (0.171) sits *below* `centre` (0.205) — genuinely negative on the
+signed curve. Read together with the nonsense probe agreeing with `centre`,
+this looks like a real property of the embedding space rather than a
+miscalibration: gibberish embeds near the corpus's mean direction (no signal
+either way), while a coherent-but-wrong concept has its own specific direction
+that is actively dissimilar to library imagery — so genuine off-topic content
+reads as more confidently wrong than noise does, not merely as absent signal.
+
+## 6. Per-signal ranks and ties are not computed — landed
 
 **Ideal** (`search_rules.md` "Data structures" §4, reporting assertions): every
 room readable on each axis alone — "#4 by tag, tied with 2 others".
 
-**Now:** `rankHybrid` returns `order`/`certainty`/`breakdown`/`signals` only.
-
-**Steps:** add the three independent per-signal sorts of the existing
-`breakdown` arrays (`ranks`/`ties`), and surface them in the breakdown UI. No new
-scoring — just sorting numbers the pass already produced.
+**Landed:** `rankHybrid` (`scoring.js`) now returns `ranks`/`ties`, each
+`{tag, story, clip}`, parallel to `order` like `breakdown` - three more
+independent sorts of the numbers already computed (`tagExact`/`tagPartialSum`
+for tag, `storyRatio`/`storyLongChars` for story, raw `cosine` for clip), run
+once via `rankAxis` before the composite sort reorders `scored`. No new
+scoring. `rank` is 1-based competition ranking (`1, 2, 2, 4`, ties share the
+better position) and `ties` is how many *other* rooms share it.
+`RoomDetails.tsx`'s `ScoreBreakdown` surfaces this as the axis note the spec
+names, attached to the first row of each axis group (`tagExact`/`tagPartial`
+share the tag axis, `story`/`storyLong` share the story axis) so a tied pair
+of rows never repeats the same note twice. `searchResult.ts`'s `SignalRanks`
+type and `useSearch.ts`'s pass-through complete the plumbing; the no-signal
+stub keeps `ranks`/`ties` `null` alongside `breakdown`.
 
 ## 7. Distribution-mapping experiment — after the core lands
 

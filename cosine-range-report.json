@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-28T15:43:33.079Z",
+  "generatedAt": "2026-08-29T16:18:00.433Z",
   "model": "Xenova/clip-vit-base-patch32",
   "rooms": 2048,
   "keywords": 2149,
@@ -143,6 +143,83 @@
     "notes": [
       "universal keywords disagree by 0.062 at p50 - CLIP's cosine scale is keyword-string-dependent, so a single-keyword calibration would not have been safe to trust; this is why floor/ceiling are the min/median across all of them, not one keyword."
     ]
+  },
+  "irrelevant": {
+    "floor": 0.12673842161893845,
+    "ceiling": 0.17067306116223335,
+    "floorPercentile": 10,
+    "ceilingPercentile": 50,
+    "byKeyword": [
+      {
+        "keyword": "race car",
+        "floor": 0.16670879870653152,
+        "ceiling": 0.18370039761066437
+      },
+      {
+        "keyword": "swimming pool",
+        "floor": 0.1642496407032013,
+        "ceiling": 0.18199841678142548
+      },
+      {
+        "keyword": "sandy beach",
+        "floor": 0.16524580419063567,
+        "ceiling": 0.18011996150016785
+      },
+      {
+        "keyword": "city traffic jam",
+        "floor": 0.14938261806964875,
+        "ceiling": 0.16750986874103546
+      },
+      {
+        "keyword": "snow-capped mountain",
+        "floor": 0.1667304217815399,
+        "ceiling": 0.1838916316628456
+      },
+      {
+        "keyword": "underwater coral reef",
+        "floor": 0.14354821294546127,
+        "ceiling": 0.16128671169281006
+      },
+      {
+        "keyword": "rock concert crowd",
+        "floor": 0.152863909304142,
+        "ceiling": 0.17383625358343124
+      },
+      {
+        "keyword": "hot air balloon festival",
+        "floor": 0.12673842161893845,
+        "ceiling": 0.1485762670636177
+      },
+      {
+        "keyword": "herd of cattle grazing",
+        "floor": 0.150745290517807,
+        "ceiling": 0.16645598411560059
+      },
+      {
+        "keyword": "lightning storm over the ocean",
+        "floor": 0.14028558135032654,
+        "ceiling": 0.16295694559812546
+      }
+    ],
+    "notes": []
+  },
+  "nonsense": {
+    "count": 18432,
+    "min": 0.1299991011619568,
+    "max": 0.289446085691452,
+    "mean": 0.2124526752700654,
+    "std": 0.020889289862035396,
+    "percentiles": {
+      "p1": 0.1582574127614498,
+      "p5": 0.17295285388827325,
+      "p10": 0.18268995583057404,
+      "p25": 0.20032066479325294,
+      "p50": 0.21469707787036896,
+      "p75": 0.22682883217930794,
+      "p90": 0.23720181733369827,
+      "p95": 0.24353810176253318,
+      "p99": 0.25400727301836007
+    }
   },
   "perKeyword": [
     {

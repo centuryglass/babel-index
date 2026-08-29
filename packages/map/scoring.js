@@ -102,19 +102,25 @@ export function lemmatise(word) {
  * the raw distribution max because a single outlier pair should not define
  * "as sure as it gets".
  *
- * `low` is still provisional: docs/search-plan.md §5 calls for measuring it
- * from known-irrelevant strong concepts (a query CLIP should recognise but
- * that has nothing to do with this corpus - "swimming pool", "race car" -
- * expected to land low-positive, not negative, per the spec). That measurement
- * needs a real corpus and network access to the CLIP text tower, neither
- * available in every environment this runs in, so until it lands `low` is the
- * mirror of `high` across `centre` (`centre - (high - centre)`) - a
- * data-grounded placeholder, not a guess pulled from nowhere, that keeps the
- * curve continuous and gives a reasonable negative reading rather than none at
- * all. `tools/embed/cosine-range.ts --irrelevant <file>` computes the real
- * anchor the same way `--universal` computes `high`; swap it in here once run.
+ * `low` is now a real measurement too, not the mirror-of-`high` placeholder
+ * this used to be: `tools/embed/cosine-range.ts --irrelevant <file>`, run
+ * against ten known-irrelevant strong concepts (`race car`, `swimming pool`,
+ * `sandy beach`, ... - things CLIP recognises but that share no visual
+ * structure, repeating-grid or otherwise, with shelved library walls) scored
+ * the same way `--universal` scores `high` - `low` is `irrelevant.ceiling`,
+ * the *median* p50 across those concepts' own best match in the corpus. The
+ * result was a genuine surprise, not the "low-positive" the placeholder's
+ * comment used to predict: irrelevant concepts land BELOW `centre`
+ * (0.171 < 0.205), confidently negative rather than merely no-opinion. A
+ * `--nonsense` keysmash probe validated `centre` in the same run (mean 0.212
+ * against `centre`'s 0.205, well inside noise) - so the surprise is read as a
+ * real property of the embedding space, not a broken `centre`: gibberish
+ * embeds near the corpus's mean direction (genuinely no signal), while a
+ * coherent-but-wrong concept has its own specific direction that is actively
+ * dissimilar to library imagery, pushing it past the noise floor rather than
+ * just sitting in it.
  */
-export const CLIP_CERTAINTY = { centre: 0.205, high: 0.279, low: 0.131 };
+export const CLIP_CERTAINTY = { centre: 0.205, high: 0.279, low: 0.171 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -724,15 +730,16 @@ export function signedClipCertainty(cosine, band = CLIP_CERTAINTY) {
 }
 
 /**
- * `signedClipCertainty`'s output as the signed percentage docs/search_rules.md
- * "Reporting" wants: same sign, magnitude clamped to `0.01`-`99.99` so CLIP
- * never reads as completely certain in either direction - not even for the
- * anchor cosines themselves.
+ * A signed `[-1, 1]` certainty as a percentage, magnitude clamped to
+ * `0.01`-`99.99` so nothing - CLIP's own signed curve, or the composite
+ * `certainty` `explainRanking` reports up top - ever reads as completely
+ * certain in either direction, not even at the anchor cosines themselves
+ * (docs/search_rules.md "Reporting").
  *
  * @param {number} signed in [-1, 1]
  * @returns {number} in [-99.99, -0.01] union [0.01, 99.99]
  */
-function clipCertaintyPercent(signed) {
+export function signedPercent(signed) {
   const magnitude = Math.min(99.99, Math.max(0.01, Math.abs(signed) * 100));
   return signed < 0 ? -magnitude : magnitude;
 }
@@ -793,6 +800,49 @@ export function matchCertainty(
   return pos > 0 ? pos : Cneg > 0 ? -Cneg : 0;
 }
 
+/** Ascending per-room comparators `rankAxis` sorts by - one per independent axis. */
+function compareTagAxis(x, y) {
+  return x.tagExact - y.tagExact || x.tagPartialSum - y.tagPartialSum;
+}
+function compareStoryAxis(x, y) {
+  return x.storyRatio - y.storyRatio || x.storyLongChars - y.storyLongChars;
+}
+function compareClipAxis(x, y) {
+  return (x.cosine ?? -Infinity) - (y.cosine ?? -Infinity);
+}
+
+/**
+ * One signal's own ranking over `byId` (id-indexed, same shape `scored` has
+ * before the composite sort below reorders it) - "this room ranks #4 by tag,
+ * tied with 2 others" (docs/search_rules.md "Reporting"), independent of
+ * whatever the weighted sum decides. Competition ranking (`1, 2, 2, 4`, not
+ * `1, 2, 2, 3`): a tie shares the rank the group's best position would have
+ * gotten, so "#4" always means "3 rooms score higher", tie or no tie.
+ *
+ * @param {{ [key: string]: any }[]} byId one row per room, indexed by id
+ * @param {(x: object, y: object) => number} compare ascending on this axis
+ * @returns {{ rank: Int32Array, ties: Int32Array }} both indexed by id;
+ *   `rank` is 1-based, `ties` is how many OTHER rooms share it
+ */
+function rankAxis(byId, compare) {
+  const ids = byId.map((_, i) => i);
+  ids.sort((a, b) => compare(byId[b], byId[a]));
+  const rank = new Int32Array(byId.length);
+  const ties = new Int32Array(byId.length);
+  let i = 0;
+  while (i < ids.length) {
+    let j = i + 1;
+    while (j < ids.length && compare(byId[ids[j]], byId[ids[i]]) === 0) j++;
+    const size = j - i;
+    for (let k = i; k < j; k++) {
+      rank[ids[k]] = i + 1;
+      ties[ids[k]] = size - 1;
+    }
+    i = j;
+  }
+  return { rank, ties };
+}
+
 /**
  * Rank the whole corpus by the blend of whatever signals are available.
  *
@@ -828,6 +878,12 @@ export function matchCertainty(
  *   that recomputed these for display could disagree with the one that sorted,
  *   and a scoring explanation that does not match the scoring is worse than
  *   none.
+ *
+ *   `ranks`/`ties` are three more independent sorts of `breakdown`'s own
+ *   numbers (tag: `tagExact`/`tagPartialSum`; story: `story`/`storyLongChars`;
+ *   clip: `cosine`), each parallel to `order` like `breakdown` - "this room
+ *   ranks #4 by tag, tied with 2 others" without the composite `order` ever
+ *   being touched by a single-axis re-sort.
  */
 export function rankHybrid({
   query,
@@ -876,6 +932,7 @@ export function rankHybrid({
   for (let id = 0; id < count; id++) {
     let tagExact = 0;
     let tagPartialSum = 0;
+    let tagPartialCount = 0;
     let tagCoverageSum = 0;
     let storyRatio = 0;
     let storyLongChars = 0;
@@ -888,7 +945,10 @@ export function rankHybrid({
           const { exact, partial } = classifyTagTerm(term, entry.keywords);
           tagCoverageSum += exact ? 1 : partial;
           if (exact) tagExact++;
-          else tagPartialSum += partial;
+          else if (partial > 0) {
+            tagPartialSum += partial;
+            tagPartialCount++;
+          }
         }
 
         storyRatio = storyScore(queryTokens, entry.story);
@@ -921,6 +981,7 @@ export function rankHybrid({
       score,
       tagExact,
       tagPartialSum,
+      tagPartialCount,
       storyRatio,
       storyLongChars,
       clipNorm,
@@ -931,6 +992,15 @@ export function rankHybrid({
     };
   }
 
+  // Independent per-signal sorts of the same numbers just computed, run
+  // BEFORE the main sort below while `scored` is still id-indexed - so
+  // `rank`/`ties` come back indexed by room id, same as `scored` itself, and
+  // re-sorting for one display column never touches the composite `order`
+  // (docs/search_rules.md "Data structures" §4, "Reporting").
+  const tagRanking = rankAxis(scored, compareTagAxis);
+  const storyRanking = rankAxis(scored, compareStoryAxis);
+  const clipRanking = rankAxis(scored, compareClipAxis);
+
   // Stable sort, so rooms that every signal is silent about keep their id order
   // rather than shuffling for no reason the reader can see.
   scored.sort((a, b) => b.score - a.score);
@@ -940,6 +1010,7 @@ export function rankHybrid({
     score: new Float32Array(count),
     tagExact: new Float32Array(count),
     tagPartialSum: new Float32Array(count),
+    tagPartialCount: new Int32Array(count),
     story: new Float32Array(count),
     storyLongChars: new Float32Array(count),
     clip: new Float32Array(count),
@@ -947,113 +1018,124 @@ export function rankHybrid({
     clipSigned: new Float32Array(count),
     cosine: new Float32Array(count),
   };
+  const ranks = {
+    tag: new Int32Array(count),
+    story: new Int32Array(count),
+    clip: new Int32Array(count),
+  };
+  const ties = {
+    tag: new Int32Array(count),
+    story: new Int32Array(count),
+    clip: new Int32Array(count),
+  };
   for (let rank = 0; rank < count; rank++) {
     const row = scored[rank];
     certainty[rank] = row.certainty;
     breakdown.score[rank] = row.score;
     breakdown.tagExact[rank] = row.tagExact;
     breakdown.tagPartialSum[rank] = row.tagPartialSum;
+    breakdown.tagPartialCount[rank] = row.tagPartialCount;
     breakdown.story[rank] = row.storyRatio;
     breakdown.storyLongChars[rank] = row.storyLongChars;
     breakdown.clip[rank] = row.clipNorm;
     breakdown.clipCertaintyGate[rank] = row.clipCertaintyGate;
     breakdown.clipSigned[rank] = row.clipSigned;
     breakdown.cosine[rank] = row.cosine ?? NaN;
+    ranks.tag[rank] = tagRanking.rank[row.id];
+    ties.tag[rank] = tagRanking.ties[row.id];
+    ranks.story[rank] = storyRanking.rank[row.id];
+    ties.story[rank] = storyRanking.ties[row.id];
+    ranks.clip[rank] = clipRanking.rank[row.id];
+    ties.clip[rank] = clipRanking.ties[row.id];
   }
 
   return {
     order: scored.map((s) => s.id),
     certainty,
     breakdown,
+    ranks,
+    ties,
     signals: { clip: Boolean(clipNormAll), keyword: sawKeyword, story: sawStory },
   };
 }
 
+/** `explainRanking`'s three axes, in the order shown when every one contributed. */
+const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', story: 'story content' };
+
 /**
- * One room's ranking, as rows a reader can check the sort against.
+ * One room's ranking, as a reader reads it rather than as the sum computed
+ * it: one composite line ("#4 of 2048, 73% match certainty"), and one line
+ * per axis that actually found something for this room - tag, story, and
+ * (whenever the corpus has embeddings at all) CLIP - each carrying its OWN
+ * independent rank/tie count from `rankHybrid`'s `ranks`/`ties`, not the
+ * composite's. Replaces `explainScore`'s per-weight-term rows (exact tag:
+ * 0.234, partial tag: 0.041, ...): a reader needs "why", not the sum's
+ * arithmetic read out loud - the arithmetic still backs every number here,
+ * it just no longer IS the display.
  *
- * The catalog shows this under every room while a search is running, and the
- * room card shows the same rows. It is the first place the distinction this
- * file's header spends a section on becomes something a reader can SEE rather
- * than something written down:
- *
- * > Ranking is relative; certainty is not.
- *
- * `breakdown.clip` is min-maxed across the corpus for this query, so SOME room
- * scores 1.00 for `art nouveau` and some room scores 1.00 for `cghjj`. Printing
- * that number alone would tell a reader the library was certain about a room it
- * has nothing to say about. So the CLIP row carries its RAW cosine alongside,
- * and `certainty` is its own row rather than being folded into the total - it
- * is the only number here computed against absolute bounds.
- *
- * A signal that contributed nothing is omitted rather than shown as zero: a row
- * of 0.00 tells a reader less than its absence does, and the ranking of a room
- * no text touched genuinely is "CLIP alone". Tag and story each get up to two
- * rows (exact/partial, short/long) since they are two independent terms in the
- * sum, not one - see docs/search_rules.md "Reporting".
+ * `certainty` is the only number here computed against absolute bounds
+ * (docs/search_rules.md "Computing certainty") rather than being read
+ * straight off `breakdown.score`, and `contributions` exists so a reader can
+ * still ask "why" without that absolute number being confused for one of the
+ * terms that produced it: each is that axis's weighted term as a SHARE of
+ * `breakdown.score` (docs/search_rules.md "Reporting" - "a percentage of the
+ * total score contributed by each signal that actually contributed
+ * something"), sorted greatest first, an axis that contributed nothing
+ * omitted rather than shown as `0%`.
  *
  * @param {number} rank position in `order`
  * @param {object} opts
  * @param {object} opts.breakdown from `rankHybrid`
  * @param {Float32Array} opts.certainty from `rankHybrid`
+ * @param {{tag: Int32Array, story: Int32Array, clip: Int32Array}} opts.ranks from `rankHybrid`
+ * @param {{tag: Int32Array, story: Int32Array, clip: Int32Array}} opts.ties from `rankHybrid`
  * @param {object} opts.weights the five-constant `config.search.weights` shape
- * @returns {import('./searchResult.ts').ScoreExplanation}
+ * @param {number} opts.total rooms in the corpus (`result.order.length`)
+ * @returns {import('./searchResult.ts').RankingExplanation | null} `null` when
+ *   nothing at all matched this room - no tag, no story, no CLIP data.
  */
-export function explainScore(rank, { breakdown, certainty, weights }) {
+export function explainRanking(rank, { breakdown, certainty, ranks, ties, weights, total }) {
   const at = (arr) => (arr && rank < arr.length ? arr[rank] : 0);
-  const rows = [];
 
   const tagExact = at(breakdown?.tagExact);
-  if (tagExact > 0)
-    rows.push({
-      key: 'tagExact',
-      label: 'exact tag',
-      weighted: weights.tagExact * tagExact,
-      raw: tagExact,
-      note: 'count of exactly matched terms',
-    });
-
   const tagPartialSum = at(breakdown?.tagPartialSum);
-  if (tagPartialSum > 0)
-    rows.push({
-      key: 'tagPartial',
-      label: 'partial tag',
-      weighted: weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION),
-      raw: tagPartialSum,
-      note: 'summed substring coverage across terms, saturating',
-    });
-
+  const tagPartialCount = at(breakdown?.tagPartialCount);
   const storyRatio = at(breakdown?.story);
-  if (storyRatio > 0)
-    rows.push({
-      key: 'story',
-      label: 'story',
-      weighted: weights.story * storyRatio,
-      raw: storyRatio,
-      note: 'share of the query found',
-    });
-
   const storyLongChars = at(breakdown?.storyLongChars);
-  const storyLongBonus = storyLongBonus01(storyLongChars);
-  if (storyLongBonus > 0)
-    rows.push({
-      key: 'storyLong',
-      label: 'long story match',
-      weighted: weights.storyLong * storyLongBonus,
-      raw: storyLongChars,
-      note: 'characters in the longest contiguous run',
-    });
-
   const cosine = at(breakdown?.cosine);
-  if (Number.isFinite(cosine))
-    rows.push({
-      key: 'clip',
-      label: 'CLIP',
-      weighted: weights.clip * at(breakdown?.clip) * at(breakdown?.clipCertaintyGate),
-      raw: cosine,
-      note: 'relative to this query’s best and worst; the raw cosine is absolute',
-      signedPercent: clipCertaintyPercent(at(breakdown?.clipSigned)),
-    });
 
-  return { rows, total: at(breakdown?.score), certainty: at(certainty) };
+  const hasTag = tagExact > 0 || tagPartialCount > 0;
+  const hasStory = storyRatio > 0 || storyLongChars > 0;
+  const hasClip = Number.isFinite(cosine);
+  if (!hasTag && !hasStory && !hasClip) return null;
+
+  const tagWeighted = weights.tagExact * tagExact + weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION);
+  const storyWeighted = weights.story * storyRatio + weights.storyLong * storyLongBonus01(storyLongChars);
+  const clipWeighted = hasClip ? weights.clip * at(breakdown?.clip) * at(breakdown?.clipCertaintyGate) : 0;
+  const totalScore = at(breakdown?.score);
+
+  /** @type {{key: 'clip'|'tag'|'story', weighted: number}[]} */
+  const contributionTerms = [
+    { key: 'clip', weighted: clipWeighted },
+    { key: 'tag', weighted: tagWeighted },
+    { key: 'story', weighted: storyWeighted },
+  ];
+  const contributions = contributionTerms
+    .filter((c) => c.weighted > 0 && totalScore > 0)
+    .map((c) => ({ key: c.key, label: CONTRIBUTION_LABELS[c.key], percent: Math.round((c.weighted / totalScore) * 100) }))
+    .sort((a, b) => b.percent - a.percent);
+
+  return {
+    rank: rank + 1,
+    total,
+    percent: signedPercent(at(certainty)),
+    contributions,
+    tag: hasTag
+      ? { rank: ranks.tag[rank], ties: ties.tag[rank], exact: tagExact, partial: tagPartialCount }
+      : null,
+    story: hasStory ? { rank: ranks.story[rank], ties: ties.story[rank], length: storyLongChars } : null,
+    clip: hasClip
+      ? { rank: ranks.clip[rank], ties: ties.clip[rank], cosine, percent: signedPercent(at(breakdown?.clipSigned)) }
+      : null,
+  };
 }
