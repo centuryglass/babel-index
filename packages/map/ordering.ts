@@ -515,7 +515,7 @@ export const EMBEDDING_SCALE = 127;
  * stored contiguously; scoring the whole corpus is a few million multiply-adds,
  * which is well under a frame for corpora of this size.
  *
- * Scores rather than an order, because the hybrid blend in `scoring.js` needs
+ * Scores rather than an order, because the hybrid blend in `scoring.ts` needs
  * the numbers to normalise before weighting. `rankByEmbedding` is the CLIP-only
  * ordering built on top, so the dot product has one implementation.
  *
@@ -532,7 +532,7 @@ export function embeddingScores(embeddings: Int8Array, dim: number, query: Float
     for (let d = 0; d < dim; d++) dot += embeddings[base + d] * query[d];
     // Both sides are unit vectors, so this is a cosine once the row's
     // quantisation is undone - and it has to be a real cosine, because
-    // `scoring.js` compares it against absolute thresholds.
+    // `scoring.ts` compares it against absolute thresholds.
     scores[i] = dot / EMBEDDING_SCALE;
   }
   return scores;

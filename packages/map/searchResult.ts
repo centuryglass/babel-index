@@ -1,10 +1,10 @@
 /**
- * Search's own data protocols: what `rankHybrid()` (`scoring.js`) returns,
+ * Search's own data protocols: what `rankHybrid()` (`scoring.ts`) returns,
  * what `useSearch.js` stores as `result`, and the match ranges/explanation
  * rows built from either.
  *
  * Type-only, imported through JSDoc (`@type {import('./searchResult.ts').X}`)
- * the same way `manifest.ts` is - see AGENTS.md's TypeScript bullet. `scoring.js`
+ * the same way `manifest.ts` is - see AGENTS.md's TypeScript bullet. `scoring.ts`
  * is one of the deliberately-loose files the migration plan defers (heavy
  * duck-typing, computed almost entirely from arrays keyed by rank rather than
  * a fixed record shape), so this file types the shapes that cross its
@@ -21,7 +21,7 @@ export interface StorySequenceEntry {
 /**
  * A room's story, tokenised and lemmatised once at build time - both as an
  * ORDERED sequence (what a contiguous-run measurement needs, see
- * `longestMatchRun`/`storyPhraseRun` in `scoring.js`) and as a `Set` of the
+ * `longestMatchRun`/`storyPhraseRun` in `scoring.ts`) and as a `Set` of the
  * same lemmas for `storyScore`'s O(1) membership test. The set is derivable
  * from the sequence; kept alongside rather than rebuilt per query.
  */
@@ -39,7 +39,7 @@ export interface SearchIndexEntry {
 
 /**
  * One word, or one quoted phrase treated as a single unit - see `parseQuery`
- * in `scoring.js` and docs/search_rules.md, "The parsed query".
+ * in `scoring.ts` and docs/search_rules.md, "The parsed query".
  */
 export interface Term {
   /** as typed, one word or the contents of one "quoted phrase" */
@@ -93,7 +93,7 @@ export interface ScoreBreakdown {
 
 /**
  * One signal's own ranking over the corpus, independent of the composite
- * `order` - `rankAxis` in `scoring.js`. Both parallel to `order` (by rank, not
+ * `order` - `rankAxis` in `scoring.ts`. Both parallel to `order` (by rank, not
  * id), same as `ScoreBreakdown`. `ranks` is 1-based competition ranking
  * (`1, 2, 2, 4`, not `1, 2, 2, 3`); `ties` is how many OTHER rooms share it -
  * together, "this room ranks #4 by tag, tied with 2 others"
