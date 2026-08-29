@@ -21,7 +21,7 @@
  * the middle of it.
  */
 import { useEffect, useRef } from 'react';
-import { RoomDetails } from './RoomDetails.jsx';
+import { RoomDetails } from './RoomDetails.tsx';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';

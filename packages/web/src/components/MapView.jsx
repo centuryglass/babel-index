@@ -22,7 +22,7 @@
  * again. Keeping it mounted also keeps the tile cache and the pyramid's LRU
  * warm. See `docs/catalog-plan.md` §2.
  */
-import { RoomDetails } from './RoomDetails.jsx';
+import { RoomDetails } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import { describeBook, BOOK_RECTS } from '../lib/center.js';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
