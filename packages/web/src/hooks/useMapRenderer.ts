@@ -67,8 +67,8 @@ interface SlideStats {
 type RoomRenderer = ReturnType<typeof createRenderer>;
 type SlideRenderer = ReturnType<typeof createSlideRenderer>;
 
-/** The live rearrangement, as `useRearrangement.js` builds it into the `anim` ref. */
-interface RunningAnim {
+/** The live rearrangement, as `useRearrangement.ts` builds it into the `anim` ref. */
+export interface RunningAnim {
   /** the arrangement being flown away from, held on screen for the flight home */
   before?: { layout: MapLayout; order: number[] };
   board?: Board;

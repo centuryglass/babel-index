@@ -18,27 +18,36 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
-import { CELL_ASPECT, pxPerCell } from '../lib/camera.ts';
+import { CELL_ASPECT, pxPerCell, type Camera } from '../lib/camera.ts';
 import { createSlideshow } from '../lib/slide.js';
 import { prefersReducedMotion } from './useMapCamera.ts';
+import type { MapLayout } from '../../../map/ordering.ts';
+import type { Config } from '../../../config/config.ts';
+import type { RunningAnim } from './useMapRenderer.ts';
 
-/**
- * @param {object} opts
- * @param {object} opts.layout            the current `createLayout` result
- * @param {number[]} opts.order           room ids by rank
- * @param {'map'|'catalog'} opts.mode
- * @param {{current: HTMLCanvasElement|null}} opts.canvasRef
- * @param {{current: HTMLFormElement|null}} opts.searchFormRef
- * @param {{current: object}} opts.cam    the live camera ref
- * @param {Function} opts.flyTo
- * @param {Function} opts.requestDraw
- * @param {object} opts.config            the whole config, not one section
- * @param {{current: object|null}} opts.anim
- * @param {Function} opts.announce
- *   `(note) => void` - what to say once this change has landed, in whatever
- *   voice the current reading uses. Map or catalog is the caller's call to
- *   make, not this hook's; it only ever hands over the note.
- */
+interface UseRearrangementOpts {
+  /** the current `createLayout` result */
+  layout: MapLayout;
+  /** room ids by rank */
+  order: number[];
+  mode: 'map' | 'catalog';
+  canvasRef: { current: HTMLCanvasElement | null };
+  searchFormRef: { current: HTMLFormElement | null };
+  /** the live camera ref */
+  cam: { current: Camera };
+  flyTo: (x: number, y: number, zoom?: number) => Promise<boolean>;
+  requestDraw: () => void;
+  /** the whole config, not one section */
+  config: Config;
+  anim: { current: RunningAnim | null };
+  /**
+   * `(note) => void` - what to say once this change has landed, in whatever
+   * voice the current reading uses. Map or catalog is the caller's call to
+   * make, not this hook's; it only ever hands over the note.
+   */
+  announce: (note: string) => void;
+}
+
 export function useRearrangement({
   layout,
   order,
@@ -51,7 +60,7 @@ export function useRearrangement({
   config,
   anim,
   announce,
-}) {
+}: UseRearrangementOpts) {
   // Set by `requestAnimation` and consumed by the effect below. A slider drag
   // changes the layout too, and must not animate - so a caller has to ask.
   const animateNext = useRef(false);
@@ -59,7 +68,7 @@ export function useRearrangement({
   // alongside `animateNext` because they are one act, not two: see the file
   // comment above.
   const pendingNote = useRef('');
-  const arrangement = useRef(null);
+  const arrangement = useRef<{ layout: MapLayout; order: number[] } | null>(null);
 
   const requestAnimation = useCallback((note = '') => {
     animateNext.current = true;
@@ -76,7 +85,10 @@ export function useRearrangement({
    * animated legally, which is the caller's cue to let it happen at once.
    */
   const startRearrangement = useCallback(
-    async (before, after) => {
+    async (
+      before: { layout: MapLayout; order: number[] },
+      after: { layout: MapLayout; order: number[] }
+    ): Promise<boolean> => {
       const canvas = canvasRef.current;
       if (!canvas) return false;
 
@@ -155,7 +167,7 @@ export function useRearrangement({
       const tick = () => {
         const running = anim.current;
         if (!running?.show) return; // interrupted
-        const { done, motions } = running.show.advanceTo(performance.now() - running.t0);
+        const { done, motions } = running.show.advanceTo(performance.now() - running.t0!);
         running.motions = motions;
         if (done) {
           anim.current = null;

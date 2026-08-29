@@ -151,12 +151,14 @@ their module when it converts and aren't listed separately.
 Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
 already exist as types to write these against; `useCorpus.js`, `useSearch.js`,
 `useModeTransition.js`, `useCenterShelf.js`, `useMapCamera.js`,
-`useMapCursor.js` and `useMapRenderer.js` already converted -
-`useMapRenderer.ts` names `RoomRenderer`/`SlideRenderer` and their draw-opts/
-stats shapes locally rather than importing types from `render.js`/`slide.js`,
-which stay untyped; same for the `RunningAnim` shape `useRearrangement.js`
-still builds into the `anim` ref):
- - `packages/web/src/hooks/useRearrangement.js`
+`useMapCursor.js`, `useMapRenderer.js` and `useRearrangement.js` already
+converted - `useMapRenderer.ts` names `RoomRenderer`/`SlideRenderer` and their
+draw-opts/stats shapes locally rather than importing types from
+`render.js`/`slide.js`, which stay untyped; `RunningAnim` (the shape
+`useRearrangement.ts` builds into the `anim` ref) is exported from
+`useMapRenderer.ts` instead of restated, since that hook already named it and
+both read/write the same ref). None left in this bucket - the rest are the
+deliberately-loose files below.
 
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
 worth writing rather than an `any`/`object` that just papers over it;
