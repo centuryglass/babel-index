@@ -94,7 +94,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
-  belong to the same subsystem (`useMapCamera.js` / `lib/camera.js`,
+  belong to the same subsystem (`useMapCamera.js` / `lib/camera.ts`,
   `useRearrangement.js` / `lib/slide.js`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
     * `src/main.jsx`: React entry point - loads the corpus, derives the layout
@@ -136,7 +136,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.js`: Geometry and content management for the center tile interface
-    * `camera.js`: Pure-math mapping functions for the map camera
+    * `camera.ts`: Pure-math mapping functions for the map camera
     * `render.js`: Render a single map frame
     * `slide.js`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
@@ -263,7 +263,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   Good early candidates: files with little duck-typing and a fixed shape
   (`port.ts` was one - one function, two primitive params). Defer files whose
   data is *deliberately* loose - `scoring.js`'s duck-typed ranking arrays,
-  `center.js`'s runtime-computed `RUNS`, `slide.js`/`camera.js`'s animation
+  `center.js`'s runtime-computed `RUNS`, `slide.js`'s animation
   state shapes - until there's a real type worth writing that doesn't just
   paper over the looseness with `any` or a lying assertion. A strict type
   that fights the code's actual tolerance is worse than an honest
@@ -329,7 +329,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 - **The world's base unit is the cell, and a cell is not square.** World
   coordinates are in cells; `zoom` is pixels per cell *width* and `pxPerCell()`
-  in `camera.js` is the only place height is derived from it. Never write `zoom`
+  in `camera.ts` is the only place height is derived from it. Never write `zoom`
   for both axes. Cameras carry an optional `aspect`, so anything constructing one
   must spread the old camera rather than rebuilding `{x, y, zoom}`, or the shape
   is lost mid-gesture.
@@ -438,7 +438,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   first. Titles read top-to-bottom, as printed spines do.
 - **Two opening views, and they are not interchangeable.** The page-load view is
   DERIVED, not configured: `main.jsx` computes it once at mount with `fitZoom`
-  (camera.js), framing the center room's book-bounding box (`GEOMETRY.opening`,
+  (camera.ts), framing the center room's book-bounding box (`GEOMETRY.opening`,
   exported as `CENTRE_SHELF_RECT` from `center.js`) on the display so the spines are legible,
   centered on the shelf and capped at the tile's NATIVE width so a page never
   loads upscaled. It is passed to `useMapCamera` as `opening` — do not restate it
@@ -581,7 +581,7 @@ code, not a standing invariant.
 - **Consuming files state no fallback defaults** — `slide.js`/`useMapCamera.js`
   read durations from config with nothing restated locally, so there's no
   second copy to drift.
-- **Zoom config narrows, never widens.** `ZOOM_LIMITS` in `camera.js` is the
+- **Zoom config narrows, never widens.** `ZOOM_LIMITS` in `camera.ts` is the
   only statement of the hard range; config may tighten it but a narrowing that
   leaves the finest rung unreachable is silently fine (just unused code).
 - **The configured range rides on the camera as `limits`**, same as `aspect` —

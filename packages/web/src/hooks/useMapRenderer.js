@@ -23,7 +23,7 @@
  *     interrupt is not a map.
  */
 import { useEffect } from 'react';
-import { cursorCell } from '../lib/camera.js';
+import { cursorCell } from '../lib/camera.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 
 /**

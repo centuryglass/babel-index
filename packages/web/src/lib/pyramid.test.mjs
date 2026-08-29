@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MIN_ZOOM, MAX_ZOOM } from './camera.js';
+import { MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import {
   PYRAMID,
   BASE_TILE,

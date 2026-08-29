@@ -36,7 +36,7 @@
  * be exercised at any limits without a disk or a server. `load.ts` is the part
  * that reads a file.
  */
-import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.js';
+import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
 import { CERTAINTY_FLOOR } from '../map/ordering.ts';
 import { CLIP_CERTAINTY } from '../map/scoring.js';
 
