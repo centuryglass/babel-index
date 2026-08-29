@@ -54,6 +54,49 @@
  * the demo server is started with `--remote`, so a bucket holding a corpus
  * needs no listing API: the one local scan that ran here is the only place
  * "what files make up this corpus" gets decided.
+ *
+ * ### Cache purge
+ *
+ * `infra/variables.tf`'s `cache_edge_ttl_seconds` caches every object under
+ * `assets_hostname` at the edge (`infra/abuse-protection.tf`'s `cache_assets`
+ * ruleset) - that includes `manifest.json` itself, not just images. Replacing
+ * a file under an existing key (the sheet regeneration this was written for:
+ * old per-file tiles deleted, new sheets uploaded under different names, but
+ * `manifest.json` overwritten in place) leaves the edge serving the stale
+ * manifest and any stale object for up to that TTL. This tool purges the keys
+ * it just wrote, plus the fixed set of keys `useCorpus.js` reads with
+ * `fetch()` (`crossOriginFetchedKeys` in lib.ts) regardless of whether their
+ * content changed - a stale cached *response* missing CORS headers (from
+ * before `cloudflare_r2_bucket_cors` existed, or from being cached by a
+ * no-Origin request) is a different failure than stale bytes, and content-hash
+ * diffing only guards against the latter. All of it goes out via Cloudflare's
+ * zone purge API, entirely optional and gated on three env vars:
+ *
+ *   CLOUDFLARE_API_TOKEN            needs Zone.Cache Purge on the zone below
+ *   CLOUDFLARE_ZONE_ID              the zone fronting the bucket (see infra/)
+ *   CLOUDFLARE_ASSETS_HOSTNAME      matches terraform's assets_hostname
+ *
+ * All three unset (the common case for a bucket with `enable_zone_protections
+ * = false`, or a purely local demo) skips the purge with a note instead of
+ * failing - there is no zone to purge against. All three set but the request
+ * fails throws, because a purge that silently didn't happen is the exact
+ * "why is it still stale" confusion this exists to prevent.
+ *
+ * Cloudflare's per-file purge takes at most 30 URLs per call, so a full
+ * corpus re-upload (this run's actual trigger) can mean hundreds of calls;
+ * past `PURGE_ALL_THRESHOLD` keys, one `purge_everything` call replaces all
+ * of them - cheaper for Cloudflare and for us, and safe because the whole
+ * point of a run past that size is that most of the corpus changed anyway.
+ *
+ * A `success: true` response here is not a guarantee - Cloudflare has been
+ * observed accepting a by-URL purge for a specific object and simply not
+ * evicting it, confirmed by comparing a normal request against one with a
+ * cache-busting query string (which reaches the origin directly and proved
+ * the object was already correct there). If a page is still stale after this
+ * prints `cache purged: N key(s)`, that's a real possibility, not proof this
+ * script is broken - see tools/upload/README.md's Cache purge section for
+ * how to tell the difference and the manual fallback (a dashboard purge, or
+ * a `purge_everything` call) that has actually cleared it in practice.
  */
 import { readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
@@ -62,10 +105,12 @@ import { scanDirectory } from '../../packages/server/scan.ts';
 import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.ts';
 import { createLimiter } from '../../packages/server/search-cache.ts';
 import { contentHash } from '../../packages/pipeline/mips.ts';
-import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.ts';
+import { buildUploadList, crossOriginFetchedKeys, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const MANIFEST_NAME = 'upload-manifest.json';
 const CONCURRENCY = 16;
+const PURGE_BATCH = 30; // Cloudflare's max files per purge_cache call
+const PURGE_ALL_THRESHOLD = 1000; // beyond this, one purge_everything beats hundreds of batched calls
 
 type Args = Record<string, string | boolean>;
 
@@ -137,6 +182,50 @@ async function listExistingKeys(client: S3Client, bucket: string, prefix: string
     listKeys(client, bucket, 'shared/'),
   ]);
   return new Set([...corpus, ...shared]);
+}
+
+interface CloudflarePurgeConfig {
+  apiToken: string;
+  zoneId: string;
+  hostname: string;
+}
+
+/** Reads the purge env vars; null (not thrown) when they're unset - see the docblock above. */
+function cloudflarePurgeConfig(): CloudflarePurgeConfig | null {
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  const zoneId = process.env.CLOUDFLARE_ZONE_ID;
+  const hostname = process.env.CLOUDFLARE_ASSETS_HOSTNAME;
+  if (!apiToken || !zoneId || !hostname) return null;
+  return { apiToken, zoneId, hostname };
+}
+
+async function callPurgeApi(cfg: CloudflarePurgeConfig, body: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`https://api.cloudflare.com/client/v4/zones/${cfg.zoneId}/purge_cache`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${cfg.apiToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const parsed = await res.json().catch(() => null);
+  if (!res.ok || !parsed?.success)
+    throw new Error(`Cloudflare cache purge failed (${res.status}): ${JSON.stringify(parsed?.errors ?? parsed)}`);
+}
+
+/**
+ * Purge exactly the keys this run wrote, or the whole zone past
+ * `PURGE_ALL_THRESHOLD` - see the docblock above for why. Keys are turned into
+ * full urls under `cfg.hostname`, matching how `packages/server/remote.ts`
+ * addresses this bucket.
+ */
+async function purgeCache(cfg: CloudflarePurgeConfig, keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  if (keys.length > PURGE_ALL_THRESHOLD) {
+    await callPurgeApi(cfg, { purge_everything: true });
+    console.log(`cache purged: purge_everything (${keys.length} keys exceeded the ${PURGE_ALL_THRESHOLD}-key batch threshold)`);
+    return;
+  }
+  const urls = keys.map((key) => `https://${cfg.hostname}/${key}`);
+  for (let i = 0; i < urls.length; i += PURGE_BATCH) await callPurgeApi(cfg, { files: urls.slice(i, i + PURGE_BATCH) });
+  console.log(`cache purged: ${keys.length} key(s)`);
 }
 
 async function putFile(client: S3Client, bucket: string, key: string, path: string): Promise<void> {
@@ -245,6 +334,26 @@ async function main() {
     console.log(`public manifest updated: ${prefix}/${REMOTE_MANIFEST_NAME}`);
   } else {
     console.log(`  would update public manifest: ${prefix}/${REMOTE_MANIFEST_NAME}`);
+  }
+
+  const purgeCfg = cloudflarePurgeConfig();
+  const purgeKeys = [
+    ...new Set([
+      ...toUpload.map(({ key }) => key),
+      `${prefix}/${REMOTE_MANIFEST_NAME}`,
+      ...crossOriginFetchedKeys(manifest, prefix),
+    ]),
+  ];
+  if (dryRun) {
+    console.log(
+      purgeCfg
+        ? `  would purge ${purgeKeys.length} key(s) from Cloudflare's cache`
+        : '  would purge Cloudflare cache (CLOUDFLARE_API_TOKEN/ZONE_ID/ASSETS_HOSTNAME not set - skipping)'
+    );
+  } else if (purgeCfg) {
+    await purgeCache(purgeCfg, purgeKeys);
+  } else {
+    console.log('cache not purged: set CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID and CLOUDFLARE_ASSETS_HOSTNAME to enable it');
   }
 }
 

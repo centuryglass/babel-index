@@ -113,6 +113,27 @@ export function diffAgainstManifest(
   return { toUpload, unchanged };
 }
 
+/**
+ * The keys `packages/web/src/hooks/useCorpus.js` reads with `fetch()` rather
+ * than an `<img>` tag - the ones a stale cached *response* (missing CORS
+ * headers, not stale bytes) silently breaks in `--remote` mode. Content-hash
+ * diffing correctly skips re-uploading these when their bytes haven't
+ * changed, but that's a different question from whether the edge's cached
+ * response for them is still the one CORS headers were configured against -
+ * so the upload tool purges these every run regardless of `toUpload`, same
+ * list `buildUploadList` guards with the same manifest fields.
+ */
+export function crossOriginFetchedKeys(manifest: Manifest, prefix: string): string[] {
+  const keys: string[] = [];
+  if (manifest.metadata) keys.push(`${prefix}/metadata.json`);
+  if (manifest.tagLinks) keys.push(`${prefix}/tagLinks.json`);
+  if (manifest.embeddings) {
+    keys.push(`${prefix}/embeddings.bin`);
+    keys.push(`${prefix}/embeddings.json`);
+  }
+  return keys;
+}
+
 /** Guess a Content-Type from a key's extension, for the objects this tool writes. */
 export function guessContentType(key: string): string {
   if (key.endsWith('.json')) return 'application/json';

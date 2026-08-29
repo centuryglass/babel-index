@@ -15,3 +15,5 @@ reference/blender/assets
 
 # Local tuning overlay (packages/config). Optional and never committed.
 config.json
+
+*.env

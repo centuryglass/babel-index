@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUploadList, diffAgainstManifest, guessContentType } from './lib.ts';
+import { buildUploadList, crossOriginFetchedKeys, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const join = (...parts) => parts.join('/');
 
@@ -120,6 +120,21 @@ test('diffAgainstManifest re-uploads a key whose hash matches but is missing fro
     ['k/a']
   );
   assert.equal(unchanged.length, 0);
+});
+
+test('crossOriginFetchedKeys lists the fetch()-read sidecars, omitting what the manifest lacks', () => {
+  assert.deepEqual(crossOriginFetchedKeys(manifest(), 'sample').sort(), [
+    'sample/embeddings.bin',
+    'sample/embeddings.json',
+    'sample/metadata.json',
+    'sample/tagLinks.json',
+  ]);
+
+  const m = manifest();
+  m.metadata = null;
+  m.tagLinks = null;
+  m.embeddings = null;
+  assert.deepEqual(crossOriginFetchedKeys(m, 'sample'), []);
 });
 
 test('guessContentType covers every extension this tool uploads', () => {
