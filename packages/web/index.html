@@ -285,19 +285,15 @@
       }
       .chip mark { background: rgba(200,169,95,0.45); box-shadow: none; }
 
-      /* Why a room ranked where it did - see RoomDetails' ScoreBreakdown. */
-      .score { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--edge); }
-      .score table { width: 100%; border-collapse: collapse; font-size: 11px; }
-      .score caption {
-        text-align: left; color: var(--dim); font-size: 10px;
-        letter-spacing: 0.06em; text-transform: uppercase; padding-bottom: 5px;
-      }
-      .score th { text-align: left; font-weight: 400; color: var(--dim); padding: 2px 0; }
-      .score td { text-align: right; font-variant-numeric: tabular-nums; padding: 2px 0; }
-      .score .num { color: var(--ink); }
-      .score .raw { color: var(--dim); width: 4.5em; }
-      /* The CLIP row's certainty phrase is longer than the raw-cosine column fits - let it wrap. */
-      .score .raw:has(.clip-certainty) { width: auto; white-space: normal; }
+      /*
+        Why a room ranked where it did - see RoomDetails' ScoreBreakdown. One
+        short line per axis that found something, not a table: the composite
+        line's tooltip (tap-and-hold on mobile) carries the per-signal
+        percentage breakdown, so nothing here restates it as a second row.
+      */
+      .score { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--edge); font-size: 11px; color: var(--dim); }
+      .score p { margin: 2px 0; font-variant-numeric: tabular-nums; }
+      .score .score-composite { color: var(--ink); font-weight: 500; }
       /*
         docs/search_rules.md "Reporting": a negative reading is evidence of a
         mismatch, not a bare minus sign, so it gets a visually distinct style -
@@ -305,15 +301,6 @@
       */
       .clip-certainty { color: var(--dim); }
       .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
-      .score .total th, .score .total td {
-        border-top: 1px solid var(--edge); padding-top: 4px; color: var(--ink);
-      }
-      /*
-        docs/search_rules.md "Reporting": each row's independent axis rank
-        ("this room ranks #4 by tag, tied with 2 others"), separate from the
-        row's own weighted contribution to the composite score above it.
-      */
-      .axis-rank { font-size: 9px; opacity: 0.7; }
       /*
         Set apart from the sum above it on purpose: every row in that sum is
         relative to this query's corpus, and this one is measured against
@@ -550,21 +537,18 @@
         margin-bottom: 5px; max-height: 48px; overflow: hidden; align-content: flex-start;
       }
       /*
-        The score, as one line rather than a table. Never wraps and scrolls
-        sideways in its own box if the query found more than fits, so every row
-        is exactly as tall as every other whatever each room matched on - which
-        is what the sliding window's spacers are computed from.
+        The score, as one line: the composite rank and its certainty, nothing
+        else - the per-axis detail (tag/story/clip) lives entirely in this
+        line's tooltip (tap-and-hold on mobile), same as `.score`'s composite
+        line does. Never wraps, so every row is exactly as tall as every
+        other whatever each room matched on - what the sliding window's
+        spacers are computed from.
       */
       .score-strip {
-        display: flex; gap: 12px; align-items: center; margin: 6px 0 0; padding: 6px 0 0;
-        list-style: none; white-space: nowrap; overflow-x: auto;
-        border-top: 1px solid var(--edge); font-size: 10px; color: var(--dim);
+        margin: 6px 0 0; padding: 6px 0 0; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; border-top: 1px solid var(--edge);
+        font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums;
       }
-      .score-strip li { flex: 0 0 auto; }
-      .score-strip b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
-      .score-strip span { color: #8a7c66; font-variant-numeric: tabular-nums; }
-      .score-strip .total b { color: #c8a95f; }
-      .score-strip .sure { font-style: italic; }
       .score-strip .clip-certainty { color: #8a7c66; }
       .score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
       .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }

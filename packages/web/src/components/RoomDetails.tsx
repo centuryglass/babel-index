@@ -20,10 +20,10 @@
  * One order, so a reader who meets a room both ways meets it the same way.
  */
 import type { ReactNode } from 'react';
-import { explainScore } from '../../../map/scoring.js';
+import { explainRanking } from '../../../map/scoring.js';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
-import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { SearchResult, MatchRange, RankingExplanation } from '../../../map/searchResult.ts';
 import type { Config } from '../../../config/config.ts';
 
 /**
@@ -50,55 +50,65 @@ export function Highlight({ text, ranges }: { text: string; ranges?: MatchRange[
 }
 
 /**
- * CLIP's own signed certainty, as the compact phrase docs/search_rules.md
- * "Reporting" describes - a distinct style for the negative reading so it is
- * never mistaken for a positive, if weaker, match.
+ * A signed certainty as the compact phrase docs/search_rules.md "Reporting"
+ * describes - a distinct style for the negative reading so it is never
+ * mistaken for a positive, if weaker, match.
  */
-function ClipCertainty({ percent }: { percent: number }) {
+function signedCertaintyText(percent: number, subject: string): { mismatch: boolean; text: string } {
   const mismatch = percent < 0;
+  const magnitude = Math.abs(percent).toFixed(2);
+  return { mismatch, text: `${magnitude}% certain ${subject} ${mismatch ? 'does not match' : 'matches'}` };
+}
+
+/** "#4 by tag, 2 matched, 1 partially matched, tied with 3 others" - `null` when nothing on this axis matched. */
+function tagLine(tag: RankingExplanation['tag']): string | null {
+  if (!tag) return null;
+  const parts: string[] = [];
+  if (tag.exact > 0) parts.push(`${tag.exact} matched`);
+  if (tag.partial > 0) parts.push(`${tag.partial} partially matched`);
+  const tie = tag.ties > 0 ? `, tied with ${tag.ties} others` : '';
+  return `#${tag.rank} by tag, ${parts.join(', ')}${tie}`;
+}
+
+/** "#2 by story, match length 41, tied with 1 other" - `null` when nothing matched the story. */
+function storyLine(story: RankingExplanation['story']): string | null {
+  if (!story) return null;
+  const tie = story.ties > 0 ? `, tied with ${story.ties} others` : '';
+  return `#${story.rank} by story, match length ${story.length}${tie}`;
+}
+
+/** "#1 by image content, 82.30% certain image matches" - `null` when the corpus has no embeddings at all. */
+function clipLine(clip: RankingExplanation['clip']): string | null {
+  if (!clip) return null;
+  return `#${clip.rank} by image content, ${signedCertaintyText(clip.percent, 'image').text}`;
+}
+
+/**
+ * The clip line, styled: the same text `clipLine` renders as plain text for
+ * the strip's tooltip, but with the certainty phrase set apart (a different
+ * color, italic when it reads as a mismatch) so it is never mistaken for a
+ * positive, if weaker, match. The raw cosine moves to ITS OWN tooltip here -
+ * "reasonably certain" already reads off the calibrated curve, and the raw
+ * number is for whoever wants to check that calibration, not the main read.
+ */
+function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
+  const { mismatch, text } = signedCertaintyText(clip.percent, 'image');
   return (
-    <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>
-      {' '}
-      {Math.abs(percent).toFixed(2)}% certain the image content {mismatch ? 'does not match' : 'matches'}
-    </span>
+    <p className="score-line" title={`${clip.cosine.toFixed(3)} cosine between CLIP text and image vectors`}>
+      #{clip.rank} by image content, <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>{text}</span>
+    </p>
   );
 }
 
-/** Which independent axis (`result.ranks`/`ties`) each `explainScore` row belongs to. */
-const AXIS_BY_ROW_KEY: Record<string, 'tag' | 'story' | 'clip'> = {
-  tagExact: 'tag',
-  tagPartial: 'tag',
-  story: 'story',
-  storyLong: 'story',
-  clip: 'clip',
-};
-
 /**
- * "this room ranks #4 by tag, tied with 2 others" (docs/search_rules.md
- * "Reporting") - `result.ranks`/`ties` read independently of the row's own
- * weighted contribution, which is why this takes the axis rather than the row.
- */
-function axisRankNote(axis: 'tag' | 'story' | 'clip', rank: number, result: SearchResult | null): string | null {
-  const r = result?.ranks?.[axis]?.[rank];
-  const t = result?.ties?.[axis]?.[rank];
-  if (r == null) return null;
-  return t > 0 ? `#${r} by ${axis}, tied with ${t} others` : `#${r} by ${axis}`;
-}
-
-/**
- * Why this room ranked where it did.
- *
- * Shown only under a search, and only for a room the search actually ranked.
- * The CLIP row prints its raw cosine beside the relative score, and certainty
- * gets its own line, because `breakdown.clip` is min-maxed across the corpus
- * for this query - some room scores 1.00 for `cghjj` too, and a bare 1.00 would
- * tell a reader the library was certain about a wall it has nothing to say
- * about. See `explainScore`.
- *
- * Each row also carries its own axis's independent rank the first time that
- * axis appears (tag rows share one rank, `tagExact`/`tagPartial` are the same
- * axis; likewise `story`/`storyLong`) - a second identical "#4 by tag" on the
- * partial-tag row would just repeat the exact-tag row's, not add information.
+ * Why this room ranked where it did: one composite line - "#4 of 2048, 73%
+ * match certainty" - whose tooltip (tap-and-hold on mobile) breaks that
+ * percentage into each signal's SHARE of the total score, greatest first,
+ * omitting anything that contributed nothing (docs/search_rules.md
+ * "Reporting"). Below it, one line per axis that actually found something -
+ * tag, story, and (whenever the corpus has embeddings at all) CLIP - each
+ * carrying that axis's OWN independent rank/tie count (`result.ranks`/
+ * `ties`), not the composite's. See `explainRanking`.
  */
 function ScoreBreakdown({
   rank,
@@ -111,87 +121,51 @@ function ScoreBreakdown({
   weights: Config['search']['weights'];
   layout?: 'table' | 'strip';
 }) {
-  if (!result?.breakdown || rank == null || rank < 0) return null;
-  const { rows, total, certainty } = explainScore(rank, {
+  if (!result?.breakdown || !result.ranks || !result.ties || rank == null || rank < 0) return null;
+  const explanation = explainRanking(rank, {
     breakdown: result.breakdown,
     certainty: result.certainty,
+    ranks: result.ranks,
+    ties: result.ties,
     weights,
+    total: result.order.length,
   });
-  if (!rows.length) return null;
+  if (!explanation) return null;
 
-  const shownAxes = new Set<string>();
-  const rowsWithRank = rows.map((r) => {
-    const axis = AXIS_BY_ROW_KEY[r.key];
-    if (!axis || shownAxes.has(axis)) return { ...r, axisNote: null as string | null };
-    shownAxes.add(axis);
-    return { ...r, axisNote: axisRankNote(axis, rank, result) };
-  });
+  const { contributions, tag, story, clip } = explanation;
+  const compositeTooltip = contributions.map((c) => `${c.percent}% by ${c.label}`).join(', ');
+  const composite = signedCertaintyText(explanation.percent, 'this');
+  const compositeText = composite.mismatch
+    ? `#${explanation.rank} of ${explanation.total}, ${composite.text}.`
+    : `#${explanation.rank} of ${explanation.total}, ${Math.abs(explanation.percent).toFixed(2)}% match certainty.`;
 
-  // Two presentations of ONE computation. A card has the room to itself and can
-  // afford a table; a catalog row is one line in a list of hundreds, and the
-  // table there was 108px tall in a 202px row and clipped its own last line.
-  // The numbers still come from a single `explainScore`, so the two layouts can
-  // disagree about shape and never about the score.
-  //
-  // The strip is one line high whatever the query found: it never wraps, and
-  // scrolls sideways in its own box if it has to, so every row in the catalog
-  // stays exactly as tall as every other. That uniformity is what the sliding
-  // window's spacer arithmetic rests on.
+  const tagText = tagLine(tag);
+  const storyText = storyLine(story);
+  const clipText = clipLine(clip);
+
+  // Two presentations of ONE computation (`explainRanking`). A card has the
+  // room to itself and can show every line; a catalog row is one line in a
+  // list of hundreds and must stay exactly as tall as every other, so the
+  // strip shows only the composite line and folds everything else - the
+  // contribution breakdown AND the tag/story/clip lines - into its tooltip
+  // rather than wrapping or scrolling a second line into existence.
   if (layout === 'strip') {
+    const tooltip = [compositeTooltip, tagText, storyText, clipText].filter(Boolean).join('\n');
     return (
-      <ul className="score-strip">
-        {rowsWithRank.map((r) => (
-          <li key={r.key} title={r.note ?? undefined}>
-            {r.label} <b>{r.weighted.toFixed(3)}</b> <span>{r.raw.toFixed(2)}</span>
-            {r.signedPercent !== undefined && <ClipCertainty percent={r.signedPercent} />}
-            {r.axisNote && <span className="axis-rank"> · {r.axisNote}</span>}
-          </li>
-        ))}
-        <li className="total">
-          total <b>{total.toFixed(3)}</b>
-        </li>
-        <li className="sure">
-          certainty <b>{certainty.toFixed(2)}</b>
-        </li>
-      </ul>
+      <p className="score-strip" title={tooltip}>
+        {compositeText}
+      </p>
     );
   }
 
   return (
     <div className="score">
-      <table>
-        <caption>why this ranked {rank + 1}</caption>
-        <tbody>
-          {rowsWithRank.map((r) => (
-            <tr key={r.key}>
-              <th scope="row">
-                {r.label}
-                {r.axisNote && <span className="axis-rank"> {r.axisNote}</span>}
-              </th>
-              <td className="num">{r.weighted.toFixed(3)}</td>
-              <td className="raw" title={r.note ?? undefined}>
-                {r.raw.toFixed(2)}
-                {r.signedPercent !== undefined && <ClipCertainty percent={r.signedPercent} />}
-              </td>
-            </tr>
-          ))}
-          <tr className="total">
-            <th scope="row">total</th>
-            <td className="num">{total.toFixed(3)}</td>
-            <td className="raw" />
-          </tr>
-          <tr className="sure">
-            {/*
-              Not part of the sum, and set apart so it cannot be read as one of
-              its terms: every row above is relative to this query's corpus,
-              this one is measured against absolute bounds.
-            */}
-            <th scope="row">certainty</th>
-            <td className="num">{certainty.toFixed(2)}</td>
-            <td className="raw">absolute</td>
-          </tr>
-        </tbody>
-      </table>
+      <p className="score-composite" title={compositeTooltip}>
+        {compositeText}
+      </p>
+      {tagText && <p className="score-line">{tagText}</p>}
+      {storyText && <p className="score-line">{storyText}</p>}
+      {clip && <ClipLine clip={clip} />}
     </div>
   );
 }
