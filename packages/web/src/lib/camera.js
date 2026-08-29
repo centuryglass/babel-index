@@ -22,7 +22,7 @@
  * screen/world round-trip, and zoom keeping the point under the cursor fixed -
  * are exact invariants worth asserting.
  */
-import { BASE_TILE } from './pyramid.js';
+import { BASE_TILE } from './pyramid.ts';
 
 /**
  * Cell height as a multiple of cell width. 0.75 at the current 4:3 tile.

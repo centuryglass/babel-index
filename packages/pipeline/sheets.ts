@@ -1,7 +1,7 @@
 /**
  * Packing coarse pyramid levels into fixed-grid tilesheets.
  *
- * Levels 2-4 (`SHEETS.fromLevel` in packages/web/src/lib/pyramid.js) are the
+ * Levels 2-4 (`SHEETS.fromLevel` in packages/web/src/lib/pyramid.ts) are the
  * ones a zoomed-out scroll session requests the most of at once - packing
  * many rooms into one grid image cuts the request count Cloudflare's WAF and
  * R2's Class B billing see, without changing what gets served or moving any
@@ -27,7 +27,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { SHEETS } from '../web/src/lib/pyramid.js';
+import { SHEETS } from '../web/src/lib/pyramid.ts';
 import { contentHash } from './mips.mjs';
 import { sheetPlan, sheetFileName, type Size, type SheetConfig } from './layout.ts';
 

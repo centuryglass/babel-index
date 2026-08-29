@@ -19,7 +19,7 @@
  * pipeline still reads as a valid level 0, and running in place costs no
  * duplicated bytes.
  */
-import { LEVELS, SHEETS } from '../web/src/lib/pyramid.js';
+import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
 
 export interface Size {
   w: number;

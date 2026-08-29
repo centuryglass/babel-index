@@ -24,7 +24,7 @@
  */
 import { useEffect } from 'react';
 import { cursorCell } from '../lib/camera.js';
-import { sizeOf as pyramidSizeOf } from '../lib/pyramid.js';
+import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 
 /**
  * @param {object} opts

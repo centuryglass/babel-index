@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTileCache, CENTER } from './tiles.js';
-import { createPyramid } from './pyramid.js';
+import { createPyramid } from './pyramid.ts';
 
 /**
  * A three-rung ladder with tiny budgets, so eviction is reachable in a test

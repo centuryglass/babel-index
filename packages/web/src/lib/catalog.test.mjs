@@ -15,7 +15,7 @@ import {
   storyLines,
   alphabeticalOrder,
 } from './catalog.ts';
-import { BASE_TILE, LEVELS, sizeOf } from './pyramid.js';
+import { BASE_TILE, LEVELS, sizeOf } from './pyramid.ts';
 
 const order = Array.from({ length: 27 }, (_, i) => 100 + i);
 

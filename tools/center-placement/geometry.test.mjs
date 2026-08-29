@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layout, TILE_ASPECT } from './lib/geometry.ts';
 import { MEASURED, SHELF_COUNT, BOOK_COUNT } from './lib/measured.ts';
-import { BASE_TILE } from '../../packages/web/src/lib/pyramid.js';
+import { BASE_TILE } from '../../packages/web/src/lib/pyramid.ts';
 
 test('measured rects are normalised and inside the tile', () => {
   const all = [MEASURED.opening, MEASURED.searchBox, ...MEASURED.shelves.flatMap((s) => s.books)];
