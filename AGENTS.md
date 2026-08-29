@@ -279,7 +279,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Tests sit next to the code**, using `node:test` + `node:assert/strict`.
   New tests are `*.test.ts` per the TypeScript-by-default rule above; existing
   `*.test.mjs` files are untouched until something else brings a reason to
-  convert them. The `test` script `find`s both extensions under `packages`/`tools`
+  convert them - and converting the module they test to `.ts` is exactly such
+  a reason: convert its paired `*.test.mjs` to `*.test.ts` in the same commit
+  rather than leaving a `.ts` module with a `.mjs` test beside it. The `test`
+  script `find`s both extensions under `packages`/`tools`
   and passes them to `node --test` explicitly: `--test`'s own auto-discovery skips
   `.ts`, and its glob expansion only exists on Node 22+, so on the Node 20 floor a
   bare `'**/*.test.ts'` is taken literally and fails to match. Enumerating the

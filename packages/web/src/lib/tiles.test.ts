@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTileCache, CENTER } from './tiles.ts';
+import { createTileCache, CENTER, type CreateTileCacheOpts, type LoadableImage } from './tiles.ts';
 import { createPyramid } from './pyramid.ts';
+import type { LocateTile } from './rooms.ts';
 
 /**
  * A three-rung ladder with tiny budgets, so eviction is reachable in a test
@@ -21,9 +22,9 @@ const LADDER = createPyramid({
  * request in flight and check that the cache does not drop it.
  */
 function fakeImages() {
-  const made = [];
-  const createImage = () => {
-    const img = { src: null, onload: null, onerror: null };
+  const made: LoadableImage[] = [];
+  const createImage = (): LoadableImage => {
+    const img: LoadableImage = { src: '', onload: null, onerror: null };
     made.push(img);
     return img;
   };
@@ -32,34 +33,40 @@ function fakeImages() {
     made,
     urls: () => made.map((i) => i.src),
     settleAll: () => made.forEach((i) => i.onload?.()),
-    settle: (url) => made.filter((i) => i.src === url).forEach((i) => i.onload?.()),
-    fail: (url) => made.filter((i) => i.src === url).forEach((i) => i.onerror?.()),
-    count: (url) => made.filter((i) => i.src === url).length,
+    settle: (url: string) => made.filter((i) => i.src === url).forEach((i) => i.onload?.()),
+    fail: (url: string) => made.filter((i) => i.src === url).forEach((i) => i.onerror?.()),
+    count: (url: string) => made.filter((i) => i.src === url).length,
   };
 }
 
 /** Every level of every room exists as its own per-file tile, unless `only` says otherwise. */
-const locate = (only = null) => (id, level) =>
+const locate = (only: number[] | null = null): LocateTile => (id, level) =>
   only && !only.includes(level) ? null : { url: `/l${level}/${id}.jpg`, rect: null };
 
 /** N rooms per sheet at one level; every other level is per-file (`locate`). */
-const sheetLocate = (level, roomsPerSheet) => (id, lvl) => {
+const sheetLocate = (level: number, roomsPerSheet: number): LocateTile => (id, lvl) => {
   if (lvl !== level) return locate()(id, lvl);
-  const sheetIndex = Math.floor(id / roomsPerSheet);
-  const posInSheet = id % roomsPerSheet;
+  const numId = Number(id);
+  const sheetIndex = Math.floor(numId / roomsPerSheet);
+  const posInSheet = numId % roomsPerSheet;
   return {
     url: `/sheet-l${level}-${sheetIndex}.jpg`,
     rect: { sx: posInSheet * 10, sy: 0, sw: 10, sh: 10 },
   };
 };
 
-const build = (opts = {}) => {
+interface BuildOpts extends Partial<CreateTileCacheOpts> {
+  only?: number[];
+}
+
+const build = (opts: BuildOpts = {}) => {
   const images = fakeImages();
+  const { only, ...rest } = opts;
   const cache = createTileCache({
-    locateTile: locate(opts.only),
+    locateTile: locate(only),
     pyramid: LADDER,
     createImage: images.createImage,
-    ...opts,
+    ...rest,
   });
   return { images, cache };
 };
@@ -130,7 +137,7 @@ test('a missing level falls back to a coarser one, and says which', () => {
   cache.get(5, 2); // load the coarse tile only
   images.settleAll();
 
-  const hit = cache.get(5, 0);
+  const hit = cache.get(5, 0)!;
   assert.equal(hit.level, 2, 'a coarse tile upscales to something soft but correct');
   assert.equal(hit.img.src, '/l2/5.jpg');
   // And the level actually wanted is now on its way, not abandoned.
@@ -141,7 +148,7 @@ test('a finer level is used only when nothing coarser exists', () => {
   const { images, cache } = build();
   cache.get(5, 0);
   images.settleAll();
-  assert.equal(cache.get(5, 2).level, 0, 'memory already spent beats drawing nothing');
+  assert.equal(cache.get(5, 2)!.level, 0, 'memory already spent beats drawing nothing');
 });
 
 test('nothing at all is the only way to report nothing', () => {
@@ -154,7 +161,7 @@ test('a flat corpus resolves every level to level 0', () => {
   const { images, cache } = build({ only: [0] });
   cache.get(5, 0);
   images.settleAll();
-  for (const want of [0, 1, 2]) assert.equal(cache.get(5, want).level, 0, `want ${want}`);
+  for (const want of [0, 1, 2]) assert.equal(cache.get(5, want)!.level, 0, `want ${want}`);
 });
 
 // --- per-level budgets ------------------------------------------------------
@@ -176,7 +183,7 @@ test('levels never evict each other', () => {
 
   assert.ok(cache.sizeOf(0) <= 4 + 10, `level 0 ran away at ${cache.sizeOf(0)}`);
   assert.equal(cache.sizeOf(2), 8, 'the coarse field must survive a zoom-in untouched');
-  for (let id = 0; id < 8; id++) assert.equal(cache.get(id, 2).level, 2, `coarse ${id} was evicted`);
+  for (let id = 0; id < 8; id++) assert.equal(cache.get(id, 2)!.level, 2, `coarse ${id} was evicted`);
 });
 
 test('each level stays within its own budget, evicting least-recently-used first', () => {
@@ -273,7 +280,7 @@ test('a pinned room survives any amount of pressure, at every level', () => {
   images.settleAll();
   for (let id = 40; id < 60; id++) cache.get(id, 2);
 
-  assert.equal(cache.get(CENTER, 2).level, 2, 'the pinned base tile was evicted');
+  assert.equal(cache.get(CENTER, 2)!.level, 2, 'the pinned base tile was evicted');
   assert.equal(images.count(`/l2/${CENTER}.jpg`), 1, 'and it must be fetched exactly once');
 });
 
@@ -344,7 +351,7 @@ test('many rooms in one sheet share exactly one fetch and one decoded image', ()
 
   images.settleAll();
   for (let id = 0; id < 4; id++) {
-    const hit = cache.get(id, 2);
+    const hit = cache.get(id, 2)!;
     assert.equal(hit.img, images.made[0], `room ${id} draws from the shared sheet image`);
   }
   assert.equal(images.made.length, 1, 'settling must not have triggered a second fetch');
@@ -357,8 +364,8 @@ test('get() reports each room’s own rect within the shared sheet', () => {
   cache.get(3, 2);
   images.settleAll();
 
-  assert.deepEqual(cache.get(0, 2).rect, { sx: 0, sy: 0, sw: 10, sh: 10 });
-  assert.deepEqual(cache.get(3, 2).rect, { sx: 30, sy: 0, sw: 10, sh: 10 });
+  assert.deepEqual(cache.get(0, 2)!.rect, { sx: 0, sy: 0, sw: 10, sh: 10 });
+  assert.deepEqual(cache.get(3, 2)!.rect, { sx: 30, sy: 0, sw: 10, sh: 10 });
 });
 
 test('a second sheet is a second fetch, independent of the first', () => {
@@ -466,7 +473,7 @@ test('the coarsest level’s sheets are never evicted, even under heavy budget p
   images.settleAll();
 
   assert.equal(cache.sheetCount(), 3, 'every sheet at the coarsest level stays resident');
-  for (const [id, url] of [[0, '/sheet-l2-0.jpg'], [4, '/sheet-l2-1.jpg'], [8, '/sheet-l2-2.jpg']]) {
+  for (const [id, url] of [[0, '/sheet-l2-0.jpg'], [4, '/sheet-l2-1.jpg'], [8, '/sheet-l2-2.jpg']] as const) {
     assert.notEqual(cache.get(id, 2), null, `room ${id} must still resolve`);
     assert.equal(images.count(url), 1, `${url} must not have been refetched`);
   }
