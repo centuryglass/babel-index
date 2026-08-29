@@ -87,7 +87,15 @@ const ROW_PAD = 22;
  * whichever of the two columns is taller.
  */
 const TEXT_MIN = 132;
-const SCORE_STRIP_PX = 30;
+/**
+ * Reserves room for the score strip's full four lines (composite, tag, story,
+ * clip) on EVERY row while a search is running, whether or not this room's own
+ * ranking found that many - same reasoning as `STORY_RESERVED_PX` reserving
+ * the "read the rest" button on rows that don't show one: a height that
+ * varied with how much a room matched would make the sliding window's spacer
+ * arithmetic wrong for that row.
+ */
+const SCORE_STRIP_PX = 70;
 
 /**
  * What sits above and below the story inside a row, and how tall one line of it
