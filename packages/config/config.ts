@@ -395,8 +395,7 @@ export const DEFAULTS: Defaults = {
        * the no-opinion point (0), `clipHigh` a genuine match's typical
        * confidence (+1), `clipLow` a genuinely-irrelevant query's (-1). The
        * one part of the gradient that is a measurement rather than a
-       * preference - see `CLIP_CERTAINTY` for where these come from, and why
-       * `clipLow` is still a provisional placeholder.
+       * preference - see `CLIP_CERTAINTY` for where these come from.
        */
       clipCentre: CLIP_CERTAINTY.centre,
       clipHigh: CLIP_CERTAINTY.high,

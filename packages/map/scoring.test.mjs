@@ -4,7 +4,7 @@ import {
   buildSearchIndex,
   classifyTagTerm,
   CLIP_CERTAINTY,
-  explainScore,
+  explainRanking,
   fold,
   foldWithMap,
   keywordMatchRanges,
@@ -881,29 +881,99 @@ test('rankHybrid reports the components it sorted on, by rank', () => {
   for (const arr of Object.values(breakdown)) assert.equal(arr.length, 3);
 });
 
-test('explainScore omits a silent signal rather than printing it as zero', () => {
-  const { breakdown, certainty } = rankHybrid({
+test('ranks/ties are independent per-signal sorts, parallel to order like breakdown', () => {
+  // Room 0: a weak partial tag hit, nothing else. Room 1: no text at all, but
+  // the corpus's strongest CLIP cosine (weights.clip's full 1.0 clears
+  // weights.tagPartial's 0.45 ceiling outright, whatever the partial fraction
+  // is) - so the COMPOSITE score puts room 1 first. The tag axis must still
+  // put room 0 first, since it is the only one of the two with any tag signal
+  // at all - that divergence from `order` is the whole reason a per-axis rank
+  // exists separately from it.
+  const { order, ranks, ties } = rankHybrid({
+    query: 'oak',
+    count: 3,
+    weights: WEIGHTS,
+    index: indexOf([['oakenwood'], null], null, null),
+    embeddings: atCosines(0.05, 0.3, -0.5),
+    dim: 2,
+    vector: CLIP_QUERY,
+  });
+
+  assert.equal(order[0], 1, 'the composite score favors the maxed-out clip term');
+  const rankOfRoom = (axis, id) => ranks[axis][order.indexOf(id)];
+  const tiesOfRoom = (axis, id) => ties[axis][order.indexOf(id)];
+
+  assert.equal(rankOfRoom('tag', 0), 1, 'room 0 is the only one with any tag signal at all');
+  assert.equal(tiesOfRoom('tag', 0), 0);
+  // Rooms 1 and 2 both score zero on the tag axis - genuinely tied there, even
+  // though the composite score (reading CLIP) puts them at opposite ends.
+  assert.equal(rankOfRoom('tag', 1), 2);
+  assert.equal(rankOfRoom('tag', 2), 2);
+  assert.equal(tiesOfRoom('tag', 1), 1);
+  assert.equal(tiesOfRoom('tag', 2), 1);
+});
+
+test('a tie on one axis is reported as tied, even when the composite score is not', () => {
+  // Same tag signal (one exact match each), different CLIP cosines - so the
+  // composite order separates them, but the tag axis must call it a tie.
+  const { order, ranks, ties } = rankHybrid({
+    query: 'oak',
+    count: 3,
+    weights: WEIGHTS,
+    index: indexOf([['oak'], null], [['oak'], null], null),
+    embeddings: atCosines(0.3, 0.1, -0.5),
+    dim: 2,
+    vector: CLIP_QUERY,
+  });
+
+  const rankOfRoom = (axis, id) => ranks[axis][order.indexOf(id)];
+  const tiesOfRoom = (axis, id) => ties[axis][order.indexOf(id)];
+  assert.equal(rankOfRoom('tag', 0), 1);
+  assert.equal(rankOfRoom('tag', 1), 1, 'competition ranking: a tie shares the better rank, not the worse');
+  assert.equal(tiesOfRoom('tag', 0), 1);
+  assert.equal(tiesOfRoom('tag', 1), 1);
+  // Room 2 has no tag match at all - not tied with the two that share one.
+  assert.equal(rankOfRoom('tag', 2), 3);
+  assert.equal(tiesOfRoom('tag', 2), 0);
+
+  // The CLIP axis, meanwhile, has no ties: three distinct cosines.
+  for (const id of [0, 1, 2]) assert.equal(tiesOfRoom('clip', id), 0);
+  assert.equal(rankOfRoom('clip', 0), 1, 'highest cosine (0.3)');
+  assert.equal(rankOfRoom('clip', 1), 2);
+  assert.equal(rankOfRoom('clip', 2), 3, 'lowest cosine (-0.5)');
+});
+
+test('explainRanking omits an axis that found nothing, and returns null when nothing at all did', () => {
+  const { breakdown, certainty, ranks, ties } = rankHybrid({
     query: 'oak',
     count: 2,
     weights: WEIGHTS,
     index: indexOf([['oak'], null], null, null),
   });
 
-  const { rows, total } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
-  assert.deepEqual(rows.map((r) => r.key), ['tagExact']);
-  assert.equal(rows[0].weighted, WEIGHTS.tagExact);
-  assert.equal(total, WEIGHTS.tagExact);
+  const explanation = explainRanking(0, { breakdown, certainty, ranks, ties, weights: WEIGHTS, total: 2 });
+  assert.ok(explanation.tag, 'room 0 matched a tag');
+  assert.equal(explanation.tag.exact, 1);
+  assert.equal(explanation.story, null, 'no story to report');
+  assert.equal(explanation.clip, null, 'no embeddings at all');
+  assert.deepEqual(explanation.contributions.map((c) => c.key), ['tag'], 'the only axis that contributed anything');
+
+  assert.equal(
+    explainRanking(1, { breakdown, certainty, ranks, ties, weights: WEIGHTS, total: 2 }),
+    null,
+    'room 1 matched nothing on any axis'
+  );
 });
 
-test('a CLIP row shows the raw cosine beside the relative one, so a certain-looking 1.00 reads as uncertain', () => {
+test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosine underneath it', () => {
   // Every cosine is below `clipLow`: CLIP reads all of these as a confident
   // MISMATCH, not merely "no opinion". Min-maxing still puts the best of them
-  // at exactly 1.00, which is the trap - a breakdown printing that alone would
-  // claim a confident match.
+  // at exactly 1.00 (`breakdown.clip`), which is the trap - a line printing
+  // that relative number alone would claim a confident match.
   const cosines = [-0.1, -0.15, -0.2];
   assert.ok(cosines.every((c) => c < CLIP_CERTAINTY.low));
 
-  const { breakdown, certainty } = rankHybrid({
+  const { breakdown, certainty, ranks, ties } = rankHybrid({
     query: 'cghjj',
     count: 3,
     weights: WEIGHTS,
@@ -912,12 +982,11 @@ test('a CLIP row shows the raw cosine beside the relative one, so a certain-look
     embeddings: atCosines(...cosines),
   });
 
-  const { rows, certainty: sure } = explainScore(0, { breakdown, certainty, weights: WEIGHTS });
-  const clip = rows.find((r) => r.key === 'clip');
+  const explanation = explainRanking(0, { breakdown, certainty, ranks, ties, weights: WEIGHTS, total: 3 });
 
   assert.equal(breakdown.clip[0], 1, 'relative score is the top of the range');
-  assert.ok(Math.abs(clip.raw - cosines[0]) < 0.01, 'the row carries the RAW cosine');
-  assert.ok(clip.raw < CLIP_CERTAINTY.low, 'which is below the low extreme');
-  assert.equal(clip.signedPercent, -99.99, 'the CLIP row reports it as a clamped signed percentage');
-  assert.equal(sure, -1, 'and certainty, computed absolutely, agrees it is a confident mismatch');
+  assert.ok(Math.abs(explanation.clip.cosine - cosines[0]) < 0.01, 'the clip summary carries the RAW cosine');
+  assert.ok(explanation.clip.cosine < CLIP_CERTAINTY.low, 'which is below the low extreme');
+  assert.equal(explanation.clip.percent, -99.99, 'reported as a clamped signed percentage');
+  assert.equal(explanation.percent, -99.99, 'and the composite reading agrees it is a confident mismatch');
 });
