@@ -102,14 +102,16 @@ serve as completed task history.
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
 opportunity, per AGENTS.md. Roughly ordered easiest/most-isolated first,
-deliberately-loose shapes last; `packages/pipeline/mips.ts`/`index.ts`
-(converted from `.mjs`, types from `layout.ts`'s existing `Size`/`LevelStep`/
-`MipStep`) was the most recent conversion. Test files (`*.test.mjs`) travel
-with their module when it converts and aren't listed separately.
+deliberately-loose shapes last; `HelpDialog.tsx`/`RoomCard.tsx` (converted
+from `.jsx`, types from `picking.ts`'s `RoomPick`, `map/describe.ts`'s
+`Description`, `map/metadata.ts`'s `RoomMeta`, `map/searchResult.ts`'s
+`SearchResult`/`MatchRange`, and `config/config.ts`'s `Config` - also tightened
+`useSearch.js`'s `highlight` JSDoc from `Function` to the real range-finder
+signature, which the stricter `RoomCard` prop type surfaced as a mismatch)
+were the most recent conversions. Test files (`*.test.mjs`) travel with
+their module when it converts and aren't listed separately.
 
 Small, mostly presentational, few or no loose shapes:
- - `packages/web/src/components/HelpDialog.jsx`
- - `packages/web/src/components/RoomCard.jsx`
  - `packages/web/src/components/RoomOverlay.jsx`
  - `packages/web/src/components/RoomDetails.jsx`
  - `packages/web/src/components/CatalogView.jsx`

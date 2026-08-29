@@ -55,7 +55,8 @@ import {
  *   search: (term: string) => Promise<void>,
  *   runSearch: (e: Event) => void,
  *   clearSearch: () => void,
- *   highlight: {keyword: Function, story: Function}|null,
+ *   highlight: {keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
+ *               story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null,
  * }}
  */
 export function useSearch({

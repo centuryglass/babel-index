@@ -106,12 +106,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/components/`: presentational React components
     * `MapView.jsx`: The 2D map canvas view
     * `CatalogView.jsx`: Alternate catalog list view
-    * `RoomCard.jsx`: RoomDetails popup, shown on right-click/long press
+    * `RoomCard.tsx`: RoomDetails popup, shown on right-click/long press
     * `RoomOverlay.jsx`: Modal showing full-size room image along with story content
     * `RoomDetails.jsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
-    * `HelpDialog.jsx`: The "READ ME" book's dialog
+    * `HelpDialog.tsx`: The "READ ME" book's dialog
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
                              Meant as an easter egg for the (not yet existing)
                              artist statement page, not wired in yet
