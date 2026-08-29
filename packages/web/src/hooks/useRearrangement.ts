@@ -19,7 +19,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { CELL_ASPECT, pxPerCell, type Camera } from '../lib/camera.ts';
-import { createSlideshow } from '../lib/slide.js';
+import { createSlideshow } from '../lib/slide.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Config } from '../../../config/config.ts';

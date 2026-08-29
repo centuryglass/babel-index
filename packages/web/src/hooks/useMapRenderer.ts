@@ -28,33 +28,15 @@ import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
-import { assignTitles } from '../lib/center.js';
+import type { Slot } from '../lib/center.ts';
 import { createRenderer, type DrawResult } from '../lib/render.ts';
-import type { createSlideRenderer } from '../lib/slide.js';
-
-/** See `useCenterShelf.ts` - `center.js`'s `assignTitles` stays untyped, so both files name the shape locally. */
-type Slot = ReturnType<typeof assignTitles>[number];
+import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
 
 /**
- * What `slide.js`'s `draw()` returns - it stays untyped (`object`, per its own
- * JSDoc), so this is read off `stats` with a cast at the one spot it is
- * actually used, rather than restating a shape the file doesn't state itself.
- * `render.ts`'s equivalent is its own real `DrawResult`, imported below - no
- * second copy needed now that the file is typed. See AGENTS.md's TypeScript
- * migration note.
- */
-interface SlideStats {
-  drawn: number;
-  blank: number;
-  level: number;
-  cells: number;
-}
-
-/**
- * `RoomRenderer` reads its shape off the real `createRenderer` rather than
- * restating it, matching `SlideRenderer` below for `slide.js` - so a change to
- * `render.ts`'s signature is picked up automatically instead of leaving a
- * second, driftable copy.
+ * `RoomRenderer`/`SlideRenderer` read their shape off the real `createRenderer`/
+ * `createSlideRenderer` rather than restating it, so a change to either
+ * signature is picked up automatically instead of leaving a second, driftable
+ * copy.
  */
 type RoomRenderer = ReturnType<typeof createRenderer>;
 type SlideRenderer = ReturnType<typeof createSlideRenderer>;
@@ -67,10 +49,7 @@ export interface RunningAnim {
   cam?: Camera;
   origin?: Point;
   motions?: Motion[];
-  show?: {
-    totalMs: number;
-    advanceTo: (ms: number) => { done: boolean; motions: Motion[] };
-  };
+  show?: ReturnType<typeof createSlideshow>;
   t0?: number;
 }
 
@@ -234,11 +213,7 @@ export function useMapRenderer({
       const running = anim.current;
       const showing = running?.before ?? { layout, order };
       // Named consts rather than object literals passed straight to `draw()` -
-      // `slide.js` stays untyped (AGENTS.md's TypeScript migration note), so a
-      // field its JSDoc's `@param` omits but its code still reads would
-      // otherwise risk an excess-property error at the call site.
-      // `render.ts`'s `DrawOpts` is a real, complete type now, so `roomDrawOpts`
-      // needs no such defending - it is kept a named const only for symmetry.
+      // kept purely for symmetry between the two draw calls below.
       const slideDrawOpts = {
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
@@ -253,7 +228,7 @@ export function useMapRenderer({
 
       const hud = document.getElementById('hud');
       if (running?.board && hud) {
-        const slideStats = stats as SlideStats;
+        const slideStats = stats as SlideDrawResult;
         const show = running.show as NonNullable<RunningAnim['show']>;
         const t0 = running.t0 as number;
         const motions = running.motions ?? [];

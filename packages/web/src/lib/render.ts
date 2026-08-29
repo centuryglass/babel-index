@@ -26,11 +26,8 @@
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
 import { CENTER, genericId, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
-import { assignTitles, composeSpines } from './center.js';
+import { composeSpines, type Slot, type SpineContext } from './center.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
-
-/** See `useMapRenderer.ts`/`useCenterShelf.ts` - `center.js`'s `assignTitles` stays untyped, so this file names the shape locally too. */
-type Slot = ReturnType<typeof assignTitles>[number];
 
 /**
  * The 2d-context surface this file actually calls - not the whole DOM
@@ -184,8 +181,13 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
+        //
+        // `ctx` is only `DrawContext` here (see that interface's own doc) - a
+        // real 2d context also satisfies `composeSpines`'s wider `SpineContext`,
+        // and the cast is what lets `render.test.mjs`'s fake stay narrow per
+        // AGENTS.md, since it never exercises this path.
         if (cell.center && centreSlots)
-          composeSpines(ctx, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots);
+          composeSpines(ctx as SpineContext, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots);
       }
     }
 
