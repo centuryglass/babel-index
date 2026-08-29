@@ -102,17 +102,30 @@ serve as completed task history.
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
 opportunity, per AGENTS.md. Roughly ordered easiest/most-isolated first,
-deliberately-loose shapes last; `RoomDetails.tsx` (converted from `.jsx`,
+deliberately-loose shapes last; `CatalogView.tsx`/`MapView.tsx` (converted
+from `.jsx`, prop types from `map/manifest.ts`'s `Manifest`,
+`config/config.ts`'s `Config`, `map/describe.ts`'s `Description`,
+`map/metadata.ts`'s `RoomMeta`, `map/searchResult.ts`'s
+`SearchResult`/`MatchRange`, and `lib/rooms.ts`'s `UrlFor`; a `Slot` type
+local to both files for `center.js`'s still-untyped `assignTitles()` return
+shape. Also tightened `useSearch.js`'s `setQuery`/`runSearch` JSDoc from
+`Function`/`(e: Event) => void` to `(query: string) => void`/React's
+`FormEventHandler<HTMLFormElement>`, which the stricter prop types surfaced
+as a mismatch - the same pattern as `RoomCard.tsx`'s `highlight` fix below.
+`manifest.directory` picked up an `?.` in `MapView.tsx`'s panel heading:
+`Manifest.directory` is optional (absent for a remote manifest), which the
+old untyped prop silently let through unguarded) are the most recent
+conversions. `RoomDetails.tsx` (converted from `.jsx`,
 same type sources as its callers below - `RoomMeta`, `Description`,
 `SearchResult`/`MatchRange`, `Config['search']['weights']` - plus its own
 internal `Highlight`/`ClipCertainty`/`ScoreBreakdown` helpers typed in
 place; `explainScore` stays imported from `scoring.js` untyped, since that
-module is one of the deliberately-loose ones left for last) is the most
-recent conversion. `RoomOverlay.tsx` (converted from `.jsx`, same prop
+module is one of the deliberately-loose ones left for last) came before
+that. `RoomOverlay.tsx` (converted from `.jsx`, same prop
 types as `RoomCard.tsx` below - `Description`, `RoomMeta`,
 `SearchResult`/`MatchRange`, `Config['search']['weights']` - `room` typed
 inline as `{id, rank}` since that's exactly the shape `main.jsx`'s
-`expandRoom` builds, nothing more) came just before.
+`expandRoom` builds, nothing more) came before that.
 `HelpDialog.tsx`/`RoomCard.tsx` (converted from `.jsx`, types from
 `picking.ts`'s `RoomPick`, `map/describe.ts`'s `Description`,
 `map/metadata.ts`'s `RoomMeta`, `map/searchResult.ts`'s
@@ -121,10 +134,6 @@ inline as `{id, rank}` since that's exactly the shape `main.jsx`'s
 signature, which the stricter `RoomCard` prop type surfaced as a mismatch)
 came before that. Test files (`*.test.mjs`) travel with
 their module when it converts and aren't listed separately.
-
-Small, mostly presentational, few or no loose shapes:
- - `packages/web/src/components/CatalogView.jsx`
- - `packages/web/src/components/MapView.jsx`
 
 Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
 already exist as types to write these against):
