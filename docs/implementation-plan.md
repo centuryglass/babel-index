@@ -150,9 +150,12 @@ their module when it converts and aren't listed separately.
 
 Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
 already exist as types to write these against; `useCorpus.js`, `useSearch.js`,
-`useModeTransition.js`, `useCenterShelf.js`, `useMapCamera.js` and
-`useMapCursor.js` already converted):
- - `packages/web/src/hooks/useMapRenderer.js`
+`useModeTransition.js`, `useCenterShelf.js`, `useMapCamera.js`,
+`useMapCursor.js` and `useMapRenderer.js` already converted -
+`useMapRenderer.ts` names `RoomRenderer`/`SlideRenderer` and their draw-opts/
+stats shapes locally rather than importing types from `render.js`/`slide.js`,
+which stay untyped; same for the `RunningAnim` shape `useRearrangement.js`
+still builds into the `anim` ref):
  - `packages/web/src/hooks/useRearrangement.js`
 
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
