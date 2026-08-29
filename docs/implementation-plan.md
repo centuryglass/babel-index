@@ -185,12 +185,23 @@ paired-test rule - the fake context and fake image objects are now typed
 against `DrawContext`/`LoadableImage` explicitly rather than left for `tsc` to
 infer, which is what surfaced the two union-widening fixes above.
 
+`slide.js` turned out not to be one of the deliberately-loose ones either,
+once looked at closely: its animation state (`Run`/`Lane`/`Stage`/`Timeline`)
+looked duck-typed only because nothing had named it yet - every field is
+fixed by `buildTimeline`/`pushMove`, not runtime-computed the way
+`center.js`'s `RUNS` or `scoring.js`'s ranking arrays are. Converting it let
+`useMapRenderer.ts` drop the `SlideStats` interface and the `object` cast it
+existed only to work around, and `RunningAnim.show` in the same file now
+reads `ReturnType<typeof createSlideshow>` instead of restating a narrower
+copy of the same shape. Its `DrawContext` param reuses `render.ts`'s existing
+narrow 2d-context interface rather than restating a third copy. `slide.test.mjs`
+converted alongside it, per the paired-test rule.
+
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
 worth writing rather than an `any`/`object` that just papers over it;
 `main.jsx` last since it wires every hook above together and is only as
 typeable as they are (`camera.js` converted - see above; it wasn't actually
 one of these):
- - `packages/web/src/lib/slide.js`
  - `packages/web/src/lib/center.js`
  - `packages/map/scoring.js`
  - `packages/web/src/main.jsx`
