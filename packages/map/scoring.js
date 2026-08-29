@@ -102,19 +102,25 @@ export function lemmatise(word) {
  * the raw distribution max because a single outlier pair should not define
  * "as sure as it gets".
  *
- * `low` is still provisional: docs/search-plan.md §5 calls for measuring it
- * from known-irrelevant strong concepts (a query CLIP should recognise but
- * that has nothing to do with this corpus - "swimming pool", "race car" -
- * expected to land low-positive, not negative, per the spec). That measurement
- * needs a real corpus and network access to the CLIP text tower, neither
- * available in every environment this runs in, so until it lands `low` is the
- * mirror of `high` across `centre` (`centre - (high - centre)`) - a
- * data-grounded placeholder, not a guess pulled from nowhere, that keeps the
- * curve continuous and gives a reasonable negative reading rather than none at
- * all. `tools/embed/cosine-range.ts --irrelevant <file>` computes the real
- * anchor the same way `--universal` computes `high`; swap it in here once run.
+ * `low` is now a real measurement too, not the mirror-of-`high` placeholder
+ * this used to be: `tools/embed/cosine-range.ts --irrelevant <file>`, run
+ * against ten known-irrelevant strong concepts (`race car`, `swimming pool`,
+ * `sandy beach`, ... - things CLIP recognises but that share no visual
+ * structure, repeating-grid or otherwise, with shelved library walls) scored
+ * the same way `--universal` scores `high` - `low` is `irrelevant.ceiling`,
+ * the *median* p50 across those concepts' own best match in the corpus. The
+ * result was a genuine surprise, not the "low-positive" the placeholder's
+ * comment used to predict: irrelevant concepts land BELOW `centre`
+ * (0.171 < 0.205), confidently negative rather than merely no-opinion. A
+ * `--nonsense` keysmash probe validated `centre` in the same run (mean 0.212
+ * against `centre`'s 0.205, well inside noise) - so the surprise is read as a
+ * real property of the embedding space, not a broken `centre`: gibberish
+ * embeds near the corpus's mean direction (genuinely no signal), while a
+ * coherent-but-wrong concept has its own specific direction that is actively
+ * dissimilar to library imagery, pushing it past the noise floor rather than
+ * just sitting in it.
  */
-export const CLIP_CERTAINTY = { centre: 0.205, high: 0.279, low: 0.131 };
+export const CLIP_CERTAINTY = { centre: 0.205, high: 0.279, low: 0.171 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.

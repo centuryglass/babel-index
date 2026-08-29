@@ -317,24 +317,29 @@ real signal has every raw cosine sitting low against those bounds, so
 corpus's cosine DISTRIBUTION, not guessed.** These phrases appear in the tag
 and story rules above and need one precise meaning.
 *Enforcement:* they read off the same signed certainty curve "Computing
-certainty" defines. The curve's `0` is the *no-opinion centre* of the measured
-cosine distribution - the cosine an unrelated query lands at, where CLIP is
-neither confirming nor denying - and `+1` is the high extreme a genuine match
-reaches. `clipCertaintyGate` is the positive half of that curve read back into
-`[0, 1]`, and "reasonably/highly certain" means `clipCertaintyGate >= 0.5`. The
-anchors are measured by `tools/embed/cosine-range.ts`, not chosen: the match
-ceiling comes from known-near-universal keywords for this corpus (`bookshelf`,
-`book`, `library`, `shelf`, ... - words true of nearly every room) rather than
-off percentiles of the whole keyword list, because the whole-list percentile
-approach silently assumed "most pairs are unrelated", which turned out wrong for
-common, genuinely-true words (`book` scored below the naive 90th-percentile
-"noise" cutoff on real, correct matches). The current calibration puts the gate's
-low at `0.217` (the *weakest* p10 across every universal keyword tried,
-conservative because different phrasings sit at different absolute cosines - see
-the cosine-stats.ts docstring, just above the noise centre of `≈ 0.205`) and its
-high at `0.279` (the *median* p50 across them). The distribution the anchors are
-read from, and the mean-centring that might sharpen it, are `docs/search-plan.md`
-§§5-7.
+certainty" defines - two linear segments meeting at `centre`, `0` there, `+1`
+at `high`, `-1` at `low`. `clipCertaintyGate` is the positive half of that
+curve read back into `[0, 1]`, and "reasonably/highly certain" means
+`clipCertaintyGate >= 0.5`. All three anchors are measured by
+`tools/embed/cosine-range.ts` against this corpus, not chosen: whole-list
+percentiles silently assumed "most pairs are unrelated", which turned out
+wrong for common, genuinely-true words (`book` scored below the naive
+90th-percentile "noise" cutoff on real, correct matches) - so `centre` is
+instead the *median* of the whole keyword x room distribution (`overall.p50`,
+`≈0.205`, the noise band a query with no real signal lands in - validated
+against a keysmash/nonsense probe, which landed within 0.01 of it), `high` is
+the *median* ceiling across near-universal keywords true of nearly every room
+(`bookshelf`, `book`, `library`, `shelf`, ... - `≈0.279`), and `low` is the
+*median* ceiling across known-irrelevant strong concepts - things CLIP
+recognises but that share nothing with a shelved library wall (`race car`,
+`swimming pool`, `sandy beach`, ... - `≈0.171`). `low` landing BELOW `centre`
+was the interesting result, not the expected one: a keysmash query embeds near
+the corpus's mean direction (genuinely no signal), while a coherent-but-wrong
+concept has its own specific direction that is actively dissimilar to library
+imagery - so real off-topic content reads as more confidently wrong than
+gibberish does. See `docs/search-plan.md` §5 for how each anchor was measured
+and `cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each read off a
+different distribution.
 
 ### Balancing signals against each other
 
