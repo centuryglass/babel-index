@@ -29,7 +29,7 @@ import { createTileCache, CENTER, genericId } from './lib/tiles.js';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.js';
 import { createSlideRenderer } from './lib/slide.js';
-import { BASE_TILE } from './lib/pyramid.js';
+import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.js';
 import { useMapRenderer } from './hooks/useMapRenderer.js';
 import { useMapCursor } from './hooks/useMapCursor.js';

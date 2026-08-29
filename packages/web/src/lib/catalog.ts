@@ -29,7 +29,7 @@
  * arithmetic rather than an estimate, which is the property the whole approach
  * rests on.
  */
-import { BASE_TILE, idealLevel } from './pyramid.js';
+import { BASE_TILE, idealLevel } from './pyramid.ts';
 
 export interface RankedRoom {
   id: number;

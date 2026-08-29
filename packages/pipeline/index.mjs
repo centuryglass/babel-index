@@ -12,7 +12,7 @@
  * content-hash caching) are left alone, so a rerun after touching a handful of
  * images only re-resizes those.
  *
- * The ladder comes from packages/web/src/lib/pyramid.js, so what this writes and
+ * The ladder comes from packages/web/src/lib/pyramid.ts, so what this writes and
  * what the client asks for cannot drift apart. Resizing is the whole of the
  * work, which is why it is a pipeline job run once rather than anything the
  * demo server does on request.
@@ -21,7 +21,7 @@ import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import sharp from 'sharp';
-import { LEVELS, SHEETS } from '../web/src/lib/pyramid.js';
+import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
 import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes } from './mips.mjs';
 import { writeSheets } from './sheets.ts';
 
@@ -91,7 +91,7 @@ console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across $
 
 // Pack the coarse levels into shared sheets so a scroll session at that zoom
 // needs a handful of requests instead of one per room (see SHEETS's docblock
-// in packages/web/src/lib/pyramid.js for why this exists and which levels).
+// in packages/web/src/lib/pyramid.ts for why this exists and which levels).
 // writeMips above always writes every level per-file first - sheets are
 // composited FROM those files, not from the source directly - so the
 // per-file directory for a sheet-packed level is deleted once its sheets are
