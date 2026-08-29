@@ -31,8 +31,8 @@ import { createRenderer } from './lib/render.js';
 import { createSlideRenderer } from './lib/slide.js';
 import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
-import { useMapRenderer } from './hooks/useMapRenderer.js';
-import { useMapCursor } from './hooks/useMapCursor.js';
+import { useMapRenderer } from './hooks/useMapRenderer.ts';
+import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
@@ -532,7 +532,7 @@ function Library({ manifest }) {
 
   // --- rendering -----------------------------------------------------------
   //
-  // The frame loop itself is `useMapRenderer.js`. `draw` stays here because the
+  // The frame loop itself is `useMapRenderer.ts`. `draw` stays here because the
   // tile cache above is built with `onLoad: requestDraw`, so the request has to
   // exist before the hook that fulfils it - one ref, and the cycle is broken.
   useMapRenderer({
