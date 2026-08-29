@@ -22,15 +22,43 @@
  */
 import { useEffect, useRef } from 'react';
 import { RoomDetails } from './RoomDetails.jsx';
+import type { RoomMeta } from '../../../map/metadata.ts';
+import type { Description } from '../../../map/describe.ts';
+import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { Config } from '../../../config/config.ts';
 
-export function RoomOverlay({ room, desc, entry, file, src, onClose, onKeyword, highlight, tagLinks, result, weights }) {
-  const ref = useRef(null);
+export function RoomOverlay({
+  room,
+  desc,
+  entry,
+  file,
+  src,
+  onClose,
+  onKeyword,
+  highlight,
+  tagLinks,
+  result,
+  weights,
+}: {
+  room: { id: number; rank: number };
+  desc: Description;
+  entry: RoomMeta | null;
+  file?: string;
+  src?: string | null;
+  onClose: () => void;
+  onKeyword: (keyword: string) => void;
+  highlight?: { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+  tagLinks?: Record<string, string> | null;
+  result?: SearchResult | null;
+  weights?: Config['search']['weights'] | null;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
 
   // Focus in on open and back where it came from on close - the same contract
   // `RoomCard` keeps, and for the same reason: a dialog that leaves focus behind
   // it strands a keyboard reader at the top of the document.
   useEffect(() => {
-    const opener = document.activeElement;
+    const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     return () => {
       if (!opener || opener === document.body || !opener.isConnected) return;
@@ -43,12 +71,12 @@ export function RoomOverlay({ room, desc, entry, file, src, onClose, onKeyword, 
   }, []);
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       // A dialog over a scrolling list has to hold focus, or Tab walks into the
       // catalog behind it and the reader is editing a page they cannot see.
       if (e.key !== 'Tab') return;
-      const focusable = ref.current?.querySelectorAll(
+      const focusable = ref.current?.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
       if (!focusable?.length) return;
@@ -67,7 +95,10 @@ export function RoomOverlay({ room, desc, entry, file, src, onClose, onKeyword, 
   }, [onClose]);
 
   return (
-    <div className="overlay-scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="overlay-scrim"
+      onPointerDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="overlay" ref={ref} role="dialog" aria-modal="true" tabIndex={-1} aria-label={desc.name}>
         <div className="card-head">
           <span className="card-id">

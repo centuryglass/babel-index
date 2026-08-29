@@ -107,7 +107,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `MapView.jsx`: The 2D map canvas view
     * `CatalogView.jsx`: Alternate catalog list view
     * `RoomCard.tsx`: RoomDetails popup, shown on right-click/long press
-    * `RoomOverlay.jsx`: Modal showing full-size room image along with story content
+    * `RoomOverlay.tsx`: Modal showing full-size room image along with story content
     * `RoomDetails.jsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
