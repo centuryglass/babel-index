@@ -76,6 +76,8 @@ export interface ScoreBreakdown {
   score: Float32Array;
   tagExact: Float32Array;
   tagPartialSum: Float32Array;
+  /** how many terms `tagPartialSum` is a sum OVER - a count, not a fraction */
+  tagPartialCount: Int32Array;
   /** `storyRatio` - query-relative, the ranking's short-story term */
   story: Float32Array;
   /** longest contiguous matched run, in characters - the long-story term */
@@ -137,25 +139,67 @@ export interface MatchRange {
   end: number;
 }
 
-/** One row of `explainScore()`'s breakdown, as the room card/catalog print it. */
-export interface ScoreExplanationRow {
-  key: string;
+/**
+ * One axis's SHARE of the total weighted score (docs/search_rules.md
+ * "Reporting" - "a percentage of the total score contributed by each signal
+ * that actually contributed something"), not a percentage of anything
+ * absolute - `RankingExplanation.contributions` sorts these greatest first
+ * and omits any axis that contributed nothing.
+ */
+export interface ContributionShare {
+  key: 'clip' | 'tag' | 'story';
   label: string;
-  weighted: number;
-  raw: number;
-  note: string | null;
-  /**
-   * CLIP row only: the signed certainty curve as a clamped percentage
-   * (docs/search_rules.md "Reporting") - positive is confidence the image
-   * matches, negative is confidence it does not. `undefined` on every other
-   * row - tags and story report counts, not a percentage.
-   */
-  signedPercent?: number;
+  /** this axis's weighted term as a share of `breakdown.score`, 0-100 */
+  percent: number;
 }
 
-/** `explainScore()`'s return value: the rows a reader can check the sort against. */
-export interface ScoreExplanation {
-  rows: ScoreExplanationRow[];
+/** The tag axis's own rank/tie count (`SignalRanks.tag`), plus what actually matched. */
+export interface TagRankingSummary {
+  rank: number;
+  ties: number;
+  /** count of terms that matched a keyword exactly */
+  exact: number;
+  /** count of terms that matched a keyword as a substring, not exactly */
+  partial: number;
+}
+
+/** The story axis's own rank/tie count (`SignalRanks.story`), plus the run length that earned it. */
+export interface StoryRankingSummary {
+  rank: number;
+  ties: number;
+  /** longest contiguous matched run, in characters (`breakdown.storyLongChars`) */
+  length: number;
+}
+
+/** The clip axis's own rank/tie count (`SignalRanks.clip`), plus the reading behind it. */
+export interface ClipRankingSummary {
+  rank: number;
+  ties: number;
+  /** the raw cosine - absolute, not relative to this query's corpus */
+  cosine: number;
+  /**
+   * the signed certainty curve as a clamped percentage (docs/search_rules.md
+   * "Reporting") - positive is confidence the image matches, negative is
+   * confidence it does not.
+   */
+  percent: number;
+}
+
+/**
+ * `explainRanking()`'s return value: one room's ranking as a reader reads it
+ * - a composite line, then one summary per axis that found something. `null`
+ * fields are axes with nothing to report, same convention `explainRanking`'s
+ * own `null` return uses for a room nothing matched at all.
+ */
+export interface RankingExplanation {
+  /** 1-based - "#4 of 2048" */
+  rank: number;
+  /** corpus size - "#4 OF 2048" */
   total: number;
-  certainty: number;
+  /** the composite `certainty`, as a signed clamped percentage */
+  percent: number;
+  contributions: ContributionShare[];
+  tag: TagRankingSummary | null;
+  story: StoryRankingSummary | null;
+  clip: ClipRankingSummary | null;
 }
