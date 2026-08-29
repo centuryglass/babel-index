@@ -15,7 +15,7 @@ const webDir = dirname(fileURLToPath(import.meta.url));
  */
 test('the client bundles', async () => {
   const result = await build({
-    entryPoints: [join(webDir, 'src/main.jsx')],
+    entryPoints: [join(webDir, 'src/main.tsx')],
     bundle: true,
     format: 'esm',
     jsx: 'automatic',
@@ -24,14 +24,14 @@ test('the client bundles', async () => {
     logLevel: 'silent',
     define: { 'process.env.NODE_ENV': '"development"' },
     // Kept in sync with packages/server/index.ts's build call - both bundle
-    // main.jsx, and the SVG-as-text loader is why (see SearchIcon.tsx).
+    // main.tsx, and the SVG-as-text loader is why (see SearchIcon.tsx).
     loader: { '.svg': 'text' },
   });
 
   assert.deepEqual(result.errors, []);
   const js = result.outputFiles[0].text;
   assert.ok(js.length > 1000, 'suspiciously small bundle');
-  // The modules the map cannot work without, all reached through main.jsx.
+  // The modules the map cannot work without, all reached through main.tsx.
   for (const marker of ['createLayout', 'createTileCache', 'useMapCamera', 'screenToWorld'])
     assert.ok(js.includes(marker), `${marker} is missing from the bundle`);
 });

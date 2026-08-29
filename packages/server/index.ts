@@ -144,7 +144,7 @@ console.log(watch ? 'bundling client (watch mode) ...' : 'bundling client ...');
 let app: Express | undefined;
 let bundleJs = '';
 const ctx = await context({
-  entryPoints: [join(webDir, 'src/main.jsx')],
+  entryPoints: [join(webDir, 'src/main.tsx')],
   bundle: true,
   format: 'esm',
   jsx: 'automatic',
