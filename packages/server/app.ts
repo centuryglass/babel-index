@@ -44,7 +44,7 @@ const LIVE_RELOAD_CLIENT = `(function () {
 })();
 `;
 
-interface CreateAppOptions {
+export interface CreateAppOptions {
   /** the initial scan (see scan.ts or remote.ts) */
   manifest: Manifest;
   /** directory the corpus is served from (local mode); omit in remote mode,

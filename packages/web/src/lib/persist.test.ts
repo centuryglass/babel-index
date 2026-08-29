@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { load, save, clear, KEYS } from './persist.ts';
+import type { StorageLike } from './persist.ts';
 
 /** A working store, so the happy path is not the only thing asserted. */
-function memoryStore() {
-  const map = new Map();
+function memoryStore(): StorageLike & { size: () => number } {
+  const map = new Map<string, string>();
   return {
-    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    getItem: (k) => (map.has(k) ? (map.get(k) as string) : null),
     setItem: (k, v) => map.set(k, String(v)),
     removeItem: (k) => map.delete(k),
     size: () => map.size,
@@ -14,7 +15,7 @@ function memoryStore() {
 }
 
 /** Safari in private mode: reads work, writes throw. */
-const writeThrows = () => ({
+const writeThrows = (): StorageLike => ({
   getItem: () => null,
   setItem: () => {
     throw new DOMException('QuotaExceededError');

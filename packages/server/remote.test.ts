@@ -2,15 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { scanRemote } from './remote.ts';
+import type { Manifest } from '../map/manifest.ts';
+import type { AddressInfo } from 'node:net';
 
 /**
  * A throwaway HTTP server standing in for the bucket - just enough to answer
  * a manifest fetch, the way a public R2 bucket/CDN would.
- * @param {Record<string, {body: Buffer|string, type?: string, status?: number}>} routes
  */
-async function remoteHost(routes, run) {
+async function remoteHost(
+  routes: Record<string, { body: Buffer | string; type?: string; status?: number }>,
+  run: (base: string) => Promise<void>
+) {
   const server = createServer((req, res) => {
-    const entry = routes[req.url];
+    const entry = req.url ? routes[req.url] : undefined;
     if (!entry) {
       res.writeHead(404).end();
       return;
@@ -18,8 +22,8 @@ async function remoteHost(routes, run) {
     res.writeHead(entry.status ?? 200, { 'content-type': entry.type ?? 'application/octet-stream' });
     res.end(entry.body);
   });
-  await new Promise((r) => server.listen(0, r));
-  const base = `http://127.0.0.1:${server.address().port}`;
+  await new Promise<void>((r) => server.listen(0, () => r()));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     return await run(base);
   } finally {
@@ -27,7 +31,7 @@ async function remoteHost(routes, run) {
   }
 }
 
-function sampleManifest() {
+function sampleManifest(): Manifest {
   return {
     mode: 'offline',
     directory: '/some/local/path',
@@ -111,7 +115,9 @@ test('a sheet-packed level round-trips through rebase untouched - it carries no 
     async (base) => {
       const remote = await scanRemote(base, 'corpus-sample');
       const level2 = remote.levels.find((l) => l.level === 2);
+      assert.ok(level2);
       assert.deepEqual(level2.sheet, manifest.levels[1].sheet, 'sheet geometry must pass through unchanged');
+      assert.ok(level2.sheet);
       // The only thing that changed is imagesBase, which the client combines
       // with sheet.dir itself - proving the full url a room resolves to.
       assert.equal(`${remote.imagesBase}/${level2.sheet.dir}/sheet-0000.jpg`, `${base}/corpus-sample/256-sheets/sheet-0000.jpg`);

@@ -10,6 +10,7 @@ import {
   rankByEmbedding,
   shuffledOrder,
 } from './ordering.ts';
+import type { CreateLayoutOptions } from './ordering.ts';
 
 test('slot density tracks contentRatio', () => {
   for (const ratio of [0.05, 0.2, 0.5]) {
@@ -250,7 +251,7 @@ test('growing the corpus still keeps existing slots, at any cell shape', () => {
 // --- the search density gradient -------------------------------------------
 
 /** A layout with a certainty profile, holding everything else steady. */
-const graded = (certainty, opts = {}) =>
+const graded = (certainty: Float32Array | null, opts: Partial<CreateLayoutOptions> = {}) =>
   createLayout({
     roomCount: 200,
     contentRatio: 0.1,

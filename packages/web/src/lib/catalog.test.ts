@@ -15,6 +15,7 @@ import {
   storyLines,
   alphabeticalOrder,
 } from './catalog.ts';
+import type { Rect } from './catalog.ts';
 import { BASE_TILE, LEVELS, sizeOf } from './pyramid.ts';
 
 const order = Array.from({ length: 27 }, (_, i) => 100 + i);
@@ -217,7 +218,7 @@ test('a DOMRect has to be converted, and the conversion is what makes the scale 
   const anchor = { x: 128, y: 144, w: 1024, h: 768 };
   const domRect = { x: 16, y: 102, width: 240, height: 180 };
 
-  assert.equal(flipTransform(anchor, domRect).scaleX, 1, 'the trap this guards');
+  assert.equal(flipTransform(anchor, domRect as unknown as Rect).scaleX, 1, 'the trap this guards');
   assert.equal(flipTransform(anchor, rectOf(domRect)).scaleX, 1024 / 240);
   assert.deepEqual(rectOf(domRect), { x: 16, y: 102, w: 240, h: 180 });
 });
