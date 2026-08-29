@@ -57,6 +57,8 @@ export interface RoomMeta {
   keywords: Keyword[];
   story: string | null;
   alt: string | null;
+  /** Tags a reader may choose to block; empty when the room carries none. */
+  sensitiveContentTags: string[];
 }
 
 /**
@@ -82,10 +84,18 @@ export function normaliseEntry(raw: unknown): RoomMeta | null {
   const story = typeof entry.story === 'string' && entry.story.trim() ? entry.story.trim() : null;
   const alt = typeof entry.alt === 'string' && entry.alt.trim() ? entry.alt.trim() : null;
 
+  const sensitiveContentTags: string[] = [];
+  if (Array.isArray(entry.sensitive_content_tags))
+    for (const t of entry.sensitive_content_tags) {
+      if (typeof t === 'string' && t.trim()) sensitiveContentTags.push(t.trim());
+    }
+
   // An entry carrying only an `alt` is still an entry: it describes the room,
   // which is the question "has metadata" is actually asking. Nothing at all -
-  // an empty object, a string, a number - is what null is for.
-  return keywords.length || story || alt ? { keywords, story, alt } : null;
+  // an empty object, a string, a number - is what null is for. A room with
+  // only sensitive-content tags and nothing else to describe is not one of
+  // these entries either - there's nothing here worth reporting as coverage.
+  return keywords.length || story || alt ? { keywords, story, alt, sensitiveContentTags } : null;
 }
 
 /**
@@ -126,4 +136,57 @@ export function metadataCoverage(
     matched: joined.filter(Boolean).length,
     entries: sidecar && typeof sidecar === 'object' ? Object.keys(sidecar).length : 0,
   };
+}
+
+/**
+ * Does this room carry any tag in `blocked`?
+ *
+ * A room with no entry, or no tags, is never blocked - there is nothing to
+ * match against.
+ */
+export function isBlocked(meta: RoomMeta | null, blocked: ReadonlySet<string>): boolean {
+  if (!meta || !blocked.size) return false;
+  return meta.sensitiveContentTags.some((t) => blocked.has(t));
+}
+
+/**
+ * Drop every id whose room carries a blocked tag, keeping the rest in order.
+ *
+ * This is the one place blocking actually removes a room from what the map or
+ * catalog can show: it runs on an already-ranked/ordered id list, so a
+ * blocked room simply never reaches a cell or a row rather than needing every
+ * consumer of `order` to check `metadata` itself.
+ *
+ * @param ids room ids, in whatever order the caller ranked them
+ * @param metadata indexed by room id, as `joinMetadata` produces it
+ * @param blocked tags a reader has chosen to block
+ */
+export function filterBlockedIds(
+  ids: number[],
+  metadata: (RoomMeta | null)[] | null,
+  blocked: ReadonlySet<string>
+): number[] {
+  if (!metadata || !blocked.size) return ids;
+  return ids.filter((id) => !isBlocked(metadata[id], blocked));
+}
+
+/** How many rooms `blocked` actually removes - what the debug HUD reports. */
+export function countBlocked(metadata: (RoomMeta | null)[] | null, blocked: ReadonlySet<string>): number {
+  if (!metadata || !blocked.size) return 0;
+  let n = 0;
+  for (const m of metadata) if (isBlocked(m, blocked)) n++;
+  return n;
+}
+
+/**
+ * Every sensitive-content tag actually present in the corpus, sorted for a
+ * stable checklist. The block-tags panel offers exactly these - not a fixed
+ * vocabulary - so a corpus with none of these tags renders no panel at all
+ * rather than a list of checkboxes with nothing behind them.
+ */
+export function availableSensitiveTags(metadata: (RoomMeta | null)[] | null): string[] {
+  if (!metadata) return [];
+  const tags = new Set<string>();
+  for (const m of metadata) if (m) for (const t of m.sensitiveContentTags) tags.add(t);
+  return [...tags].sort();
 }

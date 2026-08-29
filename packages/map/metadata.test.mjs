@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { joinMetadata, metadataCoverage, normaliseEntry } from './metadata.ts';
+import {
+  availableSensitiveTags,
+  countBlocked,
+  filterBlockedIds,
+  isBlocked,
+  joinMetadata,
+  metadataCoverage,
+  normaliseEntry,
+} from './metadata.ts';
 
 const rooms = [
   { id: 0, file: '001.jpg' },
@@ -121,4 +129,67 @@ test('coverage separates "no metadata" from "metadata that matches nothing"', ()
 
 test('an entry that is present but empty does not count as covered', () => {
   assert.deepEqual(metadataCoverage(rooms, { '001.jpg': {} }), { matched: 0, entries: 1 });
+});
+
+test('sensitive content tags are carried, trimmed, and empty when absent', () => {
+  const withTags = normaliseEntry({
+    story: 'a',
+    sensitive_content_tags: ['  gore  ', 'nudity', '', 42, null],
+  });
+  assert.deepEqual(withTags.sensitiveContentTags, ['gore', 'nudity']);
+
+  assert.deepEqual(normaliseEntry({ story: 'a' }).sensitiveContentTags, []);
+});
+
+test('a room with only sensitive content tags is not a described entry', () => {
+  // There's nothing here worth counting as coverage - no keywords, story, or alt.
+  assert.equal(normaliseEntry({ sensitive_content_tags: ['gore'] }), null);
+});
+
+test('isBlocked matches a tag against the blocked set', () => {
+  const meta = normaliseEntry({ story: 'a', sensitive_content_tags: ['gore', 'nudity'] });
+  assert.equal(isBlocked(meta, new Set(['nudity'])), true);
+  assert.equal(isBlocked(meta, new Set(['violence'])), false);
+  assert.equal(isBlocked(meta, new Set()), false);
+  assert.equal(isBlocked(null, new Set(['gore'])), false);
+});
+
+test('filterBlockedIds drops ids whose room carries a blocked tag, keeping order', () => {
+  const metadata = [
+    normaliseEntry({ story: 'a', sensitive_content_tags: ['gore'] }),
+    normaliseEntry({ story: 'b' }),
+    normaliseEntry({ story: 'c', sensitive_content_tags: ['nudity'] }),
+  ];
+  assert.deepEqual(filterBlockedIds([2, 0, 1], metadata, new Set(['gore'])), [2, 1]);
+  assert.deepEqual(filterBlockedIds([2, 0, 1], metadata, new Set(['gore', 'nudity'])), [1]);
+});
+
+test('filterBlockedIds is a no-op with nothing blocked, or no metadata loaded yet', () => {
+  const metadata = [normaliseEntry({ story: 'a', sensitive_content_tags: ['gore'] })];
+  assert.deepEqual(filterBlockedIds([0], metadata, new Set()), [0]);
+  assert.deepEqual(filterBlockedIds([0], null, new Set(['gore'])), [0]);
+});
+
+test('countBlocked counts rooms, not tags', () => {
+  const metadata = [
+    normaliseEntry({ story: 'a', sensitive_content_tags: ['gore', 'nudity'] }),
+    normaliseEntry({ story: 'b' }),
+    normaliseEntry({ story: 'c', sensitive_content_tags: ['nudity'] }),
+  ];
+  // Room 0 carries both blocked tags but is one room, not two.
+  assert.equal(countBlocked(metadata, new Set(['gore', 'nudity'])), 2);
+  assert.equal(countBlocked(metadata, new Set()), 0);
+  assert.equal(countBlocked(null, new Set(['gore'])), 0);
+});
+
+test('availableSensitiveTags is every tag in the corpus, deduped and sorted', () => {
+  const metadata = [
+    normaliseEntry({ story: 'a', sensitive_content_tags: ['nudity', 'gore'] }),
+    null,
+    normaliseEntry({ story: 'c', sensitive_content_tags: ['gore'] }),
+    normaliseEntry({ story: 'd' }),
+  ];
+  assert.deepEqual(availableSensitiveTags(metadata), ['gore', 'nudity']);
+  assert.deepEqual(availableSensitiveTags([]), []);
+  assert.deepEqual(availableSensitiveTags(null), []);
 });

@@ -9,10 +9,19 @@
  * that machinery rather than a shared wrapper because there is no third
  * dialog yet to justify factoring it out; if one shows up, fold this and
  * `RoomOverlay` into it together.
+ *
+ * The content-blocking panel lives at the bottom of this dialog, collapsed by
+ * `<details>` rather than mounted open - a reader who has never heard of
+ * sensitive-content tags should not see a checklist appear the first time
+ * they open "help". `<details>`/`<summary>` costs nothing extra: it is
+ * natively focusable and keyboard-operable, so the panel needs no open/closed
+ * state of its own. It renders nothing at all when the corpus carries no
+ * tags to block - most corpora - so the majority never see it, collapsed or
+ * not.
  */
 import { useEffect, useRef } from 'react';
 
-export function HelpDialog({ onClose }) {
+export function HelpDialog({ onClose, availableTags = [], blockedTags = [], onToggleTag, blockedCount = 0 }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -31,8 +40,12 @@ export function HelpDialog({ onClose }) {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
       if (e.key !== 'Tab') return;
+      // `summary` is included because the content-blocking panel below is a
+      // native `<details>` - it is focusable and in the real tab order
+      // whether or not it is expanded, and a trap that does not know about it
+      // would let Tab walk past the dialog's actual last stop.
       const focusable = ref.current?.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'
       );
       if (!focusable?.length) return;
       const first = focusable[0];
@@ -87,6 +100,32 @@ export function HelpDialog({ onClose }) {
             an open dialog.
           </p>
         </div>
+
+        {availableTags.length > 0 && (
+          <details className="help-block-panel">
+            <summary>content settings</summary>
+            <p className="help-block-note">
+              Some rooms in this library carry a sensitive-content tag. Block a tag to
+              remove every room carrying it from the map and the catalog.
+              {blockedCount > 0 &&
+                ` ${blockedCount} room${blockedCount === 1 ? ' is' : 's are'} hidden right now.`}
+            </p>
+            <ul className="help-block-list">
+              {availableTags.map((tag) => (
+                <li key={tag}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={blockedTags.includes(tag)}
+                      onChange={() => onToggleTag(tag)}
+                    />
+                    {tag}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
     </div>
   );
