@@ -37,7 +37,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { describeRoom } from '../../../map/describe.ts';
 import { describeBook } from '../lib/center.js';
 import { RoomDetails } from './RoomDetails.jsx';
-import { SearchForm } from './SearchForm.jsx';
+import { SearchForm } from './SearchForm.tsx';
 import {
   pageOf,
   pageCount,

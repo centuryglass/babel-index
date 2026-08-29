@@ -100,14 +100,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `src/main.jsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.
+    * `src/assets.d.ts`: Declares the `.svg` import shape esbuild's
+                         `loader: { '.svg': 'text' }` produces, for `.ts`/`.tsx`
+                         files that import one as raw markup
   - `src/components/`: presentational React components
     * `MapView.jsx`: The 2D map canvas view
     * `CatalogView.jsx`: Alternate catalog list view
     * `RoomCard.jsx`: RoomDetails popup, shown on right-click/long press
     * `RoomOverlay.jsx`: Modal showing full-size room image along with story content
     * `RoomDetails.jsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
-    * `SearchForm.jsx`: Shared search box component
-    * `SearchIcon.jsx`: The search badge's glyph and orbiting arrow
+    * `SearchForm.tsx`: Shared search box component
+    * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.jsx`: The "READ ME" book's dialog
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
                              Meant as an easter egg for the (not yet existing)

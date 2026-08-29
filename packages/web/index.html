@@ -74,7 +74,7 @@
       .center-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
 
       /*
-       * The clear-x, shared markup between both search homes (SearchForm.jsx)
+       * The clear-x, shared markup between both search homes (SearchForm.tsx)
        * but sized per home here, same as the input itself. Only mounted while
        * there is something to clear, so no `display` toggle is needed.
        */
@@ -199,7 +199,7 @@
       .search-icon-button:hover .search-icon-glyph { filter: brightness(1.15); }
       /*
         These are `<span>`s wrapping raw, injected SVG markup (see
-        SearchIcon.jsx) rather than `<svg>` elements themselves, so the size
+        SearchIcon.tsx) rather than `<svg>` elements themselves, so the size
         has to be asserted twice: on the span, positioning it over the badge,
         and on the nested `svg` the traced file declares, overriding its own
         `width`/`height` (Inkscape writes those in mm) which would otherwise
@@ -212,7 +212,7 @@
       /*
         The arrow is a separate layer over the same badge, rotated around the
         badge's own center rather than baked into a single traced shape - see
-        `SearchIcon.jsx`. `useMapRenderer` writes its `transform` every frame
+        `SearchIcon.tsx`. `useMapRenderer` writes its `transform` every frame
         from the live camera, so it always points at wherever the center tile
         currently is on screen; no default rotation here to fight that.
       */
