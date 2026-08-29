@@ -57,7 +57,7 @@ import {
   windowFor,
   storyLines,
 } from '../lib/catalog.ts';
-import { CENTER } from '../lib/tiles.js';
+import { CENTER } from '../lib/tiles.ts';
 
 /** One slot on the center shelf, as `assignTitles()` (center.js) returns it. */
 type Slot = { kind: string; text: string; term?: string; action?: string } | null;
