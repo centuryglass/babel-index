@@ -89,6 +89,20 @@ export interface ScoreBreakdown {
   cosine: Float32Array;
 }
 
+/**
+ * One signal's own ranking over the corpus, independent of the composite
+ * `order` - `rankAxis` in `scoring.js`. Both parallel to `order` (by rank, not
+ * id), same as `ScoreBreakdown`. `ranks` is 1-based competition ranking
+ * (`1, 2, 2, 4`, not `1, 2, 2, 3`); `ties` is how many OTHER rooms share it -
+ * together, "this room ranks #4 by tag, tied with 2 others"
+ * (docs/search_rules.md "Reporting").
+ */
+export interface SignalRanks {
+  tag: Int32Array;
+  story: Int32Array;
+  clip: Int32Array;
+}
+
 /** `rankHybrid()`'s return value: a completed ranking over the whole corpus. */
 export interface RankHybridResult {
   /** Room ids, best first. */
@@ -96,18 +110,23 @@ export interface RankHybridResult {
   /** Parallel to `order` (by rank, not id) - what the density gradient reads. */
   certainty: Float32Array;
   breakdown: ScoreBreakdown;
+  ranks: SignalRanks;
+  ties: SignalRanks;
   signals: RankSignals;
 }
 
 /**
  * `useSearch.js`'s `result` state: a ranking bound to the term it was run
- * for, or the no-signal stub (`certainty`/`breakdown`/`signals` all `null`)
- * when the corpus has neither embeddings nor keywords to rank with.
+ * for, or the no-signal stub (`certainty`/`breakdown`/`signals`/`ranks`/`ties`
+ * all `null`) when the corpus has neither embeddings nor keywords to rank
+ * with.
  */
 export interface SearchResult {
   order: number[];
   certainty: Float32Array | null;
   breakdown: ScoreBreakdown | null;
+  ranks: SignalRanks | null;
+  ties: SignalRanks | null;
   signals: RankSignals | null;
   term: string;
 }
