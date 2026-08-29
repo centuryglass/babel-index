@@ -29,28 +29,20 @@ import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
 import { assignTitles } from '../lib/center.js';
-import type { createRenderer } from '../lib/render.js';
+import { createRenderer, type DrawResult } from '../lib/render.ts';
 import type { createSlideRenderer } from '../lib/slide.js';
 
 /** See `useCenterShelf.ts` - `center.js`'s `assignTitles` stays untyped, so both files name the shape locally. */
 type Slot = ReturnType<typeof assignTitles>[number];
 
 /**
- * What `render.js`'s/`slide.js`'s `draw()` return - both stay untyped
- * (`object`, per their own JSDoc), so these are read off `stats` with a cast
- * at the one spot each is actually used, rather than restating a shape those
- * files don't state themselves. See AGENTS.md's TypeScript migration note.
+ * What `slide.js`'s `draw()` returns - it stays untyped (`object`, per its own
+ * JSDoc), so this is read off `stats` with a cast at the one spot it is
+ * actually used, rather than restating a shape the file doesn't state itself.
+ * `render.ts`'s equivalent is its own real `DrawResult`, imported below - no
+ * second copy needed now that the file is typed. See AGENTS.md's TypeScript
+ * migration note.
  */
-interface RenderStats {
-  cells: number;
-  drawn: number;
-  substituted: number;
-  blank: number;
-  level: number;
-  bounds: { x0: number; x1: number; y0: number; y1: number };
-  zoom: number;
-}
-
 interface SlideStats {
   drawn: number;
   blank: number;
@@ -59,10 +51,10 @@ interface SlideStats {
 }
 
 /**
- * Rather than restating `draw()`'s opts/return shape here, these read it off
- * the real functions themselves - so a change to `render.js`/`slide.js`'s
- * JSDoc (up to and including converting either to `.ts`) is picked up
- * automatically instead of leaving a second, driftable copy.
+ * `RoomRenderer` reads its shape off the real `createRenderer` rather than
+ * restating it, matching `SlideRenderer` below for `slide.js` - so a change to
+ * `render.ts`'s signature is picked up automatically instead of leaving a
+ * second, driftable copy.
  */
 type RoomRenderer = ReturnType<typeof createRenderer>;
 type SlideRenderer = ReturnType<typeof createSlideRenderer>;
@@ -241,12 +233,12 @@ export function useMapRenderer({
       // the new library, fly to it, and then slide it in from the old one.
       const running = anim.current;
       const showing = running?.before ?? { layout, order };
-      // Not object literals passed straight to `draw()`, so a field
-      // `render.js`/`slide.js`'s own JSDoc omits from its `@param` (`cursor`,
-      // here) is not an excess-property error - the untyped-and-deferred
-      // status of those two files (AGENTS.md's TypeScript migration note)
-      // means their JSDoc is not necessarily complete for every param they
-      // actually read.
+      // Named consts rather than object literals passed straight to `draw()` -
+      // `slide.js` stays untyped (AGENTS.md's TypeScript migration note), so a
+      // field its JSDoc's `@param` omits but its code still reads would
+      // otherwise risk an excess-property error at the call site.
+      // `render.ts`'s `DrawOpts` is a real, complete type now, so `roomDrawOpts`
+      // needs no such defending - it is kept a named const only for symmetry.
       const slideDrawOpts = {
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
@@ -271,7 +263,7 @@ export function useMapRenderer({
           `level ${slideStats.level} · ${slideStats.blank} blank · ${cache.size()} cached` +
           (blockedCount ? ` · ${blockedCount} blocked` : '');
       } else if (hud) {
-        const renderStats = stats as RenderStats;
+        const renderStats = stats as DrawResult;
         const size = pyramidSizeOf(renderStats.level);
         const over = cache.overBudget();
         hud.textContent =

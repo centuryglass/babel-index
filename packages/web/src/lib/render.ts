@@ -23,10 +23,46 @@
  * hysteresis band is what stops a zoom held near a boundary from flickering
  * between two levels, and it can only apply if it knows what is on screen now.
  */
-import { PYRAMID, prefetchBounds } from './pyramid.ts';
-import { pxPerCell } from './camera.ts';
-import { CENTER, genericId } from './tiles.ts';
-import { composeSpines } from './center.js';
+import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
+import { pxPerCell, type Camera } from './camera.ts';
+import { CENTER, genericId, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
+import { assignTitles, composeSpines } from './center.js';
+import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
+
+/** See `useMapRenderer.ts`/`useCenterShelf.ts` - `center.js`'s `assignTitles` stays untyped, so this file names the shape locally too. */
+type Slot = ReturnType<typeof assignTitles>[number];
+
+/**
+ * The 2d-context surface this file actually calls - not the whole DOM
+ * `CanvasRenderingContext2D`, which `render.test.mjs`'s recording fake has
+ * never implemented and should not have to. A real context satisfies this
+ * structurally, so nothing at the call sites changes.
+ */
+export interface DrawContext {
+  // A real `CanvasRenderingContext2D`'s `fillStyle`/`strokeStyle` read back as
+  // `string | CanvasGradient | CanvasPattern` even though this file only ever
+  // assigns a string to them - matching that union here is what lets a real
+  // context satisfy this interface, not just the test's recording fake.
+  fillStyle: string | CanvasGradient | CanvasPattern;
+  strokeStyle: string | CanvasGradient | CanvasPattern;
+  lineWidth: number;
+  font: string;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  strokeRect(x: number, y: number, w: number, h: number): void;
+  fillText(text: string, x: number, y: number): void;
+  // `LoadableImage` is all this file ever passes; `CanvasImageSource` is added
+  // to the union purely so a real `CanvasRenderingContext2D` - whose own
+  // `drawImage` only accepts the latter - still satisfies this interface.
+  drawImage(
+    image: LoadableImage | CanvasImageSource,
+    dx: number, dy: number, dw: number, dh: number
+  ): void;
+  drawImage(
+    image: LoadableImage | CanvasImageSource,
+    sx: number, sy: number, sw: number, sh: number,
+    dx: number, dy: number, dw: number, dh: number
+  ): void;
+}
 
 /**
  * The cache id for whatever a cell holds. The center is the blank center tile;
@@ -35,32 +71,57 @@ import { composeSpines } from './center.js';
  * falls back to the center tile, which covers a corpus with no generic tiles
  * at all.
  */
-const idOf = (cell, layout, gx, gy) =>
+const idOf = (cell: RoomAtResult, layout: MapLayout, gx: number, gy: number): RoomId =>
   cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
 
-export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
-  // Survives across frames purely so hysteresis has something to compare to.
-  let level = null;
+export interface CreateRendererOpts {
+  cache: TileCache;
+  pyramid?: Pyramid;
+}
 
+export interface DrawOpts {
+  ctx: DrawContext;
+  /** css pixels */
+  width: number;
+  /** css pixels */
+  height: number;
+  /** device pixel ratio, already clamped */
+  dpr: number;
+  cam: Camera;
+  /** from packages/map */
+  layout: MapLayout;
+  /** room ids, best first */
+  order: number[];
+  /** draw the center-room marker and rank labels */
+  chrome?: boolean;
   /**
-   * @param {object} opts
-   * @param {CanvasRenderingContext2D} opts.ctx
-   * @param {number} opts.width   css pixels
-   * @param {number} opts.height  css pixels
-   * @param {number} opts.dpr     device pixel ratio, already clamped
-   * @param {{x: number, y: number, zoom: number}} opts.cam
-   * @param {object} opts.layout  from packages/map
-   * @param {number[]} opts.order room ids, best first
-   * @param {boolean} [opts.chrome] draw the center-room marker and rank labels
-   * @param {Array|null} [opts.centreSlots] the history/tag titles to composite
-   *   onto the center tile's spines, or null to draw none. Optional so tests and
-   *   the slide renderer, which never pass it, exercise no text compositing.
-   * @returns {object} what the frame did, for the HUD and for tests
+   * the history/tag titles to composite onto the center tile's spines, or
+   * null to draw none. Optional so tests and the slide renderer, which never
+   * pass it, exercise no text compositing.
    */
+  centreSlots?: (Slot | null)[] | null;
+  cursor?: { x: number; y: number } | null;
+}
+
+/** What the frame did, for the HUD and for tests. */
+export interface DrawResult {
+  cells: number;
+  drawn: number;
+  substituted: number;
+  blank: number;
+  level: number;
+  bounds: Bounds;
+  zoom: number;
+}
+
+export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts) {
+  // Survives across frames purely so hysteresis has something to compare to.
+  let level: number | null = null;
+
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
     cursor = null,
-  }) {
+  }: DrawOpts): DrawResult {
     cache.beginFrame();
 
     ctx.fillStyle = '#0a0908';
@@ -72,7 +133,7 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
     const cellPx = pxPerCell(cam);
     const halfW = w / 2 / cellPx.x;
     const halfH = h / 2 / cellPx.y;
-    const bounds = {
+    const bounds: Bounds = {
       x0: Math.floor(cx - halfW), x1: Math.ceil(cx + halfW),
       y0: Math.floor(cy - halfH), y1: Math.ceil(cy + halfH),
     };
@@ -82,7 +143,8 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
     // display. Both axes go in: a cell need not share the tile's aspect.
     level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, level);
 
-    const toScreen = (wx, wy) => [(wx - cx) * cellPx.x + w / 2, (wy - cy) * cellPx.y + h / 2];
+    const toScreen = (wx: number, wy: number): [number, number] =>
+      [(wx - cx) * cellPx.x + w / 2, (wy - cy) * cellPx.y + h / 2];
     // +1 kills hairline gaps from rounding, on each axis independently.
     const cw = cellPx.x + 1;
     const ch = cellPx.y + 1;
@@ -90,7 +152,7 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
     let drawn = 0;
     let substituted = 0;
     let blank = 0;
-    const visible = [];
+    const visible: RoomId[] = [];
 
     for (let gy = bounds.y0; gy <= bounds.y1; gy++) {
       for (let gx = bounds.x0; gx <= bounds.x1; gx++) {
@@ -165,7 +227,14 @@ export function createRenderer({ cache, pyramid = PYRAMID } = {}) {
 }
 
 /** The center-room marker and the rank labels. Cosmetic, and zoom-gated. */
-function drawChrome(ctx, cell, sx, sy, cellPx, zoom) {
+function drawChrome(
+  ctx: DrawContext,
+  cell: RoomAtResult,
+  sx: number,
+  sy: number,
+  cellPx: { x: number; y: number },
+  zoom: number
+): void {
   if (cell.center) {
     ctx.strokeStyle = 'rgba(200,169,95,0.9)';
     ctx.lineWidth = 2;
