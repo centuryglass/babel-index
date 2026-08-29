@@ -22,12 +22,23 @@
  * again. Keeping it mounted also keeps the tile cache and the pyramid's LRU
  * warm. See `docs/catalog-plan.md` §2.
  */
+import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import { describeBook, BOOK_RECTS } from '../lib/center.js';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.tsx';
+import type { Description } from '../../../map/describe.ts';
+import type { RoomMeta } from '../../../map/metadata.ts';
+import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { Manifest } from '../../../map/manifest.ts';
+
+/** One slot on the center shelf, as `assignTitles()` (center.js) returns it. */
+type Slot = { kind: string; text: string; term?: string; action?: string } | null;
+
+/** The ranked listbox's own rows - `main.jsx`'s `searchResults`, not `SearchResult`. */
+type SearchResultsList = { total: number; rooms: { id: number; x: number; y: number; rank: number; name: string }[] } | null;
 
 /**
  * Each book's position inside the shelf container, as percentages.
@@ -85,6 +96,46 @@ export function MapView({
   history,
   onForgetSearches,
   onEnterCatalog,
+}: {
+  mode: 'map' | 'catalog';
+  canvasRef: Ref<HTMLCanvasElement>;
+  searchFormRef: Ref<HTMLFormElement>;
+  booksRef: Ref<HTMLDivElement>;
+  searchArrowRef: Ref<HTMLSpanElement>;
+  manifest: Manifest;
+  total: number;
+  described: number;
+  status: string;
+  query: string;
+  setQuery: (query: string) => void;
+  onSearch: FormEventHandler<HTMLFormElement>;
+  onClearSearch: () => void;
+  onGoToSearch: () => void;
+  maxQueryLength: number;
+  cursorLabel: string;
+  cursorEntry: RoomMeta | null;
+  cursorDesc: Description | null;
+  highlight: { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+  tagLinks: Record<string, string> | null;
+  onMapKeyDown: KeyboardEventHandler<HTMLCanvasElement>;
+  onKeyword: (keyword: string) => void;
+  centreSlots: Slot[];
+  bookFocus: number;
+  setBookFocus: (index: number) => void;
+  onBook: (index: number) => void;
+  onBooksKeyDown: KeyboardEventHandler<HTMLDivElement>;
+  searchResults: SearchResultsList;
+  onOpenRoom: (x: number, y: number, id: number, rank: number) => void;
+  roomCount: number;
+  setRoomCount: (count: number) => void;
+  contentRatio: number;
+  setContentRatio: (ratio: number) => void;
+  onReorder: () => void;
+  onRescatter: () => void;
+  onRecentre: () => void;
+  history: string[];
+  onForgetSearches: () => void;
+  onEnterCatalog: () => void;
 }) {
   return (
     <>
@@ -238,7 +289,7 @@ export function MapView({
       <div className="panel">
         <h1>The Indexing of Babel</h1>
         <p className="sub">
-          offline · {total} rooms in {manifest.directory.split('/').slice(-1)[0]}
+          offline · {total} rooms in {manifest.directory?.split('/').slice(-1)[0]}
           {described > 0 && <> · {described} described</>}
         </p>
 

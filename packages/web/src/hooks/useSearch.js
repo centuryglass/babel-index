@@ -50,10 +50,10 @@ import {
  *   nothing, so it has to speak for itself.
  * @returns {{
  *   query: string,
- *   setQuery: Function,
+ *   setQuery: (query: string) => void,
  *   result: import('../../../map/searchResult.ts').SearchResult|null,
  *   search: (term: string) => Promise<void>,
- *   runSearch: (e: Event) => void,
+ *   runSearch: import('react').FormEventHandler<HTMLFormElement>,
  *   clearSearch: () => void,
  *   highlight: {keyword: (text: string) => import('../../../map/searchResult.ts').MatchRange[],
  *               story: (text: string) => import('../../../map/searchResult.ts').MatchRange[]}|null,
