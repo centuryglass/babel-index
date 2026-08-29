@@ -104,8 +104,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                          `loader: { '.svg': 'text' }` produces, for `.ts`/`.tsx`
                          files that import one as raw markup
   - `src/components/`: presentational React components
-    * `MapView.jsx`: The 2D map canvas view
-    * `CatalogView.jsx`: Alternate catalog list view
+    * `MapView.tsx`: The 2D map canvas view
+    * `CatalogView.tsx`: Alternate catalog list view
     * `RoomCard.tsx`: RoomDetails popup, shown on right-click/long press
     * `RoomOverlay.tsx`: Modal showing full-size room image along with story content
     * `RoomDetails.tsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
@@ -119,7 +119,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
     * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
-    * `useSearch.js`: The query box, the `/api/search` fetch, blending the
+    * `useSearch.ts`: The query box, the `/api/search` fetch, blending the
                       reply into one ranking, the highlight range-finders
     * `useMapCamera.js`: React hook for camera changes, inputs entangled with
                          camera controls
@@ -608,7 +608,7 @@ code, not a standing invariant.
   `/images/foo.jpg`) resolves against the true origin root — one level above
   the subpath — and never reaches the proxy block that would have stripped
   it. `scan.ts`'s `IMAGES_BASE`/`SHARED_BASE` (`images`, `shared`, no leading
-  slash) and the two client-side `fetch()` calls (`main.jsx`, `useSearch.js`)
+  slash) and the two client-side `fetch()` calls (`main.jsx`, `useSearch.ts`)
   are relative for exactly this reason; a new one added with a leading slash
   is a subpath regression even though it works fine at the root deployment
   this app has always defaulted to.
