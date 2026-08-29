@@ -21,6 +21,24 @@ import type { Config } from '../../../config/config.ts';
 /** How far the card sits from the pick, and from the edge it is clamped against. */
 const CARD_GAP = 12;
 
+/**
+ * The area actually visible right now, not `window.inner{Width,Height}` alone.
+ *
+ * Those two describe the layout viewport, which on a phone can be larger than
+ * what is on screen - a pinch-zoomed page, or a browser chrome toolbar that is
+ * still animating out of the way, both shrink the VISUAL viewport without
+ * changing the layout one. Clamping against the wrong rectangle is exactly
+ * how a card that respects "inside the viewport" still opens partly under a
+ * toolbar or past the zoomed-in edge. `visualViewport` is undefined in a test
+ * DOM and on older browsers, so this falls back to the layout viewport there.
+ */
+function visibleRect() {
+  const vv = window.visualViewport;
+  return vv
+    ? { left: vv.offsetLeft, top: vv.offsetTop, width: vv.width, height: vv.height }
+    : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+}
+
 export function RoomCard({
   card,
   desc,
@@ -54,11 +72,25 @@ export function RoomCard({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    setPos({
-      left: Math.max(CARD_GAP, Math.min(card.at.x + CARD_GAP, window.innerWidth - width - CARD_GAP)),
-      top: Math.max(CARD_GAP, Math.min(card.at.y + CARD_GAP, window.innerHeight - height - CARD_GAP)),
-    });
+    const recalc = () => {
+      const { width, height } = el.getBoundingClientRect();
+      const vp = visibleRect();
+      setPos({
+        left: Math.max(vp.left + CARD_GAP, Math.min(card.at.x + CARD_GAP, vp.left + vp.width - width - CARD_GAP)),
+        top: Math.max(vp.top + CARD_GAP, Math.min(card.at.y + CARD_GAP, vp.top + vp.height - height - CARD_GAP)),
+      });
+    };
+    recalc();
+    // The visible area can change out from under an already-open card - a
+    // pinch-zoom, or a mobile browser's toolbar finishing its show/hide
+    // animation - and only `visualViewport` reports either.
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', recalc);
+    vv?.addEventListener('scroll', recalc);
+    return () => {
+      vv?.removeEventListener('resize', recalc);
+      vv?.removeEventListener('scroll', recalc);
+    };
   }, [card]);
 
   // Focus moves in on open and goes back where it came from on close.
