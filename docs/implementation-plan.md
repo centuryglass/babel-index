@@ -102,17 +102,21 @@ serve as completed task history.
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
 opportunity, per AGENTS.md. Roughly ordered easiest/most-isolated first,
-deliberately-loose shapes last; `HelpDialog.tsx`/`RoomCard.tsx` (converted
-from `.jsx`, types from `picking.ts`'s `RoomPick`, `map/describe.ts`'s
-`Description`, `map/metadata.ts`'s `RoomMeta`, `map/searchResult.ts`'s
+deliberately-loose shapes last; `RoomOverlay.tsx` (converted from `.jsx`,
+same prop types as `RoomCard.tsx` below - `Description`, `RoomMeta`,
+`SearchResult`/`MatchRange`, `Config['search']['weights']` - `room` typed
+inline as `{id, rank}` since that's exactly the shape `main.jsx`'s
+`expandRoom` builds, nothing more) is the most recent conversion.
+`HelpDialog.tsx`/`RoomCard.tsx` (converted from `.jsx`, types from
+`picking.ts`'s `RoomPick`, `map/describe.ts`'s `Description`,
+`map/metadata.ts`'s `RoomMeta`, `map/searchResult.ts`'s
 `SearchResult`/`MatchRange`, and `config/config.ts`'s `Config` - also tightened
 `useSearch.js`'s `highlight` JSDoc from `Function` to the real range-finder
 signature, which the stricter `RoomCard` prop type surfaced as a mismatch)
-were the most recent conversions. Test files (`*.test.mjs`) travel with
+came just before. Test files (`*.test.mjs`) travel with
 their module when it converts and aren't listed separately.
 
 Small, mostly presentational, few or no loose shapes:
- - `packages/web/src/components/RoomOverlay.jsx`
  - `packages/web/src/components/RoomDetails.jsx`
  - `packages/web/src/components/CatalogView.jsx`
  - `packages/web/src/components/MapView.jsx`
