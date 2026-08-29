@@ -162,8 +162,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `board.ts`: Sliding animation illusion's board data structure
   * `describe.ts`: Build screen reader messages
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
-  * `index.mjs`: CLI
-  * `mips.mjs`: Generate+fill alternate image size directories
+  * `index.ts`: CLI
+  * `mips.ts`: Generate+fill alternate image size directories
   * `layout.ts`: Import resolution steps from pyramid.ts, define expected directory structure
   
 ### Associated tools:

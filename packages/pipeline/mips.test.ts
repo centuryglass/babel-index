@@ -12,10 +12,15 @@ import {
   checkAspects,
   contentHash,
   updateMetadataHashes,
-} from './mips.mjs';
+} from './mips.ts';
 
 /** A JPEG of the given size, synthesised - nothing here reads the sample corpus. */
-async function makeImage(path, w, h, background = { r: 40, g: 34, b: 28 }) {
+async function makeImage(
+  path: string,
+  w: number,
+  h: number,
+  background: { r: number; g: number; b: number } = { r: 40, g: 34, b: 28 }
+): Promise<void> {
   const buf = await sharp({
     create: { width: w, height: h, channels: 3, background },
   })
@@ -24,7 +29,7 @@ async function makeImage(path, w, h, background = { r: 40, g: 34, b: 28 }) {
   await writeFile(path, buf);
 }
 
-async function withTempDir(fn) {
+async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), 'mips-'));
   try {
     return await fn(dir);

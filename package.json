@@ -9,7 +9,7 @@
   },
   "scripts": {
     "generate:figures": "node --import ./build/register.mjs tools/center-placement/hexagon-plan.mjs",
-    "generate:mips": "node --import ./build/register.mjs packages/pipeline/index.mjs",
+    "generate:mips": "node --import ./build/register.mjs packages/pipeline/index.ts",
     "generate:embeddings": "node --import ./build/register.mjs tools/embed/embed.ts",
     "upload:r2": "node --import ./build/register.mjs tools/upload/upload-r2.ts",
     "test": "node --import ./build/register.mjs --test $(find packages tools -name '*.test.mjs' -o -name '*.test.ts')",

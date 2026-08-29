@@ -48,11 +48,12 @@ import { join, extname, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { LEVELS } from '../web/src/lib/pyramid.ts';
-import { mipPlan } from './layout.ts';
+import { mipPlan, type Size, type LevelStep, type MipStep } from './layout.ts';
 
 // Re-exported because this is where callers have always looked for it. It lives
 // in layout.ts so scan.ts can read the layout without importing sharp.
 export { mipPlan } from './layout.ts';
+export type { Size, LevelStep, MipStep } from './layout.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
@@ -67,8 +68,21 @@ const METADATA_FILE = 'metadata.json';
 const HASH_PREFIX = 'babel-index:sha256:';
 const HASH_PATTERN = new RegExp(`${HASH_PREFIX}([0-9a-f]{64})`);
 
+/** One `metadata.json` sidecar entry - loose on purpose, see updateMetadataHashes. */
+type SidecarEntry = Record<string, unknown>;
+type Sidecar = Record<string, SidecarEntry>;
+
+export interface WriteMipsResult {
+  plan: MipStep[];
+  written: number;
+  skipped: number;
+  cached: number;
+  hash: string;
+  source: Size;
+}
+
 /** A hash of the source file's bytes, embedded in every level scaled from it. */
-export async function contentHash(file) {
+export async function contentHash(file: string): Promise<string> {
   return createHash('sha256').update(await readFile(file)).digest('hex');
 }
 
@@ -77,7 +91,7 @@ export async function contentHash(file) {
  * is missing, unreadable, or was never stamped by this tool - any of which
  * means it must be (re)written rather than trusted.
  */
-async function embeddedHash(file) {
+async function embeddedHash(file: string): Promise<string | null> {
   try {
     const { exif } = await sharp(file).metadata();
     if (!exif) return null;
@@ -95,15 +109,24 @@ async function embeddedHash(file) {
  * right one here - these are photographs being minified, where a box filter
  * would alias the book spines into moire.
  *
- * @param {object} opts
- * @param {string} opts.file        absolute path to the source image
- * @param {string} opts.outDir      root the <width>/ directories go under
- * @param {boolean} [opts.inPlace]  outDir is the source's own directory
- * @param {number} [opts.quality]   JPEG/WebP quality for the generated levels
- * @param {{level: number, divisor: number}[]} [opts.levels]
- * @returns {Promise<{plan: object[], written: number, skipped: number, cached: number, hash: string}>}
+ * @param opts.file        absolute path to the source image
+ * @param opts.outDir      root the <width>/ directories go under
+ * @param opts.inPlace     outDir is the source's own directory
+ * @param opts.quality     JPEG/WebP quality for the generated levels
  */
-export async function writeMips({ file, outDir, inPlace = false, quality = 82, levels = LEVELS }) {
+export async function writeMips({
+  file,
+  outDir,
+  inPlace = false,
+  quality = 82,
+  levels = LEVELS,
+}: {
+  file: string;
+  outDir: string;
+  inPlace?: boolean;
+  quality?: number;
+  levels?: LevelStep[];
+}): Promise<WriteMipsResult> {
   const meta = await sharp(file).metadata();
   const plan = mipPlan({ w: meta.width, h: meta.height }, levels);
   const name = basename(file);
@@ -113,7 +136,7 @@ export async function writeMips({ file, outDir, inPlace = false, quality = 82, l
   let skipped = 0;
   let cached = 0;
   for (const step of plan) {
-    const dir = join(outDir, step.dir);
+    const dir = join(outDir, step.dir ?? '');
     const target = join(dir, name);
 
     if (step.level === 0 && inPlace) {
@@ -155,12 +178,12 @@ export async function writeMips({ file, outDir, inPlace = false, quality = 82, l
  * A missing or unreadable sidecar is started fresh rather than failing the
  * run - a corpus with no keyword/story data yet still gets one with hashes.
  *
- * @param {string} dir the corpus directory `metadata.json` lives in
- * @param {Map<string,string>} hashes filename -> content hash
+ * @param dir the corpus directory `metadata.json` lives in
+ * @param hashes filename -> content hash
  */
-export async function updateMetadataHashes(dir, hashes) {
+export async function updateMetadataHashes(dir: string, hashes: Map<string, string>): Promise<void> {
   const path = join(dir, METADATA_FILE);
-  let sidecar = {};
+  let sidecar: Sidecar = {};
   try {
     const parsed = JSON.parse(await readFile(path, 'utf8'));
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) sidecar = parsed;
@@ -181,15 +204,19 @@ export async function updateMetadataHashes(dir, hashes) {
  * Every image directly inside a directory, ignoring the <width>/ subdirectories
  * this tool writes. Sorted, so ids stay stable the way scan.mjs assigns them.
  */
-export async function sourceImages(dir) {
+export async function sourceImages(dir: string): Promise<string[]> {
   const entries = await readdir(dir);
-  const files = [];
+  const files: string[] = [];
   for (const entry of entries) {
     if (!IMAGE_EXT.has(extname(entry).toLowerCase())) continue;
     const st = await stat(join(dir, entry));
     if (st.isFile()) files.push(entry);
   }
   return files.sort();
+}
+
+export interface SourceSize extends Size {
+  file: string;
 }
 
 /**
@@ -199,11 +226,12 @@ export async function sourceImages(dir) {
  * room with a different one is either stretched or letterboxed, and neither is
  * a decision worth making silently on someone's behalf.
  *
- * @param {{file: string, w: number, h: number}[]} sizes
- * @param {number} [tolerance] fractional difference allowed against the first
- * @returns {{aspect: number, outliers: object[]}}
+ * @param tolerance fractional difference allowed against the first
  */
-export function checkAspects(sizes, tolerance = 0.01) {
+export function checkAspects(
+  sizes: SourceSize[],
+  tolerance = 0.01
+): { aspect: number | null; outliers: SourceSize[] } {
   if (!sizes.length) return { aspect: null, outliers: [] };
   const aspect = sizes[0].w / sizes[0].h;
   const outliers = sizes.filter((s) => Math.abs(s.w / s.h - aspect) / aspect > tolerance);

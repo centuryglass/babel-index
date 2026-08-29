@@ -32,13 +32,13 @@
  * corpus costs a few inferences, not the whole corpus. A model change (the
  * whole point of which is that old vectors are no longer comparable to new
  * ones) invalidates every cached row, same as no cache existing at all. This
- * mirrors packages/pipeline/mips.mjs's content-hash cache; contentHash() is
+ * mirrors packages/pipeline/mips.ts's content-hash cache; contentHash() is
  * shared with it rather than reimplemented.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanDirectory } from '../../packages/server/scan.ts';
-import { contentHash } from '../../packages/pipeline/mips.mjs';
+import { contentHash } from '../../packages/pipeline/mips.ts';
 
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 const QUANT_SCALE = 127; // int8 half-range; see file header
