@@ -625,18 +625,25 @@ test('a single matched story word sits at the moderate STORY_FLOOR, a full claus
   assert.equal(matchCertainty({ storyMatched: false, storyLongChars: 0 }), 0);
 });
 
-test('CLIP certainty is read off the raw cosine, against the (still two-point) absolute band', () => {
-  const { low, high } = CLIP_CERTAINTY;
-  assert.equal(matchCertainty({ cosine: low - 0.05 }), 0, 'below the band it is saying nothing, not a mismatch yet');
-  assert.equal(matchCertainty({ cosine: high + 0.05 }), 1, 'above it, as sure as it gets');
-  const mid = matchCertainty({ cosine: (low + high) / 2 });
-  assert.ok(Math.abs(mid - 0.5) < 1e-6, `halfway across the band is ${mid}`);
+test('CLIP certainty is read off the raw cosine, against the three-anchor band', () => {
+  const { centre, high, low } = CLIP_CERTAINTY;
+  assert.equal(matchCertainty({ cosine: centre }), 0, 'at the no-opinion centre it says nothing');
+  assert.equal(matchCertainty({ cosine: high + 0.05 }), 1, 'above the high extreme, as sure as it gets');
+  assert.equal(matchCertainty({ cosine: low - 0.05 }), -1, 'below the low extreme, as sure it does NOT match');
+  const posMid = matchCertainty({ cosine: (centre + high) / 2 });
+  assert.ok(Math.abs(posMid - 0.5) < 1e-6, `halfway to the high extreme is ${posMid}`);
+  const negMid = matchCertainty({ cosine: (centre + low) / 2 });
+  assert.ok(Math.abs(negMid + 0.5) < 1e-6, `halfway to the low extreme is ${negMid}`);
 });
 
-test('signedClipCertainty is the positive-only interim curve, until §5 measures a real low extreme', () => {
-  assert.equal(signedClipCertainty(CLIP_CERTAINTY.low - 1), 0, 'far below the band is still "no opinion", not "sure not"');
+test('signedClipCertainty is a monotone signed curve across all three anchors', () => {
+  const { centre, high, low } = CLIP_CERTAINTY;
+  assert.equal(signedClipCertainty(centre), 0, 'the no-opinion centre');
+  assert.equal(signedClipCertainty(high + 1), 1, 'saturates at the high extreme');
+  assert.equal(signedClipCertainty(low - 1), -1, 'saturates at the low extreme');
   assert.equal(signedClipCertainty(null), 0);
-  assert.equal(signedClipCertainty(CLIP_CERTAINTY.high + 1), 1);
+  assert.ok(signedClipCertainty((centre + high) / 2) > 0, 'above centre reads positive');
+  assert.ok(signedClipCertainty((centre + low) / 2) < 0, 'below centre reads negative');
 });
 
 test('a query nothing matches clusters nothing, and does not even decide the order', () => {
@@ -644,15 +651,18 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
   // *some* room a score of 1 for any query at all, so relative CLIP alone
   // cannot tell "cghjj" from "art nouveau" - and a gradient driven by it would
   // cluster noise and claim a find. The raw cosines say what is really going
-  // on: every one of these sits below the band, so `clipCertaintyGate` is
-  // exactly 0 for all three, and `clip * clipNorm * clipCertaintyGate` - the
-  // ranking's own CLIP term - is silenced right along with certainty. Ranking
-  // falls back to stable id order, same as if there were no signal at all.
+  // on: every one of these sits below the low extreme, so `clipCertaintyGate`
+  // (the RANKING term, clamped to the positive half) is exactly 0 for all
+  // three, and `clip * clipNorm * clipCertaintyGate` - the ranking's own CLIP
+  // term - is silenced right along with any *positive* certainty. Ranking
+  // falls back to stable id order, same as if there were no signal at all -
+  // certainty itself now reads these as a confident mismatch (negative), which
+  // is a different question the density gradient floors separately.
   const cosines = [-0.2, -0.15, -0.1];
   assert.ok(cosines.every((c) => c <= CLIP_CERTAINTY.low));
   const certainty = certaintyOf({ query: 'cghjj', embeddings: atCosines(...cosines) });
 
-  assert.equal(Math.max(...certainty), 0, `expected no certainty, got ${[...certainty]}`);
+  assert.ok(Math.max(...certainty) <= 0, `expected no positive certainty, got ${[...certainty]}`);
   assert.ok(certainty.every((c) => c < CERTAINTY_FLOOR), 'and nothing that would survive the floor');
 
   assert.equal(Math.max(...normaliseScores(cosines)), 1, 'relative CLIP alone would have picked a "winner"');
@@ -686,22 +696,34 @@ test('a cosine that clears the gate still leads once some of the corpus does not
 test('a strong cosine is certain on its own', () => {
   // "red", against rooms CLIP really does think are red: certainty falls off
   // gradually with the cosine, which is what makes the density falloff gradual.
-  const certainty = certaintyOf({ query: 'red', embeddings: atCosines(0.4, 0.15, -0.1) });
+  // `atCosines` round-trips every cosine through int8 quantisation, so these
+  // land close to but not exactly on the anchors - the assertions below tie
+  // to that, not to exact equality.
+  const { centre, high } = CLIP_CERTAINTY;
+  const midHigh = centre + (high - centre) / 2;
+  const certainty = certaintyOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, centre) });
   assert.equal(certainty[0], 1);
-  assert.ok(certainty[1] > 0.4 && certainty[1] < 0.6, `middling cosine gave ${certainty[1]}`);
-  assert.equal(certainty[2], 0);
+  assert.ok(Math.abs(certainty[1] - 0.5) < 0.05, `halfway to the high extreme gave ${certainty[1]}`);
+  assert.ok(Math.abs(certainty[2]) < 0.05, `near the no-opinion centre gave ${certainty[2]}`);
 });
 
 test('an exact keyword match is certain whatever the picture looks like', () => {
-  // "lora:yuiop" tagged on a room CLIP has no opinion about. The tag is the
-  // answer; the cosine has no say in whether it is one.
+  // "lora:yuiop" tagged on a room CLIP genuinely has no opinion about (cosine
+  // at the no-opinion centre). The tag is the answer; the cosine has no say in
+  // whether it is one.
+  const { centre } = CLIP_CERTAINTY;
   const certainty = certaintyOf({
     query: 'yuiop',
-    embeddings: atCosines(-0.1, -0.1, -0.1),
+    embeddings: atCosines(centre, centre, centre),
     index: indexOf([['yuiop'], null], [['oak'], null], [['pine'], null]),
   });
   assert.equal(certainty[0], 1, 'the tagged room');
-  assert.deepEqual([...certainty.slice(1)], [0, 0], 'and nothing else clusters at all');
+  // `atCosines` round-trips `centre` through int8 quantisation, so it lands
+  // close to but not exactly on it - hence the tolerance rather than `=== 0`.
+  assert.ok(
+    certainty.slice(1).every((c) => Math.abs(c) < 0.01),
+    `expected nothing else to cluster at all, got ${[...certainty.slice(1)]}`
+  );
 });
 
 test('a partial keyword is partially certain', () => {
@@ -732,14 +754,18 @@ test('the certainty bounds are configurable', () => {
   // They are the one part of the gradient that wants measuring against a real
   // corpus, which is why they are config rather than a constant in the blend.
   const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, vector: CLIP_QUERY };
-  assert.equal(rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).certainty[0], 0);
+  assert.equal(
+    rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).certainty[0],
+    -1,
+    'the default band reads it as a confident mismatch'
+  );
   const loosened = rankHybrid({
     count: 3,
     weights: WEIGHTS,
     ...opts,
-    clipCertainty: { low: -0.3, high: -0.15 },
+    clipCertainty: { centre: -0.2, high: -0.15, low: -0.3 },
   });
-  assert.equal(loosened.certainty[0], 1, 'a lower band makes the same cosine certain');
+  assert.equal(loosened.certainty[0], 1, 'a shifted band makes the same cosine certain');
 });
 
 test('no blob means no CLIP certainty, rather than a certainty of zero cosines', () => {
@@ -870,9 +896,10 @@ test('explainScore omits a silent signal rather than printing it as zero', () =>
 });
 
 test('a CLIP row shows the raw cosine beside the relative one, so a certain-looking 1.00 reads as uncertain', () => {
-  // Every cosine is below `clipLow`: CLIP is saying nothing about any of these
-  // rooms. Min-maxing still puts the best of them at exactly 1.00, which is the
-  // trap - a breakdown printing that alone would claim a confident match.
+  // Every cosine is below `clipLow`: CLIP reads all of these as a confident
+  // MISMATCH, not merely "no opinion". Min-maxing still puts the best of them
+  // at exactly 1.00, which is the trap - a breakdown printing that alone would
+  // claim a confident match.
   const cosines = [-0.1, -0.15, -0.2];
   assert.ok(cosines.every((c) => c < CLIP_CERTAINTY.low));
 
@@ -890,6 +917,7 @@ test('a CLIP row shows the raw cosine beside the relative one, so a certain-look
 
   assert.equal(breakdown.clip[0], 1, 'relative score is the top of the range');
   assert.ok(Math.abs(clip.raw - cosines[0]) < 0.01, 'the row carries the RAW cosine');
-  assert.ok(clip.raw < CLIP_CERTAINTY.low, 'which is below the floor');
-  assert.equal(sure, 0, 'and certainty, computed absolutely, says so');
+  assert.ok(clip.raw < CLIP_CERTAINTY.low, 'which is below the low extreme');
+  assert.equal(clip.signedPercent, -99.99, 'the CLIP row reports it as a clamped signed percentage');
+  assert.equal(sure, -1, 'and certainty, computed absolutely, agrees it is a confident mismatch');
 });

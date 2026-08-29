@@ -84,6 +84,8 @@ export interface ScoreBreakdown {
   clip: Float32Array;
   /** the positive half of the signed CLIP certainty curve, in [0, 1] */
   clipCertaintyGate: Float32Array;
+  /** the full signed CLIP certainty curve, in [-1, 1] - what the CLIP row's reported percentage reads */
+  clipSigned: Float32Array;
   cosine: Float32Array;
 }
 
@@ -123,6 +125,13 @@ export interface ScoreExplanationRow {
   weighted: number;
   raw: number;
   note: string | null;
+  /**
+   * CLIP row only: the signed certainty curve as a clamped percentage
+   * (docs/search_rules.md "Reporting") - positive is confidence the image
+   * matches, negative is confidence it does not. `undefined` on every other
+   * row - tags and story report counts, not a percentage.
+   */
+  signedPercent?: number;
 }
 
 /** `explainScore()`'s return value: the rows a reader can check the sort against. */

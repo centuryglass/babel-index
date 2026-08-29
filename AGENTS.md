@@ -179,8 +179,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
 - `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
                                  corpus - the source of `CLIP_CERTAINTY`/
-                                 `search.density.clipLow/clipHigh`'s calibration
-                                 and of `docs/search_rules.md`'s thresholds.
+                                 `search.density.clipCentre/clipHigh/clipLow`'s
+                                 calibration and of `docs/search_rules.md`'s
+                                 thresholds. `--universal`/`--irrelevant` probe
+                                 lists measure the high/low extremes;
+                                 `--nonsense` validates the centre.
   * `cosine-stats.ts`: Percentile/summary arithmetic and the clipLow/clipHigh
                        and universal-keyword calibration suggestions - pure,
                        unit-tested without a model or a corpus.

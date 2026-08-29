@@ -81,39 +81,39 @@ distribution is where CLIP has *no opinion*; above it, rising confidence the
 image matches; below it, rising confidence it does *not*. Displayed as a signed
 percentage, "N% certain the image content does not match" for the negative side.
 
-**Now:** two hand-set linear bands. `CLIP_CERTAINTY = {-0.08, 0.37}` (used for
-both the ranking gate and the density gradient) and the doc's separate display
-band both put their zero-crossing far below where text→image cosines actually
-live. Measured on the real corpus (2048 rooms × 2149 keywords, ViT-B/32):
-unrelated pairs centre at cosine **≈ 0.205**, the global min across 4.4M pairs is
-only **−0.060**, and real best-matches sit at **p50 ≈ 0.26**, max **0.346**. So a
-genuinely unrelated query reads as ~60% certain on the current display band, and
-the negative side is unreachable.
+**Landed:** `CLIP_CERTAINTY` (`scoring.js`) is now the three-anchor
+`{centre, high, low}` shape, and `signedClipCertainty` is a genuine monotone
+signed curve — two linear segments meeting at `centre`, `0` there, `+1` at
+`high`, `−1` at `low` — replacing the old two-point `clamp01` band that could
+never go negative. `centre` (≈0.205) and `high` (≈0.279) are read straight off
+the real measurement already committed (`cosine-range-report.json`, 2048 rooms
+× 2149 keywords): `centre` is `overall`'s median (the noise band), `high` is
+the median ceiling across near-universal keywords (`bookshelf`, `book`,
+`library`, ...). `clipCertaintyGate` (the ranking term) is this curve's
+positive half, computed by the caller (`rankHybrid`) rather than by
+`signedClipCertainty` itself, so certainty's negative half (`Cneg` in
+`matchCertainty`) can read the same call's negative half too — one
+calibration, two readings, not two bands to drift. `explainScore` now returns
+a `signedPercent` on the CLIP row (clamped `0.01%`–`99.99%`), and
+`RoomDetails`/`index.html` render it as the spec's compact phrase, styled
+distinctly (a different color, italic) when negative. `config.search.density`
+carries the three anchors as `clipCentre`/`clipHigh`/`clipLow`, narrowing-only
+validated as `clipHigh > clipCentre > clipLow`.
 
-**Steps:**
-1. Measure the *no-opinion centre* and the two extremes directly, not by
-   guessing:
-   - the noise centre from the `overall` distribution (`cosine-range.ts`) and
-     from a set of **nonsense/keysmash** probe queries (they should land in the
-     same band — that agreement is the validation);
-   - the high extreme from `keywordMax` and the universal-keyword ceiling
-     (already measured);
-   - the low extreme from **known-irrelevant strong concepts** (celebrity names,
-     objects nothing in the corpus resembles). Expect these to land *low-positive*,
-     not negative — which is the point: it confirms the negative display range
-     maps almost entirely onto low-positive cosines, with only outliers below
-     zero, exactly as the spec now says.
-2. Replace the linear band with a monotone map anchored on those three points:
-   `0` at the no-opinion centre, `+1` toward the high extreme, `−1` toward the
-   low extreme, continuous throughout (no discrete steps). A signed transform of
-   the measured noise CDF is the natural shape and needs no arbitrary bounds;
-   `cosine-stats.ts` already computes the percentiles it would read.
-3. Keep the ranking gate (`clipCertaintyGate`, the `[0, 1]` used inside the sum)
-   as the positive half of the same curve — one calibration, two readings, not
-   two bands to drift.
-4. Update `explainScore`/`RoomDetails` to render the signed value: a positive
-   "certain it matches" and a visually distinct negative "certain it does not",
-   clamped `0.01%`–`99.99%` on both sides.
+**Steps left:** `low` is still a provisional placeholder — the mirror of
+`high` across `centre` (`centre - (high - centre)`) — not the real measurement
+the spec calls for. That needs scoring known-irrelevant strong concepts
+(`race car`, `swimming pool` — things CLIP recognises but that have nothing to
+do with this corpus) against the real corpus, which needs both the full
+embeddings blob and network access to the CLIP text tower; neither was
+available in the environment this landed in. `tools/embed/cosine-range.ts` now
+supports it directly: `--irrelevant <file>` computes the low extreme the same
+way `--universal` computes the high one (reusing `summarizeUniversal` — same
+min-p10/median-p50 math, different semantic list), and `--nonsense <file>`
+scores keysmash queries as a validation-only check that they land near
+`overall`'s centre. Once run on the real corpus, drop the measured `low` (and,
+if `--nonsense` disagreed with the centre by more than a hair, a re-read of
+`centre` too) into `CLIP_CERTAINTY` and `config.ts`'s `clipLow` default.
 
 ## 6. Per-signal ranks and ties are not computed
 

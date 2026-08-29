@@ -26,6 +26,7 @@
         --dim: #9a8f7d;
         --panel: rgba(18, 15, 12, 0.88);
         --edge: rgba(180, 160, 120, 0.22);
+        --mismatch: #c97b63;
       }
       * { box-sizing: border-box; }
       /*
@@ -295,6 +296,15 @@
       .score td { text-align: right; font-variant-numeric: tabular-nums; padding: 2px 0; }
       .score .num { color: var(--ink); }
       .score .raw { color: var(--dim); width: 4.5em; }
+      /* The CLIP row's certainty phrase is longer than the raw-cosine column fits - let it wrap. */
+      .score .raw:has(.clip-certainty) { width: auto; white-space: normal; }
+      /*
+        docs/search_rules.md "Reporting": a negative reading is evidence of a
+        mismatch, not a bare minus sign, so it gets a visually distinct style -
+        a different color plus italics - never confused with a positive match.
+      */
+      .clip-certainty { color: var(--dim); }
+      .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
       .score .total th, .score .total td {
         border-top: 1px solid var(--edge); padding-top: 4px; color: var(--ink);
       }
@@ -531,6 +541,8 @@
       .score-strip span { color: #8a7c66; font-variant-numeric: tabular-nums; }
       .score-strip .total b { color: #c8a95f; }
       .score-strip .sure { font-style: italic; }
+      .score-strip .clip-certainty { color: #8a7c66; }
+      .score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
       .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
       /* The center room's row: the shelf, as links. */
