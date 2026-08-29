@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { roomAtPoint } from './picking.ts';
-import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.js';
+import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.ts';
 import { createLayout } from '../../../map/ordering.ts';
 
 const rect = { width: 1280, height: 800 };

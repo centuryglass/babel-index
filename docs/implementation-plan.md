@@ -96,8 +96,16 @@ serve as completed task history.
   already a real, fixed shape and there was nothing left to defer. Application
   logic converts opportunistically, not on a schedule; the deliberately loose
   shapes called out in AGENTS.md (`scoring.js`'s duck-typed ranking arrays,
-  `center.js`'s `RUNS`, the animation state in `slide.js`/`camera.js`) are the
+  `center.js`'s `RUNS`, the animation state in `slide.js`) are the
   ones to leave for last, once there's a real type worth writing for them.
+  `camera.js` turned out not to be one of those - it's pure math over a fixed
+  `Camera`/`Flight` shape with no duck-typing to defer - so it's now
+  `camera.ts`, with `Camera`, `ZoomLimits`, `Flight`, `FlightState` and
+  `CursorGranularity` as real exported types other modules can import instead
+  of restating a subset inline (`picking.ts` and `useModeTransition.ts` still
+  carry their own narrower local `Camera` interfaces; unifying those is a
+  follow-up, not required for this conversion since they're structurally
+  compatible).
 
 ## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
 Not a schedule - convert one when you're already touching it or it's a clean
@@ -136,12 +144,9 @@ came before that. Test files (`*.test.mjs`) travel with
 their module when it converts and aren't listed separately.
 
 Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
-already exist as types to write these against):
- - `packages/web/src/hooks/useCorpus.js`
- - `packages/web/src/hooks/useSearch.js`
- - `packages/web/src/hooks/useModeTransition.js`
+already exist as types to write these against; `useCorpus.js`, `useSearch.js`,
+`useModeTransition.js` and `useCenterShelf.js` already converted):
  - `packages/web/src/hooks/useMapCursor.js`
- - `packages/web/src/hooks/useCenterShelf.js`
  - `packages/web/src/hooks/useMapCamera.js`
  - `packages/web/src/hooks/useMapRenderer.js`
  - `packages/web/src/hooks/useRearrangement.js`
@@ -149,9 +154,9 @@ already exist as types to write these against):
 Deliberately loose today (see AGENTS.md) - convert once there's a real type
 worth writing rather than an `any`/`object` that just papers over it;
 `main.jsx` last since it wires every hook above together and is only as
-typeable as they are:
+typeable as they are (`camera.js` converted - see above; it wasn't actually
+one of these):
  - `packages/web/src/lib/render.js`
- - `packages/web/src/lib/camera.js`
  - `packages/web/src/lib/slide.js`
  - `packages/web/src/lib/center.js`
  - `packages/map/scoring.js`

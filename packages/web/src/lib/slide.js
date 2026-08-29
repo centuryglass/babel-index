@@ -57,7 +57,7 @@
  * corpus size does not enter into it.
  */
 import { PYRAMID } from './pyramid.ts';
-import { pxPerCell } from './camera.js';
+import { pxPerCell } from './camera.ts';
 import { CENTER, genericId } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 

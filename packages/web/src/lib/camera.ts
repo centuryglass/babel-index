@@ -24,6 +24,61 @@
  */
 import { BASE_TILE } from './pyramid.ts';
 
+/** The hard or configured zoom range, riding on a camera as `limits`. */
+export interface ZoomLimits {
+  min: number;
+  max: number;
+}
+
+/**
+ * The map camera. `x`/`y` are the world cell at the center of the viewport;
+ * `zoom` is pixels per cell WIDTH. `aspect` and `limits` are optional and, once
+ * present, must survive every operation below by spreading - see the module
+ * comment.
+ */
+export interface Camera {
+  x: number;
+  y: number;
+  zoom: number;
+  aspect?: number;
+  limits?: ZoomLimits;
+}
+
+/** A viewport-relative pixel rect - the canvas bounding box. */
+export interface ViewportRect {
+  width: number;
+  height: number;
+}
+
+/** A world point, in cells. */
+export interface WorldPoint {
+  x: number;
+  y: number;
+}
+
+/** A screen point, in viewport-relative pixels. */
+export interface ScreenPoint {
+  x: number;
+  y: number;
+}
+
+/** A camera flight in progress, as a value - see `beginFlight`/`flightAt`. */
+export interface Flight {
+  from: Camera;
+  to: Camera;
+  t0: number;
+  ms: number;
+}
+
+/** `flightAt`'s result: the camera part way through, and whether it has arrived. */
+export interface FlightState {
+  cam: Camera;
+  done: boolean;
+}
+
+/** 'cell' or 'region': what kind of thing the cursor names at a given zoom. */
+export type CursorGranularity = 'cell' | 'region';
+
 /**
  * Cell height as a multiple of cell width. 0.75 at the current 4:3 tile.
  *
@@ -35,7 +90,7 @@ import { BASE_TILE } from './pyramid.ts';
 export const CELL_ASPECT = BASE_TILE.h / BASE_TILE.w;
 
 /** Pixels per cell on each axis, for a camera. The one place the aspect is applied. */
-export function pxPerCell(cam) {
+export function pxPerCell(cam: Camera): { x: number; y: number } {
   const aspect = cam.aspect ?? CELL_ASPECT;
   return { x: cam.zoom, y: cam.zoom * aspect };
 }
@@ -67,7 +122,7 @@ export const MAX_ZOOM_FACTOR = 2;
  * camera carries its own `limits`, below) but may never widen it, so that
  * assertion keeps covering every state the app can reach at runtime.
  */
-export const ZOOM_LIMITS = { min: 26, max: BASE_TILE.w * MAX_ZOOM_FACTOR };
+export const ZOOM_LIMITS: ZoomLimits = { min: 26, max: BASE_TILE.w * MAX_ZOOM_FACTOR };
 
 export const MIN_ZOOM = ZOOM_LIMITS.min;
 export const MAX_ZOOM = ZOOM_LIMITS.max;
@@ -80,7 +135,7 @@ export const MAX_ZOOM = ZOOM_LIMITS.max;
  * rather than rebuilding `{x, y, zoom}`, or the range is lost mid-gesture along
  * with the shape.
  */
-export const clampZoom = (z, limits = ZOOM_LIMITS) =>
+export const clampZoom = (z: number, limits: ZoomLimits = ZOOM_LIMITS): number =>
   Math.min(limits.max, Math.max(limits.min, z));
 
 /**
@@ -98,14 +153,28 @@ export const clampZoom = (z, limits = ZOOM_LIMITS) =>
  * Pure and DOM-free, so the opening view can be reasoned about at any viewport
  * without a browser.
  */
-export function fitZoom({ width, height, target, aspect = CELL_ASPECT, limits = ZOOM_LIMITS, margin = 1 }) {
+export function fitZoom({
+  width,
+  height,
+  target,
+  aspect = CELL_ASPECT,
+  limits = ZOOM_LIMITS,
+  margin = 1,
+}: {
+  width: number;
+  height: number;
+  target: { w: number; h: number };
+  aspect?: number;
+  limits?: ZoomLimits;
+  margin?: number;
+}): number {
   const byWidth = (width * margin) / target.w;
   const byHeight = (height * margin) / (aspect * target.h);
   return clampZoom(Math.min(byWidth, byHeight), limits);
 }
 
 /** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
-export function screenToWorld(px, py, cam, rect) {
+export function screenToWorld(px: number, py: number, cam: Camera, rect: ViewportRect): WorldPoint {
   const perCell = pxPerCell(cam);
   return {
     x: cam.x + (px - rect.width / 2) / perCell.x,
@@ -114,7 +183,7 @@ export function screenToWorld(px, py, cam, rect) {
 }
 
 /** World cell coordinate -> viewport pixel. The exact inverse of screenToWorld. */
-export function worldToScreen(wx, wy, cam, rect) {
+export function worldToScreen(wx: number, wy: number, cam: Camera, rect: ViewportRect): ScreenPoint {
   const perCell = pxPerCell(cam);
   return {
     x: (wx - cam.x) * perCell.x + rect.width / 2,
@@ -133,16 +202,13 @@ export function worldToScreen(wx, wy, cam, rect) {
  * Taking a multiplier rather than a wheel delta is what lets a pinch share this:
  * a pinch knows the ratio its fingers moved and has no delta to invent.
  *
- * @param {{x: number, y: number, zoom: number}} cam
- * @param {number} px viewport-relative anchor x
- * @param {number} py viewport-relative anchor y
- * @param {number} factor multiplier on the zoom; >1 zooms in
- * @param {{width: number, height: number}} rect
- * @returns {{x: number, y: number, zoom: number}} a new camera
+ * @param px viewport-relative anchor x
+ * @param py viewport-relative anchor y
+ * @param factor multiplier on the zoom; >1 zooms in
  */
-export function zoomBy(cam, px, py, factor, rect) {
+export function zoomBy(cam: Camera, px: number, py: number, factor: number, rect: ViewportRect): Camera {
   const before = screenToWorld(px, py, cam, rect);
-  const zoomed = { ...cam, zoom: clampZoom(cam.zoom * factor, cam.limits) };
+  const zoomed: Camera = { ...cam, zoom: clampZoom(cam.zoom * factor, cam.limits) };
   const after = screenToWorld(px, py, zoomed, rect);
   return {
     ...zoomed,
@@ -160,13 +226,10 @@ export const WHEEL_ZOOM_RATE = 0.0014;
 /**
  * Zoom about a viewport point from a wheel delta; positive `deltaY` zooms out.
  *
- * @param {{x: number, y: number, zoom: number}} cam
- * @param {number} px viewport-relative pointer x
- * @param {number} py viewport-relative pointer y
- * @param {number} deltaY
- * @param {{width: number, height: number}} rect
+ * @param px viewport-relative pointer x
+ * @param py viewport-relative pointer y
  */
-export function zoomAt(cam, px, py, deltaY, rect) {
+export function zoomAt(cam: Camera, px: number, py: number, deltaY: number, rect: ViewportRect): Camera {
   return zoomBy(cam, px, py, Math.exp(-deltaY * WHEEL_ZOOM_RATE), rect);
 }
 
@@ -190,12 +253,10 @@ const INSIDE_EPSILON = 0.999;
  * than a heavy one, and a hand can only travel so far in one go anyway, so
  * the floor costs nothing in reach.
  *
- * @param {{x: number, y: number, zoom: number}} cam
- * @param {number} dxPx pointer movement in pixels
- * @param {number} dyPx
- * @param {number} damp resistance at the camera, in [0, 1]
+ * @param dxPx pointer movement in pixels
+ * @param damp resistance at the camera, in [0, 1]
  */
-export function panByPixels(cam, dxPx, dyPx, damp) {
+export function panByPixels(cam: Camera, dxPx: number, dyPx: number, damp: number): Camera {
   const scale = 0.12 + 0.88 * damp;
   const perCell = pxPerCell(cam);
   return {
@@ -233,12 +294,10 @@ export function panByPixels(cam, dxPx, dyPx, damp) {
  * grid, and every press still advances the cursor a full cell once back
  * inside, because a scale of 1 preserves whatever offset it picked up.
  *
- * @param {{x: number, y: number, zoom: number}} cam
- * @param {number} dx cells, signed - the direction the reader asked to move
- * @param {number} dy
- * @param {number} damp resistance at the camera, in [0, 1]
+ * @param dx cells, signed - the direction the reader asked to move
+ * @param damp resistance at the camera, in [0, 1]
  */
-export function panByCells(cam, dx, dy, damp) {
+export function panByCells(cam: Camera, dx: number, dy: number, damp: number): Camera {
   // Inside the region, land CENTERED on the destination cell rather than adding
   // a raw delta. Both do move exactly one cell from a cell-centered camera, but
   // only this one recovers: a trip outside leaves the camera off the grid (the
@@ -263,7 +322,7 @@ export function panByCells(cam, dx, dy, damp) {
  * rather than snapping. Inside the region the camera is returned unchanged, by
  * identity, so the caller can skip a redraw.
  */
-export function glideStep(cam, damp) {
+export function glideStep(cam: Camera, damp: number): Camera {
   if (damp >= INSIDE_EPSILON) return cam;
   const pull = (1 - damp) * 0.06 * 0.08;
   return { ...cam, x: cam.x * (1 - pull), y: cam.y * (1 - pull) };
@@ -292,10 +351,8 @@ const GLIDE_REST_MAX_STEPS = 20_000;
  * time before crossing `INSIDE_EPSILON`, and every step here is arithmetic, not
  * a frame, so five hundred of them cost nothing next to getting the reader
  * stranded on a value that never quite settles.
- *
- * @param {(x: number, y: number) => number} resistanceAt
  */
-export function glideToRest(cam, resistanceAt) {
+export function glideToRest(cam: Camera, resistanceAt: (x: number, y: number) => number): Camera {
   let next = cam;
   for (let i = 0; i < GLIDE_REST_MAX_STEPS; i++) {
     const stepped = glideStep(next, resistanceAt(next.x, next.y));
@@ -310,7 +367,7 @@ export function glideToRest(cam, resistanceAt) {
 }
 
 /** Center the camera on a cell - cells are addressed by corner, so aim at the middle. */
-export function cameraAtCell(cam, x, y, zoom) {
+export function cameraAtCell(cam: Camera, x: number, y: number, zoom?: number): Camera {
   return { ...cam, x: x + 0.5, y: y + 0.5, zoom: zoom ? clampZoom(zoom, cam.limits) : cam.zoom };
 }
 
@@ -322,7 +379,7 @@ export function cameraAtCell(cam, x, y, zoom) {
  * is what lets a pointer pan and a keyboard pan agree on "where am I" without
  * a second notion of position to keep in step.
  */
-export function cursorCell(cam) {
+export function cursorCell(cam: Camera): { x: number; y: number } {
   return { x: Math.floor(cam.x), y: Math.floor(cam.y) };
 }
 
@@ -347,16 +404,19 @@ const GRANULARITY_HYSTERESIS = 0.35;
  * swap: an announcement that alternates between naming a cell and naming a
  * region is worse than either one held steady.
  *
- * @param {number} cellPx device pixels per cell width, e.g. `pxPerCell(cam).x * dpr`
- * @param {'cell'|'region'|null} [current] the granularity last announced
+ * @param cellPx device pixels per cell width, e.g. `pxPerCell(cam).x * dpr`
+ * @param current the granularity last announced
  */
-export function pickGranularity(cellPx, current = null) {
-  const ideal = cellPx >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
+export function pickGranularity(
+  cellPx: number,
+  current: CursorGranularity | null = null
+): CursorGranularity {
+  const ideal: CursorGranularity = cellPx >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
   if (current == null || current === ideal) return ideal;
 
   const biased =
     ideal === 'region' ? cellPx * (1 + GRANULARITY_HYSTERESIS) : cellPx / (1 + GRANULARITY_HYSTERESIS);
-  const rebiased = biased >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
+  const rebiased: CursorGranularity = biased >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
   return rebiased === current ? current : ideal;
 }
 
@@ -382,7 +442,7 @@ export const FLIGHT_MS = 450;
  * Zero velocity on arrival is the half that matters - a flight that stops at
  * full speed reads as a jerk, and "center" is a button people press repeatedly.
  */
-export const easeInOut = (t) => t * t * (3 - 2 * t);
+export const easeInOut = (t: number): number => t * t * (3 - 2 * t);
 
 /**
  * Begin a flight from one camera to another, as a value.
@@ -393,7 +453,7 @@ export const easeInOut = (t) => t * t * (3 - 2 * t);
  * remembered one is what makes a second flight during a first pick up smoothly
  * from wherever it had got to.
  */
-export function beginFlight(from, to, now, ms = FLIGHT_MS) {
+export function beginFlight(from: Camera, to: Camera, now: number, ms: number = FLIGHT_MS): Flight {
   return { from, to, t0: now, ms };
 }
 
@@ -412,7 +472,7 @@ export function beginFlight(from, to, now, ms = FLIGHT_MS) {
  * `ms <= 0` arrives immediately, which is how a caller honouring
  * `prefers-reduced-motion` asks for the old teleport without a second path.
  */
-export function flightAt(flight, now) {
+export function flightAt(flight: Flight, now: number): FlightState {
   const { from, to, t0, ms } = flight;
   const t = ms > 0 ? (now - t0) / ms : 1;
   // Landing returns the target itself, so a flight ends exactly where it was

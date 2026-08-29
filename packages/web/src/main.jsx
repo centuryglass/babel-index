@@ -24,7 +24,7 @@ import {
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
 } from './lib/center.js';
-import { CELL_ASPECT, fitZoom } from './lib/camera.js';
+import { CELL_ASPECT, fitZoom } from './lib/camera.ts';
 import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.js';
