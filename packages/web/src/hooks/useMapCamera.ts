@@ -66,6 +66,15 @@ const LONG_PRESS_MS = 500;
 const PRESS_SLOP_PX = 8;
 
 /**
+ * How soon a second tap must land, and how close to the first, to read as a
+ * double tap rather than two unrelated ones. Wider than `PRESS_SLOP_PX`
+ * because a second tap lands wherever the same finger comes back down, not
+ * wherever the first one drifted to.
+ */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP_PX = 40;
+
+/**
  * Someone who has asked for less motion gets the old teleport.
  *
  * Read per flight rather than once: the setting can change while a page is
@@ -131,6 +140,15 @@ interface UseMapCameraOpts {
    */
   onTap?: OnTap;
   /**
+   * canvas-relative point of a second tap landing within `DOUBLE_TAP_MS` and
+   * `DOUBLE_TAP_SLOP_PX` of a qualifying first one. Fires in addition to
+   * `onTap` (both fire for the second tap), never instead of it - a single
+   * tap must not wait to find out whether a second one is coming, or every
+   * ordinary tap (selecting a book, focusing the search field) picks up a
+   * `DOUBLE_TAP_MS` delay it never used to have.
+   */
+  onDoubleTap?: OnTap;
+  /**
    * one line per pointer event. Off unless asked for. Touch gestures can only
    * really be judged on a device, and a phone has no console you can read while
    * both thumbs are busy - so this exists to make "what did the browser
@@ -164,6 +182,7 @@ export function useMapCamera({
   opening,
   onPick,
   onTap,
+  onDoubleTap,
   onDebug,
 }: UseMapCameraOpts) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
@@ -187,6 +206,10 @@ export function useMapCamera({
   // tell a tap from a pan. Left as null the moment it becomes anything else - a
   // drag, a pinch, or the press that stopped a flight.
   const tap = useRef<TapCandidate | null>(null);
+  // The last completed tap, for double-tap detection - cleared once it has
+  // paired with a second tap, so a stray third tap does not pair with a
+  // double tap that already fired.
+  const lastTap = useRef<(PointerPoint & { time: number }) | null>(null);
 
   /**
    * End whatever is in the air, telling the caller whether it arrived.
@@ -408,9 +431,29 @@ export function useMapCamera({
       // is what selects a book on the center room.
       const t = tap.current;
       tap.current = null;
-      if (onTap && t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {
+      if (t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {
         const rect = canvas.getBoundingClientRect();
-        onTap(t.x - rect.left, t.y - rect.top, cam.current);
+        const px = t.x - rect.left;
+        const py = t.y - rect.top;
+        onTap?.(px, py, cam.current);
+
+        // Double tap: a second qualifying tap landing soon enough and close
+        // enough to the last one. Checked in addition to `onTap`, not instead
+        // of it - see `onDoubleTap`'s doc comment for why the single tap must
+        // never wait around to find out.
+        const now = performance.now();
+        const prior = lastTap.current;
+        if (
+          onDoubleTap &&
+          prior &&
+          now - prior.time <= DOUBLE_TAP_MS &&
+          Math.hypot(t.x - prior.x, t.y - prior.y) <= DOUBLE_TAP_SLOP_PX
+        ) {
+          lastTap.current = null;
+          onDoubleTap(px, py, cam.current);
+        } else {
+          lastTap.current = { x: t.x, y: t.y, time: now };
+        }
       }
       report(e.type, e);
     };
@@ -451,7 +494,7 @@ export function useMapCamera({
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDebug, endFlight]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDoubleTap, onDebug, endFlight]);
 
   // Step whichever of the two things is moving the camera on its own: a flight
   // while one is in the air, otherwise the glide back toward the content region
