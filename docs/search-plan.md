@@ -8,58 +8,34 @@ record of where we ended up, this file only tracks where we still are.
 Read `search_rules.md` first. Every "Ideal" below is a pointer into it, not a
 restatement; the point here is the "Now" and the "Steps".
 
-## 1. Certainty has no formula
+## 1. Certainty has no formula — landed
 
 **Ideal** (`search_rules.md` "Computing certainty"): one absolute `[-1, 1]`
 per room, a soft-OR of three absolute readings, story read by *absolute matched
 length* and exact tags scaled by *query coverage*.
 
-**Now:** `matchCertainty` in `scoring.js` is a soft-OR of `keyword`, `story`,
-`cosine`, but each input is the wrong shape for the target:
-- `story` is `storyScore`'s query-relative ratio, so a one-word query that
-  matches at all is `1.0` and reads as 100% certain — the opposite of "a short
-  match boosts moderately".
-- `keyword` is `keywordScore`'s single blended `max(whole, byToken)` number,
-  which cannot say how many terms matched *exactly* versus partially, so there
-  is nothing to scale coverage against.
-- `cosine` is mapped linearly onto `CLIP_CERTAINTY = {-0.08, 0.37}` — see §5.
+**Landed:** `matchCertainty` in `scoring.js` takes `{tagCoverage, storyLongChars,
+storyMatched, cosine}` and computes the signed `[-1, 1]` coverage-scaled soft-OR
+the spec names — `tagCoverage` and `storyLongBonus01(storyLongChars)` (shared
+with §2's `storyLong` ranking bonus) replace the old ratio-only reads, and the
+CLIP term still comes from the linear `CLIP_CERTAINTY` band pending §5's
+recalibration. The density gradient (`ordering.ts` `densityRamp`) is unchanged,
+still forcing certainty non-increasing with rank and flooring it.
 
-**Steps:**
-1. Restructure `keywordScore` to emit `{tagExact, tagPartialSum}` (a count and a
-   sum) instead of one ratio — §2 needs the same split for ranking, so do it once.
-2. Give story an absolute-length certainty term (short → moderate floor, long
-   contiguous run → 1); this shares the saturating curve with §2's `storyLong`.
-3. Rewrite `matchCertainty` as the coverage-scaled soft-OR the spec names, and
-   widen its range to signed `[-1, 1]` so CLIP's "does not match" side survives.
-4. The density gradient (`ordering.ts` `densityRamp`) already forces certainty
-   non-increasing with rank and floors it — certainty need not be monotone
-   coming out of the blend, so leave that where it is and only feed it the
-   positive part (a mismatch is not a reason to *cluster* a room).
-
-## 2. Weights are a different system from the spec's constants
+## 2. Weights are a different system from the spec's constants — landed
 
 **Ideal** (`search_rules.md` "Balancing signals"): `E=5, P=0.45, C=1, S=0.4,
 L=2`, chosen so every ranking inequality holds by construction.
 
-**Now:** `config.search.weights` is `{keyword: 1, story: 0.5, clip: 0.25}` — three
-weights, not five, and the numbers disagree. The spec's inequalities are *false*
-under the live config: a "reasonably certain" CLIP contributes `0.25 × 0.5 =
-0.125`, which does not clear the partial-tag budget `P = 0.45`, so "a confident
-image match beats a lone partial tag" does not hold today.
+**Landed:** `config.search.weights` is now the five-key shape
+`{tagExact, tagPartial, story, storyLong, clip}` at the spec's defaults
+(`config.ts`), and `rankHybrid` (`scoring.js`) sums exactly those five terms —
+`tagExact` count, `tagPartialSum` clamped through `TAG_PARTIAL_SATURATION`,
+`story`/`storyLong` off the shared `storyLongBonus01` ramp, and `clip`. Tests in
+`scoring.test.mjs` assert the spec's cross-signal inequalities directly against
+the resolved weights.
 
-**Steps:**
-1. Expand `config.search.weights` to the five-constant shape the spec assumes:
-   `{tagExact, tagPartial, story, storyLong, clip}` (the `E/P/S/L/C` names), with
-   the spec's defaults. Keep the config-narrows-never-widens discipline and the
-   `notes` reporting `config.ts` already has.
-2. Rebuild `rankHybrid`'s per-room sum around those five terms and the
-   `{tagExact, tagPartialSum}` split from §1.1, with the saturation caps the
-   spec names (`TAG_PARTIAL_SATURATION`, the `storyLong` 16→40-char ramp).
-3. Add a test that asserts each spec inequality directly against the resolved
-   weights, so a future re-tune that breaks a margin fails loudly rather than
-   silently reordering results.
-
-## 3. Story matching is word-set, not word-sequence
+## 3. Story matching is word-set, not word-sequence — landed
 
 **Ideal** (`search_rules.md` story assertions + "Feature additions"): a *long
 contiguous run* of matched query words is the thing that outranks everything,
@@ -74,16 +50,12 @@ needs: `longestMatchRun(sequence, matchLemmas)` (unordered — the longest run o
 *consecutive story tokens* whose lemma is in the query's lemma set) and
 `storyPhraseRun(sequence, phraseLemmas)` (ordered — a quoted phrase's words
 found consecutively, in order). Both are unit-tested in `scoring.test.mjs`
-but **not yet called from `rankHybrid`** — that wiring is §1/§2's job, since
-it means replacing `storyScore`'s ratio-only reading in the weighted sum.
+and, since §1/§2 landed, both are wired into `rankHybrid`:
+`longestMatchRun`'s character length feeds `storyLongBonus01` for both the
+`storyLong` ranking bonus and certainty's `S` term, and `storyPhraseRun` gives
+a quoted term story credit against its lemmatised `words` from `parseQuery`.
 
-**Steps left:**
-1. In the §1/§2 rewrite, feed `longestMatchRun`'s result (character length) to
-   the `storyLong` ranking bonus and to certainty's `storyLongBonus01` term.
-2. In the same rewrite, use `storyPhraseRun` to give a quoted term story credit
-   — it needs the term's `words` lemmatised, from `parseQuery` (§4).
-
-## 4. Quoted-phrase parsing does not exist
+## 4. Quoted-phrase parsing does not exist — landed
 
 **Ideal** (`search_rules.md` "The parsed query"): a query is an ordered list of
 terms, a quoted phrase being one term matched whole.
@@ -96,11 +68,10 @@ keywords)` gives the one-classification-per-term reading tag matching needs
 (`{exact, partial}`), tested including the "phrase matches whole, not split"
 and "quoting a bare word changes nothing" cases.
 
-**Steps left:** neither `parseQuery` nor `classifyTagTerm` is called from
-`rankHybrid` yet — `keywordScore` still reads the flat `foldedQuery`/
-`queryTokens` pair. Threading them through is §1/§2's `tagExact`/
-`tagPartialSum` rewrite, not a separate pass, since a per-term classification
-*is* that split.
+Since §1/§2 landed, both `parseQuery` and `classifyTagTerm` are called from
+`rankHybrid` — the `tagExact`/`tagPartialSum` split is built per-term from
+`classifyTagTerm`'s classification, replacing the old flat `foldedQuery`/
+`queryTokens` reads.
 
 ## 5. CLIP certainty is mapped off theoretical extremes, not the distribution
 
