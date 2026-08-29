@@ -6,9 +6,6 @@ serve as completed task history.
 ## Map interface:
  - Inpaint the "Catalog" volume in the center tile to give it a more
    distinctive appearance.
- - Generic rooms should probably display some sort of bare minimum RoomDetails,
-   so no one tries right-clicking/long pressing on one of those first and
-   doesn't bother trying the same on a unique room.
 
 ## Search:
 - The target behavior is now specified in `search_rules.md`; the gap between it
@@ -101,6 +98,50 @@ serve as completed task history.
   shapes called out in AGENTS.md (`scoring.js`'s duck-typed ranking arrays,
   `center.js`'s `RUNS`, the animation state in `slide.js`/`camera.js`) are the
   ones to leave for last, once there's a real type worth writing for them.
+
+## TypeScript migration - remaining `.js`/`.jsx`/`.mjs` files:
+Not a schedule - convert one when you're already touching it or it's a clean
+opportunity, per AGENTS.md. Roughly ordered easiest/most-isolated first,
+deliberately-loose shapes last; `pyramid.ts` (fixed shape, no DOM, no
+duck-typing, converted from `pyramid.js`) was the most recent conversion.
+Test files (`*.test.mjs`) travel with their module when it converts and
+aren't listed separately.
+
+Small, mostly presentational, few or no loose shapes:
+ - `packages/pipeline/mips.mjs`
+ - `packages/pipeline/index.mjs`
+ - `packages/web/src/components/SearchIcon.jsx`
+ - `packages/web/src/components/SearchForm.jsx`
+ - `packages/web/src/components/HelpDialog.jsx`
+ - `packages/web/src/components/RoomCard.jsx`
+ - `packages/web/src/components/RoomOverlay.jsx`
+ - `packages/web/src/components/RoomDetails.jsx`
+ - `packages/web/src/components/CatalogView.jsx`
+ - `packages/web/src/components/MapView.jsx`
+
+Hooks with real, nameable shapes (`Manifest`/`SearchResult`/`Config` etc.
+already exist as types to write these against):
+ - `packages/web/src/hooks/useCorpus.js`
+ - `packages/web/src/hooks/useSearch.js`
+ - `packages/web/src/hooks/useModeTransition.js`
+ - `packages/web/src/hooks/useMapCursor.js`
+ - `packages/web/src/hooks/useCenterShelf.js`
+ - `packages/web/src/hooks/useMapCamera.js`
+ - `packages/web/src/hooks/useMapRenderer.js`
+ - `packages/web/src/hooks/useRearrangement.js`
+
+Deliberately loose today (see AGENTS.md) - convert once there's a real type
+worth writing rather than an `any`/`object` that just papers over it;
+`main.jsx` last since it wires every hook above together and is only as
+typeable as they are:
+ - `packages/web/src/lib/tiles.js`
+ - `packages/web/src/lib/render.js`
+ - `packages/web/src/lib/camera.js`
+ - `packages/web/src/lib/slide.js`
+ - `packages/web/src/lib/center.js`
+ - `packages/map/scoring.js`
+ - `packages/web/src/main.jsx`
+
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.
 - Fonts and text rendering are unpolished, try some alternatives. The

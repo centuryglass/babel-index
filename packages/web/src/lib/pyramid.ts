@@ -31,6 +31,42 @@
  * No DOM, no imports: this is arithmetic and policy, tested as such.
  */
 
+export interface Size {
+  w: number;
+  h: number;
+}
+
+export interface LevelSpec {
+  level: number;
+  divisor: number;
+  budget: number;
+}
+
+export interface PrefetchConfig {
+  margin: number;
+  marginRatio: number;
+  concurrency: number;
+  warmCoarser: boolean;
+}
+
+export interface SheetsConfig {
+  fromLevel: number;
+  roomsPerSheet: number;
+  cols: number;
+  rows: number;
+  cacheBudget: number;
+}
+
+export interface Bounds {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** A demand can be a plain width, or a {w, h} rect when the drawn cell's shape differs from the tile's. */
+export type Demand = number | Size;
+
 /**
  * The source tile the pipeline writes at level 0 - the base render's pixel
  * dimensions, and the ONLY statement of tile size or aspect in the codebase's
@@ -58,7 +94,7 @@
  * object - so this and the `viewBox` of `shelf_geometry.svg` cannot drift apart
  * silently.
  */
-export const BASE_TILE = { w: 1024, h: 768 };
+export const BASE_TILE: Size = { w: 1024, h: 768 };
 
 /**
  * The ladder, finest first.
@@ -112,7 +148,7 @@ export const BASE_TILE = { w: 1024, h: 768 };
  * levels 2-4's real byte cost off this budget's plate, freeing room to hold
  * more revisits of the levels that are still one file per room.
  */
-export const LEVELS = [
+export const LEVELS: LevelSpec[] = [
   { level: 0, divisor: 1, budget: 480 },
   { level: 1, divisor: 2, budget: 800 },
   { level: 2, divisor: 4, budget: 1800 },
@@ -163,7 +199,7 @@ export const HYSTERESIS = 0.15;
  * upscales acceptably in the meantime, while zooming OUT needs four times as
  * many tiles at once and has nothing to show until they arrive.
  */
-export const PREFETCH = {
+export const PREFETCH: PrefetchConfig = {
   margin: 2,
   marginRatio: 0.15,
   concurrency: 4,
@@ -193,7 +229,7 @@ export const PREFETCH = {
  * from the other, so a bad edit fails loudly instead of packing a partial
  * grid.
  */
-export const SHEETS = {
+export const SHEETS: SheetsConfig = {
   fromLevel: 2,
   roomsPerSheet: 256,
   cols: 16,
@@ -212,6 +248,31 @@ export const SHEETS = {
   cacheBudget: 64,
 };
 
+export interface PyramidOpts {
+  base?: Size;
+  levels?: LevelSpec[];
+  cacheScale?: number;
+  hysteresis?: number;
+}
+
+export interface Pyramid {
+  base: Size;
+  levels: LevelSpec[];
+  /** The coarsest level - what rule 1 falls back on, and what is preloaded. */
+  fallbackLevel: number;
+  finestLevel: number;
+  sizeOf: (level: number) => Size | null;
+  bytesOf: (level: number) => number;
+  budgetOf: (level: number) => number;
+  budgetBytes: (level: number) => number;
+  totalBudgetBytes: () => number;
+  demandWidth: (drawn: Demand) => number;
+  idealLevel: (drawn: Demand) => number;
+  pickLevel: (drawn: Demand, current?: number | null) => number;
+  bestAvailable: (isReady: (level: number) => boolean, want: number) => number | null;
+  warmLevels: (level: number) => number[];
+}
+
 /**
  * Build a pyramid over a tile shape and a ladder.
  *
@@ -219,25 +280,19 @@ export const SHEETS = {
  * a different tile size or aspect without editing the constants above - which
  * is how the tests prove none of this is pinned to one size or one aspect, and
  * how an experiment can try a shape before it is adopted.
- *
- * @param {object} [opts]
- * @param {{w: number, h: number}} [opts.base]  the level-0 tile
- * @param {{level: number, divisor: number, budget: number}[]} [opts.levels]
- * @param {number} [opts.cacheScale]
- * @param {number} [opts.hysteresis]
  */
 export function createPyramid({
   base = BASE_TILE,
   levels = LEVELS,
   cacheScale = CACHE_SCALE,
   hysteresis = HYSTERESIS,
-} = {}) {
+}: PyramidOpts = {}): Pyramid {
   const byLevel = new Map(levels.map((l) => [l.level, l]));
   const coarsest = levels[levels.length - 1];
   const finest = levels[0];
 
   /** The stored pixel dimensions of a level. Rounded, so a divisor need not divide evenly. */
-  const sizeOf = (level) => {
+  const sizeOf = (level: number): Size | null => {
     const entry = byLevel.get(level);
     if (!entry) return null;
     return {
@@ -247,20 +302,20 @@ export function createPyramid({
   };
 
   /** Decoded RGBA bytes one tile of this level costs. */
-  const bytesOf = (level) => {
+  const bytesOf = (level: number): number => {
     const size = sizeOf(level);
     return size ? size.w * size.h * 4 : 0;
   };
 
   /** The budget for a level, after cacheScale. Always at least 1. */
-  const budgetOf = (level) => {
+  const budgetOf = (level: number): number => {
     const entry = byLevel.get(level);
     return entry ? Math.max(1, Math.round(entry.budget * cacheScale)) : 0;
   };
 
   /** What a full level costs, and what a full pyramid costs. Derived, never written down. */
-  const budgetBytes = (level) => budgetOf(level) * bytesOf(level);
-  const totalBudgetBytes = () => levels.reduce((sum, l) => sum + budgetBytes(l.level), 0);
+  const budgetBytes = (level: number): number => budgetOf(level) * bytesOf(level);
+  const totalBudgetBytes = (): number => levels.reduce((sum, l) => sum + budgetBytes(l.level), 0);
 
   /**
    * Demand, normalised to level-0 width-equivalent device pixels.
@@ -270,10 +325,8 @@ export function createPyramid({
    * Scaling the height demand by the tile's aspect puts both axes on the width
    * ladder, and taking the larger means a tile is never chosen that
    * under-resolves the axis that needed more.
-   *
-   * @param {number|{w: number, h: number}} drawn device pixels the cell covers
    */
-  const demandWidth = (drawn) =>
+  const demandWidth = (drawn: Demand): number =>
     typeof drawn === 'number' ? drawn : Math.max(drawn.w, drawn.h * (base.w / base.h));
 
   /**
@@ -284,14 +337,13 @@ export function createPyramid({
    * Demand is in DEVICE pixels - `zoom * devicePixelRatio` - because that is
    * what the tile actually covers. Picking on CSS pixels ships half-resolution
    * art to every retina display.
-   *
-   * @param {number|{w: number, h: number}} drawn
-   * @returns {number} a level present in `levels`
    */
-  const idealLevel = (drawn) => {
+  const idealLevel = (drawn: Demand): number => {
     const need = demandWidth(drawn);
-    for (let i = levels.length - 1; i > 0; i--)
-      if (need <= sizeOf(levels[i].level).w) return levels[i].level;
+    for (let i = levels.length - 1; i > 0; i--) {
+      const size = sizeOf(levels[i].level);
+      if (size && need <= size.w) return levels[i].level;
+    }
     return finest.level;
   };
 
@@ -302,11 +354,8 @@ export function createPyramid({
    * decisively; near a boundary it holds the current level until the demand is
    * `hysteresis` clear of it. A big jump still lands on the true ideal rather
    * than creeping one level per frame.
-   *
-   * @param {number|{w: number, h: number}} drawn
-   * @param {number|null} current the level being drawn, or null on first paint
    */
-  const pickLevel = (drawn, current = null) => {
+  const pickLevel = (drawn: Demand, current: number | null = null): number => {
     const ideal = idealLevel(drawn);
     if (current == null || current === ideal) return ideal;
 
@@ -326,11 +375,9 @@ export function createPyramid({
    * only after that - it is memory already spent, so drawing it beats drawing
    * nothing, but it is the expensive way to be right.
    *
-   * @param {(level: number) => boolean} isReady
-   * @param {number} want
-   * @returns {number|null} null only when the room has no level at all
+   * Returns null only when the room has no level at all.
    */
-  const bestAvailable = (isReady, want) => {
+  const bestAvailable = (isReady: (level: number) => boolean, want: number): number | null => {
     if (isReady(want)) return want;
     for (const { level } of levels) if (level > want && isReady(level)) return level;
     for (let i = levels.length - 1; i >= 0; i--) {
@@ -344,7 +391,7 @@ export function createPyramid({
    * Rule 2: the levels to warm for cells visible right now, in priority order
    * after the visible level itself. Empty when there is nothing coarser.
    */
-  const warmLevels = (level) => {
+  const warmLevels = (level: number): number[] => {
     if (!PREFETCH.warmCoarser) return [];
     const coarser = levels.find((l) => l.level === level + 1);
     return coarser ? [coarser.level] : [];
@@ -353,7 +400,6 @@ export function createPyramid({
   return {
     base,
     levels,
-    /** The coarsest level - what rule 1 falls back on, and what is preloaded. */
     fallbackLevel: coarsest.level,
     finestLevel: finest.level,
     sizeOf,
@@ -370,7 +416,7 @@ export function createPyramid({
 }
 
 /** The pyramid the app runs on, built from the constants above. */
-export const PYRAMID = createPyramid();
+export const PYRAMID: Pyramid = createPyramid();
 
 export const {
   fallbackLevel: FALLBACK_LEVEL,
@@ -391,10 +437,11 @@ export const {
  * floor (`PREFETCH.margin`) and a fraction (`PREFETCH.marginRatio`) of the
  * viewport's own cell span - so the ring grows with how far out the camera
  * is, not just a fixed cell count. See `PREFETCH`'s docblock for why.
- *
- * @param {{x0: number, y0: number, x1: number, y1: number}} bounds inclusive
  */
-export function marginFor({ x0, y0, x1, y1 }, { margin, marginRatio } = PREFETCH) {
+export function marginFor(
+  { x0, y0, x1, y1 }: Bounds,
+  { margin, marginRatio }: Pick<PrefetchConfig, 'margin' | 'marginRatio'> = PREFETCH
+): number {
   const span = Math.max(x1 - x0 + 1, y1 - y0 + 1);
   return Math.max(margin, Math.round(span * marginRatio));
 }
@@ -407,9 +454,10 @@ export function marginFor({ x0, y0, x1, y1 }, { margin, marginRatio } = PREFETCH
  * pixels, so this is independent of the tile's size and shape. `margin`
  * defaults to `marginFor(bounds)` rather than a flat constant - see its
  * docblock.
- *
- * @param {{x0: number, y0: number, x1: number, y1: number}} bounds inclusive
  */
-export function prefetchBounds({ x0, y0, x1, y1 }, margin = marginFor({ x0, y0, x1, y1 })) {
+export function prefetchBounds(
+  { x0, y0, x1, y1 }: Bounds,
+  margin: number = marginFor({ x0, y0, x1, y1 })
+): Bounds {
   return { x0: x0 - margin, y0: y0 - margin, x1: x1 + margin, y1: y1 + margin };
 }

@@ -56,7 +56,7 @@
  * on-camera rectangle ever slide - so the duration is set by the viewport and
  * corpus size does not enter into it.
  */
-import { PYRAMID } from './pyramid.js';
+import { PYRAMID } from './pyramid.ts';
 import { pxPerCell } from './camera.js';
 import { CENTER, genericId } from './tiles.js';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';

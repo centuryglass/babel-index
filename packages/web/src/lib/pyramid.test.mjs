@@ -20,7 +20,7 @@ import {
   prefetchBounds,
   marginFor,
   SHEETS,
-} from './pyramid.js';
+} from './pyramid.ts';
 
 /** The largest viewport the budgets are sized against, in device pixels. */
 const VIEWPORT = { w: 2560, h: 1440 };
