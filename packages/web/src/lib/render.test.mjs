@@ -22,7 +22,18 @@ function fakeCtx() {
     set fillStyle(v) { this._fill = v; },
     get fillStyle() { return this._fill; },
     strokeStyle: null, lineWidth: 0, font: null,
-    drawImage: (img, x, y, w, h) => drawn.push({ img, x, y, w, h }),
+    // Either drawImage(img, dx, dy, dw, dh) or the 9-arg source-rect form
+    // (img, sx, sy, sw, sh, dx, dy, dw, dh) - a sheet-backed tile uses the
+    // latter, so both must be distinguishable to the test asserting on it.
+    drawImage: (...args) => {
+      if (args.length === 9) {
+        const [img, sx, sy, sw, sh, x, y, w, h] = args;
+        drawn.push({ img, rect: { sx, sy, sw, sh }, x, y, w, h });
+      } else {
+        const [img, x, y, w, h] = args;
+        drawn.push({ img, rect: null, x, y, w, h });
+      }
+    },
     fillRect: (x, y, w, h) => fills.push({ x, y, w, h }),
     // A regular function, not an arrow: `this` has to bind to the ctx object
     // itself (the caller `ctx.strokeRect(...)`) to read the strokeStyle that
@@ -56,7 +67,8 @@ const ROOMS = 400;
 function world({ only = null, concurrency = 4 } = {}) {
   const images = fakeImages();
   const cache = createTileCache({
-    urlFor: (id, level) => (only && !only.includes(level) ? null : `/l${level}/${id}.jpg`),
+    locateTile: (id, level) =>
+      only && !only.includes(level) ? null : { url: `/l${level}/${id}.jpg`, rect: null },
     createImage: images.createImage,
     concurrency,
   });
@@ -145,6 +157,28 @@ test('every cell draws something once the generic has landed', () => {
   assert.equal(after.drawn.length, stats.cells, 'every cell drew an image');
 });
 
+test('a sheet-backed hit draws with the 9-arg source-rect form', () => {
+  // A sheet-packed level's tiles all live in one shared image, so the renderer
+  // must slice a source rect out of it rather than drawing the whole thing.
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: (id, level) => ({ url: `/sheet-${level}.jpg`, rect: { sx: 1, sy: 2, sw: 3, sh: 4 } }),
+    createImage: images.createImage,
+  });
+  cache.pin(CENTER);
+  const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT });
+  const w = { images, cache, layout, order: shuffledOrder(ROOMS, 1), renderer: createRenderer({ cache }) };
+
+  frame(w, { zoom: MIN_ZOOM }); // nothing resident yet: requests the sheet(s)
+  w.images.settleAll();
+
+  const after = fakeCtx();
+  const stats = frame(w, { zoom: MIN_ZOOM, ctx: after });
+  assert.equal(stats.blank, 0);
+  assert.ok(after.drawn.length > 0);
+  for (const d of after.drawn) assert.deepEqual(d.rect, { sx: 1, sy: 2, sw: 3, sh: 4 });
+});
+
 test('a room with only a coarse tile is drawn coarse, and counted as substituted', () => {
   const w = world();
   frame(w, { zoom: MIN_ZOOM });   // loads the coarse field
@@ -174,7 +208,7 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
   // position; the far-out field must still fill, from a handful of pinned tiles.
   const images = fakeImages();
   const cache = createTileCache({
-    urlFor: (id, level) => `/l${level}/${id}.jpg`,
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
   });
   const GENERICS = 6;

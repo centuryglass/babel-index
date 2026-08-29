@@ -46,6 +46,24 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
   assert.equal(level1.local, 'corpus/512/001.jpg');
 });
 
+test('buildUploadList uploads one entry per sheet file for a sheet-packed level, not per room', () => {
+  const m = manifest();
+  m.levels.push({
+    level: 2,
+    w: 256,
+    h: 192,
+    dir: null,
+    sheet: { tileW: 256, tileH: 192, cols: 2, rows: 1, roomsPerSheet: 2, sheetCount: 1, dir: '256-sheets', ext: 'jpg' },
+  });
+  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const keys = uploads.map((u) => u.key).sort();
+  assert.ok(keys.includes('sample/256-sheets/sheet-0000.jpg'));
+  assert.ok(!keys.some((k) => k.includes('/256/')), 'a sheet-packed level never uploads per-room files');
+
+  const sheet = uploads.find((u) => u.key === 'sample/256-sheets/sheet-0000.jpg');
+  assert.equal(sheet.local, 'corpus/256-sheets/sheet-0000.jpg');
+});
+
 test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have', () => {
   const m = manifest();
   m.metadata = null;

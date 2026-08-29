@@ -7,13 +7,34 @@
  * a pinch - so the cache has to be able to answer "what do you have for room
  * 12?" rather than only "do you have this url?".
  *
+ * ### Sheet-packed levels share one decoded image across many rooms
+ *
+ * A level whose `locateTile()` answer carries a `rect` (see rooms.ts) is
+ * sheet-packed: many rooms live in one image. Decoded image identity is kept
+ * separate from per-room cache-entry identity for exactly this reason - a
+ * per-`(id, level)` entry for a sheet-backed room is a lightweight pointer
+ * `{ sheetUrl, rect }`, and the actual `Image` is held once, keyed by url, in
+ * `sheetImages`. Many rooms therefore cost one fetch and one decode, which is
+ * the entire point (see SHEETS's docblock in pyramid.js for why this exists).
+ * A per-file level (no `rect`) is unchanged: the entry owns its own `Image`
+ * directly, exactly as before sheets existed.
+ *
+ * Because a sheet-backed entry does not own the fetch, evicting one never
+ * orphans a request the way evicting a loading per-file entry would - the
+ * sheet keeps loading independently in `sheetImages`, tracked by its own
+ * frame/lastUsed. That is why sheet-backed entries skip the "never evict
+ * while loading" guard `evict()` still applies to per-file entries.
+ *
  * ### Budgets are per level, and that is load-bearing
  *
  * Each level gets its own LRU with its own budget from `pyramid.js`. A single
  * global LRU would break rule 1: zooming in floods the cache with level 0,
  * evicts the entire coarse field, and zooming back out flashes blank across the
  * whole screen - which is the failure the pyramid exists to prevent. Levels
- * never evict each other.
+ * never evict each other. `sheetImages` is a further LRU of its own, on top of
+ * (not instead of) the per-level room-pointer budgets above - see its budget's
+ * docblock in pyramid.js for why "images held" means something different once
+ * one image can serve hundreds of rooms.
  *
  * ### Eviction is frame-aware, and that is too
  *
@@ -25,15 +46,27 @@
  * by the current frame or the one before it - the previous frame included
  * because eviction runs at the top of a frame, before the renderer has touched
  * anything, so protecting only the frame in progress would protect nothing.
+ * `sheetImages` entries are touched the same way whenever a room backed by
+ * them is touched, so a sheet stays resident exactly as long as any room it
+ * covers is still on camera.
  *
  * When one screen genuinely exceeds a level's budget the cache holds it anyway
  * and `overBudget()` says by how much. Holding is the lesser evil; picking a
  * coarser level is the actual answer, and that is the renderer's job.
  *
+ * The coarsest level (`pyramid.fallbackLevel`) is a further exception, by
+ * default: its sheets, once loaded, are never evicted at all (see
+ * `neverEvictSheetLevels`). A pan at that zoom crosses the whole map in a
+ * couple of gestures - constantly warming and dropping sheets there would
+ * mean visibly thrashing rather than caching. The whole level's sheets are
+ * few and cheap (see SHEETS's docblock), so holding all of them forever,
+ * loaded lazily as each is first asked for, is strictly better than evicting
+ * any of them.
+ *
  * `createImage` exists so all of this can be tested without a DOM; the browser
  * never passes it.
  */
-import { PYRAMID, PREFETCH } from './pyramid.js';
+import { PYRAMID, PREFETCH, SHEETS } from './pyramid.js';
 
 /**
  * The shared-tile ids. Strings, so they can never collide with a numeric room id.
@@ -51,25 +84,38 @@ const QUEUE_LIMIT = 256;
 
 /**
  * @param {object} opts
- * @param {(id: number|string, level: number) => string|null} opts.urlFor
- *        where a level of a room lives, or null if that level does not exist
+ * @param {(id: number|string, level: number) => {url: string, rect: object|null}|null} opts.locateTile
+ *        where a level of a room lives, and its rect within a shared sheet
+ *        image if it is packed into one; null if that level does not exist
  * @param {object} [opts.pyramid]      the ladder and its budgets
+ * @param {number} [opts.sheetBudget]  decoded sheet images held at once, across every sheet-packed level
+ * @param {number[]} [opts.neverEvictSheetLevels] sheet-packed levels whose sheets, once loaded,
+ *        are never evicted regardless of `sheetBudget` - defaults to just the coarsest level
  * @param {() => void} [opts.onLoad]   ask for a redraw
  * @param {number} [opts.concurrency]  in-flight prefetches allowed
  * @param {() => object} [opts.createImage]
  */
 export function createTileCache({
-  urlFor,
+  locateTile,
   pyramid = PYRAMID,
+  sheetBudget = SHEETS.cacheBudget,
+  neverEvictSheetLevels = [pyramid.fallbackLevel],
   onLoad,
   concurrency = PREFETCH.concurrency,
   createImage = () => new Image(),
 } = {}) {
-  // level -> (id -> { img, state, lastUsed, frame })
+  // level -> (id -> entry). A per-file entry is { img, rect: null, state, lastUsed, frame };
+  // a sheet-backed entry is { sheetUrl, rect, lastUsed, frame } - its readiness
+  // and image come from `sheetImages`, not from a state field of its own.
   const levels = new Map(pyramid.levels.map((l) => [l.level, new Map()]));
+  // url -> { img, level, state, lastUsed, frame }, shared across every entry backed by that sheet.
+  const sheetImages = new Map();
+  const neverEvict = new Set(neverEvictSheetLevels);
   const pinned = new Set();
   const queue = [];
-  let inFlightPrefetch = 0;
+  // Urls with a fetch genuinely in flight right now, so many queued rooms that
+  // resolve to the same sheet spend one concurrency slot, not one each.
+  const inFlightUrls = new Set();
   let clock = 0;
   // null until the caller opts in: without beginFrame() there is no such thing
   // as "the current frame", so nothing is protected and this is a plain LRU.
@@ -77,7 +123,14 @@ export function createTileCache({
 
   const bucket = (level) => levels.get(level);
   const entry = (id, level) => bucket(level)?.get(id);
-  const isReady = (id, level) => entry(id, level)?.state === 'ready';
+
+  const sheetReady = (url) => sheetImages.get(url)?.state === 'ready';
+  const entryReady = (e) => (e.rect ? sheetReady(e.sheetUrl) : e.state === 'ready');
+  const entryImg = (e) => (e.rect ? sheetImages.get(e.sheetUrl)?.img : e.img);
+  const isReady = (id, level) => {
+    const e = entry(id, level);
+    return e != null && entryReady(e);
+  };
 
   /**
    * Open a new frame. Tiles drawn from here on, and those drawn in the frame
@@ -88,6 +141,7 @@ export function createTileCache({
     frame = (frame ?? 0) + 1;
     queue.length = 0;
     for (const { level } of pyramid.levels) evict(level);
+    evictSheets();
   }
 
   /** Keep every level of this room forever. The base tiles are the floor rule 1 lands on. */
@@ -95,28 +149,60 @@ export function createTileCache({
     pinned.add(id);
   }
 
+  /** Register (or find) the shared decoded image for a sheet url. */
+  function requestSheet(url, level) {
+    const found = sheetImages.get(url);
+    if (found) {
+      found.lastUsed = ++clock;
+      found.frame = frame;
+      return found;
+    }
+    const img = createImage();
+    const fresh = { img, level, state: 'loading', lastUsed: ++clock, frame };
+    sheetImages.set(url, fresh);
+    img.onload = () => {
+      fresh.state = 'ready';
+      onLoad?.();
+    };
+    img.onerror = () => {
+      fresh.state = 'error';
+    };
+    img.src = url;
+    evictSheets();
+    return fresh;
+  }
+
   /**
    * Start the load for one level of one room, if it is not already here or on
-   * its way. Returns the image if it happens to be ready.
+   * its way. Returns `{img, rect}` if it happens to be ready.
    */
   function request(id, level) {
     const found = entry(id, level);
     if (found) {
       found.lastUsed = ++clock;
       found.frame = frame;
-      return found.state === 'ready' ? found.img : null;
+      if (found.rect) requestSheet(found.sheetUrl, level); // touches the sheet's own lastUsed/frame too
+      return entryReady(found) ? { img: entryImg(found), rect: found.rect } : null;
     }
 
-    const url = urlFor(id, level);
-    // No url means this level was never generated for this corpus. Recording a
-    // miss would be recording a fact about the corpus in a per-tile cache.
-    if (url == null) return null;
+    const loc = locateTile(id, level);
+    // No location means this level was never generated for this corpus. Recording
+    // a miss would be recording a fact about the corpus in a per-tile cache.
+    if (loc == null) return null;
 
     const store = bucket(level);
     if (!store) return null;
 
+    if (loc.rect) {
+      const sheet = requestSheet(loc.url, level);
+      const fresh = { sheetUrl: loc.url, rect: loc.rect, lastUsed: ++clock, frame };
+      store.set(id, fresh);
+      evict(level);
+      return sheet.state === 'ready' ? { img: sheet.img, rect: loc.rect } : null;
+    }
+
     const img = createImage();
-    const fresh = { img, state: 'loading', lastUsed: ++clock, frame };
+    const fresh = { img, rect: null, state: 'loading', lastUsed: ++clock, frame };
     store.set(id, fresh);
 
     img.onload = () => {
@@ -128,7 +214,7 @@ export function createTileCache({
     img.onerror = () => {
       fresh.state = 'error';
     };
-    img.src = url;
+    img.src = loc.url;
 
     evict(level);
     return null;
@@ -144,12 +230,12 @@ export function createTileCache({
    * gets fetched and what gets drawn agree about which substitute is best.
    */
   function servableLevel(id, want) {
-    if (urlFor(id, want) != null) return want;
+    if (locateTile(id, want) != null) return want;
     for (const { level } of pyramid.levels)
-      if (level > want && urlFor(id, level) != null) return level;
+      if (level > want && locateTile(id, level) != null) return level;
     for (let i = pyramid.levels.length - 1; i >= 0; i--) {
       const { level } = pyramid.levels[i];
-      if (level < want && urlFor(id, level) != null) return level;
+      if (level < want && locateTile(id, level) != null) return level;
     }
     return null;
   }
@@ -163,13 +249,15 @@ export function createTileCache({
    * something soft but correct. The level comes back with the image so the
    * renderer can tell a hit from a substitute.
    *
-   * @returns {{img: object, level: number}|null} null only when the room has nothing at all
+   * @returns {{img: object, rect: object|null, level: number}|null} null only when the room has nothing at all
    */
   function get(id, want) {
     const servable = servableLevel(id, want);
     if (servable !== null) request(id, servable);
     const level = pyramid.bestAvailable((l) => isReady(id, l), want);
-    return level === null ? null : { img: entry(id, level).img, level };
+    if (level === null) return null;
+    const e = entry(id, level);
+    return { img: entryImg(e), rect: e.rect, level };
   }
 
   /**
@@ -186,33 +274,52 @@ export function createTileCache({
     // A zoomed-out frame offers thousands of candidates; taking them all would
     // be a large allocation per frame to throw away.
     if (queue.length >= QUEUE_LIMIT) return;
-    if (entry(id, level) || urlFor(id, level) == null) return;
+    if (entry(id, level) || locateTile(id, level) == null) return;
     queue.push([id, level]);
     pump();
   }
 
   function pump() {
-    while (inFlightPrefetch < concurrency && queue.length) {
+    while (inFlightUrls.size < concurrency && queue.length) {
       const [id, level] = queue.shift();
       if (entry(id, level)) continue; // arrived by another route since queueing
-      inFlightPrefetch++;
-      request(id, level);
-      const started = entry(id, level);
-      if (!started || started.state !== 'loading') {
-        inFlightPrefetch--;
+      const loc = locateTile(id, level);
+      if (loc == null) continue;
+
+      if (inFlightUrls.has(loc.url)) {
+        // Another queued room already has this exact url in flight - a file,
+        // or (the common case with sheets) many rooms sharing one sheet.
+        // Materialize this room's own pointer entry without spending a
+        // second concurrency slot or a second completion hook; the fetch
+        // already in flight calls onLoad/pump once for everyone waiting on it.
+        request(id, level);
         continue;
       }
+
+      request(id, level);
+      const e = entry(id, level);
+      const state = e && (e.rect ? sheetImages.get(e.sheetUrl)?.state : e.state);
+      if (!e || state !== 'loading') continue; // resolved instantly - cached, pinned, or errored
+
+      const img = e.rect ? sheetImages.get(e.sheetUrl).img : e.img;
+      inFlightUrls.add(loc.url);
       const done = () => {
-        inFlightPrefetch--;
+        inFlightUrls.delete(loc.url);
         pump();
       };
-      const { onload, onerror } = started.img;
-      started.img.onload = () => { onload?.(); done(); };
-      started.img.onerror = () => { onerror?.(); done(); };
+      const { onload, onerror } = img;
+      img.onload = () => {
+        onload?.();
+        done();
+      };
+      img.onerror = () => {
+        onerror?.();
+        done();
+      };
     }
   }
 
-  /** Is this entry one the current draw still depends on? */
+  /** Is this entry (or sheet) one the current draw still depends on? */
   const inUse = (e) => frame !== null && e.frame != null && e.frame >= frame - 1;
 
   function evict(level) {
@@ -221,16 +328,39 @@ export function createTileCache({
     if (!store || store.size <= budget) return;
 
     const spare = [...store.entries()]
-      // Dropping an in-flight entry orphans the request: the image completes,
-      // writes into an entry no longer in the map, and the url is fetched again
-      // the next time it is drawn.
-      .filter(([id, e]) => e.state !== 'loading' && !pinned.has(id) && !inUse(e))
+      // A per-file entry mid-load owns its request; dropping it orphans the
+      // image (it completes into an entry no longer in the map, and the url
+      // is fetched again next time it's drawn). A sheet-backed entry owns
+      // nothing - its sheet keeps loading in `sheetImages` regardless - so it
+      // is always evictable, cheaply rebuilt from `locateTile` if needed again.
+      .filter(([id, e]) => (e.rect || e.state !== 'loading') && !pinned.has(id) && !inUse(e))
       .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
 
     for (const [id] of spare.slice(0, store.size - budget)) store.delete(id);
   }
 
-  const size = () => [...levels.values()].reduce((n, store) => n + store.size, 0);
+  /**
+   * A capacity-gated LRU, exactly like `evict()` for per-file entries: nothing
+   * is dropped just because it is off screen this frame - only once the total
+   * held exceeds `sheetBudget`, and then only the least-recently-used sheets
+   * among those not currently in use, oldest first, until back at budget.
+   * A level in `neverEvictSheetLevels` (the coarsest by default - see its
+   * docblock) is exempt entirely: once loaded, its sheets stay for the life
+   * of the cache, which is what makes zooming all the way out and panning
+   * freely there cost nothing after the first full pass.
+   */
+  function evictSheets() {
+    const budget = Math.max(1, Math.round(sheetBudget));
+    if (sheetImages.size <= budget) return;
+
+    const spare = [...sheetImages.entries()]
+      .filter(([, s]) => !neverEvict.has(s.level) && s.state !== 'loading' && !inUse(s))
+      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+
+    for (const [url] of spare.slice(0, sheetImages.size - budget)) sheetImages.delete(url);
+  }
+
+  const size = () => [...levels.values()].reduce((n, store) => n + store.size, 0) + sheetImages.size;
 
   return {
     beginFrame,
@@ -240,6 +370,7 @@ export function createTileCache({
     pin,
     size,
     sizeOf: (level) => bucket(level)?.size ?? 0,
+    sheetCount: () => sheetImages.size,
     /** How far past their budgets the visible working set is forcing the levels. */
     overBudget: () =>
       pyramid.levels.reduce(
@@ -249,9 +380,10 @@ export function createTileCache({
     pendingPrefetch: () => queue.length,
     clear: () => {
       for (const store of levels.values()) store.clear();
+      sheetImages.clear();
       pinned.clear();
       queue.length = 0;
-      inFlightPrefetch = 0;
+      inFlightUrls.clear();
     },
   };
 }

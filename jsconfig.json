@@ -10,7 +10,9 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "strict": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsc/buildinfo"
   },
   "include": ["packages/**/*.js", "packages/**/*.jsx", "packages/**/*.mjs", "packages/**/*.ts", "packages/**/*.tsx", "tools/**/*.mjs", "tools/**/*.js", "tools/**/*.ts", "build/**/*.mjs"],
   "exclude": ["node_modules", "**/*.test.mjs"]
