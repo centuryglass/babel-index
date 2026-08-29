@@ -123,7 +123,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       reply into one ranking, the highlight range-finders
     * `useMapCamera.ts`: React hook for camera changes, inputs entangled with
                          camera controls
-    * `useMapRenderer.js`: Map frame loop/redraw hook
+    * `useMapRenderer.ts`: Map frame loop/redraw hook
     * `useMapCursor.ts`: The keyboard cursor - where it is, what a reader
                          hears about it, and every key over the map
     * `useCenterShelf.ts`: The center room's bookshelf - titles, roving

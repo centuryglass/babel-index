@@ -23,22 +23,105 @@
  *     interrupt is not a map.
  */
 import { useEffect } from 'react';
-import { cursorCell } from '../lib/camera.ts';
+import { cursorCell, type Camera } from '../lib/camera.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
+import type { TileCache } from '../lib/tiles.ts';
+import type { MapLayout } from '../../../map/ordering.ts';
+import type { Board, Motion, Point } from '../../../map/moves.ts';
+import { assignTitles } from '../lib/center.js';
+import type { createRenderer } from '../lib/render.js';
+import type { createSlideRenderer } from '../lib/slide.js';
+
+/** See `useCenterShelf.ts` - `center.js`'s `assignTitles` stays untyped, so both files name the shape locally. */
+type Slot = ReturnType<typeof assignTitles>[number];
 
 /**
- * @param {object} opts
- * @param {object} opts.canvasRef      the one canvas, mounted for the session
- * @param {object} opts.searchFormRef  the center tile's search field
- * @param {object} opts.booksRef       the center tile's shelf of buttons
- * @param {object} opts.searchArrowRef the search badge's orbiting arrow
- * @param {object} opts.draw           assigned by this hook; called by `requestDraw`
- * @param {object} opts.anim           the running rearrangement, or null
- * @param {object} opts.keyboardUsed   gates the cursor ring - see render.js
- * @param {object} opts.cam            the live camera, a ref
- * @param {string} opts.mode           'map' or 'catalog'; hidden means no frames
- * @param {number} opts.blockedCount   rooms the reader's blocked tags removed, for the HUD
+ * What `render.js`'s/`slide.js`'s `draw()` return - both stay untyped
+ * (`object`, per their own JSDoc), so these are read off `stats` with a cast
+ * at the one spot each is actually used, rather than restating a shape those
+ * files don't state themselves. See AGENTS.md's TypeScript migration note.
  */
+interface RenderStats {
+  cells: number;
+  drawn: number;
+  substituted: number;
+  blank: number;
+  level: number;
+  bounds: { x0: number; x1: number; y0: number; y1: number };
+  zoom: number;
+}
+
+interface SlideStats {
+  drawn: number;
+  blank: number;
+  level: number;
+  cells: number;
+}
+
+/**
+ * Rather than restating `draw()`'s opts/return shape here, these read it off
+ * the real functions themselves - so a change to `render.js`/`slide.js`'s
+ * JSDoc (up to and including converting either to `.ts`) is picked up
+ * automatically instead of leaving a second, driftable copy.
+ */
+type RoomRenderer = ReturnType<typeof createRenderer>;
+type SlideRenderer = ReturnType<typeof createSlideRenderer>;
+
+/** The live rearrangement, as `useRearrangement.js` builds it into the `anim` ref. */
+interface RunningAnim {
+  /** the arrangement being flown away from, held on screen for the flight home */
+  before?: { layout: MapLayout; order: number[] };
+  board?: Board;
+  cam?: Camera;
+  origin?: Point;
+  motions?: Motion[];
+  show?: {
+    totalMs: number;
+    advanceTo: (ms: number) => { done: boolean; motions: Motion[] };
+  };
+  t0?: number;
+}
+
+/** `centreOverlay(w, h)`'s return - see `main.jsx`. */
+interface CentreOverlay {
+  cellRect: { x: number; y: number; w: number; h: number };
+  box: { x: number; y: number; w: number; h: number };
+  usable: boolean;
+  books: boolean;
+}
+
+interface UseMapRendererOpts {
+  /** the one canvas, mounted for the session */
+  canvasRef: { current: HTMLCanvasElement | null };
+  /** the center tile's search field */
+  searchFormRef: { current: HTMLFormElement | null };
+  /** the center tile's shelf of buttons */
+  booksRef: { current: HTMLElement | null };
+  /** the search badge's orbiting arrow */
+  searchArrowRef?: { current: HTMLElement | null };
+  /** assigned by this hook; called by `requestDraw` */
+  draw: { current: () => void };
+  /** the running rearrangement, or null */
+  anim: { current: RunningAnim | null };
+  /** gates the cursor ring - see render.js */
+  keyboardUsed: { current: boolean };
+  /** the live camera, a ref */
+  cam: { current: Camera };
+  /** 'map' or 'catalog'; hidden means no frames */
+  mode: string;
+  /** the current `createLayout` result */
+  layout: MapLayout;
+  /** room ids by rank */
+  order: number[];
+  renderer: RoomRenderer;
+  slideRenderer: SlideRenderer;
+  cache: TileCache;
+  centreSlots?: (Slot | null)[] | null;
+  centreOverlay: (w: number, h: number) => CentreOverlay;
+  /** rooms the reader's blocked tags removed, for the HUD */
+  blockedCount?: number;
+}
+
 export function useMapRenderer({
   canvasRef,
   searchFormRef,
@@ -57,10 +140,12 @@ export function useMapRenderer({
   centreSlots,
   centreOverlay,
   blockedCount = 0,
-}) {
+}: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return;
     // The pending frame's id, so it can be cancelled - not just a flag. This
     // closure captures `layout` and `order`, so a frame scheduled through it
     // and left to fire after the effect has been rebuilt repaints the state
@@ -156,35 +241,45 @@ export function useMapRenderer({
       // the new library, fly to it, and then slide it in from the old one.
       const running = anim.current;
       const showing = running?.before ?? { layout, order };
-      const stats =
-        running?.board
-          ? slideRenderer.draw({
-              ctx, width: w, height: h, dpr, cam: running.cam,
-              board: running.board, origin: running.origin, motions: running.motions,
-              genericIndexAt: layout.genericIndexAt,
-            })
-          : renderer.draw({
-              ctx, width: w, height: h, dpr, cam: cam.current,
-              layout: showing.layout, order: showing.order, centreSlots,
-              cursor: keyboardUsed.current ? cursorCell(cam.current) : null,
-            });
+      // Not object literals passed straight to `draw()`, so a field
+      // `render.js`/`slide.js`'s own JSDoc omits from its `@param` (`cursor`,
+      // here) is not an excess-property error - the untyped-and-deferred
+      // status of those two files (AGENTS.md's TypeScript migration note)
+      // means their JSDoc is not necessarily complete for every param they
+      // actually read.
+      const slideDrawOpts = {
+        ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
+        board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
+        genericIndexAt: layout.genericIndexAt,
+      };
+      const roomDrawOpts = {
+        ctx, width: w, height: h, dpr, cam: cam.current,
+        layout: showing.layout, order: showing.order, centreSlots,
+        cursor: keyboardUsed.current ? cursorCell(cam.current) : null,
+      };
+      const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
 
       const hud = document.getElementById('hud');
       if (running?.board && hud) {
-        const pct = Math.round((100 * Math.min(running.show.totalMs, performance.now() - running.t0)) / running.show.totalMs);
+        const slideStats = stats as SlideStats;
+        const show = running.show as NonNullable<RunningAnim['show']>;
+        const t0 = running.t0 as number;
+        const motions = running.motions ?? [];
+        const pct = Math.round((100 * Math.min(show.totalMs, performance.now() - t0)) / show.totalMs);
         hud.textContent =
-          `rearranging · ${pct}% · ${running.motions.length} lines moving · ` +
-          `level ${stats.level} · ${stats.blank} blank · ${cache.size()} cached` +
+          `rearranging · ${pct}% · ${motions.length} lines moving · ` +
+          `level ${slideStats.level} · ${slideStats.blank} blank · ${cache.size()} cached` +
           (blockedCount ? ` · ${blockedCount} blocked` : '');
       } else if (hud) {
-        const size = pyramidSizeOf(stats.level);
+        const renderStats = stats as RenderStats;
+        const size = pyramidSizeOf(renderStats.level);
         const over = cache.overBudget();
         hud.textContent =
-          `${stats.cells} cells · ${stats.drawn} drawn · ` +
-          `level ${stats.level} (${size.w}px) · ${stats.substituted} substituted · ` +
-          `${stats.blank} blank · ` +
+          `${renderStats.cells} cells · ${renderStats.drawn} drawn · ` +
+          `level ${renderStats.level} (${size.w}px) · ${renderStats.substituted} substituted · ` +
+          `${renderStats.blank} blank · ` +
           `${cache.size()} cached${over ? ` (+${over} over budget)` : ''} · ` +
-          `zoom ${Math.round(stats.zoom)} · ` +
+          `zoom ${Math.round(renderStats.zoom)} · ` +
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
           `edge at r=${layout.boundaryRadius.toFixed(1)}` +
           (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '') +
