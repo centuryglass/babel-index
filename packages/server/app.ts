@@ -7,12 +7,13 @@
  * disk beyond the images directory under test.
  */
 import { availableParallelism } from 'node:os';
-import express, { type Express, type Response } from 'express';
+import express, { type Express, type Request, type Response } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
 import { normalizeBasePath } from './base-path.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
+import type { FavoriteStore } from './favorites.ts';
 
 /** A resolved config as `loadConfig()` (packages/config/load.ts) returns it -
  *  `Config` plus where it came from, if anywhere. */
@@ -73,6 +74,17 @@ export interface CreateAppOptions {
    *  base-path.ts - this only sets the `<base href>` the served HTML carries,
    *  so the browser resolves this file's relative urls under the subpath. */
   basePath?: string;
+  /** where global favorite counts live (see favorites.ts). Absent - the
+   *  default, and every test that does not ask for it - means the three
+   *  favorite routes are not mounted at all and the client renders no favorite
+   *  UI, rather than a count nothing can record. */
+  favorites?: FavoriteStore | null;
+  /** passed straight to Express's `trust proxy` setting. It has to be set for
+   *  a deployment behind a reverse proxy, or `req.ip` is the proxy's own
+   *  address - one hash for every visitor, and every favorite count capped at
+   *  one. Default false: correct for a direct connection, which is what the
+   *  demo is. See index.ts's `--trust-proxy`. */
+  trustProxy?: string | number | boolean;
 }
 
 /** Build the app. */
@@ -87,9 +99,17 @@ export function createApp({
   readIndexHtml,
   watch = false,
   basePath = '/',
+  favorites = null,
+  trustProxy = false,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
+
+  // Only when asked for: Express's default (off) is the truthful reading of a
+  // direct connection, and trusting a header nobody strips would let any
+  // client pick its own address - which here means picking its own favorite
+  // hash, one per request, without limit.
+  if (trustProxy !== false) app.set('trust proxy', trustProxy);
 
   // Config rides on the manifest rather than getting an endpoint of its own:
   // the client already blocks on this fetch before it can render, and a second
@@ -99,11 +119,24 @@ export function createApp({
   const { notes: _notes, source: _source, ...clientConfig } = config ?? (resolveConfig() as ResolvedConfig);
   const clipTextDtype = clientConfig.search?.clipTextDtype ?? 'fp32';
 
-  app.get('/api/manifest', (_req, res) => res.json({ ...manifest, config: clientConfig }));
+  // Whether the client should offer favoriting at all. A flag rather than the
+  // counts themselves: the manifest is on the path to the first frame, and the
+  // counts are a second, cacheable thing that changes on its own schedule.
+  const favoritesInfo = favorites ? { enabled: true } : null;
+
+  app.get('/api/manifest', (_req, res) =>
+    res.json({ ...manifest, favorites: favoritesInfo, config: clientConfig })
+  );
+
+  // Which room files exist, for the favorite routes to validate against. Kept
+  // in step with `manifest` through the rescan below - a room that has left the
+  // corpus stops being favoritable the moment the scan says so.
+  let roomFiles = new Set(manifest.rooms.map((room) => room.file));
 
   app.post('/api/rescan', async (_req, res, next) => {
     try {
       manifest = await rescan();
+      roomFiles = new Set(manifest.rooms.map((room) => room.file));
       res.json({ count: manifest.count });
     } catch (err) {
       next(err);
@@ -150,6 +183,49 @@ export function createApp({
       res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q), note });
     }
   });
+
+  /**
+   * Favorites.
+   *
+   * Three routes, mounted only when a store exists (see favorites.ts for what
+   * is actually recorded and why it is a set rather than a counter):
+   *
+   *   GET    /api/favorites        every room with at least one, by file
+   *   POST   /api/favorites/:file  this address favorites the room
+   *   DELETE /api/favorites/:file  it stops
+   *
+   * There is deliberately NO route that answers "have I favorited this" - a
+   * reader's own list lives in their browser (`persist.ts`) and the server
+   * never assembles a per-visitor view of it. The two writes carry no body, so
+   * no body parser is mounted; the room is named in the path and validated
+   * against the corpus, which is also what keeps an arbitrary string out of the
+   * store.
+   */
+  if (favorites) {
+    const favoriteBuckets = createRateBuckets();
+
+    app.get('/api/favorites', (_req, res) => {
+      // Never cached: a count that is one page-load stale reads as a favorite
+      // that did not register, which is the one thing this endpoint exists to
+      // report.
+      res.set('Cache-Control', 'no-store');
+      res.json({ counts: favorites.counts() });
+    });
+
+    const write = (method: 'add' | 'remove') => (req: Request, res: Response) => {
+      const file = String(req.params.file);
+      if (!roomFiles.has(file)) return res.status(404).json({ error: 'no such room' });
+      // req.ip is undefined only for a socket that has already gone away.
+      const ip = req.ip ?? '';
+      if (!favoriteBuckets.take(ip))
+        return res.status(429).json({ error: 'too many favorites at once - try again in a moment' });
+      const count = favorites[method](file, ip);
+      res.json({ file, count, favorited: method === 'add' });
+    };
+
+    app.post('/api/favorites/:file', write('add'));
+    app.delete('/api/favorites/:file', write('remove'));
+  }
 
   // In remote mode there is no local directory to serve at all: the manifest's
   // urls (rewritten by remote.ts's scanRemote) already point the browser
@@ -323,4 +399,42 @@ export function stubRanking(rooms: { id: number }[], query: string): number[] {
   });
   scored.sort((a, b) => b.score - a.score);
   return scored.map((s) => s.id);
+}
+
+/**
+ * A token bucket per address for the favorite writes.
+ *
+ * Not a durability or a correctness measure - the set semantics already cap
+ * what one address can do to a count - just a bound on how fast a script can
+ * make this process hash things. In memory and never persisted, so it forgets
+ * everyone on restart and holds no record of who asked for what: the same
+ * reason favorites.ts stores no addresses.
+ */
+const RATE_BURST = 20;
+const RATE_REFILL_MS = 1000;
+const RATE_MAX_TRACKED = 10_000;
+
+export function createRateBuckets({ burst = RATE_BURST, refillMs = RATE_REFILL_MS } = {}) {
+  const seen = new Map<string, { tokens: number; at: number }>();
+  return {
+    /** @returns whether this address may spend a token now */
+    take(key: string): boolean {
+      const now = Date.now();
+      // Bounded so a spray of forged addresses (or an honest crowd) cannot grow
+      // this map without limit. Oldest-first, which is a Map's own iteration
+      // order here since every touch rewrites its entry at the end.
+      if (seen.size >= RATE_MAX_TRACKED && !seen.has(key)) {
+        const oldest = seen.keys().next().value;
+        if (oldest !== undefined) seen.delete(oldest);
+      }
+      const entry = seen.get(key) ?? { tokens: burst, at: now };
+      entry.tokens = Math.min(burst, entry.tokens + (now - entry.at) / refillMs);
+      entry.at = now;
+      const allowed = entry.tokens >= 1;
+      if (allowed) entry.tokens -= 1;
+      seen.delete(key);
+      seen.set(key, entry);
+      return allowed;
+    },
+  };
 }

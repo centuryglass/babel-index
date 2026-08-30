@@ -23,7 +23,7 @@
  * warm. See `docs/catalog-plan.md` §2.
  */
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
-import { RoomDetails } from './RoomDetails.tsx';
+import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import { describeBook, BOOK_RECTS, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
@@ -33,6 +33,7 @@ import type { Description } from '../../../map/describe.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
+import type { SortMode } from '../../../map/favorites.ts';
 
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
@@ -93,6 +94,11 @@ export function MapView({
   contentRatio,
   setContentRatio,
   onReorder,
+  favorites,
+  sortMode,
+  onSortMode,
+  favoriteFor,
+  cursorId,
   onRescatter,
   onRecentre,
   history,
@@ -135,6 +141,14 @@ export function MapView({
   contentRatio: number;
   setContentRatio: (ratio: number) => void;
   onReorder: () => void;
+  /** whether this deployment records favorites at all - false hides every favorite control */
+  favorites: boolean;
+  sortMode: SortMode;
+  onSortMode: (mode: SortMode) => void;
+  /** one room's favorite state, or null for a generic cell or a disabled feature */
+  favoriteFor: (id: number | null | undefined) => FavoriteControl | null;
+  /** the room under the keyboard cursor, null on the center cell and on wallpaper */
+  cursorId: number | null;
   onRescatter: () => void;
   onRecentre: () => void;
   history: string[];
@@ -207,6 +221,7 @@ export function MapView({
             chipTabIndex={-1}
             highlight={highlight}
             tagLinks={tagLinks}
+            favorite={favoriteFor(cursorId)}
           />
         )}
       </canvas>
@@ -407,6 +422,35 @@ export function MapView({
             onChange={(e) => setContentRatio(Number(e.target.value) / 100)}
           />
         </div>
+
+        {/*
+          The favorite sorts, beside the other two re-ranks because that is
+          what they are: they swap `order` and let the sliding-tile animation
+          carry the map across, exactly as reorder does. Interim placement -
+          this whole panel is behind `?debug`, and the reader-facing control
+          belongs on the center tile with the search box (see
+          docs/implementation-plan.md).
+        */}
+        {favorites && (
+          <div className="buttons" role="group" aria-label="sort the library">
+            {(
+              [
+                ['relevance', 'ranking'],
+                ['mine', 'my favorites'],
+                ['count', 'most favorited'],
+              ] as [SortMode, string][]
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                aria-pressed={sortMode === mode}
+                className={sortMode === mode ? 'sort-mode on' : 'sort-mode'}
+                onClick={() => onSortMode(mode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="buttons">
           <button onClick={onReorder}>reorder</button>

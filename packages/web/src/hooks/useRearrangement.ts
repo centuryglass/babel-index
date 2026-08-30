@@ -36,6 +36,8 @@ interface UseRearrangementOpts {
   /** the live camera ref */
   cam: { current: Camera };
   flyTo: (x: number, y: number, zoom?: number) => Promise<boolean>;
+  /** synchronous "is the camera mid-flight right now" - see `useMapCamera.ts` */
+  isFlying: () => boolean;
   requestDraw: () => void;
   /** the whole config, not one section */
   config: Config;
@@ -56,6 +58,7 @@ export function useRearrangement({
   searchFormRef,
   cam,
   flyTo,
+  isFlying,
   requestDraw,
   config,
   anim,
@@ -68,26 +71,44 @@ export function useRearrangement({
   // alongside `animateNext` because they are one act, not two: see the file
   // comment above.
   const pendingNote = useRef('');
+  // Whether this animation should fly home to the center first. True for
+  // everything a reader explicitly asks for (the reorder button, a sort
+  // change, a search) - the fly-home is what gives those a wall of rooms to
+  // slide across. False for a resort that happens under a reader who is
+  // already looking at something else (a favorite toggled live while sorted
+  // by favorites): the board math needs no particular camera position - see
+  // `board.ts`'s "nowhere near the camera" case - so there is nothing to
+  // gain and a reader's place on the map to lose by moving it.
+  const parkAtCenterRef = useRef(true);
   const arrangement = useRef<{ layout: MapLayout; order: number[] } | null>(null);
 
-  const requestAnimation = useCallback((note = '') => {
+  const requestAnimation = useCallback((note = '', opts?: { parkAtCenter?: boolean }) => {
     animateNext.current = true;
     pendingNote.current = note;
+    parkAtCenterRef.current = opts?.parkAtCenter ?? true;
   }, []);
 
   /**
    * Slide the library from one arrangement into another.
    *
-   * The camera is parked on the center at the opening zoom first, and stays
-   * there: the plan is made against exactly the cells that are on screen, and
-   * the guarantee it offers - that nothing is ever seen to teleport - is a
-   * guarantee about that rectangle. Returns false when the change cannot be
-   * animated legally, which is the caller's cue to let it happen at once.
+   * When `parkAtCenter` is true the camera flies home to the center at the
+   * opening zoom first, and stays there for the duration - the fly-home gives
+   * the animation a wall of rooms to work with. When it is false the plan is
+   * made against wherever the camera already is: `buildRearrangement` needs
+   * no particular position (the fixed tile - the center room - not being in
+   * the on-camera rectangle at all is the ordinary case, see `board.ts`), so
+   * a reader's place on the map is left alone. Either way the guarantee is
+   * the same - nothing is ever seen to teleport - and it is a guarantee about
+   * whatever rectangle the camera is parked on, not about which rectangle
+   * that is. Returns false when the change cannot be animated legally or the
+   * camera cannot be treated as settled, which is the caller's cue to let it
+   * happen at once.
    */
   const startRearrangement = useCallback(
     async (
       before: { layout: MapLayout; order: number[] },
-      after: { layout: MapLayout; order: number[] }
+      after: { layout: MapLayout; order: number[] },
+      parkAtCenter: boolean
     ): Promise<boolean> => {
       const canvas = canvasRef.current;
       if (!canvas) return false;
@@ -114,7 +135,8 @@ export function useRearrangement({
       // fly-home to the default zoom is only there to give the animation a
       // wall of rooms to work with, and leaving the camera parked there
       // afterwards fights whatever zoom the reader actually wanted (often
-      // the opening view, to keep using the center tile's controls).
+      // the opening view, to keep using the center tile's controls). Moot
+      // when the camera never leaves in the first place.
       const returnZoom = cam.current.zoom;
 
       // A reader mid-search keeps their place in the field: the fly-home and
@@ -125,15 +147,23 @@ export function useRearrangement({
       const searchInput = searchFormRef.current?.querySelector('input');
       const hadFocus = !!searchInput && document.activeElement === searchInput;
 
-      // Land before rearranging, rather than racing it: two animations
-      // competing for the same attention and neither lands. It is also a
-      // correctness requirement now that flights ease - the plan is made
-      // against exactly the cells on screen, so it cannot be made until the
-      // camera has stopped moving.
-      const landed = await flyTo(0, 0, config.camera.defaultZoom);
-      if (anim.current?.before !== before) return true; // superseded; not ours to undo
-      if (!landed) {
-        // The reader took the map. Not the moment to rebuild the library.
+      if (parkAtCenter) {
+        // Land before rearranging, rather than racing it: two animations
+        // competing for the same attention and neither lands. It is also a
+        // correctness requirement now that flights ease - the plan is made
+        // against exactly the cells on screen, so it cannot be made until the
+        // camera has stopped moving.
+        const landed = await flyTo(0, 0, config.camera.defaultZoom);
+        if (anim.current?.before !== before) return true; // superseded; not ours to undo
+        if (!landed) {
+          // The reader took the map. Not the moment to rebuild the library.
+          anim.current = null;
+          return false;
+        }
+      } else if (isFlying()) {
+        // Something else already has the camera in the air (a flight from a
+        // search, say). Not this call's place to fight it or wait it out -
+        // the caller gets the same answer a legal-but-declined plan would.
         anim.current = null;
         return false;
       }
@@ -171,7 +201,7 @@ export function useRearrangement({
         running.motions = motions;
         if (done) {
           anim.current = null;
-          if (returnZoom !== config.camera.defaultZoom) {
+          if (parkAtCenter && returnZoom !== config.camera.defaultZoom) {
             flyTo(0, 0, returnZoom).then((landedBack) => {
               if (landedBack && hadFocus) searchInput.focus();
             });
@@ -185,7 +215,7 @@ export function useRearrangement({
       requestAnimationFrame(tick);
       return true;
     },
-    [flyTo, cam, config, requestDraw, canvasRef, searchFormRef, anim]
+    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim]
   );
 
   // Every change to what is on the map arrives here. Only the ones a control
@@ -222,7 +252,8 @@ export function useRearrangement({
       return;
     }
     animateNext.current = false;
-    startRearrangement(previous, current).then((started) => {
+    const parkAtCenter = parkAtCenterRef.current;
+    startRearrangement(previous, current, parkAtCenter).then((started) => {
       if (!started) requestDraw();
       // Announce the arrangement this effect was for, and only if it is still
       // the one on the map: `startRearrangement` reports true for a run that

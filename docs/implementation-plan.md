@@ -36,6 +36,10 @@ serve as completed task history.
   cross-origin `fetch()` calls. Set `app_origins` in `terraform.tfvars` and
   apply before relying on `--remote` mode in production - not yet applied or
   tested against a real Cloudflare zone.
+- `/api/favorites`'s two writes are rate limited in process (a token bucket per
+  address, `createRateBuckets` in `app.ts`), which is a bound on hashing work
+  and not a real edge defence. When the `/api/search` ruleset below is written,
+  scope it to the favorite writes too.
 - The Cloudflare abuse protection in `infra/abuse-protection.tf` only scopes
   `assets_hostname` (the R2 bucket). `/api/search` is a much better DoS target
   than static asset serving - it's CPU-bound ML inference on an unprotected
@@ -287,6 +291,19 @@ alongside it, per the paired-test rule.
 Nothing left in this bucket - `main.jsx` (see the "TypeScript migration -
 application code" section above) converted cleanly too, and was the last file
 this list named.
+
+## Favorites:
+- The sort control is in the catalog's bar and in the `?debug` panel. The
+  reader-facing one belongs on the center tile with the search box: trace it
+  into `tools/center-placement/shelf_geometry.svg`, re-run `import-shelf-svg.ts`,
+  and have it drive the same `sortMode` state `main.tsx` already holds. Nothing
+  in the data layer has to change for it.
+- No e2e coverage yet. A spec favoriting a room from a catalog row, switching
+  the sort and reloading would cover the whole path; it needs the demo server
+  the suite starts to be given a throwaway `--favorites` path.
+- The JSON store is one file written by one process. If a second process ever
+  serves this corpus, that is the moment for the Postgres adapter behind
+  `FavoriteStore` rather than a lock on the file.
 
 ## Other:
 - Config variables are still mostly untuned, make sure to take care of that.

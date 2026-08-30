@@ -160,10 +160,57 @@ function ScoreBreakdown({
   );
 }
 
+/**
+ * The favorite control and the room's global count, as one line.
+ *
+ * A toggle button rather than an icon that means two things by looking
+ * different: `aria-pressed` says which state it is in natively, and the count
+ * is inside the accessible name because it is the thing the press changes -
+ * a reader who cannot see the number beside the star still hears it move.
+ *
+ * Absent entirely (this renders null) when the deployment records no counts.
+ * A generic cell has no file to favorite and gets none either.
+ */
+export function FavoriteToggle({ favorite, tabIndex = 0 }: { favorite: FavoriteControl; tabIndex?: number }) {
+  const { on, count, toggle } = favorite;
+  const plural = count === 1 ? 'favorite' : 'favorites';
+  return (
+    <div className="favorite">
+      <button
+        type="button"
+        className={on ? 'favorite-toggle on' : 'favorite-toggle'}
+        aria-pressed={on}
+        tabIndex={tabIndex}
+        title={on ? 'remove from your favorites' : 'add to your favorites'}
+        aria-label={`${on ? 'remove from your favorites' : 'add to your favorites'}, ${count} ${plural}`}
+        onClick={(e) => {
+          // The catalog row and the card both have their own click handlers
+          // above this one - a favorite is not also a "show me this room".
+          e.stopPropagation();
+          toggle();
+        }}
+      >
+        <span aria-hidden="true">{on ? '\u2605' : '\u2606'}</span>
+        <span className="favorite-count" aria-hidden="true">{count}</span>
+      </button>
+    </div>
+  );
+}
+
+/** What a room's favorite state looks like to this component - see `useFavorites`. */
+export interface FavoriteControl {
+  /** whether this reader has favorited the room */
+  on: boolean;
+  /** how many readers have, globally */
+  count: number;
+  toggle: () => void;
+}
+
 export function RoomDetails({
   entry,
   desc,
   onKeyword,
+  favorite = null,
   tagLinks = null,
   chipTabIndex = 0,
   highlight = null,
@@ -181,6 +228,8 @@ export function RoomDetails({
   /** keyword -> external link, from the corpus's optional tagLinks.json (see useCorpus.ts) -
    * a keyword with an entry grows a second "more about this" pill fused to it */
   tagLinks?: Record<string, string> | null;
+  /** this room's favorite state, or null where the deployment records none */
+  favorite?: FavoriteControl | null;
   /** -1 inside the canvas, 0 everywhere else */
   chipTabIndex?: number;
   /** the two range finders, already bound to the submitted query */
@@ -195,6 +244,8 @@ export function RoomDetails({
 }) {
   return (
     <>
+      {favorite && <FavoriteToggle favorite={favorite} tabIndex={chipTabIndex} />}
+
       {entry?.keywords && entry.keywords.length > 0 && (
         <div className="chips">
           {entry.keywords.map((k) => {

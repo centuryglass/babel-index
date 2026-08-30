@@ -40,10 +40,11 @@ import type { Description } from '../../../map/describe.ts';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
+import type { SortMode } from '../../../map/favorites.ts';
 import type { Config } from '../../../config/config.ts';
 import type { UrlFor } from '../lib/rooms.ts';
 import { describeBook, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
-import { RoomDetails } from './RoomDetails.tsx';
+import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import {
   pageOf,
@@ -152,6 +153,10 @@ export function CatalogView({
   onShowOnMap,
   onKeyword,
   onExpand,
+  favorites,
+  sortMode,
+  onSortMode,
+  favoriteFor,
   centreSlots,
   onBook,
   onOpenArtistStatement,
@@ -181,6 +186,11 @@ export function CatalogView({
   onShowOnMap: (x: number, y: number) => void;
   onKeyword: (keyword: string) => void;
   onExpand: (id: number, rank: number) => void;
+  /** whether this deployment records favorites at all - false hides every favorite control */
+  favorites: boolean;
+  sortMode: SortMode;
+  onSortMode: (mode: SortMode) => void;
+  favoriteFor: (id: number | null | undefined) => FavoriteControl | null;
   centreSlots: Slot[];
   onBook: (index: number) => void;
   onOpenArtistStatement: () => void;
@@ -338,6 +348,29 @@ export function CatalogView({
           </p>
 
           {/*
+            A select rather than the paging radiogroup's shape: these are three
+            mutually exclusive orderings of the same list, one of which is the
+            default, which is exactly what a select says natively - and unlike
+            paging, a reader is choosing WHAT they are looking at rather than
+            how it advances.
+
+            Sorting is a re-rank, not a search: it moves rooms within the
+            ranking already in force (see `favoriteOrder`), so a term stays
+            searched and the row a room sits in stays the row the map would
+            fly to.
+          */}
+          {favorites && (
+            <label className="catalog-sort">
+              sort
+              <select value={sortMode} onChange={(e) => onSortMode(e.target.value as SortMode)}>
+                <option value="relevance">{result?.term ? 'by ranking' : 'alphabetically'}</option>
+                <option value="mine">my favorites first</option>
+                <option value="count">most favorited</option>
+              </select>
+            </label>
+          )}
+
+          {/*
             A radiogroup rather than two buttons: these are two states of one
             setting, and a reader arrowing between them should hear that rather
             than meeting two unrelated controls.
@@ -450,6 +483,7 @@ export function CatalogView({
               tagLinks={tagLinks}
               result={result}
               weights={config.search.weights}
+              favorite={favoriteFor(id)}
             />
           ))}
 
@@ -493,7 +527,7 @@ export function CatalogView({
  */
 function CatalogRow({
   id, rank, total, file, entry, src, thumbPx, cell,
-  onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights,
+  onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights, favorite,
 }: {
   id: number;
   rank: number;
@@ -510,6 +544,7 @@ function CatalogRow({
   tagLinks: Record<string, string> | null;
   result: SearchResult | null;
   weights: Config['search']['weights'];
+  favorite: FavoriteControl | null;
 }) {
   const storyRef = useRef<HTMLDivElement>(null);
   const [clipped, setClipped] = useState(false);
@@ -580,6 +615,16 @@ function CatalogRow({
           ) : (
             <span className="catalog-show dim">not on the map</span>
           )}
+          {/*
+            In the head, NOT inside `RoomDetails` where the card and the
+            overlay put it. A row is a fixed height - that is what lets the
+            spacers standing in for unmounted pages be arithmetic - so a
+            control added to the text column would have to be reserved for in
+            `TEXT_MIN`/`STORY_RESERVED_PX` and would eat two lines of story on
+            every row to do it. In the head it costs width on a line that
+            already exists.
+          */}
+          {favorite && <FavoriteToggle favorite={favorite} />}
         </div>
 
         <div ref={storyRef}>

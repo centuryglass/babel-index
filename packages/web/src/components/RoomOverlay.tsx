@@ -21,7 +21,7 @@
  * the middle of it.
  */
 import { useEffect, useRef } from 'react';
-import { RoomDetails } from './RoomDetails.tsx';
+import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
@@ -39,6 +39,7 @@ export function RoomOverlay({
   tagLinks,
   result,
   weights,
+  favorite = null,
 }: {
   room: { id: number; rank: number };
   desc: Description;
@@ -51,6 +52,8 @@ export function RoomOverlay({
   tagLinks?: Record<string, string> | null;
   result?: SearchResult | null;
   weights?: Config['search']['weights'] | null;
+  /** this room's favorite state, passed straight through to `RoomDetails` */
+  favorite?: FavoriteControl | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -134,6 +137,7 @@ export function RoomOverlay({
             rank={room.rank}
             result={result}
             weights={weights}
+            favorite={favorite}
           />
         </div>
       </div>

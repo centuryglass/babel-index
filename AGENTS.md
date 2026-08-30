@@ -29,6 +29,7 @@ search UI and linear tile list.
 ```sh
 npm run demo                       # http://localhost:5173, against assets/corpus-sample/
 npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--port 5173] [--config config.json] [--base-path /babel-index/]
+npm run demo -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run lint                       # config in eslint.config.js
@@ -86,6 +87,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `remote.ts`: Reading a corpus manifest from a remote host (R2/Cloudflare)
                  instead of a local directory
   * `port.ts`: portInUse helper function
+  * `favorites.ts`: The global favorite counts - a `FavoriteStore` interface
+                   and one JSON-file implementation (`--favorites <path>`)
   * `search-cache.ts`: LRU cache and concurrency limiter backing `/api/search`'s
                         CLIP text tower calls
   * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
@@ -125,6 +128,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
     * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
+    * `useFavorites.ts`: The reader's own favorites (localStorage) and the
+                         library's global counts (`/api/favorites`), and the
+                         one toggle that changes both
     * `useSearch.ts`: The query box, the `/api/search` fetch, blending the
                       reply into one ranking, the highlight range-finders
     * `useMapCamera.ts`: React hook for camera changes, inputs entangled with
@@ -150,7 +156,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images
     * `rooms.js`: Map room data in the manifest to image URLs
-    * `persist.js`: Persistent data management (search history, pagination settings)
+    * `persist.js`: Persistent data management (search history, pagination
+                    settings, blocked tags, the reader's own favorites)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
 - `packages/config`: Central definition for numbers tuned by feel
@@ -167,6 +174,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                ...), type-only, shared by `illusion.ts`, `board.ts` and
                `packages/web/src/lib/slide.ts`
   * `scoring.ts`: Find room rank and match certainty for a search, searh tokenization
+  * `favorites.ts`: The favorite sort modes, as a stable re-sort of an order
+                    that already exists
   * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
   * `board.ts`: Sliding animation illusion's board data structure
   * `describe.ts`: Build screen reader messages
@@ -525,6 +534,39 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   generated, and optional exactly like the sidecar: a corpus without one just
   renders chips with no "more about this" link. `RoomDetails.tsx` takes it as
   a `tagLinks` prop rather than importing it — see `useCorpus.ts`.
+
+### Favorites
+
+- **A count is a set's size, never a counter.** `packages/server/favorites.ts`
+  stores, per room, a set of `HMAC(salt, file + NUL + ip)`. Adding twice is one
+  favorite and removing what was never there is nothing, so no endpoint can
+  zero a room out or run it up - that property is the whole reason it is a set,
+  and a "just increment a number" simplification throws it away.
+- **The hash is per ROOM on purpose.** The same visitor hashes differently in
+  every room's set, so two sets cannot be joined into one person's list. The
+  cost is that the store cannot count distinct visitors, which is not something
+  we want to be able to do. Hashing is not claimed as a security control; it is
+  the shape that makes the stored data useless while still de-duplicating.
+- **Favorites are keyed by FILENAME everywhere - server, `localStorage`, and
+  `packages/map/favorites.ts`.** Room ids are positional (`scan.ts` sorts
+  filenames and indexes them), so one image added to a corpus renumbers every
+  id after it and a stored id silently comes back pointing at a different room.
+- **`req.ip` behind a reverse proxy is the PROXY.** Without `--trust-proxy`
+  every visitor shares one hash and every count stops at 1 - and it must stay
+  off by default, since trusting `X-Forwarded-For` where nothing strips it lets
+  a client pick its own address, and here that means its own hash, once per
+  request. nginx must send `proxy_set_header X-Forwarded-For
+  $proxy_add_x_forwarded_for;` for the flag to mean anything.
+- **No store, no feature.** Without `--favorites` the routes are not mounted and
+  `manifest.favorites` is null, which every consumer reads as "render no
+  favorite control" - distinct from a count of zero, and deliberately so.
+- **A sort is a re-rank, and the catalog row's toggle is in the HEAD.** Sorting
+  swaps `order` (the reorder button's path, animation included) and must never
+  rebuild the layout - only a search may, because only a search has a certainty
+  profile. And a catalog row is a fixed height, so the row's favorite control
+  sits beside "show on the map" rather than inside `RoomDetails` where the card
+  and the overlay put it; in the text column it would have to be reserved for in
+  `TEXT_MIN`/`STORY_RESERVED_PX` and would cost two lines of story on every row.
 
 ### The reorder animation
 
