@@ -19,6 +19,7 @@ Metadata schema (``metadata.json``), keyed by webp filename::
         "keywords": [{"text": "syrup", "type": "material"}, ...],
         "story": "…",          # None/absent until generated
         "alt": "…",            # None/absent until generated; accessibility alt text
+        "title": "…",          # None/absent until generated; see babel_index_review.titles
         "final": true          # absent/false until the reviewer approves it
       },
       ...
