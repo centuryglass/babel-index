@@ -37,7 +37,7 @@ import type { CSSProperties, FormEventHandler, Ref, RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { describeRoom } from '../../../map/describe.ts';
 import type { Description } from '../../../map/describe.ts';
-import type { RoomMeta } from '../../../map/metadata.ts';
+import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 import type { Config } from '../../../config/config.ts';
@@ -564,7 +564,7 @@ function CatalogRow({
         <div className="catalog-head">
           <h2 className="catalog-name">
             <span className="catalog-rank">{rank + 1}</span>
-            Room {id}
+            {roomTitle(entry, id)}
             {file && <span className="catalog-file">{file}</span>}
           </h2>
           {/*

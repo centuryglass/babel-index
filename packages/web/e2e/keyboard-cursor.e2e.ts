@@ -155,7 +155,10 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await page.keyboard.press('Enter');
     const card = page.locator('.card');
     await card.waitFor({ timeout: 5000 });
-    assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
+    // `.card-id` now leads with the room's title when it has one, so a real
+    // room is confirmed via the dialog's own accessible name (`desc.name`,
+    // `describeRoom`) instead - unaffected by title/filename display order.
+    assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
 
     await page.keyboard.press('Escape');
     await card.waitFor({ state: 'detached', timeout: 5000 });
