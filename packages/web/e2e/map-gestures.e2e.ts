@@ -344,7 +344,10 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // file reuses this same fixed point for the same reason.
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
-    assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
+    // `.card-id` now leads with the room's title when it has one, so a real
+    // room is confirmed via the dialog's own accessible name (`desc.name`,
+    // `describeRoom`) instead - unaffected by title/filename display order.
+    assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
 
     const chips = card.locator('.chip');
     assert.equal(await chips.count(), 3, 'the sample corpus gives every room three keywords');

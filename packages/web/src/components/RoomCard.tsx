@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RoomDetails } from './RoomDetails.tsx';
 import type { RoomPick } from '../lib/picking.ts';
-import type { RoomMeta } from '../../../map/metadata.ts';
+import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Config } from '../../../config/config.ts';
@@ -136,12 +136,18 @@ export function RoomCard({
   }, [onClose]);
 
   // Named by `desc.name` - the same string a listbox option and (once the
-  // cursor lands, phase C) the map itself would say for this cell. "room" -
-  // which is what this used to announce on its own - is the one fact a reader
-  // already had; the rank and the keywords are the reason to have opened it.
+  // cursor lands, phase C) the map itself would say for this cell. The rank
+  // and the keywords are the reason to have opened it.
   //
   // `tabIndex={-1}` makes it focusable without putting it in the tab order,
   // which is what lets focus be moved here programmatically above.
+  //
+  // The visible id, unlike `desc.name`, leads with the title (`roomTitle`
+  // falls back to "Room {id}" for a room the corpus hasn't retitled) and
+  // trails with the filename - the numeric id alone named nothing a reader
+  // could act on; the order it's listed in is never explained and rarely
+  // matches the room's actual filename, so showing the number ahead of the
+  // filename read as though it meant something it didn't.
   return (
     <div
       className="card"
@@ -153,7 +159,14 @@ export function RoomCard({
     >
       <div className="card-head">
         <span className="card-id">
-          {'generic' in card ? 'a Babel shelf' : `room ${card.id}${file ? ` · ${file}` : ''}`}
+          {'generic' in card ? (
+            'a Babel shelf'
+          ) : (
+            <>
+              <b>{roomTitle(entry, card.id)}</b>
+              {file ? ` ${file}` : ''}
+            </>
+          )}
         </span>
         <button className="card-close" onClick={onClose} aria-label="close">
           ×
