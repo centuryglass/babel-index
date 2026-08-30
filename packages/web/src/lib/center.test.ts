@@ -6,11 +6,13 @@ import {
   HISTORY_SLOT_COUNT,
   CENTER_SHELF_RECT,
   CENTER_SEARCH_RECT,
+  CENTER_BOOK_PATH,
   CENTER_OPENING_RECT,
   bookScreenRects,
   searchBoxScreenRect,
   isSearchBoxUsable,
   searchBoxAtPoint,
+  centerBookAtPoint,
   centerCellRect,
   bookAtPoint,
   assignTitles,
@@ -91,6 +93,30 @@ test('searchBoxAtPoint hits the box only when it is usable, and misses outside i
   const tiny = { x: 0, y: 0, w: 100, h: 100 };
   const tinyBox = searchBoxScreenRect(tiny);
   assert.equal(searchBoxAtPoint(tinyBox.x + tinyBox.w / 2, tinyBox.y + tinyBox.h / 2, tiny), false);
+});
+
+test('CENTER_BOOK_PATH is a closed absolute path tracing the open book', () => {
+  assert.ok(CENTER_BOOK_PATH, 'the trace must carry a center_book path for this test to mean anything');
+  assert.match(CENTER_BOOK_PATH as string, /^M/, 'must start with an absolute moveto');
+  assert.match(CENTER_BOOK_PATH as string, /Z$/, 'must close its subpath');
+});
+
+test('centerBookAtPoint hits only inside the traced silhouette, never off-cell, and misses its own bbox corners', () => {
+  assert.ok(GEO.centerBook, 'the trace must carry a center_book path for this test to mean anything');
+  const b = GEO.centerBook!.bbox;
+  const cell = { x: 0, y: 0, w: 4000, h: 4000 };
+  // The bbox center is inside the book for this particular traced shape.
+  const cx = cell.x + (b.x + b.w / 2) * cell.w;
+  const cy = cell.y + (b.y + b.h / 2) * cell.h;
+  assert.equal(centerBookAtPoint(cx, cy, cell), true);
+  // Well outside the bbox entirely - never hits, on or off the cell.
+  assert.equal(centerBookAtPoint(cell.x - 50, cy, cell), false);
+  assert.equal(centerBookAtPoint(cx, cell.y + cell.h + 50, cell), false);
+  // The bbox's own top-left corner sits outside a non-rectangular silhouette -
+  // exactly the "clips into the books too" bug an exact path fixes.
+  const cornerX = cell.x + b.x * cell.w;
+  const cornerY = cell.y + b.y * cell.h;
+  assert.equal(centerBookAtPoint(cornerX, cornerY, cell), false);
 });
 
 test('minZoomForSearchBox floors a portrait opening fit that would leave the box unusable', () => {

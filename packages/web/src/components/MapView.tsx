@@ -25,7 +25,7 @@
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
-import { describeBook, BOOK_RECTS, type Slot as CentreSlot } from '../lib/center.ts';
+import { describeBook, BOOK_RECTS, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.tsx';
@@ -62,6 +62,8 @@ export function MapView({
   searchFormRef,
   booksRef,
   searchArrowRef,
+  centerBookRef,
+  onOpenArtistStatement,
   manifest,
   total,
   described,
@@ -102,6 +104,8 @@ export function MapView({
   searchFormRef: Ref<HTMLFormElement>;
   booksRef: Ref<HTMLDivElement>;
   searchArrowRef: Ref<HTMLSpanElement>;
+  centerBookRef: Ref<HTMLButtonElement>;
+  onOpenArtistStatement: () => void;
   manifest: Manifest;
   total: number;
   described: number;
@@ -269,6 +273,37 @@ export function MapView({
           ) : null
         )}
       </div>
+      {/*
+        The open book painted into a shelf gap - a distinct hotspot from the
+        forty lettered spines above, reached the same one `onTap` path
+        (`centerBookAtPoint` in main.tsx) for a sighted click and its own
+        `onClick` for a keyboard Enter or a screen reader's activate, the same
+        two-entry-point shape `.center-books` buttons use. Positioned and
+        sized every frame over the WHOLE cell, exactly like `.center-books`
+        itself - not its own rect - because the highlight is the traced SVG
+        path (`CENTER_BOOK_PATH`, in the same 0-1 cell-fraction space as every
+        other rect on this tile), not a box, and a `viewBox="0 0 1 1"` with
+        `preserveAspectRatio="none"` is what stretches that per axis onto the
+        cell exactly like `render.ts` stretches the tile image.
+        `pointer-events: none` for the same reason as the shelf - the canvas
+        keeps every gesture, so a pan starting here still pans. The hover
+        highlight is a CSS class toggled by the render loop's own pointermove
+        listener, since `pointer-events: none` means this element never sees
+        `:hover` itself.
+      */}
+      <button
+        ref={centerBookRef}
+        type="button"
+        className="center-book"
+        aria-label="an artist's statement"
+        onClick={onOpenArtistStatement}
+      >
+        {CENTER_BOOK_PATH && (
+          <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+            <path d={CENTER_BOOK_PATH} />
+          </svg>
+        )}
+      </button>
       {/*
         The search affordance - not part of the dev panel below (it has to
         survive `?debug` being off, since the panel does not) and not
