@@ -258,3 +258,16 @@ test('the alphabetical order is plain string comparison, matching scan.mjs', () 
   const rooms = [{ file: 'a.jpg' }, { file: 'Z.jpg' }];
   assert.deepEqual(alphabeticalOrder(rooms), [1, 0]);
 });
+
+test('a titled room sorts by its title, not its filename', () => {
+  const rooms = [{ file: 'a.jpg' }, { file: 'b.jpg' }, { file: 'c.jpg' }];
+  // Room 1 ("b.jpg") is titled "Aardvark" and should sort first even though
+  // its filename would put it in the middle; the untitled rooms fall back
+  // to their filenames and interleave with it normally.
+  const metadata = [
+    null,
+    { title: 'Aardvark', keywords: [], story: null, alt: null, sensitiveContentTags: [] },
+    null,
+  ];
+  assert.deepEqual(alphabeticalOrder(rooms, metadata), [1, 0, 2]);
+});

@@ -15,7 +15,7 @@ test('the center room is named, not ranked', () => {
   assert.equal(d.description, null);
 });
 
-test('a generic cell reads as a blank wall', () => {
+test('a generic cell reads as a Babel shelf', () => {
   let checked = false;
   for (let x = -6; x <= 6 && !checked; x++)
     for (let y = -6; y <= 6 && !checked; y++) {

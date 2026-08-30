@@ -232,7 +232,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // why a search and a clear are the only things that can move a room's
   // catalog row, exactly as they are the only things that move it on the map.
   const catalogOrder = useMemo(() => {
-    const base = result ? result.order : alphabeticalOrder(manifest.rooms);
+    const base = result ? result.order : alphabeticalOrder(manifest.rooms, metadata);
     return filterBlockedIds(base, metadata, blockedTagSet);
   }, [manifest, result, metadata, blockedTagSet]);
 
