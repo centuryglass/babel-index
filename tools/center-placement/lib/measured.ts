@@ -8,18 +8,32 @@
  * y against the traced height, so they carry no aspect of their own. `tile`
  * records the shape they were traced at, because that is the one thing the
  * normalisation throws away and the one thing that has to keep agreeing with
- * BASE_TILE in packages/web/src/lib/pyramid.js.
+ * BASE_TILE in packages/web/src/lib/pyramid.ts.
  *
  * Rects are [x, y, w, h].
  */
 
 export type RectTuple = [number, number, number, number];
 
+/**
+ * The open book's exact outline. `d` is an SVG path in the canonical
+ * absolute M/L/C/Z grammar `normalizePath` emits (see the importer), every
+ * coordinate a tile-normalised (x/vbW, y/vbH) fraction - so it can be handed
+ * straight to an SVG `<path d>` inside a `viewBox="0 0 1 1"`. `bbox` is the
+ * same shape as every other measured rect, for a caller that only needs a
+ * quick containment check.
+ */
+export interface CenterBook {
+  d: string;
+  bbox: RectTuple;
+}
+
 export interface MeasuredData {
   source: string;
   tile: { w: number; h: number; aspect: number };
   opening: RectTuple;
   searchBox: RectTuple | null;
+  centerBook: CenterBook | null;
   shelves: { books: RectTuple[] }[];
 }
 
@@ -28,6 +42,7 @@ export const MEASURED: MeasuredData = {
   tile: { w: 1365.3333, h: 1024, aspect: 0.75 },
   opening: [0.29279, 0.34284, 0.41296, 0.52487],
   searchBox: [0.03797, 0.01902, 0.92541, 0.06957],
+  centerBook: { d: "M0.42203,0.50503 L0.41485,0.64234 L0.41915,0.64569 L0.42513,0.64569 C0.42428,0.64843 0.42315,0.65109 0.42271,0.65401 C0.42163,0.65877 0.42248,0.66359 0.4224,0.66834 L0.42298,0.67547 L0.42471,0.67981 L0.57631,0.67981 L0.57726,0.66702 L0.57684,0.65408 L0.57362,0.64569 L0.5862,0.64457 C0.58605,0.63139 0.58452,0.61546 0.58332,0.60018 C0.58241,0.56886 0.58304,0.53766 0.58076,0.50615 L0.57068,0.50196 L0.55013,0.5014 L0.52463,0.50252 C0.5203,0.5029 0.51592,0.50369 0.51173,0.50531 C0.50835,0.50671 0.50465,0.50883 0.50072,0.51188 C0.50072,0.51188 0.49937,0.51028 0.49874,0.51 C0.49811,0.50972 0.49266,0.50643 0.49266,0.50643 L0.48193,0.50252 L0.47025,0.50112 L0.45445,0.5 L0.43778,0.5007 L0.4311,0.50217 Z", bbox: [0.41485, 0.5, 0.17135, 0.17981] },
   shelves: [
     {
       books: [

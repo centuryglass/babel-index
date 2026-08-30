@@ -112,6 +112,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.tsx`: The "READ ME" book's dialog
+    * `ArtistStatementOverlay.tsx`: The artist's statement dialog, reached by
+                                    the open book traced into the center
+                                    tile's shelf gap (`CENTER_BOOK_PATH` in
+                                    `lib/center.ts`). Ships with placeholder
+                                    content; the dialog machinery is what
+                                    landed first.
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
                              Meant as an easter egg for the (not yet existing)
                              artist statement page, not wired in yet
