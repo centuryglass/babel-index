@@ -1,0 +1,2149 @@
+bookshelf
+book
+<lora:3DMM_V11:.8>3dmm
+<lora:animeoutlineV4_16:1> lineart, monochrome
+<lora:ascii_art:0.8> ascii_art
+<lora:Astraali_GRAFFITI:1> astraaastraaligraffiti graffiti wall
+<lora:badvhs_v1:1.2> vhs footage
+<lora:banhua:1> banhua monochromatic
+<lora:chaplin_resize:1>Chpln
+<lora:CircleArt_Sora:1> Circle
+<lora:Claysculpt_v1_R64:1> claysculpt
+<lora:crayon-v1.1-000005:1> painting
+<lora:FaeTech:1> faetech scifi
+<lora:Graphic_Portrait_SD15:1> illustration drawing portrait painting outline
+<lora:J_comic_book:1> J_comic_book
+<lora:KawaiiTech:1> kawaiitech kawaii
+<lora:mshn:1>mshn
+<lora:Occult:1>
+<lora:psychedelic_noir:1>psychedelic_noir
+<lora:ral-frctlgmtry:1> ral-frctlgmtry
+<lora:ral-glydch:1> ral-glydch
+<lora:ral-ovrgrwth:1> ovrgrwth
+<lora:ral-woodfigurez:1> woodfigurez
+<lora:RetroGlitch:1>Retro Glitch
+<lora:SolarPunk_Buildings:1>slrpnk
+<lora:Vector_illustration_V2:1>vector illustration
+<lora:Vintage_vibes_SD15:1> vintage_vibes outline bold outlne lineart
+1-bit
+2-color palette
+2D
+3D printing
+3D-printed
+4K
+8-bit
+8-color palette
+16-bit
+35mm film
+1990s CGI
+2000s CGI
+A. J. Casson
+abalone
+abandoned
+Aboriginal Australian dot painting
+abraded
+Abram Efimovich Arkhipov
+abstract
+abstract animation
+Abstract art
+abstract background
+Abstract Expressionism
+Abstract Illusionism
+abyss
+abyssal
+Academic art
+accursed
+acrylic
+action
+action figures
+Adam Elsheimer
+adding machine
+Adolph Gottlieb
+adorable
+Adriaen van de Velde
+adventure
+advertising illustration
+aerial photography
+aerogel
+aerosol can
+Aertgen van Leyden
+Aestheticism
+afterimage
+agar
+agate
+Agnes Martin
+Agnolo Bronzino
+Agostino Carracci
+AI upscaling artifact
+airbrush illustration
+Albert Bierstadt
+Albert Gleizes
+Albert Pinkham Ryder
+Alberto Burri
+Albrecht Altdorfer
+Albrecht Dürer
+albumen print
+alchemical manuscript
+Aleksandr Gerasimov
+Aleksandra Ekster
+Alessandro Allori
+Alex Schomburg
+Alexander Rodchenko
+Alfred Joseph Casson
+Alfred Richard Gurrey
+Alfred Sisley
+Alfred Stevens
+algae
+alien
+all-seeing eye
+Alphonse Mucha
+Alphonse Osbert
+aluminum
+amateur photography
+amber
+amber-preserved
+ambergris
+ambient occlusion
+Ambrosius Bosschaert
+ambrotype
+American Realism
+amethyst
+Amiga graphics
+Amos Ferguson
+Ana Mendieta
+analog oscilloscope
+analog video feedback
+anamorphic
+anatomical illustration
+anatomical model
+anatomical plate
+andesite
+André Derain
+Andre Kertesz
+Andrea del Verrocchio
+Andrea Mantegna
+Andrea Pozzo
+Andrew Wyeth
+Andrey Yefimovich Martynov
+Anglo-Saxon art
+animatronic
+Anime
+anisotropic
+Anne Nasmyth
+Annibale Carracci
+anodized
+anodized metal
+anomalous
+ANSI art
+answering machine
+ant colony
+antediluvian
+Anthony Caro
+antler
+Antoni Gaudí
+Antonio Canova
+apothecary
+aquarium
+aquarium lighting
+aquatint
+Arabesque
+aragonite
+arcade
+arcade cabinet
+arcane
+Archibald Standish Hartrick
+Archigram
+architectural elevation
+architectural rendering
+architectural section
+archive
+armillary sphere
+Arnold Böcklin
+Art Deco
+Art Moderne
+Art Nouveau
+Arte Povera
+arthropoid
+Arthur Hacker
+Arthur Hughes
+Arthur Rackham
+artificial
+Arts and Crafts
+Arts and Crafts movement
+asbestos
+ASCII art
+ash
+asphalt
+assembly diagram
+Assyrian relief
+astigmatism
+astral
+astrolabe
+astronomical chart
+Atari graphics
+atmospheric scattering
+atomic
+Atomic Age design
+Aubrey Beardsley
+August Macke
+aurora
+Austin Osman Spare
+autochrome
+automatic
+automaton
+Avant-garde
+Aztec art
+azurite
+backwards
+backwards text
+bacterial
+bacterial colony
+badlands
+bakelite
+baling wire
+ballistic nylon
+bande dessinée
+Barbara Hepworth
+barbed wire
+barnacle
+Barnett Newman
+Baroque
+Barthélemy d'Eyck
+basalt
+batik
+Bauhaus
+bauxite
+bay
+beach
+bead-blasted
+beaded
+Beatrix Potter
+beautiful
+Beaux-Arts
+beeswax
+beetle
+Ben Nicholson
+Ben Shahn
+Berenice Abbott
+Berthe Morisot
+best quality
+bestial
+bestiary illustration
+Bill Traylor
+biofilm
+bioluminescence
+bioluminescent
+biomimicry
+Biopunk
+bird
+bird-and-flower painting
+bird's-eye view
+birefringence
+bismuth
+bisque
+bitumen
+bizarre
+Bjørn Wiinblad
+black background
+black-and-white negative
+blacklight
+blacklight art
+Blanche Hoschedé Monet
+blank
+blasphemous
+Blender
+blending
+blessed
+blind embossing
+blister pack
+blistered
+Blobitecture
+bloom
+blue
+blue hour
+blueprint
+bodega
+bokeh
+bolted
+bone
+bone china
+bonsai
+book cover illustration
+bootleg
+border
+boring
+Boris Grigoriev
+botanical illustration
+botanical plate
+bottle cap
+bounced flash
+braided
+brass
+brazed
+bread
+broadsheet
+brocade
+broken
+bronze
+Bronze Age comic art
+brush-and-ink
+brushed
+brushed metal
+Brutalism
+brutalist interiors
+bryozoan
+bubble wrap
+bubblegum
+bubbly
+bunraku
+burl wood
+burlap
+butcher block
+butcher paper
+butcher's paper
+Byzantine art
+cable spaghetti
+cactus
+calcified
+calcite
+calendar art
+calendar girl art
+calico
+calligraffiti
+camera obscura
+Camille Pissarro
+campy
+Canaletto
+candle wax
+candlelight
+canvas texture
+canyon
+capillary
+carbon fiber
+carbon nanotubes
+carbon paper
+carbonated
+carbonized
+cardboard
+cardstock
+cartilage
+cartoon
+carving
+casein paint
+cash register
+Caspar David Friedrich
+Cassandra Austen
+cast
+cast iron
+castle
+cat
+caustics
+cave
+Cecil Beaton
+Cecilia Beaux
+cel animation
+cel shading
+celadon
+celestial map
+celestite
+cellular
+Celtic art
+censored
+cerebral
+cesium
+Chaïm Soutine
+chain
+chainmail
+chalk
+chalkstone
+champlevé
+chaotic
+chapbook
+charcoal
+Charles Dana Gibson
+Charles E. Burchfield
+Charles Marion Russell
+Charles Rennie Mackintosh
+Charles-André van Loo
+Charlotte Nasmyth
+charming
+charred
+cheap newsprint
+cheap paperback illustration
+cheese
+cheesecloth
+chemiluminescence
+Chen Yifei
+chert
+Chesley Bonestell
+chiaroscuro
+chicken wire
+chiffon
+Childe Hassam
+children's book illustration
+Chinese ink painting
+Chinese literati painting
+chipboard
+chipped
+chitin
+chocolate
+Christmas lights
+Christoph Ludwig Agricola
+Christopher Wren
+chromakey artifact
+chromatic aberration
+chrysalis
+cigarette card illustration
+cigarette pack
+cigarette paper
+cinematic
+cinnabar
+circus poster
+city
+City Pop
+clamshell packaging
+classical
+Classical Realism
+Classicism
+classified
+Claude Cahun
+Claude Monet
+claustrophobic
+clay
+claymation
+cleanroom
+clockwork
+cloisonné
+clouds
+cloudy
+club
+CMYK
+CNC-machined
+coagulated
+coal
+cocoon
+codex
+Coles Phillips
+collage
+Color Field painting
+color negative
+colored pencil
+colorful
+coma
+comedy
+comic strip art
+complementary colors
+complex
+composite photograph
+composite video artifact
+concept art
+Conceptualism
+concrete
+Concrete art
+condensation
+confetti
+congealed
+Constance-Anne Parker
+construction light
+Constructivism
+Constructivist architecture
+contact printing
+contact sheet
+contour line
+contraband
+copper
+copper wire
+Coptic art
+coral
+coraline
+corduroy
+cork
+Cornelis Engebrechtsz
+Corporate Memphis
+corroded
+corrugated cardboard
+corrupted
+cosmic
+counterfeit
+counterfeit artifact
+courageous
+cracked
+cramped
+craquelure
+crayon
+crayon drawing
+crazed
+crazed glaze
+creepy
+creepypasta
+crime scene photography
+criminal
+Critical Regionalism
+crochet
+crocheted
+cross-processed film
+cross-stitch
+crosshatching
+crowded
+CRT glow
+CRT scanlines
+crude
+crumbs
+crust punk
+crystal
+crystal cluster
+Crystal Cubism
+crystal lattice
+crystallized
+Cubism
+Cubo-Futurism
+curiosity cabinet
+cursed
+cute
+cutout animation
+Cy Twombly
+cyanotype
+Cyberpunk
+Czech animation
+Dada
+daguerreotype
+damascene
+damask
+dangling wires
+Daniel Maclise
+Dante Gabriel Rossetti
+darkroom
+darkroom print
+databending
+datamoshing
+David Bomberg
+David Gilmour Blythe
+David Macbeth Sutherland
+David Teniers the Elder
+David Teniers the Younger
+De Stijl
+debossed
+debossed print
+debris
+decayed
+Deccani painting
+deckled edges
+decomposing
+Deconstructivism
+decorative
+Deep Dream
+deepfake artifact
+defective
+degraded
+delftware
+demo scene graphics
+demoscene
+dendritic
+denim
+department store
+deprecated
+depth of field
+deranged
+desert
+desiccated
+detailed
+detailed background
+detritus
+Deutscher Werkbund
+dew
+diamond
+diatoms
+dichroic
+dichroic glass
+diffraction
+diffraction pattern
+digital
+digital art
+dime novel
+diorama
+diorama box
+diorite
+Dirck Hals
+Dirck van Baburen
+direct flash
+dirt
+disco
+discontinued
+disheveled
+Disney animation
+dispersion
+disposable camera photograph
+distemper
+distorted
+distressing
+divine
+documentary photography
+Dod Procter
+dog
+dollhouse
+dollhouse miniature
+Domenico Quaglio the Younger
+doodle
+Dora Maar
+Dorothea Lange
+dot matrix
+dot matrix display
+double exposure
+Douglas Robertson Bisset
+draconic
+drafting table
+drama
+dreamlike
+driftwood
+dripping
+druse
+dry brush
+dry ice
+drypoint
+duct tape
+Dulah Marie Evans
+dungeon
+duotone
+dust
+dust and scratches
+dust jacket illustration
+Dutch angle
+dynamic lighting
+dystopian
+E. William Gollings
+early CGI
+earthenware
+Eastern Bloc architecture
+eclipse
+editorial illustration
+Edmund Charles Tarbell
+Edmund Dulac
+Édouard Manet
+educational diagram
+Edward Arthur Walton
+Edward Burne-Jones
+Edward Gorey
+Edward Henry Potthast
+Edward Mitchell Bannister
+Edward Penfield
+Edward Robert Hughes
+Edwin Austin Abbey
+Edwin Landseer
+effervescent
+effigy
+efflorescent
+egg carton
+egg sac
+egg tempera
+Egon Schiele
+Egon von Vietinghoff
+Egyptian hieroglyphics
+Egyptian wall painting
+Eileen Agar
+Ejnar Nielsen
+El Greco
+El Lissitzky
+Elaine de Kooning
+eldritch
+Eleanor Fortescue-Brickdale
+electric
+electrical tape
+electrified
+electroluminescence
+electrostatic
+Elisabeth Collins
+Élisabeth Vigée Le Brun
+Elizabeth Shippen Green
+Ellsworth Kelly
+Elsie Vera Cole
+emaciated
+Emanuel Leutze
+embossed
+embossed print
+embroidery
+emergency lighting
+Emil Carlsen
+Emil Nolde
+empty
+emulsified
+enameled
+enameled metal
+encaustic
+encrusted
+encyclopedia illustration
+endoscope
+engraved illustration
+engraving
+entomological plate
+epidermis
+epoxy
+Ernest Procter
+Ernst Fuchs
+Ernst Haeckel
+Ernst Ludwig Kirchner
+Ernst Wilhelm Nay
+ersatz
+etching
+ethanol
+ethereal
+etheric
+Ethiopian manuscript
+Etruscan art
+Eugène Carrière
+Eugene Delacroix
+evidence bag
+evidence locker
+evil
+Exekias
+exit sign
+experimental animation
+expired film
+exploded diagram
+exploded-view drawing
+exposed wiring
+Expressionism
+Expressionist architecture
+extruded
+Eyvind Earle
+fabricated
+faceless
+factory-made
+faerie
+faience
+fairy lights
+fairy tale
+fairy-tale illustration
+false perspective
+family photograph
+Fantastic Realism
+fantasy
+farm
+fashion
+fashion editorial
+fashion illustration
+Fauvism
+fax artifact
+Félicien Rops
+felt sculpture
+felted
+Ferdinand Hodler
+fermented
+Fernand Khnopff
+Fernand Léger
+ferrofluid
+fever dream
+fiberglass
+fibrous
+field guide illustration
+figurine
+filigree
+filings
+film grain
+film negative
+film scratches
+filthy
+fingerprints
+fire
+fireplace light
+fisheye
+fishing line
+fishnet
+Fitz Henry Lane
+flaking
+flaming
+flash photography
+flashlight
+flashlight beam
+flat
+flat colors
+flawless
+Fleischer animation
+Flemish painting
+flint
+flipbook
+Flipnote
+Floris van Schooten
+fluffy
+fluorescence
+fluorescent
+fluorescent office lighting
+fluorite
+Fluxus
+foam
+foam board
+foamy
+foil
+foil stamping
+folk
+Folk art
+food wrapper
+fool's gold
+forced perspective
+Ford Madox Brown
+forensic photography
+forged
+fossil
+fossilized
+found photography
+four-color process
+fractal
+fragmentary
+Frances Macdonald
+Francisco Goya
+Franciszek Kostrzewski
+Franciszek Żmurko
+Franklin Booth
+Frans Masereel
+František Jakub Prokyš
+František Kaván
+Franz Kline
+Franz Marc
+Franz von Stuck
+Franz Xaver Winterhalter
+frayed edges
+Frederic Church
+Frederic Leighton
+Frederic Remington
+Frederick Cayley Robinson
+freezer lighting
+fresco
+fresco secco
+Friedrich Traffelet
+Frits Thaulow
+frost
+frosted glass
+frosting
+frothy
+Frutiger Aero
+Fukuda Shigeo
+full
+fumetti
+fungal
+fungus
+Funk art
+fused glass
+Futurism
+fuzzy
+Fyodor Slavyansky
+Gabriel Metsu
+galena
+gallium
+Game Boy graphics
+gangrenous
+garbage bag
+garnet
+gas station lighting
+gate weave
+Gatōken Shunshi
+gauze
+gears
+gelatinous
+generative
+Gentile Bellini
+geode
+geologic strata
+geometric
+Geometric abstraction
+Georg Jensen
+George B. Bridgman
+George Barbier
+George Bellows
+George Caleb Bingham
+George Cruikshank
+George Hendrik Breitner
+George Inness
+Georges Braque
+Georges Seurat
+Georgia O'Keeffe
+Gerald Kelly
+Gerrit Dou
+gesso
+gesture drawing
+ghost story
+ghostly
+ghoul
+gigantic
+gilding
+gingham
+Giorgio de Chirico
+Giovanni Battista Piranesi
+Giovanni Battista Tiepolo
+Giovanni Bellini
+Giovanni Boldini
+Giovanni Francesco Barbieri
+glacier
+Gladys Kathleen Bell
+glare
+glass fiber
+glass plate negative
+glaze
+glazed
+glazing
+glitch art
+glitter
+global illumination
+gneiss
+gnostic
+god rays
+gold
+gold leaf
+Golden Age comic art
+Golden Age illustration
+golden hour
+gongbi
+good
+goofy
+Googie
+Gothic art
+Gothic Revival
+gouache
+graffiti
+granite
+Grant Wood
+graph paper
+graphite
+grass
+gravel
+grease
+greasy
+green
+green-screen terminal
+grisaille
+gristle
+grocery bag
+grotesque marginalia
+Gu Zhengyi
+Guan Daosheng
+gum bichromate
+gunpowder
+Gustav Klimt
+Gustave Boulanger
+Gustave Buchet
+Gustave Caillebotte
+Gustave Courbet
+Gustave Doré
+Gustave Moreau
+Guy Rose
+Gwen John
+haboku
+Hackers
+hairy
+halation
+half-erased
+half-remembered
+halftone
+hall
+hallucination
+hammered
+hammered metal
+hand-carved
+hand-forged
+hand-hewn
+hand-lettered
+hand-painted
+hand-stitched
+handsome
+Hannah Höch
+Hans Beat Wieland
+Hans Hofmann
+Hans Holbein the Elder
+Hans Holbein the Younger
+Harry Clarke
+harsh flash
+haunted
+headlamp
+heartwood
+heaven
+heavy metal
+Heinrich Kley
+Helen Frankenthaler
+hell
+hematite
+Hendrik Gerritsz Pot
+Hendrik Martenszoon Sorgh
+Hendrik van Steenwijk I
+Hendrik Willem Mesdag
+Henri Matisse
+Henri Rousseau
+Henry Fuseli
+heraldic illustration
+heretic
+herringbone
+Hieronymus Bosch
+high quality
+high-key photography
+High-tech architecture
+Hiroshi Yoshida
+historical
+hoarfrost
+hologram
+holographic
+holography
+holy
+honey
+honeycomb
+Honoré Daumier
+horn
+horrifying
+horror
+horror paperback cover
+Howard Arkley
+Howard Pyle
+Hubert Robert
+Hudson River School
+Huichol art
+human
+hurricane
+hyperdetailed
+Hypermodernism
+Hyperrealism
+ice
+ice cream
+ice sculpture
+Ida Rentoul Outhwaite
+Ignacy Witkiewicz
+igneous
+ikat
+IKEA instructions
+Ikko Tanaka
+illuminated codex
+illuminated initial
+illuminated manuscript
+illusion
+Ilya Repin
+imitation
+impasto
+impossible
+impossible geometry
+impossible perspective
+Impressionism
+Inca art
+incomplete
+incorrectly assembled
+incrusted
+inexplicable
+infinite
+infinity
+Informalism
+infrared photography
+inhuman
+injection-molded
+ink wash
+inlay
+insectile
+inside-out
+installation art
+instant film
+instruction manual
+Insular art
+intaglio
+interesting
+interference pattern
+intergalactic
+International Gothic
+International Style
+International Typographic Style
+intricate
+invasive
+iridescence
+iridescent
+iridescent oil
+Islamic arabesque
+Islamic geometric art
+island
+isometric
+Italian Futurist architecture
+Ivan Aivazovsky
+Ivan Bilibin
+ivory
+J. C. Leyendecker
+Jack Kirby
+Jack Smith
+Jackson Pollock
+Jacob Lawrence
+jacquard
+James Abbott McNeill Whistler
+James Gillray
+James Tissot
+Jamini Roy
+Jan Steen
+Jan van Eyck
+Japanese emakimono
+Japanese Kanō school
+Japanese Nanga
+Japanese Rinpa
+Japanese sumi-e
+japanning
+jasper
+jaundiced
+Jean Delville
+Jean Dubuffet
+Jean Fouquet
+Jean-Baptiste-Camille Corot
+Jean-Michel Basquiat
+Jessie Willcox Smith
+jet
+Joan Miró
+Joan Mitchell
+Johannes Itten
+Johannes Vermeer
+John Atkinson Grimshaw
+John Bauer
+John Berkey
+John Chamberlain
+John Collier
+John Constable
+John Everett Millais
+John James Audubon
+John Lavery
+John Martin
+John Piper
+John Singer Sargent
+John William Waterhouse
+Josef Albers
+Joseph Cornell
+joyful
+JPEG artifact
+Juan Gris
+Jugendstil
+jukebox
+Jules Bastien-Lepage
+jungle
+junk
+junk drawer
+Kaii Higashiyama
+kaleidoscope
+Karel Appel
+Karl Blossfeldt
+Katsushika Hokusai
+kawaii
+Kay Nielsen
+Kazimir Malevich
+kelp
+Ken Price
+Kenneth Noland
+keratin
+kerosene
+Kevlar
+kind
+Kitagawa Utamaro
+Kitsch movement
+knitted
+knockoff
+knurled
+Kodachrome
+Kodak Ektar
+Koloman Moser
+Konstantin Korovin
+Konstantin Somov
+Korean literati painting
+Korean minhwa
+Koson Ohara
+kraft paper
+Kuno Veeber
+Kurt Schwitters
+laboratory
+labradorite
+lace
+lacquer
+lacquered
+lake
+Land art
+large format
+latex
+lava
+Lawrence Alma-Tadema
+layering
+LCD ghosting
+lead
+leaking
+leather
+leaves
+LED
+legendary
+lens flare
+lenticular
+Leonardo da Vinci
+Leonetto Cappiello
+Leonora Carrington
+Les Automatistes
+Les Nabis
+Letterism
+letterpress
+letterpress impression
+library
+lichen
+Light and Space
+light leak
+light painting
+ligne claire
+lignite
+limbo
+limestone
+liminal
+liminal horror
+limited animation
+limited-color screenprint
+linear
+lineless
+linen canvas
+linocut
+linoleum
+linoleum print
+lint
+liquid nitrogen
+lithographic stone
+lithography
+litter
+long exposure
+looping
+loose threads
+lost-and-found
+Lotte Reiniger
+Louis Comfort Tiffany
+Louis Wain
+Louise Bourgeois
+Louise Nevelson
+low-bitrate JPEG
+low-key photography
+lowbrow
+Lucian Freud
+lucid
+lucite
+Ludwig Mies van der Rohe
+lumpy
+Lyonel Feininger
+Lyubov Popova
+machined
+macramé
+macro lens
+magic eye
+magic lantern
+magical
+Magical Realism
+magma
+magnetite
+Mail art
+majolica
+maki-e
+malachite
+malfunctioning
+mall
+Man Ray
+manga
+Mannerism
+manuscript illumination
+Māori carving
+marble
+Marc Chagall
+Marcel Duchamp
+Margaret Macdonald Mackintosh
+marginalia
+Marie Spartali Stillman
+marionette
+marionette theater
+Mark Rothko
+Mark Tobey
+market
+marquetry
+Marsden Hartley
+marshmallow
+Martin Kippenberger
+Mary Cassatt
+masked
+masking tape
+mass-produced
+Massurrealism
+masterpiece
+matchbook
+matchbox
+matchbox label art
+Maurice de Vlaminck
+Max Ernst
+Maxfield Parrish
+Maximalism
+Maya art
+meat
+mechanical
+mechanical puppet
+medical illustration
+medical monitor
+medieval bestiary
+medium format
+Meiji woodblock
+Meiji-era illustration
+membranous
+meme
+Memphis Design
+mercury
+mercury vapor
+Merovingian art
+mesa
+mesh
+Mesopotamian relief
+Metabolist architecture
+metal
+metal filigree
+metalpoint
+metamorphic
+Metaphysical painting
+Mexican muralism
+mezzotint
+mica
+microfiche
+microscope
+microscopic view
+Mid-century illustration
+Mid-century modern
+mid-century paperback cover
+Mikhail Larionov
+Mikhail Vrubel
+mildew
+milk
+milky
+milled
+Milton Avery
+Milton Caniff
+mimeograph
+mineral vein
+mineral-encrusted
+mineral-stained
+mineralized
+mineshaft
+Mingei
+miniature
+miniature effect
+Minimalism
+Minoan art
+mirage
+mirror-polished
+mirrored
+misassembled
+misidentified
+mislabeled
+misplaced
+misplaced scale
+misregistered print
+Moche art
+Model Magic
+model railway
+Modernism
+Modular Constructivism
+moiré
+moldy
+molten
+molten glass
+molten metal
+monochrome
+monochrome CRT
+monofilament
+monoprint
+monotype
+moonlight
+moonstone
+Moorish architecture
+mosaic
+moss
+mother-of-pearl
+mother-of-pearl inlay
+mountains
+movie poster
+MPEG artifact
+Mstislav Dobuzhinsky
+mucous
+Mughal miniature
+mugshot
+multiple exposure
+mummified
+murky
+museum display
+museum specimen
+muslin
+mutant
+mutated
+mycelial
+mycelium
+Mycenaean art
+mycological
+mystery
+mystical
+mythic
+N. C. Wyeth
+nacre
+napkin
+Natalia Goncharova
+Native American ledger art
+native copper
+natural history illustration
+naturalist plate
+nautical chart
+Navajo weaving
+Nazarene art
+necrotic
+needlepoint
+Neil Welliver
+Neo-futurism
+Neo-Impressionism
+Neoclassicism
+neon art
+neon lights
+neon spill
+Neoplasticism
+neoprene
+NES graphics
+nest
+netting
+newspaper comic strip
+newspaper comics
+newspaper halftone
+newsprint
+Newton's rings
+Nicholas Roerich
+nightmare
+Nihonga
+non-Euclidean
+Norman Bel Geddes
+Norman Rockwell
+nylon
+oak
+object animation
+observatory
+obsidian
+obsolete
+occult diagram
+ocean
+Odilon Redon
+offcut
+office
+offset lithography
+offset printing
+Ogawa Kazumasa
+oil
+oil paint
+oil pastel
+oil-slick
+oily
+oily sheen
+old master print
+on-camera flash
+onyx
+oozing
+Op art
+opal
+opalescent
+opera
+optical artifact
+optical illusion
+ore
+Organic architecture
+organza
+origami
+Orphism
+orrery
+Osamu Tezuka
+oscilloscope
+Oskar Fischinger
+Oskar Kokoschka
+ossified
+otherworldly
+Ottoman miniature
+outer space
+outline
+outsider art
+overcast daylight
+overgrown
+overhead projector
+overprint
+overripe
+oversized
+oxidized
+Pablo Picasso
+packing foam
+packing paper
+packing tape
+Pahari painting
+paint-on-glass animation
+painted paperback cover
+paisley
+palette knife
+palimpsest
+Panfuturism
+paper
+paper architecture
+paper bag
+paper cutout
+paper towel
+paperclips
+papercraft
+papier-mâché
+papyrus
+paraffin
+paranoid
+parasitic
+parchment
+parts bin
+passport photograph
+pastel
+patchwork
+patent drawing
+patent illustration
+patinated
+patinated bronze
+patinated copper
+Paul Gauguin
+Paul Klee
+Paul Strand
+pawnshop
+peaceful
+pearl
+pearlescent
+pearlescent sheen
+peeling
+pen-and-ink illustration
+penny dreadful
+perceptual artifact
+perfect
+perforated
+performance art
+periscope
+Persian miniature
+Persian tilework
+persistence of vision
+Peter Paul Rubens
+petri dish
+petrified
+petrified wood
+phantom
+phenakistoscope
+phosphor
+phosphor glow
+phosphorescence
+phosphorescent
+photochromic
+photocopy art
+photogram
+photogravure
+photojournalism
+photolithography
+photomontage
+Photorealism
+photorealistic
+pickled
+pictographs
+Pierre Bonnard
+Piet Mondrian
+Pieter Bruegel the Elder
+Pieter Jansz Saenredam
+piezoelectric
+pin-up art
+pinball machine
+pine
+pinhole photography
+pinscreen animation
+pit
+pitch
+pitted
+pixel art
+pixilation
+plains
+planisphere
+plankton
+plasma
+plaster
+plastic
+plastic bag
+platinum
+platinum print
+playa
+playing card
+pointillism
+polarization
+Polaroid
+police photograph
+police sketch
+Polish animation
+polished
+political cartoon
+pollen
+polyester
+polymer
+pop
+Pop art
+porcelain
+portrait
+Post-Impressionism
+poster
+poster illustration
+Postmodern architecture
+Prairie School
+pre-rendered CGI
+precise
+Precisionism
+preserved
+press photograph
+pretty
+primitive
+prismatic
+profane
+projector light
+propaganda
+protest art
+prototype
+psychedelic
+Psychedelic art
+pull tab
+pulp illustration
+pulp magazine
+pulp magazine illustration
+pulp novel cover
+pumice
+punch card
+punched
+puppet animation
+purgatory
+push-processed film
+putrefied
+pyrite
+quantum
+quartz
+quartz vein
+quicksilver
+quilling
+quilted
+quilting
+rabid
+Rackham
+radar display
+radiant
+radioactive
+railway poster
+rainbow
+rainbow sheen
+raindrops
+Rajput painting
+raku
+Ralph Albert Blakelock
+ray tracing
+rayograph
+Rayonism
+raytraced CGI
+razor wire
+Realism
+realistic
+recalled
+receipt paper
+recursive
+red
+redacted
+reflected neon
+reflection
+refraction
+refractive
+refrigerator glow
+refrigerator lighting
+refuse
+registration error
+Reiko Okuyama
+relief engraving
+relief print
+reliquary
+Remedios Varo
+René Lalique
+Rene Laloux
+repeating
+repoussé
+residue
+resin
+restricted palette
+retouched
+retro
+retro-futurist architecture
+Retrofuturism
+retroreflective
+RGB gamer
+rhyolite
+ribbon
+rice paper
+Richard Diebenkorn
+Richard Hamilton
+Richard Scarry
+rime
+ring flash
+risograph
+river
+riveted
+Robert Antoine Pinchon
+Robert Delaunay
+Robert McCall
+Robert Motherwell
+robotic
+rock
+Rockwell Kent
+Rococo
+Roman fresco
+Roman mosaic
+romance
+Romanesque art
+Romanticism
+Romare Bearden
+Ron Walotsky
+Ronald Searle
+rootbound
+rootlike
+rope
+rotoscoping
+rotten
+rough paper
+RPG
+rubber
+rubber bands
+rubber hose animation
+rubble
+rubricated manuscript
+rusted
+sackcloth
+sacred
+salt
+salt print
+salt-encrusted
+salt-stained
+Salvador Dalí
+sand
+sandblasted
+sandpaper
+Sandro Botticelli
+sandstone
+sapphire
+sapwood
+sashiko
+satellite photography
+satin
+satire
+saturated
+Satyajit Ray
+Saul Bass
+Saul Steinberg
+sawdust
+scale mail
+scales
+scan
+schist
+school portrait
+sci-fi art
+science fiction paperback cover
+scientific illustration
+scoria
+scrap
+scratch art
+scratchboard illustration
+scratched
+screen printing
+screen-printed
+screenprint
+scribble
+scuffed
+scum
+scumbling
+sea glass
+Seapunk
+seashell
+Second Empire
+security footage
+security monitor
+sediment
+sedimentary
+seed husk
+seedpod
+seeping
+selective coloring
+self-similar
+seven-segment display
+sextant
+sgraffito
+shaded
+shading
+shadow puppetry
+shadow puppets
+shadow theater
+shadowbox
+shale
+shanshui
+shavings
+Shel Silverstein
+shell
+shellac
+shellacked
+shibori
+Shin-hanga
+shiny
+shipping crate
+shoelaces
+shop window
+Shotaro Ishinomori
+shrink wrap
+Sidney Paget
+Sigmar Polke
+silhouette animation
+silicone
+silk
+silkworm
+silly
+silver
+Silver Age comic art
+silver gelatin print
+silver leaf
+silverpoint
+simple background
+simulated
+sinew
+sinewy
+sinkhole
+sintered
+skeleton
+sketchbook
+skylight
+slag
+slag heap
+slate
+slick
+slide projector
+slivered
+slot machine
+sludge
+smoke
+smoldering
+smudges
+SNES graphics
+snow storm
+soaked
+soap
+soap bubble
+soap-film colors
+soapy
+Socialist Realism
+sodium vapor
+soft
+soft focus
+softbox photography
+solarization
+Solarpunk
+soldered
+sonar display
+Sonia Delaunay
+soot
+Sōsaku-hanga
+Soviet animation
+Soviet modernism
+Soviet monumentalism
+Space Age design
+spalting
+sparkly
+specimen jar
+specimen tray
+spectral
+spectroscope
+spherical aberration
+spiderwebs
+spirit duplicator
+splash art
+sponge
+spores
+spot color
+spray paint
+stamped
+Stan Brakhage
+staples
+starburst
+starlight
+Steampunk
+steel
+steel wool
+stereoscope
+stinking
+stippling
+stoneware
+stop motion
+stop-motion
+storybook illustration
+Streamline Moderne
+street
+street photography
+string
+string lights
+Structuralism
+stucco
+studio lighting
+studio portrait
+stylized
+styrofoam
+Styrofoam
+sublime
+subsurface scattering
+sudsy
+sulfur
+Sumerian art
+Sunday comics
+superfluid
+supermarket lighting
+Suprematism
+surgical tray
+surreal
+Surrealism
+surveillance photography
+surveyor's tripod
+sushi
+SVGA graphics
+swamp
+swarf
+sweating
+Swiss Style
+sword-and-sorcery paperback cover
+symbiotic
+Symbolism
+synthetic
+Synthwave
+syrup
+syrupy
+tabloid
+tabloid photograph
+taffeta
+tallow
+tapestry
+tar
+tarnished
+tarnished silver
+tarot cards
+tarry
+tartan
+taxidermy
+technical cutaway
+technical diagram
+technical illustration
+techno
+teflon
+telephoto
+teletext
+teletype
+television glow
+tempera
+tendon
+termite mound
+terracotta
+terrarium
+terrazzo
+tessellation
+textbook illustration
+theatrical poster
+Theo van Doesburg
+theodolite
+Théodore Géricault
+Théodore Rousseau
+thermal paper
+thermal printer
+thermal receipt
+thermochromic
+thermoformed
+thermoluminescence
+thick outline
+thin-film interference
+Thomas Benjamin Kennington
+Thomas Cole
+Thomas Eakins
+Thomas Moran
+Thornton Oakley
+thread
+thriller
+thumbtacks
+tide-marked
+tie-dye
+tiger's eye
+tilt-shift photography
+Tim Hildebrandt
+tin
+tin can
+tintype
+tissue
+tissue paper
+Titian
+toile
+toilet paper
+Tonalism
+Tony Smith
+tool chest
+topaz
+topographic map
+tortoiseshell
+tourist snapshot
+tourmaline
+Tove Jansson
+town
+Toyism
+tracing paper
+tracker graphics
+trail cam footage
+Transgressive art
+transhumanism
+translucent
+translucent membrane
+transparent
+trash
+travel poster
+travertine
+triadic colors
+triboluminescence
+tritone
+Tsutsumi-e
+tungsten
+turbid
+tweed
+twilight
+twine
+typewriter
+typography
+Uemura Shoen
+ugly
+Ukiyo-e
+ultraviolet
+Umberto Boccioni
+undead
+underdrawing
+Underground Comix
+underpainting
+underwater
+unfinished
+unglazed
+unhinged
+unidentified
+unlabeled
+unmarked
+unprimed canvas
+unsettling
+unstable
+unusual coloring
+UPA animation
+upside-down
+urushi
+Utagawa Hiroshige
+Utagawa Kunisada
+V-Ray
+vacuum-formed
+valley
+Vantablack
+vapor
+vaporwave
+varnished
+vascular
+vast
+vector
+veiny
+Velcro
+vellum
+velour
+velvet
+vending machine
+vending machine lighting
+verdaccio
+verdigris
+vernacular photography
+vernacular snapshot
+vertigo
+VGA graphics
+VHS tracking error
+vibrant
+Victor Pasmore
+Victorian Gothic
+video static
+videotex
+Vienna Secession
+viewfinder
+vignette
+vignetting
+Viktor Vasnetsov
+village
+vintage
+vintage advertisement
+vintage photograph
+violet
+viral
+viscous
+viscous resin
+visual noise
+vitrified
+vivarium
+Vivian Maier
+vivid
+Vladimir Tatlin
+volcanic
+volumetric haze
+volumetric lighting
+vulcanized rubber
+Walter Crane
+war photography
+warehouse lighting
+Warner Bros. animation
+wash drawing
+washi
+wasp nest
+Wassily Kandinsky
+water
+water-stained
+watercolor
+watercolor painting
+waterlogged
+watermarks
+wax
+wax museum
+wax paper
+wax sculpture
+waxcomb
+wayang
+weird fiction cover
+Weirdcore
+welded
+western
+wet paint
+wet plate collodion
+wet-on-wet
+white background
+wholesome
+wicker
+wild
+wilderness
+William Blake
+William Etty
+William Holman Hunt
+William Merritt Chase
+William Morris
+William-Adolphe Bouguereau
+window light
+Winslow Homer
+wire
+wire mesh
+wireframe
+wise
+wood engraving
+wood panel
+woodblock illustration
+woodcut
+wooden type
+woody
+work light
+worm's-eye view
+woven
+wreckage
+wrong scale
+wrought iron
+X-ray
+xerography
+xieyi
+Yan Zhenqing
+yarn
+yearbook photograph
+yellow
+Yves Tanguy
+Zaha Hadid
+Zdzislaw Beksinski
+zinc
+zip ties
+zoetrope
+zoological plate

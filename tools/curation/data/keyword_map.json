@@ -1,0 +1,6682 @@
+{
+  "<lora:3DMM_V11:.8>3dmm": {
+    "category": "LoRA model",
+    "rename": "lora:3DMM_V11"
+  },
+  "<lora:Astraali_GRAFFITI:1> astraaastraaligraffiti graffiti wall": {
+    "category": "LoRA model",
+    "rename": "lora:Astraali_GRAFFITI"
+  },
+  "<lora:CircleArt_Sora:1> Circle": {
+    "category": "LoRA model",
+    "rename": "lora:CircleArt_Sora"
+  },
+  "<lora:Claysculpt_v1_R64:1> claysculpt": {
+    "category": "LoRA model",
+    "rename": "lora:Claysculpt_v1_R64"
+  },
+  "<lora:FaeTech:1> faetech scifi": {
+    "category": "LoRA model",
+    "rename": "lora:FaeTech"
+  },
+  "<lora:Graphic_Portrait_SD15:1> illustration drawing portrait painting outline": {
+    "category": "LoRA model",
+    "rename": "lora:Graphic_Portrait_SD15"
+  },
+  "<lora:J_comic_book:1> J_comic_book": {
+    "category": "LoRA model",
+    "rename": "lora:J_comic_book"
+  },
+  "<lora:KawaiiTech:1> kawaiitech kawaii": {
+    "category": "LoRA model",
+    "rename": "lora:KawaiiTech"
+  },
+  "<lora:LatexAIV2:1>latexai_red": {
+    "category": "LoRA model",
+    "rename": "lora:LatexAIV2"
+  },
+  "<lora:Occult:1>": {
+    "category": "LoRA model",
+    "rename": "lora:Occult"
+  },
+  "<lora:RetroGlitch:1>Retro Glitch": {
+    "category": "LoRA model",
+    "rename": "lora:RetroGlitch"
+  },
+  "<lora:SolarPunk_Buildings:1>slrpnk": {
+    "category": "LoRA model",
+    "rename": "lora:SolarPunk_Buildings"
+  },
+  "<lora:Vector_illustration_V2:1>vector illustration": {
+    "category": "LoRA model",
+    "rename": "lora:Vector_illustration_V2"
+  },
+  "<lora:Vintage_vibes_SD15:1> vintage_vibes outline bold outlne lineart": {
+    "category": "LoRA model",
+    "rename": "lora:Vintage_vibes_SD15"
+  },
+  "<lora:animeoutlineV4_16:1> lineart, monochrome": {
+    "category": "LoRA model",
+    "rename": "lora:animeoutlineV4_16"
+  },
+  "<lora:ascii_art:0.8> ascii_art": {
+    "category": "LoRA model",
+    "rename": "lora:ascii_art"
+  },
+  "<lora:badvhs_v1:1.2> vhs footage": {
+    "category": "LoRA model",
+    "rename": "lora:badvhs_v1"
+  },
+  "<lora:banhua:1> banhua monochromatic": {
+    "category": "LoRA model",
+    "rename": "lora:banhua"
+  },
+  "<lora:chaplin_resize:1>Chpln": {
+    "category": "LoRA model",
+    "rename": "lora:chaplin_resize"
+  },
+  "<lora:crayon-v1.1-000005:1> painting": {
+    "category": "LoRA model",
+    "rename": "lora:crayon-v1.1-000005"
+  },
+  "<lora:mshn:1>mshn": {
+    "category": "LoRA model",
+    "rename": "lora:mshn"
+  },
+  "<lora:psychedelic_noir:1>psychedelic_noir": {
+    "category": "LoRA model",
+    "rename": "lora:psychedelic_noir"
+  },
+  "<lora:ral-frctlgmtry:1> ral-frctlgmtry": {
+    "category": "LoRA model",
+    "rename": "lora:ral-frctlgmtry"
+  },
+  "<lora:ral-glydch:1> ral-glydch": {
+    "category": "LoRA model",
+    "rename": "lora:ral-glydch"
+  },
+  "<lora:ral-ovrgrwth:1> ovrgrwth": {
+    "category": "LoRA model",
+    "rename": "lora:ral-ovrgrwth"
+  },
+  "<lora:ral-woodfigurez:1> woodfigurez": {
+    "category": "LoRA model",
+    "rename": "lora:ral-woodfigurez"
+  },
+  "A. J. Casson": {
+    "category": "artist",
+    "rename": "Alfred Joseph Casson"
+  },
+  "Abram Efimovich Arkhipov": {
+    "category": "artist"
+  },
+  "Adam Elsheimer": {
+    "category": "artist"
+  },
+  "Adolph Gottlieb": {
+    "category": "artist"
+  },
+  "Adriaen van de Velde": {
+    "category": "artist"
+  },
+  "Aertgen van Leyden": {
+    "category": "artist"
+  },
+  "Agnes Martin": {
+    "category": "artist"
+  },
+  "Agnolo Bronzino": {
+    "category": "artist"
+  },
+  "Agostino Carracci": {
+    "category": "artist"
+  },
+  "Albert Bierstadt": {
+    "category": "artist"
+  },
+  "Albert Gleizes": {
+    "category": "artist"
+  },
+  "Alberto Burri": {
+    "category": "artist"
+  },
+  "Albrecht Altdorfer": {
+    "category": "artist"
+  },
+  "Albrecht D\u00fcrer": {
+    "category": "artist"
+  },
+  "Aleksandr Gerasimov": {
+    "category": "artist"
+  },
+  "Alessandro Allori": {
+    "category": "artist"
+  },
+  "Alex Schomburg": {
+    "category": "artist"
+  },
+  "Alfred Joseph Casson": {
+    "category": "artist"
+  },
+  "Alfred Richard Gurrey": {
+    "category": "artist"
+  },
+  "Alfred Sisley": {
+    "category": "artist"
+  },
+  "Alfred Stevens": {
+    "category": "artist"
+  },
+  "Alphonse Mucha": {
+    "category": "artist"
+  },
+  "Ambrosius Bosschaert": {
+    "category": "artist"
+  },
+  "Amos Ferguson": {
+    "category": "artist"
+  },
+  "Ana Mendieta": {
+    "category": "artist"
+  },
+  "Andre Kertesz": {
+    "category": "artist",
+    "rename": "Andr\u00e9 Kert\u00e9sz"
+  },
+  "Andrea Mantegna": {
+    "category": "artist"
+  },
+  "Andrea Pozzo": {
+    "category": "artist"
+  },
+  "Andrea del Verrocchio": {
+    "category": "artist"
+  },
+  "Andrew Wyeth": {
+    "category": "artist"
+  },
+  "Andrey Yefimovich Martynov": {
+    "category": "artist"
+  },
+  "Andr\u00e9 Kert\u00e9sz": {
+    "category": "artist"
+  },
+  "Anne Nasmyth": {
+    "category": "artist"
+  },
+  "Annibale Carracci": {
+    "category": "artist"
+  },
+  "Anthony Caro": {
+    "category": "artist"
+  },
+  "Antoni Gaud\u00ed": {
+    "category": "artist"
+  },
+  "Antonio Canova": {
+    "category": "artist"
+  },
+  "Archibald Standish Hartrick": {
+    "category": "artist"
+  },
+  "Arthur Hacker": {
+    "category": "artist"
+  },
+  "Aubrey Beardsley": {
+    "category": "artist"
+  },
+  "August Macke": {
+    "category": "artist"
+  },
+  "Austin Osman Spare": {
+    "category": "artist"
+  },
+  "Barbara Hepworth": {
+    "category": "artist"
+  },
+  "Barnett Newman": {
+    "category": "artist"
+  },
+  "Barth\u00e9lemy d'Eyck": {
+    "category": "artist"
+  },
+  "Ben Nicholson": {
+    "category": "artist"
+  },
+  "Ben Shahn": {
+    "category": "artist"
+  },
+  "Berenice Abbott": {
+    "category": "artist"
+  },
+  "Bill Traylor": {
+    "category": "artist"
+  },
+  "Bj\u00f8rn Wiinblad": {
+    "category": "artist"
+  },
+  "Blanche Hosched\u00e9 Monet": {
+    "category": "artist"
+  },
+  "Boris Grigoriev": {
+    "category": "artist"
+  },
+  "Canaletto": {
+    "category": "artist"
+  },
+  "Caspar David Friedrich": {
+    "category": "artist"
+  },
+  "Cassandra Austen": {
+    "category": "artist"
+  },
+  "Cecil Beaton": {
+    "category": "artist"
+  },
+  "Cecilia Beaux": {
+    "category": "artist"
+  },
+  "Charles E. Burchfield": {
+    "category": "artist"
+  },
+  "Charles Rennie Mackintosh": {
+    "category": "artist"
+  },
+  "Charles-Andr\u00e9 van Loo": {
+    "category": "artist"
+  },
+  "Charlotte Nasmyth": {
+    "category": "artist"
+  },
+  "Cha\u00efm Soutine": {
+    "category": "artist"
+  },
+  "Chen Yifei": {
+    "category": "artist"
+  },
+  "Chesley Bonestell": {
+    "category": "artist"
+  },
+  "Childe Hassam": {
+    "category": "artist"
+  },
+  "Christoph Ludwig Agricola": {
+    "category": "artist"
+  },
+  "Christopher Wren": {
+    "category": "artist"
+  },
+  "Claude Cahun": {
+    "category": "artist"
+  },
+  "Claude Monet": {
+    "category": "artist"
+  },
+  "Coles Phillips": {
+    "category": "artist"
+  },
+  "Constance-Anne Parker": {
+    "category": "artist"
+  },
+  "Cornelis Engebrechtsz": {
+    "category": "artist"
+  },
+  "Cy Twombly": {
+    "category": "artist"
+  },
+  "Daniel Maclise": {
+    "category": "artist"
+  },
+  "David Bomberg": {
+    "category": "artist"
+  },
+  "David Gilmour Blythe": {
+    "category": "artist"
+  },
+  "David Macbeth Sutherland": {
+    "category": "artist"
+  },
+  "David Teniers the Elder": {
+    "category": "artist"
+  },
+  "David Teniers the Younger": {
+    "category": "artist"
+  },
+  "Dirck Hals": {
+    "category": "artist"
+  },
+  "Dirck van Baburen": {
+    "category": "artist"
+  },
+  "Dod Procter": {
+    "category": "artist"
+  },
+  "Domenico Quaglio the Younger": {
+    "category": "artist"
+  },
+  "Dora Maar": {
+    "category": "artist"
+  },
+  "Dorothea Lange": {
+    "category": "artist"
+  },
+  "Douglas Robertson Bisset": {
+    "category": "artist"
+  },
+  "Dulah Marie Evans": {
+    "category": "artist"
+  },
+  "E. William Gollings": {
+    "category": "artist"
+  },
+  "Edmund Charles Tarbell": {
+    "category": "artist"
+  },
+  "Edward Arthur Walton": {
+    "category": "artist"
+  },
+  "Edward Gorey": {
+    "category": "artist"
+  },
+  "Edward Henry Potthast": {
+    "category": "artist"
+  },
+  "Edward Mitchell Bannister": {
+    "category": "artist"
+  },
+  "Edwin Landseer": {
+    "category": "artist"
+  },
+  "Egon von Vietinghoff": {
+    "category": "artist"
+  },
+  "Eileen Agar": {
+    "category": "artist"
+  },
+  "Ejnar Nielsen": {
+    "category": "artist"
+  },
+  "El Greco": {
+    "category": "artist"
+  },
+  "El Lissitzky": {
+    "category": "artist"
+  },
+  "Elaine de Kooning": {
+    "category": "artist"
+  },
+  "Eleanor Fortescue-Brickdale": {
+    "category": "artist"
+  },
+  "Elisabeth Collins": {
+    "category": "artist"
+  },
+  "Elizabeth Shippen Green": {
+    "category": "artist"
+  },
+  "Ellsworth Kelly": {
+    "category": "artist"
+  },
+  "Elsie Vera Cole": {
+    "category": "artist"
+  },
+  "Emanuel Leutze": {
+    "category": "artist"
+  },
+  "Emil Carlsen": {
+    "category": "artist"
+  },
+  "Emil Nolde": {
+    "category": "artist"
+  },
+  "Ernest Procter": {
+    "category": "artist"
+  },
+  "Ernst Fuchs": {
+    "category": "artist"
+  },
+  "Ernst Haeckel": {
+    "category": "artist"
+  },
+  "Ernst Ludwig Kirchner": {
+    "category": "artist"
+  },
+  "Ernst Wilhelm Nay": {
+    "category": "artist"
+  },
+  "Eugene Delacroix": {
+    "category": "artist",
+    "rename": "Eug\u00e8ne Delacroix"
+  },
+  "Eug\u00e8ne Delacroix": {
+    "category": "artist"
+  },
+  "Exekias": {
+    "category": "artist"
+  },
+  "Eyvind Earle": {
+    "category": "artist"
+  },
+  "Ferdinand Hodler": {
+    "category": "artist"
+  },
+  "Fernand L\u00e9ger": {
+    "category": "artist"
+  },
+  "Fitz Henry Lane": {
+    "category": "artist"
+  },
+  "Fitz Hugh Lane": {
+    "category": "artist",
+    "rename": "Fitz Henry Lane"
+  },
+  "Floris van Schooten": {
+    "category": "artist"
+  },
+  "Frances Macdonald": {
+    "category": "artist"
+  },
+  "Francisco Goya": {
+    "category": "artist"
+  },
+  "Franciszek Kostrzewski": {
+    "category": "artist"
+  },
+  "Franciszek \u017bmurko": {
+    "category": "artist"
+  },
+  "Frans Masereel": {
+    "category": "artist"
+  },
+  "Franti\u0161ek Jakub Proky\u0161": {
+    "category": "artist"
+  },
+  "Franti\u0161ek Kav\u00e1n": {
+    "category": "artist"
+  },
+  "Franz Kline": {
+    "category": "artist"
+  },
+  "Franz Marc": {
+    "category": "artist"
+  },
+  "Franz Xaver Winterhalter": {
+    "category": "artist"
+  },
+  "Frederic Church": {
+    "category": "artist"
+  },
+  "Frederic Leighton": {
+    "category": "artist"
+  },
+  "Frederick Cayley Robinson": {
+    "category": "artist"
+  },
+  "Friedrich Traffelet": {
+    "category": "artist"
+  },
+  "Frits Thaulow": {
+    "category": "artist"
+  },
+  "Fukuda Shigeo": {
+    "category": "artist"
+  },
+  "Fyodor Slavyansky": {
+    "category": "artist"
+  },
+  "Gabriel Metsu": {
+    "category": "artist"
+  },
+  "Gat\u014dken Shunshi": {
+    "category": "artist"
+  },
+  "Gentile Bellini": {
+    "category": "artist"
+  },
+  "Georg Jensen": {
+    "category": "artist"
+  },
+  "George B. Bridgman": {
+    "category": "artist"
+  },
+  "George Bellows": {
+    "category": "artist"
+  },
+  "George Hendrik Breitner": {
+    "category": "artist"
+  },
+  "George Inness": {
+    "category": "artist"
+  },
+  "Georgia O'Keeffe": {
+    "category": "artist"
+  },
+  "Georgia O\u2019Keeffe": {
+    "category": "artist",
+    "rename": "Georgia O'Keeffe"
+  },
+  "Gerald Kelly": {
+    "category": "artist"
+  },
+  "Gerrit Dou": {
+    "category": "artist"
+  },
+  "Giorgio De Chirico": {
+    "category": "artist",
+    "rename": "Giorgio de Chirico"
+  },
+  "Giorgio de Chirico": {
+    "category": "artist"
+  },
+  "Giovanni Battista Piranesi": {
+    "category": "artist"
+  },
+  "Giovanni Battista Tiepolo": {
+    "category": "artist"
+  },
+  "Giovanni Bellini": {
+    "category": "artist"
+  },
+  "Giovanni Boldini": {
+    "category": "artist"
+  },
+  "Giovanni Francesco Barbieri": {
+    "category": "artist"
+  },
+  "Gladys Kathleen Bell": {
+    "category": "artist"
+  },
+  "Grant Wood": {
+    "category": "artist"
+  },
+  "Gu Zhengyi": {
+    "category": "artist"
+  },
+  "Guan Daosheng": {
+    "category": "artist"
+  },
+  "Gustave Boulanger": {
+    "category": "artist"
+  },
+  "Gustave Buchet": {
+    "category": "artist"
+  },
+  "Gustave Caillebotte": {
+    "category": "artist"
+  },
+  "Gustave Courbet": {
+    "category": "artist"
+  },
+  "Gustave Dor\u00e9": {
+    "category": "artist"
+  },
+  "Gustave Moreau": {
+    "category": "artist"
+  },
+  "Guy Rose": {
+    "category": "artist"
+  },
+  "Gwen John": {
+    "category": "artist"
+  },
+  "Hannah H\u00f6ch": {
+    "category": "artist"
+  },
+  "Hans Beat Wieland": {
+    "category": "artist"
+  },
+  "Hans Hofmann": {
+    "category": "artist"
+  },
+  "Hans Holbein the Elder": {
+    "category": "artist"
+  },
+  "Hans Holbein the Younger": {
+    "category": "artist"
+  },
+  "Harry Clarke": {
+    "category": "artist"
+  },
+  "Helen Frankenthaler": {
+    "category": "artist"
+  },
+  "Hendrik Gerritsz Pot": {
+    "category": "artist"
+  },
+  "Hendrik Martenszoon Sorgh": {
+    "category": "artist"
+  },
+  "Hendrik Willem Mesdag": {
+    "category": "artist"
+  },
+  "Hendrik van Steenwijk I": {
+    "category": "artist"
+  },
+  "Henri Matisse": {
+    "category": "artist"
+  },
+  "Henri Rousseau": {
+    "category": "artist"
+  },
+  "Henry Fuseli": {
+    "category": "artist"
+  },
+  "Hieronymus Bosch": {
+    "category": "artist"
+  },
+  "Higashiyama Kaii": {
+    "category": "artist"
+  },
+  "Hiroshi Yoshida": {
+    "category": "artist",
+    "rename": "Yoshida Hiroshi"
+  },
+  "Honor\u00e9 Daumier": {
+    "category": "artist"
+  },
+  "Howard Arkley": {
+    "category": "artist"
+  },
+  "Hubert Robert": {
+    "category": "artist"
+  },
+  "Ida Rentoul Outhwaite": {
+    "category": "artist"
+  },
+  "Ignacy Witkiewicz": {
+    "category": "artist",
+    "rename": "Stanis\u0142aw Ignacy Witkiewicz"
+  },
+  "Ikko Tanaka": {
+    "category": "artist",
+    "rename": "Tanaka Ikko"
+  },
+  "Ilya Repin": {
+    "category": "artist"
+  },
+  "Ishinomori Sh\u014dtar\u014d": {
+    "category": "artist"
+  },
+  "Ivan Aivazovsky": {
+    "category": "artist"
+  },
+  "J. C. Leyendecker": {
+    "category": "artist"
+  },
+  "JC Leyendecker": {
+    "category": "artist",
+    "rename": "J. C. Leyendecker"
+  },
+  "Jack Kirby": {
+    "category": "artist"
+  },
+  "Jack Smith": {
+    "category": "artist"
+  },
+  "Jackson Pollock": {
+    "category": "artist"
+  },
+  "Jacob Lawrence": {
+    "category": "artist"
+  },
+  "James Abbott McNeill Whistler": {
+    "category": "artist"
+  },
+  "James Gillray": {
+    "category": "artist"
+  },
+  "James Tissot": {
+    "category": "artist"
+  },
+  "Jamini Roy": {
+    "category": "artist"
+  },
+  "Jan Steen": {
+    "category": "artist"
+  },
+  "Jan Van Eyck": {
+    "category": "artist",
+    "rename": "Jan van Eyck"
+  },
+  "Jan van Eyck": {
+    "category": "artist"
+  },
+  "Jean Dubuffet": {
+    "category": "artist"
+  },
+  "Jean Fouquet": {
+    "category": "artist"
+  },
+  "Jean-Michel Basquiat": {
+    "category": "artist"
+  },
+  "Jessie Willcox Smith": {
+    "category": "artist"
+  },
+  "Joan Mir\u00f3": {
+    "category": "artist"
+  },
+  "Joan Mitchell": {
+    "category": "artist"
+  },
+  "Johannes Itten": {
+    "category": "artist"
+  },
+  "Johannes Vermeer": {
+    "category": "artist"
+  },
+  "John Berkey": {
+    "category": "artist"
+  },
+  "John Chamberlain": {
+    "category": "artist"
+  },
+  "John Constable": {
+    "category": "artist"
+  },
+  "John James Audubon": {
+    "category": "artist"
+  },
+  "John Lavery": {
+    "category": "artist"
+  },
+  "John Piper": {
+    "category": "artist"
+  },
+  "Josef Albers": {
+    "category": "artist"
+  },
+  "Joseph Cornell": {
+    "category": "artist"
+  },
+  "Jules Bastien-Lepage": {
+    "category": "artist"
+  },
+  "Kaii Higashiyama": {
+    "category": "artist",
+    "rename": "Higashiyama Kaii"
+  },
+  "Karel Appel": {
+    "category": "artist"
+  },
+  "Karl Blossfeldt": {
+    "category": "artist"
+  },
+  "Katsushika Hokusai": {
+    "category": "artist"
+  },
+  "Kay Nielsen": {
+    "category": "artist"
+  },
+  "Ken Price": {
+    "category": "artist"
+  },
+  "Kenneth Noland": {
+    "category": "artist"
+  },
+  "Kitagawa Utamaro": {
+    "category": "artist"
+  },
+  "Koloman Moser": {
+    "category": "artist"
+  },
+  "Konstantin Korovin": {
+    "category": "artist"
+  },
+  "Koson Ohara": {
+    "category": "artist",
+    "rename": "Ohara Koson"
+  },
+  "Kunisada": {
+    "category": "artist",
+    "rename": "Utagawa Kunisada"
+  },
+  "Kuno Veeber": {
+    "category": "artist"
+  },
+  "Kurt Schwitters": {
+    "category": "artist"
+  },
+  "Leonardo Da Vinci": {
+    "category": "artist",
+    "rename": "Leonardo da Vinci"
+  },
+  "Leonardo da Vinci": {
+    "category": "artist"
+  },
+  "Leonetto Cappiello": {
+    "category": "artist"
+  },
+  "Leonora Carrington": {
+    "category": "artist"
+  },
+  "Lotte Reiniger": {
+    "category": "artist"
+  },
+  "Louis Comfort Tiffany": {
+    "category": "artist"
+  },
+  "Louis Wain": {
+    "category": "artist"
+  },
+  "Louise Bourgeois": {
+    "category": "artist"
+  },
+  "Louise Nevelson": {
+    "category": "artist"
+  },
+  "Lucian Freud": {
+    "category": "artist"
+  },
+  "Ludwig Mies van der Rohe": {
+    "category": "artist"
+  },
+  "Lyubov Popova": {
+    "category": "artist"
+  },
+  "Man Ray": {
+    "category": "artist"
+  },
+  "Marc Chagall": {
+    "category": "artist"
+  },
+  "Marcel Duchamp": {
+    "category": "artist"
+  },
+  "Margaret Macdonald Mackintosh": {
+    "category": "artist"
+  },
+  "Marie Spartali Stillman": {
+    "category": "artist"
+  },
+  "Mark Rothko": {
+    "category": "artist"
+  },
+  "Mark Tobey": {
+    "category": "artist"
+  },
+  "Marsden Hartley": {
+    "category": "artist"
+  },
+  "Martin Kippenberger": {
+    "category": "artist"
+  },
+  "Max Ernst": {
+    "category": "artist"
+  },
+  "Maxfield Parrish": {
+    "category": "artist"
+  },
+  "Milton Avery": {
+    "category": "artist"
+  },
+  "Milton Caniff": {
+    "category": "artist"
+  },
+  "Neil Welliver": {
+    "category": "artist"
+  },
+  "Odilon Redon": {
+    "category": "artist"
+  },
+  "Ogawa Kazumasa": {
+    "category": "artist"
+  },
+  "Ohara Koson": {
+    "category": "artist"
+  },
+  "Okuyama Reiko": {
+    "category": "artist"
+  },
+  "Osamu Tezuka": {
+    "category": "artist",
+    "rename": "Tezuka Osamu"
+  },
+  "Oskar Fischinger": {
+    "category": "artist"
+  },
+  "Oskar Kokoschka": {
+    "category": "artist"
+  },
+  "Pablo Picasso": {
+    "category": "artist"
+  },
+  "Paul Gauguin": {
+    "category": "artist"
+  },
+  "Paul Strand": {
+    "category": "artist"
+  },
+  "Peter Paul Rubens": {
+    "category": "artist"
+  },
+  "Pierre Bonnard": {
+    "category": "artist"
+  },
+  "Piet Mondrian": {
+    "category": "artist"
+  },
+  "Pieter Bruegel The Elder": {
+    "category": "artist",
+    "rename": "Pieter Bruegel the Elder"
+  },
+  "Pieter Bruegel the Elder": {
+    "category": "artist"
+  },
+  "Pieter Jansz Saenredam": {
+    "category": "artist"
+  },
+  "Reiko Okuyama": {
+    "category": "artist",
+    "rename": "Okuyama Reiko"
+  },
+  "Remedios Varo": {
+    "category": "artist"
+  },
+  "Rene Laloux": {
+    "category": "artist",
+    "rename": "Ren\u00e9 Laloux"
+  },
+  "Ren\u00e9 Lalique": {
+    "category": "artist"
+  },
+  "Ren\u00e9 Laloux": {
+    "category": "artist"
+  },
+  "Richard Diebenkorn": {
+    "category": "artist"
+  },
+  "Richard Hamilton": {
+    "category": "artist"
+  },
+  "Richard Scarry": {
+    "category": "artist"
+  },
+  "Robert Antoine Pinchon": {
+    "category": "artist"
+  },
+  "Robert McCall": {
+    "category": "artist"
+  },
+  "Robert Motherwell": {
+    "category": "artist"
+  },
+  "Romare Bearden": {
+    "category": "artist"
+  },
+  "Ron Walotsky": {
+    "category": "artist"
+  },
+  "Ronald Searle": {
+    "category": "artist"
+  },
+  "Salvador Dal\u00ed": {
+    "category": "artist"
+  },
+  "Sandro Botticelli": {
+    "category": "artist"
+  },
+  "Satyajit Ray": {
+    "category": "artist"
+  },
+  "Saul Bass": {
+    "category": "artist"
+  },
+  "Saul Steinberg": {
+    "category": "artist"
+  },
+  "Shel Silverstein": {
+    "category": "artist"
+  },
+  "Shigeo Fukuda": {
+    "category": "artist",
+    "rename": "Fukuda Shigeo"
+  },
+  "Shotaro Ishinomori": {
+    "category": "artist",
+    "rename": "Ishinomori Sh\u014dtar\u014d"
+  },
+  "Sigmar Polke": {
+    "category": "artist"
+  },
+  "Sonia Delaunay": {
+    "category": "artist"
+  },
+  "Stan Brakhage": {
+    "category": "artist"
+  },
+  "Stanis\u0142aw Ignacy Witkiewicz": {
+    "category": "artist"
+  },
+  "Tanaka Ikko": {
+    "category": "artist"
+  },
+  "Tezuka Osamu": {
+    "category": "artist"
+  },
+  "Theo van Doesburg": {
+    "category": "artist"
+  },
+  "Thomas Benjamin Kennington": {
+    "category": "artist"
+  },
+  "Thomas Moran": {
+    "category": "artist"
+  },
+  "Thornton Oakley": {
+    "category": "artist"
+  },
+  "Tim Hildebrandt": {
+    "category": "artist"
+  },
+  "Titian": {
+    "category": "artist"
+  },
+  "Tony Smith": {
+    "category": "artist"
+  },
+  "Tove Jansson": {
+    "category": "artist"
+  },
+  "Uemura Shoen": {
+    "category": "artist",
+    "rename": "Uemura Sh\u014den"
+  },
+  "Uemura Sh\u014den": {
+    "category": "artist"
+  },
+  "Umberto Boccioni": {
+    "category": "artist"
+  },
+  "Utagawa Hiroshige": {
+    "category": "artist"
+  },
+  "Utagawa Kunisada": {
+    "category": "artist"
+  },
+  "Victor Pasmore": {
+    "category": "artist"
+  },
+  "Vivian Maier": {
+    "category": "artist"
+  },
+  "Walter Crane": {
+    "category": "artist"
+  },
+  "William Etty": {
+    "category": "artist"
+  },
+  "William Merritt Chase": {
+    "category": "artist"
+  },
+  "William Morris": {
+    "category": "artist"
+  },
+  "William-Adolphe Bouguereau": {
+    "category": "artist"
+  },
+  "Winslow Homer": {
+    "category": "artist"
+  },
+  "Yan Zhenqing": {
+    "category": "artist"
+  },
+  "Yoshida Hiroshi": {
+    "category": "artist"
+  },
+  "Yves Tanguy": {
+    "category": "artist"
+  },
+  "Zaha Hadid": {
+    "category": "artist"
+  },
+  "Zdzis\u0142aw Beksi\u0144ski": {
+    "category": "artist"
+  },
+  "lora:3DMM_V11": {
+    "category": "LoRA model"
+  },
+  "lora:Astraali_GRAFFITI": {
+    "category": "LoRA model"
+  },
+  "lora:CircleArt_Sora": {
+    "category": "LoRA model"
+  },
+  "lora:Claysculpt_v1_R64": {
+    "category": "LoRA model"
+  },
+  "lora:FaeTech": {
+    "category": "LoRA model"
+  },
+  "lora:Graphic_Portrait_SD15": {
+    "category": "LoRA model"
+  },
+  "lora:J_comic_book": {
+    "category": "LoRA model"
+  },
+  "lora:KawaiiTech": {
+    "category": "LoRA model"
+  },
+  "lora:LatexAIV2": {
+    "category": "LoRA model"
+  },
+  "lora:Occult": {
+    "category": "LoRA model"
+  },
+  "lora:RetroGlitch": {
+    "category": "LoRA model"
+  },
+  "lora:SolarPunk_Buildings": {
+    "category": "LoRA model"
+  },
+  "lora:Vector_illustration_V2": {
+    "category": "LoRA model"
+  },
+  "lora:Vintage_vibes_SD15": {
+    "category": "LoRA model"
+  },
+  "lora:animeoutlineV4_16": {
+    "category": "LoRA model"
+  },
+  "lora:ascii_art": {
+    "category": "LoRA model"
+  },
+  "lora:badvhs_v1": {
+    "category": "LoRA model"
+  },
+  "lora:banhua": {
+    "category": "LoRA model"
+  },
+  "lora:chaplin_resize": {
+    "category": "LoRA model"
+  },
+  "lora:crayon-v1.1-000005": {
+    "category": "LoRA model"
+  },
+  "lora:mshn": {
+    "category": "LoRA model"
+  },
+  "lora:psychedelic_noir": {
+    "category": "LoRA model"
+  },
+  "lora:ral-frctlgmtry": {
+    "category": "LoRA model"
+  },
+  "lora:ral-glydch": {
+    "category": "LoRA model"
+  },
+  "lora:ral-ovrgrwth": {
+    "category": "LoRA model"
+  },
+  "lora:ral-woodfigurez": {
+    "category": "LoRA model"
+  },
+  "\u00c9douard Manet": {
+    "category": "artist"
+  },
+  "\u00c9lisabeth Vig\u00e9e Le Brun": {
+    "category": "artist"
+  },
+  "Zdzislaw Beksinski": {
+    "category": "artist"
+  },
+  "<lora:Surreal Harmony:1> Surreal Harmony": {
+    "category": "LoRA model",
+    "rename": "lora:Surreal Harmony"
+  },
+  "<lora:Emotive_Corporate:1>": {
+    "category": "LoRA model",
+    "rename": "lora:Emotive_Corporate"
+  },
+  "<lora:bichu-v0612:1> oil painting": {
+    "category": "LoRA model",
+    "rename": "lora:bichu-v0612"
+  },
+  "<lora:sdxl:1> alchemy": {
+    "category": "LoRA model",
+    "rename": "lora:sdxl_alchemy"
+  },
+  "<lora:badvhs_v1:1.2>": {
+    "category": "LoRA model",
+    "rename": "lora:badvhs_v1"
+  },
+  "<lora:Graphic:1> monochrome": {
+    "category": "LoRA model",
+    "rename": "lora:Graphic"
+  },
+  "<lora:BIOMECHA:1> bio mecha muscle": {
+    "category": "LoRA model",
+    "rename": "lora:BIOMECHA"
+  },
+  "<lora:H4LFT0N3_XL:1>": {
+    "category": "LoRA model",
+    "rename": "lora:H4LFT0N3_XL"
+  },
+  "<lora:VoxelXL_v1:1> voxel style": {
+    "category": "LoRA model",
+    "rename": "lora:VoxelXL"
+  },
+  "<lora:xk3mt1ks:1> xk3mt1ks": {
+    "category": "LoRA model",
+    "rename": "lora:xk3mt1ks"
+  },
+  "<lora:pixelbuildings128-v2:1>": {
+    "category": "LoRA model",
+    "rename": "lora:pixelbuildings128-v2"
+  },
+  "1-bit": {
+    "category": "technology"
+  },
+  "2-color palette": {
+    "category": "descriptive"
+  },
+  "2D": {
+    "category": "technology"
+  },
+  "3D printing": {
+    "category": "technique/process"
+  },
+  "3D-printed": {
+    "category": "technology"
+  },
+  "4K": {
+    "category": "technology"
+  },
+  "8-bit": {
+    "category": "technology"
+  },
+  "8-color palette": {
+    "category": "descriptive"
+  },
+  "16-bit": {
+    "category": "technology"
+  },
+  "35mm film": {
+    "category": "technology"
+  },
+  "1990s CGI": {
+    "category": "era/cultural"
+  },
+  "2000s CGI": {
+    "category": "era/cultural"
+  },
+  "abalone": {
+    "category": "object/subject"
+  },
+  "abandoned": {
+    "category": "descriptive"
+  },
+  "Aboriginal Australian dot painting": {
+    "category": "era/cultural"
+  },
+  "abraded": {
+    "category": "technique/process"
+  },
+  "abstract": {
+    "category": "descriptive"
+  },
+  "abstract animation": {
+    "category": "technique/process"
+  },
+  "Abstract art": {
+    "category": "movement/style"
+  },
+  "abstract background": {
+    "category": "descriptive"
+  },
+  "Abstract Expressionism": {
+    "category": "movement/style"
+  },
+  "Abstract Illusionism": {
+    "category": "movement/style"
+  },
+  "abyss": {
+    "category": "setting/environment"
+  },
+  "abyssal": {
+    "category": "setting/environment"
+  },
+  "Academic art": {
+    "category": "movement/style"
+  },
+  "accursed": {
+    "category": "descriptive"
+  },
+  "acrylic": {
+    "category": "medium/material"
+  },
+  "action": {
+    "category": "genre/aesthetic"
+  },
+  "action figures": {
+    "category": "object/subject"
+  },
+  "adding machine": {
+    "category": "object/subject"
+  },
+  "adorable": {
+    "category": "descriptive"
+  },
+  "adventure": {
+    "category": "genre/aesthetic"
+  },
+  "advertising illustration": {
+    "category": "genre/aesthetic"
+  },
+  "aerial photography": {
+    "category": "technique/process"
+  },
+  "aerogel": {
+    "category": "medium/material"
+  },
+  "aerosol can": {
+    "category": "object/subject"
+  },
+  "Aestheticism": {
+    "category": "movement/style"
+  },
+  "afterimage": {
+    "category": "lighting/optical"
+  },
+  "agar": {
+    "category": "medium/material"
+  },
+  "agate": {
+    "category": "medium/material"
+  },
+  "AI upscaling artifact": {
+    "category": "technology"
+  },
+  "airbrush illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Albert Pinkham Ryder": {
+    "category": "artist"
+  },
+  "albumen print": {
+    "category": "technique/process"
+  },
+  "alchemical manuscript": {
+    "category": "object/subject"
+  },
+  "Aleksandra Ekster": {
+    "category": "artist"
+  },
+  "Alexander Rodchenko": {
+    "category": "artist"
+  },
+  "algae": {
+    "category": "object/subject"
+  },
+  "alien": {
+    "category": "descriptive"
+  },
+  "all-seeing eye": {
+    "category": "object/subject"
+  },
+  "Alphonse Osbert": {
+    "category": "artist"
+  },
+  "aluminum": {
+    "category": "medium/material"
+  },
+  "amateur photography": {
+    "category": "technique/process"
+  },
+  "amber": {
+    "category": "medium/material"
+  },
+  "amber-preserved": {
+    "category": "descriptive"
+  },
+  "ambergris": {
+    "category": "medium/material"
+  },
+  "ambient occlusion": {
+    "category": "lighting/optical"
+  },
+  "ambrotype": {
+    "category": "technique/process"
+  },
+  "American Realism": {
+    "category": "movement/style"
+  },
+  "amethyst": {
+    "category": "medium/material"
+  },
+  "Amiga graphics": {
+    "category": "technology"
+  },
+  "analog oscilloscope": {
+    "category": "technology"
+  },
+  "analog video feedback": {
+    "category": "technique/process"
+  },
+  "anamorphic": {
+    "category": "technology"
+  },
+  "anatomical illustration": {
+    "category": "genre/aesthetic"
+  },
+  "anatomical model": {
+    "category": "object/subject"
+  },
+  "anatomical plate": {
+    "category": "object/subject"
+  },
+  "andesite": {
+    "category": "medium/material"
+  },
+  "Andr\u00e9 Derain": {
+    "category": "artist"
+  },
+  "Anglo-Saxon art": {
+    "category": "era/cultural"
+  },
+  "animatronic": {
+    "category": "technology"
+  },
+  "Anime": {
+    "category": "genre/aesthetic"
+  },
+  "anisotropic": {
+    "category": "descriptive"
+  },
+  "anodized": {
+    "category": "technique/process"
+  },
+  "anodized metal": {
+    "category": "medium/material"
+  },
+  "anomalous": {
+    "category": "descriptive"
+  },
+  "ANSI art": {
+    "category": "movement/style"
+  },
+  "answering machine": {
+    "category": "object/subject"
+  },
+  "ant colony": {
+    "category": "object/subject"
+  },
+  "antediluvian": {
+    "category": "genre/aesthetic"
+  },
+  "antler": {
+    "category": "object/subject"
+  },
+  "apothecary": {
+    "category": "object/subject"
+  },
+  "aquarium": {
+    "category": "setting/environment"
+  },
+  "aquarium lighting": {
+    "category": "lighting/optical"
+  },
+  "aquatint": {
+    "category": "technique/process"
+  },
+  "Arabesque": {
+    "category": "genre/aesthetic"
+  },
+  "aragonite": {
+    "category": "medium/material"
+  },
+  "arcade": {
+    "category": "setting/environment"
+  },
+  "arcade cabinet": {
+    "category": "object/subject"
+  },
+  "arcane": {
+    "category": "genre/aesthetic"
+  },
+  "Archigram": {
+    "category": "movement/style"
+  },
+  "architectural elevation": {
+    "category": "technique/process"
+  },
+  "architectural rendering": {
+    "category": "technique/process"
+  },
+  "architectural section": {
+    "category": "technique/process"
+  },
+  "archive": {
+    "category": "setting/environment"
+  },
+  "armillary sphere": {
+    "category": "object/subject"
+  },
+  "Arnold B\u00f6cklin": {
+    "category": "artist"
+  },
+  "Art Deco": {
+    "category": "movement/style"
+  },
+  "Art Moderne": {
+    "category": "movement/style"
+  },
+  "Art Nouveau": {
+    "category": "movement/style"
+  },
+  "Arte Povera": {
+    "category": "movement/style"
+  },
+  "arthropodal": {
+    "category": "descriptive"
+  },
+  "Arthur Hughes": {
+    "category": "artist"
+  },
+  "Arthur Rackham": {
+    "category": "artist"
+  },
+  "artificial": {
+    "category": "descriptive"
+  },
+  "Arts and Crafts": {
+    "category": "movement/style"
+  },
+  "Arts and Crafts movement": {
+    "category": "movement/style"
+  },
+  "asbestos": {
+    "category": "medium/material"
+  },
+  "ASCII art": {
+    "category": "movement/style"
+  },
+  "ash": {
+    "category": "medium/material"
+  },
+  "asphalt": {
+    "category": "medium/material"
+  },
+  "assembly diagram": {
+    "category": "technique/process"
+  },
+  "Assyrian relief": {
+    "category": "era/cultural"
+  },
+  "astigmatism": {
+    "category": "lighting/optical"
+  },
+  "astral": {
+    "category": "genre/aesthetic"
+  },
+  "astrolabe": {
+    "category": "object/subject"
+  },
+  "astronomical chart": {
+    "category": "object/subject"
+  },
+  "Atari graphics": {
+    "category": "technology"
+  },
+  "atmospheric scattering": {
+    "category": "lighting/optical"
+  },
+  "atomic": {
+    "category": "descriptive"
+  },
+  "Atomic Age design": {
+    "category": "era/cultural"
+  },
+  "aurora": {
+    "category": "lighting/optical"
+  },
+  "autochrome": {
+    "category": "technique/process"
+  },
+  "automatic": {
+    "category": "technology"
+  },
+  "automaton": {
+    "category": "technology"
+  },
+  "Avant-garde": {
+    "category": "movement/style"
+  },
+  "Aztec art": {
+    "category": "era/cultural"
+  },
+  "azurite": {
+    "category": "medium/material"
+  },
+  "backwards": {
+    "category": "descriptive"
+  },
+  "backwards text": {
+    "category": "descriptive"
+  },
+  "bacterial": {
+    "category": "descriptive"
+  },
+  "bacterial colony": {
+    "category": "descriptive"
+  },
+  "badlands": {
+    "category": "setting/environment"
+  },
+  "bakelite": {
+    "category": "medium/material"
+  },
+  "baling wire": {
+    "category": "medium/material"
+  },
+  "ballistic nylon": {
+    "category": "medium/material"
+  },
+  "bande dessin\u00e9e": {
+    "category": "genre/aesthetic"
+  },
+  "barbed wire": {
+    "category": "medium/material"
+  },
+  "barnacle": {
+    "category": "object/subject"
+  },
+  "Baroque": {
+    "category": "movement/style"
+  },
+  "basalt": {
+    "category": "medium/material"
+  },
+  "batik": {
+    "category": "technique/process"
+  },
+  "Bauhaus": {
+    "category": "movement/style"
+  },
+  "bauxite": {
+    "category": "medium/material"
+  },
+  "bay": {
+    "category": "setting/environment"
+  },
+  "beach": {
+    "category": "setting/environment"
+  },
+  "bead-blasted": {
+    "category": "technique/process"
+  },
+  "beaded": {
+    "category": "descriptive"
+  },
+  "Beatrix Potter": {
+    "category": "artist"
+  },
+  "beautiful": {
+    "category": "descriptive"
+  },
+  "Beaux-Arts": {
+    "category": "movement/style"
+  },
+  "beeswax": {
+    "category": "medium/material"
+  },
+  "beetle": {
+    "category": "object/subject"
+  },
+  "Berthe Morisot": {
+    "category": "artist"
+  },
+  "best quality": {
+    "category": "descriptive"
+  },
+  "bestial": {
+    "category": "descriptive"
+  },
+  "bestiary illustration": {
+    "category": "genre/aesthetic"
+  },
+  "biofilm": {
+    "category": "medium/material"
+  },
+  "bioluminescence": {
+    "category": "lighting/optical"
+  },
+  "bioluminescent": {
+    "category": "lighting/optical"
+  },
+  "biomimicry": {
+    "category": "movement/style"
+  },
+  "Biopunk": {
+    "category": "genre/aesthetic"
+  },
+  "bird": {
+    "category": "object/subject"
+  },
+  "bird-and-flower painting": {
+    "category": "genre/aesthetic"
+  },
+  "bird's-eye view": {
+    "category": "technique/process"
+  },
+  "birefringence": {
+    "category": "lighting/optical"
+  },
+  "bismuth": {
+    "category": "medium/material"
+  },
+  "bisque": {
+    "category": "medium/material"
+  },
+  "bitumen": {
+    "category": "medium/material"
+  },
+  "bizarre": {
+    "category": "descriptive"
+  },
+  "black background": {
+    "category": "descriptive"
+  },
+  "black-and-white negative": {
+    "category": "medium/material"
+  },
+  "blacklight": {
+    "category": "lighting/optical"
+  },
+  "blacklight art": {
+    "category": "movement/style"
+  },
+  "blank": {
+    "category": "descriptive"
+  },
+  "blasphemous": {
+    "category": "descriptive"
+  },
+  "Blender": {
+    "category": "technology"
+  },
+  "blending": {
+    "category": "technique/process"
+  },
+  "blessed": {
+    "category": "descriptive"
+  },
+  "blind embossing": {
+    "category": "technique/process"
+  },
+  "blister pack": {
+    "category": "object/subject"
+  },
+  "blistered": {
+    "category": "descriptive"
+  },
+  "Blobitecture": {
+    "category": "movement/style"
+  },
+  "bloom": {
+    "category": "lighting/optical"
+  },
+  "blue": {
+    "category": "lighting/optical"
+  },
+  "blue hour": {
+    "category": "lighting/optical"
+  },
+  "blueprint": {
+    "category": "technique/process"
+  },
+  "bodega": {
+    "category": "setting/environment"
+  },
+  "bokeh": {
+    "category": "lighting/optical"
+  },
+  "bolted": {
+    "category": "descriptive"
+  },
+  "bone": {
+    "category": "medium/material"
+  },
+  "bone china": {
+    "category": "medium/material"
+  },
+  "bonsai": {
+    "category": "object/subject"
+  },
+  "book cover illustration": {
+    "category": "genre/aesthetic"
+  },
+  "bootleg": {
+    "category": "genre/aesthetic"
+  },
+  "border": {
+    "category": "object/subject"
+  },
+  "boring": {
+    "category": "descriptive"
+  },
+  "botanical illustration": {
+    "category": "genre/aesthetic"
+  },
+  "botanical plate": {
+    "category": "object/subject"
+  },
+  "bottle cap": {
+    "category": "object/subject"
+  },
+  "bounced flash": {
+    "category": "lighting/optical"
+  },
+  "braided": {
+    "category": "descriptive"
+  },
+  "brass": {
+    "category": "medium/material"
+  },
+  "brazed": {
+    "category": "technique/process"
+  },
+  "bread": {
+    "category": "object/subject"
+  },
+  "broadsheet": {
+    "category": "object/subject"
+  },
+  "brocade": {
+    "category": "medium/material"
+  },
+  "broken": {
+    "category": "descriptive"
+  },
+  "bronze": {
+    "category": "medium/material"
+  },
+  "Bronze Age comic art": {
+    "category": "era/cultural"
+  },
+  "brush-and-ink": {
+    "category": "technique/process"
+  },
+  "brushed": {
+    "category": "technique/process"
+  },
+  "brushed metal": {
+    "category": "medium/material"
+  },
+  "Brutalism": {
+    "category": "movement/style"
+  },
+  "brutalist interiors": {
+    "category": "setting/environment"
+  },
+  "bryozoan": {
+    "category": "object/subject"
+  },
+  "bubble wrap": {
+    "category": "medium/material"
+  },
+  "bubblegum": {
+    "category": "medium/material"
+  },
+  "bubbly": {
+    "category": "descriptive"
+  },
+  "bunraku": {
+    "category": "genre/aesthetic"
+  },
+  "burl wood": {
+    "category": "medium/material"
+  },
+  "burlap": {
+    "category": "medium/material"
+  },
+  "butcher block": {
+    "category": "medium/material"
+  },
+  "butcher paper": {
+    "category": "medium/material"
+  },
+  "butcher's paper": {
+    "category": "medium/material"
+  },
+  "Byzantine art": {
+    "category": "era/cultural"
+  },
+  "cable spaghetti": {
+    "category": "object/subject"
+  },
+  "cactus": {
+    "category": "object/subject"
+  },
+  "calcified": {
+    "category": "descriptive"
+  },
+  "calcite": {
+    "category": "medium/material"
+  },
+  "calendar art": {
+    "category": "movement/style"
+  },
+  "calendar girl art": {
+    "category": "movement/style"
+  },
+  "calico": {
+    "category": "medium/material"
+  },
+  "calligraffiti": {
+    "category": "technique/process"
+  },
+  "camera obscura": {
+    "category": "technology"
+  },
+  "Camille Pissarro": {
+    "category": "artist"
+  },
+  "campy": {
+    "category": "genre/aesthetic"
+  },
+  "candle wax": {
+    "category": "medium/material"
+  },
+  "candlelight": {
+    "category": "lighting/optical"
+  },
+  "canvas texture": {
+    "category": "medium/material"
+  },
+  "canyon": {
+    "category": "setting/environment"
+  },
+  "capillary": {
+    "category": "object/subject"
+  },
+  "carbon fiber": {
+    "category": "medium/material"
+  },
+  "carbon nanotubes": {
+    "category": "medium/material"
+  },
+  "carbon paper": {
+    "category": "medium/material"
+  },
+  "carbonated": {
+    "category": "descriptive"
+  },
+  "carbonized": {
+    "category": "descriptive"
+  },
+  "cardboard": {
+    "category": "medium/material"
+  },
+  "cardstock": {
+    "category": "medium/material"
+  },
+  "cartilage": {
+    "category": "medium/material"
+  },
+  "cartoon": {
+    "category": "genre/aesthetic"
+  },
+  "carving": {
+    "category": "technique/process"
+  },
+  "casein paint": {
+    "category": "medium/material"
+  },
+  "cash register": {
+    "category": "object/subject"
+  },
+  "cast": {
+    "category": "medium/material"
+  },
+  "cast iron": {
+    "category": "medium/material"
+  },
+  "castle": {
+    "category": "setting/environment"
+  },
+  "cat": {
+    "category": "object/subject"
+  },
+  "caustics": {
+    "category": "lighting/optical"
+  },
+  "cave": {
+    "category": "setting/environment"
+  },
+  "cel animation": {
+    "category": "technique/process"
+  },
+  "cel shading": {
+    "category": "technique/process"
+  },
+  "celadon": {
+    "category": "medium/material"
+  },
+  "celestial map": {
+    "category": "object/subject"
+  },
+  "celestite": {
+    "category": "medium/material"
+  },
+  "cellular": {
+    "category": "descriptive"
+  },
+  "Celtic art": {
+    "category": "era/cultural"
+  },
+  "censored": {
+    "category": "descriptive"
+  },
+  "cerebral": {
+    "category": "descriptive"
+  },
+  "cesium": {
+    "category": "medium/material"
+  },
+  "chain": {
+    "category": "object/subject"
+  },
+  "chainmail": {
+    "category": "object/subject"
+  },
+  "chalk": {
+    "category": "medium/material"
+  },
+  "chalkstone": {
+    "category": "medium/material"
+  },
+  "champlev\u00e9": {
+    "category": "technique/process"
+  },
+  "chaotic": {
+    "category": "descriptive"
+  },
+  "chapbook": {
+    "category": "object/subject"
+  },
+  "charcoal": {
+    "category": "medium/material"
+  },
+  "Charles Dana Gibson": {
+    "category": "artist"
+  },
+  "Charles Marion Russell": {
+    "category": "artist"
+  },
+  "charming": {
+    "category": "descriptive"
+  },
+  "charred": {
+    "category": "descriptive"
+  },
+  "cheap newsprint": {
+    "category": "technique/process"
+  },
+  "cheap paperback illustration": {
+    "category": "genre/aesthetic"
+  },
+  "cheese": {
+    "category": "medium/material"
+  },
+  "cheesecloth": {
+    "category": "medium/material"
+  },
+  "chemiluminescence": {
+    "category": "lighting/optical"
+  },
+  "chert": {
+    "category": "medium/material"
+  },
+  "chiaroscuro": {
+    "category": "lighting/optical"
+  },
+  "chicken wire": {
+    "category": "medium/material"
+  },
+  "chiffon": {
+    "category": "medium/material"
+  },
+  "children's book illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Chinese ink painting": {
+    "category": "era/cultural"
+  },
+  "Chinese literati painting": {
+    "category": "era/cultural"
+  },
+  "chipboard": {
+    "category": "medium/material"
+  },
+  "chipped": {
+    "category": "descriptive"
+  },
+  "chitin": {
+    "category": "medium/material"
+  },
+  "chocolate": {
+    "category": "medium/material"
+  },
+  "Christmas lights": {
+    "category": "object/subject"
+  },
+  "chromakey artifact": {
+    "category": "technology"
+  },
+  "chromatic aberration": {
+    "category": "lighting/optical"
+  },
+  "chrysalis": {
+    "category": "object/subject"
+  },
+  "cigarette card illustration": {
+    "category": "genre/aesthetic"
+  },
+  "cigarette pack": {
+    "category": "object/subject"
+  },
+  "cigarette paper": {
+    "category": "medium/material"
+  },
+  "cinematic": {
+    "category": "genre/aesthetic"
+  },
+  "cinnabar": {
+    "category": "medium/material"
+  },
+  "circus poster": {
+    "category": "genre/aesthetic"
+  },
+  "city": {
+    "category": "setting/environment"
+  },
+  "City Pop": {
+    "category": "genre/aesthetic"
+  },
+  "clamshell packaging": {
+    "category": "object/subject"
+  },
+  "classical": {
+    "category": "movement/style"
+  },
+  "Classical Realism": {
+    "category": "movement/style"
+  },
+  "Classicism": {
+    "category": "movement/style"
+  },
+  "classified": {
+    "category": "descriptive"
+  },
+  "claustrophobic": {
+    "category": "descriptive"
+  },
+  "clay": {
+    "category": "medium/material"
+  },
+  "claymation": {
+    "category": "technique/process"
+  },
+  "cleanroom": {
+    "category": "setting/environment"
+  },
+  "clockwork": {
+    "category": "object/subject"
+  },
+  "cloisonn\u00e9": {
+    "category": "medium/material"
+  },
+  "clouds": {
+    "category": "object/subject"
+  },
+  "cloudy": {
+    "category": "descriptive"
+  },
+  "club": {
+    "category": "setting/environment"
+  },
+  "CMYK": {
+    "category": "technology"
+  },
+  "CNC-machined": {
+    "category": "technology"
+  },
+  "coagulated": {
+    "category": "descriptive"
+  },
+  "coal": {
+    "category": "medium/material"
+  },
+  "cocoon": {
+    "category": "object/subject"
+  },
+  "codex": {
+    "category": "object/subject"
+  },
+  "collage": {
+    "category": "technique/process"
+  },
+  "Color Field painting": {
+    "category": "movement/style"
+  },
+  "color negative": {
+    "category": "medium/material"
+  },
+  "colored pencil": {
+    "category": "medium/material"
+  },
+  "colorful": {
+    "category": "descriptive"
+  },
+  "coma": {
+    "category": "lighting/optical"
+  },
+  "comedy": {
+    "category": "genre/aesthetic"
+  },
+  "comic strip art": {
+    "category": "movement/style"
+  },
+  "complementary colors": {
+    "category": "descriptive"
+  },
+  "complex": {
+    "category": "descriptive"
+  },
+  "composite photograph": {
+    "category": "technique/process"
+  },
+  "composite video artifact": {
+    "category": "technology"
+  },
+  "concept art": {
+    "category": "genre/aesthetic"
+  },
+  "Conceptualism": {
+    "category": "movement/style"
+  },
+  "concrete": {
+    "category": "medium/material"
+  },
+  "Concrete art": {
+    "category": "movement/style"
+  },
+  "condensation": {
+    "category": "descriptive"
+  },
+  "confetti": {
+    "category": "object/subject"
+  },
+  "congealed": {
+    "category": "descriptive"
+  },
+  "construction light": {
+    "category": "lighting/optical"
+  },
+  "Constructivism": {
+    "category": "movement/style"
+  },
+  "Constructivist architecture": {
+    "category": "movement/style"
+  },
+  "contact printing": {
+    "category": "technique/process"
+  },
+  "contact sheet": {
+    "category": "technique/process"
+  },
+  "contour line": {
+    "category": "technique/process"
+  },
+  "contraband": {
+    "category": "object/subject"
+  },
+  "copper": {
+    "category": "medium/material"
+  },
+  "copper wire": {
+    "category": "medium/material"
+  },
+  "Coptic art": {
+    "category": "era/cultural"
+  },
+  "coral": {
+    "category": "object/subject"
+  },
+  "coraline": {
+    "category": "medium/material"
+  },
+  "corduroy": {
+    "category": "medium/material"
+  },
+  "cork": {
+    "category": "medium/material"
+  },
+  "Corporate Memphis": {
+    "category": "movement/style"
+  },
+  "corroded": {
+    "category": "descriptive"
+  },
+  "corrugated cardboard": {
+    "category": "medium/material"
+  },
+  "corrupted": {
+    "category": "descriptive"
+  },
+  "cosmic": {
+    "category": "genre/aesthetic"
+  },
+  "counterfeit": {
+    "category": "descriptive"
+  },
+  "counterfeit artifact": {
+    "category": "object/subject"
+  },
+  "courageous": {
+    "category": "descriptive"
+  },
+  "cracked": {
+    "category": "descriptive"
+  },
+  "cramped": {
+    "category": "descriptive"
+  },
+  "craquelure": {
+    "category": "descriptive"
+  },
+  "crayon": {
+    "category": "medium/material"
+  },
+  "crayon drawing": {
+    "category": "technique/process"
+  },
+  "crazed": {
+    "category": "descriptive"
+  },
+  "crazed glaze": {
+    "category": "descriptive"
+  },
+  "creepy": {
+    "category": "descriptive"
+  },
+  "creepypasta": {
+    "category": "genre/aesthetic"
+  },
+  "crime scene photography": {
+    "category": "technique/process"
+  },
+  "criminal": {
+    "category": "descriptive"
+  },
+  "Critical Regionalism": {
+    "category": "movement/style"
+  },
+  "crochet": {
+    "category": "technique/process"
+  },
+  "crocheted": {
+    "category": "descriptive"
+  },
+  "cross-processed film": {
+    "category": "technique/process"
+  },
+  "cross-stitch": {
+    "category": "technique/process"
+  },
+  "crosshatching": {
+    "category": "technique/process"
+  },
+  "crowded": {
+    "category": "descriptive"
+  },
+  "CRT glow": {
+    "category": "technology"
+  },
+  "CRT scanlines": {
+    "category": "technology"
+  },
+  "crude": {
+    "category": "descriptive"
+  },
+  "crumbs": {
+    "category": "object/subject"
+  },
+  "crust punk": {
+    "category": "genre/aesthetic"
+  },
+  "crystal": {
+    "category": "object/subject"
+  },
+  "crystal cluster": {
+    "category": "medium/material"
+  },
+  "Crystal Cubism": {
+    "category": "movement/style"
+  },
+  "crystal lattice": {
+    "category": "medium/material"
+  },
+  "crystallized": {
+    "category": "descriptive"
+  },
+  "Cubism": {
+    "category": "movement/style"
+  },
+  "Cubo-Futurism": {
+    "category": "movement/style"
+  },
+  "curiosity cabinet": {
+    "category": "object/subject"
+  },
+  "cursed": {
+    "category": "genre/aesthetic"
+  },
+  "cute": {
+    "category": "descriptive"
+  },
+  "cutout animation": {
+    "category": "technique/process"
+  },
+  "cyanotype": {
+    "category": "technique/process"
+  },
+  "Cyberpunk": {
+    "category": "genre/aesthetic"
+  },
+  "Czech animation": {
+    "category": "era/cultural"
+  },
+  "Dada": {
+    "category": "movement/style"
+  },
+  "daguerreotype": {
+    "category": "technique/process"
+  },
+  "damascene": {
+    "category": "technique/process"
+  },
+  "damask": {
+    "category": "medium/material"
+  },
+  "dangling wires": {
+    "category": "medium/material"
+  },
+  "Dante Gabriel Rossetti": {
+    "category": "artist"
+  },
+  "darkroom": {
+    "category": "setting/environment"
+  },
+  "darkroom print": {
+    "category": "technique/process"
+  },
+  "databending": {
+    "category": "technique/process"
+  },
+  "datamoshing": {
+    "category": "technique/process"
+  },
+  "De Stijl": {
+    "category": "movement/style"
+  },
+  "debossed": {
+    "category": "technique/process"
+  },
+  "debossed print": {
+    "category": "technique/process"
+  },
+  "debris": {
+    "category": "object/subject"
+  },
+  "decayed": {
+    "category": "descriptive"
+  },
+  "Deccani painting": {
+    "category": "era/cultural"
+  },
+  "deckled edges": {
+    "category": "descriptive"
+  },
+  "decomposing": {
+    "category": "descriptive"
+  },
+  "Deconstructivism": {
+    "category": "movement/style"
+  },
+  "decorative": {
+    "category": "descriptive"
+  },
+  "Deep Dream": {
+    "category": "genre/aesthetic"
+  },
+  "deepfake artifact": {
+    "category": "technology"
+  },
+  "defective": {
+    "category": "descriptive"
+  },
+  "degraded": {
+    "category": "descriptive"
+  },
+  "delftware": {
+    "category": "medium/material"
+  },
+  "demo scene graphics": {
+    "category": "movement/style"
+  },
+  "demoscene": {
+    "category": "movement/style"
+  },
+  "dendritic": {
+    "category": "descriptive"
+  },
+  "denim": {
+    "category": "medium/material"
+  },
+  "department store": {
+    "category": "setting/environment"
+  },
+  "deprecated": {
+    "category": "descriptive"
+  },
+  "depth of field": {
+    "category": "lighting/optical"
+  },
+  "deranged": {
+    "category": "descriptive"
+  },
+  "desert": {
+    "category": "setting/environment"
+  },
+  "desiccated": {
+    "category": "descriptive"
+  },
+  "detailed": {
+    "category": "descriptive"
+  },
+  "detailed background": {
+    "category": "descriptive"
+  },
+  "detritus": {
+    "category": "object/subject"
+  },
+  "Deutscher Werkbund": {
+    "category": "movement/style"
+  },
+  "dew": {
+    "category": "object/subject"
+  },
+  "diamond": {
+    "category": "medium/material"
+  },
+  "diatoms": {
+    "category": "object/subject"
+  },
+  "dichroic": {
+    "category": "descriptive"
+  },
+  "dichroic glass": {
+    "category": "medium/material"
+  },
+  "diffraction": {
+    "category": "lighting/optical"
+  },
+  "diffraction pattern": {
+    "category": "lighting/optical"
+  },
+  "digital": {
+    "category": "technology"
+  },
+  "digital art": {
+    "category": "movement/style"
+  },
+  "dime novel": {
+    "category": "object/subject"
+  },
+  "diorama": {
+    "category": "object/subject"
+  },
+  "diorama box": {
+    "category": "object/subject"
+  },
+  "diorite": {
+    "category": "medium/material"
+  },
+  "direct flash": {
+    "category": "lighting/optical"
+  },
+  "dirt": {
+    "category": "medium/material"
+  },
+  "disco": {
+    "category": "genre/aesthetic"
+  },
+  "discontinued": {
+    "category": "descriptive"
+  },
+  "disheveled": {
+    "category": "descriptive"
+  },
+  "Disney animation": {
+    "category": "technique/process"
+  },
+  "dispersion": {
+    "category": "lighting/optical"
+  },
+  "disposable camera photograph": {
+    "category": "technique/process"
+  },
+  "distemper": {
+    "category": "medium/material"
+  },
+  "distorted": {
+    "category": "descriptive"
+  },
+  "distressing": {
+    "category": "technique/process"
+  },
+  "divine": {
+    "category": "descriptive"
+  },
+  "documentary photography": {
+    "category": "genre/aesthetic"
+  },
+  "dog": {
+    "category": "object/subject"
+  },
+  "dollhouse": {
+    "category": "object/subject"
+  },
+  "dollhouse miniature": {
+    "category": "object/subject"
+  },
+  "doodle": {
+    "category": "technique/process"
+  },
+  "dot matrix": {
+    "category": "technology"
+  },
+  "dot matrix display": {
+    "category": "technology"
+  },
+  "double exposure": {
+    "category": "technique/process"
+  },
+  "draconic": {
+    "category": "descriptive"
+  },
+  "drafting table": {
+    "category": "technique/process"
+  },
+  "drama": {
+    "category": "genre/aesthetic"
+  },
+  "dreamlike": {
+    "category": "genre/aesthetic"
+  },
+  "driftwood": {
+    "category": "medium/material"
+  },
+  "dripping": {
+    "category": "descriptive"
+  },
+  "druse": {
+    "category": "medium/material"
+  },
+  "dry brush": {
+    "category": "technique/process"
+  },
+  "dry ice": {
+    "category": "medium/material"
+  },
+  "drypoint": {
+    "category": "technique/process"
+  },
+  "duct tape": {
+    "category": "medium/material"
+  },
+  "dungeon": {
+    "category": "setting/environment"
+  },
+  "duotone": {
+    "category": "descriptive"
+  },
+  "dust": {
+    "category": "medium/material"
+  },
+  "dust and scratches": {
+    "category": "descriptive"
+  },
+  "dust jacket illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Dutch angle": {
+    "category": "technique/process"
+  },
+  "dynamic lighting": {
+    "category": "lighting/optical"
+  },
+  "dystopian": {
+    "category": "genre/aesthetic"
+  },
+  "early CGI": {
+    "category": "technology"
+  },
+  "earthenware": {
+    "category": "medium/material"
+  },
+  "Eastern Bloc architecture": {
+    "category": "era/cultural"
+  },
+  "eclipse": {
+    "category": "lighting/optical"
+  },
+  "editorial illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Edmund Dulac": {
+    "category": "artist"
+  },
+  "educational diagram": {
+    "category": "technique/process"
+  },
+  "Edward Burne-Jones": {
+    "category": "artist"
+  },
+  "Edward Penfield": {
+    "category": "artist"
+  },
+  "Edward Robert Hughes": {
+    "category": "artist"
+  },
+  "Edwin Austin Abbey": {
+    "category": "artist"
+  },
+  "effervescent": {
+    "category": "descriptive"
+  },
+  "effigy": {
+    "category": "object/subject"
+  },
+  "efflorescent": {
+    "category": "descriptive"
+  },
+  "egg carton": {
+    "category": "object/subject"
+  },
+  "egg sac": {
+    "category": "object/subject"
+  },
+  "egg tempera": {
+    "category": "medium/material"
+  },
+  "Egon Schiele": {
+    "category": "artist"
+  },
+  "Egyptian hieroglyphics": {
+    "category": "era/cultural"
+  },
+  "Egyptian wall painting": {
+    "category": "era/cultural"
+  },
+  "eldritch": {
+    "category": "descriptive"
+  },
+  "electric": {
+    "category": "descriptive"
+  },
+  "electrical tape": {
+    "category": "medium/material"
+  },
+  "electrified": {
+    "category": "descriptive"
+  },
+  "electroluminescence": {
+    "category": "lighting/optical"
+  },
+  "electrostatic": {
+    "category": "descriptive"
+  },
+  "emaciated": {
+    "category": "descriptive"
+  },
+  "embossed": {
+    "category": "technique/process"
+  },
+  "embossed print": {
+    "category": "technique/process"
+  },
+  "embroidery": {
+    "category": "technique/process"
+  },
+  "emergency lighting": {
+    "category": "lighting/optical"
+  },
+  "empty": {
+    "category": "descriptive"
+  },
+  "emulsified": {
+    "category": "descriptive"
+  },
+  "enameled": {
+    "category": "descriptive"
+  },
+  "enameled metal": {
+    "category": "medium/material"
+  },
+  "encaustic": {
+    "category": "medium/material"
+  },
+  "encrusted": {
+    "category": "descriptive"
+  },
+  "encyclopedia illustration": {
+    "category": "genre/aesthetic"
+  },
+  "endoscope": {
+    "category": "technology"
+  },
+  "engraved illustration": {
+    "category": "genre/aesthetic"
+  },
+  "engraving": {
+    "category": "technique/process"
+  },
+  "entomological plate": {
+    "category": "object/subject"
+  },
+  "epidermis": {
+    "category": "object/subject"
+  },
+  "epoxy": {
+    "category": "medium/material"
+  },
+  "ersatz": {
+    "category": "descriptive"
+  },
+  "etching": {
+    "category": "technique/process"
+  },
+  "ethanol": {
+    "category": "medium/material"
+  },
+  "ethereal": {
+    "category": "descriptive"
+  },
+  "etheric": {
+    "category": "descriptive"
+  },
+  "Ethiopian manuscript": {
+    "category": "era/cultural"
+  },
+  "Etruscan art": {
+    "category": "era/cultural"
+  },
+  "Eug\u00e8ne Carri\u00e8re": {
+    "category": "artist"
+  },
+  "evidence bag": {
+    "category": "object/subject"
+  },
+  "evidence locker": {
+    "category": "setting/environment"
+  },
+  "evil": {
+    "category": "descriptive"
+  },
+  "exit sign": {
+    "category": "object/subject"
+  },
+  "experimental animation": {
+    "category": "technique/process"
+  },
+  "expired film": {
+    "category": "technology"
+  },
+  "exploded diagram": {
+    "category": "technique/process"
+  },
+  "exploded-view drawing": {
+    "category": "technique/process"
+  },
+  "exposed wiring": {
+    "category": "object/subject"
+  },
+  "Expressionism": {
+    "category": "movement/style"
+  },
+  "Expressionist architecture": {
+    "category": "movement/style"
+  },
+  "extruded": {
+    "category": "descriptive"
+  },
+  "fabricated": {
+    "category": "descriptive"
+  },
+  "faceless": {
+    "category": "descriptive"
+  },
+  "factory-made": {
+    "category": "descriptive"
+  },
+  "faerie": {
+    "category": "object/subject"
+  },
+  "faience": {
+    "category": "medium/material"
+  },
+  "fairy lights": {
+    "category": "object/subject"
+  },
+  "fairy tale": {
+    "category": "genre/aesthetic"
+  },
+  "fairy-tale illustration": {
+    "category": "genre/aesthetic"
+  },
+  "false perspective": {
+    "category": "technique/process"
+  },
+  "family photograph": {
+    "category": "technique/process"
+  },
+  "Fantastic Realism": {
+    "category": "movement/style"
+  },
+  "fantasy": {
+    "category": "genre/aesthetic"
+  },
+  "farm": {
+    "category": "setting/environment"
+  },
+  "fashion": {
+    "category": "genre/aesthetic"
+  },
+  "fashion editorial": {
+    "category": "genre/aesthetic"
+  },
+  "fashion illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Fauvism": {
+    "category": "movement/style"
+  },
+  "fax artifact": {
+    "category": "technology"
+  },
+  "F\u00e9licien Rops": {
+    "category": "artist"
+  },
+  "felt sculpture": {
+    "category": "technique/process"
+  },
+  "felted": {
+    "category": "descriptive"
+  },
+  "fermented": {
+    "category": "descriptive"
+  },
+  "Fernand Khnopff": {
+    "category": "artist"
+  },
+  "ferrofluid": {
+    "category": "medium/material"
+  },
+  "fever dream": {
+    "category": "genre/aesthetic"
+  },
+  "fiberglass": {
+    "category": "medium/material"
+  },
+  "fibrous": {
+    "category": "descriptive"
+  },
+  "field guide illustration": {
+    "category": "genre/aesthetic"
+  },
+  "figurine": {
+    "category": "object/subject"
+  },
+  "filigree": {
+    "category": "medium/material"
+  },
+  "filings": {
+    "category": "medium/material"
+  },
+  "film grain": {
+    "category": "lighting/optical"
+  },
+  "film negative": {
+    "category": "technology"
+  },
+  "film scratches": {
+    "category": "descriptive"
+  },
+  "filthy": {
+    "category": "descriptive"
+  },
+  "fingerprints": {
+    "category": "object/subject"
+  },
+  "fire": {
+    "category": "object/subject"
+  },
+  "fireplace light": {
+    "category": "lighting/optical"
+  },
+  "fisheye": {
+    "category": "lighting/optical"
+  },
+  "fishing line": {
+    "category": "object/subject"
+  },
+  "fishnet": {
+    "category": "object/subject"
+  },
+  "flaking": {
+    "category": "descriptive"
+  },
+  "flaming": {
+    "category": "descriptive"
+  },
+  "flash photography": {
+    "category": "technique/process"
+  },
+  "flashlight": {
+    "category": "lighting/optical"
+  },
+  "flashlight beam": {
+    "category": "lighting/optical"
+  },
+  "flat": {
+    "category": "descriptive"
+  },
+  "flat colors": {
+    "category": "descriptive"
+  },
+  "flawless": {
+    "category": "descriptive"
+  },
+  "Fleischer animation": {
+    "category": "era/cultural"
+  },
+  "Flemish painting": {
+    "category": "movement/style"
+  },
+  "flint": {
+    "category": "medium/material"
+  },
+  "flipbook": {
+    "category": "object/subject"
+  },
+  "Flipnote": {
+    "category": "technology"
+  },
+  "fluffy": {
+    "category": "descriptive"
+  },
+  "fluorescence": {
+    "category": "lighting/optical"
+  },
+  "fluorescent": {
+    "category": "lighting/optical"
+  },
+  "fluorescent office lighting": {
+    "category": "lighting/optical"
+  },
+  "fluorite": {
+    "category": "medium/material"
+  },
+  "Fluxus": {
+    "category": "movement/style"
+  },
+  "foam": {
+    "category": "medium/material"
+  },
+  "foam board": {
+    "category": "medium/material"
+  },
+  "foamy": {
+    "category": "descriptive"
+  },
+  "foil": {
+    "category": "medium/material"
+  },
+  "foil stamping": {
+    "category": "technique/process"
+  },
+  "folk": {
+    "category": "genre/aesthetic"
+  },
+  "Folk art": {
+    "category": "movement/style"
+  },
+  "food wrapper": {
+    "category": "object/subject"
+  },
+  "fool's gold": {
+    "category": "medium/material"
+  },
+  "forced perspective": {
+    "category": "technique/process"
+  },
+  "Ford Madox Brown": {
+    "category": "artist"
+  },
+  "forensic photography": {
+    "category": "technique/process"
+  },
+  "forged": {
+    "category": "descriptive"
+  },
+  "fossil": {
+    "category": "object/subject"
+  },
+  "fossilized": {
+    "category": "descriptive"
+  },
+  "found photography": {
+    "category": "technique/process"
+  },
+  "four-color process": {
+    "category": "descriptive"
+  },
+  "fractal": {
+    "category": "movement/style"
+  },
+  "fragmentary": {
+    "category": "descriptive"
+  },
+  "Franklin Booth": {
+    "category": "artist"
+  },
+  "Franz von Stuck": {
+    "category": "artist"
+  },
+  "frayed edges": {
+    "category": "descriptive"
+  },
+  "Frederic Remington": {
+    "category": "artist"
+  },
+  "freezer lighting": {
+    "category": "lighting/optical"
+  },
+  "fresco": {
+    "category": "technique/process"
+  },
+  "fresco secco": {
+    "category": "technique/process"
+  },
+  "frost": {
+    "category": "object/subject"
+  },
+  "frosted glass": {
+    "category": "medium/material"
+  },
+  "frosting": {
+    "category": "descriptive"
+  },
+  "frothy": {
+    "category": "descriptive"
+  },
+  "Frutiger Aero": {
+    "category": "genre/aesthetic"
+  },
+  "full": {
+    "category": "descriptive"
+  },
+  "fumetti": {
+    "category": "genre/aesthetic"
+  },
+  "fungal": {
+    "category": "descriptive"
+  },
+  "fungus": {
+    "category": "object/subject"
+  },
+  "Funk art": {
+    "category": "movement/style"
+  },
+  "fused glass": {
+    "category": "medium/material"
+  },
+  "Futurism": {
+    "category": "movement/style"
+  },
+  "fuzzy": {
+    "category": "descriptive"
+  },
+  "galena": {
+    "category": "medium/material"
+  },
+  "gallium": {
+    "category": "medium/material"
+  },
+  "Game Boy graphics": {
+    "category": "technology"
+  },
+  "gangrenous": {
+    "category": "descriptive"
+  },
+  "garbage bag": {
+    "category": "object/subject"
+  },
+  "garnet": {
+    "category": "medium/material"
+  },
+  "gas station lighting": {
+    "category": "lighting/optical"
+  },
+  "gate weave": {
+    "category": "technology"
+  },
+  "gauze": {
+    "category": "medium/material"
+  },
+  "gears": {
+    "category": "object/subject"
+  },
+  "gelatinous": {
+    "category": "descriptive"
+  },
+  "generative": {
+    "category": "technique/process"
+  },
+  "geode": {
+    "category": "object/subject"
+  },
+  "geologic strata": {
+    "category": "object/subject"
+  },
+  "geometric": {
+    "category": "descriptive"
+  },
+  "Geometric abstraction": {
+    "category": "movement/style"
+  },
+  "George Barbier": {
+    "category": "artist"
+  },
+  "George Caleb Bingham": {
+    "category": "artist"
+  },
+  "George Cruikshank": {
+    "category": "artist"
+  },
+  "Georges Braque": {
+    "category": "artist"
+  },
+  "Georges Seurat": {
+    "category": "artist"
+  },
+  "gesso": {
+    "category": "medium/material"
+  },
+  "gesture drawing": {
+    "category": "technique/process"
+  },
+  "ghost story": {
+    "category": "genre/aesthetic"
+  },
+  "ghostly": {
+    "category": "descriptive"
+  },
+  "ghoul": {
+    "category": "object/subject"
+  },
+  "gigantic": {
+    "category": "descriptive"
+  },
+  "gilding": {
+    "category": "technique/process"
+  },
+  "gingham": {
+    "category": "medium/material"
+  },
+  "glacier": {
+    "category": "setting/environment"
+  },
+  "glare": {
+    "category": "lighting/optical"
+  },
+  "glass fiber": {
+    "category": "medium/material"
+  },
+  "glass plate negative": {
+    "category": "medium/material"
+  },
+  "glaze": {
+    "category": "medium/material"
+  },
+  "glazed": {
+    "category": "descriptive"
+  },
+  "glazing": {
+    "category": "technique/process"
+  },
+  "glitch art": {
+    "category": "movement/style"
+  },
+  "glitter": {
+    "category": "medium/material"
+  },
+  "global illumination": {
+    "category": "lighting/optical"
+  },
+  "gneiss": {
+    "category": "medium/material"
+  },
+  "gnostic": {
+    "category": "descriptive"
+  },
+  "god rays": {
+    "category": "lighting/optical"
+  },
+  "gold": {
+    "category": "medium/material"
+  },
+  "gold leaf": {
+    "category": "medium/material"
+  },
+  "Golden Age comic art": {
+    "category": "era/cultural"
+  },
+  "Golden Age illustration": {
+    "category": "genre/aesthetic"
+  },
+  "golden hour": {
+    "category": "lighting/optical"
+  },
+  "gongbi": {
+    "category": "technique/process"
+  },
+  "good": {
+    "category": "descriptive"
+  },
+  "goofy": {
+    "category": "descriptive"
+  },
+  "Googie": {
+    "category": "movement/style"
+  },
+  "Gothic art": {
+    "category": "movement/style"
+  },
+  "Gothic Revival": {
+    "category": "movement/style"
+  },
+  "gouache": {
+    "category": "medium/material"
+  },
+  "graffiti": {
+    "category": "technique/process"
+  },
+  "granite": {
+    "category": "medium/material"
+  },
+  "graph paper": {
+    "category": "medium/material"
+  },
+  "graphite": {
+    "category": "medium/material"
+  },
+  "grass": {
+    "category": "object/subject"
+  },
+  "gravel": {
+    "category": "medium/material"
+  },
+  "grease": {
+    "category": "medium/material"
+  },
+  "greasy": {
+    "category": "descriptive"
+  },
+  "green": {
+    "category": "descriptive"
+  },
+  "green-screen terminal": {
+    "category": "technology"
+  },
+  "grisaille": {
+    "category": "technique/process"
+  },
+  "gristle": {
+    "category": "medium/material"
+  },
+  "grocery bag": {
+    "category": "object/subject"
+  },
+  "grotesque marginalia": {
+    "category": "genre/aesthetic"
+  },
+  "gum bichromate": {
+    "category": "technique/process"
+  },
+  "gunpowder": {
+    "category": "medium/material"
+  },
+  "Gustav Klimt": {
+    "category": "artist"
+  },
+  "haboku": {
+    "category": "technique/process"
+  },
+  "Hackers": {
+    "category": "genre/aesthetic"
+  },
+  "hairy": {
+    "category": "descriptive"
+  },
+  "halation": {
+    "category": "lighting/optical"
+  },
+  "half-erased": {
+    "category": "descriptive"
+  },
+  "half-remembered": {
+    "category": "genre/aesthetic"
+  },
+  "halftone": {
+    "category": "technique/process"
+  },
+  "hall": {
+    "category": "setting/environment"
+  },
+  "hallucination": {
+    "category": "genre/aesthetic"
+  },
+  "hammered": {
+    "category": "technique/process"
+  },
+  "hammered metal": {
+    "category": "medium/material"
+  },
+  "hand-carved": {
+    "category": "technique/process"
+  },
+  "hand-forged": {
+    "category": "technique/process"
+  },
+  "hand-hewn": {
+    "category": "technique/process"
+  },
+  "hand-lettered": {
+    "category": "technique/process"
+  },
+  "hand-painted": {
+    "category": "technique/process"
+  },
+  "hand-stitched": {
+    "category": "technique/process"
+  },
+  "handsome": {
+    "category": "descriptive"
+  },
+  "harsh flash": {
+    "category": "lighting/optical"
+  },
+  "haunted": {
+    "category": "descriptive"
+  },
+  "headlamp": {
+    "category": "lighting/optical"
+  },
+  "heartwood": {
+    "category": "medium/material"
+  },
+  "heaven": {
+    "category": "setting/environment"
+  },
+  "heavy metal": {
+    "category": "medium/material"
+  },
+  "Heinrich Kley": {
+    "category": "artist"
+  },
+  "hell": {
+    "category": "setting/environment"
+  },
+  "hematite": {
+    "category": "medium/material"
+  },
+  "heraldic illustration": {
+    "category": "genre/aesthetic"
+  },
+  "heretic": {
+    "category": "genre/aesthetic"
+  },
+  "herringbone": {
+    "category": "medium/material"
+  },
+  "high quality": {
+    "category": "descriptive"
+  },
+  "high-key photography": {
+    "category": "technique/process"
+  },
+  "High-tech architecture": {
+    "category": "movement/style"
+  },
+  "historical": {
+    "category": "era/cultural"
+  },
+  "hoarfrost": {
+    "category": "object/subject"
+  },
+  "hologram": {
+    "category": "technology"
+  },
+  "holographic": {
+    "category": "technology"
+  },
+  "holography": {
+    "category": "technology"
+  },
+  "holy": {
+    "category": "genre/aesthetic"
+  },
+  "honey": {
+    "category": "medium/material"
+  },
+  "honeycomb": {
+    "category": "object/subject"
+  },
+  "horn": {
+    "category": "medium/material"
+  },
+  "horrifying": {
+    "category": "descriptive"
+  },
+  "horror": {
+    "category": "genre/aesthetic"
+  },
+  "horror paperback cover": {
+    "category": "object/subject"
+  },
+  "Howard Pyle": {
+    "category": "artist"
+  },
+  "Hudson River School": {
+    "category": "movement/style"
+  },
+  "Huichol art": {
+    "category": "era/cultural"
+  },
+  "human": {
+    "category": "object/subject"
+  },
+  "hurricane": {
+    "category": "object/subject"
+  },
+  "hyperdetailed": {
+    "category": "descriptive"
+  },
+  "Hypermodernism": {
+    "category": "movement/style"
+  },
+  "Hyperrealism": {
+    "category": "movement/style"
+  },
+  "ice": {
+    "category": "medium/material"
+  },
+  "ice cream": {
+    "category": "object/subject"
+  },
+  "ice sculpture": {
+    "category": "technique/process"
+  },
+  "igneous": {
+    "category": "descriptive"
+  },
+  "ikat": {
+    "category": "technique/process"
+  },
+  "IKEA instructions": {
+    "category": "object/subject"
+  },
+  "illuminated codex": {
+    "category": "object/subject"
+  },
+  "illuminated initial": {
+    "category": "object/subject"
+  },
+  "illuminated manuscript": {
+    "category": "object/subject"
+  },
+  "illusion": {
+    "category": "lighting/optical"
+  },
+  "imitation": {
+    "category": "descriptive"
+  },
+  "impasto": {
+    "category": "technique/process"
+  },
+  "impossible": {
+    "category": "genre/aesthetic"
+  },
+  "impossible geometry": {
+    "category": "genre/aesthetic"
+  },
+  "impossible perspective": {
+    "category": "technique/process"
+  },
+  "Impressionism": {
+    "category": "movement/style"
+  },
+  "Inca art": {
+    "category": "era/cultural"
+  },
+  "incomplete": {
+    "category": "descriptive"
+  },
+  "incorrectly assembled": {
+    "category": "descriptive"
+  },
+  "incrusted": {
+    "category": "descriptive"
+  },
+  "inexplicable": {
+    "category": "genre/aesthetic"
+  },
+  "infinite": {
+    "category": "genre/aesthetic"
+  },
+  "infinity": {
+    "category": "genre/aesthetic"
+  },
+  "Informalism": {
+    "category": "movement/style"
+  },
+  "infrared photography": {
+    "category": "technique/process"
+  },
+  "inhuman": {
+    "category": "genre/aesthetic"
+  },
+  "injection-molded": {
+    "category": "technique/process"
+  },
+  "ink wash": {
+    "category": "medium/material"
+  },
+  "inlay": {
+    "category": "technique/process"
+  },
+  "insectile": {
+    "category": "descriptive"
+  },
+  "inside-out": {
+    "category": "descriptive"
+  },
+  "installation art": {
+    "category": "movement/style"
+  },
+  "instant film": {
+    "category": "technology"
+  },
+  "instruction manual": {
+    "category": "technique/process"
+  },
+  "Insular art": {
+    "category": "era/cultural"
+  },
+  "intaglio": {
+    "category": "technique/process"
+  },
+  "interesting": {
+    "category": "descriptive"
+  },
+  "interference pattern": {
+    "category": "lighting/optical"
+  },
+  "intergalactic": {
+    "category": "genre/aesthetic"
+  },
+  "International Gothic": {
+    "category": "movement/style"
+  },
+  "International Style": {
+    "category": "movement/style"
+  },
+  "International Typographic Style": {
+    "category": "movement/style"
+  },
+  "intricate": {
+    "category": "descriptive"
+  },
+  "invasive": {
+    "category": "descriptive"
+  },
+  "iridescence": {
+    "category": "lighting/optical"
+  },
+  "iridescent": {
+    "category": "descriptive"
+  },
+  "iridescent oil": {
+    "category": "medium/material"
+  },
+  "Islamic arabesque": {
+    "category": "era/cultural"
+  },
+  "Islamic geometric art": {
+    "category": "era/cultural"
+  },
+  "island": {
+    "category": "setting/environment"
+  },
+  "isometric": {
+    "category": "technique/process"
+  },
+  "Italian Futurist architecture": {
+    "category": "era/cultural"
+  },
+  "Ivan Bilibin": {
+    "category": "artist"
+  },
+  "ivory": {
+    "category": "medium/material"
+  },
+  "jacquard": {
+    "category": "technique/process"
+  },
+  "Japanese emakimono": {
+    "category": "era/cultural"
+  },
+  "Japanese Kan\u014d school": {
+    "category": "era/cultural"
+  },
+  "Japanese Nanga": {
+    "category": "era/cultural"
+  },
+  "Japanese Rinpa": {
+    "category": "era/cultural"
+  },
+  "Japanese sumi-e": {
+    "category": "era/cultural"
+  },
+  "japanning": {
+    "category": "technique/process"
+  },
+  "jasper": {
+    "category": "medium/material"
+  },
+  "jaundiced": {
+    "category": "descriptive"
+  },
+  "Jean Delville": {
+    "category": "artist"
+  },
+  "Jean-Baptiste-Camille Corot": {
+    "category": "artist"
+  },
+  "jet": {
+    "category": "medium/material"
+  },
+  "John Atkinson Grimshaw": {
+    "category": "artist"
+  },
+  "John Bauer": {
+    "category": "artist"
+  },
+  "John Collier": {
+    "category": "artist"
+  },
+  "John Everett Millais": {
+    "category": "artist"
+  },
+  "John Martin": {
+    "category": "artist"
+  },
+  "John Singer Sargent": {
+    "category": "artist"
+  },
+  "John William Waterhouse": {
+    "category": "artist"
+  },
+  "joyful": {
+    "category": "descriptive"
+  },
+  "JPEG artifact": {
+    "category": "technology"
+  },
+  "Juan Gris": {
+    "category": "artist"
+  },
+  "Jugendstil": {
+    "category": "movement/style"
+  },
+  "jukebox": {
+    "category": "object/subject"
+  },
+  "jungle": {
+    "category": "setting/environment"
+  },
+  "junk": {
+    "category": "object/subject"
+  },
+  "junk drawer": {
+    "category": "object/subject"
+  },
+  "kaleidoscope": {
+    "category": "object/subject"
+  },
+  "kawaii": {
+    "category": "genre/aesthetic"
+  },
+  "Kazimir Malevich": {
+    "category": "artist"
+  },
+  "kelp": {
+    "category": "object/subject"
+  },
+  "keratin": {
+    "category": "medium/material"
+  },
+  "kerosene": {
+    "category": "medium/material"
+  },
+  "Kevlar": {
+    "category": "medium/material"
+  },
+  "kind": {
+    "category": "descriptive"
+  },
+  "Kitsch movement": {
+    "category": "movement/style"
+  },
+  "knitted": {
+    "category": "descriptive"
+  },
+  "knockoff": {
+    "category": "descriptive"
+  },
+  "knurled": {
+    "category": "descriptive"
+  },
+  "Kodachrome": {
+    "category": "technology"
+  },
+  "Kodak Ektar": {
+    "category": "medium/material"
+  },
+  "Konstantin Somov": {
+    "category": "artist"
+  },
+  "Korean literati painting": {
+    "category": "era/cultural"
+  },
+  "Korean minhwa": {
+    "category": "era/cultural"
+  },
+  "kraft paper": {
+    "category": "medium/material"
+  },
+  "laboratory": {
+    "category": "setting/environment"
+  },
+  "labradorite": {
+    "category": "medium/material"
+  },
+  "lace": {
+    "category": "medium/material"
+  },
+  "lacquer": {
+    "category": "medium/material"
+  },
+  "lacquered": {
+    "category": "medium/material"
+  },
+  "lake": {
+    "category": "setting/environment"
+  },
+  "Land art": {
+    "category": "movement/style"
+  },
+  "large format": {
+    "category": "descriptive"
+  },
+  "latex": {
+    "category": "medium/material"
+  },
+  "lava": {
+    "category": "object/subject"
+  },
+  "Lawrence Alma-Tadema": {
+    "category": "artist"
+  },
+  "layering": {
+    "category": "technique/process"
+  },
+  "LCD ghosting": {
+    "category": "technology"
+  },
+  "lead": {
+    "category": "medium/material"
+  },
+  "leaking": {
+    "category": "descriptive"
+  },
+  "leather": {
+    "category": "medium/material"
+  },
+  "leaves": {
+    "category": "object/subject"
+  },
+  "LED": {
+    "category": "technology"
+  },
+  "legendary": {
+    "category": "descriptive"
+  },
+  "lens flare": {
+    "category": "lighting/optical"
+  },
+  "lenticular": {
+    "category": "technology"
+  },
+  "Les Automatistes": {
+    "category": "movement/style"
+  },
+  "Les Nabis": {
+    "category": "movement/style"
+  },
+  "Letterism": {
+    "category": "movement/style"
+  },
+  "letterpress": {
+    "category": "technique/process"
+  },
+  "letterpress impression": {
+    "category": "technique/process"
+  },
+  "library": {
+    "category": "setting/environment"
+  },
+  "lichen": {
+    "category": "object/subject"
+  },
+  "Light and Space": {
+    "category": "movement/style"
+  },
+  "light leak": {
+    "category": "lighting/optical"
+  },
+  "light painting": {
+    "category": "technique/process"
+  },
+  "ligne claire": {
+    "category": "movement/style"
+  },
+  "lignite": {
+    "category": "medium/material"
+  },
+  "limbo": {
+    "category": "setting/environment"
+  },
+  "limestone": {
+    "category": "medium/material"
+  },
+  "liminal": {
+    "category": "genre/aesthetic"
+  },
+  "liminal horror": {
+    "category": "genre/aesthetic"
+  },
+  "limited animation": {
+    "category": "technique/process"
+  },
+  "limited-color screenprint": {
+    "category": "technique/process"
+  },
+  "linear": {
+    "category": "descriptive"
+  },
+  "lineless": {
+    "category": "descriptive"
+  },
+  "linen canvas": {
+    "category": "medium/material"
+  },
+  "linocut": {
+    "category": "technique/process"
+  },
+  "linoleum": {
+    "category": "medium/material"
+  },
+  "linoleum print": {
+    "category": "technique/process"
+  },
+  "lint": {
+    "category": "object/subject"
+  },
+  "liquid nitrogen": {
+    "category": "medium/material"
+  },
+  "lithographic stone": {
+    "category": "technique/process"
+  },
+  "lithography": {
+    "category": "technique/process"
+  },
+  "litter": {
+    "category": "object/subject"
+  },
+  "long exposure": {
+    "category": "lighting/optical"
+  },
+  "looping": {
+    "category": "technique/process"
+  },
+  "loose threads": {
+    "category": "object/subject"
+  },
+  "lost-and-found": {
+    "category": "genre/aesthetic"
+  },
+  "low-bitrate JPEG": {
+    "category": "technology"
+  },
+  "low-key photography": {
+    "category": "technique/process"
+  },
+  "lowbrow": {
+    "category": "genre/aesthetic"
+  },
+  "lucid": {
+    "category": "genre/aesthetic"
+  },
+  "lucite": {
+    "category": "medium/material"
+  },
+  "lumpy": {
+    "category": "descriptive"
+  },
+  "Lyonel Feininger": {
+    "category": "artist"
+  },
+  "machined": {
+    "category": "descriptive"
+  },
+  "macram\u00e9": {
+    "category": "technique/process"
+  },
+  "macro lens": {
+    "category": "lighting/optical"
+  },
+  "magic eye": {
+    "category": "technology"
+  },
+  "magic lantern": {
+    "category": "technology"
+  },
+  "magical": {
+    "category": "genre/aesthetic"
+  },
+  "Magical Realism": {
+    "category": "movement/style"
+  },
+  "magma": {
+    "category": "object/subject"
+  },
+  "magnetite": {
+    "category": "medium/material"
+  },
+  "Mail art": {
+    "category": "movement/style"
+  },
+  "majolica": {
+    "category": "medium/material"
+  },
+  "maki-e": {
+    "category": "technique/process"
+  },
+  "malachite": {
+    "category": "medium/material"
+  },
+  "malfunctioning": {
+    "category": "descriptive"
+  },
+  "mall": {
+    "category": "setting/environment"
+  },
+  "manga": {
+    "category": "genre/aesthetic"
+  },
+  "Mannerism": {
+    "category": "movement/style"
+  },
+  "manuscript illumination": {
+    "category": "object/subject"
+  },
+  "M\u0101ori carving": {
+    "category": "era/cultural"
+  },
+  "marble": {
+    "category": "medium/material"
+  },
+  "marginalia": {
+    "category": "object/subject"
+  },
+  "marionette": {
+    "category": "object/subject"
+  },
+  "marionette theater": {
+    "category": "object/subject"
+  },
+  "market": {
+    "category": "setting/environment"
+  },
+  "marquetry": {
+    "category": "technique/process"
+  },
+  "marshmallow": {
+    "category": "object/subject"
+  },
+  "Mary Cassatt": {
+    "category": "artist"
+  },
+  "masked": {
+    "category": "descriptive"
+  },
+  "masking tape": {
+    "category": "medium/material"
+  },
+  "mass-produced": {
+    "category": "descriptive"
+  },
+  "Massurrealism": {
+    "category": "movement/style"
+  },
+  "masterpiece": {
+    "category": "genre/aesthetic"
+  },
+  "matchbook": {
+    "category": "object/subject"
+  },
+  "matchbox": {
+    "category": "object/subject"
+  },
+  "matchbox label art": {
+    "category": "genre/aesthetic"
+  },
+  "Maurice de Vlaminck": {
+    "category": "artist"
+  },
+  "Maximalism": {
+    "category": "movement/style"
+  },
+  "Maya art": {
+    "category": "era/cultural"
+  },
+  "meat": {
+    "category": "medium/material"
+  },
+  "mechanical": {
+    "category": "object/subject"
+  },
+  "mechanical puppet": {
+    "category": "object/subject"
+  },
+  "medical illustration": {
+    "category": "genre/aesthetic"
+  },
+  "medical monitor": {
+    "category": "technology"
+  },
+  "medieval bestiary": {
+    "category": "era/cultural"
+  },
+  "medium format": {
+    "category": "technology"
+  },
+  "Meiji woodblock": {
+    "category": "era/cultural"
+  },
+  "Meiji-era illustration": {
+    "category": "era/cultural"
+  },
+  "membranous": {
+    "category": "descriptive"
+  },
+  "meme": {
+    "category": "genre/aesthetic"
+  },
+  "Memphis Design": {
+    "category": "movement/style"
+  },
+  "mercury": {
+    "category": "medium/material"
+  },
+  "mercury vapor": {
+    "category": "medium/material"
+  },
+  "Merovingian art": {
+    "category": "era/cultural"
+  },
+  "mesa": {
+    "category": "setting/environment"
+  },
+  "mesh": {
+    "category": "object/subject"
+  },
+  "Mesopotamian relief": {
+    "category": "era/cultural"
+  },
+  "Metabolist architecture": {
+    "category": "era/cultural"
+  },
+  "metal": {
+    "category": "medium/material"
+  },
+  "metal filigree": {
+    "category": "medium/material"
+  },
+  "metalpoint": {
+    "category": "medium/material"
+  },
+  "metamorphic": {
+    "category": "descriptive"
+  },
+  "Metaphysical painting": {
+    "category": "movement/style"
+  },
+  "Mexican muralism": {
+    "category": "movement/style"
+  },
+  "mezzotint": {
+    "category": "technique/process"
+  },
+  "mica": {
+    "category": "medium/material"
+  },
+  "microfiche": {
+    "category": "technology"
+  },
+  "microscope": {
+    "category": "technology"
+  },
+  "microscopic view": {
+    "category": "technique/process"
+  },
+  "Mid-century illustration": {
+    "category": "era/cultural"
+  },
+  "Mid-century modern": {
+    "category": "era/cultural"
+  },
+  "mid-century paperback cover": {
+    "category": "medium/material"
+  },
+  "Mikhail Larionov": {
+    "category": "artist"
+  },
+  "Mikhail Vrubel": {
+    "category": "artist"
+  },
+  "mildew": {
+    "category": "object/subject"
+  },
+  "milk": {
+    "category": "medium/material"
+  },
+  "milky": {
+    "category": "descriptive"
+  },
+  "milled": {
+    "category": "descriptive"
+  },
+  "mimeograph": {
+    "category": "technology"
+  },
+  "mineral vein": {
+    "category": "medium/material"
+  },
+  "mineral-encrusted": {
+    "category": "descriptive"
+  },
+  "mineral-stained": {
+    "category": "descriptive"
+  },
+  "mineralized": {
+    "category": "medium/material"
+  },
+  "mineshaft": {
+    "category": "setting/environment"
+  },
+  "Mingei": {
+    "category": "movement/style"
+  },
+  "miniature": {
+    "category": "object/subject"
+  },
+  "miniature effect": {
+    "category": "technique/process"
+  },
+  "Minimalism": {
+    "category": "movement/style"
+  },
+  "Minoan art": {
+    "category": "era/cultural"
+  },
+  "mirage": {
+    "category": "lighting/optical"
+  },
+  "mirror-polished": {
+    "category": "descriptive"
+  },
+  "mirrored": {
+    "category": "medium/material"
+  },
+  "misassembled": {
+    "category": "descriptive"
+  },
+  "misidentified": {
+    "category": "descriptive"
+  },
+  "mislabeled": {
+    "category": "descriptive"
+  },
+  "misplaced": {
+    "category": "descriptive"
+  },
+  "misplaced scale": {
+    "category": "medium/material"
+  },
+  "misregistered print": {
+    "category": "technique/process"
+  },
+  "Moche art": {
+    "category": "era/cultural"
+  },
+  "Model Magic": {
+    "category": "medium/material"
+  },
+  "model railway": {
+    "category": "object/subject"
+  },
+  "Modernism": {
+    "category": "movement/style"
+  },
+  "Modular Constructivism": {
+    "category": "movement/style"
+  },
+  "moir\u00e9": {
+    "category": "lighting/optical"
+  },
+  "moldy": {
+    "category": "descriptive"
+  },
+  "molten": {
+    "category": "descriptive"
+  },
+  "molten glass": {
+    "category": "medium/material"
+  },
+  "molten metal": {
+    "category": "medium/material"
+  },
+  "monochrome": {
+    "category": "descriptive"
+  },
+  "monochrome CRT": {
+    "category": "technology"
+  },
+  "monofilament": {
+    "category": "medium/material"
+  },
+  "monoprint": {
+    "category": "technique/process"
+  },
+  "monotype": {
+    "category": "technique/process"
+  },
+  "moonlight": {
+    "category": "lighting/optical"
+  },
+  "moonstone": {
+    "category": "medium/material"
+  },
+  "Moorish architecture": {
+    "category": "era/cultural"
+  },
+  "mosaic": {
+    "category": "technique/process"
+  },
+  "moss": {
+    "category": "object/subject"
+  },
+  "mother-of-pearl": {
+    "category": "medium/material"
+  },
+  "mother-of-pearl inlay": {
+    "category": "technique/process"
+  },
+  "mountains": {
+    "category": "setting/environment"
+  },
+  "movie poster": {
+    "category": "object/subject"
+  },
+  "MPEG artifact": {
+    "category": "movement/style"
+  },
+  "Mstislav Dobuzhinsky": {
+    "category": "artist"
+  },
+  "mucous": {
+    "category": "medium/material"
+  },
+  "Mughal miniature": {
+    "category": "era/cultural"
+  },
+  "mugshot": {
+    "category": "technique/process"
+  },
+  "multiple exposure": {
+    "category": "technique/process"
+  },
+  "mummified": {
+    "category": "descriptive"
+  },
+  "murky": {
+    "category": "descriptive"
+  },
+  "museum display": {
+    "category": "setting/environment"
+  },
+  "museum specimen": {
+    "category": "object/subject"
+  },
+  "muslin": {
+    "category": "medium/material"
+  },
+  "mutant": {
+    "category": "object/subject"
+  },
+  "mutated": {
+    "category": "descriptive"
+  },
+  "mycelial": {
+    "category": "descriptive"
+  },
+  "mycelium": {
+    "category": "object/subject"
+  },
+  "Mycenaean art": {
+    "category": "movement/style"
+  },
+  "mycological": {
+    "category": "genre/aesthetic"
+  },
+  "mystery": {
+    "category": "genre/aesthetic"
+  },
+  "mystical": {
+    "category": "genre/aesthetic"
+  },
+  "mythic": {
+    "category": "genre/aesthetic"
+  },
+  "N. C. Wyeth": {
+    "category": "artist"
+  },
+  "nacre": {
+    "category": "medium/material"
+  },
+  "napkin": {
+    "category": "medium/material"
+  },
+  "Natalia Goncharova": {
+    "category": "artist"
+  },
+  "Native American ledger art": {
+    "category": "era/cultural"
+  },
+  "native copper": {
+    "category": "medium/material"
+  },
+  "natural history illustration": {
+    "category": "genre/aesthetic"
+  },
+  "naturalist plate": {
+    "category": "technique/process"
+  },
+  "nautical chart": {
+    "category": "movement/style"
+  },
+  "Navajo weaving": {
+    "category": "era/cultural"
+  },
+  "Nazarene art": {
+    "category": "era/cultural"
+  },
+  "necrotic": {
+    "category": "descriptive"
+  },
+  "needlepoint": {
+    "category": "object/subject"
+  },
+  "Neo-futurism": {
+    "category": "movement/style"
+  },
+  "Neo-Impressionism": {
+    "category": "movement/style"
+  },
+  "Neoclassicism": {
+    "category": "movement/style"
+  },
+  "neon art": {
+    "category": "movement/style"
+  },
+  "neon lights": {
+    "category": "lighting/optical"
+  },
+  "neon spill": {
+    "category": "lighting/optical"
+  },
+  "Neoplasticism": {
+    "category": "movement/style"
+  },
+  "neoprene": {
+    "category": "medium/material"
+  },
+  "NES graphics": {
+    "category": "technology"
+  },
+  "nest": {
+    "category": "object/subject"
+  },
+  "netting": {
+    "category": "medium/material"
+  },
+  "newspaper comic strip": {
+    "category": "medium/material"
+  },
+  "newspaper comics": {
+    "category": "medium/material"
+  },
+  "newspaper halftone": {
+    "category": "medium/material"
+  },
+  "newsprint": {
+    "category": "medium/material"
+  },
+  "Newton's rings": {
+    "category": "lighting/optical"
+  },
+  "Nicholas Roerich": {
+    "category": "artist"
+  },
+  "nightmare": {
+    "category": "genre/aesthetic"
+  },
+  "Nihonga": {
+    "category": "era/cultural"
+  },
+  "non-Euclidean": {
+    "category": "genre/aesthetic"
+  },
+  "Norman Bel Geddes": {
+    "category": "artist"
+  },
+  "Norman Rockwell": {
+    "category": "artist"
+  },
+  "nylon": {
+    "category": "medium/material"
+  },
+  "oak": {
+    "category": "medium/material"
+  },
+  "object animation": {
+    "category": "technique/process"
+  },
+  "observatory": {
+    "category": "setting/environment"
+  },
+  "obsidian": {
+    "category": "medium/material"
+  },
+  "obsolete": {
+    "category": "descriptive"
+  },
+  "occult diagram": {
+    "category": "genre/aesthetic"
+  },
+  "ocean": {
+    "category": "setting/environment"
+  },
+  "offcut": {
+    "category": "object/subject"
+  },
+  "office": {
+    "category": "setting/environment"
+  },
+  "offset lithography": {
+    "category": "technique/process"
+  },
+  "offset printing": {
+    "category": "technique/process"
+  },
+  "oil": {
+    "category": "medium/material"
+  },
+  "oil paint": {
+    "category": "medium/material"
+  },
+  "oil pastel": {
+    "category": "medium/material"
+  },
+  "oil-slick": {
+    "category": "medium/material"
+  },
+  "oily": {
+    "category": "medium/material"
+  },
+  "oily sheen": {
+    "category": "medium/material"
+  },
+  "old master print": {
+    "category": "technique/process"
+  },
+  "on-camera flash": {
+    "category": "lighting/optical"
+  },
+  "onyx": {
+    "category": "medium/material"
+  },
+  "oozing": {
+    "category": "descriptive"
+  },
+  "Op art": {
+    "category": "movement/style"
+  },
+  "opal": {
+    "category": "medium/material"
+  },
+  "opalescent": {
+    "category": "descriptive"
+  },
+  "opera": {
+    "category": "genre/aesthetic"
+  },
+  "optical artifact": {
+    "category": "lighting/optical"
+  },
+  "optical illusion": {
+    "category": "lighting/optical"
+  },
+  "ore": {
+    "category": "medium/material"
+  },
+  "Organic architecture": {
+    "category": "setting/environment"
+  },
+  "organza": {
+    "category": "medium/material"
+  },
+  "origami": {
+    "category": "technique/process"
+  },
+  "Orphism": {
+    "category": "movement/style"
+  },
+  "orrery": {
+    "category": "object/subject"
+  },
+  "oscilloscope": {
+    "category": "technology"
+  },
+  "ossified": {
+    "category": "descriptive"
+  },
+  "otherworldly": {
+    "category": "descriptive"
+  },
+  "Ottoman miniature": {
+    "category": "era/cultural"
+  },
+  "outer space": {
+    "category": "setting/environment"
+  },
+  "outline": {
+    "category": "technique/process"
+  },
+  "outsider art": {
+    "category": "movement/style"
+  },
+  "overcast daylight": {
+    "category": "lighting/optical"
+  },
+  "overgrown": {
+    "category": "descriptive"
+  },
+  "overhead projector": {
+    "category": "technology"
+  },
+  "overprint": {
+    "category": "technique/process"
+  },
+  "overripe": {
+    "category": "descriptive"
+  },
+  "oversized": {
+    "category": "descriptive"
+  },
+  "oxidized": {
+    "category": "descriptive"
+  },
+  "packing foam": {
+    "category": "medium/material"
+  },
+  "packing paper": {
+    "category": "medium/material"
+  },
+  "packing tape": {
+    "category": "object/subject"
+  },
+  "Pahari painting": {
+    "category": "era/cultural"
+  },
+  "paint-on-glass animation": {
+    "category": "technique/process"
+  },
+  "painted paperback cover": {
+    "category": "medium/material"
+  },
+  "paisley": {
+    "category": "movement/style"
+  },
+  "palette knife": {
+    "category": "technique/process"
+  },
+  "palimpsest": {
+    "category": "technique/process"
+  },
+  "Panfuturism": {
+    "category": "movement/style"
+  },
+  "paper": {
+    "category": "medium/material"
+  },
+  "paper architecture": {
+    "category": "medium/material"
+  },
+  "paper bag": {
+    "category": "medium/material"
+  },
+  "paper cutout": {
+    "category": "technique/process"
+  },
+  "paper towel": {
+    "category": "medium/material"
+  },
+  "paperclips": {
+    "category": "object/subject"
+  },
+  "papercraft": {
+    "category": "technique/process"
+  },
+  "papier-m\u00e2ch\u00e9": {
+    "category": "technique/process"
+  },
+  "papyrus": {
+    "category": "medium/material"
+  },
+  "paraffin": {
+    "category": "medium/material"
+  },
+  "paranoid": {
+    "category": "genre/aesthetic"
+  },
+  "parasitic": {
+    "category": "descriptive"
+  },
+  "parchment": {
+    "category": "medium/material"
+  },
+  "parts bin": {
+    "category": "movement/style"
+  },
+  "passport photograph": {
+    "category": "technique/process"
+  },
+  "pastel": {
+    "category": "medium/material"
+  },
+  "patchwork": {
+    "category": "technique/process"
+  },
+  "patent drawing": {
+    "category": "technique/process"
+  },
+  "patent illustration": {
+    "category": "genre/aesthetic"
+  },
+  "patinated": {
+    "category": "descriptive"
+  },
+  "patinated bronze": {
+    "category": "medium/material"
+  },
+  "patinated copper": {
+    "category": "medium/material"
+  },
+  "Paul Klee": {
+    "category": "artist"
+  },
+  "pawnshop": {
+    "category": "setting/environment"
+  },
+  "peaceful": {
+    "category": "descriptive"
+  },
+  "pearl": {
+    "category": "medium/material"
+  },
+  "pearlescent": {
+    "category": "descriptive"
+  },
+  "pearlescent sheen": {
+    "category": "lighting/optical"
+  },
+  "peeling": {
+    "category": "descriptive"
+  },
+  "pen-and-ink illustration": {
+    "category": "genre/aesthetic"
+  },
+  "penny dreadful": {
+    "category": "genre/aesthetic"
+  },
+  "perceptual artifact": {
+    "category": "movement/style"
+  },
+  "perfect": {
+    "category": "descriptive"
+  },
+  "perforated": {
+    "category": "descriptive"
+  },
+  "performance art": {
+    "category": "movement/style"
+  },
+  "periscope": {
+    "category": "technology"
+  },
+  "Persian miniature": {
+    "category": "era/cultural"
+  },
+  "Persian tilework": {
+    "category": "era/cultural"
+  },
+  "persistence of vision": {
+    "category": "lighting/optical"
+  },
+  "petri dish": {
+    "category": "object/subject"
+  },
+  "petrified": {
+    "category": "descriptive"
+  },
+  "petrified wood": {
+    "category": "medium/material"
+  },
+  "phantom": {
+    "category": "genre/aesthetic"
+  },
+  "phenakistoscope": {
+    "category": "technology"
+  },
+  "phosphor": {
+    "category": "lighting/optical"
+  },
+  "phosphor glow": {
+    "category": "lighting/optical"
+  },
+  "phosphorescence": {
+    "category": "lighting/optical"
+  },
+  "phosphorescent": {
+    "category": "lighting/optical"
+  },
+  "photochromic": {
+    "category": "technology"
+  },
+  "photocopy art": {
+    "category": "movement/style"
+  },
+  "photogram": {
+    "category": "technique/process"
+  },
+  "photogravure": {
+    "category": "technique/process"
+  },
+  "photojournalism": {
+    "category": "genre/aesthetic"
+  },
+  "photolithography": {
+    "category": "technique/process"
+  },
+  "photomontage": {
+    "category": "technique/process"
+  },
+  "Photorealism": {
+    "category": "movement/style"
+  },
+  "photorealistic": {
+    "category": "descriptive"
+  },
+  "pickled": {
+    "category": "descriptive"
+  },
+  "pictographs": {
+    "category": "technique/process"
+  },
+  "piezoelectric": {
+    "category": "technology"
+  },
+  "pin-up art": {
+    "category": "genre/aesthetic"
+  },
+  "pinball machine": {
+    "category": "object/subject"
+  },
+  "pine": {
+    "category": "medium/material"
+  },
+  "pinhole photography": {
+    "category": "technique/process"
+  },
+  "pinscreen animation": {
+    "category": "technique/process"
+  },
+  "pit": {
+    "category": "setting/environment"
+  },
+  "pitch": {
+    "category": "medium/material"
+  },
+  "pitted": {
+    "category": "descriptive"
+  },
+  "pixel art": {
+    "category": "movement/style"
+  },
+  "pixilation": {
+    "category": "technique/process"
+  },
+  "plains": {
+    "category": "setting/environment"
+  },
+  "planisphere": {
+    "category": "object/subject"
+  },
+  "plankton": {
+    "category": "object/subject"
+  },
+  "plasma": {
+    "category": "medium/material"
+  },
+  "plaster": {
+    "category": "medium/material"
+  },
+  "plastic": {
+    "category": "medium/material"
+  },
+  "plastic bag": {
+    "category": "medium/material"
+  },
+  "platinum": {
+    "category": "medium/material"
+  },
+  "platinum print": {
+    "category": "technique/process"
+  },
+  "playa": {
+    "category": "setting/environment"
+  },
+  "playing card": {
+    "category": "object/subject"
+  },
+  "pointillism": {
+    "category": "technique/process"
+  },
+  "polarization": {
+    "category": "lighting/optical"
+  },
+  "Polaroid": {
+    "category": "technology"
+  },
+  "police photograph": {
+    "category": "technique/process"
+  },
+  "police sketch": {
+    "category": "technique/process"
+  },
+  "Polish animation": {
+    "category": "technique/process"
+  },
+  "polished": {
+    "category": "descriptive"
+  },
+  "political cartoon": {
+    "category": "movement/style"
+  },
+  "pollen": {
+    "category": "object/subject"
+  },
+  "polyester": {
+    "category": "medium/material"
+  },
+  "polymer": {
+    "category": "medium/material"
+  },
+  "pop": {
+    "category": "genre/aesthetic"
+  },
+  "Pop art": {
+    "category": "movement/style"
+  },
+  "porcelain": {
+    "category": "medium/material"
+  },
+  "portrait": {
+    "category": "object/subject"
+  },
+  "Post-Impressionism": {
+    "category": "movement/style"
+  },
+  "poster": {
+    "category": "object/subject"
+  },
+  "poster illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Postmodern architecture": {
+    "category": "setting/environment"
+  },
+  "Prairie School": {
+    "category": "movement/style"
+  },
+  "pre-rendered CGI": {
+    "category": "technology"
+  },
+  "precise": {
+    "category": "descriptive"
+  },
+  "Precisionism": {
+    "category": "movement/style"
+  },
+  "preserved": {
+    "category": "descriptive"
+  },
+  "press photograph": {
+    "category": "technique/process"
+  },
+  "pretty": {
+    "category": "descriptive"
+  },
+  "primitive": {
+    "category": "descriptive"
+  },
+  "prismatic": {
+    "category": "movement/style"
+  },
+  "profane": {
+    "category": "descriptive"
+  },
+  "projector light": {
+    "category": "lighting/optical"
+  },
+  "propaganda": {
+    "category": "genre/aesthetic"
+  },
+  "protest art": {
+    "category": "genre/aesthetic"
+  },
+  "prototype": {
+    "category": "object/subject"
+  },
+  "psychedelic": {
+    "category": "genre/aesthetic"
+  },
+  "Psychedelic art": {
+    "category": "movement/style"
+  },
+  "pull tab": {
+    "category": "object/subject"
+  },
+  "pulp illustration": {
+    "category": "genre/aesthetic"
+  },
+  "pulp magazine": {
+    "category": "genre/aesthetic"
+  },
+  "pulp magazine illustration": {
+    "category": "genre/aesthetic"
+  },
+  "pulp novel cover": {
+    "category": "object/subject"
+  },
+  "pumice": {
+    "category": "medium/material"
+  },
+  "punch card": {
+    "category": "object/subject"
+  },
+  "punched": {
+    "category": "descriptive"
+  },
+  "puppet animation": {
+    "category": "technique/process"
+  },
+  "purgatory": {
+    "category": "setting/environment"
+  },
+  "push-processed film": {
+    "category": "technique/process"
+  },
+  "putrefied": {
+    "category": "descriptive"
+  },
+  "pyrite": {
+    "category": "medium/material"
+  },
+  "quantum": {
+    "category": "genre/aesthetic"
+  },
+  "quartz": {
+    "category": "medium/material"
+  },
+  "quartz vein": {
+    "category": "medium/material"
+  },
+  "quicksilver": {
+    "category": "medium/material"
+  },
+  "quilling": {
+    "category": "technique/process"
+  },
+  "quilted": {
+    "category": "descriptive"
+  },
+  "quilting": {
+    "category": "technique/process"
+  },
+  "rabid": {
+    "category": "descriptive"
+  },
+  "Rackham": {
+    "category": "artist"
+  },
+  "radar display": {
+    "category": "technology"
+  },
+  "radiant": {
+    "category": "descriptive"
+  },
+  "radioactive": {
+    "category": "descriptive"
+  },
+  "railway poster": {
+    "category": "object/subject"
+  },
+  "rainbow": {
+    "category": "object/subject"
+  },
+  "rainbow sheen": {
+    "category": "lighting/optical"
+  },
+  "raindrops": {
+    "category": "object/subject"
+  },
+  "Rajput painting": {
+    "category": "era/cultural"
+  },
+  "raku": {
+    "category": "technique/process"
+  },
+  "Ralph Albert Blakelock": {
+    "category": "artist"
+  },
+  "ray tracing": {
+    "category": "lighting/optical"
+  },
+  "rayograph": {
+    "category": "technique/process"
+  },
+  "Rayonism": {
+    "category": "movement/style"
+  },
+  "raytraced CGI": {
+    "category": "technology"
+  },
+  "razor wire": {
+    "category": "medium/material"
+  },
+  "Realism": {
+    "category": "movement/style"
+  },
+  "realistic": {
+    "category": "descriptive"
+  },
+  "recalled": {
+    "category": "descriptive"
+  },
+  "receipt paper": {
+    "category": "medium/material"
+  },
+  "recursive": {
+    "category": "descriptive"
+  },
+  "red": {
+    "category": "descriptive"
+  },
+  "redacted": {
+    "category": "descriptive"
+  },
+  "reflected neon": {
+    "category": "lighting/optical"
+  },
+  "reflection": {
+    "category": "lighting/optical"
+  },
+  "refraction": {
+    "category": "lighting/optical"
+  },
+  "refractive": {
+    "category": "lighting/optical"
+  },
+  "refrigerator glow": {
+    "category": "lighting/optical"
+  },
+  "refrigerator lighting": {
+    "category": "lighting/optical"
+  },
+  "refuse": {
+    "category": "object/subject"
+  },
+  "registration error": {
+    "category": "technique/process"
+  },
+  "relief engraving": {
+    "category": "technique/process"
+  },
+  "relief print": {
+    "category": "technique/process"
+  },
+  "reliquary": {
+    "category": "object/subject"
+  },
+  "repeating": {
+    "category": "descriptive"
+  },
+  "repouss\u00e9": {
+    "category": "technique/process"
+  },
+  "residue": {
+    "category": "object/subject"
+  },
+  "resin": {
+    "category": "medium/material"
+  },
+  "restricted palette": {
+    "category": "technique/process"
+  },
+  "retouched": {
+    "category": "technique/process"
+  },
+  "retro": {
+    "category": "genre/aesthetic"
+  },
+  "retro-futurist architecture": {
+    "category": "setting/environment"
+  },
+  "Retrofuturism": {
+    "category": "movement/style"
+  },
+  "retroreflective": {
+    "category": "medium/material"
+  },
+  "RGB gamer": {
+    "category": "genre/aesthetic"
+  },
+  "rhyolite": {
+    "category": "medium/material"
+  },
+  "ribbon": {
+    "category": "object/subject"
+  },
+  "rice paper": {
+    "category": "medium/material"
+  },
+  "rime": {
+    "category": "object/subject"
+  },
+  "ring flash": {
+    "category": "lighting/optical"
+  },
+  "risograph": {
+    "category": "technique/process"
+  },
+  "river": {
+    "category": "setting/environment"
+  },
+  "riveted": {
+    "category": "technique/process"
+  },
+  "Robert Delaunay": {
+    "category": "artist"
+  },
+  "robotic": {
+    "category": "genre/aesthetic"
+  },
+  "rock": {
+    "category": "object/subject"
+  },
+  "Rockwell Kent": {
+    "category": "artist"
+  },
+  "Rococo": {
+    "category": "movement/style"
+  },
+  "Roman fresco": {
+    "category": "era/cultural"
+  },
+  "Roman mosaic": {
+    "category": "era/cultural"
+  },
+  "romance": {
+    "category": "genre/aesthetic"
+  },
+  "Romanesque art": {
+    "category": "era/cultural"
+  },
+  "Romanticism": {
+    "category": "movement/style"
+  },
+  "rootbound": {
+    "category": "object/subject"
+  },
+  "rootlike": {
+    "category": "descriptive"
+  },
+  "rope": {
+    "category": "object/subject"
+  },
+  "rotoscoping": {
+    "category": "technique/process"
+  },
+  "rotten": {
+    "category": "descriptive"
+  },
+  "rough paper": {
+    "category": "medium/material"
+  },
+  "RPG": {
+    "category": "genre/aesthetic"
+  },
+  "rubber": {
+    "category": "medium/material"
+  },
+  "rubber bands": {
+    "category": "medium/material"
+  },
+  "rubber hose animation": {
+    "category": "movement/style"
+  },
+  "rubble": {
+    "category": "object/subject"
+  },
+  "rubricated manuscript": {
+    "category": "object/subject"
+  },
+  "rusted": {
+    "category": "descriptive"
+  },
+  "sackcloth": {
+    "category": "medium/material"
+  },
+  "sacred": {
+    "category": "genre/aesthetic"
+  },
+  "salt": {
+    "category": "technique/process"
+  },
+  "salt print": {
+    "category": "technique/process"
+  },
+  "salt-encrusted": {
+    "category": "medium/material"
+  },
+  "salt-stained": {
+    "category": "medium/material"
+  },
+  "sand": {
+    "category": "medium/material"
+  },
+  "sandblasted": {
+    "category": "technique/process"
+  },
+  "sandpaper": {
+    "category": "medium/material"
+  },
+  "sandstone": {
+    "category": "medium/material"
+  },
+  "sapphire": {
+    "category": "medium/material"
+  },
+  "sapwood": {
+    "category": "medium/material"
+  },
+  "sashiko": {
+    "category": "medium/material"
+  },
+  "satellite photography": {
+    "category": "technique/process"
+  },
+  "satin": {
+    "category": "medium/material"
+  },
+  "satire": {
+    "category": "genre/aesthetic"
+  },
+  "saturated": {
+    "category": "descriptive"
+  },
+  "sawdust": {
+    "category": "medium/material"
+  },
+  "scale mail": {
+    "category": "medium/material"
+  },
+  "scales": {
+    "category": "object/subject"
+  },
+  "scan": {
+    "category": "technology"
+  },
+  "schist": {
+    "category": "medium/material"
+  },
+  "school portrait": {
+    "category": "movement/style"
+  },
+  "sci-fi art": {
+    "category": "genre/aesthetic"
+  },
+  "science fiction paperback cover": {
+    "category": "medium/material"
+  },
+  "scientific illustration": {
+    "category": "genre/aesthetic"
+  },
+  "scoria": {
+    "category": "medium/material"
+  },
+  "scrap": {
+    "category": "object/subject"
+  },
+  "scratch art": {
+    "category": "movement/style"
+  },
+  "scratchboard illustration": {
+    "category": "genre/aesthetic"
+  },
+  "scratched": {
+    "category": "descriptive"
+  },
+  "screen printing": {
+    "category": "technique/process"
+  },
+  "screen-printed": {
+    "category": "technique/process"
+  },
+  "screenprint": {
+    "category": "technique/process"
+  },
+  "scribble": {
+    "category": "technique/process"
+  },
+  "scuffed": {
+    "category": "descriptive"
+  },
+  "scum": {
+    "category": "object/subject"
+  },
+  "scumbling": {
+    "category": "technique/process"
+  },
+  "sea glass": {
+    "category": "medium/material"
+  },
+  "Seapunk": {
+    "category": "movement/style"
+  },
+  "seashell": {
+    "category": "object/subject"
+  },
+  "Second Empire": {
+    "category": "movement/style"
+  },
+  "security footage": {
+    "category": "technology"
+  },
+  "security monitor": {
+    "category": "technology"
+  },
+  "sediment": {
+    "category": "medium/material"
+  },
+  "sedimentary": {
+    "category": "descriptive"
+  },
+  "seed husk": {
+    "category": "object/subject"
+  },
+  "seedpod": {
+    "category": "object/subject"
+  },
+  "seeping": {
+    "category": "descriptive"
+  },
+  "selective coloring": {
+    "category": "technique/process"
+  },
+  "self-similar": {
+    "category": "descriptive"
+  },
+  "seven-segment display": {
+    "category": "technology"
+  },
+  "sextant": {
+    "category": "object/subject"
+  },
+  "sgraffito": {
+    "category": "technique/process"
+  },
+  "shaded": {
+    "category": "descriptive"
+  },
+  "shading": {
+    "category": "technique/process"
+  },
+  "shadow puppetry": {
+    "category": "object/subject"
+  },
+  "shadow puppets": {
+    "category": "object/subject"
+  },
+  "shadow theater": {
+    "category": "genre/aesthetic"
+  },
+  "shadowbox": {
+    "category": "object/subject"
+  },
+  "shale": {
+    "category": "medium/material"
+  },
+  "shanshui": {
+    "category": "era/cultural"
+  },
+  "shavings": {
+    "category": "object/subject"
+  },
+  "shell": {
+    "category": "object/subject"
+  },
+  "shellac": {
+    "category": "medium/material"
+  },
+  "shellacked": {
+    "category": "medium/material"
+  },
+  "shibori": {
+    "category": "technique/process"
+  },
+  "Shin-hanga": {
+    "category": "era/cultural"
+  },
+  "shiny": {
+    "category": "descriptive"
+  },
+  "shipping crate": {
+    "category": "object/subject"
+  },
+  "shoelaces": {
+    "category": "medium/material"
+  },
+  "shop window": {
+    "category": "setting/environment"
+  },
+  "shrink wrap": {
+    "category": "medium/material"
+  },
+  "Sidney Paget": {
+    "category": "artist"
+  },
+  "silhouette animation": {
+    "category": "technique/process"
+  },
+  "silicone": {
+    "category": "medium/material"
+  },
+  "silk": {
+    "category": "medium/material"
+  },
+  "silkworm": {
+    "category": "object/subject"
+  },
+  "silly": {
+    "category": "descriptive"
+  },
+  "silver": {
+    "category": "medium/material"
+  },
+  "Silver Age comic art": {
+    "category": "era/cultural"
+  },
+  "silver gelatin print": {
+    "category": "technique/process"
+  },
+  "silver leaf": {
+    "category": "medium/material"
+  },
+  "silverpoint": {
+    "category": "medium/material"
+  },
+  "simple background": {
+    "category": "descriptive"
+  },
+  "simulated": {
+    "category": "descriptive"
+  },
+  "sinew": {
+    "category": "medium/material"
+  },
+  "sinewy": {
+    "category": "descriptive"
+  },
+  "sinkhole": {
+    "category": "setting/environment"
+  },
+  "sintered": {
+    "category": "descriptive"
+  },
+  "skeleton": {
+    "category": "object/subject"
+  },
+  "sketchbook": {
+    "category": "technique/process"
+  },
+  "skylight": {
+    "category": "lighting/optical"
+  },
+  "slag": {
+    "category": "medium/material"
+  },
+  "slag heap": {
+    "category": "setting/environment"
+  },
+  "slate": {
+    "category": "medium/material"
+  },
+  "slick": {
+    "category": "descriptive"
+  },
+  "slide projector": {
+    "category": "technology"
+  },
+  "slivered": {
+    "category": "descriptive"
+  },
+  "slot machine": {
+    "category": "object/subject"
+  },
+  "sludge": {
+    "category": "medium/material"
+  },
+  "smoke": {
+    "category": "object/subject"
+  },
+  "smoldering": {
+    "category": "descriptive"
+  },
+  "smudges": {
+    "category": "descriptive"
+  },
+  "SNES graphics": {
+    "category": "technology"
+  },
+  "snow storm": {
+    "category": "setting/environment"
+  },
+  "soaked": {
+    "category": "descriptive"
+  },
+  "soap": {
+    "category": "object/subject"
+  },
+  "soap bubble": {
+    "category": "object/subject"
+  },
+  "soap-film colors": {
+    "category": "technology"
+  },
+  "soapy": {
+    "category": "descriptive"
+  },
+  "Socialist Realism": {
+    "category": "movement/style"
+  },
+  "sodium vapor": {
+    "category": "lighting/optical"
+  },
+  "soft": {
+    "category": "lighting/optical"
+  },
+  "soft focus": {
+    "category": "lighting/optical"
+  },
+  "softbox photography": {
+    "category": "technique/process"
+  },
+  "solarization": {
+    "category": "technique/process"
+  },
+  "Solarpunk": {
+    "category": "genre/aesthetic"
+  },
+  "soldered": {
+    "category": "technique/process"
+  },
+  "sonar display": {
+    "category": "technology"
+  },
+  "soot": {
+    "category": "medium/material"
+  },
+  "S\u014dsaku-hanga": {
+    "category": "era/cultural"
+  },
+  "Soviet animation": {
+    "category": "technique/process"
+  },
+  "Soviet modernism": {
+    "category": "movement/style"
+  },
+  "Soviet monumentalism": {
+    "category": "movement/style"
+  },
+  "Space Age design": {
+    "category": "era/cultural"
+  },
+  "spalting": {
+    "category": "technique/process"
+  },
+  "sparkly": {
+    "category": "descriptive"
+  },
+  "specimen jar": {
+    "category": "object/subject"
+  },
+  "specimen tray": {
+    "category": "object/subject"
+  },
+  "spectral": {
+    "category": "lighting/optical"
+  },
+  "spectroscope": {
+    "category": "technology"
+  },
+  "spherical aberration": {
+    "category": "lighting/optical"
+  },
+  "spiderwebs": {
+    "category": "object/subject"
+  },
+  "spirit duplicator": {
+    "category": "technology"
+  },
+  "splash art": {
+    "category": "movement/style"
+  },
+  "sponge": {
+    "category": "medium/material"
+  },
+  "spores": {
+    "category": "medium/material"
+  },
+  "spot color": {
+    "category": "descriptive"
+  },
+  "spray paint": {
+    "category": "medium/material"
+  },
+  "stamped": {
+    "category": "technique/process"
+  },
+  "staples": {
+    "category": "object/subject"
+  },
+  "starburst": {
+    "category": "object/subject"
+  },
+  "starlight": {
+    "category": "lighting/optical"
+  },
+  "Steampunk": {
+    "category": "genre/aesthetic"
+  },
+  "steel": {
+    "category": "medium/material"
+  },
+  "steel wool": {
+    "category": "medium/material"
+  },
+  "stereoscope": {
+    "category": "technology"
+  },
+  "stinking": {
+    "category": "descriptive"
+  },
+  "stippling": {
+    "category": "technique/process"
+  },
+  "stoneware": {
+    "category": "medium/material"
+  },
+  "stop motion": {
+    "category": "technique/process"
+  },
+  "stop-motion": {
+    "category": "technique/process"
+  },
+  "storybook illustration": {
+    "category": "genre/aesthetic"
+  },
+  "Streamline Moderne": {
+    "category": "movement/style"
+  },
+  "street": {
+    "category": "setting/environment"
+  },
+  "street photography": {
+    "category": "technique/process"
+  },
+  "string": {
+    "category": "medium/material"
+  },
+  "string lights": {
+    "category": "object/subject"
+  },
+  "Structuralism": {
+    "category": "movement/style"
+  },
+  "stucco": {
+    "category": "medium/material"
+  },
+  "studio lighting": {
+    "category": "lighting/optical"
+  },
+  "studio portrait": {
+    "category": "genre/aesthetic"
+  },
+  "stylized": {
+    "category": "descriptive"
+  },
+  "styrofoam": {
+    "category": "medium/material"
+  },
+  "Styrofoam": {
+    "category": "medium/material"
+  },
+  "sublime": {
+    "category": "descriptive"
+  },
+  "subsurface scattering": {
+    "category": "lighting/optical"
+  },
+  "sudsy": {
+    "category": "descriptive"
+  },
+  "sulfur": {
+    "category": "medium/material"
+  },
+  "Sumerian art": {
+    "category": "era/cultural"
+  },
+  "Sunday comics": {
+    "category": "era/cultural"
+  },
+  "superfluid": {
+    "category": "medium/material"
+  },
+  "supermarket lighting": {
+    "category": "lighting/optical"
+  },
+  "Suprematism": {
+    "category": "movement/style"
+  },
+  "surgical tray": {
+    "category": "object/subject"
+  },
+  "surreal": {
+    "category": "genre/aesthetic"
+  },
+  "Surrealism": {
+    "category": "movement/style"
+  },
+  "surveillance photography": {
+    "category": "technique/process"
+  },
+  "surveyor's tripod": {
+    "category": "object/subject"
+  },
+  "sushi": {
+    "category": "object/subject"
+  },
+  "SVGA graphics": {
+    "category": "technology"
+  },
+  "swamp": {
+    "category": "setting/environment"
+  },
+  "swarf": {
+    "category": "object/subject"
+  },
+  "sweating": {
+    "category": "descriptive"
+  },
+  "Swiss Style": {
+    "category": "movement/style"
+  },
+  "sword-and-sorcery paperback cover": {
+    "category": "medium/material"
+  },
+  "symbiotic": {
+    "category": "genre/aesthetic"
+  },
+  "Symbolism": {
+    "category": "movement/style"
+  },
+  "synthetic": {
+    "category": "descriptive"
+  },
+  "Synthwave": {
+    "category": "genre/aesthetic"
+  },
+  "syrup": {
+    "category": "medium/material"
+  },
+  "syrupy": {
+    "category": "descriptive"
+  },
+  "tabloid": {
+    "category": "object/subject"
+  },
+  "tabloid photograph": {
+    "category": "technique/process"
+  },
+  "taffeta": {
+    "category": "medium/material"
+  },
+  "tallow": {
+    "category": "medium/material"
+  },
+  "tapestry": {
+    "category": "medium/material"
+  },
+  "tar": {
+    "category": "medium/material"
+  },
+  "tarnished": {
+    "category": "medium/material"
+  },
+  "tarnished silver": {
+    "category": "medium/material"
+  },
+  "tarot cards": {
+    "category": "object/subject"
+  },
+  "tarry": {
+    "category": "descriptive"
+  },
+  "tartan": {
+    "category": "descriptive"
+  },
+  "taxidermy": {
+    "category": "technique/process"
+  },
+  "technical cutaway": {
+    "category": "technique/process"
+  },
+  "technical diagram": {
+    "category": "technique/process"
+  },
+  "technical illustration": {
+    "category": "genre/aesthetic"
+  },
+  "techno": {
+    "category": "genre/aesthetic"
+  },
+  "teflon": {
+    "category": "medium/material"
+  },
+  "telephoto": {
+    "category": "technology"
+  },
+  "teletext": {
+    "category": "technology"
+  },
+  "teletype": {
+    "category": "technology"
+  },
+  "television glow": {
+    "category": "technology"
+  },
+  "tempera": {
+    "category": "medium/material"
+  },
+  "tendon": {
+    "category": "object/subject"
+  },
+  "termite mound": {
+    "category": "object/subject"
+  },
+  "terracotta": {
+    "category": "medium/material"
+  },
+  "terrarium": {
+    "category": "object/subject"
+  },
+  "terrazzo": {
+    "category": "medium/material"
+  },
+  "tessellation": {
+    "category": "technique/process"
+  },
+  "textbook illustration": {
+    "category": "genre/aesthetic"
+  },
+  "theatrical poster": {
+    "category": "object/subject"
+  },
+  "theodolite": {
+    "category": "object/subject"
+  },
+  "Th\u00e9odore G\u00e9ricault": {
+    "category": "artist"
+  },
+  "Th\u00e9odore Rousseau": {
+    "category": "artist"
+  },
+  "thermal paper": {
+    "category": "medium/material"
+  },
+  "thermal printer": {
+    "category": "technique/process"
+  },
+  "thermal receipt": {
+    "category": "technology"
+  },
+  "thermochromic": {
+    "category": "technology"
+  },
+  "thermoformed": {
+    "category": "technique/process"
+  },
+  "thermoluminescence": {
+    "category": "lighting/optical"
+  },
+  "thick outline": {
+    "category": "descriptive"
+  },
+  "thin-film interference": {
+    "category": "lighting/optical"
+  },
+  "Thomas Cole": {
+    "category": "artist"
+  },
+  "Thomas Eakins": {
+    "category": "artist"
+  },
+  "thread": {
+    "category": "medium/material"
+  },
+  "thriller": {
+    "category": "genre/aesthetic"
+  },
+  "thumbtacks": {
+    "category": "object/subject"
+  },
+  "tide-marked": {
+    "category": "descriptive"
+  },
+  "tie-dye": {
+    "category": "technique/process"
+  },
+  "tiger's eye": {
+    "category": "medium/material"
+  },
+  "tilt-shift photography": {
+    "category": "technique/process"
+  },
+  "tin": {
+    "category": "medium/material"
+  },
+  "tin can": {
+    "category": "object/subject"
+  },
+  "tintype": {
+    "category": "technique/process"
+  },
+  "tissue": {
+    "category": "medium/material"
+  },
+  "tissue paper": {
+    "category": "medium/material"
+  },
+  "toile": {
+    "category": "medium/material"
+  },
+  "toilet paper": {
+    "category": "medium/material"
+  },
+  "Tonalism": {
+    "category": "movement/style"
+  },
+  "tool chest": {
+    "category": "object/subject"
+  },
+  "topaz": {
+    "category": "medium/material"
+  },
+  "topographic map": {
+    "category": "object/subject"
+  },
+  "tortoiseshell": {
+    "category": "medium/material"
+  },
+  "tourist snapshot": {
+    "category": "genre/aesthetic"
+  },
+  "tourmaline": {
+    "category": "medium/material"
+  },
+  "town": {
+    "category": "setting/environment"
+  },
+  "Toyism": {
+    "category": "movement/style"
+  },
+  "tracing paper": {
+    "category": "medium/material"
+  },
+  "tracker graphics": {
+    "category": "technology"
+  },
+  "trail cam footage": {
+    "category": "technology"
+  },
+  "Transgressive art": {
+    "category": "movement/style"
+  },
+  "transhumanism": {
+    "category": "movement/style"
+  },
+  "translucent": {
+    "category": "descriptive"
+  },
+  "translucent membrane": {
+    "category": "descriptive"
+  },
+  "transparent": {
+    "category": "descriptive"
+  },
+  "trash": {
+    "category": "medium/material"
+  },
+  "travel poster": {
+    "category": "object/subject"
+  },
+  "travertine": {
+    "category": "medium/material"
+  },
+  "triadic colors": {
+    "category": "descriptive"
+  },
+  "triboluminescence": {
+    "category": "lighting/optical"
+  },
+  "tritone": {
+    "category": "descriptive"
+  },
+  "Tsutsumi-e": {
+    "category": "era/cultural"
+  },
+  "tungsten": {
+    "category": "lighting/optical"
+  },
+  "turbid": {
+    "category": "descriptive"
+  },
+  "tweed": {
+    "category": "medium/material"
+  },
+  "twilight": {
+    "category": "lighting/optical"
+  },
+  "twine": {
+    "category": "medium/material"
+  },
+  "typewriter": {
+    "category": "technology"
+  },
+  "typography": {
+    "category": "technique/process"
+  },
+  "ugly": {
+    "category": "descriptive"
+  },
+  "Ukiyo-e": {
+    "category": "era/cultural"
+  },
+  "ultraviolet": {
+    "category": "lighting/optical"
+  },
+  "undead": {
+    "category": "object/subject"
+  },
+  "underdrawing": {
+    "category": "technique/process"
+  },
+  "Underground Comix": {
+    "category": "era/cultural"
+  },
+  "underpainting": {
+    "category": "technique/process"
+  },
+  "underwater": {
+    "category": "setting/environment"
+  },
+  "unfinished": {
+    "category": "descriptive"
+  },
+  "unglazed": {
+    "category": "descriptive"
+  },
+  "unhinged": {
+    "category": "descriptive"
+  },
+  "unidentified": {
+    "category": "descriptive"
+  },
+  "unlabeled": {
+    "category": "descriptive"
+  },
+  "unmarked": {
+    "category": "descriptive"
+  },
+  "unprimed canvas": {
+    "category": "medium/material"
+  },
+  "unsettling": {
+    "category": "descriptive"
+  },
+  "unstable": {
+    "category": "descriptive"
+  },
+  "unusual coloring": {
+    "category": "descriptive"
+  },
+  "UPA animation": {
+    "category": "technique/process"
+  },
+  "upside-down": {
+    "category": "descriptive"
+  },
+  "urushi": {
+    "category": "technique/process"
+  },
+  "V-Ray": {
+    "category": "technology"
+  },
+  "vacuum-formed": {
+    "category": "technique/process"
+  },
+  "valley": {
+    "category": "setting/environment"
+  },
+  "Vantablack": {
+    "category": "medium/material"
+  },
+  "vapor": {
+    "category": "lighting/optical"
+  },
+  "vaporwave": {
+    "category": "genre/aesthetic"
+  },
+  "varnished": {
+    "category": "descriptive"
+  },
+  "vascular": {
+    "category": "descriptive"
+  },
+  "vast": {
+    "category": "descriptive"
+  },
+  "vector": {
+    "category": "technology"
+  },
+  "veiny": {
+    "category": "descriptive"
+  },
+  "Velcro": {
+    "category": "technology"
+  },
+  "vellum": {
+    "category": "medium/material"
+  },
+  "velour": {
+    "category": "medium/material"
+  },
+  "velvet": {
+    "category": "medium/material"
+  },
+  "vending machine": {
+    "category": "object/subject"
+  },
+  "vending machine lighting": {
+    "category": "lighting/optical"
+  },
+  "verdaccio": {
+    "category": "technique/process"
+  },
+  "verdigris": {
+    "category": "medium/material"
+  },
+  "vernacular photography": {
+    "category": "technique/process"
+  },
+  "vernacular snapshot": {
+    "category": "genre/aesthetic"
+  },
+  "vertigo": {
+    "category": "genre/aesthetic"
+  },
+  "VGA graphics": {
+    "category": "technology"
+  },
+  "VHS tracking error": {
+    "category": "technology"
+  },
+  "vibrant": {
+    "category": "descriptive"
+  },
+  "Victorian Gothic": {
+    "category": "era/cultural"
+  },
+  "video static": {
+    "category": "technology"
+  },
+  "videotex": {
+    "category": "technology"
+  },
+  "Vienna Secession": {
+    "category": "movement/style"
+  },
+  "viewfinder": {
+    "category": "technology"
+  },
+  "vignette": {
+    "category": "technique/process"
+  },
+  "vignetting": {
+    "category": "lighting/optical"
+  },
+  "Viktor Vasnetsov": {
+    "category": "artist"
+  },
+  "village": {
+    "category": "setting/environment"
+  },
+  "vintage": {
+    "category": "descriptive"
+  },
+  "vintage advertisement": {
+    "category": "descriptive"
+  },
+  "vintage photograph": {
+    "category": "technique/process"
+  },
+  "violet": {
+    "category": "descriptive"
+  },
+  "viral": {
+    "category": "descriptive"
+  },
+  "viscous": {
+    "category": "descriptive"
+  },
+  "viscous resin": {
+    "category": "medium/material"
+  },
+  "visual noise": {
+    "category": "lighting/optical"
+  },
+  "vitrified": {
+    "category": "descriptive"
+  },
+  "vivarium": {
+    "category": "object/subject"
+  },
+  "vivid": {
+    "category": "descriptive"
+  },
+  "Vladimir Tatlin": {
+    "category": "artist"
+  },
+  "volcanic": {
+    "category": "descriptive"
+  },
+  "volumetric haze": {
+    "category": "lighting/optical"
+  },
+  "volumetric lighting": {
+    "category": "lighting/optical"
+  },
+  "vulcanized rubber": {
+    "category": "medium/material"
+  },
+  "war photography": {
+    "category": "technique/process"
+  },
+  "warehouse lighting": {
+    "category": "lighting/optical"
+  },
+  "Warner Bros. animation": {
+    "category": "technique/process"
+  },
+  "wash drawing": {
+    "category": "technique/process"
+  },
+  "washi": {
+    "category": "medium/material"
+  },
+  "wasp nest": {
+    "category": "object/subject"
+  },
+  "Wassily Kandinsky": {
+    "category": "artist"
+  },
+  "water": {
+    "category": "medium/material"
+  },
+  "water-stained": {
+    "category": "descriptive"
+  },
+  "watercolor": {
+    "category": "medium/material"
+  },
+  "watercolor painting": {
+    "category": "technique/process"
+  },
+  "waterlogged": {
+    "category": "descriptive"
+  },
+  "watermarks": {
+    "category": "technique/process"
+  },
+  "wax": {
+    "category": "medium/material"
+  },
+  "wax museum": {
+    "category": "setting/environment"
+  },
+  "wax paper": {
+    "category": "medium/material"
+  },
+  "wax sculpture": {
+    "category": "technique/process"
+  },
+  "waxcomb": {
+    "category": "medium/material"
+  },
+  "wayang": {
+    "category": "object/subject"
+  },
+  "weird fiction cover": {
+    "category": "genre/aesthetic"
+  },
+  "Weirdcore": {
+    "category": "genre/aesthetic"
+  },
+  "welded": {
+    "category": "descriptive"
+  },
+  "western": {
+    "category": "genre/aesthetic"
+  },
+  "wet paint": {
+    "category": "medium/material"
+  },
+  "wet plate collodion": {
+    "category": "technique/process"
+  },
+  "wet-on-wet": {
+    "category": "technique/process"
+  },
+  "white background": {
+    "category": "descriptive"
+  },
+  "wholesome": {
+    "category": "descriptive"
+  },
+  "wicker": {
+    "category": "medium/material"
+  },
+  "wild": {
+    "category": "descriptive"
+  },
+  "wilderness": {
+    "category": "setting/environment"
+  },
+  "William Blake": {
+    "category": "artist"
+  },
+  "William Holman Hunt": {
+    "category": "artist"
+  },
+  "window light": {
+    "category": "lighting/optical"
+  },
+  "wire": {
+    "category": "medium/material"
+  },
+  "wire mesh": {
+    "category": "medium/material"
+  },
+  "wireframe": {
+    "category": "technology"
+  },
+  "wise": {
+    "category": "descriptive"
+  },
+  "wood engraving": {
+    "category": "technique/process"
+  },
+  "wood panel": {
+    "category": "medium/material"
+  },
+  "woodblock illustration": {
+    "category": "genre/aesthetic"
+  },
+  "woodcut": {
+    "category": "technique/process"
+  },
+  "wooden type": {
+    "category": "medium/material"
+  },
+  "woody": {
+    "category": "medium/material"
+  },
+  "work light": {
+    "category": "lighting/optical"
+  },
+  "worm's-eye view": {
+    "category": "technique/process"
+  },
+  "woven": {
+    "category": "descriptive"
+  },
+  "wreckage": {
+    "category": "object/subject"
+  },
+  "wrong scale": {
+    "category": "descriptive"
+  },
+  "wrought iron": {
+    "category": "medium/material"
+  },
+  "X-ray": {
+    "category": "technology"
+  },
+  "xerography": {
+    "category": "technology"
+  },
+  "xieyi": {
+    "category": "era/cultural"
+  },
+  "yarn": {
+    "category": "medium/material"
+  },
+  "yearbook photograph": {
+    "category": "technique/process"
+  },
+  "yellow": {
+    "category": "descriptive"
+  },
+  "zinc": {
+    "category": "medium/material"
+  },
+  "zip ties": {
+    "category": "object/subject"
+  },
+  "zoetrope": {
+    "category": "medium/material"
+  },
+  "zoological plate": {
+    "category": "technique/process"
+  }
+}
