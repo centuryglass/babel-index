@@ -4,7 +4,8 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
-import { createApp, stubRanking, hasTextModel } from './app.ts';
+import { createApp, stubRanking, hasTextModel, createRateBuckets } from './app.ts';
+import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import type { CreateAppOptions } from './app.ts';
 import { scanDirectory } from './scan.ts';
 import { DEFAULTS, resolveConfig } from '../config/config.ts';
@@ -460,4 +461,82 @@ test('a search still ranks when the text model cannot be loaded', async () => {
     // reaches the browser, and local filesystem paths have no business there.
     if (res.note) assert.ok(!/imported from|node_modules|ERR_MODULE_NOT_FOUND/.test(res.note), res.note);
   });
+});
+
+// --- favorites --------------------------------------------------------------
+
+/** The store the favorite tests run against, in a throwaway directory. */
+async function withStore(run: (store: FavoriteStore, path: string) => Promise<void>) {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-favapi-'));
+  try {
+    const path = join(dir, 'favorites.json');
+    await run(await createJsonFavoriteStore({ path, flushMs: 0 }), path);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test('the favorite routes are absent, and the manifest says so, with no store', async () => {
+  await serving(async ({ base, get }) => {
+    const manifest = await (await get('/api/manifest')).json();
+    assert.equal(manifest.favorites, null);
+    assert.equal((await fetch(`${base}/api/favorites`)).status, 404);
+    assert.equal((await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST' })).status, 404);
+  });
+});
+
+test('favoriting is a set membership, and the manifest advertises the feature', async () => {
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ base, get }) => {
+        const manifest = await (await get('/api/manifest')).json();
+        assert.deepEqual(manifest.favorites, { enabled: true });
+
+        const post = () => fetch(`${base}/api/favorites/001.jpg`, { method: 'POST' });
+        assert.deepEqual(await (await post()).json(), { file: '001.jpg', count: 1, favorited: true });
+        assert.deepEqual(await (await post()).json(), { file: '001.jpg', count: 1, favorited: true },
+          'the same address favoriting twice is still one favorite');
+
+        const counts = await (await get('/api/favorites')).json();
+        assert.deepEqual(counts, { counts: { '001.jpg': 1 } });
+
+        const del = await fetch(`${base}/api/favorites/001.jpg`, { method: 'DELETE' });
+        assert.deepEqual(await del.json(), { file: '001.jpg', count: 0, favorited: false });
+        assert.deepEqual(await (await get('/api/favorites')).json(), { counts: {} });
+      },
+      { favorites }
+    );
+  });
+});
+
+test('a room this corpus does not have cannot be favorited', async () => {
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ base, get }) => {
+        const res = await fetch(`${base}/api/favorites/${encodeURIComponent('../../etc/passwd')}`, { method: 'POST' });
+        assert.equal(res.status, 404);
+        assert.deepEqual(await (await get('/api/favorites')).json(), { counts: {} });
+      },
+      { favorites }
+    );
+  });
+});
+
+test('the counts endpoint is never cached', async () => {
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ get }) => {
+        assert.match((await get('/api/favorites')).headers.get('cache-control'), /no-store/);
+      },
+      { favorites }
+    );
+  });
+});
+
+test('a burst of writes is rate limited rather than served without end', async () => {
+  const buckets = createRateBuckets({ burst: 2, refillMs: 60_000 });
+  assert.equal(buckets.take('10.0.0.1'), true);
+  assert.equal(buckets.take('10.0.0.1'), true);
+  assert.equal(buckets.take('10.0.0.1'), false, 'the bucket is empty');
+  assert.equal(buckets.take('10.0.0.2'), true, 'and it is per address');
 });
