@@ -29,6 +29,13 @@
  * manifest's urls point the browser there directly rather than this server
  * serving or proxying anything under `/images`/`/shared`.
  *
+ * `--favorites <path>` turns on global favorite counts, stored in that one
+ * JSON file (see favorites.ts). Without it the favorite routes are not mounted
+ * and the client offers no favorite control - the demo stays the stateless
+ * thing it has always been. Behind a reverse proxy it must be paired with
+ * `--trust-proxy 1` (and an nginx that sets X-Forwarded-For), or every visitor
+ * shares the proxy's address and every count stops at one.
+ *
  * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
  * the client against precomputed embeddings, so /api/search stays a text tower
@@ -43,6 +50,7 @@ import { context } from 'esbuild';
 import { scanDirectory } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
+import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
 import { normalizeBasePath } from './base-path.ts';
@@ -104,6 +112,27 @@ if (await portInUse(port)) {
 const config = await loadConfig({ path: argv.config as string | undefined });
 if (config.source) console.log(`config: ${config.source}`);
 for (const note of config.notes) console.warn(`config: ${note}`);
+
+// Off unless asked for. The counts are the only state this process owns, and
+// a demo that silently started recording them somewhere would be the wrong
+// default in both directions - nothing to clean up, nothing to explain.
+const favoritesPath = argv.favorites as string | undefined;
+let favorites: FavoriteStore | null = null;
+if (favoritesPath) {
+  try {
+    favorites = await createJsonFavoriteStore({ path: resolve(process.cwd(), favoritesPath) });
+  } catch (err) {
+    console.error(`could not open ${favoritesPath}: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+// Express's `trust proxy`, verbatim - '1' and 'loopback' both mean something
+// to it, so this is not parsed into a boolean here. Unset is a direct
+// connection, where the socket address IS the visitor's.
+const trustProxyArg = argv['trust-proxy'];
+const trustProxy =
+  trustProxyArg === undefined ? false : typeof trustProxyArg === 'string' && /^\d+$/.test(trustProxyArg) ? Number(trustProxyArg) : trustProxyArg;
 
 const rescan = remoteBase
   ? () => scanRemote(remoteBase, argv.prefix as string)
@@ -183,6 +212,8 @@ app = createApp({
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
   watch,
   basePath,
+  favorites,
+  trustProxy,
 });
 
 const server = app.listen(port, () => {
@@ -198,6 +229,12 @@ const server = app.listen(port, () => {
   for (const addr of lanAddresses()) console.log(`                       http://${addr}:${port}`);
   if (basePath !== '/')
     console.log(`  --base-path ${basePath}: <base href> is set for a reverse proxy that strips it - see server-nginx.conf`);
+  if (favorites) {
+    const rooms = Object.keys(favorites.counts()).length;
+    console.log(`  favorites: ${favoritesPath} (${rooms} room(s) favorited so far)`);
+    if (!trustProxy)
+      console.log('             direct connections assumed - behind a reverse proxy, pass --trust-proxy 1');
+  }
   if (watch) console.log('  watch mode: client edits rebuild in place, the browser reloads itself');
   console.log();
 });
@@ -214,6 +251,13 @@ server.on('error', (err: NodeJS.ErrnoException) => {
   );
   process.exit(1);
 });
+
+// The debounced snapshot is deliberately unref'd, so nothing but this writes
+// out the last few favorites when the process is asked to stop.
+for (const signal of ['SIGINT', 'SIGTERM'] as const)
+  process.once(signal, () => {
+    void (favorites?.flush() ?? Promise.resolve()).finally(() => process.exit(0));
+  });
 
 /** Non-internal IPv4 addresses, for testing the map on a device that is not this one. */
 function lanAddresses() {
