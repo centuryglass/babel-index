@@ -302,7 +302,7 @@ export function RoomDetails({
         "No keywords recorded" is a claim about a corpus room's metadata; a
         generic cell has none by definition and already said so above, via
         `desc.description` - repeating it here would read as a second,
-        contradictory explanation for the same blank wall.
+        contradictory explanation for the same Babel shelf.
       */}
       {!entry && desc?.kind !== 'generic' && (
         <p className="story dim">No keywords recorded for this room.</p>

@@ -22,7 +22,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
-import type { RoomMeta } from '../../../map/metadata.ts';
+import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Config } from '../../../config/config.ts';
@@ -104,9 +104,14 @@ export function RoomOverlay({
     >
       <div className="overlay" ref={ref} role="dialog" aria-modal="true" tabIndex={-1} aria-label={desc.name}>
         <div className="card-head">
+          {/*
+            Leads with the title (`roomTitle`'s "Room {id}" fallback for an
+            untitled room), trailing with the filename - see `RoomCard` for
+            why the numeric id no longer comes first.
+          */}
           <span className="card-id">
-            room {room.id}
-            {file ? ` · ${file}` : ''}
+            <b>{roomTitle(entry, room.id)}</b>
+            {file ? ` ${file}` : ''}
           </span>
           <button className="card-close" onClick={onClose} aria-label="close">
             ×

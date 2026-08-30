@@ -3,6 +3,10 @@ node_modules/
 .DS_Store
 *.kate-swp
 
+# Python (tools/curation).
+__pycache__/
+*.py[cod]
+
 # Screenshots the browser smoke test leaves behind.
 packages/web/e2e/artifacts/
 

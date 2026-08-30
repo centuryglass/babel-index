@@ -37,13 +37,13 @@ import type { CSSProperties, FormEventHandler, Ref, RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { describeRoom } from '../../../map/describe.ts';
 import type { Description } from '../../../map/describe.ts';
-import type { RoomMeta } from '../../../map/metadata.ts';
+import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import type { Config } from '../../../config/config.ts';
 import type { UrlFor } from '../lib/rooms.ts';
-import { describeBook, type Slot as CentreSlot } from '../lib/center.ts';
+import { describeBook, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
 import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import {
@@ -159,6 +159,7 @@ export function CatalogView({
   favoriteFor,
   centreSlots,
   onBook,
+  onOpenArtistStatement,
   cellOfId,
   history,
   onForgetSearches,
@@ -192,6 +193,7 @@ export function CatalogView({
   favoriteFor: (id: number | null | undefined) => FavoriteControl | null;
   centreSlots: Slot[];
   onBook: (index: number) => void;
+  onOpenArtistStatement: () => void;
   cellOfId: (id: number) => { x: number; y: number } | null;
   history: string[];
   onForgetSearches: () => void;
@@ -404,19 +406,40 @@ export function CatalogView({
             of what a book does.
           */}
           <li className="catalog-row catalog-center" ref={centreRowRef}>
-            <img
-              ref={firstTileRef}
-              className="catalog-tile"
-              src={urlFor(CENTER, 0) ?? ''}
-              alt=""
-              width={thumbPx}
-              height={tileHeight(thumbPx)}
-              decoding="async"
-            />
+            <div className="catalog-tile-wrap">
+              <img
+                ref={firstTileRef}
+                className="catalog-tile"
+                src={urlFor(CENTER, 0) ?? ''}
+                alt=""
+                width={thumbPx}
+                height={tileHeight(thumbPx)}
+                decoding="async"
+              />
+              {/*
+                The open book painted into a shelf gap - the same hotspot the
+                map hovers/opens via `centerBookAtPoint`, drawn here as the
+                same traced SVG path (`CENTER_BOOK_PATH`) rather than a
+                bounding box, filling the whole thumbnail via
+                `viewBox="0 0 1 1"` + `preserveAspectRatio="none"` exactly
+                like the map's own overlay. This thumbnail is a fixed size,
+                not a moving camera, so there is nothing to reposition per
+                frame and a real `:hover` (this is a normal list, not the
+                gesture-owning canvas) is simpler than the map's
+                pointermove-driven highlight.
+              */}
+              {CENTER_BOOK_PATH && (
+                <button type="button" className="catalog-center-book" aria-label="an artist's statement" onClick={onOpenArtistStatement}>
+                  <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+                    <path d={CENTER_BOOK_PATH} />
+                  </svg>
+                </button>
+              )}
+            </div>
             <div className="catalog-body">
               <h2 className="catalog-name">the center of the library</h2>
               <p className="catalog-sub">
-                the shelf, as it is painted on the wall — newest search first
+                the index shelf, where searches are recorded
               </p>
               <div className="shelf-links">
                 {centreSlots.map((slot, i) =>
@@ -576,7 +599,7 @@ function CatalogRow({
         <div className="catalog-head">
           <h2 className="catalog-name">
             <span className="catalog-rank">{rank + 1}</span>
-            Room {id}
+            {roomTitle(entry, id)}
             {file && <span className="catalog-file">{file}</span>}
           </h2>
           {/*
