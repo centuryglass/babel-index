@@ -406,7 +406,7 @@ export function CatalogView({
             <div className="catalog-body">
               <h2 className="catalog-name">the center of the library</h2>
               <p className="catalog-sub">
-                the shelf, as it is painted on the wall — newest search first
+                the index shelf, where searches are recorded
               </p>
               <div className="shelf-links">
                 {centreSlots.map((slot, i) =>
