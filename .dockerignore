@@ -1,0 +1,8 @@
+node_modules
+.git
+*.log
+config.json
+packages/web/e2e/artifacts
+infra/.terraform
+infra/terraform.tfstate*
+infra/*.tfvars

@@ -210,6 +210,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
            a billing alert). Applied locally by hand, never from CI -
            credentials live in a gitignored `terraform.tfvars`. See
            `infra/README.md`.
+- `Dockerfile`: Containerizes the demo server. Bakes in no corpus, config, or
+               remote address - `packages/server/index.ts` already takes all
+               of that as CLI flags, so the image works either way: bind-mount
+               a corpus dir and pass `--images`, or pass `--remote`/`--prefix`
+               with nothing mounted.
+- `.dockerignore`: Keeps `node_modules`, local `config.json`, and Terraform
+                   state/vars out of the build context.
 
 ### Assets:
 - `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
