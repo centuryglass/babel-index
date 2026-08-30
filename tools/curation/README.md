@@ -93,11 +93,12 @@ retrying until the reply is a valid JSON array drawn only from that list.
 **Titles**
 
 ```sh
-python -m babel_index_review.titles DIR [--out babel_titles.csv] [--model MODEL] [--all]
+python -m babel_index_review.titles DIR [--model MODEL] [--all]
 ```
 
 Generates a short, unique title per finalized tile from its image + story
-(never the seed keywords), appending to a CSV as it goes.
+(never the seed keywords), writing each into `metadata.json`'s `title` field
+as it goes. Also editable directly in the review GUI.
 
 **Story generation via Claude Code subagents (no API billing)**
 
