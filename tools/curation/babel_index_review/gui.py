@@ -42,6 +42,7 @@ navigation ever see; every entry stays loaded and intact on disk.
 from __future__ import annotations
 
 import os
+import sys
 
 from PySide6.QtCore import Qt, QObject, QPoint, QRect, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
@@ -96,6 +97,21 @@ _STATE_COLOR = {
     "missing_story": COLOR_MISSING_STORY,
     "missing_image": COLOR_MISSING_IMAGE,
 }
+
+
+def _print_progress(done: int, total: int, width: int = 30):
+    """Overwrite one console line with a ``[####----] done/total`` bar.
+
+    Only ``_populate_grid`` calls this -- it's the one step slow enough on a
+    big tile directory (thumbnail decode per tile) to be worth feedback
+    before the window ever appears on screen.
+    """
+    if total == 0 or not sys.stdout.isatty():
+        return
+    filled = width * done // total
+    bar = "#" * filled + "-" * (width - filled)
+    end = "\n" if done == total else ""
+    print(f"\rLoading tiles [{bar}] {done}/{total}", end=end, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -579,13 +595,15 @@ class ReviewWindow(QMainWindow):
         return pix.scaled(THUMB, THUMB, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
     def _populate_grid(self):
-        for key in self.keys:
+        total = len(self.keys)
+        for i, key in enumerate(self.keys):
             tile = TileButton(key, self._thumb(key))
             tile.set_state(tile_state(self.index[key], self._exists(key)))
             tile.clicked.connect(self.select_tile)
             tile.entered.connect(self._on_tile_entered)
             tile.left.connect(self._on_tile_left)
             self.tiles[key] = tile
+            _print_progress(i + 1, total)
         self._reflow(force=True)
         self._update_counts()
 
