@@ -51,3 +51,16 @@ The application should be fully usable in a screen reader, and reduced motion co
 This project is all about being able to use technology and information science to enhance our ability to search random noise for accidental meaning. To serve that purpose, there should be an alternate interface that maximizes search capability by sacrificing the illusion of the infinite library.
 
 In catalog mode, no default rooms will be shown, and rooms will be shown as a flat list in order of search match. Keywords and stories will appear to the right of each room, not needing to be opened automatically. When searching, rank and certainty metrics will be plainly shown for each room. The map view's mostly-diegetic interface will be replaced with a search UI modeled after the usual conventions for searching and sorting an online dataset.
+
+### 8/30/26: Favorite count tracking
+This project is fundamentally about searching and curation, and I should do something to support that in the code. The solution: add a favorite icon to each room detail panel, and show each room's global favorite count. 
+
+#### The interface
+Favorite count should appear in both map and catalog views. Users should be able to both add and remove a room from favorites. from either the map or the catalog, Users should be able to sort in two ways. Either by their own favorites, or by global favorite count. 
+
+#### Data tracking
+I don't want to spy on my users and I don't want to build an account system, but I don't want the counts to just be raw numbers that anyone can mess with by hitting an endpoint either.
+
+Personal favorite lists can be tracked in local storage. The server should never expose favorites on a per-user basis; let users track their own favorites. 
+
+Global counts will tracked internally as per-image sets of hashed IP addresses. The hashing isn't a real security method, it's mostly just present as another way to signal that I'm not interested in spying on my users. Checking favorites on a room returns the size of the set, add_favorite and remove_favorite endpoints add and remove the request IP from the set. Gaming the system in a limited way is possible, but not something I'm very worried about. The important part is ensuring a bad actor can't just zero out favorite counts or boost them infinitely.
