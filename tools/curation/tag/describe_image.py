@@ -67,6 +67,44 @@ CLAUDE_MODELS = {
     "Fable 5": "claude-fable-5",
 }
 
+# Hand-maintained Claude API prices, in dollars per million tokens (input,
+# output). Anthropic's Models API doesn't expose pricing, so there's no way to
+# fetch this live -- it's a snapshot of https://platform.claude.com/docs/en/pricing
+# and may go stale as prices change. See README's Setup section for the caveat.
+CLAUDE_PRICING = {
+    "claude-fable-5": (10.00, 50.00),
+    "claude-opus-4-8": (5.00, 25.00),
+    "claude-sonnet-5": (3.00, 15.00),
+    "claude-haiku-4-5": (1.00, 5.00),
+}
+
+
+def _price_suffix(input_per_mtok: float, output_per_mtok: float) -> str:
+    def fmt(price: float) -> str:
+        return f"{price:g}"
+
+    return f" (${fmt(input_per_mtok)}/${fmt(output_per_mtok)} per 1M tok)"
+
+
+# Prefix on every Anthropic API label in the dropdown, so it isn't confused
+# with an OpenRouter entry for the same underlying Claude model.
+ANTHROPIC_LABEL_PREFIX = "Anthropic API: "
+
+
+def _with_claude_price(label: str, model_id: str) -> str:
+    price = CLAUDE_PRICING.get(model_id)
+    if price is None:
+        return label
+    return label + _price_suffix(*price)
+
+
+def _priced_claude_models(models: dict) -> dict:
+    """Re-key a {label: model_id} dict with the Anthropic prefix and a price suffix."""
+    return {
+        _with_claude_price(ANTHROPIC_LABEL_PREFIX + label, model_id): model_id
+        for label, model_id in models.items()
+    }
+
 
 # Fallback used when the OpenRouter Models API cannot be queried. Lists
 # DEFAULT_MODEL itself first so it's always a real entry in the dropdown -
@@ -113,7 +151,7 @@ _EMDASH_LOGIT_BIAS = _load_emdash_logit_bias()
 # Kept for backwards compatibility: the full static fallback list (Claude +
 # local placeholder) that the GUI seeds its dropdown with before refreshing.
 MODELS = {
-    **CLAUDE_MODELS,
+    **_priced_claude_models(CLAUDE_MODELS),
     **STATIC_LOCAL_MODELS,
     **STATIC_OPENROUTER_MODELS,
 }
@@ -139,10 +177,10 @@ def _claude_models() -> dict:
                 except (KeyError, TypeError):
                     pass  # capabilities present but no vision info -> keep it
             label = getattr(model, "display_name", None) or model.id
-            models[label] = model.id
-        return models or dict(CLAUDE_MODELS)
+            models[_with_claude_price(ANTHROPIC_LABEL_PREFIX + label, model.id)] = model.id
+        return models or _priced_claude_models(CLAUDE_MODELS)
     except Exception:
-        return dict(CLAUDE_MODELS)
+        return _priced_claude_models(CLAUDE_MODELS)
 
 
 def _local_label(model_id: str) -> str:
@@ -154,8 +192,15 @@ def _local_label(model_id: str) -> str:
 
 
 def _openrouter_label(model: dict) -> str:
-    """Build a friendly label for an OpenRouter model catalog entry."""
-    return model.get("name") or model.get("id", "unknown")
+    """Build a friendly label for an OpenRouter model catalog entry, with price."""
+    label = model.get("name") or model.get("id", "unknown")
+    pricing = model.get("pricing") or {}
+    try:
+        prompt_price = float(pricing["prompt"]) * 1_000_000
+        completion_price = float(pricing["completion"]) * 1_000_000
+    except (KeyError, TypeError, ValueError):
+        return label
+    return label + _price_suffix(prompt_price, completion_price)
 
 
 def openrouter_models(

@@ -30,6 +30,14 @@ backend from the model id's prefix:
   `titles.py` and `sensitive_tags.py` default here, since neither of
   them need the more expensive models to do their job well.
 
+The GUI's model dropdown shows a per-million-token price in parentheses after
+each label. OpenRouter's prices come live from its `/models` endpoint.
+Claude's do not - Anthropic's Models API has no pricing field, so
+`tag/describe_image.py`'s `CLAUDE_PRICING` is a hand-maintained snapshot of
+[platform.claude.com/docs/en/pricing](https://platform.claude.com/docs/en/pricing)
+and may be out of date; treat it as approximate and check the pricing page for
+the current numbers.
+
 Everything below is run as `python -m babel_index_review.<tool>` from
 `tools/curation/`, against a tile directory `DIR` holding `NNNNN.webp` files
 plus a `metadata.json` sidecar (see `babel_index_review/core.py`'s module
@@ -93,11 +101,12 @@ retrying until the reply is a valid JSON array drawn only from that list.
 **Titles**
 
 ```sh
-python -m babel_index_review.titles DIR [--out babel_titles.csv] [--model MODEL] [--all]
+python -m babel_index_review.titles DIR [--model MODEL] [--all]
 ```
 
 Generates a short, unique title per finalized tile from its image + story
-(never the seed keywords), appending to a CSV as it goes.
+(never the seed keywords), writing each into `metadata.json`'s `title` field
+as it goes. Also editable directly in the review GUI.
 
 **Story generation via Claude Code subagents (no API billing)**
 

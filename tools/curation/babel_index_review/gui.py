@@ -16,6 +16,9 @@ Right panel: story editing for the selected tile.
   - Alt text -- accessibility description, editable with its own autosave and
     "Generate alt" button (uses the model dropdown, ``core.default_alt_prompt``,
     stored as "alt" on the tile's metadata entry).
+  - Title -- short evocative title, editable with its own autosave, stored as
+    "title" on the tile's metadata entry (see ``babel_index_review.titles``
+    for the batch generator).
   - Below that -- sensitive content tag checkboxes (gore, body-horror, horror,
     death, insects/arthropods, trypophobia), stored as an optional
     "sensitive_content_tags" list on the tile's metadata entry (omitted when
@@ -39,6 +42,7 @@ navigation ever see; every entry stays loaded and intact on disk.
 from __future__ import annotations
 
 import os
+import sys
 
 from PySide6.QtCore import Qt, QObject, QPoint, QRect, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
@@ -49,6 +53,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -60,7 +65,7 @@ from PySide6.QtWidgets import (
 )
 
 from babel_index_review import core
-from tag.describe_image import MODELS, DEFAULT_MODEL, available_models
+from tag.describe_image import MODELS, DEFAULT_MODEL, LOCAL_PREFIX, available_models
 
 THUMB = 128           # thumbnail edge, px
 CELL = THUMB + 22     # cell footprint incl. border/margins, for column math
@@ -92,6 +97,21 @@ _STATE_COLOR = {
     "missing_story": COLOR_MISSING_STORY,
     "missing_image": COLOR_MISSING_IMAGE,
 }
+
+
+def _print_progress(done: int, total: int, width: int = 30):
+    """Overwrite one console line with a ``[####----] done/total`` bar.
+
+    Only ``_populate_grid`` calls this -- it's the one step slow enough on a
+    big tile directory (thumbnail decode per tile) to be worth feedback
+    before the window ever appears on screen.
+    """
+    if total == 0 or not sys.stdout.isatty():
+        return
+    filled = width * done // total
+    bar = "#" * filled + "-" * (width - filled)
+    end = "\n" if done == total else ""
+    print(f"\rLoading tiles [{bar}] {done}/{total}", end=end, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +259,8 @@ class ReviewWindow(QMainWindow):
         self._save_timer.timeout.connect(self._flush_story)
         self._alt_save_timer = QTimer(self, singleShot=True, interval=600)
         self._alt_save_timer.timeout.connect(self._flush_alt)
+        self._title_save_timer = QTimer(self, singleShot=True, interval=600)
+        self._title_save_timer.timeout.connect(self._flush_title)
 
         self.setWindowTitle(f"babel-index review — {os.path.basename(os.path.abspath(tile_dir))}")
         self.resize(1200, 800)
@@ -323,6 +345,11 @@ class ReviewWindow(QMainWindow):
         self.keyword_label.setWordWrap(True)
         self.keyword_label.setStyleSheet("color: #888;")
         layout.addWidget(self.keyword_label)
+
+        layout.addWidget(QLabel("Title"))
+        self.title_edit = QLineEdit()
+        self.title_edit.textChanged.connect(self._on_title_changed)
+        layout.addWidget(self.title_edit)
 
         layout.addWidget(QLabel("Initial prompt"))
         self.prompt_edit = QPlainTextEdit()
@@ -535,13 +562,21 @@ class ReviewWindow(QMainWindow):
 
     # -- Model selector -----------------------------------------------------
     def _set_models(self, models: dict):
-        """Repopulate the model dropdown, preserving the current selection."""
+        """Repopulate the model dropdown, preserving the current selection.
+
+        Sorted alphabetically (case-insensitive) by label, except local-server
+        entries (model id starts with `local:`), which always sort first.
+        """
         if not models:
             return
         current = self.model_combo.currentData()
         self.model_combo.blockSignals(True)
         self.model_combo.clear()
-        for label, model_id in models.items():
+        ordered = sorted(
+            models.items(),
+            key=lambda item: (not item[1].startswith(LOCAL_PREFIX), item[0].casefold()),
+        )
+        for label, model_id in ordered:
             self.model_combo.addItem(label, model_id)
         # Keep the prior pick if it survived the refresh, else fall back to the
         # default model, else the first entry.
@@ -568,13 +603,15 @@ class ReviewWindow(QMainWindow):
         return pix.scaled(THUMB, THUMB, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
     def _populate_grid(self):
-        for key in self.keys:
+        total = len(self.keys)
+        for i, key in enumerate(self.keys):
             tile = TileButton(key, self._thumb(key))
             tile.set_state(tile_state(self.index[key], self._exists(key)))
             tile.clicked.connect(self.select_tile)
             tile.entered.connect(self._on_tile_entered)
             tile.left.connect(self._on_tile_left)
             self.tiles[key] = tile
+            _print_progress(i + 1, total)
         self._reflow(force=True)
         self._update_counts()
 
@@ -629,6 +666,7 @@ class ReviewWindow(QMainWindow):
             return
         self._flush_story()  # persist any pending edit on the outgoing tile
         self._flush_alt()
+        self._flush_title()
 
         if self.current_key in self.tiles:
             self.tiles[self.current_key].set_selected(False)
@@ -644,6 +682,7 @@ class ReviewWindow(QMainWindow):
                 f"{kw['text']} ({kw['type']})" for kw in entry.get("keywords", [])
             )
         )
+        self.title_edit.setText(entry.get("title") or "")
         self.prompt_edit.setPlainText(core.default_prompt(core.keyword_texts(entry)))
         self.story_edit.setPlainText(entry.get("story") or "")
         self.revision_edit.setPlainText("")
@@ -702,6 +741,22 @@ class ReviewWindow(QMainWindow):
             entry["story"] = text or None
             core.save_index(self.tile_dir, self.index)
             self._refresh_tile(self.current_key)
+
+    # -- Title autosave -------------------------------------------------------
+    def _on_title_changed(self):
+        if not self._loading:
+            self._title_save_timer.start()
+
+    def _flush_title(self):
+        self._title_save_timer.stop()
+        if self.current_key is None:
+            return
+        entry = self.index[self.current_key]
+        text = self.title_edit.text().strip()
+        stored = entry.get("title") or ""
+        if text != stored:
+            entry["title"] = text or None
+            core.save_index(self.tile_dir, self.index)
 
     # -- Alt text autosave / generation --------------------------------------
     def _on_alt_changed(self):
@@ -946,4 +1001,5 @@ class ReviewWindow(QMainWindow):
         self._mod_timer.stop()
         self._flush_story()
         self._flush_alt()
+        self._flush_title()
         super().closeEvent(event)
