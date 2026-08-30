@@ -153,7 +153,7 @@ export function RoomCard({
     >
       <div className="card-head">
         <span className="card-id">
-          {'generic' in card ? 'blank wall' : `room ${card.id}${file ? ` · ${file}` : ''}`}
+          {'generic' in card ? 'a Babel shelf' : `room ${card.id}${file ? ` · ${file}` : ''}`}
         </span>
         <button className="card-close" onClick={onClose} aria-label="close">
           ×

@@ -46,9 +46,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
   test('the library opens', async () => {
     const { page, origin } = session;
-    assert.equal(await page.title(), 'The Indexing of Babel');
+    assert.equal(await page.title(), 'The Index of Babel');
     await assert.doesNotReject(page.locator('.panel h1').waitFor({ timeout: 5000 }));
-    assert.equal(await page.locator('.panel h1').textContent(), 'The Indexing of Babel');
+    assert.equal(await page.locator('.panel h1').textContent(), 'The Index of Babel');
 
     const { count } = await (await fetch(`${origin}/api/manifest`)).json();
     assert.match(await page.locator('.panel .sub').textContent(), new RegExp(`offline · ${count} rooms`));

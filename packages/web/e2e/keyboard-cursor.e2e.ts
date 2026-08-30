@@ -78,7 +78,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       `one arrow press must move exactly one cell: ${home.x} -> ${afterOneStep.x}`
     );
     await waitFor(
-      async () => /Room \d+|blank wall/.test((await live.textContent()) ?? ''),
+      async () => /Room \d+|a Babel shelf/.test((await live.textContent()) ?? ''),
       2000,
       'an arrow press must announce something about the new cursor cell'
     );
@@ -98,7 +98,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     );
     const ctrlArrowText = await live.textContent();
     if (!/^nothing further/.test(ctrlArrowText)) {
-      assert.match(ctrlArrowText, /^Room \d+/, 'ctrl+arrow must never land announcing a blank wall');
+      assert.match(ctrlArrowText, /^Room \d+/, 'ctrl+arrow must never land announcing a generic shelf');
       // And it must actually have MOVED the camera - a room announcement
       // without a matching jump would mean the text and the map disagree.
       await waitFor(async () => (await hud(page)).x !== home.x, 2000, 'ctrl+arrow never moved the camera');
