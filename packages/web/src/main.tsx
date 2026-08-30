@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
+import { favoriteOrder, favoriteCount, type SortMode } from '../../map/favorites.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
 import type { RoomMeta } from '../../map/metadata.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
@@ -14,7 +15,7 @@ import { alphabeticalOrder } from './lib/catalog.ts';
 import { load, save, clear, KEYS } from './lib/persist.ts';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
 import { roomAtPoint, type RoomPick } from './lib/picking.ts';
-import { describeCell, describeRoom, describeCatalog } from '../../map/describe.ts';
+import { describeCell, describeRoom, describeCatalog, describeSort } from '../../map/describe.ts';
 import {
   bookAtPoint,
   centerCellRect,
@@ -43,6 +44,7 @@ import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
+import { useFavorites } from './hooks/useFavorites.ts';
 
 function App() {
   const [manifest, setManifest] = useState<ManifestResponse | null>(null);
@@ -108,6 +110,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
   const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(() => Date.now());
+  // Which of the three readings of the same ranking is in force. Session-only,
+  // unlike the favorites themselves: the list is a standing choice about the
+  // library, "show me it sorted by favorites right now" is not.
+  const [sortMode, setSortMode] = useState<SortMode>('relevance');
+
   const [status, setStatus] = useState('');
   // Search history, newest first, one book per entry - and one of the two
   // things in this app that survives a reload (see `persist.js` for why so few
@@ -198,6 +205,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // them. Both are positional and order-independent, so they never change under
   // a search or a reorder - which is why the rearrangement can treat every
   // generic cell as one interchangeable value.
+  // The reader's own favorites and the library's global counts - see
+  // `useFavorites`. Absent from a deployment with no store, in which case
+  // `enabled` is false and no favorite control renders anywhere.
+  const favorites = useFavorites({ manifest, setStatus });
+
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
@@ -222,8 +234,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     const base = result ? result.order : shuffledOrder(total, orderSeed);
     // A blocked room drops out of the ranking entirely - not hidden behind a
     // cell, absent from it - so it never gets a slot on the map at all.
-    return filterBlockedIds(base, metadata, blockedTagSet);
-  }, [total, orderSeed, result, metadata, blockedTagSet]);
+    // Blocking first, then sorting: a blocked room must not come back because
+    // somebody favorited it.
+    return favoriteOrder(filterBlockedIds(base, metadata, blockedTagSet), {
+      mode: sortMode,
+      ...favorites.sortInput,
+    });
+  }, [total, orderSeed, result, metadata, blockedTagSet, sortMode, favorites.sortInput]);
 
   // The catalog's own order: a shuffle is not a list order anyone can read by
   // eye, so its idle default is alphabetical rather than a second read of the
@@ -233,8 +250,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // catalog row, exactly as they are the only things that move it on the map.
   const catalogOrder = useMemo(() => {
     const base = result ? result.order : alphabeticalOrder(manifest.rooms, metadata);
-    return filterBlockedIds(base, metadata, blockedTagSet);
-  }, [manifest, result, metadata, blockedTagSet]);
+    return favoriteOrder(filterBlockedIds(base, metadata, blockedTagSet), {
+      mode: sortMode,
+      ...favorites.sortInput,
+    });
+  }, [manifest, result, metadata, blockedTagSet, sortMode, favorites.sortInput]);
 
   // Which cell a room id sits in on the map right now, keyed by id rather
   // than by rank - the catalog's rank in `catalogOrder` and the map's rank in
@@ -430,7 +450,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cam, flyTo, nudgeBy, flightTarget } = useMapCamera({
+  const { cam, flyTo, nudgeBy, flightTarget, isFlying } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
@@ -512,7 +532,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // Everything about it - the cell, what gets said, and every key - is
   // `useMapCursor`. It is derived from the camera rather than tracked beside
   // it, so it goes in after `useMapCamera` and takes that hook's movers.
-  const { cursorLabel, cursorEntry, cursorDesc, onMapKeyDown, announceArrangement, keyboardUsed } =
+  const { cursorLabel, cursorEntry, cursorDesc, cursorId, onMapKeyDown, announceArrangement, keyboardUsed } =
     useMapCursor({
       layout,
       order,
@@ -609,12 +629,46 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     searchFormRef,
     cam,
     flyTo,
+    isFlying,
     requestDraw,
     config,
     anim,
     announce,
   });
   requestAnimationRef.current = requestAnimation;
+
+  /**
+   * One room's favorite state, in the shape `RoomDetails` wants it.
+   *
+   * Handed down as a function rather than a map so a component asks about the
+   * room it is rendering and nothing builds a per-room object for a corpus of
+   * rooms nobody is looking at. Null for a generic cell (no file to favorite)
+   * and null throughout when the feature is off.
+   *
+   * Toggling asks for the sliding-tile treatment, unparked, whenever the map
+   * is sorted by favorites: the toggle changes `favorites.sortInput`, which
+   * changes `order` below, and without this that resort would just snap -
+   * `useRearrangement`'s effect only animates a change a caller asked for. It
+   * is deliberately NOT the parked kind `changeSort`/`reorder` ask for - the
+   * reader did not ask to change what they are looking at, they clicked a
+   * star, so the camera has no business leaving.
+   */
+  const favoriteFor = useCallback(
+    (id: number | null | undefined) =>
+      favorites.enabled && id != null && id >= 0
+        ? {
+            on: favorites.isFavorite(id),
+            count: favorites.countOf(id),
+            toggle: () => {
+              if (mode === 'map' && sortMode !== 'relevance') {
+                requestAnimation('', { parkAtCenter: false });
+              }
+              void favorites.toggle(id);
+            },
+          }
+        : null,
+    [favorites.enabled, favorites.isFavorite, favorites.countOf, favorites.toggle, mode, sortMode, requestAnimation]
+  );
 
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
@@ -669,6 +723,19 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     requestAnimation('');
     setOrderSeed((s) => s + 1);
   }, [requestAnimation]);
+  // Changing the sort is a RE-RANK, exactly like the reorder above it: it
+  // swaps `order` and lets the sliding-tile animation carry the map from one
+  // arrangement to the other. It must not rebuild the layout - only a search
+  // may do that, because only a search has a certainty profile to place by.
+  const changeSort = useCallback(
+    (next: SortMode) => {
+      if (next === sortMode) return;
+      requestAnimation(describeSort(next, favoriteCount(manifest.rooms, favorites.mine)));
+      setSortMode(next);
+    },
+    [sortMode, requestAnimation, manifest, favorites.mine]
+  );
+
   const rescatter = useCallback(() => {
     requestAnimation('');
     setSeed((s) => s + 1);
@@ -783,6 +850,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         setContentRatio={setContentRatio}
         onReorder={reorder}
         onRescatter={rescatter}
+        favorites={favorites.enabled}
+        sortMode={sortMode}
+        onSortMode={changeSort}
+        favoriteFor={favoriteFor}
+        cursorId={cursorId}
         onRecentre={recentre}
         history={history}
         onForgetSearches={forgetSearches}
@@ -809,6 +881,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           onShowOnMap={showOnMap}
           onKeyword={searchKeyword}
           onExpand={expandRoom}
+          favorites={favorites.enabled}
+          sortMode={sortMode}
+          onSortMode={changeSort}
+          favoriteFor={favoriteFor}
           centreSlots={centreSlots}
           onBook={onBook}
           onOpenArtistStatement={openArtistStatement}
@@ -860,6 +936,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           tagLinks={tagLinks}
           result={result}
           weights={config.search.weights}
+          favorite={favoriteFor(overlay.id)}
         />
       )}
 
@@ -889,6 +966,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           tagLinks={tagLinks}
           result={result}
           weights={config.search.weights}
+          favorite={'id' in card ? favoriteFor(card.id) : null}
         />
       )}
     </>

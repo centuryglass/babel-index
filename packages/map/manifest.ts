@@ -114,7 +114,21 @@ export interface Manifest {
   levels: LevelInfo[];
 }
 
+/**
+ * Whether this deployment records global favorite counts at all.
+ *
+ * Not part of the scan - the corpus has nothing to say about it - so it is
+ * added by `app.ts` on the way out, alongside `config`. Null means no store was
+ * configured and the favorite routes are not mounted, which is what the client
+ * reads as "do not offer favoriting"; a count of zero is a different statement
+ * and one this cannot be confused with.
+ */
+export interface FavoritesInfo {
+  enabled: boolean;
+}
+
 /** The manifest as served by `/api/manifest`: the scan plus the client config. */
 export interface ManifestResponse extends Manifest {
+  favorites: FavoritesInfo | null;
   config: Record<string, unknown>;
 }

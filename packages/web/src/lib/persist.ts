@@ -8,9 +8,10 @@
  * (`fitZoom` in main.jsx) precisely so it is right on whatever device is in
  * front of them rather than right on the one they used last.
  *
- * Three things earn an exception, all of them the reader's own choices rather
+ * Four things earn an exception, all of them the reader's own choices rather
  * than the map's state: which way they page the catalog, what they have
- * searched for, and which sensitive-content tags they have blocked. The
+ * searched for, which sensitive-content tags they have blocked, and which
+ * rooms they have favorited. The
  * second is the consequential one - the search history titles the center
  * room's shelf, so persisting it means the wall of books becomes a record of
  * what this reader has asked the library instead of resetting to keyword tags
@@ -49,6 +50,17 @@ export const KEYS = {
   paging: `${PREFIX}paging`,
   /** Sensitive-content tags a reader has chosen to block, from HelpDialog's panel. */
   blockedTags: `${PREFIX}blockedTags`,
+  /**
+   * The reader's own favorites, as room FILENAMES.
+   *
+   * Here rather than on the server on purpose (concept.md, 8/30/26): the
+   * server records global counts and nothing per-visitor, so a personal list
+   * is only ever kept by the person it belongs to. Filenames rather than room
+   * ids because ids are positional - scan.ts sorts filenames and indexes them,
+   * so one image added to the corpus renumbers every id after it and a stored
+   * id would silently come back pointing at a different room.
+   */
+  favorites: `${PREFIX}favorites`,
 };
 
 /**
