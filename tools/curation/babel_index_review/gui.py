@@ -16,6 +16,9 @@ Right panel: story editing for the selected tile.
   - Alt text -- accessibility description, editable with its own autosave and
     "Generate alt" button (uses the model dropdown, ``core.default_alt_prompt``,
     stored as "alt" on the tile's metadata entry).
+  - Title -- short evocative title, editable with its own autosave, stored as
+    "title" on the tile's metadata entry (see ``babel_index_review.titles``
+    for the batch generator).
   - Below that -- sensitive content tag checkboxes (gore, body-horror, horror,
     death, insects/arthropods, trypophobia), stored as an optional
     "sensitive_content_tags" list on the tile's metadata entry (omitted when
@@ -49,6 +52,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -239,6 +243,8 @@ class ReviewWindow(QMainWindow):
         self._save_timer.timeout.connect(self._flush_story)
         self._alt_save_timer = QTimer(self, singleShot=True, interval=600)
         self._alt_save_timer.timeout.connect(self._flush_alt)
+        self._title_save_timer = QTimer(self, singleShot=True, interval=600)
+        self._title_save_timer.timeout.connect(self._flush_title)
 
         self.setWindowTitle(f"babel-index review — {os.path.basename(os.path.abspath(tile_dir))}")
         self.resize(1200, 800)
@@ -323,6 +329,11 @@ class ReviewWindow(QMainWindow):
         self.keyword_label.setWordWrap(True)
         self.keyword_label.setStyleSheet("color: #888;")
         layout.addWidget(self.keyword_label)
+
+        layout.addWidget(QLabel("Title"))
+        self.title_edit = QLineEdit()
+        self.title_edit.textChanged.connect(self._on_title_changed)
+        layout.addWidget(self.title_edit)
 
         layout.addWidget(QLabel("Initial prompt"))
         self.prompt_edit = QPlainTextEdit()
@@ -629,6 +640,7 @@ class ReviewWindow(QMainWindow):
             return
         self._flush_story()  # persist any pending edit on the outgoing tile
         self._flush_alt()
+        self._flush_title()
 
         if self.current_key in self.tiles:
             self.tiles[self.current_key].set_selected(False)
@@ -644,6 +656,7 @@ class ReviewWindow(QMainWindow):
                 f"{kw['text']} ({kw['type']})" for kw in entry.get("keywords", [])
             )
         )
+        self.title_edit.setText(entry.get("title") or "")
         self.prompt_edit.setPlainText(core.default_prompt(core.keyword_texts(entry)))
         self.story_edit.setPlainText(entry.get("story") or "")
         self.revision_edit.setPlainText("")
@@ -702,6 +715,22 @@ class ReviewWindow(QMainWindow):
             entry["story"] = text or None
             core.save_index(self.tile_dir, self.index)
             self._refresh_tile(self.current_key)
+
+    # -- Title autosave -------------------------------------------------------
+    def _on_title_changed(self):
+        if not self._loading:
+            self._title_save_timer.start()
+
+    def _flush_title(self):
+        self._title_save_timer.stop()
+        if self.current_key is None:
+            return
+        entry = self.index[self.current_key]
+        text = self.title_edit.text().strip()
+        stored = entry.get("title") or ""
+        if text != stored:
+            entry["title"] = text or None
+            core.save_index(self.tile_dir, self.index)
 
     # -- Alt text autosave / generation --------------------------------------
     def _on_alt_changed(self):
@@ -946,4 +975,5 @@ class ReviewWindow(QMainWindow):
         self._mod_timer.stop()
         self._flush_story()
         self._flush_alt()
+        self._flush_title()
         super().closeEvent(event)
