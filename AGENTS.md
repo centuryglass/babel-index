@@ -209,6 +209,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `variants.ts`: The font/settings sweep matrix `render.ts` draws.
   * `render.ts`: Composite each variant onto the real center tile via Playwright
                  Chromium, three zooms to a labelled contact-sheet PNG.
+- `tools/curation`: Python/Qt tools for turning a batch of generated tiles
+                    into `metadata.json` - keyword extraction, story
+                    generation/review, alt text, titles, sensitive-content
+                    tagging. Separate ecosystem from the rest of this repo
+                    (Python, not Node/TS); has its own nested `AGENTS.md`/
+                    `CLAUDE.md` and `README.md` with the real detail - you
+                    don't need either unless you're actually working in this
+                    directory.
 
 ### Infra:
 - `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the
