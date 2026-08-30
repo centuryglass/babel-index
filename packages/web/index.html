@@ -248,6 +248,40 @@
         font-size: 15px; color: var(--dim); background: none; border: none; cursor: pointer;
       }
       .card-close:hover { color: var(--ink); background: none; }
+      /*
+        The favorite control, in a card, in the overlay, and in a catalog row's
+        head - one appearance in all three, since the thing it reports (this
+        room's global count) is the same fact wherever it is met. The filled
+        star is `aria-hidden`; `aria-pressed` and the label are what a reader
+        actually hears.
+      */
+      .favorite { display: flex; margin-bottom: 8px; }
+      .catalog-name .favorite { margin: 0; }
+      .favorite-toggle {
+        flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
+        color: var(--dim); background: rgba(200,169,95,0.08);
+        border: 1px solid var(--edge); border-radius: 999px;
+      }
+      .favorite-toggle:hover { color: var(--ink); background: rgba(200,169,95,0.22); border-color: #c8a95f; }
+      .favorite-toggle.on { color: #c8a95f; background: rgba(200,169,95,0.24); border-color: #c8a95f; }
+      .favorite-count { font-variant-numeric: tabular-nums; }
+      /* The map panel's sort row - three states of one setting, like `.paging`. */
+      .sort-mode.on { color: var(--ink); background: rgba(200,169,95,0.24); border-color: #c8a95f; }
+      /*
+        Sized to its own text, like every other catalog-bar control - the
+        panel's `button { flex: 1 }` would otherwise stretch the select across
+        the row.
+      */
+      .catalog-sort {
+        flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+        color: var(--dim); font-size: 11px;
+      }
+      .catalog-sort select {
+        font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
+        background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
+        border-radius: 4px; padding: 3px 6px;
+      }
       .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
       .chip {
         flex: 0 0 auto; padding: 3px 8px; font-size: 11px;
@@ -511,6 +545,7 @@
       }
       .catalog-file { overflow: hidden; text-overflow: ellipsis; }
       .catalog-show { flex: 0 0 auto; }
+      .catalog-name .favorite-toggle { flex: 0 0 auto; }
       .catalog-rank {
         color: #c8a95f; font-variant-numeric: tabular-nums; font-size: 11px;
         min-width: 2.2em;

@@ -148,3 +148,20 @@ export function describeCatalog({ total, query = '', note = '' }: DescribeCatalo
     : `the catalog, ${total} rooms in alphabetical order`;
   return [head, note].filter(Boolean).join('. ');
 }
+
+/**
+ * What just happened when a reader changed the sort.
+ *
+ * Said after the rearrangement lands, like every other arrangement sentence
+ * here. The count is the point of the "mine" reading - a sort that moved
+ * nothing because nothing is favorited yet looks identical on the map, and
+ * this is the only thing that can say so.
+ */
+export function describeSort(mode: 'relevance' | 'mine' | 'count', mineCount: number): string {
+  if (mode === 'mine')
+    return mineCount
+      ? `sorted by your favorites — ${mineCount} ${mineCount === 1 ? 'room' : 'rooms'} first`
+      : 'sorted by your favorites — you have not favorited any rooms yet';
+  if (mode === 'count') return 'sorted by how often each room has been favorited';
+  return 'sorted by search ranking again';
+}

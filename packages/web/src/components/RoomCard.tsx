@@ -11,7 +11,7 @@
  * dismissed, and where focus goes.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { RoomDetails } from './RoomDetails.tsx';
+import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
 import type { RoomPick } from '../lib/picking.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
@@ -50,6 +50,7 @@ export function RoomCard({
   tagLinks,
   result,
   weights,
+  favorite = null,
 }: {
   card: RoomPick & { at: { x: number; y: number } };
   desc: Description;
@@ -61,6 +62,8 @@ export function RoomCard({
   tagLinks?: Record<string, string> | null;
   result?: SearchResult | null;
   weights?: Config['search']['weights'] | null;
+  /** this room's favorite state, passed straight through to `RoomDetails` */
+  favorite?: FavoriteControl | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(() => ({ left: card.at.x + CARD_GAP, top: card.at.y + CARD_GAP }));
@@ -169,6 +172,7 @@ export function RoomCard({
         rank={'generic' in card ? undefined : card.rank}
         result={result}
         weights={weights}
+        favorite={favorite}
       />
     </div>
   );
