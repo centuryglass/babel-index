@@ -8,6 +8,8 @@
  * Conventions in that file, per the author:
  *   rect labelled "search_box"   -> where the live search field sits
  *   rects labelled "book0".."bookN" -> book spines, addressed by that label
+ *   path labelled "center_book"  -> the open book painted into a shelf gap,
+ *                                   a distinct hotspot from the lettered books
  *
  * That is the whole trace now - no board, upright or lamp is read from the
  * SVG any more. Only the label is authoritative; fill colour is decorative.
@@ -18,6 +20,15 @@
  * that shelf has more than one addressable run, and it is left to the
  * consumer (center.js) to treat those runs as separate clusters for
  * hit-testing.
+ *
+ * `center_book` is traced as a `<path>`, not a `<rect>` - it is the silhouette
+ * of an open book, not a spine, and the point of tracing it as a path rather
+ * than another box is that the hover/hit region and the highlight drawn on
+ * screen are the SHAPE, not a rectangle loose enough to lap onto the spines
+ * either side of it. The importer re-serialises the traced `d` into one
+ * canonical, tile-normalised grammar (see `normalizePath`) rather than
+ * reducing it to a box; a bounding box is still reported alongside it for
+ * anything that only needs a quick containment check.
  *
  * Everything is emitted normalised to the tile edge (0-1), so it is resolution
  * independent. Tracing by hand in Inkscape is five minutes of work and avoids
@@ -69,6 +80,137 @@ for (const g of svg.matchAll(/<g\b[\s\S]*?>/g)) {
   ty += Number(translate[2]);
 }
 
+/** Argument count per path command letter, uppercased; A(rc) is unsupported. */
+const PATH_ARG_COUNT: Record<string, number> = {
+  M: 2, L: 2, H: 1, V: 1, C: 6, Z: 0,
+};
+
+/**
+ * Re-serialise a `<path>`'s `d` into ONE canonical grammar - absolute M/L/C/Z
+ * only, every number a tile-normalised (x/vbW, y/vbH) coordinate - and report
+ * its bounding box (over on-curve AND control points, which for a cubic
+ * Bezier never underestimates the true bound: the curve stays inside the hull
+ * of its control points).
+ *
+ * Collapsing H/V/M-repeat/relative-vs-absolute into this one grammar is what
+ * lets the consumer (`center.ts`) hand the string straight to an SVG
+ * `<path d>` with no further interpretation, and what lets `geometry.ts`
+ * rescale it for an arbitrary tile size with a single regex over `x,y` pairs
+ * rather than a second copy of this walk. S/Q/T/A are refused rather than
+ * silently mishandled - the hand traced silhouette this importer exists for
+ * has never needed them (see the trace itself, not a claim this file makes).
+ */
+function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: number) {
+  const tokens = d.match(/[MmLlHhVvCcZz]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
+  let i = 0;
+  let cx = 0;
+  let cy = 0;
+  let startX = 0;
+  let startY = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const out: string[] = [];
+  const nx = (v: number) => round((v + tx) / vbW);
+  const ny = (v: number) => round((v + ty) / vbH);
+  const visit = (x: number, y: number) => {
+    minX = Math.min(minX, x + tx);
+    minY = Math.min(minY, y + ty);
+    maxX = Math.max(maxX, x + tx);
+    maxY = Math.max(maxY, y + ty);
+  };
+  let cmd: string | null = null;
+  // Whether the current outer-loop pass is reading the FIRST pair after a
+  // command letter (true) or a REPEATED pair with no new letter in between
+  // (false). Only matters for M: SVG defines a repeated pair after the first
+  // in an 'M'/'m' as an implicit LINETO, not a second moveto - miss that and
+  // every repeat comes out as a stray, disconnected subpath.
+  let firstOfRun = false;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (/^[A-Za-z]$/.test(t)) {
+      cmd = t;
+      i++;
+      firstOfRun = true;
+    }
+    if (!cmd) throw new Error(`path has no leading command: ${d.slice(0, 40)}`);
+    const letter = cmd.toUpperCase();
+    if (!(letter in PATH_ARG_COUNT))
+      throw new Error(`path command '${letter}' is not supported by the importer (only M/L/H/V/C/Z)`);
+    const relative = cmd === cmd.toLowerCase();
+    const argc = PATH_ARG_COUNT[letter];
+    if (letter === 'Z') {
+      // Consumes no arguments; `i` already points past the command letter.
+      cx = startX;
+      cy = startY;
+      out.push('Z');
+      firstOfRun = false;
+      continue;
+    }
+    const nums = tokens.slice(i, i + argc).map(Number);
+    if (nums.length < argc) break;
+    i += argc;
+    if (letter === 'H') {
+      cx = relative ? cx + nums[0] : nums[0];
+      visit(cx, cy);
+      out.push(`L${nx(cx)},${ny(cy)}`);
+    } else if (letter === 'V') {
+      cy = relative ? cy + nums[0] : nums[0];
+      visit(cx, cy);
+      out.push(`L${nx(cx)},${ny(cy)}`);
+    } else if (letter === 'C') {
+      // A cubic's three pairs (two control points, one endpoint) are ALL
+      // relative to the point BEFORE this curve - never chained pair to pair,
+      // which is the mistake that sent a control point rocketing off toward
+      // wherever the previous control point happened to land. Only the
+      // endpoint (the third pair) becomes the new current point.
+      const rx = cx;
+      const ry = cy;
+      const points: string[] = [];
+      for (let p = 0; p < 6; p += 2) {
+        const x = relative ? rx + nums[p] : nums[p];
+        const y = relative ? ry + nums[p + 1] : nums[p + 1];
+        visit(x, y);
+        points.push(`${nx(x)},${ny(y)}`);
+        if (p === 4) {
+          cx = x;
+          cy = y;
+        }
+      }
+      out.push(`C${points.join(' ')}`);
+    } else {
+      // M and L's args are (x, y) pairs; a repeat (no new letter) is chained
+      // off the point the PREVIOUS pair just landed on, which is what makes
+      // this loop, unlike C's above, walk px/py forward pair by pair.
+      let px = cx;
+      let py = cy;
+      const points: string[] = [];
+      for (let p = 0; p < argc; p += 2) {
+        const x = relative ? px + nums[p] : nums[p];
+        const y = relative ? py + nums[p + 1] : nums[p + 1];
+        visit(x, y);
+        points.push(`${nx(x)},${ny(y)}`);
+        px = x;
+        py = y;
+      }
+      cx = px;
+      cy = py;
+      out.push(`${letter === 'M' && firstOfRun ? 'M' : 'L'}${points[0]}`);
+      if (letter === 'M' && firstOfRun) {
+        startX = cx;
+        startY = cy;
+      }
+    }
+    firstOfRun = false;
+  }
+  if (!Number.isFinite(minX)) throw new Error(`empty or unparsable path: ${d.slice(0, 60)}`);
+  return {
+    d: out.join(' '),
+    bbox: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+  };
+}
+
 function attr(tag: string, name: string): string | null {
   const direct = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(tag);
   if (direct) return direct[1].trim();
@@ -91,6 +233,15 @@ for (const m of svg.matchAll(/<rect\b[\s\S]*?\/>/g)) {
   const h = Number(attr(tag, 'height'));
   if ([x, y, w, h].some(Number.isNaN)) continue;
   rects.push({ label: attr(tag, 'inkscape:label'), x, y, w, h });
+}
+
+const centerBookPaths: { d: string; bbox: { x: number; y: number; w: number; h: number } }[] = [];
+for (const m of svg.matchAll(/<path\b[\s\S]*?\/>/g)) {
+  const tag = m[0];
+  if (attr(tag, 'inkscape:label') !== 'center_book') continue;
+  const rawD = attr(tag, 'd');
+  if (!rawD) continue;
+  centerBookPaths.push(normalizePath(rawD, tx, ty, vbW, vbH));
 }
 
 const searchBoxRects = rects.filter((r) => r.label === 'search_box');
@@ -131,6 +282,7 @@ const openingRect = {
 };
 
 const searchBox = searchBoxRects[0] ?? null;
+const centerBook = centerBookPaths[0] ?? null;
 
 console.log(
   `viewBox ${round(vbW)} x ${round(vbH)} (aspect ${round(vbH / vbW)}), ` +
@@ -139,6 +291,7 @@ console.log(
 console.log('  -> BASE_TILE in packages/web/src/lib/pyramid.ts must match this aspect');
 console.log(`rects ${rects.length}: ${spines.length} books, ${searchBoxRects.length} search_box, ${other.length} unlabelled`);
 console.log(`search_box: ${searchBox ? nrect(searchBox).join(', ') : 'MISSING'}`);
+console.log(`center_book: ${centerBook ? `bbox ${nrect(centerBook.bbox).join(', ')}, ${centerBook.d.split(' ').length} path commands` : 'none traced'}`);
 console.log(`opening: ${nrect(openingRect).join(', ')}`);
 console.log(`\n${shelves.length} shelves, ${spines.length} books total:`);
 for (const [i, row] of shelves.entries())
@@ -149,6 +302,7 @@ if (other.length) problems.push(`${other.length} rects had no recognised label (
 if (searchBoxRects.length > 1) problems.push(`${searchBoxRects.length} rects labelled search_box, expected one`);
 if (!searchBox) problems.push('no rect labelled search_box');
 if (!spines.length) problems.push('no rects labelled book<n>');
+if (centerBookPaths.length > 1) problems.push(`${centerBookPaths.length} paths labelled center_book, expected at most one`);
 if (problems.length) {
   console.error('\nPROBLEMS:');
   for (const p of problems) console.error(`  ! ${p}`);
@@ -172,11 +326,25 @@ const body = `/**
 
 export type RectTuple = [number, number, number, number];
 
+/**
+ * The open book's exact outline. \`d\` is an SVG path in the canonical
+ * absolute M/L/C/Z grammar \`normalizePath\` emits (see the importer), every
+ * coordinate a tile-normalised (x/vbW, y/vbH) fraction - so it can be handed
+ * straight to an SVG \`<path d>\` inside a \`viewBox="0 0 1 1"\`. \`bbox\` is the
+ * same shape as every other measured rect, for a caller that only needs a
+ * quick containment check.
+ */
+export interface CenterBook {
+  d: string;
+  bbox: RectTuple;
+}
+
 export interface MeasuredData {
   source: string;
   tile: { w: number; h: number; aspect: number };
   opening: RectTuple;
   searchBox: RectTuple | null;
+  centerBook: CenterBook | null;
   shelves: { books: RectTuple[] }[];
 }
 
@@ -185,6 +353,7 @@ export const MEASURED: MeasuredData = {
   tile: { w: ${round(vbW)}, h: ${round(vbH)}, aspect: ${round(vbH / vbW)} },
   opening: [${nrect(openingRect).join(', ')}],
   searchBox: ${searchBox ? `[${nrect(searchBox).join(', ')}]` : 'null'},
+  centerBook: ${centerBook ? `{ d: ${JSON.stringify(centerBook.d)}, bbox: [${nrect(centerBook.bbox).join(', ')}] }` : 'null'},
   shelves: [
 ${shelves
   .map(

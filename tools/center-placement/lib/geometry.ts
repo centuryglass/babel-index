@@ -39,6 +39,18 @@ const PROVISIONAL = {
 const round = (n: number) => Math.round(n * 1e4) / 1e4;
 
 /**
+ * Scale a `CenterBook.d` string onto a tile of size `W x H`.
+ *
+ * Every number in `import-shelf-svg.ts`'s canonical M/L/C/Z output is one
+ * half of an `x,y` pair (H/V/S/Q/T were all normalised away on import, and Z
+ * carries no numbers), so a blind regex over `x,y` pairs is enough - the same
+ * shortcut every other rect in this module takes (`r()`, above), just applied
+ * to path data instead of four numbers.
+ */
+const scalePathData = (d: string, W: number, H: number) =>
+  d.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${round(Number(x) * W)},${round(Number(y) * H)}`);
+
+/**
  * The tile's shape, from the trace itself.
  *
  * `height` defaults to this rather than to `width`. It used to default to a
@@ -75,12 +87,20 @@ export interface SideReturn {
   inner: { x: number; top: number; bottom: number };
 }
 
+/** The open book's exact outline, scaled to a tile size - see measured.ts's `CenterBook`. */
+export interface CenterBook {
+  d: string;
+  bbox: Rect;
+}
+
 export interface TileLayout {
   width: number;
   height: number;
   measured: true;
   opening: Rect;
   searchBox: Rect;
+  /** the open book painted into a shelf gap - null if the trace has none */
+  centerBook: CenterBook | null;
   shelves: Shelf[];
   floorLine: number;
   sideReturn: number;
@@ -106,6 +126,9 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
 
   const opening = r(MEASURED.opening);
   const searchBox = r(MEASURED.searchBox!);
+  const centerBook: CenterBook | null = MEASURED.centerBook
+    ? { d: scalePathData(MEASURED.centerBook.d, W, H), bbox: r(MEASURED.centerBook.bbox) }
+    : null;
 
   const shelves: Shelf[] = MEASURED.shelves.map((s, index) => ({
     index,
@@ -124,6 +147,7 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
     measured: true,
     opening,
     searchBox,
+    centerBook,
     shelves,
     floorLine,
     sideReturn,

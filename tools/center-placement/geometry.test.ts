@@ -41,6 +41,15 @@ test('every book on a shelf stands on the same line', () => {
   }
 });
 
+test('the traced center book, if any, has a real bbox inside the tile and a path that starts and ends closed', () => {
+  if (!MEASURED.centerBook) return;
+  const [x, y, w, h] = MEASURED.centerBook.bbox;
+  assert.ok(w > 0 && h > 0, `degenerate centerBook bbox ${MEASURED.centerBook.bbox}`);
+  assert.ok(x >= 0 && y >= 0 && x + w <= 1.0001 && y + h <= 1.0001, `centerBook bbox outside tile: ${MEASURED.centerBook.bbox}`);
+  assert.ok(/^M/.test(MEASURED.centerBook.d), 'centerBook.d must start with an absolute moveto');
+  assert.ok(/Z$/.test(MEASURED.centerBook.d), 'centerBook.d must close its subpath');
+});
+
 test('layout scales linearly with tile size', () => {
   const a = layout({ width: 512 });
   const b = layout({ width: 1024 });
