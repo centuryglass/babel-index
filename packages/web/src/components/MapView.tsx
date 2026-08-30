@@ -196,7 +196,7 @@ export function MapView({
           own empty state: the card's "No keywords recorded for this room" is
           right for something a reader deliberately opened, and wrong for a
           cursor that is sitting on wallpaper - which is four cells in five. The
-          canvas's own aria-label already says "a blank wall"; saying it again
+          canvas's own aria-label already says "a Babel shelf"; saying it again
           in different words is noise on every arrow press.
         */}
         {cursorEntry && (
@@ -322,7 +322,7 @@ export function MapView({
       </button>
       {DEBUG && (
       <div className="panel">
-        <h1>The Indexing of Babel</h1>
+        <h1>The Index of Babel</h1>
         <p className="sub">
           offline · {total} rooms in {manifest.directory?.split('/').slice(-1)[0]}
           {described > 0 && <> · {described} described</>}

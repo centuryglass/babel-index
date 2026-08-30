@@ -219,7 +219,8 @@ export function windowFor(
 }
 
 /**
- * The catalog's own default order: every room id, by filename.
+ * The catalog's own default order: every room id, by title (or filename,
+ * for a room with none).
  *
  * The map's idle order is a shuffle - there is no "index order" worth reading
  * on a wall of tiles nobody can alphabetize by eye. A LIST is exactly the
@@ -231,15 +232,21 @@ export function windowFor(
  * would be its own bug.
  *
  * @param rooms manifest.rooms, indexed by id
+ * @param metadata indexed by room id, as `joinMetadata()` returns; a room
+ *   with no entry or no title sorts by its filename instead
  * @returns room ids
  */
-export function alphabeticalOrder(rooms: { file: string }[]): number[] {
+export function alphabeticalOrder(
+  rooms: { file: string }[],
+  metadata?: (import('../../../map/metadata.ts').RoomMeta | null)[] | null
+): number[] {
+  const keyOf = (id: number) => metadata?.[id]?.title || rooms[id].file;
   return rooms
     .map((room, id) => id)
     .sort((a, b) => {
-      const fa = rooms[a].file;
-      const fb = rooms[b].file;
-      return fa < fb ? -1 : fa > fb ? 1 : 0;
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
 }
 

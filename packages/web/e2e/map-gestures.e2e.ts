@@ -46,9 +46,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
   test('the library opens', async () => {
     const { page, origin } = session;
-    assert.equal(await page.title(), 'The Indexing of Babel');
+    assert.equal(await page.title(), 'The Index of Babel');
     await assert.doesNotReject(page.locator('.panel h1').waitFor({ timeout: 5000 }));
-    assert.equal(await page.locator('.panel h1').textContent(), 'The Indexing of Babel');
+    assert.equal(await page.locator('.panel h1').textContent(), 'The Index of Babel');
 
     const { count } = await (await fetch(`${origin}/api/manifest`)).json();
     assert.match(await page.locator('.panel .sub').textContent(), new RegExp(`offline · ${count} rooms`));
@@ -344,7 +344,10 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // file reuses this same fixed point for the same reason.
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
-    assert.match(await card.locator('.card-id').textContent(), /^room \d+/);
+    // `.card-id` now leads with the room's title when it has one, so a real
+    // room is confirmed via the dialog's own accessible name (`desc.name`,
+    // `describeRoom`) instead - unaffected by title/filename display order.
+    assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
 
     const chips = card.locator('.chip');
     assert.equal(await chips.count(), 3, 'the sample corpus gives every room three keywords');
