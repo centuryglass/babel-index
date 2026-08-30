@@ -1,0 +1,10 @@
+{
+  "_comment": "Gemma3 tokenizer (llama-server at localhost:8765). Token ids whose decoded text contains an em dash, found by probing /tokenize with the obvious contexts (bare, space-prefixed, doubled/tripled, fused with adjacent punctuation). Not an exhaustive vocab scan -- see CLAUDE.md / conversation history for the full-scan fallback if these turn out to be insufficient.",
+  "237028": "—",
+  "2192": " —",
+  "12204": "——",
+  "130532": "———",
+  "29333": ".—",
+  "123409": "?—",
+  "120867": ",—"
+}
