@@ -22,12 +22,14 @@ import {
   searchBoxScreenRect,
   isSearchBoxUsable,
   searchBoxAtPoint,
+  centerBookAtPoint,
   areSpinesLegible,
   overlapsViewport,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
 } from './lib/center.ts';
+import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
 import { CELL_ASPECT, fitZoom, type Camera } from './lib/camera.ts';
 import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
@@ -79,6 +81,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // currently is on screen), so it gets the same imperative-ref treatment as
   // the two center-tile overlays above rather than being React state.
   const searchArrowRef = useRef<HTMLSpanElement>(null);
+  // The open book's hotspot - positioned and shown/hidden imperatively from
+  // the render loop exactly like `booksRef`, one button rather than forty
+  // because it is one fixed rect (the whole cell, like `booksRef`), holding
+  // an SVG that traces the exact silhouette (`CENTER_BOOK_PATH`) rather than
+  // a rectangle.
+  const centerBookRef = useRef<HTMLButtonElement>(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -241,7 +249,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // why a search and a clear are the only things that can move a room's
   // catalog row, exactly as they are the only things that move it on the map.
   const catalogOrder = useMemo(() => {
-    const base = result ? result.order : alphabeticalOrder(manifest.rooms);
+    const base = result ? result.order : alphabeticalOrder(manifest.rooms, metadata);
     return favoriteOrder(filterBlockedIds(base, metadata, blockedTagSet), {
       mode: sortMode,
       ...favorites.sortInput,
@@ -317,6 +325,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // A reserved book on the center shelf opens this instead of running a
   // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // The open book painted into a shelf gap - a distinct hotspot from the
+  // lettered books above, reached the same way in both views: a tap routed
+  // through `centerBookAtPoint` on the map, an ordinary click in the catalog.
+  const [artistStatementOpen, setArtistStatementOpen] = useState(false);
+  const openArtistStatement = useCallback(() => setArtistStatementOpen(true), []);
 
   // Right-click or long press opens the room's card. The pick is anchored to
   // where it happened rather than tracking the tile: the card names its room,
@@ -578,7 +592,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // tile cache above is built with `onLoad: requestDraw`, so the request has to
   // exist before the hook that fulfils it - one ref, and the cycle is broken.
   useMapRenderer({
-    canvasRef, searchFormRef, booksRef, searchArrowRef, draw, anim, keyboardUsed, cam, mode,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed, cam, mode,
     layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay, blockedCount,
   });
 
@@ -750,6 +764,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       return;
     }
 
+    // The open book sits in a shelf gap, outside the lettered runs
+    // `bookAtPoint` walks, so it needs its own check - before the books, same
+    // as the search field above, since nothing about it overlaps a spine.
+    if (centerBookAtPoint(px, py, cell)) {
+      openArtistStatement();
+      return;
+    }
+
     const slotIndex = bookAtPoint(px, py, cell);
     if (slotIndex != null) onBook(slotIndex);
   };
@@ -796,6 +818,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         searchFormRef={searchFormRef}
         booksRef={booksRef}
         searchArrowRef={searchArrowRef}
+        centerBookRef={centerBookRef}
+        onOpenArtistStatement={openArtistStatement}
         manifest={manifest}
         total={total}
         described={described}
@@ -863,6 +887,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           favoriteFor={favoriteFor}
           centreSlots={centreSlots}
           onBook={onBook}
+          onOpenArtistStatement={openArtistStatement}
           cellOfId={(id) => cellById.get(id) ?? null}
           history={history}
           onForgetSearches={forgetSearches}
@@ -923,6 +948,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           onToggleTag={toggleBlockedTag}
           blockedCount={blockedCount}
         />
+      )}
+
+      {artistStatementOpen && (
+        <ArtistStatementOverlay onClose={() => setArtistStatementOpen(false)} />
       )}
 
       {card && cardDescription && (

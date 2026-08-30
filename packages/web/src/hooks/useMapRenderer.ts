@@ -24,6 +24,7 @@
  */
 import { useEffect } from 'react';
 import { cursorCell, type Camera } from '../lib/camera.ts';
+import { centerBookAtPoint, centerCellRect } from '../lib/center.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
@@ -68,6 +69,8 @@ interface UseMapRendererOpts {
   searchFormRef: { current: HTMLFormElement | null };
   /** the center tile's shelf of buttons */
   booksRef: { current: HTMLElement | null };
+  /** the open book painted into a shelf gap - a distinct hotspot, not one of the shelf's buttons */
+  centerBookRef?: { current: HTMLElement | null };
   /** the search badge's orbiting arrow */
   searchArrowRef?: { current: HTMLElement | null };
   /** assigned by this hook; called by `requestDraw` */
@@ -98,6 +101,7 @@ export function useMapRenderer({
   searchFormRef,
   booksRef,
   searchArrowRef,
+  centerBookRef,
   draw,
   anim,
   keyboardUsed,
@@ -149,7 +153,8 @@ export function useMapRenderer({
       const searchEl = searchFormRef.current;
       const booksEl = booksRef.current;
       const arrowEl = searchArrowRef?.current;
-      if (searchEl || booksEl || arrowEl) {
+      const bookEl = centerBookRef?.current;
+      if (searchEl || booksEl || arrowEl || bookEl) {
         const { box, usable, cellRect, books } = centreOverlay(w, h);
         if (searchEl) {
           searchEl.style.display = usable ? 'block' : 'none';
@@ -171,6 +176,19 @@ export function useMapRenderer({
             booksEl.style.top = `${cellRect.y}px`;
             booksEl.style.width = `${cellRect.w}px`;
             booksEl.style.height = `${cellRect.h}px`;
+          }
+        }
+        // The open book: same visibility gate and same box as the shelf - it
+        // is an SVG path drawn with `viewBox="0 0 1 1"` over the whole cell,
+        // exactly like `booksEl`'s buttons are percentages of it, so it needs
+        // no rect of its own.
+        if (bookEl) {
+          bookEl.style.display = books ? 'block' : 'none';
+          if (books) {
+            bookEl.style.left = `${cellRect.x}px`;
+            bookEl.style.top = `${cellRect.y}px`;
+            bookEl.style.width = `${cellRect.w}px`;
+            bookEl.style.height = `${cellRect.h}px`;
           }
         }
         // The arrow, pointed at the center tile's screen position rather
@@ -277,13 +295,34 @@ export function useMapRenderer({
     };
     window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onDown);
+
+    // The open book's hover highlight. Cosmetic only - `centerBookRef`'s
+    // element is `pointer-events: none` (see index.html), the same reasoning
+    // as the shelf's buttons: the canvas keeps every gesture, so a pan whose
+    // start happens to land here must still pan. A real click already reaches
+    // `onTap` -> `centerBookAtPoint` in main.tsx; this listener only decides
+    // whether the highlight class shows, so it does not need to distinguish a
+    // hover from the start of a drag the way gesture arbitration does.
+    const onMove = (e: PointerEvent) => {
+      const el = centerBookRef?.current;
+      if (!el) return;
+      const rect = canvas.getBoundingClientRect();
+      const cellRect = centerCellRect(cam.current, { width: canvas.clientWidth, height: canvas.clientHeight });
+      const hovering = centerBookAtPoint(e.clientX - rect.left, e.clientY - rect.top, cellRect);
+      el.classList.toggle('hover', hovering);
+    };
+    const onLeave = () => centerBookRef?.current?.classList.remove('hover');
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerleave', onLeave);
     return () => {
       if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerleave', onLeave);
     };
   }, [
-    canvasRef, searchFormRef, booksRef, searchArrowRef, draw, anim, keyboardUsed,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode, blockedCount,
   ]);
 }

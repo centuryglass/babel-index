@@ -44,6 +44,21 @@ test('the optional alt is carried, trimmed, and null when absent', () => {
     assert.equal(normaliseEntry(raw).alt, null, JSON.stringify(raw));
 });
 
+test('the optional title is carried, trimmed, and null when absent', () => {
+  const withTitle = normaliseEntry({ story: 'x', title: '  The Unsurveyed Room  ' });
+  assert.equal(withTitle.title, 'The Unsurveyed Room');
+
+  for (const raw of [{ story: 'x' }, { story: 'x', title: '   ' }, { story: 'x', title: 42 }])
+    assert.equal(normaliseEntry(raw).title, null, JSON.stringify(raw));
+});
+
+test('an entry carrying only a title still counts as an entry', () => {
+  const e = normaliseEntry({ title: 'The Unsurveyed Room' });
+  assert.ok(e);
+  assert.deepEqual(e.keywords, []);
+  assert.equal(e.story, null);
+});
+
 test('an entry carrying only an alt still counts as an entry', () => {
   // It describes the room, which is the question "has metadata" is asking -
   // and a caption is the one description some rooms will ever have.

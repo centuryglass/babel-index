@@ -60,6 +60,93 @@ export const CENTER_SHELF_RECT: Rect = GEOMETRY.opening;
 export const CENTER_SEARCH_RECT: Rect = GEOMETRY.searchBox;
 
 /**
+ * The open book painted into a shelf gap, traced as an exact SVG path rather
+ * than a box - a bounding rect for this shape laps onto the spines either
+ * side of it, which is the whole reason `import-shelf-svg.ts` walks the
+ * traced `<path>` instead of reducing it to one. Every coordinate is a cell
+ * fraction against `{x,y,w,h}` = `{width:1,height:1}`, i.e. this is exactly
+ * what an SVG `viewBox="0 0 1 1"` with `preserveAspectRatio="none"` wants,
+ * the same per-axis stretch every other rect on this tile gets. Null on a
+ * trace that carries no `center_book`, in which case the hotspot never lights
+ * up. Distinct from `BOOK_RECTS`: it is decorative art occupying a gap
+ * between two runs (AGENTS.md's "open 'Index of Babel' book"), not one of the
+ * lettered spines, so it carries its own hit-test rather than a slot id.
+ */
+export const CENTER_BOOK_PATH: string | null = GEOMETRY.centerBook?.d ?? null;
+
+/**
+ * `CENTER_BOOK_PATH` flattened into a polygon, once at module load - the
+ * shape `centerBookAtPoint` below tests a point against. Cubic segments are
+ * sampled rather than solved exactly: a hover/hit test has no need for a
+ * mathematically exact curve, only one fine enough that the boundary looks
+ * right at screen resolution, and a fixed sample count keeps this pure and
+ * assertable without a browser (no `Path2D`/`isPointInFill`, which need a
+ * live canvas).
+ */
+/** Cubic Bezier sample count per curve segment - see `CENTER_BOOK_POLYGON`. */
+const CURVE_SAMPLES = 12;
+
+const CENTER_BOOK_POLYGON: { x: number; y: number }[] | null = CENTER_BOOK_PATH
+  ? flattenPath(CENTER_BOOK_PATH)
+  : null;
+
+/**
+ * Flatten an SVG path in the canonical absolute M/L/C/Z grammar
+ * `import-shelf-svg.ts` emits into a polygon of `{x, y}` points.
+ *
+ * Only what that grammar ever contains - the same restriction the importer
+ * itself enforces on import, so a path that reaches this function is already
+ * known to be one of these four commands.
+ */
+function flattenPath(d: string): { x: number; y: number }[] {
+  const tokens = d.match(/[MLCZ]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
+  const points: { x: number; y: number }[] = [];
+  let cx = 0;
+  let cy = 0;
+  let i = 0;
+  while (i < tokens.length) {
+    const cmd = tokens[i++];
+    if (cmd === 'Z') continue;
+    if (cmd === 'M' || cmd === 'L') {
+      cx = Number(tokens[i++]);
+      cy = Number(tokens[i++]);
+      points.push({ x: cx, y: cy });
+    } else if (cmd === 'C') {
+      const x1 = Number(tokens[i++]);
+      const y1 = Number(tokens[i++]);
+      const x2 = Number(tokens[i++]);
+      const y2 = Number(tokens[i++]);
+      const ex = Number(tokens[i++]);
+      const ey = Number(tokens[i++]);
+      for (let s = 1; s <= CURVE_SAMPLES; s++) {
+        const t = s / CURVE_SAMPLES;
+        const mt = 1 - t;
+        points.push({
+          x: mt * mt * mt * cx + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * ex,
+          y: mt * mt * mt * cy + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * ey,
+        });
+      }
+      cx = ex;
+      cy = ey;
+    }
+  }
+  return points;
+}
+
+/** Even-odd ray-casting point-in-polygon test, pure and browser-free. */
+function pointInPolygon(px: number, py: number, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x;
+    const yi = poly[i].y;
+    const xj = poly[j].x;
+    const yj = poly[j].y;
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
  * The opening view's real framing target: the bounding-box union of the
  * bookshelf and the search box. The search box sits above the shelf, outside
  * `CENTER_SHELF_RECT`, so fitting to the shelf alone risks leaving the live
@@ -340,6 +427,20 @@ export function searchBoxAtPoint(px: number, py: number, cellRect: Rect): boolea
   if (!isSearchBoxUsable(cellRect)) return false;
   const b = searchBoxScreenRect(cellRect);
   return px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
+}
+
+/**
+ * Whether a screen point lands on the open book's SILHOUETTE, not merely its
+ * bounding box - a box loose enough to cover the whole shape laps onto the
+ * spines either side of it (the reason `CENTER_BOOK_PATH` traces the outline
+ * at all). Converts to the same cell-local fraction space `CENTER_BOOK_PATH`
+ * is already in, then runs the flattened polygon through `pointInPolygon`.
+ */
+export function centerBookAtPoint(px: number, py: number, cellRect: Rect): boolean {
+  if (!CENTER_BOOK_POLYGON) return false;
+  const localX = (px - cellRect.x) / cellRect.w;
+  const localY = (py - cellRect.y) / cellRect.h;
+  return pointInPolygon(localX, localY, CENTER_BOOK_POLYGON);
 }
 
 /**

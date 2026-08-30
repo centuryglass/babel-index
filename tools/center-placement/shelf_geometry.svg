@@ -9,13 +9,12 @@
    viewBox="0 0 1365.3333 1024"
    sodipodi:docname="shelf_geometry.svg"
    inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xml:space="preserve"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg">
-  <defs
-     id="defs1" />
-  <sodipodi:namedview
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+     id="defs1" /><sodipodi:namedview
      id="namedview1"
      pagecolor="#ffffff"
      bordercolor="#666666"
@@ -25,346 +24,307 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      showgrid="false"
-     inkscape:zoom="0.43652346"
-     inkscape:cx="664.34"
-     inkscape:cy="167.23041"
+     inkscape:zoom="0.87304692"
+     inkscape:cx="467.90154"
+     inkscape:cy="276.04473"
      inkscape:window-width="1920"
      inkscape:window-height="1022"
      inkscape:window-x="2160"
      inkscape:window-y="1503"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g1" />
-  <g
+     inkscape:current-layer="g1" /><g
      inkscape:groupmode="layer"
      inkscape:label="Image"
-     id="g1">
-    <rect
+     id="g1"><rect
        style="fill:#d4aa00;fill-rule:evenodd;stroke-width:0.752466;paint-order:markers stroke fill"
        id="rect1"
        width="1263.4906"
        height="71.240105"
        x="51.83551"
        y="19.472034"
-       inkscape:label="search_box" />
-    <rect
+       inkscape:label="search_box" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2"
        width="32.071587"
        height="144.89485"
        x="400.32211"
        y="351.06934"
-       inkscape:label="book0" />
-    <rect
+       inkscape:label="book0" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1"
        width="32.071587"
        height="144.89485"
        x="435.18115"
        y="351.06934"
-       inkscape:label="book1" />
-    <rect
+       inkscape:label="book1" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3"
        width="32.071587"
        height="144.89485"
        x="470.08054"
        y="351.06934"
-       inkscape:label="book2" />
-    <rect
+       inkscape:label="book2" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6"
        width="32.071587"
        height="144.89485"
        x="504.20816"
        y="351.06934"
-       inkscape:label="book3" />
-    <rect
+       inkscape:label="book3" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2"
        width="32.071587"
        height="144.89485"
        x="540.20813"
        y="351.06934"
-       inkscape:label="book4" />
-    <rect
+       inkscape:label="book4" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5"
        width="32.071587"
        height="144.89485"
        x="576.21741"
        y="351.06934"
-       inkscape:label="book5" />
-    <rect
+       inkscape:label="book5" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9"
        width="32.071587"
        height="144.89485"
        x="612.21741"
        y="351.06934"
-       inkscape:label="book6" />
-    <rect
+       inkscape:label="book6" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2"
        width="32.071587"
        height="144.89485"
        x="648.21741"
        y="351.06934"
-       inkscape:label="book7" />
-    <rect
+       inkscape:label="book7" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4"
        width="32.071587"
        height="144.89485"
        x="684.21741"
        y="351.06934"
-       inkscape:label="book8" />
-    <rect
+       inkscape:label="book8" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0"
        width="32.071587"
        height="144.89485"
        x="719.35828"
        y="351.06934"
-       inkscape:label="book9" />
-    <rect
+       inkscape:label="book9" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0-6"
        width="32.071587"
        height="144.89485"
        x="754.78552"
        y="351.06934"
-       inkscape:label="book10" />
-    <rect
+       inkscape:label="book10" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0-6-1"
        width="32.071587"
        height="144.89485"
        x="789.63129"
        y="351.06934"
-       inkscape:label="book11" />
-    <rect
+       inkscape:label="book11" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0-6-1-6"
        width="32.071587"
        height="144.89485"
        x="825.05859"
        y="351.06934"
-       inkscape:label="book12" />
-    <rect
+       inkscape:label="book12" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0-6-1-6-7"
        width="32.071587"
        height="144.89485"
        x="860.4859"
        y="351.06934"
-       inkscape:label="book13" />
-    <rect
+       inkscape:label="book13" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0-6-1-6-7-4"
        width="32.071587"
        height="144.89485"
        x="895.90436"
        y="351.06934"
-       inkscape:label="book14" />
-    <rect
+       inkscape:label="book14" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.849097;paint-order:markers stroke fill"
        id="rect2-1-3-6-2-5-9-2-4-0-6-1-6-7-4-0"
        width="32.071587"
        height="144.89485"
        x="930.18628"
        y="351.06934"
-       inkscape:label="book14" />
-    <rect
+       inkscape:label="book14" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8"
        width="29.78076"
        height="147.75839"
        x="399.74942"
        y="543.92389"
-       inkscape:label="book15" />
-    <rect
+       inkscape:label="book15" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9"
        width="29.78076"
        height="147.75839"
        x="435.74942"
        y="543.92389"
-       inkscape:label="book16" />
-    <rect
+       inkscape:label="book16" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9-9"
        width="29.78076"
        height="147.75839"
        x="471.17673"
        y="543.92389"
-       inkscape:label="book17" />
-    <rect
+       inkscape:label="book17" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9-9-9"
        width="29.78076"
        height="147.75839"
        x="507.17673"
        y="543.92389"
-       inkscape:label="book18" />
-    <rect
+       inkscape:label="book18" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6"
        width="29.78076"
        height="147.75839"
        x="827.17676"
        y="543.92389"
-       inkscape:label="book19" />
-    <rect
+       inkscape:label="book19" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9"
        width="29.78076"
        height="147.75839"
        x="861.45868"
        y="543.92389"
-       inkscape:label="book20" />
-    <rect
+       inkscape:label="book20" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7"
        width="29.78076"
        height="147.75839"
        x="897.17676"
        y="543.92389"
-       inkscape:label="book21" />
-    <rect
+       inkscape:label="book21" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.826256;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7"
        width="29.78076"
        height="147.75839"
        x="932.60406"
        y="543.92389"
-       inkscape:label="book22" />
-    <rect
+       inkscape:label="book22" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6"
        width="29.78076"
        height="149.47652"
        x="400.35345"
        y="739.05817"
-       inkscape:label="book23" />
-    <rect
+       inkscape:label="book23" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4"
        width="29.78076"
        height="149.47652"
        x="436.06711"
        y="739.05817"
-       inkscape:label="book24" />
-    <rect
+       inkscape:label="book24" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3"
        width="29.78076"
        height="149.47652"
        x="470.92615"
        y="739.05817"
-       inkscape:label="book25" />
-    <rect
+       inkscape:label="book25" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5"
        width="29.78076"
        height="149.47652"
        x="506.35788"
        y="739.05817"
-       inkscape:label="book26" />
-    <rect
+       inkscape:label="book26" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8"
        width="29.78076"
        height="149.47652"
        x="542.35791"
        y="739.05817"
-       inkscape:label="book27" />
-    <rect
+       inkscape:label="book27" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5"
        width="29.78076"
        height="149.47652"
        x="577.50342"
        y="739.05817"
-       inkscape:label="book28" />
-    <rect
+       inkscape:label="book28" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1"
        width="29.78076"
        height="149.47652"
        x="613.21704"
        y="739.05817"
-       inkscape:label="book29" />
-    <rect
+       inkscape:label="book29" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4"
        width="29.78076"
        height="149.47652"
        x="648.93066"
        y="739.05817"
-       inkscape:label="book30" />
-    <rect
+       inkscape:label="book30" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3"
        width="29.78076"
        height="149.47652"
        x="684.07617"
        y="739.05817"
-       inkscape:label="book31" />
-    <rect
+       inkscape:label="book31" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6"
        width="29.78076"
        height="149.47652"
        x="720.07617"
        y="739.05817"
-       inkscape:label="book32" />
-    <rect
+       inkscape:label="book32" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6-5"
        width="29.78076"
        height="149.47652"
        x="756.07617"
        y="739.05817"
-       inkscape:label="book33" />
-    <rect
+       inkscape:label="book33" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6-5-5"
        width="29.78076"
        height="149.47652"
        x="792.07617"
        y="739.05817"
-       inkscape:label="book34" />
-    <rect
+       inkscape:label="book34" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6-5-5-8"
        width="29.78076"
        height="149.47652"
        x="826.93066"
        y="739.05817"
-       inkscape:label="book35" />
-    <rect
+       inkscape:label="book35" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6-5-5-8-9"
        width="29.78076"
        height="149.47652"
        x="862.36255"
        y="739.05817"
-       inkscape:label="book36" />
-    <rect
+       inkscape:label="book36" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6-5-5-8-9-3"
        width="29.78076"
        height="149.47652"
        x="897.79443"
        y="739.05817"
-       inkscape:label="book37" />
-    <rect
+       inkscape:label="book37" /><rect
        style="fill:#ff0000;fill-rule:evenodd;stroke-width:0.831046;paint-order:markers stroke fill"
        id="rect2-8-9-9-9-6-9-7-7-6-4-3-5-8-5-1-4-3-6-5-5-8-9-3-8"
        width="29.78076"
        height="149.47652"
        x="933.79443"
        y="739.05817"
-       inkscape:label="book38" />
-  </g>
-</svg>
+       inkscape:label="book38" /><path
+       style="opacity:1;fill:#000000;fill-rule:evenodd;stroke-width:3.77953;paint-order:markers stroke fill"
+       d="m 576.21741,517.15434 -9.81028,140.59954 5.87259,3.43624 h 8.15873 c -1.1569,2.80402 -2.69292,5.52939 -3.29297,8.51902 -1.47434,4.86801 -0.32247,9.8076 -0.42953,14.67561 l 0.78747,7.29753 2.36232,4.44296 h 206.99137 l 1.29065,-13.10066 -0.57271,-13.24385 -4.39836,-8.59061 17.18121,-1.14541 c -0.20817,-13.49644 -2.2935,-29.80864 -3.93735,-45.45861 -1.23053,-32.0713 -0.3732,-64.02688 -3.48532,-96.28635 l -13.76748,-4.2953 -28.06264,-0.57271 -34.81612,1.14542 c -5.90903,0.39215 -11.88113,1.20185 -17.60879,2.86353 -4.61731,1.427 -9.66175,3.60031 -15.0355,6.72931 0,0 -1.83714,-1.64653 -2.69619,-1.93289 -0.85906,-0.28635 -8.30425,-3.65101 -8.30425,-3.65101 L 657.99111,514.57716 642.04935,513.14539 620.4788,512 l -22.7651,0.71586 -9.11418,1.50336 z"
+       id="path1"
+       sodipodi:nodetypes="ccccccccccccccccccccsccccccc"
+       inkscape:label="center_book" /></g></svg>

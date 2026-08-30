@@ -14,7 +14,7 @@
       simulator does not settle iOS gesture arbitration.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The Indexing of Babel</title>
+    <title>The Index of Babel</title>
     <!-- Relative so a subpath deployment resolves it under <base href>
          instead of the browser's default same-origin /favicon.ico guess,
          which the reverse-proxied prefix never sees - see base-path.ts. -->
@@ -113,6 +113,30 @@
       }
       .center-books button:hover { background: none; }
       .center-books button:focus-visible { outline-offset: 1px; }
+
+      /*
+       * The open book's hotspot - sized over the WHOLE cell like
+       * `.center-books`, not its own box; the highlight is the traced SVG
+       * path inside it (`CENTER_BOOK_PATH`), stretched per axis by
+       * `viewBox="0 0 1 1"` + `preserveAspectRatio="none"` exactly like the
+       * tile image itself, so the highlight is the exact silhouette rather
+       * than a rectangle that laps onto the spines either side of it.
+       * Positioned and shown/hidden by the same render loop as
+       * `.center-books` and for the same reason `pointer-events: none`: a
+       * real click already reaches `onTap` -> `centerBookAtPoint` through the
+       * canvas, so opening this up to the pointer would only take a gesture
+       * away from the map. The `.hover` class is toggled by that render
+       * loop's own pointermove listener (useMapRenderer.ts) rather than by
+       * CSS `:hover`, which never fires on a `pointer-events: none` element.
+       */
+      .center-book {
+        position: absolute; display: none; margin: 0; padding: 0; border: none;
+        background: none; pointer-events: none;
+      }
+      .center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .center-book path { fill: transparent; stroke: none; }
+      .center-book.hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
+      .center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
 
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
@@ -243,6 +267,7 @@
         margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
       }
       .card-id { color: var(--dim); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+      .card-id b { font-weight: 700; color: var(--ink); }
       .card-close {
         flex: none; width: 20px; height: 20px; padding: 0; line-height: 1;
         font-size: 15px; color: var(--dim); background: none; border: none; cursor: pointer;
@@ -468,6 +493,29 @@
         display: block; width: var(--catalog-thumb); height: auto;
         border-radius: 2px; background: #14110d; transform-origin: 0 0;
       }
+      /*
+        Only the center row's thumbnail wraps its tile - it is the one room
+        whose art carries an addressable hotspot (the open book), so it is the
+        one thumbnail that needs a positioning parent at all.
+      */
+      .catalog-tile-wrap { position: relative; flex: 0 0 auto; line-height: 0; }
+      /*
+        The open book's hotspot on the catalog's small thumbnail, filling the
+        whole thumbnail - the traced SVG path inside it is the actual
+        highlight shape, stretched per axis exactly like the map's own
+        `.center-book`. A real `:hover`/`:focus-visible` works here (unlike
+        the map) because this sits in an ordinary scrolling list, not over the
+        gesture-owning canvas - there is no pan to protect from a stray
+        pointerdown.
+      */
+      .catalog-center-book {
+        position: absolute; inset: 0; margin: 0; padding: 0; border: none;
+        background: none; cursor: pointer; width: 100%; height: 100%;
+      }
+      .catalog-center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .catalog-center-book path { fill: transparent; stroke: none; }
+      .catalog-center-book:hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
+      .catalog-center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
       /* Shown only on a story the clamp actually cut - see CatalogRow. */
       .catalog-more {
         font: inherit; font-size: 10px; color: #c8a95f; cursor: pointer;

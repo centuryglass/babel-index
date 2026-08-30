@@ -159,11 +159,17 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
       const card = page.locator('.card');
       await card.waitFor({ timeout: 5000 });
-      const cardText = await card.locator('.card-id').textContent();
+      // `.card-id`'s visible text now leads with the room's title when it has
+      // one, so it can no longer be parsed back into "Room N" and compared to
+      // the result button's text. The dialog's own accessible name
+      // (`desc.name`, from the same `describeRoom` call that built the result
+      // button's text) is the same string regardless of what the card
+      // displays visually - a direct, exact comparison instead of a prefix guess.
+      const cardLabel = await card.getAttribute('aria-label');
       const firstResultText = await options.first().textContent();
-      assert.ok(
-        firstResultText.startsWith(cardText.split(' · ')[0].replace(/^room/i, 'Room')),
-        `the opened card must be the room the result named: ${JSON.stringify({ firstResultText, cardText })}`
+      assert.equal(
+        cardLabel, firstResultText,
+        `the opened card must be the room the result named: ${JSON.stringify({ firstResultText, cardLabel })}`
       );
 
       // And the whole thing - search active, listbox populated, card open -

@@ -27,6 +27,14 @@
  * the corpus is generated, not a constraint the map needs, and rejecting a room
  * with two would lose real data to a rule nothing here depends on.
  *
+ * ### `title` is optional, and falls back to the filename everywhere it is shown
+ *
+ * A room may carry a human-written `title`, shown in place of its filename
+ * wherever a reader is told which room they're looking at, and used in place
+ * of the filename to alphabetize the catalog's idle order. Absent for most
+ * rooms until the corpus is retitled, which is why every consumer falls back
+ * to the filename rather than assuming one is there.
+ *
  * ### `alt`, and why it is optional in the strong sense
  *
  * A room may carry an `alt`: one sentence describing the PICTURE, for a reader
@@ -54,11 +62,24 @@ export interface Keyword {
 
 /** One room's normalised sidecar entry. */
 export interface RoomMeta {
+  title: string | null;
   keywords: Keyword[];
   story: string | null;
   alt: string | null;
   /** Tags a reader may choose to block; empty when the room carries none. */
   sensitiveContentTags: string[];
+}
+
+/**
+ * What a reader calls this room: its title, or "Room {id}" for a room the
+ * corpus hasn't retitled. The numeric fallback is meaningful on its own -
+ * every other consumer (the map's aria-live cursor, the search listbox, the
+ * catalog's default order) already names an untitled room this way - so
+ * this is the one place that fallback is written, rather than every caller
+ * re-deriving `Room ${id}` next to its own `entry?.title` check.
+ */
+export function roomTitle(entry: RoomMeta | null, id: number): string {
+  return entry?.title || `Room ${id}`;
 }
 
 /**
@@ -81,6 +102,7 @@ export function normaliseEntry(raw: unknown): RoomMeta | null {
       keywords.push({ text, type });
     }
 
+  const title = typeof entry.title === 'string' && entry.title.trim() ? entry.title.trim() : null;
   const story = typeof entry.story === 'string' && entry.story.trim() ? entry.story.trim() : null;
   const alt = typeof entry.alt === 'string' && entry.alt.trim() ? entry.alt.trim() : null;
 
@@ -95,7 +117,7 @@ export function normaliseEntry(raw: unknown): RoomMeta | null {
   // an empty object, a string, a number - is what null is for. A room with
   // only sensitive-content tags and nothing else to describe is not one of
   // these entries either - there's nothing here worth reporting as coverage.
-  return keywords.length || story || alt ? { keywords, story, alt, sensitiveContentTags } : null;
+  return keywords.length || story || alt || title ? { title, keywords, story, alt, sensitiveContentTags } : null;
 }
 
 /**
