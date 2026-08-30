@@ -65,7 +65,7 @@ from PySide6.QtWidgets import (
 )
 
 from babel_index_review import core
-from tag.describe_image import MODELS, DEFAULT_MODEL, available_models
+from tag.describe_image import MODELS, DEFAULT_MODEL, LOCAL_PREFIX, available_models
 
 THUMB = 128           # thumbnail edge, px
 CELL = THUMB + 22     # cell footprint incl. border/margins, for column math
@@ -562,13 +562,21 @@ class ReviewWindow(QMainWindow):
 
     # -- Model selector -----------------------------------------------------
     def _set_models(self, models: dict):
-        """Repopulate the model dropdown, preserving the current selection."""
+        """Repopulate the model dropdown, preserving the current selection.
+
+        Sorted alphabetically (case-insensitive) by label, except local-server
+        entries (model id starts with `local:`), which always sort first.
+        """
         if not models:
             return
         current = self.model_combo.currentData()
         self.model_combo.blockSignals(True)
         self.model_combo.clear()
-        for label, model_id in models.items():
+        ordered = sorted(
+            models.items(),
+            key=lambda item: (not item[1].startswith(LOCAL_PREFIX), item[0].casefold()),
+        )
+        for label, model_id in ordered:
             self.model_combo.addItem(label, model_id)
         # Keep the prior pick if it survived the refresh, else fall back to the
         # default model, else the first entry.
