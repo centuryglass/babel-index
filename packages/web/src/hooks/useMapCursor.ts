@@ -382,7 +382,11 @@ export function useMapCursor({
       setStatus,
     ]
   );
-  return { cursorLabel, cursorEntry, cursorDesc, onMapKeyDown, announceArrangement, keyboardUsed };
+  // The room under the cursor, or null on the center cell and on wallpaper -
+  // the two things that have no file to favorite.
+  const cursorId = cursorRoom.center || cursorRoom.generic ? null : cursorRoom.id;
+
+  return { cursorLabel, cursorEntry, cursorDesc, cursorId, onMapKeyDown, announceArrangement, keyboardUsed };
 }
 
 /**
