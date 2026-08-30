@@ -720,5 +720,13 @@ export function useMapCamera({
    */
   const flightTarget = useCallback((): Camera => flight.current?.to ?? cam.current, []);
 
-  return { cam, flyTo, nudgeBy, flightTarget };
+  /**
+   * Whether a flight is currently in the air - a synchronous read for a
+   * caller that needs to know it is safe to treat `cam.current` as settled
+   * (e.g. a rearrangement that plans against whatever the camera is already
+   * showing, rather than flying it home first).
+   */
+  const isFlying = useCallback((): boolean => flight.current != null, []);
+
+  return { cam, flyTo, nudgeBy, flightTarget, isFlying };
 }

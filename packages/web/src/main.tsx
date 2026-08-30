@@ -202,25 +202,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // `enabled` is false and no favorite control renders anywhere.
   const favorites = useFavorites({ manifest, setStatus });
 
-  /**
-   * One room's favorite state, in the shape `RoomDetails` wants it.
-   *
-   * Handed down as a function rather than a map so a component asks about the
-   * room it is rendering and nothing builds a per-room object for a corpus of
-   * rooms nobody is looking at. Null for a generic cell (no file to favorite)
-   * and null throughout when the feature is off.
-   */
-  const favoriteFor = useCallback(
-    (id: number | null | undefined) =>
-      favorites.enabled && id != null && id >= 0
-        ? {
-            on: favorites.isFavorite(id),
-            count: favorites.countOf(id),
-            toggle: () => void favorites.toggle(id),
-          }
-        : null,
-    [favorites.enabled, favorites.isFavorite, favorites.countOf, favorites.toggle]
-  );
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
@@ -455,7 +436,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { cam, flyTo, nudgeBy, flightTarget } = useMapCamera({
+  const { cam, flyTo, nudgeBy, flightTarget, isFlying } = useMapCamera({
     canvasRef,
     resistanceAt,
     onChange: requestDraw,
@@ -634,12 +615,46 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     searchFormRef,
     cam,
     flyTo,
+    isFlying,
     requestDraw,
     config,
     anim,
     announce,
   });
   requestAnimationRef.current = requestAnimation;
+
+  /**
+   * One room's favorite state, in the shape `RoomDetails` wants it.
+   *
+   * Handed down as a function rather than a map so a component asks about the
+   * room it is rendering and nothing builds a per-room object for a corpus of
+   * rooms nobody is looking at. Null for a generic cell (no file to favorite)
+   * and null throughout when the feature is off.
+   *
+   * Toggling asks for the sliding-tile treatment, unparked, whenever the map
+   * is sorted by favorites: the toggle changes `favorites.sortInput`, which
+   * changes `order` below, and without this that resort would just snap -
+   * `useRearrangement`'s effect only animates a change a caller asked for. It
+   * is deliberately NOT the parked kind `changeSort`/`reorder` ask for - the
+   * reader did not ask to change what they are looking at, they clicked a
+   * star, so the camera has no business leaving.
+   */
+  const favoriteFor = useCallback(
+    (id: number | null | undefined) =>
+      favorites.enabled && id != null && id >= 0
+        ? {
+            on: favorites.isFavorite(id),
+            count: favorites.countOf(id),
+            toggle: () => {
+              if (mode === 'map' && sortMode !== 'relevance') {
+                requestAnimation('', { parkAtCenter: false });
+              }
+              void favorites.toggle(id);
+            },
+          }
+        : null,
+    [favorites.enabled, favorites.isFavorite, favorites.countOf, favorites.toggle, mode, sortMode, requestAnimation]
+  );
 
   // A chip on the card is a live search: reading a room becomes a way of moving
   // through the library rather than a dead end. The card closes because the map
