@@ -19,8 +19,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -68,24 +69,31 @@ export async function waitFor(predicate, timeoutMs, message) {
  * this is never hard-coded), `roomCount` for the catalog's "every room once"
  * assertion, and a `consoleErrors` array a file's own "nothing was logged to
  * the console" test reads at the end.
+ *
+ * `favorites: true` boots the server with `--favorites` against a fresh,
+ * per-run temp file - no file existing is an empty store (see
+ * `favorites.ts`'s `read`), so nothing has to be seeded. Every other file in
+ * this suite omits it, which is why `manifest.favorites` is null and no
+ * favorite control renders anywhere else in the suite - a favorites-specific
+ * test needs the flag on purpose, not as an oversight to fix elsewhere.
  */
-export async function openLibrary() {
+export async function openLibrary({ favorites = false } = {}) {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
 
-  const server = spawn(
-    process.execPath,
-    [
-      '--import',
-      './build/register.mjs',
-      'packages/server/index.ts',
-      '--port',
-      String(port),
-      '--images',
-      'assets/corpus-sample',
-    ],
-    { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] }
-  );
+  const favoritesDir = favorites ? await mkdtemp(join(tmpdir(), 'babel-e2e-favorites-')) : null;
+  const args = [
+    '--import',
+    './build/register.mjs',
+    'packages/server/index.ts',
+    '--port',
+    String(port),
+    '--images',
+    'assets/corpus-sample',
+  ];
+  if (favoritesDir) args.push('--favorites', join(favoritesDir, 'favorites.json'));
+
+  const server = spawn(process.execPath, args, { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   server.stdout.on('data', (d) => (log += d));
   server.stderr.on('data', (d) => (log += d));
@@ -150,10 +158,11 @@ export async function openLibrary() {
       { timeout: 30_000 }
     );
 
-    return { server, browser, page, origin, flightMs, roomCount, consoleErrors };
+    return { server, browser, page, origin, flightMs, roomCount, consoleErrors, favoritesDir };
   } catch (err) {
     await browser?.close().catch(() => {});
     server.kill();
+    if (favoritesDir) await rm(favoritesDir, { recursive: true, force: true }).catch(() => {});
     throw err;
   }
 }
@@ -168,7 +177,7 @@ export async function closeLibrary(session, screenshotName) {
   // cleaned up after itself in that case (see the try/catch there), so
   // there is nothing left to close here.
   if (!session) return;
-  const { page, browser, server } = session;
+  const { page, browser, server, favoritesDir } = session;
   // Whatever state the run ended in, keep a picture of it - it is the
   // fastest way to read a failure that happened on a machine you are not at.
   if (page && !page.isClosed()) {
@@ -177,6 +186,7 @@ export async function closeLibrary(session, screenshotName) {
   }
   await browser?.close();
   server?.kill();
+  if (favoritesDir) await rm(favoritesDir, { recursive: true, force: true }).catch(() => {});
 }
 
 /** Parse the HUD, which is the app's own account of what it just drew. */

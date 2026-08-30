@@ -534,12 +534,13 @@
         width apart.
       */
       .catalog-head {
-        display: flex; align-items: baseline; justify-content: space-between;
+        display: flex; align-items: baseline;
         gap: 12px; margin-bottom: 9px;
       }
       .catalog-name {
         margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
         display: flex; align-items: baseline; gap: 8px; min-width: 0;
+        flex: 1 1 auto;
         /* One line: "Room 25" breaking in two pushed the whole row down. */
         white-space: nowrap; overflow: hidden;
       }
