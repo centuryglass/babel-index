@@ -71,15 +71,6 @@ export function useRearrangement({
   // alongside `animateNext` because they are one act, not two: see the file
   // comment above.
   const pendingNote = useRef('');
-  // Whether this animation should fly home to the center first. True for
-  // everything a reader explicitly asks for (the reorder button, a sort
-  // change, a search) - the fly-home is what gives those a wall of rooms to
-  // slide across. False for a resort that happens under a reader who is
-  // already looking at something else (a favorite toggled live while sorted
-  // by favorites): the board math needs no particular camera position - see
-  // `board.ts`'s "nowhere near the camera" case - so there is nothing to
-  // gain and a reader's place on the map to lose by moving it.
-  const parkAtCenterRef = useRef(true);
   const arrangement = useRef<{ layout: MapLayout; order: number[] } | null>(null);
   // What to do once the new arrangement has actually landed on screen - after
   // the slide (and, if parked, the fly back) rather than merely launched. Read
@@ -89,10 +80,9 @@ export function useRearrangement({
   const pendingOnSettledRef = useRef<(() => void) | null>(null);
 
   const requestAnimation = useCallback(
-    (note = '', opts?: { parkAtCenter?: boolean; onSettled?: () => void }) => {
+    (note = '', opts?: { onSettled?: () => void }) => {
       animateNext.current = true;
       pendingNote.current = note;
-      parkAtCenterRef.current = opts?.parkAtCenter ?? true;
       pendingOnSettledRef.current = opts?.onSettled ?? null;
     },
     []
@@ -101,24 +91,26 @@ export function useRearrangement({
   /**
    * Slide the library from one arrangement into another.
    *
-   * When `parkAtCenter` is true the camera flies home to the center at the
-   * opening zoom first, and stays there for the duration - the fly-home gives
-   * the animation a wall of rooms to work with. When it is false the plan is
-   * made against wherever the camera already is: `buildRearrangement` needs
-   * no particular position (the fixed tile - the center room - not being in
-   * the on-camera rectangle at all is the ordinary case, see `board.ts`), so
-   * a reader's place on the map is left alone. Either way the guarantee is
-   * the same - nothing is ever seen to teleport - and it is a guarantee about
-   * whatever rectangle the camera is parked on, not about which rectangle
-   * that is. Returns false when the change cannot be animated legally or the
-   * camera cannot be treated as settled, which is the caller's cue to let it
-   * happen at once.
+   * The camera zooms out IN PLACE first - eased to `min(current zoom,
+   * defaultZoom)` at the x/y it already has - rather than flying home to the
+   * center. Widening the view is what gives the slide a wall of rooms to work
+   * with; recentering was never necessary for that, and it cost every reader
+   * their position on the map for every rearrangement, search included. A
+   * reader already at or below `defaultZoom` gets no zoom flight at all - the
+   * slide runs immediately against wherever they are, exactly as it does when
+   * a favorite toggled live is asking for the same treatment mid-browse.
+   * `buildRearrangement` needs no particular position (the fixed tile - the
+   * center room - not being in the on-camera rectangle at all is the ordinary
+   * case, see `board.ts`). The guarantee is the same either way - nothing is
+   * ever seen to teleport - and it is a guarantee about whatever rectangle the
+   * camera is parked on, not about which rectangle that is. Returns false
+   * when the change cannot be animated legally or the camera cannot be
+   * treated as settled, which is the caller's cue to let it happen at once.
    */
   const startRearrangement = useCallback(
     async (
       before: { layout: MapLayout; order: number[] },
       after: { layout: MapLayout; order: number[] },
-      parkAtCenter: boolean,
       onSettled: (() => void) | null
     ): Promise<boolean> => {
       const canvas = canvasRef.current;
@@ -131,7 +123,7 @@ export function useRearrangement({
       // motion costs one condition and reuses a path that is already written
       // and already tested, rather than adding a branch of its own.
       //
-      // Before the flight, deliberately: the fly-home exists to set up the
+      // Before the flight, deliberately: the zoom-out exists to set up the
       // animation, so with no animation to set up there is no reason to move
       // the camera - and moving it unasked is itself the thing being avoided.
       if (prefersReducedMotion()) return false;
@@ -142,29 +134,30 @@ export function useRearrangement({
       // had already replaced.
       anim.current = { before };
 
-      // Remembered so the map can return to it once the slide settles - the
-      // fly-home to the default zoom is only there to give the animation a
-      // wall of rooms to work with, and leaving the camera parked there
+      // Remembered so the map can return to it once the slide settles -
+      // widening to the default zoom is only there to give the animation a
+      // wall of rooms to work with, and leaving the camera at that zoom
       // afterwards fights whatever zoom the reader actually wanted (often
       // the opening view, to keep using the center tile's controls). Moot
       // when the camera never leaves in the first place.
       const returnZoom = cam.current.zoom;
+      const target = Math.min(returnZoom, config.camera.defaultZoom);
 
-      // A reader mid-search keeps their place in the field: the fly-home and
-      // the slide both move focus-stealing content under the browser, and
+      // A reader mid-search keeps their place in the field: the zoom flight
+      // and the slide both move focus-stealing content under the browser, and
       // some browsers blur an input whose containing scroll position moves
       // out from under it. Refocus once the map is done moving rather than
       // leaving the reader to click back in.
       const searchInput = searchFormRef.current?.querySelector('input');
       const hadFocus = !!searchInput && document.activeElement === searchInput;
 
-      if (parkAtCenter) {
+      if (target !== returnZoom) {
         // Land before rearranging, rather than racing it: two animations
         // competing for the same attention and neither lands. It is also a
         // correctness requirement now that flights ease - the plan is made
         // against exactly the cells on screen, so it cannot be made until the
         // camera has stopped moving.
-        const landed = await flyTo(0, 0, config.camera.defaultZoom);
+        const landed = await flyTo(cam.current.x, cam.current.y, target);
         if (anim.current?.before !== before) return true; // superseded; not ours to undo
         if (!landed) {
           // The reader took the map. Not the moment to rebuild the library.
@@ -212,8 +205,8 @@ export function useRearrangement({
         running.motions = motions;
         if (done) {
           anim.current = null;
-          if (parkAtCenter && returnZoom !== config.camera.defaultZoom) {
-            flyTo(0, 0, returnZoom).then((landedBack) => {
+          if (target !== returnZoom) {
+            flyTo(parked.x, parked.y, returnZoom).then((landedBack) => {
               if (landedBack && hadFocus) searchInput.focus();
               onSettled?.();
             });
@@ -265,10 +258,9 @@ export function useRearrangement({
       return;
     }
     animateNext.current = false;
-    const parkAtCenter = parkAtCenterRef.current;
     const onSettled = pendingOnSettledRef.current;
     pendingOnSettledRef.current = null;
-    startRearrangement(previous, current, parkAtCenter, onSettled).then((started) => {
+    startRearrangement(previous, current, onSettled).then((started) => {
       if (!started) {
         // Nothing to watch for - the new arrangement is already on screen,
         // drawn at once rather than slid into. Whatever `onSettled` wanted to

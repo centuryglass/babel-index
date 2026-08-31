@@ -256,6 +256,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           target, not the current code.
 - `docs/search-plan.md`: The gap between `search_rules.md` and the code today,
                          and the steps to close it. Delete steps as they land.
+- `docs/favorites-density-plan.md`: Making an active favorite sort a placement
+                                    input (its own density gradient), the camera
+                                    "zoom out in place" change, and the invariant
+                                    rewrites both imply. Implemented.
   
 ## Conventions
 
@@ -389,11 +393,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   existing slots where they are and append further out; that property is what
   makes the sliders usable and is asserted in `ordering.test.mjs`. (TODO:
   I never use the room count slider, I should remove that and update this.)
-- **Re-ranking swaps one array; only a search may move slots.** A reorder (the
-  shuffle button, a re-sort of the same results) stays a swap of `order` — the
-  map rearranges, it does not reload. A search is the one thing allowed to
-  rebuild the layout, because its certainty profile is an input to placement;
-  that rebuild is the same O(slots) the ratio slider does on every drag. Nothing
+- **Re-ranking swaps one array; only a search or an active favorite sort may
+  move slots.** A reorder (the shuffle button, a relevance re-sort) stays a
+  swap of `order` — the map rearranges, it does not reload. A search or an
+  active favorite sort (`'mine'`/`'count'`) is what may rebuild the layout,
+  because each has a certainty profile that is an input to placement —
+  `favoriteSort` (`packages/map/favorites.ts`) composes the two rather than
+  letting one override the other, see `docs/favorites-density-plan.md`. That
+  rebuild is the same O(slots) the ratio slider does on every drag. Nothing
   else recomputes placement. (TODO: Do I even want to keep non-search map order?)
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 
@@ -562,13 +569,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **No store, no feature.** Without `--favorites` the routes are not mounted and
   `manifest.favorites` is null, which every consumer reads as "render no
   favorite control" - distinct from a count of zero, and deliberately so.
-- **A sort is a re-rank, and the catalog row's toggle is in the HEAD.** Sorting
-  swaps `order` (the reorder button's path, animation included) and must never
-  rebuild the layout - only a search may, because only a search has a certainty
-  profile. And a catalog row is a fixed height, so the row's favorite control
-  sits beside "show on the map" rather than inside `RoomDetails` where the card
-  and the overlay put it; in the text column it would have to be reserved for in
-  `TEXT_MIN`/`STORY_RESERVED_PX` and would cost two lines of story on every row.
+- **A relevance sort is a re-rank, and the catalog row's toggle is in the
+  HEAD.** In `'relevance'` mode sorting swaps `order` (the reorder button's
+  path, animation included) and must never rebuild the layout. An active
+  favorite sort (`'mine'`/`'count'`) is the exception - it IS a placement
+  input, exactly as a search is, because "sorted to the front" is itself a
+  certainty claim - see `docs/favorites-density-plan.md` and
+  `packages/map/favorites.ts`'s `favoriteSort`. And a catalog row is a fixed
+  height, so the row's favorite control sits beside "show on the map" rather
+  than inside `RoomDetails` where the card and the overlay put it; in the text
+  column it would have to be reserved for in `TEXT_MIN`/`STORY_RESERVED_PX` and
+  would cost two lines of story on every row.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` sit in `--shared-dir`
   next to the center tile but outside `manifest.shared` - `rooms.ts`'s
@@ -595,10 +606,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   visible.
 - **The center room is the planner's fixed tile**, holding the same value in
   both boards by construction — locking it is why the map visibly pivots
-  around it.
-- **The board is finite only because the camera is parked** on the center for
-  the whole animation. Anything that moves the camera mid-rearrangement (pan,
-  zoom, `flyTo`) must end the animation instead.
+  around it. That is a fact about the board's VALUE, unrelated to where the
+  camera is parked.
+- **The board is finite only because the camera is parked** for the whole
+  animation, at whatever position it already had — `startRearrangement`
+  (`useRearrangement.ts`) zooms out in place rather than flying home to the
+  center, so "parked" no longer implies "at the origin." Anything that moves
+  the camera mid-rearrangement (pan, zoom, `flyTo`) must end the animation
+  instead.
 - **`board.ts` returning null is a real answer, not a failure.** With the
   rooms-on-the-map slider pulled back, a room the new order wants on camera may
   never have been on the old board; the caller falls back to an instant
@@ -644,9 +659,9 @@ code, not a standing invariant.
   any pointer ever touching the map. `glideToRest` runs the same step function
   to convergence for `prefers-reduced-motion` rather than inventing a closed-
   form endpoint — there isn't one.
-- **While flying home to start a rearrangement, the map still draws the OLD
+- **While zooming out to start a rearrangement, the map still draws the OLD
   arrangement** until the camera lands (`anim.current.before` holds it) — skip
-  that hold and the map shows the new library, flies to it, then slides in
+  that hold and the map shows the new library, zooms to it, then slides in
   from the one it already replaced.
 - **A flight interpolates zoom geometrically, position linearly**, sharing the
   glide's rAF loop — don't start a second loop. `pointerdown`/`wheel` each drop
