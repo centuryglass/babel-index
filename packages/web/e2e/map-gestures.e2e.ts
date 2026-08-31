@@ -262,54 +262,55 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     assert.equal(after.zoom, wheeled.zoom, `the flight flew on under the wheel: ${wheeled.zoom} -> ${after.zoom}`);
   });
 
-  test('a search reorders the library around the center', async () => {
+  test('a search reorders the library around wherever the camera already is', async () => {
     const { page, flightMs } = session;
-    // Park at the center and record the view, because a search both moves the
-    // camera home AND reorders the rooms. Comparing pixels from two different
-    // camera positions would pass on the camera move alone, which is a test
-    // that cannot tell a working search from one whose ranking is discarded.
+    // Park at the center and record the view, because a search both zooms the
+    // camera out (to give the slide a wall of rooms) AND reorders the rooms.
+    // Comparing pixels from two different cameras would pass on the camera
+    // move alone, which is a test that cannot tell a working search from one
+    // whose ranking is discarded.
     //
     // `landed` rather than `settled`: the camera is flying for ~450ms after the
-    // click, and a "parked" camera read mid-flight is a position the search's
-    // own flight home would only pass through.
+    // click, and a "parked" camera read mid-flight is a position a flight
+    // would only pass through.
     await page.locator('button', { hasText: 'center' }).click();
-    const parked = await landed(page, flightMs);
+    await landed(page, flightMs);
     const before = await fingerprint(page);
 
-    // Wander off, so the fly-home is observable too.
+    // Wander off, so a stray recenter would be observable.
     await page.mouse.move(640, 400);
     await page.mouse.down();
     await page.mouse.move(400, 250, { steps: 8 });
     await page.mouse.up();
     const wandered = await settled(page);
-    assert.notEqual(wandered.x, parked.x, 'the drag did not move the camera');
 
     // The live field lives on the center tile, not the panel - wandered this
     // far out it is off screen, so reaching it is itself a flight the search
     // trigger starts. Land that one before typing into what it flew to.
     await page.locator('button.search-trigger').click();
     const atField = await landed(page, flightMs);
+    assert.notEqual(atField.x, wandered.x, 'the search trigger did not fly to the field');
     await page.locator('input[type=search]').fill('hexagonal galleries');
     await page.locator('input[type=search]').press('Enter');
 
-    // A search flies home to show off the rearrangement, then flies back to
-    // whatever zoom the reader was actually at (here, the search-trigger's
-    // opening view) so the field stays reachable rather than stranding them
-    // at the rearrangement's parked-out zoom. So the final resting point is
-    // the field's zoom, not the center-button's - only x/y return to center.
+    // A search no longer recenters the camera - it zooms out IN PLACE to show
+    // off the rearrangement (docs/favorites-density-plan.md), then eases back
+    // to the zoom the reader was actually at, at the SAME x/y throughout. So
+    // the final resting point is exactly where the search was triggered from,
+    // not the center.
     await waitFor(
       async () => {
         const c = await settled(page);
-        return c.x === parked.x && c.y === parked.y && c.zoom === atField.zoom;
+        return c.x === atField.x && c.y === atField.y && c.zoom === atField.zoom;
       },
       SEARCH_TIMEOUT,
-      'the search never flew the camera back to the zoom it started the search from'
+      'the search never eased the camera back to where and how zoomed in it was called from'
     );
     const home = await settled(page);
     assert.deepEqual(
       { x: home.x, y: home.y, zoom: home.zoom },
-      { x: parked.x, y: parked.y, zoom: atField.zoom },
-      'a search must return the camera to the center, at the zoom it was called from'
+      { x: atField.x, y: atField.y, zoom: atField.zoom },
+      'a search must return the camera to exactly where it was called from'
     );
 
     // Same camera, same slots - so any change in pixels is the rooms moving
