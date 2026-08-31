@@ -39,6 +39,7 @@ import { layout, type Rect } from '../../../../tools/center-placement/lib/geomet
 import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
 import { CELL_ASPECT, pxPerCell, worldToScreen, type Camera, type ViewportRect } from './camera.ts';
 import type { DrawContext } from './render.ts';
+import { SPINE_FONT_FAMILY } from './spineFont.ts';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
@@ -278,6 +279,35 @@ const MIN_SEARCH_BOX_PX = 22;
 const INK = 'rgba(238,230,214,0.92)';
 /** A dark halo so the gilt reads on a light spine as well as a dark one. */
 const HALO = 'rgba(12,9,6,0.85)';
+/** The hovered book's plate fill, standing in for the halo (see `composeSpines`). */
+const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
+/** The hovered book's glow - same gold as `.center-book.hover` (index.html), painted
+ *  across the whole spine BEHIND the backdrop plate rather than as a DOM overlay: the
+ *  DOM sits above the canvas in paint order, so a CSS glow there would wash out over
+ *  the composited title instead of sitting behind it. */
+const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
+const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
+
+// The font-lab sweep's winning settings (tools/font-lab, `--cap 32 --min 12
+// --halo-scale 0.1 --font roboto-slab`) - a per-title auto-fit between a
+// floor and a ceiling (see `fitFontSize`) rather than one size derived from
+// spine width alone. The floor and ceiling themselves are `config.center`'s
+// `spineMinPx`/`spineMaxPx` (packages/config/config.ts), not constants here -
+// they are exactly the kind of by-feel number that file exists to hold, and
+// `composeSpines` takes them as a parameter rather than restating a fallback,
+// per AGENTS.md's "consuming files state no fallback defaults".
+/** The auto-fit range `composeSpines` sizes a title's font within - `config.center`. */
+export interface SpineFontLimits {
+  /** floor: a long title shrinks toward this and no further, then is truncated with an ellipsis */
+  minPx: number;
+  /** ceiling, also capped by spine width: a short title grows to this */
+  maxPx: number;
+}
+/** Spine-width fraction feeding the auto-fit ceiling, same knob as font-lab's `sizeScale`. */
+const SPINE_SIZE_SCALE = 0.82;
+/** halo lineWidth = max(SPINE_HALO_FLOOR, fontPx * SPINE_HALO_SCALE). */
+const SPINE_HALO_SCALE = 0.1;
+const SPINE_HALO_FLOOR = 1.5;
 
 /**
  * The center cell's on-screen rectangle, for a given camera.
@@ -607,6 +637,11 @@ export interface SpineContext extends DrawContext {
   moveTo(x: number, y: number): void;
   lineTo(x: number, y: number): void;
   stroke(): void;
+  // The hovered book's backdrop plate (see `composeSpines`) - a rounded rect
+  // behind the title instead of a stroked halo, so the CSS hover glow behind
+  // it (`.center-books button.hover`, index.html) never washes out the text.
+  roundRect(x: number, y: number, w: number, h: number, r: number): void;
+  fill(): void;
 }
 
 /**
@@ -618,17 +653,39 @@ export interface SpineContext extends DrawContext {
  * the center, which the map now opens having done.
  *
  * Each title reads TOP-TO-BOTTOM down the spine, the way a shelved book is
- * printed, truncated to the spine's length with an ellipsis, over a dark halo so
- * gilt reads on any spine tone. Draws nothing for an `empty` book.
+ * printed, sized PER TITLE by `fitFontSize` so a short word ("biology") grows
+ * to fill the spine while a long one ("the garden of forking paths") shrinks
+ * toward `fontLimits.minPx` instead of being drawn at one size and truncated -
+ * only a title that still does not fit at the floor gets the ellipsis.
+ * `fontLimits` is `config.center`'s `spineMinPx`/`spineMaxPx`, threaded down
+ * through `render.ts`'s `DrawOpts` rather than defaulted here - see that
+ * config block's doc comment. Drawn over a dark halo so gilt reads on any
+ * spine tone. Draws nothing for an `empty` book.
+ *
+ * `hoveredBook` (a flat slot id, or null) is the one book under the pointer -
+ * see `useMapRenderer.ts`'s `pointermove` listener, which runs the same
+ * `bookAtPoint` hit-test a click does. That book gets a gold glow across the
+ * whole spine (`HOVER_GLOW_FILL`/`_STROKE`) AND a backdrop plate instead of
+ * the halo outline - both painted here, on the canvas, rather than as a DOM
+ * overlay: the DOM sits above the canvas in paint order, so a CSS glow would
+ * wash out over the composited title instead of sitting behind it. The glow
+ * is drawn first, so the plate sits on top of it and the title stays legible.
  *
  * An OVERRIDE book is underlined. It does something other than run a search,
  * and nothing about a title says so - "the catalog" reads exactly like a
  * keyword until it is pressed. Placeholder styling for the font/text pass; the
  * requirement it meets is only that the difference is visible.
  */
-export function composeSpines(ctx: SpineContext, cellRect: Rect, slots: (Slot | null)[]): void {
+export function composeSpines(
+  ctx: SpineContext,
+  cellRect: Rect,
+  slots: (Slot | null)[],
+  hoveredBook: number | null,
+  fontLimits: SpineFontLimits
+): void {
   if (!areSpinesLegible(cellRect)) return;
   const rects = bookScreenRects(cellRect);
+  const { minPx, maxPx } = fontLimits;
 
   ctx.save();
   ctx.textAlign = 'left';
@@ -637,8 +694,19 @@ export function composeSpines(ctx: SpineContext, cellRect: Rect, slots: (Slot | 
     const slot = slots[i];
     if (!slot || !slot.text) continue;
     const r = rects[i];
-    const fontPx = Math.max(6, Math.min(13, Math.floor(r.w * 0.82)));
-    ctx.font = `${fontPx}px ui-sans-serif, system-ui, sans-serif`;
+    const ceilingPx = Math.max(minPx, Math.min(maxPx, Math.floor(r.w * SPINE_SIZE_SCALE)));
+
+    // The hover glow, painted BEFORE the rotated text/plate below so the
+    // plate sits on top of it rather than the DOM overlay sitting on top of
+    // everything - see HOVER_GLOW_FILL's comment. Covers the whole upright
+    // spine rect, unrotated, the same rect the DOM button occupies.
+    if (i === hoveredBook) {
+      ctx.fillStyle = HOVER_GLOW_FILL;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = HOVER_GLOW_STROKE;
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, Math.max(0, r.w - 1), Math.max(0, r.h - 1));
+    }
 
     ctx.save();
     // Turn so the text runs DOWN the spine, as titles are printed and as books
@@ -647,12 +715,25 @@ export function composeSpines(ctx: SpineContext, cellRect: Rect, slots: (Slot | 
     ctx.translate(r.x + r.w / 2, r.y);
     ctx.rotate(Math.PI / 2);
     const inset = Math.min(4, r.h * 0.1);
-    const text = fitText(ctx, slot.text, r.h - inset * 2);
+    const available = r.h - inset * 2;
+    const fontPx = fitFontSize(ctx, slot.text, available, minPx, ceilingPx);
+    ctx.font = `${fontPx}px ${SPINE_FONT_FAMILY}`;
+    const text = fitText(ctx, slot.text, available);
 
-    ctx.lineWidth = Math.max(1.5, fontPx / 5);
-    ctx.strokeStyle = HALO;
-    ctx.lineJoin = 'round';
-    ctx.strokeText(text, inset, 0);
+    if (i === hoveredBook) {
+      const padX = Math.max(1.5, fontPx * 0.14);
+      const padY = Math.max(1, fontPx * 0.16);
+      const width = ctx.measureText(text).width;
+      ctx.fillStyle = HOVER_BACKDROP;
+      ctx.beginPath();
+      ctx.roundRect(inset - padX, -fontPx / 2 - padY, width + padX * 2, fontPx + padY * 2, Math.min(3, fontPx * 0.28));
+      ctx.fill();
+    } else {
+      ctx.lineWidth = Math.max(SPINE_HALO_FLOOR, fontPx * SPINE_HALO_SCALE);
+      ctx.strokeStyle = HALO;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(text, inset, 0);
+    }
     ctx.fillStyle = INK;
     ctx.fillText(text, inset, 0);
 
@@ -681,6 +762,38 @@ export function composeSpines(ctx: SpineContext, cellRect: Rect, slots: (Slot | 
     ctx.restore();
   }
   ctx.restore();
+}
+
+/**
+ * The largest integer font size in `[minPx, ceilingPx]` whose rendered width
+ * still fits `maxWidth` - see `composeSpines`'s doc comment. Falls back to
+ * `minPx` (paired with `fitText`'s ellipsis) when even that doesn't fit.
+ * Ported from `tools/font-lab/render.ts`'s `fitFontSize`, the tool this sizing
+ * was worked out in.
+ */
+function fitFontSize(
+  ctx: Pick<SpineContext, 'font' | 'measureText'>,
+  text: string,
+  maxWidth: number,
+  minPx: number,
+  ceilingPx: number
+): number {
+  ctx.font = `${ceilingPx}px ${SPINE_FONT_FAMILY}`;
+  if (ctx.measureText(text).width <= maxWidth) return ceilingPx;
+  let lo = minPx;
+  let hi = ceilingPx;
+  let best = minPx;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    ctx.font = `${mid}px ${SPINE_FONT_FAMILY}`;
+    if (ctx.measureText(text).width <= maxWidth) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
 }
 
 /** Shorten `text` with an ellipsis until it fits `maxWidth` at the current font. */

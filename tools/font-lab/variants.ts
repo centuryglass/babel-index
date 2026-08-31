@@ -52,7 +52,7 @@ export interface Variant extends SpineStyle {
 
 // The app's current spine styling, from center.js. Every variant starts here and
 // overrides a subset, so "baseline" is stated once.
-const BASE: SpineStyle = {
+export const BASE: SpineStyle = {
   weight: 400,
   style: 'normal',
   sizeScale: 0.82, //   fontPx = clamp(minPx, maxPx, floor(spineWidthPx * sizeScale))
@@ -68,7 +68,17 @@ const BASE: SpineStyle = {
 };
 
 // A readable serif to carry the fallback in every serif variant's font stack.
-const SERIF = 'Georgia, serif';
+export const SERIF = 'Georgia, serif';
+
+/**
+ * Looks up a `--font` argument by family name ("DM Sans") or by slug ("dm-sans"),
+ * since a reader on the fonts/ directory listing sees the slug but everywhere
+ * else in this file (labels, FONTS) uses the family name.
+ */
+export function findFont(name: string): FontEntry | undefined {
+  const needle = name.toLowerCase();
+  return FONTS.find((f) => f.family.toLowerCase() === needle || f.slug.toLowerCase() === needle);
+}
 
 /** The font sweep: one composite per candidate, plus the shipping baseline. */
 const fontSweep: Variant[] = [

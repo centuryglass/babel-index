@@ -26,7 +26,7 @@
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
 import { CENTER, FAV_ON, FAV_OFF, genericId, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
-import { composeSpines, type Slot, type SpineContext } from './center.ts';
+import { composeSpines, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect } from './favoriteBadge.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 
@@ -98,6 +98,14 @@ export interface DrawOpts {
    * pass it, exercise no text compositing.
    */
   centreSlots?: (Slot | null)[] | null;
+  /** the shelf book under the pointer, or null - see `composeSpines`'s hover backdrop */
+  hoveredBook?: number | null;
+  /**
+   * `config.center`'s auto-fit font range for `composeSpines` - required
+   * together with `centreSlots`; the spines are skipped (not sized off a
+   * restated fallback) if a caller supplies one without the other.
+   */
+  spineFontLimits?: SpineFontLimits | null;
   cursor?: { x: number; y: number } | null;
   /**
    * Overlay a favorite badge on every non-center, non-generic cell, or null
@@ -124,7 +132,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
-    cursor = null, favorites = null,
+    hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null,
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -197,8 +205,10 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // real 2d context also satisfies `composeSpines`'s wider `SpineContext`,
         // and the cast is what lets `render.test.mjs`'s fake stay narrow per
         // AGENTS.md, since it never exercises this path.
-        if (cell.center && centreSlots)
-          composeSpines(ctx as SpineContext, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots);
+        if (cell.center && centreSlots && spineFontLimits)
+          composeSpines(
+            ctx as SpineContext, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots, hoveredBook, spineFontLimits
+          );
       }
     }
 

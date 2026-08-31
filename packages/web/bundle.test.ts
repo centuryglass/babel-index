@@ -24,8 +24,9 @@ test('the client bundles', async () => {
     logLevel: 'silent',
     define: { 'process.env.NODE_ENV': '"development"' },
     // Kept in sync with packages/server/index.ts's build call - both bundle
-    // main.tsx, and the SVG-as-text loader is why (see SearchIcon.tsx).
-    loader: { '.svg': 'text' },
+    // main.tsx, the SVG-as-text loader is why (see SearchIcon.tsx), and the
+    // woff2-as-dataurl loader is why (see spineFont.ts).
+    loader: { '.svg': 'text', '.woff2': 'dataurl' },
   });
 
   assert.deepEqual(result.errors, []);

@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { layout } from '../center-placement/lib/geometry.ts';
 import { FONTS } from './fonts.ts';
-import { VARIANTS, REQUIRED_FACES } from './variants.ts';
+import { VARIANTS, REQUIRED_FACES, BASE, SERIF, findFont } from './variants.ts';
 import type { Variant, FaceRef } from './variants.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +68,22 @@ const SAMPLE_TITLES = [
  *   --backdrop            rounded plate per book instead of the outline halo
  *   --ink <rgba>          title colour, e.g. "rgba(238,230,214,0.92)"
  *   --backdrop-color <rgba>  plate fill (implies --backdrop), e.g. "rgba(0,0,0,0.6)"
+ *
+ *   --font <family>        skip the sweep; render ONE composite in this font instead
+ *                          (a name from fonts.ts, e.g. "Domine"). Combine with any of
+ *                          --scale, --cap, --tracking, --weight, --caps, --backdrop,
+ *                          --ink, --backdrop-color to test one settings combination
+ *                          at once. Lands in out/custom/custom.png.
+ *   --scale <n>            sizeScale (fontPx = floor(spineWidth * scale), clamped)
+ *   --cap <n>              maxPx, the per-title auto-fit ceiling
+ *   --min <n>              minPx, the per-title auto-fit floor - a long title
+ *                          shrinks toward this and no further; below it, it is
+ *                          truncated with an ellipsis instead of shrinking more
+ *   --tracking <n>         letterSpacing, px
+ *   --weight <n>           font weight (must be one of the family's fetched weights)
+ *   --halo-scale <n>       lineWidth = max(haloFloor, fontPx * haloScale)
+ *   --halo-floor <n>       lineWidth floor, px
+ *   --halo-none            fill only, no dark outline (overridden by --backdrop)
  */
 function parseCli() {
   const { values } = parseArgs({
@@ -77,6 +93,15 @@ function parseCli() {
       backdrop: { type: 'boolean', default: false },
       ink: { type: 'string' },
       'backdrop-color': { type: 'string' },
+      font: { type: 'string' },
+      scale: { type: 'string' },
+      cap: { type: 'string' },
+      min: { type: 'string' },
+      tracking: { type: 'string' },
+      weight: { type: 'string' },
+      'halo-scale': { type: 'string' },
+      'halo-floor': { type: 'string' },
+      'halo-none': { type: 'boolean', default: false },
     },
   });
   const dpr = Math.max(1, Number(values.dpr) || 1);
@@ -93,7 +118,48 @@ function parseCli() {
   if (overrides.backdrop) parts.push('backdrop');
   if (overrides.ink) parts.push('ink');
   if (overrides.backdropColor) parts.push('bg');
-  return { dpr, overrides, suffix: parts.join('-') };
+
+  let custom: Variant | null = null;
+  if (values.font) {
+    const font = findFont(values.font);
+    if (!font) throw new Error(`no such font in fonts.ts: ${values.font}`);
+    const weight = values.weight ? Number(values.weight) : 400;
+    const face: FaceRef = { family: font.family, weight };
+    const knobs: string[] = [font.family];
+    if (values.scale) knobs.push(`scale ${values.scale}`);
+    if (values.cap) knobs.push(`cap ${values.cap}`);
+    if (values.min) knobs.push(`min ${values.min}`);
+    if (values.tracking) knobs.push(`+${values.tracking}px tracking`);
+    if (values.weight) knobs.push(`weight ${values.weight}`);
+    if (values['halo-scale']) knobs.push(`halo scale ${values['halo-scale']}`);
+    if (values['halo-floor']) knobs.push(`halo floor ${values['halo-floor']}`);
+    if (values['halo-none']) knobs.push('no halo');
+    if (overrides.caps) knobs.push('ALL CAPS');
+    if (overrides.backdrop) knobs.push('backdrop plate');
+    custom = {
+      id: 'custom',
+      group: 'custom',
+      label: `CUSTOM — ${font.family}`,
+      sub: knobs.slice(1).join(' · ') || 'baseline settings',
+      fontFamily: `'${font.family}', ${SERIF}`,
+      face,
+      ...BASE,
+      weight,
+      ...(values.scale ? { sizeScale: Number(values.scale) } : {}),
+      ...(values.cap ? { maxPx: Number(values.cap) } : {}),
+      ...(values.min ? { minPx: Number(values.min) } : {}),
+      ...(values.tracking ? { letterSpacing: Number(values.tracking) } : {}),
+      ...(values['halo-scale'] ? { haloScale: Number(values['halo-scale']) } : {}),
+      ...(values['halo-floor'] ? { haloFloor: Number(values['halo-floor']) } : {}),
+      ...(values['halo-none'] ? { halo: null } : {}),
+      ...overrides,
+    };
+    if (custom.minPx > custom.maxPx) {
+      throw new Error(`--min ${custom.minPx} exceeds --cap ${custom.maxPx}`);
+    }
+  }
+
+  return { dpr, overrides, suffix: parts.join('-'), custom };
 }
 
 /** Fill every book slot deterministically from the sample pool. */
@@ -170,6 +236,36 @@ function renderInPage(variant, env) {
 
   // --- the compositor: a faithful copy of center.js composeSpines, styled ------
   const MIN_SPINE_PX = 5;
+
+  function fontAt(px) {
+    return `${variant.style} ${variant.weight} ${px}px ${variant.fontFamily}`;
+  }
+
+  // The largest integer size in [minPx, ceilingPx] whose rendered width still
+  // fits maxWidth - so a short title ("biology") grows all the way to the
+  // spine-width ceiling while a long one ("the garden of forking paths")
+  // shrinks toward minPx instead of being drawn at a size chosen for spine
+  // width alone and then truncated. Falls back to minPx (fitText's ellipsis
+  // handles the rest) when even that doesn't fit.
+  function fitFontSize(ctx, text, maxWidth, minPx, ceilingPx) {
+    ctx.font = fontAt(ceilingPx);
+    if (ctx.measureText(text).width <= maxWidth) return ceilingPx;
+    let lo = minPx;
+    let hi = ceilingPx;
+    let best = minPx;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      ctx.font = fontAt(mid);
+      if (ctx.measureText(text).width <= maxWidth) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return best;
+  }
+
   function composeSpines(ctx, cellRect) {
     const rects = books.map((b) => ({
       x: cellRect.x + b.x * cellRect.w,
@@ -188,17 +284,19 @@ function renderInPage(variant, env) {
       if (!text) continue;
       if (variant.caps) text = text.toUpperCase();
       const r = rects[i];
-      const fontPx = Math.max(
+      const ceilingPx = Math.max(
         variant.minPx,
         Math.min(variant.maxPx, Math.floor(r.w * variant.sizeScale))
       );
-      ctx.font = `${variant.style} ${variant.weight} ${fontPx}px ${variant.fontFamily}`;
 
       ctx.save();
       ctx.translate(r.x + r.w / 2, r.y);
       ctx.rotate(Math.PI / 2);
       const inset = Math.min(4, r.h * 0.1);
-      const fitted = fitText(ctx, text, r.h - inset * 2);
+      const available = r.h - inset * 2;
+      const fontPx = fitFontSize(ctx, text, available, variant.minPx, ceilingPx);
+      ctx.font = fontAt(fontPx);
+      const fitted = fitText(ctx, text, available);
 
       if (variant.backdrop) {
         // A rounded plate sized to the text, running down the spine. In this
@@ -277,12 +375,16 @@ function renderInPage(variant, env) {
     const px = Math.round(cx - p.cropW / 2);
     g.drawImage(p.cv, px, PANEL_TOP, p.cropW, p.cropH);
 
-    // Caption: zoom, spine width, resulting font size.
+    // Caption: zoom, spine width, resulting font size for book 0's actual title
+    // (per-title fitting means this is no longer spine-width alone).
     const spinePx = books[0].w * p.cellW;
-    const fontPx = Math.max(
-      variant.minPx,
-      Math.min(variant.maxPx, Math.floor(spinePx * variant.sizeScale))
-    );
+    const cellHi = p.cellW * (centerH / centerW);
+    const b0h = books[0].h * cellHi;
+    const b0Inset = Math.min(4, b0h * 0.1);
+    let b0Text = slots[0] ?? '';
+    if (variant.caps) b0Text = b0Text.toUpperCase();
+    const b0Ceiling = Math.max(variant.minPx, Math.min(variant.maxPx, Math.floor(spinePx * variant.sizeScale)));
+    const fontPx = fitFontSize(g, b0Text, b0h - b0Inset * 2, variant.minPx, b0Ceiling);
     g.fillStyle = '#cdbfa6';
     g.font = '500 17px ui-sans-serif, system-ui, sans-serif';
     g.textAlign = 'center';
@@ -317,9 +419,11 @@ function renderInPage(variant, env) {
 }
 
 async function main() {
-  const { dpr, overrides, suffix } = parseCli();
-  // Flagged runs get their own directory so they never clobber the baseline.
-  const runDir = suffix ? join(OUT, 'variants', suffix) : OUT;
+  const { dpr, overrides, suffix, custom } = parseCli();
+  // A --font run always lands in out/custom/, ignoring the sweep's variants dir.
+  const runDir = custom ? join(OUT, 'custom') : suffix ? join(OUT, 'variants', suffix) : OUT;
+  const variants = custom ? [custom] : VARIANTS;
+  const requiredFaces = custom ? (custom.face ? [custom.face] : []) : REQUIRED_FACES;
 
   const g1 = layout({ width: 1, height: 1 });
   const books = g1.shelves.flatMap((s) => s.books.map(({ x, y, w, h }) => ({ x, y, w, h })));
@@ -328,7 +432,7 @@ async function main() {
 
   const centerUri = await dataUri(join(ROOT, 'assets', 'center_tile.png'), 'image/png');
   const faces = [];
-  for (const face of REQUIRED_FACES) {
+  for (const face of requiredFaces) {
     faces.push({ ...face, uri: await dataUri(faceFile(face), 'font/woff2') });
   }
 
@@ -360,7 +464,7 @@ async function main() {
   }, { faces, centerUri });
 
   const written = [];
-  for (const base of VARIANTS) {
+  for (const base of variants) {
     const variant = { ...base, ...overrides }; // CLI flags win over the variant
     const dir = join(runDir, variant.group);
     await mkdir(dir, { recursive: true });

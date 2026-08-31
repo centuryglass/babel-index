@@ -35,6 +35,7 @@ import { createTileCache, CENTER, FAV_ON, FAV_OFF, genericId } from './lib/tiles
 import { favoriteIconScreenRect, favoriteHitRect, isFavoriteHitEnabled, pointInRect } from './lib/favoriteBadge.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
+import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { BASE_TILE } from './lib/pyramid.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
@@ -284,6 +285,20 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const draw = useRef(() => {});
   const requestDraw = useCallback(() => {
     draw.current();
+  }, []);
+
+  // The center shelf's webfont. `composeSpines` falls back to Georgia until
+  // this resolves, so a spine composited on the first frame is legible but
+  // not final - this redraws once the real face is registered on the
+  // document. See spineFont.ts for why loading lives outside `center.ts`.
+  useEffect(() => {
+    let cancelled = false;
+    loadSpineFont().then(() => {
+      if (!cancelled) draw.current();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Where a room's tile lives, at a level. `createTileLocator` is the full
@@ -617,9 +632,18 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     () => (favorites.enabled ? { isFavorite: favorites.isFavorite } : null),
     [favorites.enabled, favorites.isFavorite]
   );
+  // `config.center`'s auto-fit font range for the shelf's spines - memoized so
+  // `useMapRenderer`'s effect (which depends on the object identity) does not
+  // rebuild every render over an object literal that is really the same two
+  // numbers each time.
+  const spineFontLimits = useMemo(
+    () => ({ minPx: config.center.spineMinPx, maxPx: config.center.spineMaxPx }),
+    [config.center.spineMinPx, config.center.spineMaxPx]
+  );
+
   useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed, cam, mode,
-    layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay, blockedCount,
+    layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay,
   });
 
