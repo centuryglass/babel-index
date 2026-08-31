@@ -653,6 +653,23 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
   requestAnimationRef.current = requestAnimation;
 
+  // Where the toggle above sends the camera once that unparked resort has
+  // actually landed - a ref, reassigned every render, because `onSettled`
+  // fires later against whatever `card`/`cellById` are BY THEN, not whatever
+  // they were when the star was clicked. If the room whose card is open is
+  // the one just favorited, its cell after the resort is exactly what
+  // `cellById` already tracks (built for "show on the map"); flying there
+  // with no zoom argument keeps whatever zoom the reader was already at -
+  // the point is to bring the shelf back under an open card, not to reframe
+  // it. A card for a different room, or none at all, is left alone: nothing
+  // to reunite with the camera.
+  const onFavoriteRearrangedRef = useRef((_id: number) => {});
+  onFavoriteRearrangedRef.current = (id: number) => {
+    if (mode !== 'map' || !card || 'generic' in card || card.id !== id) return;
+    const cell = cellById.get(id);
+    if (cell) flyTo(cell.x, cell.y);
+  };
+
   /**
    * One room's favorite state, in the shape `RoomDetails` wants it.
    *
@@ -667,7 +684,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
    * `useRearrangement`'s effect only animates a change a caller asked for. It
    * is deliberately NOT the parked kind `changeSort`/`reorder` ask for - the
    * reader did not ask to change what they are looking at, they clicked a
-   * star, so the camera has no business leaving.
+   * star, so the camera has no business leaving. It may still need to catch
+   * up afterwards, though: `onSettled` flies it to wherever this room ended
+   * up if that room's card is what is still open once the resort lands.
    */
   const favoriteFor = useCallback(
     (id: number | null | undefined) =>
@@ -677,7 +696,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             count: favorites.countOf(id),
             toggle: () => {
               if (mode === 'map' && sortMode !== 'relevance') {
-                requestAnimation('', { parkAtCenter: false });
+                requestAnimation('', {
+                  parkAtCenter: false,
+                  onSettled: () => onFavoriteRearrangedRef.current(id),
+                });
               }
               void favorites.toggle(id);
             },
