@@ -24,13 +24,14 @@
  */
 import { useEffect } from 'react';
 import { cursorCell, type Camera } from '../lib/camera.ts';
-import { centerBookAtPoint, centerCellRect } from '../lib/center.ts';
+import { bookAtPoint, centerBookAtPoint, centerCellRect } from '../lib/center.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
 import type { Slot } from '../lib/center.ts';
 import { createRenderer, type DrawResult } from '../lib/render.ts';
+import type { SpineFontLimits } from '../lib/center.ts';
 import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
 
 /**
@@ -91,6 +92,8 @@ interface UseMapRendererOpts {
   slideRenderer: SlideRenderer;
   cache: TileCache;
   centreSlots?: (Slot | null)[] | null;
+  /** `config.center`'s auto-fit font range - see `render.ts`'s `DrawOpts.spineFontLimits` */
+  spineFontLimits?: SpineFontLimits | null;
   centreOverlay: (w: number, h: number) => CentreOverlay;
   /** rooms the reader's blocked tags removed, for the HUD */
   blockedCount?: number;
@@ -115,6 +118,7 @@ export function useMapRenderer({
   slideRenderer,
   cache,
   centreSlots,
+  spineFontLimits = null,
   centreOverlay,
   blockedCount = 0,
   favorites = null,
@@ -130,6 +134,10 @@ export function useMapRenderer({
     // this render pass replaced. That is a real frame of the old map, arriving
     // after the new one and winning, which is what a stale draw looks like.
     let pending = 0;
+    // The shelf book under the pointer, or null - read by `render()` each
+    // frame and written by the `pointermove` listener below, the same split
+    // `centerBookRef`'s hover class uses (`bookEl`/`onMove` further down).
+    let hoveredBook: number | null = null;
 
     const render = () => {
       pending = 0;
@@ -242,7 +250,7 @@ export function useMapRenderer({
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
-        layout: showing.layout, order: showing.order, centreSlots,
+        layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
         cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
@@ -299,22 +307,44 @@ export function useMapRenderer({
     window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onDown);
 
-    // The open book's hover highlight. Cosmetic only - `centerBookRef`'s
-    // element is `pointer-events: none` (see index.html), the same reasoning
-    // as the shelf's buttons: the canvas keeps every gesture, so a pan whose
-    // start happens to land here must still pan. A real click already reaches
-    // `onTap` -> `centerBookAtPoint` in main.tsx; this listener only decides
-    // whether the highlight class shows, so it does not need to distinguish a
-    // hover from the start of a drag the way gesture arbitration does.
+    // The open book's hover highlight, and the shelf's. Cosmetic only -
+    // `centerBookRef`'s element and every `.center-books` button are
+    // `pointer-events: none` (see index.html), the same reasoning in both
+    // cases: the canvas keeps every gesture, so a pan whose start happens to
+    // land here must still pan. A real click already reaches `onTap` ->
+    // `centerBookAtPoint`/`bookAtPoint` in main.tsx; this listener only
+    // decides what highlights, so it does not need to distinguish a hover
+    // from the start of a drag the way gesture arbitration does.
+    //
+    // The open book's highlight is a DOM `.hover` class because that hotspot
+    // paints no text of its own - a CSS overlay is the whole highlight. A
+    // shelf book's IS text, and the DOM sits above the canvas in paint order,
+    // so a DOM glow there would wash out over the composited title instead of
+    // sitting behind it. `hoveredBook` instead feeds `composeSpines` directly
+    // (via `render()` below), which paints the glow FIRST and the hover
+    // backdrop plate over it, on the same canvas layer as the title.
     const onMove = (e: PointerEvent) => {
-      const el = centerBookRef?.current;
-      if (!el) return;
       const rect = canvas.getBoundingClientRect();
       const cellRect = centerCellRect(cam.current, { width: canvas.clientWidth, height: canvas.clientHeight });
-      const hovering = centerBookAtPoint(e.clientX - rect.left, e.clientY - rect.top, cellRect);
-      el.classList.toggle('hover', hovering);
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      const el = centerBookRef?.current;
+      if (el) el.classList.toggle('hover', centerBookAtPoint(px, py, cellRect));
+
+      const next = booksRef.current ? bookAtPoint(px, py, cellRect) : null;
+      if (next !== hoveredBook) {
+        hoveredBook = next;
+        draw.current();
+      }
     };
-    const onLeave = () => centerBookRef?.current?.classList.remove('hover');
+    const onLeave = () => {
+      centerBookRef?.current?.classList.remove('hover');
+      if (hoveredBook !== null) {
+        hoveredBook = null;
+        draw.current();
+      }
+    };
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerleave', onLeave);
     return () => {
@@ -326,7 +356,7 @@ export function useMapRenderer({
     };
   }, [
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed,
-    layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode, blockedCount,
-    favorites,
+    layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
+    blockedCount, favorites,
   ]);
 }

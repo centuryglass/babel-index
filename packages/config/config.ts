@@ -74,6 +74,11 @@ interface CatalogConfig {
   paging: 'scroll' | 'pages';
 }
 
+interface CenterConfig {
+  spineMinPx: number;
+  spineMaxPx: number;
+}
+
 interface SearchWeights {
   tagExact: number;
   tagPartial: number;
@@ -103,6 +108,7 @@ interface Defaults {
   map: MapConfig;
   slide: SlideConfig;
   catalog: CatalogConfig;
+  center: CenterConfig;
   search: SearchDefaults;
 }
 
@@ -118,6 +124,7 @@ export interface Config {
   slide: SlideConfig;
   catalog: CatalogConfig;
   map: MapConfig;
+  center: CenterConfig;
   search: SearchDefaults;
   notes: string[];
 }
@@ -304,6 +311,21 @@ export const DEFAULTS: Defaults = {
     paging: 'scroll',
   },
 
+  center: {
+    /**
+     * The center shelf's per-title auto-fit font range, in px - see
+     * `composeSpines` (packages/web/src/lib/center.ts). A short title grows
+     * toward `spineMaxPx`, a long one shrinks toward `spineMinPx` before it is
+     * truncated with an ellipsis; both are ceilings/floors, not fixed sizes -
+     * most titles land somewhere between them. Chosen with `tools/font-lab`'s
+     * sweep (`--cap 32 --min 12`, Roboto Slab) as a starting point meant to be
+     * tuned further by feel, which is why these are config and not a rendering
+     * constant the way `MIN_SPINE_PX` (the zoom-legibility gate) is.
+     */
+    spineMinPx: 12,
+    spineMaxPx: 32,
+  },
+
   search: {
     /**
      * The five constants docs/search_rules.md "Balancing signals" names: `E`
@@ -472,6 +494,7 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     },
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
     catalog: catalog(asSection(src.catalog, 'catalog', notes), notes),
+    center: center(asSection(src.center, 'center', notes), notes),
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
@@ -537,6 +560,35 @@ function catalog(src: Section, notes: string[]): CatalogConfig {
     transitionMs: duration(src.transitionMs, d.transitionMs, 'catalog.transitionMs', notes),
     paging: paging as 'scroll' | 'pages',
   };
+}
+
+/**
+ * The center shelf's auto-fit font range.
+ *
+ * Both floored at 1px rather than rejected, the same reasoning `catalog`'s
+ * counts use - a font size of zero or less renders nothing, which is an
+ * honest reading of "auto-fit turned off" rather than a config error. An
+ * inverted range (`spineMinPx` above `spineMaxPx`) would leave every title
+ * with no size that satisfies both the floor and the ceiling `fitFontSize`
+ * binary-searches between, so it falls back to the defaults together, the
+ * same as camera's inverted zoom range.
+ */
+function center(src: Section, notes: string[]): CenterConfig {
+  const d = DEFAULTS.center;
+  const spineMinPx = atLeast(
+    integer(src.spineMinPx, d.spineMinPx, 'center.spineMinPx', notes), 1, 'center.spineMinPx', notes
+  );
+  const spineMaxPx = atLeast(
+    integer(src.spineMaxPx, d.spineMaxPx, 'center.spineMaxPx', notes), 1, 'center.spineMaxPx', notes
+  );
+  if (spineMinPx > spineMaxPx) {
+    notes.push(
+      `center.spineMinPx ${spineMinPx} is above center.spineMaxPx ${spineMaxPx}; ` +
+        `using ${d.spineMinPx}/${d.spineMaxPx}`
+    );
+    return { spineMinPx: d.spineMinPx, spineMaxPx: d.spineMaxPx };
+  }
+  return { spineMinPx, spineMaxPx };
 }
 
 /** Floor a value with a note, for the two counts above. */

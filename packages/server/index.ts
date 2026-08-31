@@ -185,7 +185,10 @@ const ctx = await context({
   // Chrome art (the search icon's badge and arrow) gets imported as raw
   // markup rather than traced into JSX by hand, so the source SVGs in
   // assets/ stay the one copy of that path data - see SearchIcon.tsx.
-  loader: { '.svg': 'text' },
+  // The center shelf's spine webfont is bundled the same self-hosted way, as a
+  // base64 data URI, so a title renders without a font CDN request - see
+  // spineFont.ts.
+  loader: { '.svg': 'text', '.woff2': 'dataurl' },
   plugins: [
     {
       name: 'live-reload',
