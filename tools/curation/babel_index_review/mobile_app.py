@@ -41,7 +41,13 @@ INDEX_HTML = """<!doctype html>
     color: #e6e6e6;
     display: flex;
     flex-direction: column;
-    height: 100dvh;
+    /* svh, not dvh: Firefox for Android's dynamic toolbar recompute of dvh is
+       buggy (mozilla-mobile/fenix#25680, #17991) and can leave a bottom flex
+       item like #bottombar rendered off-screen or jumping as the toolbar
+       shows/hides while scrolling #main. svh is static (sized as if the
+       toolbar is always shown), so it never re-triggers that reflow -- the
+       cost is not reclaiming the sliver of space when the toolbar auto-hides. */
+    height: 100svh;
   }
   #status {
     padding: 6px 10px;
