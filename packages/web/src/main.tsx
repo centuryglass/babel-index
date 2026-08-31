@@ -25,6 +25,7 @@ import {
   centerBookAtPoint,
   areSpinesLegible,
   overlapsViewport,
+  fullyInViewport,
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
@@ -502,7 +503,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // there. One computation, because both the render loop (to position and
   // show/hide them) and the panel's search trigger (to decide whether to fly
   // home first) need it and neither should restate the other's notion of
-  // "usable".
+  // "usable". The render loop draws on partial overlap (`usable`); the search
+  // trigger needs the stricter `fullyUsable` - a box half off screen is not one
+  // a reader can actually use, even though it is still worth drawing.
   //
   // A rearrangement disqualifies both: mid-slide the center tile is drawn from
   // the animation's own board at a camera this function knows nothing about, so
@@ -516,6 +519,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         cellRect,
         box,
         usable: settled && overlapsViewport(box, w, h) && isSearchBoxUsable(cellRect),
+        // Stricter than `usable`: the box must be ENTIRELY on screen, not
+        // merely overlapping it. `goToSearch` reads this rather than
+        // `usable` - a box only partly visible is one a reader can't actually
+        // read or use, even though it still overlaps the viewport enough to
+        // stay drawn.
+        fullyUsable: settled && fullyInViewport(box, w, h) && isSearchBoxUsable(cellRect),
         // The buttons exist exactly while the titles are legible, so tabbing
         // into the shelf never reaches a book nobody can see named. Off-screen
         // is the other half: a focus ring somewhere past the edge of the
@@ -542,7 +551,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     const canvas = canvasRef.current;
     const input = searchFormRef.current?.querySelector('input');
     if (!canvas || !input) return;
-    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).usable) {
+    if (centreOverlay(canvas.clientWidth, canvas.clientHeight).fullyUsable) {
       input.focus();
       return;
     }
