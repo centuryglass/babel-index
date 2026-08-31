@@ -321,3 +321,27 @@ test('a catalog transition of zero means swap at once, and is not an error', () 
   assert.equal(catalog.transitionMs, 0);
   assert.ok(!notes.some((n) => n.startsWith('catalog.transitionMs')));
 });
+
+// --- the center shelf's auto-fit font range ---------------------------------
+
+test('the center block defaults, and narrows the auto-fit range', () => {
+  const { center } = resolveConfig({});
+  assert.deepEqual(center, DEFAULTS.center);
+
+  const narrowed = resolveConfig({ center: { spineMinPx: 8, spineMaxPx: 20 } }).center;
+  assert.deepEqual(narrowed, { spineMinPx: 8, spineMaxPx: 20 });
+});
+
+test('an inverted spine range falls back to the defaults together, with a note', () => {
+  const { center, notes } = resolveConfig({ center: { spineMinPx: 30, spineMaxPx: 12 } });
+  assert.deepEqual(center, DEFAULTS.center);
+  assert.ok(notes.some((n) => n.startsWith('center.spineMinPx')));
+});
+
+test('a non-positive spine bound is floored at 1px, not rejected', () => {
+  const { center, notes } = resolveConfig({ center: { spineMinPx: 0, spineMaxPx: -5 } });
+  assert.equal(center.spineMinPx, 1);
+  assert.equal(center.spineMaxPx, 1);
+  for (const key of ['center.spineMinPx', 'center.spineMaxPx'])
+    assert.ok(notes.some((n) => n.startsWith(key)), `a note for ${key}`);
+});
