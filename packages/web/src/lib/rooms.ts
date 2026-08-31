@@ -22,7 +22,7 @@
  * those few in memory. (Giving the shared assets their own resolution pyramid
  * is a later step.)
  */
-import { CENTER, genericId } from './tiles.ts';
+import { CENTER, genericId, FAV_ON, FAV_OFF } from './tiles.ts';
 import { sheetPosition, sheetFileName } from '../../../pipeline/layout.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 
@@ -56,6 +56,11 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   const sharedUrls = new Map<number | string, string>();
   if (shared.center?.url) sharedUrls.set(CENTER, shared.center.url);
   shared.generic.forEach((v, i) => sharedUrls.set(genericId(i), v.url));
+  // The favorite badge's two faces are fixed app art, not part of a scanned
+  // corpus, so they are not in `manifest.shared` - but they live in the same
+  // `--shared-dir` and are served flat from it exactly like the center tile.
+  sharedUrls.set(FAV_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_on.png')}`);
+  sharedUrls.set(FAV_OFF, `${manifest.sharedBase}/${encodeURIComponent('fav_off.png')}`);
 
   return (id, level) => {
     if (sharedUrls.has(id)) return level === 0 ? { url: sharedUrls.get(id)!, rect: null } : null;

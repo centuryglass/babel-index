@@ -340,3 +340,57 @@ test('a narrow viewport costs proportionally less', () => {
   assert.ok(totalMs < desktop.totalMs, 'a phone should not take longer than a desktop');
   assert.ok(BOARD_GENERIC === 'generic');
 });
+
+test('the favorite badge rides along with a sliding board, room cells only', () => {
+  // The requirement this exists to prove: a rearrangement is exactly the one
+  // moment `render.ts`'s per-frame badge draw is replaced by this file's own,
+  // and it must not silently drop the badge for the duration of the animation.
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const isFavorite = () => false;
+  const cellPx = { x: ZOOM, y: ZOOM * CELL_ASPECT };
+  // A badge is small next to the tile it sits on - the same margin
+  // `render.test.ts` uses to tell the two apart.
+  const isBadge = (d) => d.w < cellPx.x / 2;
+
+  const frame = (motions) => {
+    const ctx = fakeCtx();
+    renderer.draw({
+      ctx, width: 1920, height: 1080, dpr: 1, cam,
+      board, origin: built.origin, motions, favorites: { isFavorite },
+    });
+    return ctx;
+  };
+
+  frame([]);
+  settle();
+
+  for (let t = 0; t <= show.totalMs; t += 41) {
+    const { motions } = show.advanceTo(t);
+    const ctx = frame(motions);
+    if (motions.length === 0) continue; // no lines in motion this beat
+
+    assert.ok(ctx.drawn.some(isBadge), `no badge drawn while a line is sliding, at t=${t}`);
+  }
+});
+
+test('no favorites option on the slide renderer means no badge at all', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  settle();
+
+  const ctx = fakeCtx();
+  renderer.draw({ ctx, width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  const cellPx = { x: ZOOM, y: ZOOM * CELL_ASPECT };
+  for (const d of ctx.drawn) assert.ok(d.w >= cellPx.x / 2, 'unexpected small draw with no favorites option');
+});
