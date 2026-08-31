@@ -94,6 +94,8 @@ interface UseMapRendererOpts {
   centreOverlay: (w: number, h: number) => CentreOverlay;
   /** rooms the reader's blocked tags removed, for the HUD */
   blockedCount?: number;
+  /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
+  favorites?: { isFavorite: (id: number) => boolean } | null;
 }
 
 export function useMapRenderer({
@@ -115,6 +117,7 @@ export function useMapRenderer({
   centreSlots,
   centreOverlay,
   blockedCount = 0,
+  favorites = null,
 }: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -235,12 +238,12 @@ export function useMapRenderer({
       const slideDrawOpts = {
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
-        genericIndexAt: layout.genericIndexAt,
+        genericIndexAt: layout.genericIndexAt, favorites,
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
         layout: showing.layout, order: showing.order, centreSlots,
-        cursor: keyboardUsed.current ? cursorCell(cam.current) : null,
+        cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
 
@@ -324,5 +327,6 @@ export function useMapRenderer({
   }, [
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, centreOverlay, mode, blockedCount,
+    favorites,
   ]);
 }

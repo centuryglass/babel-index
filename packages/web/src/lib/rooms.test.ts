@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTileLocator, createUrlFor } from './rooms.ts';
-import { CENTER, genericId } from './tiles.ts';
+import { CENTER, FAV_ON, FAV_OFF, genericId } from './tiles.ts';
 
 function manifest(extraLevels: any[] = []): any {
   return {
@@ -62,6 +62,15 @@ test('the center and generic tiles resolve flat, at level 0 only', () => {
   assert.deepEqual(locate(CENTER, 0), { url: 'shared/center.png', rect: null });
   assert.equal(locate(CENTER, 1), null, 'shared tiles have no coarser levels yet');
   assert.deepEqual(locate(genericId(0), 0), { url: 'shared/generic/g1.png', rect: null });
+});
+
+test('the favorite badge faces resolve flat off sharedBase, even absent from manifest.shared', () => {
+  // Fixed app art, not a scanned corpus asset - so unlike the center and the
+  // generic tiles, there is nothing describing them in `manifest.shared`.
+  const locate = createTileLocator(manifest());
+  assert.deepEqual(locate(FAV_ON, 0), { url: 'shared/fav_on.png', rect: null });
+  assert.deepEqual(locate(FAV_OFF, 0), { url: 'shared/fav_off.png', rect: null });
+  assert.equal(locate(FAV_ON, 1), null, 'the badge has no coarser levels either');
 });
 
 // --- sheet-packed levels -----------------------------------------------------

@@ -80,6 +80,10 @@ import type { Rect, LocateTile } from './rooms.ts';
 export const CENTER = 'center';
 export const genericId = (i: number): number | string => (i < 0 ? CENTER : `generic:${i}`);
 
+/** The favorite badge's two faces - see `favoriteBadge.ts`. Shared ids, like `CENTER`. */
+export const FAV_ON = 'fav-on';
+export const FAV_OFF = 'fav-off';
+
 /** How many prefetches may be waiting at once. See prefetch() for why. */
 const QUEUE_LIMIT = 256;
 

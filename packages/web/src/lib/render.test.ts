@@ -361,3 +361,71 @@ test('the keyboard cursor draws a ring only when passed, and only on screen', ()
   });
   assert.equal(offscreen.strokes.length, 0, 'a cursor far off screen must not be drawn');
 });
+
+// --- the favorite badge -----------------------------------------------------
+
+test('the favorite badge draws on every room cell, and only room cells', () => {
+  const w = world();
+  const isFavorite = (id: number) => id === w.order[0];
+  const cam = { x: 0.5, y: 0.5, zoom: 220 };
+
+  w.renderer.draw({
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
+    cam, layout: w.layout, order: w.order, favorites: { isFavorite },
+  }); // requests the badge art alongside every tile
+  w.images.settleAll();
+
+  const ctx = fakeCtx();
+  const stats = w.renderer.draw({
+    ctx, width: 1600, height: 900, dpr: 1,
+    cam, layout: w.layout, order: w.order, favorites: { isFavorite },
+  });
+
+  // One badge per non-center, non-generic cell drawn this frame - never more,
+  // never for the center or a generic cell.
+  let rooms = 0;
+  for (let gy = stats.bounds.y0; gy <= stats.bounds.y1; gy++)
+    for (let gx = stats.bounds.x0; gx <= stats.bounds.x1; gx++) {
+      const cell = w.layout.roomAt(gx, gy, w.order);
+      if (!cell.center && !cell.generic) rooms++;
+    }
+  assert.ok(rooms > 0, 'expected at least one room cell in view');
+
+  const badgeDraws = ctx.drawn.filter((d) => d.w < 100 && d.h < 300); // the badge is tiny next to a tile
+  assert.equal(badgeDraws.length, rooms);
+});
+
+test('no favorites option means no badge at all', () => {
+  const w = world();
+  frame(w, { zoom: 220 });
+  w.images.settleAll();
+
+  const ctx = fakeCtx();
+  frame(w, { zoom: 220, ctx });
+  // Every drawn image is a tile-sized draw; nothing badge-sized appears.
+  for (const d of ctx.drawn) assert.ok(d.w > 100 || d.h > 300, 'unexpected small draw with no favorites option');
+});
+
+test('the badge follows the same zoom scale as the tile it sits on', () => {
+  const w = world();
+  const isFavorite = () => false;
+  w.renderer.draw({
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
+    cam: { x: 0.5, y: 0.5, zoom: 220 }, layout: w.layout, order: w.order, favorites: { isFavorite },
+  });
+  w.images.settleAll();
+
+  const at = (zoom: number) => {
+    const ctx = fakeCtx();
+    w.renderer.draw({
+      ctx, width: 1600, height: 900, dpr: 1,
+      cam: { x: 0.5, y: 0.5, zoom }, layout: w.layout, order: w.order, favorites: { isFavorite },
+    });
+    const badge = ctx.drawn.find((d) => d.w < 100 && d.h < 300);
+    return badge!;
+  };
+
+  const small = at(110);
+  const big = at(220);
+  assert.ok(Math.abs(big.w / small.w - 2) < 0.05, `badge did not scale with zoom: ${small.w} -> ${big.w}`);
+});

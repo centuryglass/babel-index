@@ -58,11 +58,11 @@
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
-import { CENTER, genericId, type RoomId, type TileCache } from './tiles.ts';
+import { CENTER, FAV_ON, FAV_OFF, genericId, type RoomId, type TileCache } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
-import type { DrawContext } from './render.ts';
+import { drawFavoriteBadge, type DrawContext } from './render.ts';
 
 /**
  * The cache id for a board value at its HOME map cell.
@@ -363,6 +363,8 @@ export interface SlideDrawOpts {
   genericIndexAt?: (x: number, y: number) => number;
   /** the center-room marker */
   chrome?: boolean;
+  /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
+  favorites?: { isFavorite: (id: number) => boolean } | null;
 }
 
 export interface SlideDrawResult {
@@ -382,6 +384,7 @@ export interface SlideDrawResult {
 export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
   function draw({
     ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
+    favorites = null,
   }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
@@ -431,6 +434,11 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
         ctx.fillRect(sx, sy, cw, ch);
         blank++;
       }
+      // The favorite badge rides along with a sliding tile - never the center
+      // or a generic face, only a real room, which is exactly when `value` is
+      // its numeric id rather than one of the two shared board values.
+      if (favorites && typeof value === 'number')
+        drawFavoriteBadge(ctx, cache, favorites.isFavorite(value) ? FAV_ON : FAV_OFF, cellPx, sx, sy);
       wanted.push(id);
     };
 

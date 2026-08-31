@@ -30,8 +30,9 @@ import {
   minZoomForSearchBox,
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
-import { CELL_ASPECT, fitZoom, type Camera } from './lib/camera.ts';
-import { createTileCache, CENTER, genericId } from './lib/tiles.ts';
+import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera } from './lib/camera.ts';
+import { createTileCache, CENTER, FAV_ON, FAV_OFF, genericId } from './lib/tiles.ts';
+import { favoriteIconScreenRect, favoriteHitRect, isFavoriteHitEnabled, pointInRect } from './lib/favoriteBadge.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
 import { createSlideRenderer } from './lib/slide.ts';
@@ -299,8 +300,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       tiles.pin(id);
       tiles.request(id, 0);
     }
+    // The favorite badge's two faces, pinned the same way - a bounded pair of
+    // tiny images every non-generic, non-center cell can draw.
+    if (favorites.enabled) {
+      for (const id of [FAV_ON, FAV_OFF]) {
+        tiles.pin(id);
+        tiles.request(id, 0);
+      }
+    }
     return tiles;
-  }, [manifest, requestDraw, locateTile]);
+  }, [manifest, requestDraw, locateTile, favorites.enabled]);
 
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
   const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
@@ -591,9 +600,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // The frame loop itself is `useMapRenderer.ts`. `draw` stays here because the
   // tile cache above is built with `onLoad: requestDraw`, so the request has to
   // exist before the hook that fulfils it - one ref, and the cycle is broken.
+  // Only in map mode: the catalog is a conventional list, not the diegetic
+  // surface a badge painted onto a tile belongs to.
+  const favoritesOverlay = useMemo(
+    () => (favorites.enabled ? { isFavorite: favorites.isFavorite } : null),
+    [favorites.enabled, favorites.isFavorite]
+  );
   useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed, cam, mode,
     layout, order, renderer, slideRenderer, cache, centreSlots, centreOverlay, blockedCount,
+    favorites: favoritesOverlay,
   });
 
   // --- the rearrangement animation -----------------------------------------
@@ -773,7 +789,26 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     }
 
     const slotIndex = bookAtPoint(px, py, cell);
-    if (slotIndex != null) onBook(slotIndex);
+    if (slotIndex != null) {
+      onBook(slotIndex);
+      return;
+    }
+
+    // A tap on a room's favorite badge toggles it, rather than doing nothing
+    // (an ordinary room tile has no other tap behaviour - right-click/long
+    // press opens the card, double-tap zooms). `roomAtPoint` returns null for
+    // the center cell and `{generic: true}` for a generic one, so both are
+    // already excluded from having a badge to tap.
+    if (favorites.enabled) {
+      const hit = roomAtPoint(px, py, camera, rect, layout, order);
+      if (hit && !('generic' in hit)) {
+        const cellPx = pxPerCell(camera);
+        const { x: sx, y: sy } = worldToScreen(hit.x, hit.y, camera, rect);
+        const hitRect = favoriteHitRect(favoriteIconScreenRect(cellPx, sx, sy));
+        if (isFavoriteHitEnabled(hitRect, COARSE_POINTER) && pointInRect(px, py, hitRect))
+          favoriteFor(hit.id)?.toggle();
+      }
+    }
   };
 
   // Double-tapping a room zooms to fit it; double-tapping the same room again
@@ -987,6 +1022,14 @@ const RESULTS_WINDOW = 50;
  * its value.
  */
 const OPENING_MARGIN = 0.94;
+
+/**
+ * Whether this pointer is coarse (touch) rather than fine (mouse/trackpad) -
+ * the same `matchMedia` reasoning `useMapCamera.ts`'s `prefersReducedMotion`
+ * uses, computed once at module load. Decides which of `MIN_FAVORITE_HIT`'s
+ * two floors a favorite badge's tap target must clear.
+ */
+const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
  * Which reading the page opens on.
