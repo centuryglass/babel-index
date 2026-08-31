@@ -10,7 +10,9 @@ __pycache__/
 # Screenshots the browser smoke test leaves behind.
 packages/web/e2e/artifacts/
 
-# Blender's texture cache for babel_shelf.blend.
+# Blender source file (too large for git; kept local only) and its
+# texture cache/backups.
+reference/blender/babel_shelf.blend
 reference/blender/textures
 reference/blender/assets
 
