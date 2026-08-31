@@ -81,12 +81,22 @@ export function useRearrangement({
   // gain and a reader's place on the map to lose by moving it.
   const parkAtCenterRef = useRef(true);
   const arrangement = useRef<{ layout: MapLayout; order: number[] } | null>(null);
+  // What to do once the new arrangement has actually landed on screen - after
+  // the slide (and, if parked, the fly back) rather than merely launched. Read
+  // once by the effect below alongside `pendingNote`, for the same reason: a
+  // caller asking for this one animation to be watched for should not also be
+  // on the hook for the next one it did not ask about.
+  const pendingOnSettledRef = useRef<(() => void) | null>(null);
 
-  const requestAnimation = useCallback((note = '', opts?: { parkAtCenter?: boolean }) => {
-    animateNext.current = true;
-    pendingNote.current = note;
-    parkAtCenterRef.current = opts?.parkAtCenter ?? true;
-  }, []);
+  const requestAnimation = useCallback(
+    (note = '', opts?: { parkAtCenter?: boolean; onSettled?: () => void }) => {
+      animateNext.current = true;
+      pendingNote.current = note;
+      parkAtCenterRef.current = opts?.parkAtCenter ?? true;
+      pendingOnSettledRef.current = opts?.onSettled ?? null;
+    },
+    []
+  );
 
   /**
    * Slide the library from one arrangement into another.
@@ -108,7 +118,8 @@ export function useRearrangement({
     async (
       before: { layout: MapLayout; order: number[] },
       after: { layout: MapLayout; order: number[] },
-      parkAtCenter: boolean
+      parkAtCenter: boolean,
+      onSettled: (() => void) | null
     ): Promise<boolean> => {
       const canvas = canvasRef.current;
       if (!canvas) return false;
@@ -204,9 +215,11 @@ export function useRearrangement({
           if (parkAtCenter && returnZoom !== config.camera.defaultZoom) {
             flyTo(0, 0, returnZoom).then((landedBack) => {
               if (landedBack && hadFocus) searchInput.focus();
+              onSettled?.();
             });
-          } else if (hadFocus) {
-            searchInput.focus();
+          } else {
+            if (hadFocus) searchInput.focus();
+            onSettled?.();
           }
         }
         requestDraw();
@@ -253,8 +266,16 @@ export function useRearrangement({
     }
     animateNext.current = false;
     const parkAtCenter = parkAtCenterRef.current;
-    startRearrangement(previous, current, parkAtCenter).then((started) => {
-      if (!started) requestDraw();
+    const onSettled = pendingOnSettledRef.current;
+    pendingOnSettledRef.current = null;
+    startRearrangement(previous, current, parkAtCenter, onSettled).then((started) => {
+      if (!started) {
+        // Nothing to watch for - the new arrangement is already on screen,
+        // drawn at once rather than slid into. Whatever `onSettled` wanted to
+        // do (typically: find where a room landed) is already true.
+        requestDraw();
+        onSettled?.();
+      }
       // Announce the arrangement this effect was for, and only if it is still
       // the one on the map: `startRearrangement` reports true for a run that
       // was superseded mid-flight as well as for one that got going, and the
