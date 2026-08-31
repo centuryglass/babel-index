@@ -336,6 +336,17 @@ export function overlapsViewport(rect: Rect, width: number, height: number): boo
 }
 
 /**
+ * Whether a screen rect is ENTIRELY within the viewport, not merely
+ * overlapping it. `goToSearch` (main.tsx) needs this rather than
+ * `overlapsViewport`: a search box only partly on screen is not one a reader
+ * can actually read or use, even though it is technically "on screen" by the
+ * weaker check.
+ */
+export function fullyInViewport(rect: Rect, width: number, height: number): boolean {
+  return rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= width && rect.y + rect.h <= height;
+}
+
+/**
  * Whether the spines are wide enough on screen to carry a title.
  *
  * One statement of the zoom gate, read by the compositing below AND by the DOM
