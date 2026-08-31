@@ -25,8 +25,9 @@
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
-import { CENTER, genericId, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
+import { CENTER, FAV_ON, FAV_OFF, genericId, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
 import { composeSpines, type Slot, type SpineContext } from './center.ts';
+import { favoriteIconScreenRect } from './favoriteBadge.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 
 /**
@@ -98,6 +99,12 @@ export interface DrawOpts {
    */
   centreSlots?: (Slot | null)[] | null;
   cursor?: { x: number; y: number } | null;
+  /**
+   * Overlay a favorite badge on every non-center, non-generic cell, or null
+   * to draw none - absent whenever this deployment has no favorite store
+   * (see `useFavorites.ts`'s `enabled`).
+   */
+  favorites?: { isFavorite: (id: number) => boolean } | null;
 }
 
 /** What the frame did, for the HUD and for tests. */
@@ -117,7 +124,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
-    cursor = null,
+    cursor = null, favorites = null,
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -178,6 +185,10 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         }
 
         if (chrome) drawChrome(ctx, cell, sx, sy, cellPx, zoom);
+        // The favorite badge - every real room, never the center (it is the
+        // controls, not a room) and never a generic cell (nothing to favorite).
+        if (favorites && !cell.center && !cell.generic)
+          drawFavoriteBadge(ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy);
         // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
@@ -226,6 +237,31 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
   }
 
   return { draw };
+}
+
+/**
+ * Draw one tile's favorite badge, if its art has landed - rule 1 does not
+ * apply here, since a badge that has not loaded yet simply does not draw
+ * rather than falling back to anything. Shared between `render.ts` and
+ * `slide.ts`, since both draw the exact same badge over the exact same corner.
+ */
+export function drawFavoriteBadge(
+  ctx: DrawContext,
+  cache: TileCache,
+  id: RoomId,
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number
+): void {
+  const hit = cache.get(id, 0);
+  if (!hit) return;
+  const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy);
+  if (hit.rect) {
+    const { sx: rx, sy: ry, sw, sh } = hit.rect;
+    ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
+  } else {
+    ctx.drawImage(hit.img, x, y, w, h);
+  }
 }
 
 /** The center-room marker and the rank labels. Cosmetic, and zoom-gated. */

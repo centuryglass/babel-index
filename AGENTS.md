@@ -152,6 +152,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `render.ts`: Render a single map frame
     * `slide.ts`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
+    * `favoriteBadge.ts`: Geometry and hit-test for the favorite badge painted
+                          onto a room tile's upper right corner
     * `catalog.ts`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images
@@ -567,6 +569,19 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   sits beside "show on the map" rather than inside `RoomDetails` where the card
   and the overlay put it; in the text column it would have to be reserved for in
   `TEXT_MIN`/`STORY_RESERVED_PX` and would cost two lines of story on every row.
+- **The on-map badge is the third favorite control, and it is fixed art, not a
+  scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` sit in `--shared-dir`
+  next to the center tile but outside `manifest.shared` - `rooms.ts`'s
+  `createTileLocator` resolves `FAV_ON`/`FAV_OFF` (`tiles.ts`) off
+  `manifest.sharedBase` directly rather than off a manifest listing, since
+  there is nothing for `scan.ts` to have discovered. Drawn by both
+  `render.ts` and `slide.ts` (`drawFavoriteBadge`, exported from `render.ts`)
+  on every non-center, non-generic cell - `favoriteBadge.ts` is the pure half,
+  anchoring the badge to a tile's upper right corner and scaling it by the
+  same per-cell factor the tile itself is drawn at. The tap hit-test
+  (`main.tsx`'s `tapRef.current`) only enables once the scaled hit bounds
+  clear `MIN_FAVORITE_HIT` (24px desktop, 48px `(pointer: coarse)` mobile) -
+  a badge too small to fairly hit is decoration only, not a dead control.
 
 ### The reorder animation
 
