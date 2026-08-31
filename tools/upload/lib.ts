@@ -74,6 +74,13 @@ export function buildUploadList(
   for (const generic of manifest.shared?.generic ?? [])
     uploads.push({ local: join(sharedDir, 'generic', generic.file), key: `shared/generic/${generic.file}` });
 
+  // Fixed app art, not part of any corpus's manifest.shared - see
+  // packages/web/src/lib/rooms.ts, which resolves these two filenames off
+  // manifest.sharedBase unconditionally. Always uploaded, unlike center/
+  // generic, because there's no manifest field to gate on.
+  for (const file of ['fav_on.png', 'fav_off.png'])
+    uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
+
   return uploads;
 }
 

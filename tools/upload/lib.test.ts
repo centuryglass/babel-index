@@ -42,6 +42,8 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'sample/metadata.json',
     'sample/tagLinks.json',
     'shared/center_tile.png',
+    'shared/fav_off.png',
+    'shared/fav_on.png',
     'shared/generic/a.jpg',
   ]);
 
@@ -69,7 +71,7 @@ test('buildUploadList uploads one entry per sheet file for a sheet-packed level,
   assert.equal(sheet.local, 'corpus/256-sheets/sheet-0000.jpg');
 });
 
-test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have', () => {
+test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have, but always uploads the fixed favorite badge art', () => {
   const m = manifest();
   m.metadata = null;
   m.tagLinks = null;
@@ -78,7 +80,14 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(
     uploads.map((u) => u.key).sort(),
-    ['sample/001.jpg', 'sample/002.jpg', 'sample/512/001.jpg', 'sample/512/002.jpg']
+    [
+      'sample/001.jpg',
+      'sample/002.jpg',
+      'sample/512/001.jpg',
+      'sample/512/002.jpg',
+      'shared/fav_off.png',
+      'shared/fav_on.png',
+    ]
   );
 });
 
