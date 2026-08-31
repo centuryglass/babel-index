@@ -14,7 +14,8 @@
  *   - Content slots are ordered by distance from the origin. A ranking (from
  *     CLIP, from manual score, or shuffled) is poured into that ordering, so
  *     rank 0 lands in the slot nearest the center.
- *   - Re-ranking after a search swaps one array. Slot positions never move,
+ *   - Re-ranking (after a search, or an active favorite sort - see
+ *     `packages/map/favorites.ts`) swaps one array. Slot positions never move,
  *     which is what makes the re-order read as the library rearranging itself
  *     rather than as a page reload.
  *

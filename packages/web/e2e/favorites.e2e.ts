@@ -41,17 +41,19 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       await ratio.press('End');
       await settled(page);
 
-      // Sorting BY favorites is the one change that IS allowed to fly the
-      // camera home first (`changeSort` asks for `parkAtCenter: true`, the
-      // default) - do that, and let it land, before panning away. Otherwise a
-      // flaky "did the camera move" assertion below could be catching THIS
-      // flight rather than the one under test. It returns to whatever zoom it
-      // was called from (here, the page-load opening view - see
-      // `useRearrangement.ts`'s `returnZoom`), so explicitly return to the
-      // "center" button's wider view afterwards: the opening view is zoomed
-      // into just the center shelf, too tight for a real room to be under the
-      // fixed point used below (`map-gestures.e2e.ts` relies on the same
-      // "center" button for the same reason).
+      // Sorting BY favorites is a rearrangement like any other, so it gets the
+      // same zoom-out-in-place `startRearrangement` gives every rearrangement
+      // (`useRearrangement.ts`) - the page is still centered on the shelf at
+      // this point, so widening to the default zoom is a camera move here. Let
+      // it land before panning away, otherwise a flaky "did the camera move"
+      // assertion below could be catching THIS flight rather than the one
+      // under test. It eases back to whatever zoom it was called from (here,
+      // the page-load opening view - see `useRearrangement.ts`'s
+      // `returnZoom`), so explicitly return to the "center" button's wider
+      // view afterwards: the opening view is zoomed into just the center
+      // shelf, too tight for a real room to be under the fixed point used
+      // below (`map-gestures.e2e.ts` relies on the same "center" button for
+      // the same reason).
       await page.locator('button', { hasText: 'my favorites' }).click();
       await landed(page, flightMs);
       await page.locator('button', { hasText: 'center' }).click();
@@ -88,8 +90,10 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       await card.waitFor({ state: 'detached', timeout: 5000 });
 
       // The camera must not have moved AT ALL - this is the behavior this
-      // test exists for. `landed`, not `settled`: a regression here is a
-      // camera FLIGHT (`flyTo(0, 0, ...)`), and `settled` only waits out the
+      // test exists for. Already at `defaultZoom` here (the "center" button
+      // above), so `startRearrangement`'s zoom-out-in-place is a no-op and
+      // there is no flight to wait out - a regression would be a camera
+      // FLIGHT. `landed`, not `settled`: `settled` only waits out the
       // tile-slide, not a flight still easing toward its target - reading
       // straight after `settled` can catch an early frame of exactly that
       // flight, whose eased position rounds to the pre-toggle one by

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
-import { favoriteOrder, favoriteCount, type SortMode } from '../../map/favorites.ts';
+import { favoriteOrder, favoriteSort, favoriteCount, type SortMode } from '../../map/favorites.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
 import type { RoomMeta } from '../../map/metadata.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
@@ -214,6 +214,30 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
+  // The map's order AND its density profile, from one sort: an active favorite
+  // sort is a placement input exactly as a search is (see
+  // docs/favorites-density-plan.md), so the certainty a room lands with has to
+  // be derived from the same sort that placed it rather than from the search
+  // alone. `favoriteSort` composes the two - a search's own certainty, boosted
+  // to 1 for whatever the sort lifted to the front - so `layout` below reads
+  // one number per room instead of two that could disagree.
+  //
+  // A search ranks the whole corpus; the layout takes as many as it has slots.
+  // A blocked room drops out of the ranking entirely - not hidden behind a
+  // cell, absent from it - so it never gets a slot on the map at all. Blocking
+  // first, then sorting: a blocked room must not come back because somebody
+  // favorited it.
+  const sortResult = useMemo(() => {
+    const base = result ? result.order : shuffledOrder(total, orderSeed);
+    return favoriteSort(
+      filterBlockedIds(base, metadata, blockedTagSet),
+      { mode: sortMode, ...favorites.sortInput },
+      result?.certainty ? { order: result.order, certainty: result.certainty } : null
+    );
+  }, [total, orderSeed, result, metadata, blockedTagSet, sortMode, favorites.sortInput]);
+
+  const order = sortResult.order;
+
   const layout = useMemo(
     () =>
       createLayout({
@@ -223,25 +247,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         aspect: CELL_ASPECT,
         genericCount,
         genericSeed,
-        density: result?.certainty
-          ? { ...config.search.density, certainty: result.certainty }
+        density: sortResult.certainty
+          ? { ...config.search.density, certainty: sortResult.certainty }
           : null,
       }),
-    [roomCount, contentRatio, seed, total, result, config, genericCount, genericSeed]
+    [roomCount, contentRatio, seed, total, sortResult, config, genericCount, genericSeed]
   );
-
-  const order = useMemo(() => {
-    // A search ranks the whole corpus; the layout takes as many as it has slots.
-    const base = result ? result.order : shuffledOrder(total, orderSeed);
-    // A blocked room drops out of the ranking entirely - not hidden behind a
-    // cell, absent from it - so it never gets a slot on the map at all.
-    // Blocking first, then sorting: a blocked room must not come back because
-    // somebody favorited it.
-    return favoriteOrder(filterBlockedIds(base, metadata, blockedTagSet), {
-      mode: sortMode,
-      ...favorites.sortInput,
-    });
-  }, [total, orderSeed, result, metadata, blockedTagSet, sortMode, favorites.sortInput]);
 
   // The catalog's own order: a shuffle is not a list order anyone can read by
   // eye, so its idle default is alphabetical rather than a second read of the
@@ -653,16 +664,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
   requestAnimationRef.current = requestAnimation;
 
-  // Where the toggle above sends the camera once that unparked resort has
-  // actually landed - a ref, reassigned every render, because `onSettled`
-  // fires later against whatever `card`/`cellById` are BY THEN, not whatever
-  // they were when the star was clicked. If the room whose card is open is
-  // the one just favorited, its cell after the resort is exactly what
-  // `cellById` already tracks (built for "show on the map"); flying there
-  // with no zoom argument keeps whatever zoom the reader was already at -
-  // the point is to bring the shelf back under an open card, not to reframe
-  // it. A card for a different room, or none at all, is left alone: nothing
-  // to reunite with the camera.
+  // Where the toggle above sends the camera once that resort has actually
+  // landed - a ref, reassigned every render, because `onSettled` fires later
+  // against whatever `card`/`cellById` are BY THEN, not whatever they were
+  // when the star was clicked. If the room whose card is open is the one just
+  // favorited, its cell after the resort is exactly what `cellById` already
+  // tracks (built for "show on the map"); flying there with no zoom argument
+  // keeps whatever zoom the reader was already at - the point is to bring the
+  // shelf back under an open card, not to reframe it. A card for a different
+  // room, or none at all, is left alone: nothing to reunite with the camera.
   const onFavoriteRearrangedRef = useRef((_id: number) => {});
   onFavoriteRearrangedRef.current = (id: number) => {
     if (mode !== 'map' || !card || 'generic' in card || card.id !== id) return;
@@ -678,15 +688,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
    * rooms nobody is looking at. Null for a generic cell (no file to favorite)
    * and null throughout when the feature is off.
    *
-   * Toggling asks for the sliding-tile treatment, unparked, whenever the map
-   * is sorted by favorites: the toggle changes `favorites.sortInput`, which
-   * changes `order` below, and without this that resort would just snap -
-   * `useRearrangement`'s effect only animates a change a caller asked for. It
-   * is deliberately NOT the parked kind `changeSort`/`reorder` ask for - the
-   * reader did not ask to change what they are looking at, they clicked a
-   * star, so the camera has no business leaving. It may still need to catch
-   * up afterwards, though: `onSettled` flies it to wherever this room ended
-   * up if that room's card is what is still open once the resort lands.
+   * Toggling asks for the sliding-tile treatment whenever the map is sorted
+   * by favorites: the toggle changes `favorites.sortInput`, which changes
+   * `sortResult` (order AND density) above, and without this that resort
+   * would just snap - `useRearrangement`'s effect only animates a change a
+   * caller asked for. `startRearrangement` zooms out in place rather than
+   * flying home, so a reader who is off-center keeps their position; it may
+   * still need to catch up afterwards, though - `onSettled` flies it to
+   * wherever this room ended up if that room's card is what is still open
+   * once the resort lands.
    */
   const favoriteFor = useCallback(
     (id: number | null | undefined) =>
@@ -696,10 +706,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             count: favorites.countOf(id),
             toggle: () => {
               if (mode === 'map' && sortMode !== 'relevance') {
-                requestAnimation('', {
-                  parkAtCenter: false,
-                  onSettled: () => onFavoriteRearrangedRef.current(id),
-                });
+                requestAnimation('', { onSettled: () => onFavoriteRearrangedRef.current(id) });
               }
               void favorites.toggle(id);
             },
