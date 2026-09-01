@@ -1,13 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import {
   FAV_ICON_SIZE,
   favoriteIconScreenRect,
   favoriteHitRect,
   isFavoriteHitEnabled,
   pointInRect,
+  FAVORITE_TOGGLE_PATH,
+  favoriteToggleAtPoint,
 } from './favoriteBadge.ts';
 import { BASE_TILE } from './pyramid.ts';
+
+const GEO = layout({ width: 1, height: 1 });
 
 test('the icon is anchored to the tile\'s upper right corner and scales with cellPx', () => {
   const cellPx = { x: BASE_TILE.w, y: BASE_TILE.h }; // 1x scale
@@ -63,4 +68,38 @@ test('pointInRect is inclusive on the low edge, exclusive on the high edge', () 
   assert.equal(pointInRect(15, 10, rect), false);
   assert.equal(pointInRect(10, 15, rect), false);
   assert.equal(pointInRect(9.9, 10, rect), false);
+});
+
+test('FAVORITE_TOGGLE_PATH is a closed absolute path tracing the badge', () => {
+  assert.ok(FAVORITE_TOGGLE_PATH, 'the trace must carry a tile_fav_toggle path for this test to mean anything');
+  assert.match(FAVORITE_TOGGLE_PATH as string, /^M/, 'must start with an absolute moveto');
+  assert.match(FAVORITE_TOGGLE_PATH as string, /Z$/, 'must close its subpath');
+});
+
+test('favoriteToggleAtPoint hits the traced silhouette but not its own bbox corner', () => {
+  assert.ok(GEO.favoriteToggle, 'the trace must carry a tile_fav_toggle path for this test to mean anything');
+  const b = GEO.favoriteToggle!.bbox;
+  const cellPx = { x: 4000, y: 4000 };
+  const sx = 0;
+  const sy = 0;
+  const cx = sx + (b.x + b.w / 2) * cellPx.x;
+  const cy = sy + (b.y + b.h / 2) * cellPx.y;
+  assert.equal(favoriteToggleAtPoint(cx, cy, cellPx, sx, sy), true);
+  // Well outside the bbox entirely - never hits.
+  assert.equal(favoriteToggleAtPoint(sx, sy, cellPx, sx, sy), false);
+  // An ellipse's own bbox corner sits outside the curve itself.
+  const cornerX = sx + b.x * cellPx.x;
+  const cornerY = sy + b.y * cellPx.y;
+  assert.equal(favoriteToggleAtPoint(cornerX, cornerY, cellPx, sx, sy), false);
+});
+
+test('favoriteToggleAtPoint scales per-axis with cellPx and translates with sx/sy', () => {
+  assert.ok(GEO.favoriteToggle);
+  const b = GEO.favoriteToggle!.bbox;
+  const cellPx = { x: 4000, y: 3000 };
+  const sx = 120;
+  const sy = 80;
+  const cx = sx + (b.x + b.w / 2) * cellPx.x;
+  const cy = sy + (b.y + b.h / 2) * cellPx.y;
+  assert.equal(favoriteToggleAtPoint(cx, cy, cellPx, sx, sy), true);
 });

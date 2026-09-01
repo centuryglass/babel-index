@@ -179,6 +179,24 @@
         opacity: 1; visibility: visible;
       }
 
+      /*
+       * The on-tile favorite badge's tooltip - `.control-tooltip` above sits
+       * inside the one fixed button it labels, but a badge is painted onto
+       * EVERY tile on the canvas and has no per-tile DOM button to anchor
+       * one to. One floating element instead, positioned at the pointer by
+       * the render loop's own `pointermove` listener (useMapRenderer.ts,
+       * alongside `hoveredFavorite`) rather than tied to any element's box.
+       * `display: none` is the hidden default; the listener sets `block`
+       * only while the pointer is over a badge's traced silhouette.
+       */
+      .favorite-tooltip {
+        position: absolute; display: none; pointer-events: none; z-index: 2;
+        transform: translate(-50%, -100%); margin-top: -8px;
+        padding: 4px 8px; white-space: nowrap;
+        background: var(--panel); border: 1px solid var(--edge); border-radius: 5px;
+        color: var(--ink); font-size: 11px; line-height: 1.3;
+      }
+
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
         background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;

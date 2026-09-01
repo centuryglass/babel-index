@@ -77,6 +77,7 @@ export function MapView({
   searchArrowRef,
   centerBookRef,
   controlsRef,
+  favTooltipRef,
   onOpenArtistStatement,
   manifest,
   total,
@@ -125,6 +126,7 @@ export function MapView({
   searchArrowRef: Ref<HTMLSpanElement>;
   centerBookRef: Ref<HTMLButtonElement>;
   controlsRef: Ref<HTMLDivElement>;
+  favTooltipRef: Ref<HTMLDivElement>;
   onOpenArtistStatement: () => void;
   manifest: Manifest;
   total: number;
@@ -240,6 +242,19 @@ export function MapView({
           />
         )}
       </canvas>
+      {/*
+        The on-tile favorite badge's "add to favorites"/"remove from
+        favorites" tooltip - one floating element for the whole map, rather
+        than `.control-tooltip`'s per-button copy, because a badge is
+        canvas-painted on every tile and has none of its own to carry one.
+        Positioned and shown imperatively from the render loop's own
+        `pointermove` listener (`useMapRenderer.ts`), the same treatment
+        `searchArrowRef` gets - not React state, since it moves on every
+        pointer move rather than on a render. `aria-hidden`: it repeats what
+        the badge's own state already is, and a room's favorite status is
+        available on the card without a mouse.
+      */}
+      <div ref={favTooltipRef} className="favorite-tooltip" aria-hidden="true" />
       {/*
         The live search field, on the center tile itself rather than in the
         panel. Always mounted - Playwright's `inputValue()` and React's

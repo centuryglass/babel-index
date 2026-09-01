@@ -40,6 +40,7 @@ import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
 import { CELL_ASPECT, pxPerCell, worldToScreen, type Camera, type ViewportRect } from './camera.ts';
 import type { DrawContext } from './render.ts';
 import { SPINE_FONT_FAMILY } from './spineFont.ts';
+import { flattenPath, pointInPolygon } from './svgPath.ts';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
@@ -100,64 +101,8 @@ export const CENTER_BOOK_PATH: string | null = GEOMETRY.centerBook?.d ?? null;
 const CURVE_SAMPLES = 12;
 
 const CENTER_BOOK_POLYGON: { x: number; y: number }[] | null = CENTER_BOOK_PATH
-  ? flattenPath(CENTER_BOOK_PATH)
+  ? flattenPath(CENTER_BOOK_PATH, CURVE_SAMPLES)
   : null;
-
-/**
- * Flatten an SVG path in the canonical absolute M/L/C/Z grammar
- * `import-shelf-svg.ts` emits into a polygon of `{x, y}` points.
- *
- * Only what that grammar ever contains - the same restriction the importer
- * itself enforces on import, so a path that reaches this function is already
- * known to be one of these four commands.
- */
-function flattenPath(d: string): { x: number; y: number }[] {
-  const tokens = d.match(/[MLCZ]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
-  const points: { x: number; y: number }[] = [];
-  let cx = 0;
-  let cy = 0;
-  let i = 0;
-  while (i < tokens.length) {
-    const cmd = tokens[i++];
-    if (cmd === 'Z') continue;
-    if (cmd === 'M' || cmd === 'L') {
-      cx = Number(tokens[i++]);
-      cy = Number(tokens[i++]);
-      points.push({ x: cx, y: cy });
-    } else if (cmd === 'C') {
-      const x1 = Number(tokens[i++]);
-      const y1 = Number(tokens[i++]);
-      const x2 = Number(tokens[i++]);
-      const y2 = Number(tokens[i++]);
-      const ex = Number(tokens[i++]);
-      const ey = Number(tokens[i++]);
-      for (let s = 1; s <= CURVE_SAMPLES; s++) {
-        const t = s / CURVE_SAMPLES;
-        const mt = 1 - t;
-        points.push({
-          x: mt * mt * mt * cx + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * ex,
-          y: mt * mt * mt * cy + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * ey,
-        });
-      }
-      cx = ex;
-      cy = ey;
-    }
-  }
-  return points;
-}
-
-/** Even-odd ray-casting point-in-polygon test, pure and browser-free. */
-function pointInPolygon(px: number, py: number, poly: { x: number; y: number }[]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i].x;
-    const yi = poly[i].y;
-    const xj = poly[j].x;
-    const yj = poly[j].y;
-    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
 
 /**
  * The opening view's real framing target: the bounding-box union of the

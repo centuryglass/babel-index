@@ -30,7 +30,8 @@ import {
   genericId, type LoadableImage, type RoomId, type TileCache,
 } from './tiles.ts';
 import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
-import { favoriteIconScreenRect, favoriteSwitchScreenRect } from './favoriteBadge.ts';
+import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
+import { parsePath } from './svgPath.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
@@ -118,6 +119,14 @@ export interface DrawOpts {
    */
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /**
+   * The world cell of the tile whose favorite badge is under the pointer, or
+   * null - same split as `hoveredBook`: read each frame here, written by
+   * `useMapRenderer.ts`'s `pointermove` listener. Compared against `(gx, gy)`
+   * in the draw loop below rather than carried as a room id, since a generic
+   * or center cell never has a badge to hover in the first place.
+   */
+  hoveredFavorite?: { x: number; y: number } | null;
+  /**
    * Which of the three rankings is in force, for the center tile's
    * favorites-sort switch (drawn whenever `favorites` is non-null - see
    * `drawFavoriteSwitch`). Read together with `favorites` rather than folded
@@ -144,7 +153,8 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
-    hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, sortMode = 'relevance',
+    hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, hoveredFavorite = null,
+    sortMode = 'relevance',
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -207,8 +217,12 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         if (chrome) drawChrome(ctx, cell, sx, sy, cellPx, zoom);
         // The favorite badge - every real room, never the center (it is the
         // controls, not a room) and never a generic cell (nothing to favorite).
-        if (favorites && !cell.center && !cell.generic)
-          drawFavoriteBadge(ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy);
+        if (favorites && !cell.center && !cell.generic) {
+          const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
+          drawFavoriteBadge(
+            ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
+          );
+        }
         // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
@@ -269,10 +283,60 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 }
 
 /**
+ * The 2d-context surface a traced-path highlight needs, beyond `DrawContext` -
+ * same split as `SpineContext` above, and for the same reason: `render.test.mjs`
+ * never hovers a badge, so its recording fake never implements these either.
+ */
+interface PathContext extends DrawContext {
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void;
+  closePath(): void;
+  fill(): void;
+  stroke(): void;
+}
+
+/** Same gold as the shelf's `HOVER_GLOW_FILL`/`_STROKE` (center.ts) - one hover treatment across every integrated control. */
+const FAVORITE_HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
+const FAVORITE_HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
+
+/**
+ * Trace `FAVORITE_TOGGLE_PATH` (a per-axis tile fraction, like every other
+ * traced rect on a tile) onto a real path at this tile's screen position,
+ * ready to `fill()`/`stroke()`. Replays the true Bezier curve rather than a
+ * flattened polygon - `parsePath` exists for exactly this, `flattenPath`
+ * (`svgPath.ts`) is for hit-testing only.
+ */
+function traceFavoriteToggle(ctx: PathContext, cellPx: { x: number; y: number }, sx: number, sy: number): void {
+  ctx.beginPath();
+  for (const cmd of parsePath(FAVORITE_TOGGLE_PATH as string)) {
+    if (cmd.type === 'M') ctx.moveTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
+    else if (cmd.type === 'L') ctx.lineTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
+    else if (cmd.type === 'C')
+      ctx.bezierCurveTo(
+        sx + cmd.x1 * cellPx.x, sy + cmd.y1 * cellPx.y,
+        sx + cmd.x2 * cellPx.x, sy + cmd.y2 * cellPx.y,
+        sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y
+      );
+    else ctx.closePath();
+  }
+}
+
+/**
  * Draw one tile's favorite badge, if its art has landed - rule 1 does not
  * apply here, since a badge that has not loaded yet simply does not draw
  * rather than falling back to anything. Shared between `render.ts` and
  * `slide.ts`, since both draw the exact same badge over the exact same corner.
+ *
+ * `hovered` paints a gold glow OVER the art, in the badge's own traced
+ * silhouette (`FAVORITE_TOGGLE_PATH`) rather than a rectangle loose enough to
+ * cover the tile's corner - the same "shape, not a box" choice the shelf's
+ * open book makes, and the same reason it is drawn on the canvas rather than
+ * as a DOM overlay: there is no per-tile DOM element to hang a CSS `:hover`
+ * off of. `ctx` is only `DrawContext` here (see that interface's own doc) - a
+ * real 2d context also satisfies `PathContext`, and the cast is sound for the
+ * same reason `render()`'s own cast into `SpineContext` is.
  */
 export function drawFavoriteBadge(
   ctx: DrawContext,
@@ -280,16 +344,27 @@ export function drawFavoriteBadge(
   id: RoomId,
   cellPx: { x: number; y: number },
   sx: number,
-  sy: number
+  sy: number,
+  hovered = false
 ): void {
   const hit = cache.get(id, 0);
-  if (!hit) return;
-  const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy);
-  if (hit.rect) {
-    const { sx: rx, sy: ry, sw, sh } = hit.rect;
-    ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
-  } else {
-    ctx.drawImage(hit.img, x, y, w, h);
+  if (hit) {
+    const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy);
+    if (hit.rect) {
+      const { sx: rx, sy: ry, sw, sh } = hit.rect;
+      ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
+    } else {
+      ctx.drawImage(hit.img, x, y, w, h);
+    }
+  }
+  if (hovered && FAVORITE_TOGGLE_PATH) {
+    const path = ctx as PathContext;
+    traceFavoriteToggle(path, cellPx, sx, sy);
+    path.fillStyle = FAVORITE_HOVER_GLOW_FILL;
+    path.fill();
+    path.lineWidth = 1;
+    path.strokeStyle = FAVORITE_HOVER_GLOW_STROKE;
+    path.stroke();
   }
 }
 

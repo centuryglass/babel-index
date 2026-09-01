@@ -100,6 +100,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // imperatively exactly like `booksRef`, holding three buttons laid out in
   // percentages of it.
   const controlsRef = useRef<HTMLDivElement>(null);
+  // The on-tile favorite badge's tooltip - one floating element for the
+  // whole map, positioned and shown imperatively from the render loop's
+  // pointermove listener exactly like the overlays above, since a badge is
+  // painted on every tile and has no DOM element of its own to anchor one to.
+  const favTooltipRef = useRef<HTMLDivElement>(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -665,7 +670,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
-    favorites: favoritesOverlay, sortMode,
+    favorites: favoritesOverlay, favTooltipRef, sortMode,
   });
 
   // --- the rearrangement animation -----------------------------------------
@@ -962,6 +967,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         searchArrowRef={searchArrowRef}
         centerBookRef={centerBookRef}
         controlsRef={controlsRef}
+        favTooltipRef={favTooltipRef}
         onOpenArtistStatement={openArtistStatement}
         manifest={manifest}
         total={total}

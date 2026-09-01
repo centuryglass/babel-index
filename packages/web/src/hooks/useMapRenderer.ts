@@ -23,11 +23,13 @@
  *     interrupt is not a map.
  */
 import { useEffect } from 'react';
-import { cursorCell, type Camera } from '../lib/camera.ts';
+import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
 import {
   bookAtPoint, centerBookAtPoint, centerCellRect,
   shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint,
 } from '../lib/center.ts';
+import { roomAtPoint } from '../lib/picking.ts';
+import { favoriteIconScreenRect, favoriteHitRect, isFavoriteHitEnabled, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
@@ -37,6 +39,9 @@ import type { Slot } from '../lib/center.ts';
 import { createRenderer, type DrawResult } from '../lib/render.ts';
 import type { SpineFontLimits } from '../lib/center.ts';
 import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
+
+/** Same check `main.tsx`'s tap-hit test uses for `isFavoriteHitEnabled` - a coarse pointer needs a bigger badge to be a fair target, hover included. */
+const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
  * `RoomRenderer`/`SlideRenderer` read their shape off the real `createRenderer`/
@@ -109,6 +114,14 @@ interface UseMapRendererOpts {
   blockedCount?: number;
   /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
   favorites?: { isFavorite: (id: number) => boolean } | null;
+  /**
+   * The floating "add to favorites"/"remove from favorites" tooltip - one
+   * element for the whole map, since a badge is canvas-painted on every
+   * tile and has no DOM element of its own to hang `.control-tooltip` off
+   * of (unlike the center tile's fixed controls). Positioned and shown by
+   * the `pointermove` listener below, alongside `hoveredFavorite`.
+   */
+  favTooltipRef?: { current: HTMLElement | null };
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
 }
@@ -135,6 +148,7 @@ export function useMapRenderer({
   centreOverlay,
   blockedCount = 0,
   favorites = null,
+  favTooltipRef,
   sortMode = 'relevance',
 }: UseMapRendererOpts) {
   useEffect(() => {
@@ -152,6 +166,10 @@ export function useMapRenderer({
     // frame and written by the `pointermove` listener below, the same split
     // `centerBookRef`'s hover class uses (`bookEl`/`onMove` further down).
     let hoveredBook: number | null = null;
+    // The world cell of the tile whose favorite badge is under the pointer,
+    // or null - same split as `hoveredBook` just above: read each frame by
+    // `render()`, written by the `pointermove` listener below.
+    let hoveredFavorite: { x: number; y: number } | null = null;
 
     const render = () => {
       pending = 0;
@@ -278,7 +296,7 @@ export function useMapRenderer({
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
         layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
-        cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites, sortMode,
+        cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
 
@@ -352,7 +370,8 @@ export function useMapRenderer({
     // backdrop plate over it, on the same canvas layer as the title.
     const onMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const cellRect = centerCellRect(cam.current, { width: canvas.clientWidth, height: canvas.clientHeight });
+      const viewportRect = { width: canvas.clientWidth, height: canvas.clientHeight };
+      const cellRect = centerCellRect(cam.current, viewportRect);
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
 
@@ -380,12 +399,59 @@ export function useMapRenderer({
         hoveredBook = next;
         draw.current();
       }
+
+      // The on-tile favorite badge - there is no per-tile DOM element to
+      // toggle a `.hover` class on (unlike every control above, which is
+      // fixed to the one center cell), so both the highlight (`hoveredFavorite`,
+      // read by `render()` above) and the tooltip are driven from here. The
+      // hover trigger is the badge's traced silhouette
+      // (`favoriteToggleAtPoint`), gated the same way a tap is
+      // (`isFavoriteHitEnabled`) so hovering never lights up a badge too
+      // small to actually tap - but the tap itself still goes through the
+      // looser `favoriteHitRect` box, which exists to be more forgiving than
+      // the art's own outline.
+      let nextFavorite: { x: number; y: number; id: number } | null = null;
+      if (favorites) {
+        const hit = roomAtPoint(px, py, cam.current, viewportRect, layout, order);
+        if (hit && !('generic' in hit)) {
+          const cellPx = pxPerCell(cam.current);
+          const { x: bsx, y: bsy } = worldToScreen(hit.x, hit.y, cam.current, viewportRect);
+          const hitRect = favoriteHitRect(favoriteIconScreenRect(cellPx, bsx, bsy));
+          if (
+            isFavoriteHitEnabled(hitRect, COARSE_POINTER) &&
+            favoriteToggleAtPoint(px, py, cellPx, bsx, bsy)
+          )
+            nextFavorite = { x: hit.x, y: hit.y, id: hit.id };
+        }
+      }
+      if (nextFavorite?.x !== hoveredFavorite?.x || nextFavorite?.y !== hoveredFavorite?.y) {
+        hoveredFavorite = nextFavorite;
+        draw.current();
+      }
+      const tooltip = favTooltipRef?.current;
+      if (tooltip) {
+        if (nextFavorite && favorites) {
+          tooltip.textContent = favorites.isFavorite(nextFavorite.id)
+            ? 'Remove from favorites'
+            : 'Add to favorites';
+          tooltip.style.left = `${px}px`;
+          tooltip.style.top = `${py}px`;
+          tooltip.style.display = 'block';
+        } else {
+          tooltip.style.display = 'none';
+        }
+      }
     };
     const onLeave = () => {
       centerBookRef?.current?.classList.remove('hover');
       controlsRef?.current
         ?.querySelectorAll('.hover')
         .forEach((n) => n.classList.remove('hover'));
+      if (favTooltipRef?.current) favTooltipRef.current.style.display = 'none';
+      if (hoveredFavorite !== null) {
+        hoveredFavorite = null;
+        draw.current();
+      }
       if (hoveredBook !== null) {
         hoveredBook = null;
         draw.current();
@@ -403,6 +469,6 @@ export function useMapRenderer({
   }, [
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
-    blockedCount, favorites, sortMode,
+    blockedCount, favorites, favTooltipRef, sortMode,
   ]);
 }
