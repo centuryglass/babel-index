@@ -156,7 +156,8 @@ def default_prompt(keywords: list[str], k=4) -> str:
         "\n - \"the books are paint/dye/fabric/material samples\": We've "
         "got a lot of those already, don't add another unless it's especially clever."
         "\n - Tedious business/industrial/bureaucratic minutia that doesn't tie into anything unexpected"
-        "\n - Humidity/light need to be just right or the spines crack/ink fades")
+        "\n - Humidity/light need to be just right or the spines crack/ink fades"
+        "\n - Books that are only there to serve as ballast/counterbalance/support/some other form of convenient mass")
 
 
 
