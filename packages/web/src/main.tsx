@@ -29,10 +29,15 @@ import {
   HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
   minZoomForSearchBox,
+  shuffleButtonAtPoint,
+  mineToggleAtPoint,
+  countToggleAtPoint,
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
 import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera } from './lib/camera.ts';
-import { createTileCache, CENTER, FAV_ON, FAV_OFF, genericId } from './lib/tiles.ts';
+import {
+  createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON, genericId,
+} from './lib/tiles.ts';
 import { favoriteIconScreenRect, favoriteHitRect, isFavoriteHitEnabled, pointInRect } from './lib/favoriteBadge.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
@@ -90,6 +95,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // an SVG that traces the exact silhouette (`CENTER_BOOK_PATH`) rather than
   // a rectangle.
   const centerBookRef = useRef<HTMLButtonElement>(null);
+  // The favorites-sort switch and reorder button's container - one
+  // absolutely-positioned box matching the center cell, positioned
+  // imperatively exactly like `booksRef`, holding three buttons laid out in
+  // percentages of it.
+  const controlsRef = useRef<HTMLDivElement>(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -328,9 +338,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       tiles.request(id, 0);
     }
     // The favorite badge's two faces, pinned the same way - a bounded pair of
-    // tiny images every non-generic, non-center cell can draw.
+    // tiny images every non-generic, non-center cell can draw. The center
+    // tile's favorites-sort switch art rides along with them: same gate,
+    // same reasoning, one more bounded handful of tiny images.
     if (favorites.enabled) {
-      for (const id of [FAV_ON, FAV_OFF]) {
+      for (const id of [FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON]) {
         tiles.pin(id);
         tiles.request(id, 0);
       }
@@ -651,9 +663,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   );
 
   useMapRenderer({
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed, cam, mode,
-    layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
-    favorites: favoritesOverlay,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed, cam,
+    mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
+    favorites: favoritesOverlay, sortMode,
   });
 
   // --- the rearrangement animation -----------------------------------------
@@ -814,6 +826,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [sortMode, requestAnimation, manifest, favorites.mine]
   );
 
+  // The center tile's favorites-sort switch reads as a physical switch, not a
+  // three-way select like the debug panel's buttons: pressing the active
+  // switch again returns to 'relevance' rather than doing nothing, which is
+  // what lets the switch's two "on" faces (`render.ts`'s `drawFavoriteSwitch`)
+  // double as the control's own state - neither face lit means 'relevance'.
+  const toggleSort = useCallback(
+    (next: SortMode) => changeSort(sortMode === next ? 'relevance' : next),
+    [changeSort, sortMode]
+  );
+
   const rescatter = useCallback(() => {
     requestAnimation('');
     setSeed((s) => s + 1);
@@ -848,6 +870,29 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     if (centerBookAtPoint(px, py, cell)) {
       openArtistStatement();
       return;
+    }
+
+    // The reorder button - a fixed hotspot on the center tile, checked before
+    // the shelf's own books for the same reason the search field and the open
+    // book are above: it does not overlap a spine. Unlike the two switches
+    // below it, reordering needs no favorite store.
+    if (shuffleButtonAtPoint(px, py, cell)) {
+      reorder();
+      return;
+    }
+
+    // The favorites-sort switch - two more fixed hotspots, meaningless
+    // without a favorite store to sort by, which is why they are gated on
+    // `favorites.enabled` while the reorder button above is not.
+    if (favorites.enabled) {
+      if (mineToggleAtPoint(px, py, cell)) {
+        toggleSort('mine');
+        return;
+      }
+      if (countToggleAtPoint(px, py, cell)) {
+        toggleSort('count');
+        return;
+      }
     }
 
     const slotIndex = bookAtPoint(px, py, cell);
@@ -916,6 +961,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         booksRef={booksRef}
         searchArrowRef={searchArrowRef}
         centerBookRef={centerBookRef}
+        controlsRef={controlsRef}
         onOpenArtistStatement={openArtistStatement}
         manifest={manifest}
         total={total}
@@ -949,7 +995,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         onRescatter={rescatter}
         favorites={favorites.enabled}
         sortMode={sortMode}
-        onSortMode={changeSort}
+        onToggleSort={toggleSort}
         favoriteFor={favoriteFor}
         cursorId={cursorId}
         onRecentre={recentre}

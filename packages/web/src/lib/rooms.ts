@@ -22,7 +22,7 @@
  * those few in memory. (Giving the shared assets their own resolution pyramid
  * is a later step.)
  */
-import { CENTER, genericId, FAV_ON, FAV_OFF } from './tiles.ts';
+import { CENTER, genericId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON } from './tiles.ts';
 import { sheetPosition, sheetFileName } from '../../../pipeline/layout.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 
@@ -61,6 +61,10 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // `--shared-dir` and are served flat from it exactly like the center tile.
   sharedUrls.set(FAV_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_on.png')}`);
   sharedUrls.set(FAV_OFF, `${manifest.sharedBase}/${encodeURIComponent('fav_off.png')}`);
+  // The center tile's favorites-sort switch art - same fixed-app-art treatment.
+  sharedUrls.set(FAV_CENTER_SWITCH_BASE, `${manifest.sharedBase}/${encodeURIComponent('fav_center_switch_base.png')}`);
+  sharedUrls.set(FAV_MINE_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_mine_on.png')}`);
+  sharedUrls.set(FAV_COUNT_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_count_on.png')}`);
 
   return (id, level) => {
     if (sharedUrls.has(id)) return level === 0 ? { url: sharedUrls.get(id)!, rect: null } : null;

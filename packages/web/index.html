@@ -138,6 +138,47 @@
       .center-book.hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
       .center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
 
+      /*
+       * The favorites-sort switch and reorder button - one container over
+       * the whole cell exactly like `.center-books`, its buttons positioned
+       * in percentages from their own traced rects. `pointer-events: none`
+       * for the same reason as the shelf: a real click already reaches
+       * `onTap` -> `shuffleButtonAtPoint`/`mineToggleAtPoint`/
+       * `countToggleAtPoint` through the canvas. The `.hover` class is
+       * toggled by the render loop's own pointermove listener
+       * (useMapRenderer.ts), same as `.center-book` above, rather than by CSS
+       * `:hover`, which never fires on a `pointer-events: none` element -
+       * the glow itself is a plain background tint since these buttons paint
+       * no text of their own to protect.
+       */
+      .center-controls { position: absolute; display: none; pointer-events: none; }
+      .center-controls button {
+        position: absolute; margin: 0; padding: 0; border: none;
+        background: none; border-radius: 2px;
+      }
+      .center-controls button.hover { background: rgba(200,169,95,0.28); box-shadow: 0 0 0 1px rgba(200,169,95,0.55); }
+      .center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(200,169,95,0.75); }
+      .center-controls button:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+      /*
+       * A custom tooltip, not the native `title` popup: the button it is
+       * inside has `pointer-events: none` (inherited from `.center-controls`),
+       * so a real `mouseover` never reaches it and `title` alone would never
+       * show. Shown on the same `.hover` class the render loop's pointermove
+       * listener already toggles (useMapRenderer.ts), and on `:focus-visible`
+       * so tabbing to the control shows it too, not just a mouse.
+       */
+      .center-controls .control-tooltip {
+        position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+        margin-bottom: 6px; padding: 4px 8px; white-space: nowrap;
+        background: var(--panel); border: 1px solid var(--edge); border-radius: 5px;
+        color: var(--ink); font-size: 11px; line-height: 1.3;
+        opacity: 0; visibility: hidden; transition: opacity 0.1s ease;
+      }
+      .center-controls button.hover .control-tooltip,
+      .center-controls button:focus-visible .control-tooltip {
+        opacity: 1; visibility: visible;
+      }
+
       .panel {
         position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
         background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
@@ -291,8 +332,6 @@
       .favorite-toggle:hover { color: var(--ink); background: rgba(200,169,95,0.22); border-color: #c8a95f; }
       .favorite-toggle.on { color: #c8a95f; background: rgba(200,169,95,0.24); border-color: #c8a95f; }
       .favorite-count { font-variant-numeric: tabular-nums; }
-      /* The map panel's sort row - three states of one setting, like `.paging`. */
-      .sort-mode.on { color: var(--ink); background: rgba(200,169,95,0.24); border-color: #c8a95f; }
       /*
         Sized to its own text, like every other catalog-bar control - the
         panel's `button { flex: 1 }` would otherwise stretch the select across

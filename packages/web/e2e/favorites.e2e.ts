@@ -54,7 +54,19 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       // shelf, too tight for a real room to be under the fixed point used
       // below (`map-gestures.e2e.ts` relies on the same "center" button for
       // the same reason).
-      await page.locator('button', { hasText: 'my favorites' }).click();
+      // The "sort by my favorites" switch is diegetic now, painted onto the
+      // center tile with `pointer-events: none` (see AGENTS.md's Favorites
+      // section) - a real click reaches it through the canvas's own hit
+      // testing, not a native pointer event on the button itself. Activating
+      // it the same way `shelf.e2e.ts` activates a book - focus the element,
+      // then Enter - exercises the keyboard/screen-reader entry point
+      // instead, which is exactly as real a way to reach it.
+      const mineToggle = page.locator('[data-control="mine"]');
+      await mineToggle.waitFor({ state: 'visible', timeout: 5000 });
+      await page.evaluate(() => {
+        (document.querySelector('[data-control="mine"]') as HTMLElement | null)?.focus();
+      });
+      await page.keyboard.press('Enter');
       await landed(page, flightMs);
       await page.locator('button', { hasText: 'center' }).click();
       await landed(page, flightMs);

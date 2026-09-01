@@ -25,10 +25,14 @@
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
-import { CENTER, FAV_ON, FAV_OFF, genericId, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
-import { composeSpines, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
-import { favoriteIconScreenRect } from './favoriteBadge.ts';
+import {
+  CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
+  genericId, type LoadableImage, type RoomId, type TileCache,
+} from './tiles.ts';
+import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
+import { favoriteIconScreenRect, favoriteSwitchScreenRect } from './favoriteBadge.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
+import type { SortMode } from '../../../map/favorites.ts';
 
 /**
  * The 2d-context surface this file actually calls - not the whole DOM
@@ -113,6 +117,14 @@ export interface DrawOpts {
    * (see `useFavorites.ts`'s `enabled`).
    */
   favorites?: { isFavorite: (id: number) => boolean } | null;
+  /**
+   * Which of the three rankings is in force, for the center tile's
+   * favorites-sort switch (drawn whenever `favorites` is non-null - see
+   * `drawFavoriteSwitch`). Read together with `favorites` rather than folded
+   * into it: `sortMode` always has a value, `favorites` is what actually
+   * gates whether the switch draws at all.
+   */
+  sortMode?: SortMode;
 }
 
 /** What the frame did, for the HUD and for tests. */
@@ -132,7 +144,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
-    hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null,
+    hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, sortMode = 'relevance',
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -209,6 +221,13 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
           composeSpines(
             ctx as SpineContext, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots, hoveredBook, spineFontLimits
           );
+        // The favorites-sort switch, painted into the center tile's upper
+        // left corner - the mirror of the favorite badge's upper right,
+        // drawn only once this deployment actually has a favorite store
+        // (`favorites` is null otherwise) and only once the tile is zoomed in
+        // enough to be worth reading, the same gate the shelf's own titles use.
+        if (cell.center && favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
+          drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
       }
     }
 
@@ -272,6 +291,35 @@ export function drawFavoriteBadge(
   } else {
     ctx.drawImage(hit.img, x, y, w, h);
   }
+}
+
+/**
+ * Draw the center tile's favorites-sort switch: the base plate, always drawn
+ * once favorites are enabled, plus whichever "on" face matches the active
+ * sort - neither face for `'relevance'`, which is the switch's off position.
+ * Each piece draws only once its own art has landed, same as
+ * `drawFavoriteBadge`, and all three share one screen rect since the "on"
+ * faces are painted to overlay the base plate exactly. Exported and shared
+ * with `slide.ts` (same as `drawFavoriteBadge`) - the center tile is the
+ * rearrangement's fixed tile, so its controls must keep drawing across the
+ * handoff between renderers rather than blinking out for the animation.
+ */
+export function drawFavoriteSwitch(
+  ctx: DrawContext,
+  cache: TileCache,
+  sortMode: SortMode,
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number
+): void {
+  const { x, y, w, h } = favoriteSwitchScreenRect(cellPx, sx, sy);
+  const draw = (id: RoomId) => {
+    const hit = cache.get(id, 0);
+    if (hit) ctx.drawImage(hit.img, x, y, w, h);
+  };
+  draw(FAV_CENTER_SWITCH_BASE);
+  if (sortMode === 'mine') draw(FAV_MINE_ON);
+  else if (sortMode === 'count') draw(FAV_COUNT_ON);
 }
 
 /** The center-room marker and the rank labels. Cosmetic, and zoom-gated. */

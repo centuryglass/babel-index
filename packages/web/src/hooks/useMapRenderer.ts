@@ -24,7 +24,11 @@
  */
 import { useEffect } from 'react';
 import { cursorCell, type Camera } from '../lib/camera.ts';
-import { bookAtPoint, centerBookAtPoint, centerCellRect } from '../lib/center.ts';
+import {
+  bookAtPoint, centerBookAtPoint, centerCellRect,
+  shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint,
+} from '../lib/center.ts';
+import type { SortMode } from '../../../map/favorites.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
@@ -72,6 +76,12 @@ interface UseMapRendererOpts {
   booksRef: { current: HTMLElement | null };
   /** the open book painted into a shelf gap - a distinct hotspot, not one of the shelf's buttons */
   centerBookRef?: { current: HTMLElement | null };
+  /**
+   * The favorites-sort switch and reorder button, painted into the center
+   * tile - one container over the whole cell, like `booksRef`, holding three
+   * buttons positioned in percentages of it.
+   */
+  controlsRef?: { current: HTMLElement | null };
   /** the search badge's orbiting arrow */
   searchArrowRef?: { current: HTMLElement | null };
   /** assigned by this hook; called by `requestDraw` */
@@ -99,6 +109,8 @@ interface UseMapRendererOpts {
   blockedCount?: number;
   /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
   favorites?: { isFavorite: (id: number) => boolean } | null;
+  /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
+  sortMode?: SortMode;
 }
 
 export function useMapRenderer({
@@ -107,6 +119,7 @@ export function useMapRenderer({
   booksRef,
   searchArrowRef,
   centerBookRef,
+  controlsRef,
   draw,
   anim,
   keyboardUsed,
@@ -122,6 +135,7 @@ export function useMapRenderer({
   centreOverlay,
   blockedCount = 0,
   favorites = null,
+  sortMode = 'relevance',
 }: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -165,7 +179,8 @@ export function useMapRenderer({
       const booksEl = booksRef.current;
       const arrowEl = searchArrowRef?.current;
       const bookEl = centerBookRef?.current;
-      if (searchEl || booksEl || arrowEl || bookEl) {
+      const controlsEl = controlsRef?.current;
+      if (searchEl || booksEl || arrowEl || bookEl || controlsEl) {
         const { box, usable, cellRect, books } = centreOverlay(w, h);
         if (searchEl) {
           searchEl.style.display = usable ? 'block' : 'none';
@@ -200,6 +215,18 @@ export function useMapRenderer({
             bookEl.style.top = `${cellRect.y}px`;
             bookEl.style.width = `${cellRect.w}px`;
             bookEl.style.height = `${cellRect.h}px`;
+          }
+        }
+        // The favorites-sort switch and the reorder button - the same
+        // whole-cell container + percentage-children shape as `booksEl`, so
+        // this costs one style write regardless of how many controls it holds.
+        if (controlsEl) {
+          controlsEl.style.display = books ? 'block' : 'none';
+          if (books) {
+            controlsEl.style.left = `${cellRect.x}px`;
+            controlsEl.style.top = `${cellRect.y}px`;
+            controlsEl.style.width = `${cellRect.w}px`;
+            controlsEl.style.height = `${cellRect.h}px`;
           }
         }
         // The arrow, pointed at the center tile's screen position rather
@@ -246,12 +273,12 @@ export function useMapRenderer({
       const slideDrawOpts = {
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
-        genericIndexAt: layout.genericIndexAt, favorites,
+        genericIndexAt: layout.genericIndexAt, favorites, sortMode,
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
         layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
-        cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites,
+        cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites, sortMode,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
 
@@ -332,6 +359,22 @@ export function useMapRenderer({
       const el = centerBookRef?.current;
       if (el) el.classList.toggle('hover', centerBookAtPoint(px, py, cellRect));
 
+      // The favorites-sort switch and reorder button - same DOM `.hover`
+      // class approach as the open book above, for the same reason: neither
+      // paints any text of its own, so a CSS overlay is the whole highlight.
+      const controls = controlsRef?.current;
+      if (controls) {
+        controls
+          .querySelector('[data-control="shuffle"]')
+          ?.classList.toggle('hover', shuffleButtonAtPoint(px, py, cellRect));
+        controls
+          .querySelector('[data-control="mine"]')
+          ?.classList.toggle('hover', mineToggleAtPoint(px, py, cellRect));
+        controls
+          .querySelector('[data-control="count"]')
+          ?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
+      }
+
       const next = booksRef.current ? bookAtPoint(px, py, cellRect) : null;
       if (next !== hoveredBook) {
         hoveredBook = next;
@@ -340,6 +383,9 @@ export function useMapRenderer({
     };
     const onLeave = () => {
       centerBookRef?.current?.classList.remove('hover');
+      controlsRef?.current
+        ?.querySelectorAll('.hover')
+        .forEach((n) => n.classList.remove('hover'));
       if (hoveredBook !== null) {
         hoveredBook = null;
         draw.current();
@@ -355,8 +401,8 @@ export function useMapRenderer({
       canvas.removeEventListener('pointerleave', onLeave);
     };
   }, [
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, draw, anim, keyboardUsed,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
-    blockedCount, favorites,
+    blockedCount, favorites, sortMode,
   ]);
 }

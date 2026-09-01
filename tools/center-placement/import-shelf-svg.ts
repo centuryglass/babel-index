@@ -10,6 +10,9 @@
  *   rects labelled "book0".."bookN" -> book spines, addressed by that label
  *   path labelled "center_book"  -> the open book painted into a shelf gap,
  *                                   a distinct hotspot from the lettered books
+ *   rect labelled "fav_mine_toggle"  -> hit region for the "my favorites" sort switch
+ *   rect labelled "fav_count_toggle" -> hit region for the "most favorited" sort switch
+ *   rect labelled "shuffle_button"   -> hit region for the reorder control
  *
  * That is the whole trace now - no board, upright or lamp is read from the
  * SVG any more. Only the label is authoritative; fill colour is decorative.
@@ -245,10 +248,18 @@ for (const m of svg.matchAll(/<path\b[\s\S]*?\/>/g)) {
 }
 
 const searchBoxRects = rects.filter((r) => r.label === 'search_box');
+const mineToggleRects = rects.filter((r) => r.label === 'fav_mine_toggle');
+const countToggleRects = rects.filter((r) => r.label === 'fav_count_toggle');
+const shuffleRects = rects.filter((r) => r.label === 'shuffle_button');
 const spines = rects
   .filter((r) => /^book\d+$/.test(r.label ?? ''))
   .sort((a, b) => a.y - b.y || a.x - b.x);
-const other = rects.filter((r) => r !== searchBoxRects[0] && !/^book\d+$/.test(r.label ?? ''));
+const NAMED_SINGLETON_LABELS = new Set([
+  'search_box', 'fav_mine_toggle', 'fav_count_toggle', 'shuffle_button',
+]);
+const other = rects.filter(
+  (r) => !NAMED_SINGLETON_LABELS.has(r.label ?? '') && !/^book\d+$/.test(r.label ?? '')
+);
 
 // Every book on one shelf shares its y in the trace - no board or upright is
 // needed to find the bays. A small tolerance absorbs sub-pixel trace noise
@@ -282,6 +293,9 @@ const openingRect = {
 };
 
 const searchBox = searchBoxRects[0] ?? null;
+const mineToggle = mineToggleRects[0] ?? null;
+const countToggle = countToggleRects[0] ?? null;
+const shuffleButton = shuffleRects[0] ?? null;
 const centerBook = centerBookPaths[0] ?? null;
 
 console.log(
@@ -291,6 +305,9 @@ console.log(
 console.log('  -> BASE_TILE in packages/web/src/lib/pyramid.ts must match this aspect');
 console.log(`rects ${rects.length}: ${spines.length} books, ${searchBoxRects.length} search_box, ${other.length} unlabelled`);
 console.log(`search_box: ${searchBox ? nrect(searchBox).join(', ') : 'MISSING'}`);
+console.log(`fav_mine_toggle: ${mineToggle ? nrect(mineToggle).join(', ') : 'none traced'}`);
+console.log(`fav_count_toggle: ${countToggle ? nrect(countToggle).join(', ') : 'none traced'}`);
+console.log(`shuffle_button: ${shuffleButton ? nrect(shuffleButton).join(', ') : 'none traced'}`);
 console.log(`center_book: ${centerBook ? `bbox ${nrect(centerBook.bbox).join(', ')}, ${centerBook.d.split(' ').length} path commands` : 'none traced'}`);
 console.log(`opening: ${nrect(openingRect).join(', ')}`);
 console.log(`\n${shelves.length} shelves, ${spines.length} books total:`);
@@ -301,6 +318,9 @@ const problems: string[] = [];
 if (other.length) problems.push(`${other.length} rects had no recognised label (book<n> or search_box)`);
 if (searchBoxRects.length > 1) problems.push(`${searchBoxRects.length} rects labelled search_box, expected one`);
 if (!searchBox) problems.push('no rect labelled search_box');
+if (mineToggleRects.length > 1) problems.push(`${mineToggleRects.length} rects labelled fav_mine_toggle, expected at most one`);
+if (countToggleRects.length > 1) problems.push(`${countToggleRects.length} rects labelled fav_count_toggle, expected at most one`);
+if (shuffleRects.length > 1) problems.push(`${shuffleRects.length} rects labelled shuffle_button, expected at most one`);
 if (!spines.length) problems.push('no rects labelled book<n>');
 if (centerBookPaths.length > 1) problems.push(`${centerBookPaths.length} paths labelled center_book, expected at most one`);
 if (problems.length) {
@@ -344,6 +364,12 @@ export interface MeasuredData {
   tile: { w: number; h: number; aspect: number };
   opening: RectTuple;
   searchBox: RectTuple | null;
+  /** hit region for the "sort by my favorites" switch - null on a trace with none */
+  mineToggle: RectTuple | null;
+  /** hit region for the "sort by most favorited" switch - null on a trace with none */
+  countToggle: RectTuple | null;
+  /** hit region for the reorder control - null on a trace with none */
+  shuffleButton: RectTuple | null;
   centerBook: CenterBook | null;
   shelves: { books: RectTuple[] }[];
 }
@@ -353,6 +379,9 @@ export const MEASURED: MeasuredData = {
   tile: { w: ${round(vbW)}, h: ${round(vbH)}, aspect: ${round(vbH / vbW)} },
   opening: [${nrect(openingRect).join(', ')}],
   searchBox: ${searchBox ? `[${nrect(searchBox).join(', ')}]` : 'null'},
+  mineToggle: ${mineToggle ? `[${nrect(mineToggle).join(', ')}]` : 'null'},
+  countToggle: ${countToggle ? `[${nrect(countToggle).join(', ')}]` : 'null'},
+  shuffleButton: ${shuffleButton ? `[${nrect(shuffleButton).join(', ')}]` : 'null'},
   centerBook: ${centerBook ? `{ d: ${JSON.stringify(centerBook.d)}, bbox: [${nrect(centerBook.bbox).join(', ')}] }` : 'null'},
   shelves: [
 ${shelves

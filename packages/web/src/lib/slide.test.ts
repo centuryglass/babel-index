@@ -378,6 +378,41 @@ test('the favorite badge rides along with a sliding board, room cells only', () 
   }
 });
 
+test('the favorites-sort switch rides along with the center room during a rearrangement', () => {
+  // The center room is the rearrangement's fixed tile - it never moves, but
+  // it is drawn here, not by `render.ts`, for as long as the animation is
+  // running. Without this the switch would blink out the moment a
+  // rearrangement starts and reappear only once it lands.
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const isFavorite = () => false;
+
+  const frame = (motions) => {
+    const ctx = fakeCtx();
+    renderer.draw({
+      ctx, width: 1920, height: 1080, dpr: 1, cam,
+      board, origin: built.origin, motions, favorites: { isFavorite }, sortMode: 'mine',
+    });
+    return ctx;
+  };
+
+  frame([]);
+  settle();
+
+  const hasSwitchPiece = (ctx, id) => ctx.drawn.some((d) => String(d.img.src).includes(id));
+
+  for (let t = 0; t <= show.totalMs; t += 41) {
+    const { motions } = show.advanceTo(t);
+    const ctx = frame(motions);
+    assert.ok(hasSwitchPiece(ctx, 'fav-center-switch-base'), `no switch base drawn at t=${t}`);
+    assert.ok(hasSwitchPiece(ctx, 'fav-mine-on'), `no "mine" face drawn for sortMode: 'mine' at t=${t}`);
+  }
+});
+
 test('no favorites option on the slide renderer means no badge at all', () => {
   const { built, moves } = rearrangement();
   const { cache, settle } = readyCache();

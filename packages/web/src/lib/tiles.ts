@@ -84,6 +84,15 @@ export const genericId = (i: number): number | string => (i < 0 ? CENTER : `gene
 export const FAV_ON = 'fav-on';
 export const FAV_OFF = 'fav-off';
 
+/**
+ * The center tile's favorites-sort switch art - the base plate, always drawn
+ * over the center cell whenever favorites are enabled, and the two "on" faces
+ * layered over it for whichever sort is active. Shared ids, like `CENTER`.
+ */
+export const FAV_CENTER_SWITCH_BASE = 'fav-center-switch-base';
+export const FAV_MINE_ON = 'fav-mine-on';
+export const FAV_COUNT_ON = 'fav-count-on';
+
 /** How many prefetches may be waiting at once. See prefetch() for why. */
 const QUEUE_LIMIT = 256;
 

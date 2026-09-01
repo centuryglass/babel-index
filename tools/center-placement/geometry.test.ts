@@ -5,7 +5,11 @@ import { MEASURED, SHELF_COUNT, BOOK_COUNT } from './lib/measured.ts';
 import { BASE_TILE } from '../../packages/web/src/lib/pyramid.ts';
 
 test('measured rects are normalised and inside the tile', () => {
-  const all = [MEASURED.opening, MEASURED.searchBox, ...MEASURED.shelves.flatMap((s) => s.books)];
+  const all = [
+    MEASURED.opening, MEASURED.searchBox,
+    MEASURED.mineToggle, MEASURED.countToggle, MEASURED.shuffleButton,
+    ...MEASURED.shelves.flatMap((s) => s.books),
+  ].filter((r) => r !== null);
   for (const [x, y, w, h] of all) {
     assert.ok(w > 0 && h > 0, `degenerate rect ${[x, y, w, h]}`);
     assert.ok(x >= 0 && y >= 0 && x + w <= 1.0001 && y + h <= 1.0001, `outside tile: ${[x, y, w, h]}`);
