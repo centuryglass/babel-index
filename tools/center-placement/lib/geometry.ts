@@ -107,6 +107,12 @@ export interface TileLayout {
   shuffleButton: Rect | null;
   /** the open book painted into a shelf gap - null if the trace has none */
   centerBook: CenterBook | null;
+  /**
+   * The on-tile favorite badge's traced silhouette, in the same per-axis
+   * fraction space as every other rect here (see measured.ts) - null if the
+   * trace has none.
+   */
+  favoriteToggle: CenterBook | null;
   shelves: Shelf[];
   floorLine: number;
   sideReturn: number;
@@ -138,6 +144,9 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
   const centerBook: CenterBook | null = MEASURED.centerBook
     ? { d: scalePathData(MEASURED.centerBook.d, W, H), bbox: r(MEASURED.centerBook.bbox) }
     : null;
+  const favoriteToggle: CenterBook | null = MEASURED.favoriteToggle
+    ? { d: scalePathData(MEASURED.favoriteToggle.d, W, H), bbox: r(MEASURED.favoriteToggle.bbox) }
+    : null;
 
   const shelves: Shelf[] = MEASURED.shelves.map((s, index) => ({
     index,
@@ -160,6 +169,7 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
     countToggle,
     shuffleButton,
     centerBook,
+    favoriteToggle,
     shelves,
     floorLine,
     sideReturn,

@@ -13,6 +13,12 @@
  *   rect labelled "fav_mine_toggle"  -> hit region for the "my favorites" sort switch
  *   rect labelled "fav_count_toggle" -> hit region for the "most favorited" sort switch
  *   rect labelled "shuffle_button"   -> hit region for the reorder control
+ *   ellipse labelled "tile_fav_toggle" -> the on-tile favorite badge's
+ *                                         non-transparent silhouette, traced
+ *                                         over the whole tile (not just the
+ *                                         badge's own icon) so it lands in
+ *                                         the same per-axis fraction space as
+ *                                         every other traced element
  *
  * That is the whole trace now - no board, upright or lamp is read from the
  * SVG any more. Only the label is authoritative; fill colour is decorative.
@@ -214,6 +220,82 @@ function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: numb
   };
 }
 
+/** A 2x3 affine matrix, as an SVG `matrix(a,b,c,d,e,f)` transform names it. */
+interface Matrix {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+}
+
+function parseMatrix(transform: string | null): Matrix | null {
+  if (!transform) return null;
+  const m = /matrix\(\s*([^)]+)\)/.exec(transform);
+  if (!m) throw new Error(`unsupported element transform: ${transform}`);
+  const [a, b, c, d, e, f] = m[1].trim().split(/[\s,]+/).map(Number);
+  return { a, b, c, d, e, f };
+}
+
+const applyMatrix = (mat: Matrix, x: number, y: number): [number, number] => [
+  mat.a * x + mat.c * y + mat.e,
+  mat.b * x + mat.d * y + mat.f,
+];
+
+/** Circle/ellipse -> 4 cubic Beziers, the standard `kappa` control-point offset. */
+const ELLIPSE_KAPPA = 0.5522847498;
+
+/**
+ * Turn a traced `<ellipse>` (with its own `transform`, if any) into the same
+ * canonical absolute M/L/C/Z grammar `normalizePath` emits for a `<path>` -
+ * so `tile_fav_toggle` reaches `center.ts`/`favoriteBadge.ts` exactly like
+ * `center_book` does, and the two consumers do not need to know one shape
+ * started life as an ellipse. Approximated as 4 cubic Beziers (the standard
+ * `kappa` construction) rather than solved exactly - close enough that the
+ * boundary looks right at screen resolution, same tradeoff `flattenPath` in
+ * `center.ts` makes for a hover hit-test.
+ */
+function ellipseToPath(
+  cx: number, cy: number, rx: number, ry: number,
+  mat: Matrix | null, tx: number, ty: number, vbW: number, vbH: number
+) {
+  const k = ELLIPSE_KAPPA;
+  const local: [number, number][] = [
+    [cx + rx, cy], [cx + rx, cy + ry * k], [cx + rx * k, cy + ry], [cx, cy + ry],
+    [cx - rx * k, cy + ry], [cx - rx, cy + ry * k], [cx - rx, cy], [cx - rx, cy - ry * k],
+    [cx - rx * k, cy - ry], [cx, cy - ry], [cx + rx * k, cy - ry], [cx + rx, cy - ry * k],
+  ];
+  // Raw (pre-normalisation) points for the bbox - `nrect` at the template's
+  // output site divides by vbW/vbH itself, same convention `normalizePath`'s
+  // bbox uses, so the two shapes go through one normalisation path rather
+  // than this function guessing which callers already divided.
+  const raw = local.map(([x, y]) => {
+    const [tx0, ty0] = mat ? applyMatrix(mat, x, y) : [x, y];
+    return [tx0 + tx, ty0 + ty] as [number, number];
+  });
+  const norm = raw.map(([x, y]) => [round(x / vbW), round(y / vbH)] as [number, number]);
+  const [p0, c01a, c01b, p1, c12a, c12b, p2, c23a, c23b, p3, c30a, c30b] = norm;
+  const seg = (c1: [number, number], c2: [number, number], end: [number, number]) =>
+    `C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${end[0]},${end[1]}`;
+  const d = [
+    `M${p0[0]},${p0[1]}`,
+    seg(c01a, c01b, p1),
+    seg(c12a, c12b, p2),
+    seg(c23a, c23b, p3),
+    seg(c30a, c30b, p0),
+    'Z',
+  ].join(' ');
+  const xs = raw.map((p) => p[0]);
+  const ys = raw.map((p) => p[1]);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return {
+    d,
+    bbox: { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY },
+  };
+}
+
 function attr(tag: string, name: string): string | null {
   const direct = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(tag);
   if (direct) return direct[1].trim();
@@ -245,6 +327,19 @@ for (const m of svg.matchAll(/<path\b[\s\S]*?\/>/g)) {
   const rawD = attr(tag, 'd');
   if (!rawD) continue;
   centerBookPaths.push(normalizePath(rawD, tx, ty, vbW, vbH));
+}
+
+const favoriteTogglePaths: { d: string; bbox: { x: number; y: number; w: number; h: number } }[] = [];
+for (const m of svg.matchAll(/<ellipse\b[\s\S]*?\/>/g)) {
+  const tag = m[0];
+  if (attr(tag, 'inkscape:label') !== 'tile_fav_toggle') continue;
+  const cx = Number(attr(tag, 'cx'));
+  const cy = Number(attr(tag, 'cy'));
+  const rx = Number(attr(tag, 'rx'));
+  const ry = Number(attr(tag, 'ry'));
+  if ([cx, cy, rx, ry].some(Number.isNaN)) continue;
+  const mat = parseMatrix(attr(tag, 'transform'));
+  favoriteTogglePaths.push(ellipseToPath(cx, cy, rx, ry, mat, tx, ty, vbW, vbH));
 }
 
 const searchBoxRects = rects.filter((r) => r.label === 'search_box');
@@ -297,6 +392,7 @@ const mineToggle = mineToggleRects[0] ?? null;
 const countToggle = countToggleRects[0] ?? null;
 const shuffleButton = shuffleRects[0] ?? null;
 const centerBook = centerBookPaths[0] ?? null;
+const favoriteToggle = favoriteTogglePaths[0] ?? null;
 
 console.log(
   `viewBox ${round(vbW)} x ${round(vbH)} (aspect ${round(vbH / vbW)}), ` +
@@ -309,6 +405,7 @@ console.log(`fav_mine_toggle: ${mineToggle ? nrect(mineToggle).join(', ') : 'non
 console.log(`fav_count_toggle: ${countToggle ? nrect(countToggle).join(', ') : 'none traced'}`);
 console.log(`shuffle_button: ${shuffleButton ? nrect(shuffleButton).join(', ') : 'none traced'}`);
 console.log(`center_book: ${centerBook ? `bbox ${nrect(centerBook.bbox).join(', ')}, ${centerBook.d.split(' ').length} path commands` : 'none traced'}`);
+console.log(`tile_fav_toggle: ${favoriteToggle ? `bbox ${nrect(favoriteToggle.bbox).join(', ')}` : 'none traced'}`);
 console.log(`opening: ${nrect(openingRect).join(', ')}`);
 console.log(`\n${shelves.length} shelves, ${spines.length} books total:`);
 for (const [i, row] of shelves.entries())
@@ -323,6 +420,7 @@ if (countToggleRects.length > 1) problems.push(`${countToggleRects.length} rects
 if (shuffleRects.length > 1) problems.push(`${shuffleRects.length} rects labelled shuffle_button, expected at most one`);
 if (!spines.length) problems.push('no rects labelled book<n>');
 if (centerBookPaths.length > 1) problems.push(`${centerBookPaths.length} paths labelled center_book, expected at most one`);
+if (favoriteTogglePaths.length > 1) problems.push(`${favoriteTogglePaths.length} ellipses labelled tile_fav_toggle, expected at most one`);
 if (problems.length) {
   console.error('\nPROBLEMS:');
   for (const p of problems) console.error(`  ! ${p}`);
@@ -371,6 +469,15 @@ export interface MeasuredData {
   /** hit region for the reorder control - null on a trace with none */
   shuffleButton: RectTuple | null;
   centerBook: CenterBook | null;
+  /**
+   * The on-tile favorite badge's non-transparent silhouette - an ellipse in
+   * the trace, converted on import to the same M/L/C/Z grammar \`centerBook\`
+   * uses. Traced over the WHOLE tile, not the badge's own icon, so it is in
+   * the same per-axis fraction space as every other rect here; a consumer
+   * scales it by a tile's \`cellPx\` exactly like \`centerBook\`. Null on a
+   * trace with none, in which case a badge draws no hover highlight.
+   */
+  favoriteToggle: CenterBook | null;
   shelves: { books: RectTuple[] }[];
 }
 
@@ -383,6 +490,7 @@ export const MEASURED: MeasuredData = {
   countToggle: ${countToggle ? `[${nrect(countToggle).join(', ')}]` : 'null'},
   shuffleButton: ${shuffleButton ? `[${nrect(shuffleButton).join(', ')}]` : 'null'},
   centerBook: ${centerBook ? `{ d: ${JSON.stringify(centerBook.d)}, bbox: [${nrect(centerBook.bbox).join(', ')}] }` : 'null'},
+  favoriteToggle: ${favoriteToggle ? `{ d: ${JSON.stringify(favoriteToggle.d)}, bbox: [${nrect(favoriteToggle.bbox).join(', ')}] }` : 'null'},
   shelves: [
 ${shelves
   .map(

@@ -17,6 +17,8 @@
  * No DOM - this is the pure geometry/hit-test half, split out the same way
  * `picking.ts` and `center.ts` are.
  */
+import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
+import { flattenPath, pointInPolygon, type Point } from './svgPath.ts';
 import { BASE_TILE } from './pyramid.ts';
 
 export interface Rect {
@@ -25,6 +27,22 @@ export interface Rect {
   w: number;
   h: number;
 }
+
+const GEOMETRY = layout({ width: 1, height: 1 });
+
+/**
+ * The on-tile favorite badge's traced silhouette - `tile_fav_toggle` in
+ * `shelf_geometry.svg`, an ellipse fitted to the badge art's non-transparent
+ * pixels and imported the same way `center.ts`'s `CENTER_BOOK_PATH` is: the
+ * canonical M/L/C/Z grammar, every coordinate a fraction of the WHOLE tile
+ * (not of the badge's own icon), so it scales the same way every other traced
+ * rect on a tile does - per axis, by that tile's `cellPx`. Null on a trace
+ * with none, in which case a badge draws no hover highlight.
+ */
+export const FAVORITE_TOGGLE_PATH: string | null = GEOMETRY.favoriteToggle?.d ?? null;
+
+/** `FAVORITE_TOGGLE_PATH` flattened into a polygon once at module load - see `CENTER_BOOK_POLYGON` in `center.ts` for the same tradeoff. */
+const FAVORITE_TOGGLE_POLYGON: Point[] | null = FAVORITE_TOGGLE_PATH ? flattenPath(FAVORITE_TOGGLE_PATH) : null;
 
 /** The native pixel size of fav_on.png/fav_off.png. */
 export const FAV_ICON_SIZE = { w: 92, h: 198 };
@@ -86,4 +104,25 @@ export function isFavoriteHitEnabled(hitRect: Rect, mobile: boolean): boolean {
 
 export function pointInRect(px: number, py: number, rect: Rect): boolean {
   return px >= rect.x && px < rect.x + rect.w && py >= rect.y && py < rect.y + rect.h;
+}
+
+/**
+ * Whether a screen point lands on the favorite badge's traced SILHOUETTE, not
+ * merely `favoriteHitRect`'s bounding box - the same "shape, not a box"
+ * argument `centerBookAtPoint` (`center.ts`) makes for the open book.
+ * `cellPx`/`sx`/`sy` are the whole tile's own screen geometry (as `render.ts`
+ * draws it), since `FAVORITE_TOGGLE_PATH` is traced against the whole tile,
+ * not the badge icon alone. Used for the hover highlight only - the tap hit
+ * test still goes through `favoriteHitRect`/`isFavoriteHitEnabled`, which
+ * exists precisely to be more forgiving than the art's own outline.
+ */
+export function favoriteToggleAtPoint(
+  px: number,
+  py: number,
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number
+): boolean {
+  if (!FAVORITE_TOGGLE_POLYGON) return false;
+  return pointInPolygon((px - sx) / cellPx.x, (py - sy) / cellPx.y, FAVORITE_TOGGLE_POLYGON);
 }
