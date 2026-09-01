@@ -157,7 +157,7 @@ export function useRearrangement({
         // correctness requirement now that flights ease - the plan is made
         // against exactly the cells on screen, so it cannot be made until the
         // camera has stopped moving.
-        const landed = await flyTo(cam.current.x, cam.current.y, target);
+        const landed = await flyTo(cam.current.x - 0.5, cam.current.y - 0.5, target);
         if (anim.current?.before !== before) return true; // superseded; not ours to undo
         if (!landed) {
           // The reader took the map. Not the moment to rebuild the library.
@@ -206,7 +206,7 @@ export function useRearrangement({
         if (done) {
           anim.current = null;
           if (target !== returnZoom) {
-            flyTo(parked.x, parked.y, returnZoom).then((landedBack) => {
+            flyTo(parked.x - 0.5, parked.y - 0.5, returnZoom).then((landedBack) => {
               if (landedBack && hadFocus) searchInput.focus();
               onSettled?.();
             });
