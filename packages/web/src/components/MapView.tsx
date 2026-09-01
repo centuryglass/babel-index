@@ -109,7 +109,6 @@ export function MapView({
   onReorder,
   favorites,
   sortMode,
-  onSortMode,
   onToggleSort,
   favoriteFor,
   cursorId,
@@ -159,7 +158,6 @@ export function MapView({
   /** whether this deployment records favorites at all - false hides every favorite control */
   favorites: boolean;
   sortMode: SortMode;
-  onSortMode: (mode: SortMode) => void;
   /** the center tile's favorites-sort switch: pressing the active mode again returns to 'relevance' */
   onToggleSort: (mode: SortMode) => void;
   /** one room's favorite state, or null for a generic cell or a disabled feature */
@@ -506,36 +504,14 @@ export function MapView({
         </div>
 
         {/*
-          The favorite sorts, beside the other two re-ranks because that is
-          what they are: they swap `order` and let the sliding-tile animation
-          carry the map across, exactly as reorder does. Interim placement -
-          this whole panel is behind `?debug`, and the reader-facing control
-          belongs on the center tile with the search box (see
-          docs/implementation-plan.md).
+          Reorder and the favorite sorts both used to have a debug-only button
+          here too, before they had a permanent home on the center tile's
+          shuffle/switch controls above - see AGENTS.md's Favorites section.
+          `rescatter` and `center` stay: neither has a diegetic equivalent
+          (rescatter reseeds which cells hold a room at all, not the ranking;
+          `center` is a plain camera reset).
         */}
-        {favorites && (
-          <div className="buttons" role="group" aria-label="sort the library">
-            {(
-              [
-                ['relevance', 'ranking'],
-                ['mine', 'my favorites'],
-                ['count', 'most favorited'],
-              ] as [SortMode, string][]
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                aria-pressed={sortMode === mode}
-                className={sortMode === mode ? 'sort-mode on' : 'sort-mode'}
-                onClick={() => onSortMode(mode)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
         <div className="buttons">
-          <button onClick={onReorder}>reorder</button>
           <button onClick={onRescatter}>rescatter</button>
           <button onClick={onRecentre}>center</button>
         </div>

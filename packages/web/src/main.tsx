@@ -995,7 +995,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         onRescatter={rescatter}
         favorites={favorites.enabled}
         sortMode={sortMode}
-        onSortMode={changeSort}
         onToggleSort={toggleSort}
         favoriteFor={favoriteFor}
         cursorId={cursorId}
