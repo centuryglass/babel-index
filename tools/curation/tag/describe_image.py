@@ -327,6 +327,26 @@ def _to_openai_content(block: dict) -> dict:
     return {"type": "text", "text": block["text"]}
 
 
+def _raise_with_body(resp: requests.Response) -> None:
+    """Like resp.raise_for_status(), but include the response body's error detail.
+
+    OpenRouter (and OpenAI-compatible servers generally) put the actionable
+    detail -- a missing attestation, a data-policy gate, a rate limit -- in
+    the JSON error body; requests' default HTTPError message discards it and
+    leaves only e.g. "403 Client Error: Forbidden for url: ...".
+    """
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as exc:
+        try:
+            detail = resp.json().get("error", {}).get("message")
+        except (ValueError, AttributeError):
+            detail = None
+        if detail:
+            raise requests.HTTPError(f"{exc}: {detail}", response=resp) from exc
+        raise
+
+
 def _send_openrouter(
     messages: list,
     model: str,
@@ -359,7 +379,7 @@ def _send_openrouter(
         json=payload,
         timeout=OPENROUTER_TIMEOUT,
     )
-    resp.raise_for_status()
+    _raise_with_body(resp)
     choice = resp.json()["choices"][0]
     content = (choice["message"].get("content") or "").strip()
     if not content:
@@ -389,7 +409,7 @@ def _send_local(messages: list, model: str, base: str = LOCAL_API_BASE) -> str:
     resp = requests.post(
         f"{base}/chat/completions", json=payload, timeout=LOCAL_TIMEOUT
     )
-    resp.raise_for_status()
+    _raise_with_body(resp)
     choice = resp.json()["choices"][0]
     content = (choice["message"].get("content") or "").strip()
     if not content:

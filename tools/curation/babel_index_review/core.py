@@ -76,8 +76,8 @@ QUESTIONS = [
     ("What's with the decor?", 1.0),
     ("What's the most interesting thing you could learn from reading here?", 1.0),
     ("What life-changing idea is only found in these pages?", 1.0),
-    ("Who'd burn this place down if they could?", 1.0),
-    ("What would the world lose if these volumes were destroyed?", 1.0),
+    ("Who'd burn this place down if they could?", 0.3),
+    ("What would the world lose if these volumes were destroyed?", 0.3),
     ("What's the worst book in the collection?", 1.0),
     ("What did this room replace?", 1.0),
     ("What's directly on the other side of that wall?", 1.0),
@@ -95,6 +95,12 @@ QUESTIONS = [
     ("What's scheduled to happen here next?", 1.0),
     ("What would a stranger get wrong about this place?", 1.0),
     ("How is this room different at night?", 1.0),
+    ("How *dare* you?", 1.0),
+    ("Do you really think you'll be forgiven?", 1.0),
+    ("How can I make it stop?", 1.0),
+    ("What's the one work of fiction on the shelves?", 1.0),
+    ("Why shouldn't I ask any questions?", 1.0),
+    ("How can we stop it?", 1.0),
     ("What should you never do here?", 0.35),
 ]
 
