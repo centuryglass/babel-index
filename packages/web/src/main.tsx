@@ -277,13 +277,22 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // `result.order` is the one array both views take a rank from - which is
   // why a search and a clear are the only things that can move a room's
   // catalog row, exactly as they are the only things that move it on the map.
-  const catalogOrder = useMemo(() => {
+  //
+  // Kept separate from `catalogOrder` below so its identity survives a
+  // favorite toggle: `favoriteOrder` returns this same array back for
+  // `'relevance'` (see `packages/map/favorites.ts`), and `CatalogView` resets
+  // scroll position whenever `order`'s identity changes - recomputing `base`
+  // on every `favorites.sortInput` change would scroll the reader back to the
+  // top just for favoriting a row.
+  const catalogBase = useMemo(() => {
     const base = result ? result.order : alphabeticalOrder(manifest.rooms, metadata);
-    return favoriteOrder(filterBlockedIds(base, metadata, blockedTagSet), {
-      mode: sortMode,
-      ...favorites.sortInput,
-    });
-  }, [manifest, result, metadata, blockedTagSet, sortMode, favorites.sortInput]);
+    return filterBlockedIds(base, metadata, blockedTagSet);
+  }, [manifest, result, metadata, blockedTagSet]);
+
+  const catalogOrder = useMemo(
+    () => favoriteOrder(catalogBase, { mode: sortMode, ...favorites.sortInput }),
+    [catalogBase, sortMode, favorites.sortInput]
+  );
 
   // Which cell a room id sits in on the map right now, keyed by id rather
   // than by rank - the catalog's rank in `catalogOrder` and the map's rank in
