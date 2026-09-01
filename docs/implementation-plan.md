@@ -24,24 +24,6 @@ serve as completed task history.
   making future hosting changes easier would be a good idea.
 
 ## Favorites:
-- The sort control is in the catalog's bar and in the `?debug` panel, but can
-  now move to the map, as can the shuffle button:
-  1. Update the shelf_geometry.svg import to scan for the new shuffle_button,
-     fav_count_toggle, and fave_mine_toggle rectangles.
-  2. Update the shared asset upload code to upload the new fav_*.png files
-     under assets.
-  3. When running the server with favorites enabled, always render
-     fav_center_switch_base over the center tile, aligned with the upper left
-     corner and scaled in a similar way to how fav_on.png aligns with the
-     upper right.
-  4. When favorite sort=mine, render fav_mine_on.png above that, also aligned
-     with the upper left corner in the same way.
-  5. When favorite sort=count, do the same, except with fav_count_on.png
-  6. On mouseover of any of the added button bounds parsed from the svg,
-     highlight the area as we do with the book interface. On click, apply the
-     change in the expected way.
-  7. Ensure all of this is reflected in the DOM for a11y purposes. Make sure
-     the center book/artist's statement link is there too.
 - No e2e coverage yet. A spec favoriting a room from a catalog row, switching
   the sort and reloading would cover the whole path; it needs the demo server
   the suite starts to be given a throwaway `--favorites` path.

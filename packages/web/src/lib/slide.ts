@@ -62,7 +62,9 @@ import { CENTER, FAV_ON, FAV_OFF, genericId, type RoomId, type TileCache } from 
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
-import { drawFavoriteBadge, type DrawContext } from './render.ts';
+import type { SortMode } from '../../../map/favorites.ts';
+import { drawFavoriteBadge, drawFavoriteSwitch, type DrawContext } from './render.ts';
+import { areSpinesLegible } from './center.ts';
 
 /**
  * The cache id for a board value at its HOME map cell.
@@ -365,6 +367,8 @@ export interface SlideDrawOpts {
   chrome?: boolean;
   /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
   favorites?: { isFavorite: (id: number) => boolean } | null;
+  /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
+  sortMode?: SortMode;
 }
 
 export interface SlideDrawResult {
@@ -384,7 +388,7 @@ export interface SlideDrawResult {
 export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
   function draw({
     ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
-    favorites = null,
+    favorites = null, sortMode = 'relevance',
   }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
@@ -483,6 +487,11 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       ctx.strokeStyle = 'rgba(200,169,95,0.9)';
       ctx.lineWidth = 2;
       ctx.strokeRect(sx + 1, sy + 1, cellPx.x - 2, cellPx.y - 2);
+      // The favorites-sort switch rides along with the center room across the
+      // handoff between renderers - same gate as `render.ts`'s own draw, so it
+      // never blinks out for the animation only to reappear once it lands.
+      if (favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
+        drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
     }
 
     return { drawn, blank, level, cells: wanted.length };

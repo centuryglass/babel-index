@@ -392,7 +392,9 @@ test('the favorite badge draws on every room cell, and only room cells', () => {
   assert.ok(rooms > 0, 'expected at least one room cell in view');
 
   const badgeDraws = ctx.drawn.filter((d) => d.w < 100 && d.h < 300); // the badge is tiny next to a tile
-  assert.equal(badgeDraws.length, rooms);
+  // +1: the center tile's favorites-sort switch base plate draws small too,
+  // whenever a favorite store is present - see `drawFavoriteSwitch`.
+  assert.equal(badgeDraws.length, rooms + 1);
 });
 
 test('no favorites option means no badge at all', () => {

@@ -99,6 +99,12 @@ export interface TileLayout {
   measured: true;
   opening: Rect;
   searchBox: Rect;
+  /** hit region for the "sort by my favorites" switch - null if the trace has none */
+  mineToggle: Rect | null;
+  /** hit region for the "sort by most favorited" switch - null if the trace has none */
+  countToggle: Rect | null;
+  /** hit region for the reorder control - null if the trace has none */
+  shuffleButton: Rect | null;
   /** the open book painted into a shelf gap - null if the trace has none */
   centerBook: CenterBook | null;
   shelves: Shelf[];
@@ -126,6 +132,9 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
 
   const opening = r(MEASURED.opening);
   const searchBox = r(MEASURED.searchBox!);
+  const mineToggle = MEASURED.mineToggle ? r(MEASURED.mineToggle) : null;
+  const countToggle = MEASURED.countToggle ? r(MEASURED.countToggle) : null;
+  const shuffleButton = MEASURED.shuffleButton ? r(MEASURED.shuffleButton) : null;
   const centerBook: CenterBook | null = MEASURED.centerBook
     ? { d: scalePathData(MEASURED.centerBook.d, W, H), bbox: r(MEASURED.centerBook.bbox) }
     : null;
@@ -147,6 +156,9 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
     measured: true,
     opening,
     searchBox,
+    mineToggle,
+    countToggle,
+    shuffleButton,
     centerBook,
     shelves,
     floorLine,

@@ -47,6 +47,26 @@ export function favoriteIconScreenRect(cellPx: { x: number; y: number }, sx: num
   return { x: sx + cellPx.x - w, y: sy, w, h };
 }
 
+/**
+ * The native pixel size of `fav_center_switch_base.png`/`fav_mine_on.png`/
+ * `fav_count_on.png` - identical for all three, since the two "on" faces
+ * overlay the base plate exactly.
+ */
+export const FAV_SWITCH_SIZE = { w: 239, h: 240 };
+
+/**
+ * The favorites-sort switch's full screen rect on the CENTER tile, anchored
+ * to its upper LEFT corner - the mirror of `favoriteIconScreenRect`'s upper
+ * right, scaled by the same factor the tile itself is drawn at. The switch's
+ * own hit regions are traced separately (`center.ts`'s
+ * `CENTER_MINE_TOGGLE_RECT`/`CENTER_COUNT_TOGGLE_RECT`/`CENTER_SHUFFLE_RECT`);
+ * this is only where the art is drawn.
+ */
+export function favoriteSwitchScreenRect(cellPx: { x: number; y: number }, sx: number, sy: number): Rect {
+  const scale = cellPx.x / BASE_TILE.w;
+  return { x: sx, y: sy, w: FAV_SWITCH_SIZE.w * scale, h: FAV_SWITCH_SIZE.h * scale };
+}
+
 /** `FAV_ICON_HIT_BOUNDS`, carried into the same screen rect as `iconRect`. */
 export function favoriteHitRect(iconRect: Rect): Rect {
   const scale = iconRect.w / FAV_ICON_SIZE.w;

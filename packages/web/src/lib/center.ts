@@ -61,6 +61,18 @@ export const CENTER_SHELF_RECT: Rect = GEOMETRY.opening;
 export const CENTER_SEARCH_RECT: Rect = GEOMETRY.searchBox;
 
 /**
+ * Hit regions for the three favorites controls painted onto the center
+ * tile - the reorder ("shuffle") button and the two sort-mode switches
+ * ("my favorites", "most favorited") - in the same cell fractions as every
+ * other rect on this tile. Null on a trace with none, in which case the
+ * control has no hotspot and no DOM button (see `AGENTS.md`'s Favorites
+ * section for the plan these implement).
+ */
+export const CENTER_SHUFFLE_RECT: Rect | null = GEOMETRY.shuffleButton;
+export const CENTER_MINE_TOGGLE_RECT: Rect | null = GEOMETRY.mineToggle;
+export const CENTER_COUNT_TOGGLE_RECT: Rect | null = GEOMETRY.countToggle;
+
+/**
  * The open book painted into a shelf gap, traced as an exact SVG path rather
  * than a box - a bounding rect for this shape laps onto the spines either
  * side of it, which is the whole reason `import-shelf-svg.ts` walks the
@@ -421,15 +433,74 @@ export function bookScreenRects(cellRect: Rect): Rect[] {
   }));
 }
 
+/**
+ * Any traced cell-fraction rect on this tile, scaled onto a center-cell
+ * rect - per axis, like every other measurement here.
+ */
+function rectOnCell(rect: Rect, cellRect: Rect): Rect {
+  return {
+    x: cellRect.x + rect.x * cellRect.w,
+    y: cellRect.y + rect.y * cellRect.h,
+    w: rect.w * cellRect.w,
+    h: rect.h * cellRect.h,
+  };
+}
+
 /** The live search field's rect in screen pixels, scaled onto a center-cell rect. */
 export function searchBoxScreenRect(cellRect: Rect): Rect {
-  const b = CENTER_SEARCH_RECT;
-  return {
-    x: cellRect.x + b.x * cellRect.w,
-    y: cellRect.y + b.y * cellRect.h,
-    w: b.w * cellRect.w,
-    h: b.h * cellRect.h,
-  };
+  return rectOnCell(CENTER_SEARCH_RECT, cellRect);
+}
+
+/** Below this, on each axis, a control is too small to be a fair click/tap target. */
+const MIN_CONTROL_PX = 16;
+
+/**
+ * Whether a traced control rect is both present in the trace and large
+ * enough on screen to be worth hit-testing - the same "too small to be a
+ * fair target" idea `favoriteBadge.ts`'s `isFavoriteHitEnabled` applies to
+ * the on-map favorite badge.
+ */
+function controlUsable(rect: Rect | null, cellRect: Rect): boolean {
+  if (!rect) return false;
+  const r = rectOnCell(rect, cellRect);
+  return r.w >= MIN_CONTROL_PX && r.h >= MIN_CONTROL_PX;
+}
+
+/** The reorder ("shuffle") control's rect in screen pixels, or null if untraced. */
+export function shuffleButtonScreenRect(cellRect: Rect): Rect | null {
+  return CENTER_SHUFFLE_RECT && rectOnCell(CENTER_SHUFFLE_RECT, cellRect);
+}
+
+/** The "sort by my favorites" switch's rect in screen pixels, or null if untraced. */
+export function mineToggleScreenRect(cellRect: Rect): Rect | null {
+  return CENTER_MINE_TOGGLE_RECT && rectOnCell(CENTER_MINE_TOGGLE_RECT, cellRect);
+}
+
+/** The "sort by most favorited" switch's rect in screen pixels, or null if untraced. */
+export function countToggleScreenRect(cellRect: Rect): Rect | null {
+  return CENTER_COUNT_TOGGLE_RECT && rectOnCell(CENTER_COUNT_TOGGLE_RECT, cellRect);
+}
+
+/** Whether a screen point lands on the reorder ("shuffle") control. */
+export function shuffleButtonAtPoint(px: number, py: number, cellRect: Rect): boolean {
+  if (!controlUsable(CENTER_SHUFFLE_RECT, cellRect)) return false;
+  return pointInRect(px, py, rectOnCell(CENTER_SHUFFLE_RECT as Rect, cellRect));
+}
+
+/** Whether a screen point lands on the "sort by my favorites" switch. */
+export function mineToggleAtPoint(px: number, py: number, cellRect: Rect): boolean {
+  if (!controlUsable(CENTER_MINE_TOGGLE_RECT, cellRect)) return false;
+  return pointInRect(px, py, rectOnCell(CENTER_MINE_TOGGLE_RECT as Rect, cellRect));
+}
+
+/** Whether a screen point lands on the "sort by most favorited" switch. */
+export function countToggleAtPoint(px: number, py: number, cellRect: Rect): boolean {
+  if (!controlUsable(CENTER_COUNT_TOGGLE_RECT, cellRect)) return false;
+  return pointInRect(px, py, rectOnCell(CENTER_COUNT_TOGGLE_RECT as Rect, cellRect));
+}
+
+function pointInRect(px: number, py: number, r: Rect): boolean {
+  return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
 }
 
 /**

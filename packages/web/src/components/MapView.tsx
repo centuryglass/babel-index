@@ -25,7 +25,11 @@
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
-import { describeBook, BOOK_RECTS, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
+import {
+  describeBook, BOOK_RECTS, CENTER_BOOK_PATH,
+  CENTER_SHUFFLE_RECT, CENTER_MINE_TOGGLE_RECT, CENTER_COUNT_TOGGLE_RECT,
+  type Slot as CentreSlot,
+} from '../lib/center.ts';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.tsx';
@@ -57,6 +61,14 @@ const BOOK_STYLES = BOOK_RECTS.map((b) => ({
   height: `${b.h * 100}%`,
 }));
 
+/** Same per-axis percentage treatment as `BOOK_STYLES`, for a traced rect that may be absent. */
+const rectStyle = (r: { x: number; y: number; w: number; h: number } | null) =>
+  r && { left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` };
+
+const SHUFFLE_STYLE = rectStyle(CENTER_SHUFFLE_RECT);
+const MINE_TOGGLE_STYLE = rectStyle(CENTER_MINE_TOGGLE_RECT);
+const COUNT_TOGGLE_STYLE = rectStyle(CENTER_COUNT_TOGGLE_RECT);
+
 export function MapView({
   mode,
   canvasRef,
@@ -64,6 +76,7 @@ export function MapView({
   booksRef,
   searchArrowRef,
   centerBookRef,
+  controlsRef,
   onOpenArtistStatement,
   manifest,
   total,
@@ -97,6 +110,7 @@ export function MapView({
   favorites,
   sortMode,
   onSortMode,
+  onToggleSort,
   favoriteFor,
   cursorId,
   onRescatter,
@@ -111,6 +125,7 @@ export function MapView({
   booksRef: Ref<HTMLDivElement>;
   searchArrowRef: Ref<HTMLSpanElement>;
   centerBookRef: Ref<HTMLButtonElement>;
+  controlsRef: Ref<HTMLDivElement>;
   onOpenArtistStatement: () => void;
   manifest: Manifest;
   total: number;
@@ -145,6 +160,8 @@ export function MapView({
   favorites: boolean;
   sortMode: SortMode;
   onSortMode: (mode: SortMode) => void;
+  /** the center tile's favorites-sort switch: pressing the active mode again returns to 'relevance' */
+  onToggleSort: (mode: SortMode) => void;
   /** one room's favorite state, or null for a generic cell or a disabled feature */
   favoriteFor: (id: number | null | undefined) => FavoriteControl | null;
   /** the room under the keyboard cursor, null on the center cell and on wallpaper */
@@ -319,6 +336,71 @@ export function MapView({
           </svg>
         )}
       </button>
+      {/*
+        The favorites-sort switch and the reorder button - the AGENTS.md
+        Favorites plan's diegetic controls, one container matching the whole
+        center cell (like `.center-books`) so a pan costs one style write
+        regardless of how many buttons are inside it. Each button is
+        positioned in PERCENTAGES from its own traced rect, same shape as
+        `BOOK_STYLES`, and `pointer-events: none` on the container for the
+        same reason as the shelf: the canvas keeps every gesture, so a pan
+        starting on a button still pans. A sighted click routes through
+        `onTap` -> `shuffleButtonAtPoint`/`mineToggleAtPoint`/
+        `countToggleAtPoint` in main.tsx, the same two-entry-point shape every
+        other center-tile control uses; `onClick` here is the keyboard/screen
+        reader entry point, calling the exact same handler. The reorder
+        button needs no favorite store and is never hidden; the two switches
+        are meaningless without one, so they render only while `favorites`
+        is true - same gate the debug panel's own sort buttons use.
+
+        Each carries both a `title` (the usual affordance, though pointer
+        events never reach the button so it can never actually pop up here)
+        and a `.control-tooltip` child - a small CSS bubble shown by the same
+        `.hover` class the render loop's pointermove listener already toggles
+        on this element (useMapRenderer.ts), so real hover feedback works
+        despite `pointer-events: none`. It also shows on `:focus-visible`,
+        which a `title` alone would not give a keyboard user.
+      */}
+      <div ref={controlsRef} className="center-controls">
+        {SHUFFLE_STYLE && (
+          <button
+            type="button"
+            data-control="shuffle"
+            style={SHUFFLE_STYLE}
+            title="reorder the library"
+            aria-label="reorder the library"
+            onClick={onReorder}
+          >
+            <span className="control-tooltip">reorder the library</span>
+          </button>
+        )}
+        {favorites && MINE_TOGGLE_STYLE && (
+          <button
+            type="button"
+            data-control="mine"
+            style={MINE_TOGGLE_STYLE}
+            aria-pressed={sortMode === 'mine'}
+            title="sort the library by my favorites"
+            aria-label="sort the library by my favorites"
+            onClick={() => onToggleSort('mine')}
+          >
+            <span className="control-tooltip">sort by my favorites</span>
+          </button>
+        )}
+        {favorites && COUNT_TOGGLE_STYLE && (
+          <button
+            type="button"
+            data-control="count"
+            style={COUNT_TOGGLE_STYLE}
+            aria-pressed={sortMode === 'count'}
+            title="sort the library by most favorited"
+            aria-label="sort the library by most favorited"
+            onClick={() => onToggleSort('count')}
+          >
+            <span className="control-tooltip">sort by most favorited</span>
+          </button>
+        )}
+      </div>
       {/*
         The search affordance - not part of the dev panel below (it has to
         survive `?debug` being off, since the panel does not) and not
