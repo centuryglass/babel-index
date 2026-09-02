@@ -29,7 +29,7 @@ import {
   shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint,
 } from '../lib/center.ts';
 import { roomAtPoint } from '../lib/picking.ts';
-import { favoriteIconScreenRect, favoriteHitRect, isFavoriteHitEnabled, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
+import { favoriteIconScreenRect, favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
@@ -40,7 +40,7 @@ import { createRenderer, type DrawResult } from '../lib/render.ts';
 import type { SpineFontLimits } from '../lib/center.ts';
 import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
 
-/** Same check `main.tsx`'s tap-hit test uses for `isFavoriteHitEnabled` - a coarse pointer needs a bigger badge to be a fair target, hover included. */
+/** Same check `main.tsx`'s tap-hit test uses - a coarse pointer gets its hit rect padded (`favoriteHitRect`), a mouse stays precise. */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
@@ -323,6 +323,7 @@ export function useMapRenderer({
         const renderStats = stats as DrawResult;
         const size = pyramidSizeOf(renderStats.level);
         const over = cache.overBudget();
+        const favHit = favoriteHitRect(favoriteIconScreenRect(pxPerCell(cam.current), 0, 0), pxPerCell(cam.current), COARSE_POINTER);
         hud.textContent =
           `${renderStats.cells} cells · ${renderStats.drawn} drawn · ` +
           `level ${renderStats.level} (${size.w}px) · ${renderStats.substituted} substituted · ` +
@@ -332,7 +333,8 @@ export function useMapRenderer({
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
           `edge at r=${layout.boundaryRadius.toFixed(1)}` +
           (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '') +
-          (blockedCount ? ` · ${blockedCount} blocked` : '');
+          (blockedCount ? ` · ${blockedCount} blocked` : '') +
+          ` · fav hit ${favHit.w.toFixed(1)}×${favHit.h.toFixed(1)}px (${COARSE_POINTER ? 'touch-padded' : 'mouse'})`;
       }
     };
 
@@ -412,23 +414,17 @@ export function useMapRenderer({
       // toggle a `.hover` class on (unlike every control above, which is
       // fixed to the one center cell), so both the highlight (`hoveredFavorite`,
       // read by `render()` above) and the tooltip are driven from here. The
-      // hover trigger is the badge's traced silhouette
-      // (`favoriteToggleAtPoint`), gated the same way a tap is
-      // (`isFavoriteHitEnabled`) so hovering never lights up a badge too
-      // small to actually tap - but the tap itself still goes through the
-      // looser `favoriteHitRect` box, which exists to be more forgiving than
-      // the art's own outline.
+      // hover trigger is the badge's traced silhouette (`favoriteToggleAtPoint`)
+      // - already precise on its own, so no padding/gate is applied here the
+      // way the tap hit test pads out for touch (`favoriteHitRect`); a mouse
+      // hover should track the art exactly.
       let nextFavorite: { x: number; y: number; id: number } | null = null;
       if (favorites) {
         const hit = roomAtPoint(px, py, cam.current, viewportRect, layout, order);
         if (hit && !('generic' in hit)) {
           const cellPx = pxPerCell(cam.current);
           const { x: bsx, y: bsy } = worldToScreen(hit.x, hit.y, cam.current, viewportRect);
-          const hitRect = favoriteHitRect(favoriteIconScreenRect(cellPx, bsx, bsy));
-          if (
-            isFavoriteHitEnabled(hitRect, COARSE_POINTER) &&
-            favoriteToggleAtPoint(px, py, cellPx, bsx, bsy)
-          )
+          if (favoriteToggleAtPoint(px, py, cellPx, bsx, bsy))
             nextFavorite = { x: hit.x, y: hit.y, id: hit.id };
         }
       }

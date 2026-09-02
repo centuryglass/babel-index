@@ -211,16 +211,18 @@ export function parseHud(text) {
   // - both optional here, but parsed rather than skipped, because both are
   // numbers a test might need.
   const m = text.match(
-    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?$/
+    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?(?: · (\d+) blocked)? · fav hit ([\d.]+)×([\d.]+)px \((touch-padded|mouse)\)$/
   );
   assert.ok(m, `could not read the hud: ${JSON.stringify(text)}`);
-  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered] = m;
+  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered, blocked, favHitW, favHitH, favHitMode] = m;
   return {
     cells: +cells, drawn: +drawn, level: +level, tilePx: +tilePx,
     substituted: +substituted, blank: +blank, cached: +cached,
     over: over === undefined ? 0 : +over,
     zoom: +zoom, x: +x, y: +y, edge: +edge,
     clustered: clustered === undefined ? 0 : +clustered,
+    blocked: blocked === undefined ? 0 : +blocked,
+    favHit: { w: +favHitW, h: +favHitH, mode: favHitMode },
   };
 }
 

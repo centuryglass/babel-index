@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import {
   FAV_ICON_SIZE,
+  MIN_FAVORITE_HIT_TOUCH,
   favoriteIconScreenRect,
   favoriteHitRect,
-  isFavoriteHitEnabled,
   pointInRect,
   FAVORITE_TOGGLE_PATH,
   favoriteToggleAtPoint,
@@ -30,35 +30,53 @@ test('halving the scale halves the icon and its hit rect together', () => {
   assert.equal(half.w, full.w / 2);
   assert.equal(half.h, full.h / 2);
 
-  const fullHit = favoriteHitRect(full);
-  const halfHit = favoriteHitRect(half);
+  const fullHit = favoriteHitRect(full, { x: BASE_TILE.w, y: BASE_TILE.h }, false);
+  const halfHit = favoriteHitRect(half, { x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, false);
   assert.equal(halfHit.w, fullHit.w / 2);
   assert.equal(halfHit.h, fullHit.h / 2);
 });
 
-test('the hit rect sits inside the icon rect', () => {
-  const icon = favoriteIconScreenRect({ x: 400, y: 300 }, 50, 60);
-  const hit = favoriteHitRect(icon);
+test('the hit rect sits inside the icon rect on a mouse', () => {
+  const cellPx = { x: 400, y: 300 };
+  const icon = favoriteIconScreenRect(cellPx, 50, 60);
+  const hit = favoriteHitRect(icon, cellPx, false);
   assert.ok(hit.x >= icon.x && hit.x + hit.w <= icon.x + icon.w);
   assert.ok(hit.y >= icon.y && hit.y + hit.h <= icon.y + icon.h);
 });
 
-test('a badge too small is disabled on desktop and on mobile', () => {
-  const tiny = { x: 0, y: 0, w: 10, h: 10 };
-  assert.equal(isFavoriteHitEnabled(tiny, false), false);
-  assert.equal(isFavoriteHitEnabled(tiny, true), false);
+test('a mouse never pads the hit rect, no matter how small the badge', () => {
+  const cellPx = { x: 100, y: 100 };
+  const tiny = favoriteIconScreenRect(cellPx, 0, 0);
+  const hit = favoriteHitRect(tiny, cellPx, false);
+  assert.ok(hit.w < MIN_FAVORITE_HIT_TOUCH);
+  assert.ok(hit.h < MIN_FAVORITE_HIT_TOUCH);
 });
 
-test('a badge between the two floors is tappable on desktop only', () => {
-  const mid = { x: 0, y: 0, w: 15, h: 15 };
-  assert.equal(isFavoriteHitEnabled(mid, false), true);
-  assert.equal(isFavoriteHitEnabled(mid, true), false);
+test('a coarse pointer pads a tiny badge up to the touch floor, centered on the art', () => {
+  const cellPx = { x: 1000, y: 1000 }; // large tile - the area cap doesn't bind here
+  const tiny = favoriteIconScreenRect({ x: 100, y: 100 }, 0, 0);
+  const unpadded = favoriteHitRect(tiny, cellPx, false);
+  const padded = favoriteHitRect(tiny, cellPx, true);
+  assert.equal(padded.w, MIN_FAVORITE_HIT_TOUCH);
+  assert.equal(padded.h, MIN_FAVORITE_HIT_TOUCH);
+  assert.ok(Math.abs(padded.x + padded.w / 2 - (unpadded.x + unpadded.w / 2)) < 1e-9);
+  assert.ok(Math.abs(padded.y + padded.h / 2 - (unpadded.y + unpadded.h / 2)) < 1e-9);
 });
 
-test('a badge past the mobile floor is tappable everywhere', () => {
-  const big = { x: 0, y: 0, w: 60, h: 60 };
-  assert.equal(isFavoriteHitEnabled(big, false), true);
-  assert.equal(isFavoriteHitEnabled(big, true), true);
+test('a coarse pointer leaves a badge already past the touch floor unpadded', () => {
+  const cellPx = { x: 4000, y: 4000 };
+  const big = favoriteIconScreenRect(cellPx, 0, 0);
+  const padded = favoriteHitRect(big, cellPx, true);
+  const unpadded = favoriteHitRect(big, cellPx, false);
+  assert.equal(padded.w, unpadded.w);
+  assert.equal(padded.h, unpadded.h);
+});
+
+test('the touch pad is capped at 10% of the tile\'s own area', () => {
+  const cellPx = { x: 30, y: 30 }; // small enough that MIN_FAVORITE_HIT_TOUCH would overshoot the cap
+  const tiny = favoriteIconScreenRect(cellPx, 0, 0);
+  const hit = favoriteHitRect(tiny, cellPx, true);
+  assert.ok(hit.w * hit.h <= cellPx.x * cellPx.y * 0.1 + 1e-9);
 });
 
 test('pointInRect is inclusive on the low edge, exclusive on the high edge', () => {

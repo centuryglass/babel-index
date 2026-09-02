@@ -38,7 +38,7 @@ import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera } from './l
 import {
   createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON, genericId,
 } from './lib/tiles.ts';
-import { favoriteIconScreenRect, favoriteHitRect, isFavoriteHitEnabled, pointInRect } from './lib/favoriteBadge.ts';
+import { favoriteIconScreenRect, favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
@@ -940,9 +940,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       if (hit && !('generic' in hit)) {
         const cellPx = pxPerCell(camera);
         const { x: sx, y: sy } = worldToScreen(hit.x, hit.y, camera, rect);
-        const hitRect = favoriteHitRect(favoriteIconScreenRect(cellPx, sx, sy));
-        if (isFavoriteHitEnabled(hitRect, COARSE_POINTER) && pointInRect(px, py, hitRect))
-          favoriteFor(hit.id)?.toggle();
+        const hitRect = favoriteHitRect(favoriteIconScreenRect(cellPx, sx, sy), cellPx, COARSE_POINTER);
+        if (pointInRect(px, py, hitRect)) favoriteFor(hit.id)?.toggle();
       }
     }
   };
@@ -1166,8 +1165,8 @@ const OPENING_MARGIN = 0.94;
 /**
  * Whether this pointer is coarse (touch) rather than fine (mouse/trackpad) -
  * the same `matchMedia` reasoning `useMapCamera.ts`'s `prefersReducedMotion`
- * uses, computed once at module load. Decides which of `MIN_FAVORITE_HIT`'s
- * two floors a favorite badge's tap target must clear.
+ * uses, computed once at module load. Decides whether a favorite badge's tap
+ * target gets padded out to `MIN_FAVORITE_HIT_TOUCH` - a mouse stays precise.
  */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
