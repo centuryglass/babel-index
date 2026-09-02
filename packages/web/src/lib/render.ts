@@ -50,6 +50,8 @@ export interface DrawContext {
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
   font: string;
+  /** 0-1. Used only for sieve mode's black fade over generic tiles - restored to 1 after. */
+  globalAlpha: number;
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
   fillText(text: string, x: number, y: number): void;
@@ -134,6 +136,27 @@ export interface DrawOpts {
    * gates whether the switch draws at all.
    */
   sortMode?: SortMode;
+  /**
+   * Sieve mode's black fade over generic tiles - 0 (normal) to 1 (fully
+   * hidden), or undefined/0 to draw generics as usual. See
+   * `packages/web/src/hooks/useSieveMode.ts`.
+   */
+  genericFade?: number;
+}
+
+/**
+ * Sieve mode's black overlay for a generic tile - drawn OVER the tile's own
+ * art rather than skipping it, so the fade is a crossfade rather than a cut.
+ * Shared with `slide.ts` so a generic tile mid-slide gets the same treatment.
+ */
+export function drawGenericFade(
+  ctx: DrawContext, fade: number, sx: number, sy: number, w: number, h: number
+): void {
+  if (fade <= 0) return;
+  ctx.globalAlpha = Math.min(1, fade);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(sx, sy, w, h);
+  ctx.globalAlpha = 1;
 }
 
 /** What the frame did, for the HUD and for tests. */
@@ -154,7 +177,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
     hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, hoveredFavorite = null,
-    sortMode = 'relevance',
+    sortMode = 'relevance', genericFade = 0,
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -213,6 +236,8 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
           ctx.fillRect(sx, sy, cw, ch);
           blank++;
         }
+
+        if (cell.generic && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
 
         if (chrome) drawChrome(ctx, cell, sx, sy, zoom);
         // The favorite badge - every real room, never the center (it is the

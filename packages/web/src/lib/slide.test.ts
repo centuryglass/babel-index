@@ -28,7 +28,7 @@ function fakeCtx(): FakeCtx {
   return {
     drawn,
     fills,
-    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '',
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', globalAlpha: 1,
     // Either drawImage(img, dx, dy, dw, dh) or the 9-arg source-rect form -
     // the test's cache never produces a sheet rect, so only the 4-arg form is
     // ever actually exercised, but the type still has to admit both.

@@ -124,6 +124,12 @@ interface UseMapRendererOpts {
   favTooltipRef?: { current: HTMLElement | null };
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
+  /**
+   * Sieve mode's black fade over generic tiles, 0-1 - a ref rather than a
+   * plain value since it changes every rAF tick of `useSieveMode.ts`'s own
+   * fade loop, the same reason `anim`/`cam` are refs rather than props.
+   */
+  genericFade?: { current: number };
 }
 
 export function useMapRenderer({
@@ -150,6 +156,7 @@ export function useMapRenderer({
   favorites = null,
   favTooltipRef,
   sortMode = 'relevance',
+  genericFade,
 }: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -291,12 +298,13 @@ export function useMapRenderer({
       const slideDrawOpts = {
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
-        genericIndexAt: layout.genericIndexAt, favorites, sortMode,
+        genericIndexAt: layout.genericIndexAt, favorites, sortMode, genericFade: genericFade?.current,
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
         layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
         cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
+        genericFade: genericFade?.current,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
 
@@ -469,6 +477,6 @@ export function useMapRenderer({
   }, [
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
-    blockedCount, favorites, favTooltipRef, sortMode,
+    blockedCount, favorites, favTooltipRef, sortMode, genericFade,
   ]);
 }
