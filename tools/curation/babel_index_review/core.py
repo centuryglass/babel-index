@@ -47,7 +47,7 @@ from tag.describe_image import describe_image, converse_about_image, DEFAULT_MOD
 from util.metadata import do_update as copy_metadata
 
 INDEX_JSON = "metadata.json"
-DEFAULT_KEYWORD_MAP = "keyword_map.json"
+DEFAULT_KEYWORD_MAP = "data/keyword_map.json"
 
 # Sensitive-content tag vocabulary shared by the review GUI and the
 # batch tagger (babel_index_review.sensitive_tags). Stored on an entry as

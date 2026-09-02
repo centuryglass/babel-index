@@ -39,7 +39,7 @@ def get_char():
 
 _DEFAULT_KEYWORD_PATH = Path(__file__).resolve().parent.parent / "data" / "all_styles.txt"
 keyword_path = os.environ.get("BABEL_KEYWORD_SOURCE", str(_DEFAULT_KEYWORD_PATH))
-map_file = 'keyword_map.json'
+map_file = 'data/keyword_map.json'
 
 categories = [
     'descriptive',

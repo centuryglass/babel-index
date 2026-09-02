@@ -1,12 +1,12 @@
 """
-Sensitive-content tagging for the babel-index project, via the local vision model.
+Sensitive-content tagging for the babel-index project, via a vision-capable model.
 
-For each tile with a story, sends the image plus its story to a local
-llama.cpp server and asks which of the fixed ``core.SENSITIVE_TAGS`` vocabulary
-apply, if any. The model must answer with a JSON array drawn only from that
-list (or an empty array); if it invents a tag, returns malformed JSON, or
-otherwise breaks the contract, it's told why and asked to try again, in the
-same conversation, until it produces something valid.
+For each tile with a story, sends the image plus its story to the model and
+asks which of the fixed ``core.SENSITIVE_TAGS`` vocabulary apply, if any. The
+model must answer with a JSON array drawn only from that list (or an empty
+array); if it invents a tag, returns malformed JSON, or otherwise breaks the
+contract, it's told why and asked to try again, in the same conversation,
+until it produces something valid.
 
     python -m babel_index_review.sensitive_tags DIR [--model MODEL] [--all] [--retag]
 
@@ -18,8 +18,9 @@ explicit empty list from a prior "none apply" verdict) are skipped; pass
 
 By default only tiles marked ``"final"`` are considered -- pass --all to also
 tag tiles that merely have a story. ``--model`` accepts anything
-``tag.describe_image`` does (``local:...`` for the local server, which is the
-default; a bare Claude model id to use the paid API instead).
+``tag.describe_image`` does -- the default is
+``tag.describe_image.DEFAULT_MODEL``; pass ``local:...`` for the local server
+instead, or a bare Claude model id for the paid API.
 """
 
 import argparse
@@ -28,9 +29,8 @@ import os
 import sys
 
 from babel_index_review import core, parallel
-from tag.describe_image import LOCAL_PREFIX, converse_about_image
+from tag.describe_image import DEFAULT_MODEL, converse_about_image
 
-DEFAULT_MODEL = LOCAL_PREFIX  # empty tail: single-model llama-server picks its loaded model
 MAX_ATTEMPTS = 6
 
 _TAG_SET = set(core.SENSITIVE_TAGS)
@@ -182,7 +182,9 @@ def run(tile_dir: str, model: str, include_all: bool, retag: bool, workers: int)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     parser.add_argument("dir", help="Tile directory.")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model id (default: local server).")
+    parser.add_argument(
+        "--model", default=DEFAULT_MODEL, help=f"Model id (default: {DEFAULT_MODEL})."
+    )
     parser.add_argument(
         "--all", action="store_true", help="Check tiles with a story even if not marked final."
     )

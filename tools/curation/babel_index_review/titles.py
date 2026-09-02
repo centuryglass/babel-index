@@ -1,12 +1,12 @@
 """
-Title generation for the babel-index project, via the local vision model.
+Title generation for the babel-index project, via a vision-capable model.
 
 For each finalized tile, sends the image plus its story (never the seed
-keywords, so the title comes from the narrative rather than the prompt) to a
-local llama.cpp server and asks for a short title. Uniqueness and length are
-enforced by talking back: if the model's answer collides with a title already
-in use, or breaks the word-count/length limits, it's told why and asked to try
-again, in the same conversation, until it produces something valid.
+keywords, so the title comes from the narrative rather than the prompt) to
+the model and asks for a short title. Uniqueness and length are enforced by
+talking back: if the model's answer collides with a title already in use, or
+breaks the word-count/length limits, it's told why and asked to try again, in
+the same conversation, until it produces something valid.
 
     python -m babel_index_review.titles DIR [--model MODEL] [--all]
 
@@ -17,8 +17,9 @@ skipped.
 
 By default only tiles marked ``"final"`` in metadata.json are titled -- pass
 --all to also title tiles that merely have a story. ``--model`` accepts
-anything ``tag.describe_image`` does (``local:...`` for the local server,
-which is the default; a bare Claude model id to use the paid API instead).
+anything ``tag.describe_image`` does -- the default is
+``tag.describe_image.DEFAULT_MODEL``; pass ``local:...`` for the local server
+instead, or a bare Claude model id for the paid API.
 """
 
 import argparse
@@ -27,9 +28,8 @@ import sys
 
 from babel_index_review import core, parallel
 from babel_index_review.parallel import SharedTitleSet
-from tag.describe_image import LOCAL_PREFIX, converse_about_image
+from tag.describe_image import DEFAULT_MODEL, converse_about_image
 
-DEFAULT_MODEL = LOCAL_PREFIX  # empty tail: single-model llama-server picks its loaded model
 MIN_WORDS = 1
 MAX_WORDS = 3
 MAX_CHARS = 30
@@ -148,7 +148,9 @@ def run(tile_dir: str, model: str, include_all: bool, workers: int) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     parser.add_argument("dir", help="Tile directory.")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model id (default: local server).")
+    parser.add_argument(
+        "--model", default=DEFAULT_MODEL, help=f"Model id (default: {DEFAULT_MODEL})."
+    )
     parser.add_argument(
         "--all", action="store_true", help="Title tiles with a story even if not marked final."
     )

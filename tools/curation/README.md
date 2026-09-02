@@ -19,16 +19,16 @@ pip install -r tools/curation/requirements.txt
 Vision/text model calls go through `tag/describe_image.py`, which picks a
 backend from the model id's prefix:
 
-- A bare Claude model id (e.g. `claude-opus-4-1`) - the default for most
-  tools. Reads `ANTHROPIC_API_KEY` from the environment.
+- A bare Claude model id (e.g. `claude-opus-4-1`). Reads `ANTHROPIC_API_KEY`
+  from the environment.
 - `openrouter:<provider/model>` - OpenAI-compatible chat completions via
-  OpenRouter. Reads `OPENROUTER_API_KEY`. `alt_text.py`'s default model
-  (`openrouter:~google/gemini-flash-latest`) uses this path.
+  OpenRouter. Reads `OPENROUTER_API_KEY`. Every batch tool's default model
+  (`tag.describe_image.DEFAULT_MODEL`, currently
+  `openrouter:~google/gemini-flash-latest`) uses this path.
 - `local:<model>` (or bare `local:` to let a single-model server pick) - an
   OpenAI-compatible local server, e.g. `llama.cpp`'s `llama-server`, at
   `http://localhost:9931/v1` by default (override with `BABEL_LOCAL_API_BASE`).
-  `titles.py` and `sensitive_tags.py` default here, since neither of
-  them need the more expensive models to do their job well.
+  Pass `--model local:...` to any tool to use this instead of the default.
 
 The GUI's model dropdown shows a per-million-token price in parentheses after
 each label. OpenRouter's prices come live from its `/models` endpoint.
@@ -49,16 +49,16 @@ argument, never a flag.
 **Import a batch**
 
 ```sh
-python -m babel_index_review.tile_process DIR [--map data/keyword_map.json] [--generate-stories] [--workers N]
+python -m babel_index_review.tile_process DIR [--map MAP] [--generate-stories] [--workers N]
 ```
 
 Ingests every loose `.png` in `DIR`: extracts keywords from the A1111 prompt
-metadata (normalized via a keyword map JSON - defaults to `keyword_map.json`
-in the current directory; pass `--map data/keyword_map.json` to use the
-bundled one), re-encodes each as `NNNNN.webp` under the next free index, and
-records the mapping in `metadata.json`. `--generate-stories` additionally asks
-Claude for a story on every tile that still lacks one, `--workers N` many at
-a time (default 6; see "Parallel requests" below).
+metadata (normalized via a keyword map JSON - defaults to the bundled
+`data/keyword_map.json`; pass `--map` to use a different one), re-encodes
+each as `NNNNN.webp` under the next free index, and records the mapping in
+`metadata.json`. `--generate-stories` additionally asks the model for a
+story on every tile that still lacks one, `--workers N` many at a time
+(default 6; see "Parallel requests" below).
 
 **Review and revise stories (desktop)**
 
@@ -152,10 +152,10 @@ python -m babel_index_review.keyword_map
 
 Interactive terminal prompt: walks `data/all_styles.txt` (a wildcard-file
 snapshot; override the source with `BABEL_KEYWORD_SOURCE`) one keyword at a
-time, categorizing or renaming each into `keyword_map.json` in the current
-directory. `data/keyword_map.json` in this tree is the already-categorized
-result of a prior pass over ~2200 keywords - most of what you'd run this
-against has already been done.
+time, categorizing or renaming each into the bundled `data/keyword_map.json`
+- already the categorized result of a prior pass over ~2200 keywords, so
+most of what you'd run this against has already been done and this only
+prompts for what's new.
 
 **Metadata inspection (standalone, no tile dir needed)**
 
