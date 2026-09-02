@@ -51,6 +51,7 @@ import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.ts';
+import { useSieveMode } from './hooks/useSieveMode.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
 import { useFavorites } from './hooks/useFavorites.ts';
 
@@ -676,12 +677,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [config.center.spineMinPx, config.center.spineMaxPx]
   );
 
-  useMapRenderer({
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed, cam,
-    mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
-    favorites: favoritesOverlay, favTooltipRef, sortMode,
-  });
-
   // --- the rearrangement animation -----------------------------------------
   //
   // Everything about it - whether a layout/order change animates, what plays
@@ -722,6 +717,26 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     announce,
   });
   requestAnimationRef.current = requestAnimation;
+
+  // --- sieve mode ------------------------------------------------------------
+  //
+  // Hides every generic room and lets the corpus rooms already on the map
+  // pack together to fill the space, then reverses it - see
+  // `useSieveMode.ts` for why a `contentRatio` flip is the whole mechanism
+  // and what the fade adds on top.
+  const { sieveMode, toggleSieve, genericFade } = useSieveMode({
+    defaultRatio: config.map.contentRatio,
+    fadeMs: config.map.sieveFadeMs,
+    setContentRatio,
+    requestAnimation,
+    requestDraw,
+  });
+
+  useMapRenderer({
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed, cam,
+    mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
+    favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade,
+  });
 
   // Where the toggle above sends the camera once that resort has actually
   // landed - a ref, reassigned every render, because `onSettled` fires later
@@ -1008,6 +1023,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         setContentRatio={setContentRatio}
         onReorder={reorder}
         onRescatter={rescatter}
+        sieveMode={sieveMode}
+        onToggleSieve={toggleSieve}
         favorites={favorites.enabled}
         sortMode={sortMode}
         onToggleSort={toggleSort}

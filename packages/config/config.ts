@@ -57,6 +57,7 @@ interface MapConfig {
   contentRatio: number;
   slotSeed: number;
   genericSeed: number;
+  sieveFadeMs: number;
 }
 
 interface SlideConfig {
@@ -211,6 +212,13 @@ export const DEFAULTS: Defaults = {
      * would be visible in each other.
      */
     genericSeed: 1,
+
+    /**
+     * How long sieve mode's fade to/from black takes, in milliseconds - the
+     * phase that runs before the slide when hiding generic rooms, and after
+     * it when bringing them back. See `packages/web/src/hooks/useSieveMode.ts`.
+     */
+    sieveFadeMs: 320,
   },
 
   slide: {
@@ -500,6 +508,9 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
       genericSeed: integer(
         mapIn.genericSeed, DEFAULTS.map.genericSeed, 'map.genericSeed', notes
+      ),
+      sieveFadeMs: duration(
+        mapIn.sieveFadeMs, DEFAULTS.map.sieveFadeMs, 'map.sieveFadeMs', notes
       ),
     },
     search: {

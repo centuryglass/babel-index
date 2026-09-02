@@ -63,7 +63,7 @@ import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/b
 import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import { drawFavoriteBadge, drawFavoriteSwitch, type DrawContext } from './render.ts';
+import { drawFavoriteBadge, drawFavoriteSwitch, drawGenericFade, type DrawContext } from './render.ts';
 import { areSpinesLegible } from './center.ts';
 
 /**
@@ -369,6 +369,8 @@ export interface SlideDrawOpts {
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
+  /** sieve mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
+  genericFade?: number;
 }
 
 export interface SlideDrawResult {
@@ -388,7 +390,7 @@ export interface SlideDrawResult {
 export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
   function draw({
     ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
-    favorites = null, sortMode = 'relevance',
+    favorites = null, sortMode = 'relevance', genericFade = 0,
   }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
@@ -438,6 +440,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
         ctx.fillRect(sx, sy, cw, ch);
         blank++;
       }
+      if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
       // The favorite badge rides along with a sliding tile - never the center
       // or a generic face, only a real room, which is exactly when `value` is
       // its numeric id rather than one of the two shared board values.
