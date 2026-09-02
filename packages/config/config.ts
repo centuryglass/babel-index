@@ -142,7 +142,7 @@ export const DEFAULTS: Defaults = {
      * number to pull the range in; a number outside the hard limits is clamped
      * to them rather than honoured, because config narrows and never widens.
      */
-    minZoom: null,
+    minZoom: 50,
     maxZoom: null,
 
     /**
@@ -158,7 +158,7 @@ export const DEFAULTS: Defaults = {
      * out on a phone and too far in on a wide monitor to state as one value. What
      * belongs in config is what nothing derives; this now derives, so it left.
      */
-    defaultZoom: 220,
+    defaultZoom: 300,
 
     /**
      * How long a camera flight takes - "center", and the fly home after a
@@ -199,7 +199,7 @@ export const DEFAULTS: Defaults = {
      * generic. 0.2 is the concept's "maybe 80% generic" - sparse enough that
      * finding a distinct room feels like finding something.
      */
-    contentRatio: 0.2,
+    contentRatio: 0.25,
 
     /** Scatter seed for slot placement. Changing it reshuffles which cells are slots. */
     slotSeed: 1,
@@ -322,8 +322,8 @@ export const DEFAULTS: Defaults = {
      * tuned further by feel, which is why these are config and not a rendering
      * constant the way `MIN_SPINE_PX` (the zoom-legibility gate) is.
      */
-    spineMinPx: 12,
-    spineMaxPx: 32,
+    spineMinPx: 10,
+    spineMaxPx: 30,
   },
 
   search: {

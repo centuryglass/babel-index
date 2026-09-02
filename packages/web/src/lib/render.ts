@@ -214,7 +214,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
           blank++;
         }
 
-        if (chrome) drawChrome(ctx, cell, sx, sy, cellPx, zoom);
+        if (chrome) drawChrome(ctx, cell, sx, sy, zoom);
         // The favorite badge - every real room, never the center (it is the
         // controls, not a room) and never a generic cell (nothing to favorite).
         if (favorites && !cell.center && !cell.generic) {
@@ -397,25 +397,15 @@ export function drawFavoriteSwitch(
   else if (sortMode === 'count') draw(FAV_COUNT_ON);
 }
 
-/** The center-room marker and the rank labels. Cosmetic, and zoom-gated. */
+/** The rank labels. Cosmetic, and zoom-gated. */
 function drawChrome(
   ctx: DrawContext,
   cell: RoomAtResult,
   sx: number,
   sy: number,
-  cellPx: { x: number; y: number },
   zoom: number
 ): void {
-  if (cell.center) {
-    ctx.strokeStyle = 'rgba(200,169,95,0.9)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx + 1, sy + 1, cellPx.x - 2, cellPx.y - 2);
-    if (zoom > 90) {
-      ctx.fillStyle = 'rgba(200,169,95,0.95)';
-      ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText('the center', sx + 10, sy + 22);
-    }
-  } else if (!cell.generic && zoom > 120) {
+  if (!cell.center && !cell.generic && zoom > 120) {
     ctx.fillStyle = 'rgba(232,224,210,0.55)';
     ctx.font = '11px ui-monospace, monospace';
     ctx.fillText(`#${cell.rank}`, sx + 8, sy + 18);
