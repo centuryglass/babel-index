@@ -17,8 +17,9 @@ test('an empty overlay is exactly the defaults', () => {
   assert.deepEqual(c.notes, []);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio);
   assert.deepEqual(c.search.weights, DEFAULTS.search.weights);
-  // null means "no narrowing", which is what keeps the hard limits stated once.
-  assert.equal(c.camera.minZoom, LIMITS.min);
+  // minZoom now has a real default (50); null still means "no narrowing" for
+  // whichever end is left unset, which is why maxZoom still falls to the hard limit.
+  assert.equal(c.camera.minZoom, DEFAULTS.camera.minZoom);
   assert.equal(c.camera.maxZoom, LIMITS.max);
 });
 
@@ -90,8 +91,9 @@ test('defaultZoom is clamped into the configured range, not the hard one', () =>
 test('narrowing the range drags the opening zoom with it, and says so', () => {
   // Narrowing past the default is legal, but the opening zoom moving is not
   // something the reader asked for, so it is reported rather than silent.
-  const c = resolveConfig({ camera: { maxZoom: 30 } }, { zoomLimits: ZOOM_LIMITS });
-  assert.equal(c.camera.defaultZoom, 30);
+  // maxZoom must stay above the default minZoom (50) or the range inverts instead.
+  const c = resolveConfig({ camera: { maxZoom: 60 } }, { zoomLimits: ZOOM_LIMITS });
+  assert.equal(c.camera.defaultZoom, 60);
   assert.match(c.notes.join('\n'), /defaultZoom/);
 });
 

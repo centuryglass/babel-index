@@ -50,7 +50,7 @@ test('a badge too small is disabled on desktop and on mobile', () => {
 });
 
 test('a badge between the two floors is tappable on desktop only', () => {
-  const mid = { x: 0, y: 0, w: 30, h: 30 };
+  const mid = { x: 0, y: 0, w: 15, h: 15 };
   assert.equal(isFavoriteHitEnabled(mid, false), true);
   assert.equal(isFavoriteHitEnabled(mid, true), false);
 });
