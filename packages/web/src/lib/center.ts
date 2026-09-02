@@ -401,9 +401,7 @@ const MIN_CONTROL_PX = 16;
 
 /**
  * Whether a traced control rect is both present in the trace and large
- * enough on screen to be worth hit-testing - the same "too small to be a
- * fair target" idea `favoriteBadge.ts`'s `isFavoriteHitEnabled` applies to
- * the on-map favorite badge.
+ * enough on screen to be worth hit-testing.
  */
 function controlUsable(rect: Rect | null, cellRect: Rect): boolean {
   if (!rect) return false;

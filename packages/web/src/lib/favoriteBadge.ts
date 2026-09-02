@@ -50,8 +50,21 @@ export const FAV_ICON_SIZE = { w: 92, h: 198 };
 /** The non-transparent bounds within `FAV_ICON_SIZE`, in the same native pixel space. */
 export const FAV_ICON_HIT_BOUNDS: Rect = { x: 29, y: 128, w: 41, h: 49 };
 
-/** Below this, on each axis, the badge is too small to be a fair click/tap target. */
-export const MIN_FAVORITE_HIT = { desktop: 12, mobile: 20 };
+/**
+ * Touch-only floor for the badge's tap target, on each axis - a coarse
+ * pointer gets its hit rect padded up to at least this size (see
+ * `favoriteHitRect`). Mouse/trackpad input is precise enough that the art's
+ * own bounds are always a fair target, so this never applies to it.
+ */
+export const MIN_FAVORITE_HIT_TOUCH = 20;
+
+/**
+ * The padded touch hit rect may never exceed this fraction of the tile's own
+ * area - otherwise, at extreme zoom-out, a tiny badge would pad out to
+ * cover most of the tile and turn "tap the tile" into "tap the favorite
+ * button" by accident.
+ */
+const TOUCH_HIT_AREA_CAP = 0.1;
 
 /**
  * The badge's full screen rect for a tile whose top left corner is at
@@ -85,21 +98,27 @@ export function favoriteSwitchScreenRect(cellPx: { x: number; y: number }, sx: n
   return { x: sx, y: sy, w: FAV_SWITCH_SIZE.w * scale, h: FAV_SWITCH_SIZE.h * scale };
 }
 
-/** `FAV_ICON_HIT_BOUNDS`, carried into the same screen rect as `iconRect`. */
-export function favoriteHitRect(iconRect: Rect): Rect {
+/**
+ * `FAV_ICON_HIT_BOUNDS`, carried into the same screen rect as `iconRect` -
+ * then, for a coarse (touch) pointer only, grown to `MIN_FAVORITE_HIT_TOUCH`
+ * on each axis (centered on the art's own bounds) and capped so the result
+ * never exceeds `TOUCH_HIT_AREA_CAP` of the tile's area. A mouse/trackpad
+ * gets the raw art bounds back unchanged - there is no disabled state here
+ * any more: a badge is always tappable, just not always as forgivingly.
+ */
+export function favoriteHitRect(iconRect: Rect, cellPx: { x: number; y: number }, touch: boolean): Rect {
   const scale = iconRect.w / FAV_ICON_SIZE.w;
-  return {
+  const rect: Rect = {
     x: iconRect.x + FAV_ICON_HIT_BOUNDS.x * scale,
     y: iconRect.y + FAV_ICON_HIT_BOUNDS.y * scale,
     w: FAV_ICON_HIT_BOUNDS.w * scale,
     h: FAV_ICON_HIT_BOUNDS.h * scale,
   };
-}
-
-/** Whether a hit rect this size is worth testing at all - see `MIN_FAVORITE_HIT`. */
-export function isFavoriteHitEnabled(hitRect: Rect, mobile: boolean): boolean {
-  const min = mobile ? MIN_FAVORITE_HIT.mobile : MIN_FAVORITE_HIT.desktop;
-  return hitRect.w >= min && hitRect.h >= min;
+  if (!touch) return rect;
+  const maxSide = Math.sqrt(cellPx.x * cellPx.y * TOUCH_HIT_AREA_CAP);
+  const w = Math.min(Math.max(rect.w, MIN_FAVORITE_HIT_TOUCH), maxSide);
+  const h = Math.min(Math.max(rect.h, MIN_FAVORITE_HIT_TOUCH), maxSide);
+  return { x: rect.x - (w - rect.w) / 2, y: rect.y - (h - rect.h) / 2, w, h };
 }
 
 export function pointInRect(px: number, py: number, rect: Rect): boolean {
@@ -113,8 +132,8 @@ export function pointInRect(px: number, py: number, rect: Rect): boolean {
  * `cellPx`/`sx`/`sy` are the whole tile's own screen geometry (as `render.ts`
  * draws it), since `FAVORITE_TOGGLE_PATH` is traced against the whole tile,
  * not the badge icon alone. Used for the hover highlight only - the tap hit
- * test still goes through `favoriteHitRect`/`isFavoriteHitEnabled`, which
- * exists precisely to be more forgiving than the art's own outline.
+ * test still goes through `favoriteHitRect`, which exists precisely to be
+ * more forgiving than the art's own outline (on touch, considerably more so).
  */
 export function favoriteToggleAtPoint(
   px: number,
