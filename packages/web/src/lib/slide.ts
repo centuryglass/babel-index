@@ -484,9 +484,6 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       // The center room, which by construction has not moved.
       const sx = (0 - cam.x) * cellPx.x + w / 2;
       const sy = (0 - cam.y) * cellPx.y + h / 2;
-      ctx.strokeStyle = 'rgba(200,169,95,0.9)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(sx + 1, sy + 1, cellPx.x - 2, cellPx.y - 2);
       // The favorites-sort switch rides along with the center room across the
       // handoff between renderers - same gate as `render.ts`'s own draw, so it
       // never blinks out for the animation only to reappear once it lands.

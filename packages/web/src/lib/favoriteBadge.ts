@@ -51,7 +51,7 @@ export const FAV_ICON_SIZE = { w: 92, h: 198 };
 export const FAV_ICON_HIT_BOUNDS: Rect = { x: 29, y: 128, w: 41, h: 49 };
 
 /** Below this, on each axis, the badge is too small to be a fair click/tap target. */
-export const MIN_FAVORITE_HIT = { desktop: 24, mobile: 48 };
+export const MIN_FAVORITE_HIT = { desktop: 24, mobile: 24 };
 
 /**
  * The badge's full screen rect for a tile whose top left corner is at
