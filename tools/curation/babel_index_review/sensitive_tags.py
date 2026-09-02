@@ -27,7 +27,7 @@ import json
 import os
 import sys
 
-from babel_index_review import core
+from babel_index_review import core, parallel
 from tag.describe_image import LOCAL_PREFIX, converse_about_image
 
 DEFAULT_MODEL = LOCAL_PREFIX  # empty tail: single-model llama-server picks its loaded model
@@ -155,23 +155,28 @@ def propose_tags(image_path: str, story: str, model: str) -> list[str] | None:
     return None
 
 
-def run(tile_dir: str, model: str, include_all: bool, retag: bool) -> None:
+def run(tile_dir: str, model: str, include_all: bool, retag: bool, workers: int) -> None:
     index = core.load_index(tile_dir)
     targets = list(_tiles_to_tag(tile_dir, index, include_all, retag))
-    print(f"{len(targets)} tile(s) to check", file=sys.stderr)
+    workers = parallel.resolve_workers(model, workers)
+    print(f"{len(targets)} tile(s) to check, {workers} worker(s)", file=sys.stderr)
 
-    for key, entry in targets:
-        image_path = os.path.join(tile_dir, key)
-        tags = propose_tags(image_path, entry["story"], model)
+    def worker_fn(image_path: str, entry: dict) -> list[str] | None:
+        return propose_tags(image_path, entry["story"], model)
+
+    def apply_fn(index: dict, key: str, entry: dict, tags: list[str] | None) -> None:
         if tags is None:
             print(f"skip {key}: no valid answer after {MAX_ATTEMPTS} attempts", file=sys.stderr)
-            continue
+            return
         if tags:
-            entry["sensitive_content_tags"] = tags
+            index[key]["sensitive_content_tags"] = tags
         else:
-            entry.pop("sensitive_content_tags", None)
-        core.save_index(tile_dir, index)
+            index[key].pop("sensitive_content_tags", None)
         print(f"{key} -> {tags or '(none)'}")
+
+    parallel.run_parallel(
+        tile_dir, targets, worker_fn=worker_fn, apply_fn=apply_fn, workers=workers
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -184,6 +189,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--retag", action="store_true", help="Re-check tiles that already have a verdict."
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=parallel.DEFAULT_WORKERS,
+        help=f"Concurrent requests (default: {parallel.DEFAULT_WORKERS}; "
+        "forced to 1 for a local: model).",
+    )
     return parser.parse_args()
 
 
@@ -193,7 +205,7 @@ def main() -> int:
         print(f"{args.dir} not found", file=sys.stderr)
         return 1
     try:
-        run(args.dir, args.model, args.all, args.retag)
+        run(args.dir, args.model, args.all, args.retag, args.workers)
     except KeyboardInterrupt:
         print("\ninterrupted -- progress saved", file=sys.stderr)
         return 130

@@ -25,7 +25,8 @@ import argparse
 import os
 import sys
 
-from babel_index_review import core
+from babel_index_review import core, parallel
+from babel_index_review.parallel import SharedTitleSet
 from tag.describe_image import LOCAL_PREFIX, converse_about_image
 
 DEFAULT_MODEL = LOCAL_PREFIX  # empty tail: single-model llama-server picks its loaded model
@@ -56,7 +57,7 @@ def _clean_title(raw: str) -> str:
     return title.rstrip(".").strip()
 
 
-def _validation_error(title: str, used_titles: set) -> str | None:
+def _validation_error(title: str, used_titles: SharedTitleSet) -> str | None:
     """Return a feedback message if `title` is invalid, else None."""
     if not title:
         return "That was empty. Reply with only the title, 1 to 3 words."
@@ -71,7 +72,7 @@ def _validation_error(title: str, used_titles: set) -> str | None:
             f'"{title}" is {len(title)} characters, over the {MAX_CHARS}-character limit. '
             "Try again with something shorter -- respond with only the title."
         )
-    if title.casefold() in used_titles:
+    if used_titles.contains(title.casefold()):
         return (
             f'"{title}" is already the title of another tile. Propose a different one -- '
             "respond with only the title."
@@ -79,10 +80,17 @@ def _validation_error(title: str, used_titles: set) -> str | None:
     return None
 
 
-def propose_title(image_path: str, story: str, used_titles: set, model: str) -> str | None:
+def propose_title(image_path: str, story: str, used_titles: SharedTitleSet, model: str) -> str | None:
     """Ask the model for a unique 1-3 word title, retrying on rule violations.
 
-    Returns None if no valid title emerged within MAX_ATTEMPTS.
+    A title that passes validation is claimed via ``used_titles.try_reserve``
+    before being returned -- if another worker claimed it first (a race
+    between two concurrent tiles proposing the same free title), that's
+    treated exactly like any other rule violation: tell the model why and
+    ask again in the same conversation.
+
+    Returns None if no valid, successfully claimed title emerged within
+    MAX_ATTEMPTS.
     """
     prompt = (
         "Here is a bookshelf tile from an impossible library, along with a short "
@@ -97,30 +105,44 @@ def propose_title(image_path: str, story: str, used_titles: set, model: str) -> 
         turns.append(("assistant", reply))
         error = _validation_error(title, used_titles)
         if error is None:
-            return title
+            if used_titles.try_reserve(title.casefold()):
+                return title
+            error = (
+                f'"{title}" was just claimed by another tile. Propose a different one -- '
+                "respond with only the title."
+            )
         turns.append(("user", error))
     return None
 
 
-def run(tile_dir: str, model: str, include_all: bool) -> None:
+def run(tile_dir: str, model: str, include_all: bool, workers: int) -> None:
     index = core.load_index(tile_dir)
-    used_titles = {
+    existing_titles = {
         entry["title"].casefold() for entry in index.values() if entry.get("title")
     }
+    used_titles = SharedTitleSet(existing_titles)
 
     targets = list(_tiles_to_title(tile_dir, index, include_all))
-    print(f"{len(used_titles)} title(s) already recorded, {len(targets)} to go", file=sys.stderr)
+    workers = parallel.resolve_workers(model, workers)
+    print(
+        f"{len(existing_titles)} title(s) already recorded, {len(targets)} to go, "
+        f"{workers} worker(s)",
+        file=sys.stderr,
+    )
 
-    for key, entry in targets:
-        image_path = os.path.join(tile_dir, key)
-        title = propose_title(image_path, entry["story"], used_titles, model)
+    def worker_fn(image_path: str, entry: dict) -> str | None:
+        return propose_title(image_path, entry["story"], used_titles, model)
+
+    def apply_fn(index: dict, key: str, entry: dict, title: str | None) -> None:
         if title is None:
             print(f"skip {key}: no valid title after {MAX_ATTEMPTS} attempts", file=sys.stderr)
-            continue
-        entry["title"] = title
-        core.save_index(tile_dir, index)
-        used_titles.add(title.casefold())
+            return
+        index[key]["title"] = title
         print(f"{key} -> {title}")
+
+    parallel.run_parallel(
+        tile_dir, targets, worker_fn=worker_fn, apply_fn=apply_fn, workers=workers
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,6 +151,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Model id (default: local server).")
     parser.add_argument(
         "--all", action="store_true", help="Title tiles with a story even if not marked final."
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=parallel.DEFAULT_WORKERS,
+        help=f"Concurrent requests (default: {parallel.DEFAULT_WORKERS}; "
+        "forced to 1 for a local: model).",
     )
     return parser.parse_args()
 
@@ -139,7 +168,7 @@ def main() -> int:
         print(f"{args.dir} not found", file=sys.stderr)
         return 1
     try:
-        run(args.dir, args.model, args.all)
+        run(args.dir, args.model, args.all, args.workers)
     except KeyboardInterrupt:
         print("\ninterrupted -- progress saved", file=sys.stderr)
         return 130

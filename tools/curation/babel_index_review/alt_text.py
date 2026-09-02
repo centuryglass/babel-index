@@ -22,7 +22,7 @@ import argparse
 import os
 import sys
 
-from babel_index_review import core
+from babel_index_review import core, parallel
 from tag.describe_image import DEFAULT_MODEL
 
 
@@ -37,20 +37,25 @@ def _tiles_needing_alt(tile_dir: str, index: dict, force: bool):
         yield key, entry
 
 
-def run(tile_dir: str, model: str, force: bool, limit: int | None) -> None:
+def run(tile_dir: str, model: str, force: bool, limit: int | None, workers: int) -> None:
     index = core.load_index(tile_dir)
     targets = list(_tiles_needing_alt(tile_dir, index, force))
     if limit is not None:
         targets = targets[:limit]
-    print(f"{len(targets)} tile(s) to go", file=sys.stderr)
+    workers = parallel.resolve_workers(model, workers)
+    print(f"{len(targets)} tile(s) to go, {workers} worker(s)", file=sys.stderr)
 
-    for key, entry in targets:
-        image_path = os.path.join(tile_dir, key)
+    def worker_fn(image_path: str, entry: dict) -> str:
         prompt = core.default_alt_prompt(core.keyword_texts(entry))
-        alt = core.generate_alt_text(image_path, prompt, model=model).strip()
-        entry["alt"] = alt
-        core.save_index(tile_dir, index)
+        return core.generate_alt_text(image_path, prompt, model=model).strip()
+
+    def apply_fn(index: dict, key: str, entry: dict, alt: str) -> None:
+        index[key]["alt"] = alt
         print(f"{key} -> {alt}")
+
+    parallel.run_parallel(
+        tile_dir, targets, worker_fn=worker_fn, apply_fn=apply_fn, workers=workers
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,6 +68,13 @@ def parse_args() -> argparse.Namespace:
         "--force", action="store_true", help="Regenerate alt text even for tiles that already have it."
     )
     parser.add_argument("--limit", type=int, default=None, help="Stop after N tiles.")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=parallel.DEFAULT_WORKERS,
+        help=f"Concurrent requests (default: {parallel.DEFAULT_WORKERS}; "
+        "forced to 1 for a local: model).",
+    )
     return parser.parse_args()
 
 
@@ -72,7 +84,7 @@ def main() -> int:
         print(f"{args.dir} not found", file=sys.stderr)
         return 1
     try:
-        run(args.dir, args.model, args.force, args.limit)
+        run(args.dir, args.model, args.force, args.limit, args.workers)
     except KeyboardInterrupt:
         print("\ninterrupted -- progress saved", file=sys.stderr)
         return 130

@@ -49,7 +49,7 @@ argument, never a flag.
 **Import a batch**
 
 ```sh
-python -m babel_index_review.tile_process DIR [--map data/keyword_map.json] [--generate-stories]
+python -m babel_index_review.tile_process DIR [--map data/keyword_map.json] [--generate-stories] [--workers N]
 ```
 
 Ingests every loose `.png` in `DIR`: extracts keywords from the A1111 prompt
@@ -57,7 +57,8 @@ metadata (normalized via a keyword map JSON - defaults to `keyword_map.json`
 in the current directory; pass `--map data/keyword_map.json` to use the
 bundled one), re-encodes each as `NNNNN.webp` under the next free index, and
 records the mapping in `metadata.json`. `--generate-stories` additionally asks
-Claude for a story on every tile that still lacks one.
+Claude for a story on every tile that still lacks one, `--workers N` many at
+a time (default 6; see "Parallel requests" below).
 
 **Review and revise stories (desktop)**
 
@@ -83,7 +84,7 @@ device without the desktop app. No model picker; always uses
 **Alt text**
 
 ```sh
-python -m babel_index_review.alt_text DIR [--model MODEL] [--force] [--limit N]
+python -m babel_index_review.alt_text DIR [--model MODEL] [--force] [--limit N] [--workers N]
 ```
 
 Generates accessibility alt text from the image + seed keywords (not the
@@ -92,7 +93,7 @@ story, to avoid describing the same tile twice for a screen reader).
 **Sensitive-content tagging**
 
 ```sh
-python -m babel_index_review.sensitive_tags DIR [--model MODEL] [--all] [--retag]
+python -m babel_index_review.sensitive_tags DIR [--model MODEL] [--all] [--retag] [--workers N]
 ```
 
 Asks a local vision model which tags from `core.SENSITIVE_TAGS` apply, if any,
@@ -101,12 +102,32 @@ retrying until the reply is a valid JSON array drawn only from that list.
 **Titles**
 
 ```sh
-python -m babel_index_review.titles DIR [--model MODEL] [--all]
+python -m babel_index_review.titles DIR [--model MODEL] [--all] [--workers N]
 ```
 
 Generates a short, unique title per finalized tile from its image + story
 (never the seed keywords), writing each into `metadata.json`'s `title` field
-as it goes. Also editable directly in the review GUI.
+as it goes. Also editable directly in the review GUI. Uniqueness holds even
+with `--workers` above 1: a title claimed by one in-flight tile is
+immediately unavailable to every other, so two tiles can never land on the
+same title.
+
+**Parallel requests**
+
+`tile_process.py --generate-stories`, `alt_text.py`, `sensitive_tags.py`, and
+`titles.py` all accept `--workers N` (default 6), running up to `N` model
+calls at once instead of one at a time - a real speedup against a remote
+model (`openrouter:...`, a bare Claude id), since each call spends most of
+its time waiting on the network. A `local:` model is always forced to 1
+regardless of `--workers`, since a single-model `llama-server` can't usefully
+serve concurrent requests. Every tile's result is still written to
+`metadata.json` one at a time by a single thread as it completes, so an
+interrupted run (Ctrl+C included) loses nothing beyond whatever was still
+in flight at that moment - same guarantee as the old serial loop, just
+faster. `metadata.json` reads and writes are also now safe across
+*processes*: running two of these tools (or one alongside the GUI) against
+the same `DIR` at once no longer risks one process's save silently
+overwriting another's.
 
 **Story generation via Claude Code subagents (no API billing)**
 

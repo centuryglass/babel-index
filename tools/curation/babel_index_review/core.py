@@ -28,11 +28,13 @@ Metadata schema (``metadata.json``), keyed by webp filename::
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import re
 import random
-from typing import Optional
+from typing import Callable, Optional
 
 from PIL import Image
 
@@ -256,6 +258,39 @@ def save_index(tile_dir: str, index: dict) -> None:
     """Write ``index`` back to ``metadata.json`` (pretty, UTF-8 preserved)."""
     with open(index_path(tile_dir), "w", encoding="utf-8") as file:
         json.dump(index, file, ensure_ascii=False, indent=2)
+
+
+@contextlib.contextmanager
+def _index_lock(tile_dir: str):
+    """Hold an exclusive lock on ``metadata.json.lock`` for the block's duration.
+
+    Only serializes access between cooperating processes that go through this
+    lock (i.e. ``update_index`` below) - it doesn't protect ``load_index``/
+    ``save_index`` called directly, which is why those two stay as the plain,
+    unlocked primitives everything already uses for a single in-memory run.
+    """
+    lock_path = index_path(tile_dir) + ".lock"
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def update_index(tile_dir: str, mutate_fn: Callable[[dict], dict]) -> dict:
+    """Read-modify-write ``metadata.json`` under an exclusive lock.
+
+    Re-reads the file fresh (picking up anything another process just wrote)
+    before calling ``mutate_fn(fresh_index) -> fresh_index`` and saving the
+    result, so two processes touching the same ``metadata.json`` at once
+    (two batch scripts, or a script alongside the GUI) merge rather than
+    blindly overwrite each other's unrelated changes. Returns the saved index.
+    """
+    with _index_lock(tile_dir):
+        index = mutate_fn(load_index(tile_dir))
+        save_index(tile_dir, index)
+        return index
 
 
 def load_keyword_map(path: str = DEFAULT_KEYWORD_MAP) -> dict:
