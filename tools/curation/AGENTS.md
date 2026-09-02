@@ -54,9 +54,12 @@ along.
   (`local:`, `openrouter:`, bare Claude id) - see `README.md`'s Setup section
   for the env vars each backend reads. Don't add a second way to pick a model.
 - No tests here (migrated as-is; the source repo didn't have any for this
-  subtree either). If you add real logic - not just another thin CLI over
-  `core.py` - consider whether it's worth a `node:test`-free `pytest`/`unittest`
-  file rather than leaving it unverified.
+  subtree either), and this stays a deliberately loose, imported set of
+  utility scripts - don't chase general coverage. The one exception is a
+  test that guards against real data loss (e.g. a concurrency race that
+  could silently drop or duplicate a write to `metadata.json`) - that's
+  worth a `node:test`-free `pytest`/`unittest` file. Any such test runs
+  locally only and is never wired into `ci.yml`/`e2e.yml`.
 
 ## Things that will bite you
 
