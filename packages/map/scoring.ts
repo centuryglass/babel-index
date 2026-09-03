@@ -54,14 +54,12 @@
  *
  * No DOM. Two imports: the dot products it would otherwise duplicate, and a
  * lemmatizer - reducing free text to a base form is exactly the kind of thing
- * that is unwise to reimplement. A Porter stemmer (`stemmer`, the previous
- * choice) collapses purely by suffix stripping and doesn't know a noun from a
- * verb, which is how `animation` and `animal` end up sharing the stem `anim` -
- * a real false positive, not a hypothetical one. `wink-lemmatizer` looks a
- * word up (falling back to suffix rules only for the unknown) separately per
- * part of speech, so `lemmatise` below tries noun, then verb, then adjective
- * and keeps the first one that actually changed the word - the cheap stand-in
- * for POS tagging the header above already accepts for story matching.
+ * that is unwise to reimplement. `wink-lemmatizer` is chosen over a Porter
+ * stemmer because a stemmer collapses by suffix alone and can't tell a noun
+ * from a verb, so `animation` and `animal` share the stem `anim` - a real false
+ * positive. The lemmatizer looks a word up per part of speech, so `lemmatise`
+ * below tries noun, then verb, then adjective and keeps the first that changed
+ * the word.
  */
 // Default import only: wink-lemmatizer is CommonJS, and Node's ESM interop
 // does not statically discover its named exports.
@@ -113,32 +111,25 @@ export function lemmatise(word: string): string {
  * `low` is a genuinely-irrelevant query's typical confidence (-1). Continuous
  * and monotone between them - see `signedClipCertainty`.
  *
- * `centre` and `high` are read straight off `cosine-range-report.json`
- * (2048 rooms x 2149 generation keywords, CLIP ViT-B/32, via
- * `tools/embed/cosine-range.ts`): `centre` is the *median* of the overall
- * keyword x room distribution (mostly-unrelated pairs - `overall.p50`), `high`
- * is the *median* ceiling across near-universal keywords true of nearly every
- * room (`bookshelf`, `book`, `library`, ... - `universal.ceiling`), chosen over
- * the raw distribution max because a single outlier pair should not define
- * "as sure as it gets".
+ * All three are measured against a real corpus via `tools/embed/cosine-range.ts`
+ * (2048 rooms x 2149 generation keywords, CLIP ViT-B/32), read off
+ * `cosine-range-report.json`:
+ *   - `centre` is the *median* of the overall keyword x room distribution
+ *     (mostly-unrelated pairs - `overall.p50`), cross-checked by a `--nonsense`
+ *     keysmash probe that lands right on it (mean 0.212 vs 0.205).
+ *   - `high` (`--universal`, `universal.ceiling`) is the *median* ceiling
+ *     across near-universal keywords true of nearly every room (`bookshelf`,
+ *     `book`, `library`, ...), preferred over the raw max so one outlier pair
+ *     does not define "as sure as it gets".
+ *   - `low` (`--irrelevant`, `irrelevant.ceiling`) is the median best match of
+ *     ten strong concepts CLIP recognises but that share no visual structure
+ *     with library walls (`race car`, `swimming pool`, `sandy beach`, ...).
  *
- * `low` is now a real measurement too, not the mirror-of-`high` placeholder
- * this used to be: `tools/embed/cosine-range.ts --irrelevant <file>`, run
- * against ten known-irrelevant strong concepts (`race car`, `swimming pool`,
- * `sandy beach`, ... - things CLIP recognises but that share no visual
- * structure, repeating-grid or otherwise, with shelved library walls) scored
- * the same way `--universal` scores `high` - `low` is `irrelevant.ceiling`,
- * the *median* p50 across those concepts' own best match in the corpus. The
- * result was a genuine surprise, not the "low-positive" the placeholder's
- * comment used to predict: irrelevant concepts land BELOW `centre`
- * (0.171 < 0.205), confidently negative rather than merely no-opinion. A
- * `--nonsense` keysmash probe validated `centre` in the same run (mean 0.212
- * against `centre`'s 0.205, well inside noise) - so the surprise is read as a
- * real property of the embedding space, not a broken `centre`: gibberish
- * embeds near the corpus's mean direction (genuinely no signal), while a
- * coherent-but-wrong concept has its own specific direction that is actively
- * dissimilar to library imagery, pushing it past the noise floor rather than
- * just sitting in it.
+ * `low` sits BELOW `centre` (0.171 < 0.205): a coherent-but-wrong concept is
+ * confidently negative, not merely no-opinion, because it has its own specific
+ * direction that is actively dissimilar to library imagery - where gibberish
+ * just embeds near the corpus mean. That is a property of the embedding space,
+ * and the reason `low` is measured rather than mirrored from `high`.
  */
 export const CLIP_CERTAINTY: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
 
@@ -251,9 +242,8 @@ export function tokenise(text: unknown, { minLength = 3, stopwords = true }: Tok
  *
  * Deliberately does not apply the stopword/`minTokenLength` floor here -
  * that still happens per word for SCORING (`tokenise` inside `keywordScore`/
- * `storyScore` and friends), same as before quoting existed. Quoting changes
- * how a term is matched, not the vocabulary floor.
- *
+ * `storyScore` and friends). Quoting changes how a term is matched, not the
+ * vocabulary floor.
  */
 export function parseQuery(raw: unknown): ParsedQuery {
   const text = String(raw ?? '');
@@ -445,13 +435,12 @@ export function keywordScore(foldedQuery: string, queryTokens: string[], keyword
  * asked is "how much of what you asked for is in here".
  *
  * Each token is weighted by its own length, so `cartographer` counts for more
- * than `oil`. Matching is by lemma, so `room` finds `rooms` and `survey` finds
- * `surveyed` - and, unlike the prefix rule it replaces, the reverse too -
- * while `cat` no longer matches `catalogue` the way a prefix test would, and
- * `animation` no longer matches `animal` the way a Porter stem did. The story
- * index is lemmatised once at build time (`buildSearchIndex`); the query's few
- * tokens are lemmatised here, and weighting stays keyed to the ORIGINAL token
- * length so the query-normalisation above still holds.
+ * than `oil`. Matching is by lemma, so `room` finds `rooms`, `survey` finds
+ * `surveyed`, and the reverse; `cat` does not match `catalogue`, nor
+ * `animation` `animal`. The story index is lemmatised once at build time
+ * (`buildSearchIndex`); the query's few tokens are lemmatised here, and
+ * weighting stays keyed to the ORIGINAL token length so the query-normalisation
+ * above still holds.
  *
  * @param queryTokens raw (folded, untokenised-past-splitting) tokens
  * @param storyIndex the room's story
@@ -541,9 +530,8 @@ export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined
  *
  * The asymmetry between them is the asymmetry between the scorers, and it is
  * not incidental: a keyword matches by SUBSTRING (`k.includes(token)`), a story
- * word by PREFIX (`word.startsWith(token)`, the cheap stand-in for stemming).
- * One highlighter over both would mark text `keywordScore` never looked at and
- * miss text `storyScore` credited.
+ * word by LEMMA (`lemmatise(word)` equality). One highlighter over both would
+ * mark text `keywordScore` never looked at and miss text `storyScore` credited.
  *
  * Both return ranges into the ORIGINAL string - sorted, merged, non-overlapping
  * - which is what `<Highlight>` renders and what makes them assertable without
@@ -556,7 +544,6 @@ export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined
  * Two query tokens routinely hit the same span (`art` and `artist` against
  * `artists`), and nested or duplicated `<mark>` elements are not what anyone
  * wants to render or to read out.
- *
  */
 function mergeRanges(ranges: MatchRange[]): MatchRange[] {
   const sorted = ranges.filter((r) => r.end > r.start).sort((a, b) => a.start - b.start);
@@ -618,7 +605,7 @@ export function keywordMatchRanges(text: unknown, foldedQuery: string, queryToke
 }
 
 /**
- * Where a query matched a story, mirroring `storyScore`'s STEM rule.
+ * Where a query matched a story, mirroring `storyScore`'s LEMMA rule.
  *
  * Walks the text on the same word boundary `tokenise` splits on, and marks a
  * word whose lemma is one of the query's. That is the same test `storyScore`
@@ -669,7 +656,6 @@ export function storyMatchRanges(
  * A flat array carries no information, so it normalises to all-zero rather than
  * to all-one or a divide by zero: a signal that cannot distinguish anything
  * should not contribute a constant that outweighs one that can.
- *
  */
 export function normaliseScores(scores: ArrayLike<number>): Float32Array {
   const out = new Float32Array(scores.length);
@@ -1117,10 +1103,8 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', story: 
  * per axis that actually found something for this room - tag, story, and
  * (whenever the corpus has embeddings at all) CLIP - each carrying its OWN
  * independent rank/tie count from `rankHybrid`'s `ranks`/`ties`, not the
- * composite's. Replaces `explainScore`'s per-weight-term rows (exact tag:
- * 0.234, partial tag: 0.041, ...): a reader needs "why", not the sum's
- * arithmetic read out loud - the arithmetic still backs every number here,
- * it just no longer IS the display.
+ * composite's. A reader needs "why", not the sum's arithmetic read out loud -
+ * the arithmetic backs every number here without being the display itself.
  *
  * `certainty` is the only number here computed against absolute bounds
  * (docs/search_rules.md "Computing certainty") rather than being read
