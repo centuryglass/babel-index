@@ -70,8 +70,9 @@
  * bottom of it - free panning over empty generic space, which is worse than the
  * ellipse. One metric, both jobs.
  *
- * `aspect` defaults to 1, so a caller that has no opinion gets exactly the
- * square-cell behaviour, and nothing else in this file needs to know why.
+ * `aspect` is required at every entry point: there is no square-cell default,
+ * so a caller that forgets it gets a loud RangeError rather than a silently
+ * square map, and nothing else in this file needs to know why.
  */
 
 /** 32-bit spatial hash -> [0, 1). Stable across platforms. */
@@ -175,9 +176,10 @@ function densityRamp(
 
 /**
  * Distance from the origin in units of cell WIDTHS - the metric everything in
- * this file sorts and clamps by. With a square cell it is plain `hypot`.
+ * this file sorts and clamps by. `aspect` is required; at `aspect` 1 (a square
+ * cell) it reduces to plain `hypot`, but nothing supplies that for you.
  */
-export const cellDistance = (x: number, y: number, aspect = 1): number => Math.hypot(x, y * aspect);
+export const cellDistance = (x: number, y: number, aspect: number): number => Math.hypot(x, y * aspect);
 
 /** One content slot, nearest first. */
 export interface Slot {
@@ -235,10 +237,11 @@ export interface CreateLayoutOptions {
   /** scatter seed for slot placement */
   seed?: number;
   /**
-   * cell height / cell width; 1 for a square cell. Makes the library round on
-   * screen rather than round in the index.
+   * cell height / cell width - required, no default. Makes the library round on
+   * screen rather than round in the index. 1 would be a square cell, but the
+   * corpus is never square, so the caller always states the real ratio.
    */
-  aspect?: number;
+  aspect: number;
   /**
    * how many generic tiles exist, so a generic cell can be given one. 0 means
    * the map has only the center tile to fall back on.
@@ -255,7 +258,7 @@ export function createLayout({
   roomCount,
   contentRatio = 0.2,
   seed = 0,
-  aspect = 1,
+  aspect,
   genericCount = 0,
   genericSeed = 0,
   density = null,
@@ -374,7 +377,7 @@ function collectSlots(
   count: number,
   contentRatio: number,
   seed: number,
-  aspect = 1,
+  aspect: number,
   ramp: (rank: number) => number = () => contentRatio
 ): Slot[] {
   if (count === 0) return [];

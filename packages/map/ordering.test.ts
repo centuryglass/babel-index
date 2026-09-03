@@ -12,6 +12,11 @@ import {
 } from './ordering.ts';
 import type { CreateLayoutOptions } from './ordering.ts';
 
+// The corpus is never square and `createLayout` no longer defaults `aspect`, so
+// the structural tests below state a real cell shape. The value is arbitrary as
+// long as it is non-1; tests that specifically need square pass `aspect: 1`.
+const ASPECT = 720 / 1280;
+
 test('slot density tracks contentRatio', () => {
   for (const ratio of [0.05, 0.2, 0.5]) {
     let hits = 0;
@@ -27,22 +32,23 @@ test('slot density tracks contentRatio', () => {
 });
 
 test('layout places every room and orders by distance from center', () => {
-  const L = createLayout({ roomCount: 512, contentRatio: 0.2, seed: 3 });
+  const L = createLayout({ roomCount: 512, contentRatio: 0.2, seed: 3, aspect: ASPECT });
   assert.equal(L.slots.length, 512);
   for (let i = 1; i < L.slots.length; i++)
     assert.ok(L.slots[i].d >= L.slots[i - 1].d, 'slots must be distance-ordered');
 
   // Rank 0 must be the closest content slot there is - verified against an
-  // independent scan rather than against a guessed radius.
+  // independent scan rather than against a guessed radius. The scan measures in
+  // the same cell-width metric the layout sorts by, aspect included.
   let best = Infinity;
   for (let y = -40; y <= 40; y++)
     for (let x = -40; x <= 40; x++)
-      if (isContentSlot(x, y, { seed: 3, contentRatio: 0.2 })) best = Math.min(best, Math.hypot(x, y));
+      if (isContentSlot(x, y, { seed: 3, contentRatio: 0.2 })) best = Math.min(best, cellDistance(x, y, ASPECT));
   assert.equal(L.slots[0].d, best);
 });
 
 test('the origin is the center room, never a corpus slot', () => {
-  const L = createLayout({ roomCount: 512, contentRatio: 0.9, seed: 3 });
+  const L = createLayout({ roomCount: 512, contentRatio: 0.9, seed: 3, aspect: ASPECT });
   assert.equal(isContentSlot(0, 0, { seed: 3, contentRatio: 0.9 }), false);
   assert.ok(!L.slots.some((s) => s.x === 0 && s.y === 0));
   assert.deepEqual(L.roomAt(0, 0, shuffledOrder(512, 1)), { center: true });
@@ -50,7 +56,7 @@ test('the origin is the center room, never a corpus slot', () => {
 });
 
 test('slot positions are stable when the ranking changes', () => {
-  const L = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 11 });
+  const L = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 11, aspect: ASPECT });
   const before = L.slots.map((s) => `${s.x},${s.y}`);
   const orderA = shuffledOrder(200, 1);
   const orderB = shuffledOrder(200, 2);
@@ -64,9 +70,9 @@ test('slot positions are stable when the ranking changes', () => {
 });
 
 test('same seed reproduces the same layout; different seed does not', () => {
-  const a = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 5 });
-  const b = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 5 });
-  const c = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 6 });
+  const a = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 5, aspect: ASPECT });
+  const b = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 5, aspect: ASPECT });
+  const c = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 6, aspect: ASPECT });
   assert.deepEqual(a.slots, b.slots);
   assert.notDeepEqual(a.slots, c.slots);
 });
@@ -74,18 +80,18 @@ test('same seed reproduces the same layout; different seed does not', () => {
 test('corpus size and ratio are runtime-tweakable without reloading data', () => {
   // Growing the corpus keeps existing slots in place and appends further out:
   // the point of tuning by feel is that the map does not reshuffle underneath.
-  const small = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 9 });
-  const large = createLayout({ roomCount: 400, contentRatio: 0.2, seed: 9 });
+  const small = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 9, aspect: ASPECT });
+  const large = createLayout({ roomCount: 400, contentRatio: 0.2, seed: 9, aspect: ASPECT });
   assert.deepEqual(large.slots.slice(0, 100), small.slots);
   assert.ok(large.boundaryRadius > small.boundaryRadius);
 
   // Loosening the ratio packs the same rooms into a tighter region.
-  const dense = createLayout({ roomCount: 400, contentRatio: 0.5, seed: 9 });
+  const dense = createLayout({ roomCount: 400, contentRatio: 0.5, seed: 9, aspect: ASPECT });
   assert.ok(dense.boundaryRadius < large.boundaryRadius);
 });
 
 test('cells outside the corpus are generic', () => {
-  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2 });
+  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, aspect: ASPECT });
   const order = shuffledOrder(50, 1);
   let generic = 0;
   for (let y = -6; y <= 6; y++)
@@ -113,7 +119,7 @@ test('the generic tile a cell shows does not depend on the search order', () => 
   // This is the property the rearrangement animation leans on: a reorder never
   // changes a generic cell's face, so the board can treat every generic as one
   // interchangeable value.
-  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, genericCount: 6, genericSeed: 3 });
+  const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, aspect: ASPECT, genericCount: 6, genericSeed: 3 });
   for (let y = -8; y <= 8; y++)
     for (let x = -8; x <= 8; x++)
       assert.equal(L.genericIndexAt(x, y), genericIndexAt(x, y, { seed: 3, count: 6 }));
@@ -152,7 +158,7 @@ test('the generic seed is independent of the slot seed', () => {
 });
 
 test('resistance is flat inside the region and falls off outside', () => {
-  const L = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 4 });
+  const L = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 4, aspect: ASPECT });
   assert.equal(L.resistanceAt(0, 0), 1);
   const r = L.boundaryRadius;
   assert.equal(L.resistanceAt(r - 1, 0), 1);
@@ -163,9 +169,9 @@ test('resistance is flat inside the region and falls off outside', () => {
 });
 
 test('rejects nonsense parameters', () => {
-  assert.throws(() => createLayout({ roomCount: -1 }), RangeError);
-  assert.throws(() => createLayout({ roomCount: 10, contentRatio: 0 }), RangeError);
-  assert.throws(() => createLayout({ roomCount: 10, contentRatio: 1.5 }), RangeError);
+  assert.throws(() => createLayout({ roomCount: -1, aspect: ASPECT }), RangeError);
+  assert.throws(() => createLayout({ roomCount: 10, contentRatio: 0, aspect: ASPECT }), RangeError);
+  assert.throws(() => createLayout({ roomCount: 10, contentRatio: 1.5, aspect: ASPECT }), RangeError);
   assert.throws(() => createLayout({ roomCount: 10, aspect: 0 }), RangeError);
   assert.throws(() => createLayout({ roomCount: 10, aspect: -1 }), RangeError);
   assert.throws(() => createLayout({ roomCount: 10, aspect: Infinity }), RangeError);
@@ -228,15 +234,6 @@ test('round on screen means not round in the index', () => {
   assert.ok(cellsH > cellsW * 1.5, `expected a taller spread in cells, got ${cellsW}x${cellsH}`);
 });
 
-test('a square cell is exactly the old behaviour', () => {
-  // aspect defaults to 1, and 1 must change nothing - otherwise every existing
-  // assertion in this file is quietly testing something else.
-  const implicit = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 11 });
-  const explicit = createLayout({ roomCount: 200, contentRatio: 0.2, seed: 11, aspect: 1 });
-  assert.deepEqual(explicit.slots, implicit.slots);
-  assert.equal(explicit.boundaryRadius, implicit.boundaryRadius);
-});
-
 test('growing the corpus still keeps existing slots, at any cell shape', () => {
   // The property that makes the sliders usable, re-checked per shape: the
   // aspect is fixed for a given tile, so the ordering must stay stable under it.
@@ -256,6 +253,7 @@ const graded = (certainty: Float32Array | null, opts: Partial<CreateLayoutOption
     roomCount: 200,
     contentRatio: 0.1,
     seed: 17,
+    aspect: ASPECT,
     ...opts,
     density: certainty ? { certainty, ...(opts.density ?? {}) } : null,
   });

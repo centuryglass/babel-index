@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { describeCell, describeRoom, describeArrangement, describeCatalog } from './describe.ts';
 import { createLayout } from './ordering.ts';
 
-const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1 });
+// `createLayout` requires a real cell shape; the corpus is never square.
+const ASPECT = 720 / 1280;
+
+const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1, aspect: ASPECT });
 const order = Array.from({ length: 40 }, (_, i) => i);
 
 /** A room whose slot rank is known, so the message can be checked exactly. */
@@ -115,7 +118,7 @@ test('no caption is null everywhere, and nothing invents one', () => {
 // --- the arrangement, for a reader who cannot watch it happen ---------------
 
 test('an arrangement says how big the map is and whether the search clustered', () => {
-  const uniform = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1 });
+  const uniform = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1, aspect: ASPECT });
   assert.equal(uniform.gradedCount, 0, 'no search, no cluster');
   const said = describeArrangement(uniform);
   assert.match(said, /40 rooms on the map/);
@@ -125,7 +128,7 @@ test('an arrangement says how big the map is and whether the search clustered', 
   // count IS the cluster the animation is drawing.
   const certainty = Array.from({ length: 40 }, (_, i) => Math.max(0, 1 - i / 8));
   const clustered = createLayout({
-    roomCount: 40, contentRatio: 0.3, seed: 1,
+    roomCount: 40, contentRatio: 0.3, seed: 1, aspect: ASPECT,
     density: { certainty, peak: 1, floor: 0.05 },
   });
   assert.ok(clustered.gradedCount > 0);
@@ -133,7 +136,7 @@ test('an arrangement says how big the map is and whether the search clustered', 
 });
 
 test('the arrangement never mentions the animation, which is the optional half', () => {
-  const layoutNow = createLayout({ roomCount: 12, contentRatio: 0.5, seed: 3 });
+  const layoutNow = createLayout({ roomCount: 12, contentRatio: 0.5, seed: 3, aspect: ASPECT });
   const said = describeArrangement(layoutNow);
   assert.doesNotMatch(said, /slid|sliding|animat|moving/i);
 });

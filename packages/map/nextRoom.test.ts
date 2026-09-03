@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { nextRoom } from './nextRoom.ts';
 import { createLayout } from './ordering.ts';
 
-const layout = createLayout({ roomCount: 30, contentRatio: 0.15, seed: 1 });
+// `createLayout` requires a real cell shape; the corpus is never square.
+const ASPECT = 720 / 1280;
+
+const layout = createLayout({ roomCount: 30, contentRatio: 0.15, seed: 1, aspect: ASPECT });
 
 test('finds the nearest room in the given direction, skipping wallpaper', () => {
   // Walk east from the origin until a room turns up; the walk under test must
@@ -47,7 +50,7 @@ test('the four directions are independent', () => {
 });
 
 test('a corpus with only wallpaper never finds a room', () => {
-  const empty = createLayout({ roomCount: 0, contentRatio: 0.5, seed: 1 });
+  const empty = createLayout({ roomCount: 0, contentRatio: 0.5, seed: 1, aspect: ASPECT });
   const found = nextRoom(empty, { x: 0, y: 0 }, { dx: 1, dy: 0 });
   assert.equal(found, null);
 });
