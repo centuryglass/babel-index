@@ -119,8 +119,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                     the open book traced into the center
                                     tile's shelf gap (`CENTER_BOOK_PATH` in
                                     `lib/center.ts`). Ships with placeholder
-                                    content; the dialog machinery is what
-                                    landed first.
+                                    content.
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
                              Meant as an easter egg for the (not yet existing)
                              artist statement page, not wired in yet
@@ -279,14 +278,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   file can't be `.ts`/`.tsx` yet, not out of habit or to match a neighbor that
   hasn't been converted.
 
-  This is a change from how the migration below started: the file-by-file
-  conversion of *existing* code is still exactly as described - no deadline,
-  convert something old when you're already in it or it's a good candidate, and
-  don't mass-rename working files just to convert them. What's different is new
-  code's starting point. `.js`/`.mjs`/`.jsx` and `.ts`/`.tsx` are still expected
-  to coexist for a long stretch - the old default doesn't retroactively become
-  wrong - but every file added from here on should be TypeScript unless it
-  can't be. Two kinds of file so far:
+  `.js`/`.mjs`/`.jsx` and `.ts`/`.tsx` coexist for a long stretch; existing code
+  converts file-by-file, with no deadline - convert something old when you're
+  already in it or it's a good candidate, and don't mass-rename working files
+  just to convert them. Two kinds of TypeScript file:
   - **A pure type contract** (`packages/map/manifest.ts`): a `.ts` file
     exporting only `interface`s/`type`s, never imported by a `.js`/`.mjs`/`.jsx`
     file at runtime - only through JSDoc (`@type {import('./manifest.ts').Manifest}`).
@@ -298,28 +293,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     `.js` file once its neighbors are already `.ts` - two type notations for
     one module is the drift this migration exists to remove.
 
-  Good early candidates: files with little duck-typing and a fixed shape
-  (`port.ts` was one - one function, two primitive params). Defer files whose
-  data is *deliberately* loose until there's a real type worth writing that
-  doesn't just paper over the looseness with `any` or a lying assertion. A
+  Convert files with little duck-typing and a fixed shape first. Defer files
+  whose data is *deliberately* loose until there's a real type worth writing
+  that doesn't just paper over the looseness with `any` or a lying assertion: a
   strict type that fights the code's actual tolerance is worse than an honest
-  `object`/JSDoc. (`metadata.js`'s sidecar parsing looked like one of these
-  until the keyword shape was tightened to `{text, type}` only - dropping the
-  plain-string form it used to also accept - at which point `RoomMeta` was
-  already a real, fixed shape and converting it cost nothing. `center.ts`'s
-  `RUNS` and `slide.ts`'s animation state turned out to be the same story:
-  runtime-*computed*, from a traced SVG and a planned move list respectively,
-  but not runtime-*loose* - every field they carry is fixed by the code that
-  builds them, so both converted cleanly once actually looked at. `scoring.ts`
-  was the same story again, and was for a while this bullet's standing example
-  of deliberate looseness: `rankHybrid`'s `scored` rows, `breakdown`, `ranks`
-  and `ties` only looked duck-typed because nothing had named them, and
-  `searchResult.ts` already named every shape crossing the module's boundary
-  before the module itself converted.)
+  `object`/JSDoc.
 
   `checkJs` is on (`jsconfig.json`, `npm run typecheck`) as a local signal, not
-  yet a CI gate - see `docs/implementation-plan.md` for what it has and hasn't
-  caught so far. Writing accurate JSDoc on new `.js`/`.mjs` code is still
+  yet a CI gate. Writing accurate JSDoc on new `.js`/`.mjs` code is still
   welcome; it's what the next conversion reads from.
 - **Tests sit next to the code**, using `node:test` + `node:assert/strict`.
   New tests are `*.test.ts` per the TypeScript-by-default rule above; existing
@@ -343,11 +324,28 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Fixtures are synthesised, not committed.** `packages/server/image-fixtures.ts`
   builds PNG/JPEG/WebP headers byte by byte. Don't make tests depend on
   `assets/corpus-sample/`.
-- **Comments generally explain why, not what.** Files open with a block comment
-  saying what the file is for and which decision it embodies. Prose comments use
-  ASCII hyphens; markdown uses em dashes. Match the surrounding density rather than
-  adding a comment per line. Comments explaining what code is doing might exist
-  if human-added, but you should avoid adding them yourself.
+- **Comments explain why - and the "why" is for the next reader, not a defense
+  of the change against the version it replaces.** Files open with a block
+  comment saying what the file is for and which decision it embodies. Match the
+  surrounding density rather than adding a comment per line, and don't narrate
+  what the code is doing (a human may have; you should not). Prose comments use
+  ASCII hyphens; markdown uses em dashes.
+
+  The trap this codebase keeps falling into is comments that argue the current
+  structure is right by contrasting it with how it used to be - "not a number
+  restated here that would only drift," "rather than folded into X," "would
+  force it to grow stubs." That reasoning is real and worth doing, but it
+  belongs in your thinking, not the file: once the change lands, the version it
+  argues against exists only in git, and the comment is scaffolding left in the
+  wall. Do the argument-against-the-past while you think; commit a comment only
+  when it earns its place with a future reader. A comment that warns the next
+  editor off a live hazard - "board.ts refuses a margin under 1 because a
+  tighter one lands the swap somewhere visible" - is the durable kind; keep
+  those. The tell for the transient kind is that it references the prior
+  implementation rather than the code as it now stands. If some slips through
+  anyway, a narrow end-of-change sweep over the lines you touched, flagging
+  "used to / instead of / rather than / would only," catches the residue
+  without re-judging every comment's worth.
 - Two-space indent, semicolons, single quotes, trailing commas in multi-line
   literals. Just follow the file you're in.
 
@@ -383,16 +381,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `cellDistance()` — `hypot(x, y * aspect)`, i.e. cell *widths*. That makes the
   library round on screen. A raw `Math.hypot(x, y)` anywhere in that file is the
   bug. Placement uses the same metric and has to: a circular boundary around an
-  elliptical spread of rooms is a circle empty at top and bottom. (`aspect`
-  defaults to 1, so a square cell behaves as before and the module needs no
-  imports. TODO: remove after fixing, square rooms are gone and not coming back.)
+  elliptical spread of rooms is a circle empty at top and bottom. 
 - **The center room is cell (0, 0)** and is reserved — `packages/map` never
   assigns a corpus room there.
 - **Corpus size and generic ratio are runtime parameters**, arguments to
   `createLayout()`, not build-time settings. Growing the corpus must keep
   existing slots where they are and append further out; that property is what
-  makes the sliders usable and is asserted in `ordering.test.mjs`. (TODO:
-  I never use the room count slider, I should remove that and update this.)
+  makes the sliders usable and is asserted in `ordering.test.mjs`.
 - **Re-ranking swaps one array; only a search or an active favorite sort may
   move slots.** A reorder (the shuffle button, a relevance re-sort) stays a
   swap of `order` — the map rearranges, it does not reload. A search or an
@@ -401,7 +396,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `favoriteSort` (`packages/map/favorites.ts`) composes the two rather than
   letting one override the other, see `docs/favorites-density-plan.md`. That
   rebuild is the same O(slots) the ratio slider does on every drag. Nothing
-  else recomputes placement. (TODO: Do I even want to keep non-search map order?)
+  else recomputes placement.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 
 ### The center tile and its generic tiles
@@ -425,9 +420,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `--shared-dir` (default `assets/`): the center by name (`center_tile.*`, else
   `center.*`, else `--center`) and the generic tiles as every image in
   `generic/`. They ride in the manifest as `shared: { center, generic }` and
-  are served from the `/shared/` mount, not `/images/`. The old "a `center.*`
-  inside the corpus dir is a generic tile" behaviour survives only as the
-  `sharedDir === imagesDir` case.
+  are served from the `/shared/` mount, not `/images/`. The one case where a
+  `center.*` inside the corpus dir counts as a generic tile is `sharedDir ===
+  imagesDir`.
 - **The shared tiles are served flat (level 0) for now.** `rooms.js` resolves a
   shared id to its url at level 0 only; every coarser request falls back
   through `servableLevel`. Bounded, because the cache keys on id not cell, but
@@ -611,7 +606,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The board is finite only because the camera is parked** for the whole
   animation, at whatever position it already had — `startRearrangement`
   (`useRearrangement.ts`) zooms out in place rather than flying home to the
-  center, so "parked" no longer implies "at the origin." Anything that moves
+  center, so "parked" does not imply "at the origin." Anything that moves
   the camera mid-rearrangement (pan, zoom, `flyTo`) must end the animation
   instead.
 - **`board.ts` returning null is a real answer, not a failure.** With the
@@ -756,9 +751,9 @@ code, not a standing invariant.
   stays scoped to the canvas. The catalog is a `<ul>` - §3.7's argument for a
   `listbox` is about the panel's bare-name results and does not carry to rows
   containing keyword chips.
-- **One live region for the whole app, and it lives outside both views.** It
-  used to sit in the panel, which is part of the map; a region that unmounts on
-  a mode switch is one a screen reader loses. `.note` keeps only the static
+- **One live region for the whole app, and it lives outside both views.** The
+  panel is part of the map, and a region that unmounts on a mode switch is one a
+  screen reader loses - keep it out of both. `.note` keeps only the static
   hint, which must never share a node with `role="status"`.
 - **Rows are a FIXED height and the spacers are arithmetic, not estimates.**
   `spacerHeight` stands in for unmounted pages exactly, so a recycled page

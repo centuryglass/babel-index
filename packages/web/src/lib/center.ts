@@ -1,37 +1,42 @@
 /**
- * The center room's interactive book spines - the first piece of phase 5.
+ * Placement, rendering constants, and pure utility functions for the center
+ * tile interface. This includes the following:
  *
- * Cell (0, 0) is the one room whose art we control, so it is the one room where
- * per-book hit-testing is meaningful (inpainting does not preserve shelf counts,
- * so no corpus room can be addressed book by book). Every book on the wall
- * (`BOOK_COUNT` of them) carries a composited title, and clicking a book runs
- * that title as a search. The book count and shelf count are a UI choice, sized
- * for legible search-history titles - see the trace itself, not a number
- * restated here that would only drift.
+ * - Help window button: The first book on the shelves
+ * - Catalog mode button: The second book on the shelves
+ * - Buttons for restoring previous searches, padded out with random keywords:
+ *   Mapped to the remaining closed books on the shelves, except possibly the
+ *   last
+ * - Clear search history button: Mapped to the final book, only when search
+ *   history is non-empty
+ * - Artist statement: Mapped to the open book in the center of the room.
+ * - Search bar: as a metal bar across the top of the room
+ * - Sort by favorite/by global favorite count: Two buttons on a panel beneath
+ *   the search bar.
+ * - Shuffle button: As a panel with a d6 die icon beneath the favorite sort
+ *   buttons.
  *
- * Two roles share the wall:
+ * Cell (0, 0) in the map serves as title page, user interface, and anchor.
+ * It contains a set of control elements mapped to features within the room
+ * image. This file contains pure code managing how those elements are
+ * displayed geometry, title assignment, hit-test, and compositing.
  *
- *   - SEARCH HISTORY fills the wall as ONE continuous list, top left to bottom
- *     right, skipping any book an override has reserved. Every search projects
- *     onto the frontmost open slot, newest first, and clicking a book repeats
- *     its search. Shelves are small now that books are sized for legible
- *     titles, so a history confined to one shelf ran out of room fast; the
- *     whole wall is the queue instead.
- *   - Any book history has not yet reached shows a random corpus keyword, so
- *     the wall never carries a blank book while it fills in.
+ * All geometry within this file is defined in relation to the size of the
+ * center cell, in cell fractions(`{x, y, w, h}` against width and height.
+ * All geometry is imported from a single reference SVG by geometry.ts.
+ * *NOTE*: Because dimensions are relative to the cell, width and height
+ * values are not equivalent.
  *
- * This is the pure half, split out like `picking.js`: the part with a right
- * answer, assertable without a browser. It owns the book geometry, the title
- * assignment, the hit-test and the compositing; the hook decides WHEN a tap
- * happened and `main.jsx` owns the history state.
+ * Nullable elements will only be null if they were not present in the
+ * reference SVG at last import time. Any null element will be excluded from
+ * the interface.
  *
- * The geometry comes from the SINGLE SOURCE - `tools/center-placement/lib/geometry.ts`,
- * the same pure module the tile trace is imported into. `layout({ width: 1,
- * height: 1 })` returns every rect as raw per-axis fractions (x, w against width;
- * y, h against height), which is exactly the space the map draws the center tile
- * in: `render.js` stretches the tile image width -> cellPx.x and height ->
- * cellPx.y independently, so a fraction scaled by each axis lands on the art it
- * was traced against.
+ * See also:
+ * - ../hooks/useCenterShelf.ts: Controls the actual behaviors tied to the UI
+ *   elements.
+ * - tools/center-placement/lib/geometry.ts: The source of truth for all
+ *   geometry, parsed trom a reference SVG.
+ * - ../main.tsx: Manages search history state.
  *
  * No DOM (the compositing takes a 2d context but reads nothing back).
  */
@@ -45,13 +50,9 @@ import { flattenPath, pointInPolygon } from './svgPath.ts';
 const GEOMETRY = layout({ width: 1, height: 1 });
 
 /**
- * The bookshelf's bounding box within the center cell, in cell fractions
- * (`{x, y, w, h}` against width and height). It is the union of every shelf's
- * books - the thing a reader comes to the center to read - and it sits LOW in
- * the tile, below the cornice and above the floor. The opening view frames
- * itself on this rect rather than on the cell so the shelf fills the display;
- * `main.jsx` fits and centers on it. Sourced from the one geometry module, so
- * it tracks any re-trace of the tile.
+ * The bookshelf's bounding box within the center cell; the union of
+ * every shelf's books. Used along with search bar bounds by `main.jsx` to
+ * frame the opening view.
  */
 export const CENTER_SHELF_RECT: Rect = GEOMETRY.opening;
 
@@ -62,54 +63,44 @@ export const CENTER_SHELF_RECT: Rect = GEOMETRY.opening;
 export const CENTER_SEARCH_RECT: Rect = GEOMETRY.searchBox;
 
 /**
- * Hit regions for the three favorites controls painted onto the center
- * tile - the reorder ("shuffle") button and the two sort-mode switches
- * ("my favorites", "most favorited") - in the same cell fractions as every
- * other rect on this tile. Null on a trace with none, in which case the
- * control has no hotspot and no DOM button (see `AGENTS.md`'s Favorites
- * section for the plan these implement).
+ * Hit regions for the two sort-mode switches ("my favorites",
+ * "most favorited") and the reorder ("shuffle") button.
  */
 export const CENTER_SHUFFLE_RECT: Rect | null = GEOMETRY.shuffleButton;
 export const CENTER_MINE_TOGGLE_RECT: Rect | null = GEOMETRY.mineToggle;
 export const CENTER_COUNT_TOGGLE_RECT: Rect | null = GEOMETRY.countToggle;
 
 /**
- * The open book painted into a shelf gap, traced as an exact SVG path rather
- * than a box - a bounding rect for this shape laps onto the spines either
- * side of it, which is the whole reason `import-shelf-svg.ts` walks the
- * traced `<path>` instead of reducing it to one. Every coordinate is a cell
- * fraction against `{x,y,w,h}` = `{width:1,height:1}`, i.e. this is exactly
- * what an SVG `viewBox="0 0 1 1"` with `preserveAspectRatio="none"` wants,
- * the same per-axis stretch every other rect on this tile gets. Null on a
- * trace that carries no `center_book`, in which case the hotspot never lights
- * up. Distinct from `BOOK_RECTS`: it is decorative art occupying a gap
- * between two runs (AGENTS.md's "open 'Index of Babel' book"), not one of the
- * lettered spines, so it carries its own hit-test rather than a slot id.
+ * The open book painted into a shelf gap that opens the artist's statement
+ * page. Unlike the other center tile elements, this item doesn't have a
+ * simple rectangular shape, so it's traced as an exact SVG path rather
+ * than a box. Coordinates are still relative to the cell, so it'll need to be
+ * drawn with `viewBox="0 0 1 1"` and `preserveAspectRatio="none".
+ * Distinct from `BOOK_RECTS`: despite being a book, it is mechanically
+ * independent from the array of closed books that are treated as
+ * interconnected.
  */
 export const CENTER_BOOK_PATH: string | null = GEOMETRY.centerBook?.d ?? null;
 
-/**
- * `CENTER_BOOK_PATH` flattened into a polygon, once at module load - the
- * shape `centerBookAtPoint` below tests a point against. Cubic segments are
- * sampled rather than solved exactly: a hover/hit test has no need for a
- * mathematically exact curve, only one fine enough that the boundary looks
- * right at screen resolution, and a fixed sample count keeps this pure and
- * assertable without a browser (no `Path2D`/`isPointInFill`, which need a
- * live canvas).
- */
 /** Cubic Bezier sample count per curve segment - see `CENTER_BOOK_POLYGON`. */
 const CURVE_SAMPLES = 12;
 
+/**
+ * `CENTER_BOOK_PATH` flattened into a polygon at module load, used by
+ * `centerBookAtPoint` to test points. Cubic segments are sampled rather than
+ * solved exactl because we don't need an exact curve just to render a
+ * decent-looking path with reliable precision, and a fixed sample count keeps
+ * this pure and assertable without a browser (no `Path2D`/`isPointInFill`,
+ * which need a  live canvas).
+ */
 const CENTER_BOOK_POLYGON: { x: number; y: number }[] | null = CENTER_BOOK_PATH
   ? flattenPath(CENTER_BOOK_PATH, CURVE_SAMPLES)
   : null;
 
 /**
  * The opening view's real framing target: the bounding-box union of the
- * bookshelf and the search box. The search box sits above the shelf, outside
- * `CENTER_SHELF_RECT`, so fitting to the shelf alone risks leaving the live
- * field off the top edge depending on viewport aspect. `main.jsx` fits and
- * centers the opening camera on this rect instead.
+ * bookshelf and the search box, so that core controls are all on-screen when
+ * the page is opened.
  */
 export const CENTER_OPENING_RECT: Rect = (() => {
   const a = CENTER_SHELF_RECT;
@@ -123,10 +114,8 @@ export const CENTER_OPENING_RECT: Rect = (() => {
 
 /**
  * Every book on the tile, flat, shelf-major and left to right within a shelf -
- * top left to bottom right, the way a reader's eye moves. A book's index in
- * this array is its slot id everywhere below - in the assignment, the hit-test
- * and the overrides - so there is one address for a book, not a (shelf, index)
- * pair to keep in step.
+ * top left to bottom right. A book's index in this array is its slot id
+ * everywhere below - in the assignment, the hit-test and the overrides.
  */
 const BOOKS: Rect[] = GEOMETRY.shelves.flatMap((s) => s.books.map(({ x, y, w, h }) => ({ x, y, w, h })));
 
@@ -135,18 +124,9 @@ export const BOOK_COUNT = BOOKS.length;
 
 /**
  * Every book's rect as raw cell fractions, in the same flat order as the slot
- * ids - what the DOM overlay lays its buttons out in.
- *
- * Exported rather than kept private because the buttons are positioned in
- * PERCENTAGES of the center cell's screen rect, not in pixels: one container
- * is written per frame and the forty children inside it then need no per-frame
- * work at all (accessibility-plan.md §3.3). `bookScreenRects` is the same
- * numbers already scaled, for the canvas, which has no percentages.
- *
- * That the fractions are per-axis is load-bearing here for the same reason it
- * is in `render.js`: `x`/`w` are against the cell's width and `y`/`h` against
- * its height, and one divisor for both axes would put the focus ring on the
- * wrong book.
+ * ids - what the DOM overlay lays its buttons out in. Exported because 
+ * MapView.tsx uses these to build the book element CSS, and sharing them
+ * ensures the DOM and canvas book placements stay in sync.
  */
 export const BOOK_RECTS: Rect[] = BOOKS;
 
@@ -160,13 +140,9 @@ interface Row {
 }
 
 /**
- * The wall's books grouped by SHELF, as flat-index bands.
- *
- * Rows, not runs: a shelf broken into more than one run by art is still one
- * row to a reader moving up and down it, and the gap between two runs is not
- * somewhere the keyboard should stop. Runs exist for the hit-test, where a
- * point really can land in the gap; rows exist for the arrow keys, which move
- * between books and never between the spaces around them.
+ * The wall's books grouped by SHELF, as flat-index bands, for the sake of
+ * arrow-key navigation. Distinct from runs, which track book clusters for
+ * hit testing.
  */
 const ROWS: Row[] = (() => {
   let flat = 0;
@@ -187,15 +163,15 @@ interface Run {
   y1: number;
 }
 
-// Per-run bands, in fractions: a run is a CONTIGUOUS group of books on one
-// shelf, and a shelf may hold more than one - the trace is free to leave a gap
-// wider than a book for art occupying part of the shelf (the open "Index of
-// Babel" book on the middle shelf, say), and that gap must not resolve to a
-// phantom book. A gap no wider than a book is still just the thin margin
-// between two spines, and
-// the hit-test floors a point into the run's columns so a click there still
-// resolves to a book - the same "addressed by a pitch" discipline
-// `picking.js` uses for cells. Runs, not shelves, are what the hit-test walks.
+/**
+ * Per-run bands, in fractions: a run is a CONTIGUOUS group of books on one
+ * shelf, and a shelf may hold more than one. Used for hit tracking, so
+ * accidentally clicking between a book and its neighbor rounds properly to
+ * target what you actually intended to click. Distinct from rows because
+ * rows may contain large gaps (e.g. the center artist's statement button's
+ * place), and clicking within those gaps shouldn't be interpreted as
+ * clicking the nearest book.
+ */
 const RUNS: Run[] = (() => {
   interface Building { start: number; books: Rect[]; x1: number }
   const runs: Building[] = [];
@@ -228,6 +204,11 @@ const RUNS: Run[] = (() => {
 // thresholds in render.js - not config, because nothing derives from them and
 // no test pins their value.
 
+// TODO: I'm not sure putting these here is the best approach. The point of
+//       config is that all the tunable numbers are neatly organized in a
+//       single spot, where they can be easily found and adjusted. Because these
+//       constants weren't there, I didn't even know to find them here.
+
 /** Below this on-screen spine width, a title is sub-pixel; do not draw it. */
 const MIN_SPINE_PX = 5;
 /** Below this on-screen height, the live search field is too small to use or read. */
@@ -245,6 +226,10 @@ const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
 const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
 const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
+// TODO: see, this is what I mean by that previous point. Everything below
+//       in this comment block is contrary to what it says above about
+//       constant placement.
+//
 // The font-lab sweep's winning settings (tools/font-lab, `--cap 32 --min 12
 // --halo-scale 0.1 --font roboto-slab`) - a per-title auto-fit between a
 // floor and a ceiling (see `fitFontSize`) rather than one size derived from
@@ -304,34 +289,28 @@ export function fullyInViewport(rect: Rect, width: number, height: number): bool
 }
 
 /**
- * Whether the spines are wide enough on screen to carry a title.
- *
- * One statement of the zoom gate, read by the compositing below AND by the DOM
- * overlay in `main.jsx`: the buttons exist exactly while the titles do, so a
- * reader tabbing into the shelf is reaching books they can also see named.
+ * Whether the spines are wide enough on screen to carry a title. Book
+ * controls are disabled when zoomed out too far to actually read titles.
  */
 export function areSpinesLegible(cellRect: Rect): boolean {
   return BOOKS.length > 0 && BOOKS[0].w * cellRect.w >= MIN_SPINE_PX;
 }
 
 /**
- * The book an arrow key moves to from `from`, or `from` itself at the wall's
- * edge.
+ * Given a starting index `from` and an arrow key direction `dir`, find which
+ * index should be focused next.
  *
  * The wall is one flat queue, so left and right are just the next and previous
- * book across shelf ends - the same order the titles are assigned in and the
- * same order a reader's eye travels. Up and down move by SHELF, holding the
- * column, because that is what the geometry looks like.
+ * book across shelf ends. Up and down move by SHELF, selecting based on which
+ * books are visibly above or below the current index
  *
- * Books with no title are stepped over rather than landed on: an untitled book
- * is a blank spine with nothing to search for, and a focus ring on one would be
- * a stop that does nothing. (It only happens at all on a corpus with no
- * keywords, where `assignTitles` has nothing to letter the far end of the wall
- * with.) Pure, so the whole walk is assertable without a browser.
+ * Books with no title are non-functional, so they are stepped over. In
+ * practice, will basically never happen, as books are only left blank when
+ * the search history is not long enough and there's no tags within the corpus
+ * to assign to the remaining books.
  *
  * `from` may be outside the wall on purpose: -1 with `dx: 1` is "the first
- * titled book", `BOOK_COUNT` with `dx: -1` is the last, which is what Home and
- * End want and saves them a second entry point.
+ * titled book", `BOOK_COUNT` with `dx: -1` is the last.
  *
  * @param from flat slot id
  * @param dir one step, as the keyboard handler has it
@@ -380,7 +359,7 @@ export function bookScreenRects(cellRect: Rect): Rect[] {
 
 /**
  * Any traced cell-fraction rect on this tile, scaled onto a center-cell
- * rect - per axis, like every other measurement here.
+ * rect.
  */
 function rectOnCell(rect: Rect, cellRect: Rect): Rect {
   return {
@@ -448,8 +427,7 @@ function pointInRect(px: number, py: number, r: Rect): boolean {
 
 /**
  * Whether the live search field is large enough on screen to show and use.
- * Gated on height, the box's thin axis - the same idea as `MIN_SPINE_PX`, but
- * a wide short strip is limited by how tall it is on screen, not how wide.
+ * Gated on height, the box's thin axis: the same idea as `MIN_SPINE_PX`
  */
 export function isSearchBoxUsable(cellRect: Rect): boolean {
   return searchBoxScreenRect(cellRect).h >= MIN_SEARCH_BOX_PX;
@@ -457,26 +435,14 @@ export function isSearchBoxUsable(cellRect: Rect): boolean {
 
 /**
  * The zoom below which the search field cannot be usable, whatever else the
- * camera is framed on - the floor `goToSearch` (main.jsx) applies on top of
- * `CENTER_OPENING_RECT`'s fit. That fit binds on whichever axis of the
- * shelf+box union would overflow first, which on a narrow/portrait viewport
- * is the width - the shelf is wide relative to the screen, so the landing
- * zoom is picked to keep IT on screen and can leave the box, gated on
- * height alone, under `MIN_SEARCH_BOX_PX` even though the union itself
- * "fits". This is the zoom the box alone needs, independent of the shelf.
+ * camera is framed on. This is the zoom the box alone needs, independent of the shelf.
  */
 export function minZoomForSearchBox(aspect: number = CELL_ASPECT): number {
   return MIN_SEARCH_BOX_PX / (aspect * CENTER_SEARCH_RECT.h);
 }
 
 /**
- * Whether a screen point lands on the live, currently-usable search field -
- * the same "addressed by a pitch" hit-test `bookAtPoint` runs for a spine,
- * reused so a tap on the box and a tap on a book resolve through one path.
- * That path already only fires on a genuine tap (`onTap` loses to a pan, a
- * pinch, or a flight), which is what lets a click activate the field while a
- * gesture that merely crosses its screen rect keeps panning or zooming - no
- * separate arbitration needed here.
+ * Whether a screen point lands on the live, currently-usable search field.
  */
 export function searchBoxAtPoint(px: number, py: number, cellRect: Rect): boolean {
   if (!isSearchBoxUsable(cellRect)) return false;
@@ -485,9 +451,8 @@ export function searchBoxAtPoint(px: number, py: number, cellRect: Rect): boolea
 }
 
 /**
- * Whether a screen point lands on the open book's SILHOUETTE, not merely its
- * bounding box - a box loose enough to cover the whole shape laps onto the
- * spines either side of it (the reason `CENTER_BOOK_PATH` traces the outline
+ * Whether a screen point lands within the open center book's bounds: the one
+ * element with a shape that doesn't cleanly map to a simple bounding box.
  * at all). Converts to the same cell-local fraction space `CENTER_BOOK_PATH`
  * is already in, then runs the flattened polygon through `pointInPolygon`.
  */
@@ -503,10 +468,7 @@ export function centerBookAtPoint(px: number, py: number, cellRect: Rect): boole
  *
  * Finds the run whose row band holds the point AND whose columns hold it, then
  * floors into those columns, so a click in the gap between two spines resolves
- * to a book. A shelf with more than one run (art breaking up the run) is
- * exactly why this checks every run rather than stopping at the first whose row
- * matches - a point between two runs on the same shelf must fall through to
- * null, not snap into whichever run happened to be checked first.
+ * to a book.
  */
 export function bookAtPoint(px: number, py: number, cellRect: Rect): number | null {
   for (const run of RUNS) {
@@ -546,9 +508,9 @@ export interface AssignTitlesOpts {
  *
  * Three sources, in strict precedence:
  *
- *   1. OVERRIDES - reserved books with a distinct function (a future artist's
- *      statement, say). Keyed by flat book id, placed first, and never
- *      overwritten. This is the seam the concept asks for; it ships empty.
+ *   1. OVERRIDES - reserved books with a distinct function, e.g. opening a
+ *      help dialog). Keyed by flat book id, placed first, and never
+ *      overwritten.
  *   2. HISTORY - past searches, newest first, into the wall's books in flat
  *      order (top left to bottom right), skipping any book an override has
  *      claimed. So the most recent search is the first open book on the wall.
@@ -559,8 +521,8 @@ export interface AssignTitlesOpts {
  *
  * Pure and deterministic in its inputs. A `history`/`tag` book carries a `term`
  * to search; an `override` book carries an `action` to dispatch. Every slot is
- * filled - never left null - by construction: the tag loop below runs across
- * every remaining index.
+ * filled if possible: slots will only remain null in the unusual case where a
+ * corpus contains zero tags.
  */
 export function assignTitles({ history = [], tags = [], overrides = {} }: AssignTitlesOpts = {}): Slot[] {
   const slots: (Slot | null)[] = new Array(BOOK_COUNT).fill(null);
@@ -592,16 +554,13 @@ export function assignTitles({ history = [], tags = [], overrides = {} }: Assign
 }
 
 /**
- * What one book's button is called, for a reader who cannot see the spine.
+ * Get screen reader text for any book's button is called.
  *
  * The title alone is not enough: forty buttons named `art nouveau`, `brass`,
  * `spiral staircase` say nothing about what pressing one does, and the wall
  * mixes two things that do different things - a past search to repeat and a
  * keyword to try. The canvas draws the title alone because the shelf around it
  * already says it is a shelf; the accessible name has to carry both halves.
- *
- * Naming, so it lives beside `describeCell` in spirit and here in fact - pure,
- * and assertable without a browser.
  */
 export function describeBook(slot: Slot | null | undefined): string {
   if (!slot?.text) return '';
@@ -641,12 +600,10 @@ export function pickTags(metadata: (KeywordSource | null)[] | null, seed = 1): s
 /**
  * The 2d-context surface `composeSpines` needs, beyond `render.ts`'s own
  * `DrawContext` - the text/path operations render.js's cell-blitting never
- * touches. Kept as its own interface rather than folded into `DrawContext`:
- * `render.test.mjs` deliberately never passes `centreSlots` (AGENTS.md), so
- * its recording fake never implements `save`/`rotate`/etc, and widening
- * `DrawContext` itself would force it to grow stubs it has no use for.
- * `render.ts`'s `draw()` casts its own `ctx` to this at the one call site,
- * which is sound because that `ctx` is always a real 2d context in practice.
+ * touches. Kept as its own interface rather than folded into `DrawContext`
+ * because the added properties are never used outside of this file and its
+ * tests. Except in unit tests, this will always be used for real HTML
+ * canvas 2D contexts.
  */
 export interface SpineContext extends DrawContext {
   save(): void;
@@ -673,9 +630,8 @@ export interface SpineContext extends DrawContext {
  * Composite the titles onto the center tile's books.
  *
  * ZOOM-GATED: a spine narrower than MIN_SPINE_PX carries no legible text, so it
- * carries none at all rather than a smear of sub-pixels. This is the "faithful
- * zoom-in reward" - a title is only readable once the reader has zoomed into
- * the center, which the map now opens having done.
+ * renders none at all rather than a smear of sub-pixels. We start zoomed-in,
+ * so users can figure out that they need to be zoomed to use these controls.
  *
  * Each title reads TOP-TO-BOTTOM down the spine, the way a shelved book is
  * printed, sized PER TITLE by `fitFontSize` so a short word ("biology") grows
@@ -698,8 +654,7 @@ export interface SpineContext extends DrawContext {
  *
  * An OVERRIDE book is underlined. It does something other than run a search,
  * and nothing about a title says so - "the catalog" reads exactly like a
- * keyword until it is pressed. Placeholder styling for the font/text pass; the
- * requirement it meets is only that the difference is visible.
+ * keyword until it is pressed.
  */
 export function composeSpines(
   ctx: SpineContext,
@@ -722,8 +677,7 @@ export function composeSpines(
     const ceilingPx = Math.max(minPx, Math.min(maxPx, Math.floor(r.w * SPINE_SIZE_SCALE)));
 
     // The hover glow, painted BEFORE the rotated text/plate below so the
-    // plate sits on top of it rather than the DOM overlay sitting on top of
-    // everything - see HOVER_GLOW_FILL's comment. Covers the whole upright
+    // plate sits on top of it. Covers the whole upright
     // spine rect, unrotated, the same rect the DOM button occupies.
     if (i === hoveredBook) {
       ctx.fillStyle = HOVER_GLOW_FILL;
@@ -734,9 +688,7 @@ export function composeSpines(
     }
 
     ctx.save();
-    // Turn so the text runs DOWN the spine, as titles are printed and as books
-    // are shelved: origin at the spine's head, a quarter-turn clockwise so +x
-    // now points down the book.
+    // Turn so the text runs DOWN the spine.
     ctx.translate(r.x + r.w / 2, r.y);
     ctx.rotate(Math.PI / 2);
     const inset = Math.min(4, r.h * 0.1);
@@ -762,12 +714,7 @@ export function composeSpines(
     ctx.fillStyle = INK;
     ctx.fillText(text, inset, 0);
 
-    // An override book does something other than search, and a reader has no
-    // way to tell that from a title alone - "the catalog" reads exactly like a
-    // keyword until you press it. Underlined, in the ink it is already drawn
-    // in, because the rotation makes this the one decoration that survives
-    // reading down a spine. A placeholder for the font/text pass; what matters
-    // is that the distinction is visible at all.
+    // Ensure override books have a unique appearance:
     if (slot.kind === 'override') {
       const width = ctx.measureText(text).width;
       const drop = fontPx * 0.62;
