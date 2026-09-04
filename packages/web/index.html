@@ -113,6 +113,18 @@
       }
       .center-books button:hover { background: none; }
       .center-books button:focus-visible { outline-offset: 1px; }
+      /*
+        The one-time nudge toward the help book (`showHelpHint`, main.tsx) - a
+        soft pulse rather than anything that steals focus or blocks input, so
+        a reader who ignores it loses nothing. Turned off entirely rather than
+        held static under reduced motion: a book that never stops glowing
+        reads as broken, not as a hint.
+      */
+      .center-books button.hint { animation: book-hint 1.8s ease-in-out infinite; }
+      @keyframes book-hint {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(200,169,95,0.6); }
+        50% { box-shadow: 0 0 5px 2px rgba(200,169,95,0.9); }
+      }
 
       /*
        * The open book's hotspot - sized over the WHOLE cell like
@@ -475,6 +487,7 @@
       @keyframes catalog-out { from { opacity: 1; } to { opacity: 0; } }
       @media (prefers-reduced-motion: reduce) {
         .catalog, .catalog.leaving { animation: none; }
+        .center-books button.hint { animation: none; }
       }
 
       .catalog-bar {
@@ -651,6 +664,12 @@
       .help-overlay { width: min(520px, 100%); }
       .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
       .help-body p:last-child { margin-bottom: 0; }
+      .help-keys {
+        display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 6px;
+        margin: 0 0 10px; font-size: 12px; line-height: 1.4;
+      }
+      .help-keys dt { color: var(--ink); font-weight: 600; white-space: nowrap; }
+      .help-keys dd { margin: 0; color: var(--dim); }
       /*
         Collapsed by default (see HelpDialog.tsx) - a reader who never opens
         this should see one quiet line, not a checklist. `summary` gets its

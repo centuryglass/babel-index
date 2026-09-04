@@ -1,5 +1,5 @@
 /**
- * "A note on finding your way" - the library's one piece of explicit help,
+ * The one piece of explicit, plain-language help explaining the interface -
  * reached by pressing a reserved book on the center shelf (`onOverride` in
  * `main.jsx`, action `help`). No new UI chrome outside the shelf.
  *
@@ -82,10 +82,10 @@ export function HelpDialog({
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        aria-label="a note on finding your way"
+        aria-label="help"
       >
         <div className="card-head">
-          <span className="card-id">a note on finding your way</span>
+          <span className="card-id">help</span>
           <button className="card-close" onClick={onClose} aria-label="close">
             ×
           </button>
@@ -93,24 +93,68 @@ export function HelpDialog({
 
         <div className="help-body">
           <p>
-            This is a library. Drag to walk the shelves, scroll or pinch to draw closer or
-            step back. Right-click a room - or long-press it - to read what is on its wall.
+            <strong>What this is:</strong> a zoomable, pannable map of library
+            rooms, each paired with keywords and a short story. Most rooms are alike,
+            but strange variations can be found among them.
           </p>
           <p>
-            The room at the center holds the search desk. Type a word or phrase into it and
-            the library rearranges itself around what matches. The books on its shelf are
-            worth trying too: each is either a search already made, waiting to be repeated,
-            or a word drawn from the collection, waiting to be tried.
+            <strong>Move around:</strong> drag to pan, scroll or pinch to zoom. With a
+            keyboard, arrow keys pan the map when no other control has focus.
           </p>
           <p>
-            One of those books leads to the catalog: the same collection, read as an
-            ordinary list rather than walked as a map.
+            <strong>View a room:</strong> right-click it, long-press it, or focus it and
+            press Enter, to see the full image, its story, and its keywords.
           </p>
           <p>
-            With a keyboard: arrow keys move the shelf's focus and pan the map when nothing
-            else has claimed the press, Enter reads or repeats a book, and Escape closes
-            an open dialog.
+            <strong>Search:</strong> type a word or phrase into the search box at the
+            center of the map. The map rearranges so closer matches sit nearer the center;
+            an unrelated search leaves rooms mixed evenly with generic ones, which is a
+            visible sign of how confident the match is. The books on the center shelf are
+            shortcuts: some repeat an earlier search, others try a keyword drawn from the
+            collection.
           </p>
+          <p>
+            <strong>Catalog view:</strong> one of the center shelf's books switches to a
+            plain list view of the same collection, better suited to reading result by
+            result than scanning a map.
+          </p>
+          <p>
+            <strong>Favorites:</strong> mark a room as a favorite to find it again later and
+            to help others discover the most interesting ones. Sort by your favorites to see
+            all rooms you've marked, or by most favorited to see which ones other people
+            recommend.
+          </p>
+          <p>
+            <strong>Keyboard, general:</strong> Tab moves between controls, arrow keys pan
+            the map or move shelf/list focus, Enter activates whatever is focused, and
+            Escape closes an open dialog.
+          </p>
+          <p>
+            <strong>Keyboard, on the map:</strong> the shortcuts below apply once the map
+            itself has focus (Tab to it, or click it).
+          </p>
+          <dl className="help-keys">
+            <dt>Arrow keys</dt>
+            <dd>move one room at a time</dd>
+            <dt>Shift + arrow</dt>
+            <dd>jump a full screen in that direction</dd>
+            <dt>Ctrl/Cmd + arrow</dt>
+            <dd>jump to the next unique room in that direction, skipping generic ones</dd>
+            <dt>+ / - (or Page Up/Down)</dt>
+            <dd>zoom in or out, centered on the current room</dd>
+            <dt>Home</dt>
+            <dd>return to the center</dd>
+            <dt>Ctrl/Cmd + Home</dt>
+            <dd>jump to the top search result</dd>
+            <dt>Ctrl/Cmd + End</dt>
+            <dd>jump to the lowest-ranked search result</dd>
+            <dt>Enter / Space</dt>
+            <dd>open the current room</dd>
+            <dt>/</dt>
+            <dd>jump to the search box</dd>
+            <dt>?</dt>
+            <dd>hear a description of what's nearby</dd>
+          </dl>
         </div>
 
         {availableTags.length > 0 && (
