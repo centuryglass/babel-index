@@ -659,6 +659,26 @@
         exactly what this is for.
       */
       .overlay-body .story { display: block; overflow: visible; white-space: pre-line; }
+      /*
+        Default: stacked, same as always. A maximized desktop window (wide,
+        but short enough that a tall single column feels cramped) switches
+        this to a row instead - see the media query below.
+      */
+      .overlay-columns { display: block; }
+      /*
+        A landscape-ish, reasonably wide window has width to spare that a
+        single stacked column wastes while running short on height - put the
+        text beside the tile instead of under it. `.overlay` widens to fit
+        the tile at its native width (1024px, `BASE_TILE`) plus a real text
+        column; narrower or more portrait than this, the block layout above
+        applies and nothing changes from before.
+      */
+      @media (min-width: 900px) and (min-aspect-ratio: 4/3) {
+        .overlay { width: min(1440px, 100%); }
+        .overlay-columns { display: flex; align-items: flex-start; gap: 20px; }
+        .overlay-columns .overlay-tile { flex: 1 1 auto; min-width: 0; margin: 4px 0 0; }
+        .overlay-columns .overlay-body { flex: 0 0 340px; width: 340px; }
+      }
 
       /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
       .help-overlay { width: min(520px, 100%); }

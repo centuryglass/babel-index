@@ -164,19 +164,6 @@ export function RoomOverlay({
         </div>
 
         {/*
-          The tile at its own native resolution by default, never upscaled
-          past it - the same rule the map's opening view follows - and a
-          right-click here reaches the browser's own "save image", which a
-          canvas-painted map tile could never offer. `alt` is `desc.picture` -
-          for a real room, the sidecar's optional caption, empty when the
-          corpus does not carry one; for a generic cell, the one fixed
-          sentence every generic tile shares (`describe.ts`'s generic
-          branch) - the only case where this file invents a caption rather
-          than reading one.
-        */}
-        {src && <img className="overlay-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
-
-        {/*
           The favorite toggle and the other reading's link, one row, the link
           right-aligned - the same pairing a catalog row makes in its head for
           the same reason: two ways of *acting* on this room belong beside its
@@ -194,18 +181,41 @@ export function RoomOverlay({
           </div>
         )}
 
-        <div className="overlay-body">
-          <RoomDetails
-            entry={entry}
-            desc={desc}
-            onKeyword={onKeyword}
-            highlight={highlight}
-            tagLinks={tagLinks}
-            rank={'generic' in room ? undefined : room.rank}
-            result={result}
-            weights={weights}
-            favorite={null}
-          />
+        {/*
+          A wide-but-short viewport (a maximized desktop window) has room
+          beside the tile that a single scrolling column wastes - the tile at
+          native resolution, the text down its own side. `.overlay-columns`
+          is a plain flex row gated by a landscape-ish media query
+          (`index.html`); narrower or taller than that, it falls back to the
+          same single stacked column this always was.
+        */}
+        <div className="overlay-columns">
+          {/*
+            The tile at its own native resolution by default, never upscaled
+            past it - the same rule the map's opening view follows - and a
+            right-click here reaches the browser's own "save image", which a
+            canvas-painted map tile could never offer. `alt` is `desc.picture` -
+            for a real room, the sidecar's optional caption, empty when the
+            corpus does not carry one; for a generic cell, the one fixed
+            sentence every generic tile shares (`describe.ts`'s generic
+            branch) - the only case where this file invents a caption rather
+            than reading one.
+          */}
+          {src && <img className="overlay-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
+
+          <div className="overlay-body">
+            <RoomDetails
+              entry={entry}
+              desc={desc}
+              onKeyword={onKeyword}
+              highlight={highlight}
+              tagLinks={tagLinks}
+              rank={'generic' in room ? undefined : room.rank}
+              result={result}
+              weights={weights}
+              favorite={null}
+            />
+          </div>
         </div>
       </div>
     </div>
