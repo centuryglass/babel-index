@@ -110,16 +110,13 @@ export function useMapCursor({
    * actually drifted to rather than on where they last aimed.
    */
   const cursorNow = useCallback(() => cursorCell(flightTarget()), [flightTarget]);
-  // Whether ANY keyboard action has happened yet. Gates the ring in `render.js`
-  // - a permanent reticle in the middle of a page nobody has touched would be a
-  // strong visual choice made on nobody's behalf (accessibility-plan.md §3.6,
-  // §8 item 6). A ref, not state: it only needs to be true by the time the next
-  // frame reads it, not to trigger a render of its own.
-  const keyboardUsed = useRef(false);
-  // The ring itself is derived from the live camera in the render loop, and
-  // every camera change already requests a draw - so this covers the one case
-  // that is not a camera move: the FIRST keypress flipping `keyboardUsed`,
-  // which makes the ring appear.
+  // The ring's position is derived from the live camera in the render loop,
+  // and every camera change already requests a draw - `cursor` state exists
+  // for JSX (the canvas's nested fallback content, below), not for the ring
+  // itself, so this just keeps that content in step with the cell it names.
+  // Whether the ring is shown AT ALL is a separate question, gated on canvas
+  // focus rather than on keyboard use - see `useMapRenderer.ts`'s
+  // `focus`/`blur` listeners.
   useEffect(() => {
     requestDraw();
   }, [cursor, requestDraw]);
@@ -253,7 +250,6 @@ export function useMapCursor({
 
       if (dir) {
         e.preventDefault();
-        keyboardUsed.current = true;
 
         if (e.ctrlKey || e.metaKey) {
           const found = nextRoom(layout, cursorNow(), dir);
@@ -304,9 +300,16 @@ export function useMapCursor({
         return;
       }
 
-      if (e.key === 'PageUp' || e.key === 'PageDown') {
+      // `+`/`-` are aliases for PageUp/PageDown - the convention every other
+      // map-like UI uses, and cheap to support since it is the same target
+      // math either way. `=` stands in for `+` because that is the bare key
+      // under Shift on the layouts where `+` lives, and browsers report
+      // whichever one the reader actually pressed.
+      if (
+        e.key === 'PageUp' || e.key === 'PageDown' ||
+        e.key === '+' || e.key === '=' || e.key === '-'
+      ) {
         e.preventDefault();
-        keyboardUsed.current = true;
         // Flies to the CURSOR's own cell at a new zoom, which keeps the
         // cursor fixed across the zoom the way the old pixel-anchored
         // `zoomBy` did, and lands the camera exactly cell-centered.
@@ -318,7 +321,8 @@ export function useMapCursor({
         // the SAME target and the second would silently cancel the first's
         // effect rather than compounding it - `flightTarget()` chains off the
         // fully-resolved target of whatever is already in flight instead.
-        const factor = e.key === 'PageUp' ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
+        const zoomingIn = e.key === 'PageUp' || e.key === '+' || e.key === '=';
+        const factor = zoomingIn ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
         const zoom = flightTarget().zoom * factor;
         const here = cursorNow();
         flyTo(here.x, here.y, zoom, { ms: camera.keyboardMoveMs });
@@ -330,7 +334,6 @@ export function useMapCursor({
 
       if (e.key === 'Home') {
         e.preventDefault();
-        keyboardUsed.current = true;
         if (e.ctrlKey || e.metaKey) {
           const best = layout.cellOfRank(0);
           if (!best) {
@@ -345,6 +348,22 @@ export function useMapCursor({
             (landed) => landed && announceCursorMove({ x: 0, y: 0 })
           );
         }
+        return;
+      }
+
+      // The symmetric jump `Ctrl/Cmd+Home` doesn't have on its own: last
+      // ranked room rather than first. Plain `End` is left unbound - there is
+      // no cell it obviously means the way (0, 0) does for `Home`.
+      if (e.key === 'End' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        const best = layout.cellOfRank(order.length - 1);
+        if (!best) {
+          setStatus('no ranked rooms to jump to');
+          return;
+        }
+        flyTo(best.x, best.y, camera.defaultZoom).then(
+          (landed) => landed && announceCursorMove(best)
+        );
         return;
       }
 
@@ -381,7 +400,7 @@ export function useMapCursor({
   // the two things that have no file to favorite.
   const cursorId = cursorRoom.center || cursorRoom.generic ? null : cursorRoom.id;
 
-  return { cursorLabel, cursorEntry, cursorDesc, cursorId, onMapKeyDown, announceArrangement, keyboardUsed };
+  return { cursorLabel, cursorEntry, cursorDesc, cursorId, onMapKeyDown, announceArrangement };
 }
 
 /**

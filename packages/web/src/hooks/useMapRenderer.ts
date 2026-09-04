@@ -93,8 +93,6 @@ interface UseMapRendererOpts {
   draw: { current: () => void };
   /** the running rearrangement, or null */
   anim: { current: RunningAnim | null };
-  /** gates the cursor ring - see render.js */
-  keyboardUsed: { current: boolean };
   /** the live camera, a ref */
   cam: { current: Camera };
   /** 'map' or 'catalog'; hidden means no frames */
@@ -141,7 +139,6 @@ export function useMapRenderer({
   controlsRef,
   draw,
   anim,
-  keyboardUsed,
   cam,
   mode,
   layout,
@@ -177,6 +174,15 @@ export function useMapRenderer({
     // or null - same split as `hoveredBook` just above: read each frame by
     // `render()`, written by the `pointermove` listener below.
     let hoveredFavorite: { x: number; y: number } | null = null;
+    // Gates the cursor ring (`render.ts`). Tied to the canvas's own focus
+    // rather than to whether a key has ever been pressed: a reader who just
+    // tabbed onto the map has no other way to tell the press landed, since
+    // nothing else about the page changes until the first arrow key moves
+    // something. `:focus-visible` (not plain `:focus`) is what keeps a mouse
+    // click from lighting up a permanent reticle for someone who never
+    // touched a keyboard - the same distinction every other focus ring in
+    // this app already draws (index.html's global `:focus-visible` rule).
+    let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
     const render = () => {
       pending = 0;
@@ -303,7 +309,7 @@ export function useMapRenderer({
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
         layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
-        cursor: keyboardUsed.current ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
+        cursor: focusVisible ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
         genericFade: genericFade?.current,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
@@ -361,6 +367,22 @@ export function useMapRenderer({
     };
     window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onDown);
+
+    // Blur always hides the ring outright - there is no reading of `:focus-
+    // visible` to make there, since an element with no focus at all cannot be
+    // focus-visible. Focus re-checks it fresh each time rather than assuming
+    // true, because a programmatic `.focus()` call and a mouse click both
+    // fire this event and only one of them should light the ring.
+    const onFocus = () => {
+      focusVisible = canvas.matches(':focus-visible');
+      draw.current();
+    };
+    const onBlur = () => {
+      focusVisible = false;
+      draw.current();
+    };
+    canvas.addEventListener('focus', onFocus);
+    canvas.addEventListener('blur', onBlur);
 
     // The open book's hover highlight, and the shelf's. Cosmetic only -
     // `centerBookRef`'s element and every `.center-books` button are
@@ -467,11 +489,13 @@ export function useMapRenderer({
       if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('focus', onFocus);
+      canvas.removeEventListener('blur', onBlur);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerleave', onLeave);
     };
   }, [
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
     blockedCount, favorites, favTooltipRef, sortMode, genericFade,
   ]);
