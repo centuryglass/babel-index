@@ -14,7 +14,9 @@ Valid results are written straight to ``metadata.json`` as each tile finishes,
 so an interrupted run (Ctrl+C included) never loses prior progress. By default
 tiles that already have a ``sensitive_content_tags`` key (including an
 explicit empty list from a prior "none apply" verdict) are skipped; pass
---retag to re-run everything instead.
+--retag to re-run everything instead. A --retag run only ever adds tags on
+top of an existing verdict -- it never removes a tag a prior run found, since
+model answers are flaky near the boundary and a tag found once stays found.
 
 By default only tiles marked ``"final"`` are considered -- pass --all to also
 tag tiles that merely have a story. ``--model`` accepts anything
@@ -120,8 +122,10 @@ def propose_tags(image_path: str, story: str, model: str) -> list[str] | None:
         "Strict definitions -- a tag applies ONLY if the described condition is "
         "literally, visibly true in THIS SPECIFIC image or story, not just "
         "consistent with a dark mood:\n"
-        "- gore: blood, mutilation, dismemberment, or open wounds are explicitly "
-        "shown or described.\n"
+        "- gore: blood, mutilation, dismemberment, open wounds, or exposed "
+        "viscera/organs are explicitly shown or described -- a clean cut of "
+        "meat or a butcher's display alone does not qualify, but flesh shown "
+        "pierced, flayed, or with visible organs/viscera does.\n"
         "- body-horror: a body is depicted as grotesquely deformed, fused, or "
         "transformed in a visceral, unsettling way.\n"
         "- horror: a monster, ghost, or scene built specifically to frighten is "
@@ -168,11 +172,18 @@ def run(tile_dir: str, model: str, include_all: bool, retag: bool, workers: int)
         if tags is None:
             print(f"skip {key}: no valid answer after {MAX_ATTEMPTS} attempts", file=sys.stderr)
             return
-        if tags:
-            index[key]["sensitive_content_tags"] = tags
-        else:
-            index[key].pop("sensitive_content_tags", None)
-        print(f"{key} -> {tags or '(none)'}")
+        # A --retag run only ever adds tags on top of a prior verdict -- a
+        # tag the model finds evidence for once doesn't stop being true just
+        # because a later (or flakier) run misses it again.
+        merged = list(index[key].get("sensitive_content_tags", []))
+        for tag in tags:
+            if tag not in merged:
+                merged.append(tag)
+        # Always write the key, even as [] -- that's what lets a plain
+        # (non --retag) run skip a tile already checked and found clean,
+        # per _tiles_to_tag's `"sensitive_content_tags" in entry` test.
+        index[key]["sensitive_content_tags"] = merged
+        print(f"{key} -> {merged or '(none)'}")
 
     parallel.run_parallel(
         tile_dir, targets, worker_fn=worker_fn, apply_fn=apply_fn, workers=workers
@@ -189,7 +200,10 @@ def parse_args() -> argparse.Namespace:
         "--all", action="store_true", help="Check tiles with a story even if not marked final."
     )
     parser.add_argument(
-        "--retag", action="store_true", help="Re-check tiles that already have a verdict."
+        "--retag",
+        action="store_true",
+        help="Re-check tiles that already have a verdict, adding any newly found "
+        "tags on top rather than replacing the existing ones.",
     )
     parser.add_argument(
         "--workers",
