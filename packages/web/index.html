@@ -552,6 +552,19 @@
         border-bottom: 1px solid var(--edge); overflow: hidden;
       }
       /*
+        "Show in the catalog" (`RoomOverlay`'s view toggle) lands a reader on a
+        row that otherwise looks like any other - this is what actually picks
+        it out. A background pulse rather than a border: a border shifts
+        layout by its own width unless every row reserves it unused, and this
+        is transient by design (`SPOTLIGHT_MS`, `CatalogView.tsx`) rather than
+        a standing marker that would want a permanent outline.
+      */
+      .catalog-row.spotlight { animation: catalog-spotlight 1.6s ease-out; }
+      @keyframes catalog-spotlight {
+        0% { background: rgba(200,169,95,0.32); }
+        100% { background: transparent; }
+      }
+      /*
         The tile is a BUTTON - pressing it enlarges the room. A bare <img> with a
         click handler is unreachable by keyboard and announces as an image
         rather than as a control.

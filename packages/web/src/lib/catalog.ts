@@ -219,6 +219,28 @@ export function windowFor(
 }
 
 /**
+ * Where to scroll so a given rank's row lands centered in the viewport.
+ *
+ * Arithmetic, like `pageAtScroll`'s inverse - a row's top is exactly `leadPx +
+ * rank * rowPx` regardless of which page it falls on, since paging only
+ * decides what is MOUNTED, not where anything sits (see the header). Centered
+ * rather than flush to the top so a "jump to this room" lands it somewhere a
+ * reader is already looking, not pinned against the search bar.
+ *
+ * Clamped to 0: a rank near the top would otherwise centre into negative
+ * scroll, which every browser just clamps anyway, but a negative number fed
+ * back into `pageAtScroll` on the resulting scroll event would read as page 0
+ * for the wrong reason (rubber-banding) rather than the right one (this jump).
+ */
+export function focusScrollTop(
+  rank: number,
+  { rowPx, leadPx, viewportPx }: { rowPx: number; leadPx: number; viewportPx: number },
+): number {
+  const rowTop = leadPx + rank * rowPx;
+  return Math.max(0, rowTop - Math.max(0, (viewportPx - rowPx) / 2));
+}
+
+/**
  * The catalog's own default order: every room id, by title (or filename,
  * for a room with none).
  *
