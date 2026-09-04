@@ -32,8 +32,19 @@
  * picture compete for the same space rather than each getting a fixed share,
  * which is the plain, unsurprising behavior the catalog's own tile-then-text
  * rows already give a reader before anything is expanded.
+ *
+ * The tile-and-text pair only moves into two columns when stacking them
+ * would make the dialog scroll - a short story stays under the tile exactly
+ * as it always has, because there's nothing wrong with that layout when it
+ * fits. `measureColumns` below answers that by measuring, not guessing:
+ * force the pair back to a single block column, read its natural height,
+ * and compare against the room the scrim actually has (its own height minus
+ * padding, read live off the scrim rather than assumed). Only when that
+ * natural height would overflow, and the dialog is wide enough for a second
+ * column to be worth it, does `.overlay-columns` get the class that turns
+ * it into a row.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
@@ -139,6 +150,51 @@ export function RoomOverlay({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const colsRef = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(false);
+
+  // Whether the tile and text sit in two columns instead of one - see the
+  // file doc comment. `columns` on `.overlay-columns` is what actually
+  // switches the CSS to a row; toggling it off on the element being measured
+  // is what makes `scrollHeight` answer "how tall would this be stacked",
+  // regardless of which layout is live right now.
+  const measureColumns = useRef(() => {});
+  measureColumns.current = () => {
+    const scrim = scrimRef.current;
+    const overlayEl = ref.current;
+    const cols = colsRef.current;
+    if (!scrim || !overlayEl || !cols) return;
+
+    // The comparison is against the WHOLE dialog's height, not just the
+    // tile-and-text pair - the head and the actions row above it take space
+    // too, and a pair that would juuust fit on its own can still leave the
+    // dialog as a whole needing to scroll.
+    const wasColumns = cols.classList.contains('columns');
+    cols.classList.remove('columns');
+    const neededHeight = overlayEl.scrollHeight;
+    if (wasColumns) cols.classList.add('columns');
+
+    const scrimStyle = getComputedStyle(scrim);
+    const verticalPadding = parseFloat(scrimStyle.paddingTop) + parseFloat(scrimStyle.paddingBottom);
+    const availableHeight = scrim.clientHeight - verticalPadding;
+    // Below this, a second column would be squeezed thinner than the tile
+    // is tall enough to be worth reading beside - not a tuned constant,
+    // just "does a text column plus a gap plausibly fit at all".
+    const MIN_COLUMNS_WIDTH = 900;
+
+    setColumns(neededHeight > availableHeight && scrim.clientWidth >= MIN_COLUMNS_WIDTH);
+  };
+
+  useLayoutEffect(() => {
+    measureColumns.current();
+    const onResize = () => measureColumns.current();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // Re-measure whenever the room being shown changes - the tile and the
+    // story it's paired with are both new, and their combined height with it.
+  }, [desc, entry, src]);
+
   // Named by `desc.name` - the same string a listbox option and the map's own
   // cursor say for this cell. The rank and the keywords are the reason to
   // have opened it.
@@ -151,9 +207,17 @@ export function RoomOverlay({
   return (
     <div
       className="overlay-scrim"
+      ref={scrimRef}
       onPointerDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="overlay" ref={ref} role="dialog" aria-modal="true" tabIndex={-1} aria-label={desc.name}>
+      <div
+        className={columns ? 'overlay columns' : 'overlay'}
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        aria-label={desc.name}
+      >
         <div className="card-head">
           <span className="card-id">
             {'generic' in room ? 'a Babel shelf' : <b>{roomTitle(entry, room.id)}</b>}
@@ -182,14 +246,12 @@ export function RoomOverlay({
         )}
 
         {/*
-          A wide-but-short viewport (a maximized desktop window) has room
-          beside the tile that a single scrolling column wastes - the tile at
-          native resolution, the text down its own side. `.overlay-columns`
-          is a plain flex row gated by a landscape-ish media query
-          (`index.html`); narrower or taller than that, it falls back to the
-          same single stacked column this always was.
+          Two columns only when one would overflow - see `measureColumns`
+          above. A short story stays under the tile exactly as it always has;
+          only a story tall enough to force scrolling moves beside it, and
+          only when the dialog is wide enough for that to be worth doing.
         */}
-        <div className="overlay-columns">
+        <div className={columns ? 'overlay-columns columns' : 'overlay-columns'} ref={colsRef}>
           {/*
             The tile at its own native resolution by default, never upscaled
             past it - the same rule the map's opening view follows - and a
@@ -200,8 +262,20 @@ export function RoomOverlay({
             sentence every generic tile shares (`describe.ts`'s generic
             branch) - the only case where this file invents a caption rather
             than reading one.
+
+            `onLoad` re-measures once the browser knows the tile's real
+            height - before that, an unloaded `<img>` has none, and a
+            measurement taken against zero would never decide to overflow.
           */}
-          {src && <img className="overlay-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
+          {src && (
+            <img
+              className="overlay-tile"
+              src={src}
+              alt={desc.picture ?? ''}
+              decoding="async"
+              onLoad={() => measureColumns.current()}
+            />
+          )}
 
           <div className="overlay-body">
             <RoomDetails

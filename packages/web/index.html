@@ -660,24 +660,44 @@
       */
       .overlay-body .story { display: block; overflow: visible; white-space: pre-line; }
       /*
-        Default: stacked, same as always. A maximized desktop window (wide,
-        but short enough that a tall single column feels cramped) switches
-        this to a row instead - see the media query below.
+        Default: stacked, same as always - a short story sits under the tile
+        with nothing clipped, exactly as before this pass. `.columns` is
+        added by `RoomOverlay`'s `measureColumns`, never by a media query:
+        it measures whether the stacked pair actually overflows the scrim
+        before switching layouts, so a story that already fits never moves.
       */
       .overlay-columns { display: block; }
       /*
-        A landscape-ish, reasonably wide window has width to spare that a
-        single stacked column wastes while running short on height - put the
-        text beside the tile instead of under it. `.overlay` widens to fit
-        the tile at its native width (1024px, `BASE_TILE`) plus a real text
-        column; narrower or more portrait than this, the block layout above
-        applies and nothing changes from before.
+        Hug the content instead of always claiming a fixed width - `fit-
+        content` so a small generic tile's dialog doesn't open with a wide
+        empty margin down the text column just because some other room's
+        tile happens to be bigger. `.overlay`'s own width, not
+        `.overlay-columns`'s, so the head and actions row widen with it too.
       */
-      @media (min-width: 900px) and (min-aspect-ratio: 4/3) {
-        .overlay { width: min(1440px, 100%); }
-        .overlay-columns { display: flex; align-items: flex-start; gap: 20px; }
-        .overlay-columns .overlay-tile { flex: 1 1 auto; min-width: 0; margin: 4px 0 0; }
-        .overlay-columns .overlay-body { flex: 0 0 340px; width: 340px; }
+      .overlay.columns { width: fit-content; max-width: min(1500px, 96vw); }
+      /*
+        Centered, not top-aligned - a short story next to a tall tile reads
+        as a caption beside a picture this way instead of a paragraph
+        stranded at the top of an otherwise empty column.
+      */
+      .overlay-columns.columns { display: flex; align-items: center; gap: 24px; }
+      /*
+        The tile keeps its own natural size (`flex-basis: auto` reads that
+        from the image itself) rather than stretching to fill whatever the
+        text column leaves behind - `max-width: 100%` above still applies,
+        so it only ever shrinks from there, never grows past it.
+      */
+      .overlay-columns.columns .overlay-tile { flex: 0 1 auto; min-width: 0; margin: 4px 0 0; }
+      /*
+        A comfortable reading width, not a stretch to fill the leftover row -
+        capped so a short story doesn't get stranded in a column sized for a
+        much longer one, and the dialog's own `fit-content` means there's no
+        leftover space to fill anyway. The rule against the left edge marks
+        the split as deliberate rather than an accidental gap.
+      */
+      .overlay-columns.columns .overlay-body {
+        flex: 0 1 400px; width: 400px; min-width: 260px;
+        padding-left: 24px; border-left: 1px solid var(--edge);
       }
 
       /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
