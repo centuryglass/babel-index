@@ -315,27 +315,58 @@
       }
 
       /*
-        The room card: a catalogue slip rather than a tooltip. A flex column so
-        the head and tile stay put while `.card-scroll` alone scrolls - the
-        card's own `max-height` bounds the whole stack, not just the text.
+        The room card: a full-page modal now, the same scrim/dialog treatment
+        `.overlay-scrim`/`.overlay` give a room reached from the catalog.
+      */
+      .card-scrim {
+        position: fixed; inset: 0; z-index: 20; display: flex;
+        align-items: center; justify-content: center; padding: 24px;
+        background: rgba(6,5,4,0.82); overflow-y: auto; touch-action: auto;
+      }
+      /*
+        Wide enough for the tile at its native resolution (1024px, `BASE_TILE`)
+        plus the padding/border around it - a viewport that size or larger
+        shows the picture at full size, a smaller one shrinks it (`.card-tile`
+        below). A flex column so the head stays put and `.card-tile`/
+        `.card-scroll` share what's left of the height.
       */
       .card {
-        position: absolute; width: 300px; max-height: 60vh;
-        display: flex; flex-direction: column;
+        width: min(1060px, 100%); max-height: 100%;
+        display: flex; flex-direction: column; overflow: hidden;
         padding: 12px 14px 14px;
         background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
-        backdrop-filter: blur(8px); box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+        box-shadow: 0 8px 28px rgba(0,0,0,0.55);
       }
+      .card:focus { outline: none; }
       .card-head {
         display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
         margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
+        flex: none;
       }
-      /* Capped so a room's tile is never upscaled past its own pixels, same rule as `.overlay-tile`. */
+      /*
+        Sized to its own native resolution by default: `flex: 0 1 auto` starts
+        from the image's intrinsic size (the leading `0` is what stops it being
+        blown up past that to fill spare room) and only shrinks - preserving
+        aspect ratio via `object-fit: contain` - when `.card`'s own
+        `max-height` genuinely leaves no room for it alongside the head and
+        some of the story. `min-height: 0` overrides a flex item's default
+        `min-height: auto`, which otherwise refuses to shrink below content
+        size at all.
+      */
       .card-tile {
-        display: block; width: 100%; max-width: 1024px; max-height: 40vh; object-fit: contain;
-        margin: 0 0 10px; border-radius: 3px; background: #14110d; flex: none;
+        display: block; max-width: 100%; width: auto; height: auto;
+        flex: 0 1 auto; min-height: 0; min-width: 0; object-fit: contain; align-self: center;
+        margin: 0 0 10px; border-radius: 3px; background: #14110d;
       }
-      .card-scroll { overflow-y: auto; min-height: 0; }
+      /*
+        Its own scrolling region, independent of the tile above: a long story
+        must not push a native-resolution picture out of view, and a tall
+        picture must not bury the story below the fold with no way to reach
+        it. `min-height` is a floor, not a target - flexbox still shrinks this
+        before it grows past its content, and prefers to take the deficit from
+        whichever sibling has more of it (ordinarily the tile).
+      */
+      .card-scroll { flex: 1 1 auto; min-height: 3.5em; overflow-y: auto; }
       .card-id { color: var(--dim); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
       .card-id b { font-weight: 700; color: var(--ink); }
       .card-close {

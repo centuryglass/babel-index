@@ -71,8 +71,8 @@ function App() {
   return <Library manifest={manifest} />;
 }
 
-/** The card's open picking result, anchored to where the pick happened. */
-type CardState = RoomPick & { at: { x: number; y: number } };
+/** The card's open picking result - which room or generic cell it names. */
+type CardState = RoomPick;
 
 function Library({ manifest }: { manifest: ManifestResponse }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -395,18 +395,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const [artistStatementOpen, setArtistStatementOpen] = useState(false);
   const openArtistStatement = useCallback(() => setArtistStatementOpen(true), []);
 
-  // Right-click or long press opens the room's card. The pick is anchored to
-  // where it happened rather than tracking the tile: the card names its room,
-  // so a pan underneath it is harmless, and a panel that chases a moving cell
-  // would be the more distracting of the two.
+  // Right-click or long press opens the room's card - a modal dialog now, so
+  // there is no click point to anchor it to, only which room (or generic
+  // cell) it names. The card names its room, so a pan underneath it while
+  // it's open is harmless.
   const [card, setCard] = useState<CardState | null>(null);
   const onPick = useCallback(
     (px: number, py: number, camera: Camera) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
-      const hit = roomAtPoint(px, py, camera, rect, layout, order);
-      setCard(hit && { ...hit, at: { x: px, y: py } });
+      setCard(roomAtPoint(px, py, camera, rect, layout, order));
     },
     [layout, order]
   );
@@ -814,18 +813,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // Choosing a result in the ranked list (below) moves the camera AND opens
   // the room's card, in that order but not waiting on one another. The card is
-  // an independent DOM dialog with its own position, so its content is
-  // reachable the instant this runs regardless of whether - or how fast - the
-  // camera arrives; the flight is for the sighted reader's continuity, not a
-  // precondition for anyone else's access. This is the touch/VoiceOver path
-  // into a room's content that right-click and long-press never gave them.
+  // an independent DOM dialog, so its content is reachable the instant this
+  // runs regardless of whether - or how fast - the camera arrives; the flight
+  // is for the sighted reader's continuity, not a precondition for anyone
+  // else's access. This is the touch/VoiceOver path into a room's content
+  // that right-click and long-press never gave them.
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
-      const canvas = canvasRef.current;
-      const at = canvas
-        ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
-        : { x: 0, y: 0 };
-      setCard({ id, rank, x, y, at });
+      setCard({ id, rank, x, y });
       flyTo(x, y, config.camera.defaultZoom);
     },
     [flyTo, config]

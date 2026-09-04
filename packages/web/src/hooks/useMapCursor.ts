@@ -33,7 +33,6 @@ interface OpenCardArgs {
   rank: number;
   x: number;
   y: number;
-  at: { x: number; y: number };
 }
 
 interface FlyOpts {
@@ -357,11 +356,7 @@ export function useMapCursor({
         const at = layout.roomAt(here.x, here.y, order);
         if (at.center || at.generic) return;
         e.preventDefault();
-        const canvas = canvasRef.current;
-        const at2 = canvas
-          ? { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }
-          : { x: 0, y: 0 };
-        onOpenCard({ id: at.id, rank: at.rank, x: here.x, y: here.y, at: at2 });
+        onOpenCard({ id: at.id, rank: at.rank, x: here.x, y: here.y });
         return;
       }
 
