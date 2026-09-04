@@ -11,6 +11,7 @@ import express, { type Express, type Request, type Response } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
 import { normalizeBasePath } from './base-path.ts';
+import { logger } from './logger.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
 import type { FavoriteStore } from './favorites.ts';
@@ -173,10 +174,15 @@ export function createApp({
       }
       res.json({ stub: false, query: q, vector });
     } catch (err) {
-      // The note reaches the browser, so it says what happened rather than
-      // pasting a module resolution error with local paths in it. The two cases
-      // are worth telling apart: no model installed at all is a permanent fact
-      // about this machine, and anything else is a load that may yet succeed.
+      // The note reaching the browser deliberately omits local paths and stack
+      // traces - the operator's copy, with those, goes to the logger instead.
+      // Previously this failure had NO server-side trace at all: a broken
+      // install (present but failing to load, not simply absent) surfaced only
+      // as a client-facing note nobody was watching for.
+      logger.error({ err, query: q }, 'CLIP text-tower inference failed');
+      // The two cases are worth telling apart: no model installed at all is a
+      // permanent fact about this machine, and anything else is a load that
+      // may yet succeed.
       const note = hasTextModel()
         ? `the CLIP text model failed to load: ${err?.message ?? err}`
         : 'no CLIP text model installed - ranking by keywords and story only';
@@ -336,7 +342,23 @@ const embedCache = createLruCache(EMBED_CACHE_SIZE);
 // many threads are fighting for the same cores rather than doing useful work,
 // so a burst of distinct queries degrades to queueing latency instead of
 // thrashing the machine.
-const embedLimiter = createLimiter(Math.max(1, availableParallelism()));
+//
+// A load test against the live deploy showed exactly that degradation
+// (throughput pinned at the limiter's cap, latency climbing with the queue)
+// with no visible signal server-side - the only way to know it was happening
+// was to be the one running the test. Logging it here, throttled, means a
+// real traffic spike leaves a trace instead of just "the site felt slow that
+// one time."
+const SATURATION_LOG_INTERVAL_MS = 5_000;
+let lastSaturationLog = 0;
+const embedLimiter = createLimiter(Math.max(1, availableParallelism()), {
+  onSaturated: ({ active, queued }) => {
+    const now = Date.now();
+    if (now - lastSaturationLog < SATURATION_LOG_INTERVAL_MS) return;
+    lastSaturationLog = now;
+    logger.warn({ active, queued }, 'search concurrency limit reached - requests are queueing');
+  },
+});
 
 // Keyed by dtype rather than one bare promise: `createApp` may be built more
 // than once in a process (tests do this) with different config, and reusing

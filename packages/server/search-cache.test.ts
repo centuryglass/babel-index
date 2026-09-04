@@ -111,3 +111,20 @@ test('results are returned to the caller that queued them, not mixed up', async 
 test('rejects a concurrency cap under 1', () => {
   assert.throws(() => createLimiter(0), RangeError);
 });
+
+test('calls onSaturated only for jobs that had to wait, with a live count', async () => {
+  const seen: { active: number; queued: number }[] = [];
+  const run = createLimiter(2, { onSaturated: (info) => seen.push(info) });
+  const job = () => new Promise((r) => setTimeout(r, 10));
+  await Promise.all([run(job), run(job), run(job), run(job)]);
+  // The first two run immediately (under the cap); the last two queue behind them.
+  assert.deepEqual(seen, [
+    { active: 2, queued: 1 },
+    { active: 2, queued: 2 },
+  ]);
+});
+
+test('onSaturated is optional', async () => {
+  const run = createLimiter(1);
+  await assert.doesNotReject(Promise.all([run(() => Promise.resolve(1)), run(() => Promise.resolve(2))]));
+});

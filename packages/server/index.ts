@@ -54,6 +54,7 @@ import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
 import { normalizeBasePath } from './base-path.ts';
+import { logger } from './logger.ts';
 import type { Express } from 'express';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -65,11 +66,11 @@ const basePath = normalizeBasePath(argv['base-path'] as string | undefined);
 
 const remoteBase = (argv.remote as string | undefined) ?? null;
 if (remoteBase && argv.images) {
-  console.error('--remote and --images are mutually exclusive - the corpus comes from one place or the other.');
+  logger.error('--remote and --images are mutually exclusive - the corpus comes from one place or the other.');
   process.exit(1);
 }
 if (remoteBase && !argv.prefix) {
-  console.error('--remote requires --prefix (the corpus prefix used when it was uploaded).');
+  logger.error('--remote requires --prefix (the corpus prefix used when it was uploaded).');
   process.exit(1);
 }
 
@@ -77,7 +78,7 @@ if (remoteBase && !argv.prefix) {
 // with no arguments and no external files. Unused entirely in --remote mode.
 const imagesDir = remoteBase ? null : resolve(process.cwd(), (argv.images as string | undefined) ?? 'assets/corpus-sample');
 if (!remoteBase && !existsSync(imagesDir)) {
-  console.error(`no such directory: ${imagesDir}`);
+  logger.error({ imagesDir }, 'no such directory');
   process.exit(1);
 }
 // The shared tiles (center + generic tiles) live outside the corpus, in the
@@ -100,18 +101,18 @@ const watch = Boolean(argv.watch);
 // http://localhost:5173", exits successfully, and serves nothing - every page
 // you then load is the old process, including the code you just changed.
 if (await portInUse(port)) {
-  console.error(
-    `port ${port} is already in use - something else is serving there.\n` +
-      'Stop it first, or pass a different --port. (A demo server left running in\n' +
-      'another window will happily keep serving the code you had before.)'
+  logger.error(
+    { port },
+    'port is already in use - something else is serving there. Stop it first, or pass a different --port. ' +
+      '(A demo server left running in another window will happily keep serving the code you had before.)'
   );
   process.exit(1);
 }
 
 // Load optional JSON config if provided, announcing invalid data:
 const config = await loadConfig({ path: argv.config as string | undefined });
-if (config.source) console.log(`config: ${config.source}`);
-for (const note of config.notes) console.warn(`config: ${note}`);
+if (config.source) logger.info({ source: config.source }, 'config loaded');
+for (const note of config.notes) logger.warn({ note }, 'config note');
 
 // Off unless asked for. The counts are the only state this process owns, and
 // a demo that silently started recording them somewhere would be the wrong
@@ -122,7 +123,7 @@ if (favoritesPath) {
   try {
     favorites = await createJsonFavoriteStore({ path: resolve(process.cwd(), favoritesPath) });
   } catch (err) {
-    console.error(`could not open ${favoritesPath}: ${(err as Error).message}`);
+    logger.error({ err, favoritesPath }, 'could not open favorites store');
     process.exit(1);
   }
 }
@@ -138,25 +139,28 @@ const rescan = remoteBase
   ? () => scanRemote(remoteBase, argv.prefix as string)
   : () => scanDirectory(imagesDir as string, { center: argv.center as string | undefined, sharedDir: sharedDir as string | undefined });
 
-console.log(remoteBase ? `fetching manifest from ${remoteBase}/${argv.prefix} ...` : `scanning ${imagesDir} ...`);
+logger.info(
+  remoteBase ? { remoteBase, prefix: argv.prefix } : { imagesDir },
+  remoteBase ? 'fetching manifest' : 'scanning'
+);
 const manifest = await rescan();
 const centerFile = manifest.shared.center?.file ?? '(none)';
-console.log(
-  `  ${manifest.count} rooms, center tile: ${centerFile}, ${manifest.shared.generic.length} generic tile(s)`
+logger.info(
+  { rooms: manifest.count, centerFile, genericTiles: manifest.shared.generic.length },
+  'corpus scanned'
 );
 // A shared directory with no center means the map has no blank tile to draw at
 // the origin or to fall back on - worth saying, since it reads on the map as a
 // hole rather than an error.
 if (!manifest.shared.center && !remoteBase)
-  console.warn(`  no center tile found in ${sharedDir} - expected center_tile.* (or pass --center)`);
+  logger.warn({ sharedDir }, 'no center tile found - expected center_tile.* (or pass --center)');
 
 if (manifest.metadata) {
   const { matched, entries } = manifest.metadata;
-  console.log(`  ${matched} rooms with keywords or story (${entries} entries in the sidecar)`);
+  logger.info({ matched, entries }, 'rooms with keywords or story');
   // Metadata that matches nothing is indistinguishable from no metadata once the
   // map is running, so it is the one case worth saying out loud.
-  if (matched === 0)
-    console.warn('  none of them matched a room - are the sidecar keys the image filenames?');
+  if (matched === 0) logger.warn('none of the sidecar entries matched a room - are the keys the image filenames?');
 }
 
 // The CLIP text tower is an OPTIONAL dependency, because `onnxruntime-node`
@@ -164,10 +168,9 @@ if (manifest.metadata) {
 // whole install down on anything else. Without it a search still ranks - by
 // keywords and story - so this is a note, not a warning, and it is said at
 // startup rather than left to be discovered on the first query.
-if (!hasTextModel())
-  console.log('  no CLIP text model installed - search will rank by keywords and story only');
+if (!hasTextModel()) logger.info('no CLIP text model installed - search will rank by keywords and story only');
 
-console.log(watch ? 'bundling client (watch mode) ...' : 'bundling client ...');
+logger.info(watch ? 'bundling client (watch mode)' : 'bundling client');
 // `app` is assigned below, after this closure is built - referenced here only
 // from onEnd, which never fires before then.
 let app: Express | undefined;
@@ -225,21 +228,18 @@ const server = app.listen(port, () => {
   // arriving through it - so this box's own address is unprefixed even when
   // --base-path is set. Hitting it directly here would 404 against
   // <base href>'s prefix; that's expected, not a bug to chase.
-  console.log(`\n  the library is open at http://localhost:${port}`);
   // Express binds every interface, so the demo is already reachable from a
   // phone on the same network - but only if you know which address to type.
-  // Printing them is the difference between "it is exposed" and "it is usable".
-  for (const addr of lanAddresses()) console.log(`                       http://${addr}:${port}`);
+  // Listing them is the difference between "it is exposed" and "it is usable".
+  logger.info({ port, addresses: lanAddresses(), watch }, 'the library is open');
   if (basePath !== '/')
-    console.log(`  --base-path ${basePath}: <base href> is set for a reverse proxy that strips it - see server-nginx.conf`);
+    logger.info({ basePath }, '<base href> is set for a reverse proxy that strips it - see server-nginx.conf');
   if (favorites) {
     const rooms = Object.keys(favorites.counts()).length;
-    console.log(`  favorites: ${favoritesPath} (${rooms} room(s) favorited so far)`);
+    logger.info({ favoritesPath, rooms }, 'favorites store loaded');
     if (!trustProxy)
-      console.log('             direct connections assumed - behind a reverse proxy, pass --trust-proxy 1');
+      logger.info('direct connections assumed for favorites - behind a reverse proxy, pass --trust-proxy 1');
   }
-  if (watch) console.log('  watch mode: client edits rebuild in place, the browser reloads itself');
-  console.log();
 });
 
 // The backstop. The check above races anything that grabs the port in the
@@ -247,11 +247,8 @@ const server = app.listen(port, () => {
 // an exit code of 0 - an unhandled 'error' here would otherwise be reported
 // after the success banner has already been printed.
 server.on('error', (err: NodeJS.ErrnoException) => {
-  console.error(
-    err.code === 'EADDRINUSE'
-      ? `\nport ${port} was taken before this server could bind it. Nothing is being served.`
-      : `\nthe server failed to start: ${err.message}`
-  );
+  if (err.code === 'EADDRINUSE') logger.error({ port }, 'port was taken before this server could bind it - nothing is being served');
+  else logger.error({ err }, 'the server failed to start');
   process.exit(1);
 });
 

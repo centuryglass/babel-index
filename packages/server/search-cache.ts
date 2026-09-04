@@ -53,9 +53,13 @@ export function createLruCache<K, V>(max: number) {
  * `onnxruntime-node`'s CPU-bound inference without knowing anything about it.
  *
  * @param max concurrent jobs; must be at least 1
+ * @param onSaturated called when a job is queued because `max` are already
+ *   active, with the active/queued counts right after that job was pushed -
+ *   the caller's signal that load is starting to queue rather than run, with
+ *   no opinion of its own on whether that's worth logging or how often.
  * @returns `run`
  */
-export function createLimiter(max: number) {
+export function createLimiter(max: number, { onSaturated }: { onSaturated?: (info: { active: number; queued: number }) => void } = {}) {
   if (!(max >= 1)) throw new RangeError(`createLimiter: max must be at least 1, got ${max}`);
   let active = 0;
   interface Job<T> {
@@ -86,6 +90,7 @@ export function createLimiter(max: number) {
   return function run<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       queue.push({ fn, resolve, reject } as unknown as Job<unknown>);
+      if (active >= max) onSaturated?.({ active, queued: queue.length });
       next();
     });
   };
