@@ -42,7 +42,8 @@
  */
 import { layout, type Rect } from '../../../../tools/center-placement/lib/geometry.ts';
 import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
-import { CELL_ASPECT, pxPerCell, worldToScreen, type Camera, type ViewportRect } from './camera.ts';
+import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera, type ViewportRect, type ZoomLimits } from './camera.ts';
+import { BASE_TILE } from './pyramid.ts';
 import type { DrawContext } from './render.ts';
 import { SPINE_FONT_FAMILY } from './spineFont.ts';
 import { flattenPath, pointInPolygon } from './svgPath.ts';
@@ -439,6 +440,29 @@ export function isSearchBoxUsable(cellRect: Rect): boolean {
  */
 export function minZoomForSearchBox(aspect: number = CELL_ASPECT): number {
   return MIN_SEARCH_BOX_PX / (aspect * CENTER_SEARCH_RECT.h);
+}
+
+/**
+ * A hair under 1, so the opening view leaves breathing room around the
+ * shelf+box union instead of jamming it to the viewport's edge.
+ */
+const OPENING_MARGIN = 0.94;
+
+/**
+ * The zoom the map opens at: `CENTER_OPENING_RECT` fit to the viewport,
+ * floored at what the search box alone needs and capped at the tile's native
+ * width so the page never loads upscaled. `main.tsx`'s `goToSearch` flies to
+ * this same value, so the search button never has to move the camera further
+ * than where the page already opened.
+ */
+export function openingZoom(viewport: ViewportRect, limits?: ZoomLimits): number {
+  return Math.min(
+    BASE_TILE.w,
+    Math.max(
+      fitZoom({ ...viewport, target: CENTER_OPENING_RECT, limits, margin: OPENING_MARGIN }),
+      minZoomForSearchBox()
+    )
+  );
 }
 
 /**
