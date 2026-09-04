@@ -89,8 +89,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `port.ts`: portInUse helper function
   * `favorites.ts`: The global favorite counts - a `FavoriteStore` interface
                    and one JSON-file implementation (`--favorites <path>`)
-  * `search-cache.ts`: LRU cache and concurrency limiter backing `/api/search`'s
-                        CLIP text tower calls
+  * `logger.ts`: The one leveled/structured logger every server module logs
+                through - pino, pretty-printed on a TTY, plain JSON otherwise
+                (journald, CI)
+  * `search-cache.ts`: LRU cache and concurrency limiter (with an
+                        `onSaturated` hook `app.ts` logs from) backing
+                        `/api/search`'s CLIP text tower calls
   * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
   * `base-path.ts`: Normalizes `--base-path`, for a subpath deployment behind
                     a prefix-stripping reverse proxy (`server-nginx.conf`)
