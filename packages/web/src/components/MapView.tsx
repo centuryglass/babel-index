@@ -87,6 +87,8 @@ export function MapView({
   setQuery,
   onSearch,
   onClearSearch,
+  onSearchKeyDown,
+  onControlKeyDown,
   onGoToSearch,
   maxQueryLength,
   cursorLabel,
@@ -138,6 +140,10 @@ export function MapView({
   setQuery: (query: string) => void;
   onSearch: FormEventHandler<HTMLFormElement>;
   onClearSearch: () => void;
+  /** `Escape` in the field - back to the canvas, the same jump the shelf's `Escape` makes */
+  onSearchKeyDown: KeyboardEventHandler<HTMLInputElement>;
+  /** `Escape` on any plain center-tile control button - back to the canvas */
+  onControlKeyDown: KeyboardEventHandler<HTMLButtonElement>;
   onGoToSearch: () => void;
   maxQueryLength: number;
   cursorLabel: string;
@@ -282,6 +288,7 @@ export function MapView({
         setQuery={setQuery}
         onSubmit={onSearch}
         onClear={onClearSearch}
+        onKeyDown={onSearchKeyDown}
         maxLength={maxQueryLength}
       />
       {/*
@@ -351,6 +358,7 @@ export function MapView({
         className="center-book"
         aria-label="an artist's statement"
         onClick={onOpenArtistStatement}
+        onKeyDown={onControlKeyDown}
       >
         {CENTER_BOOK_PATH && (
           <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
@@ -392,6 +400,7 @@ export function MapView({
             title="reorder the library"
             aria-label="reorder the library"
             onClick={onReorder}
+            onKeyDown={onControlKeyDown}
           >
             <span className="control-tooltip">reorder the library</span>
           </button>
@@ -405,6 +414,7 @@ export function MapView({
             title="sort the library by my favorites"
             aria-label="sort the library by my favorites"
             onClick={() => onToggleSort('mine')}
+            onKeyDown={onControlKeyDown}
           >
             <span className="control-tooltip">sort by my favorites</span>
           </button>
@@ -418,6 +428,7 @@ export function MapView({
             title="sort the library by most favorited"
             aria-label="sort the library by most favorited"
             onClick={() => onToggleSort('count')}
+            onKeyDown={onControlKeyDown}
           >
             <span className="control-tooltip">sort by most favorited</span>
           </button>
@@ -434,6 +445,7 @@ export function MapView({
         type="button"
         className="search-trigger search-icon-button"
         onClick={onGoToSearch}
+        onKeyDown={onControlKeyDown}
         aria-label="search the library"
       >
         <SearchGlyph className="search-icon-glyph" />

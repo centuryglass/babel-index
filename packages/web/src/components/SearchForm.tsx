@@ -1,4 +1,4 @@
-import type { Ref, FormEventHandler } from 'react';
+import type { Ref, FormEventHandler, KeyboardEventHandler } from 'react';
 import clearSvg from '../../../../assets/clear_search.svg';
 
 /**
@@ -19,6 +19,7 @@ export function SearchForm({
   setQuery,
   onSubmit,
   onClear,
+  onKeyDown,
   className,
   formRef = null,
   label = 'search the library',
@@ -28,6 +29,8 @@ export function SearchForm({
   setQuery: (query: string) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
   onClear: () => void;
+  /** on the map's copy, `Escape`'s way back to the canvas - the catalog's copy passes nothing */
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   className?: string;
   formRef?: Ref<HTMLFormElement> | null;
   label?: string;
@@ -46,6 +49,7 @@ export function SearchForm({
         // makes the limit visible at the moment someone hits it.
         maxLength={maxLength}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={onKeyDown}
       />
       {/*
         Only mounted once there is something to clear - unlike the input

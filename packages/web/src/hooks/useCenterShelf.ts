@@ -42,6 +42,8 @@ interface UseCenterShelfOpts {
   /** search history, newest first */
   history: string[];
   booksRef: { current: HTMLElement | null };
+  /** `Escape` returns focus here - the only way back to the canvas besides `Shift+Tab` */
+  canvasRef: { current: HTMLElement | null };
   /** fills the search box to match a pressed book */
   setQuery: (term: string) => void;
   /** a history/tag book repeats its search */
@@ -59,6 +61,7 @@ export function useCenterShelf({
   slotSeed,
   history,
   booksRef,
+  canvasRef,
   setQuery,
   search,
   enterCatalog,
@@ -143,8 +146,20 @@ export function useCenterShelf({
   // column - `bookNeighbour` owns both, so what a press does is asserted
   // without a browser. Home and End reuse it from outside the wall rather than
   // being a second way to say "first" and "last".
+  //
+  // `Escape` is the shortcut back to browsing the map: `Shift+Tab` also gets
+  // there (the canvas is the tab stop before this one, and before the search
+  // box when it's on screen), but it costs one or two presses depending on
+  // whether the search box is currently visible, and reversing direction is
+  // not the obvious move for a reader who just wants out. `Escape` is a
+  // direct jump regardless.
   const onBooksKeyDown = useCallback(
     (e: KeyboardEvent<HTMLElement>) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        canvasRef.current?.focus();
+        return;
+      }
       const dir = ({
         ArrowLeft: { dx: -1 }, ArrowRight: { dx: 1 },
         ArrowUp: { dy: -1 }, ArrowDown: { dy: 1 },
@@ -161,7 +176,7 @@ export function useCenterShelf({
       setBookFocus(next);
       (booksRef.current?.querySelector(`[data-book="${next}"]`) as HTMLElement | null)?.focus();
     },
-    [bookFocus, centreSlots, booksRef]
+    [bookFocus, centreSlots, booksRef, canvasRef]
   );
 
   return { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown };

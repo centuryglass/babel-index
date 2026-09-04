@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { favoriteOrder, favoriteSort, favoriteCount, type SortMode } from '../../map/favorites.ts';
@@ -592,12 +592,47 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     if (landed) input.focus();
   }, [flyTo, opening, centreOverlay]);
 
+  // `Escape`'s way back to the canvas - the shelf's own `Escape` binding
+  // (`useCenterShelf.ts`) does the same thing for the same reason:
+  // `Shift+Tab` already gets there, but it's a reversal a reader has to think
+  // to make, and past the shelf it's not even a fixed number of presses -
+  // `.center-book`, the reorder/favorite-sort toggles and the search trigger
+  // are each conditionally rendered, so how many controls sit between
+  // wherever focus is and the canvas depends on zoom and which features are
+  // on. `Escape` sidesteps all of that with a direct jump, from any of them.
+  const focusCanvas = useCallback(() => {
+    canvasRef.current?.focus();
+  }, [canvasRef]);
+
+  const onSearchKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      focusCanvas();
+    },
+    [focusCanvas]
+  );
+
+  // Shared by every plain center-tile control button - `.center-book`, the
+  // reorder button, the two favorite-sort toggles, and the search trigger.
+  // None of them has any other reason to intercept a key (activation is
+  // native button click, same as the shelf's books), so one handler covers
+  // all five rather than five near-identical copies.
+  const onControlKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      focusCanvas();
+    },
+    [focusCanvas]
+  );
+
   // --- the keyboard cursor ---------------------------------------------------
   //
   // Everything about it - the cell, what gets said, and every key - is
   // `useMapCursor`. It is derived from the camera rather than tracked beside
   // it, so it goes in after `useMapCamera` and takes that hook's movers.
-  const { cursorLabel, cursorEntry, cursorDesc, cursorId, onMapKeyDown, announceArrangement, keyboardUsed } =
+  const { cursorLabel, cursorEntry, cursorDesc, cursorId, onMapKeyDown, announceArrangement } =
     useMapCursor({
       layout,
       order,
@@ -644,6 +679,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     slotSeed: config.map.slotSeed,
     history,
     booksRef,
+    canvasRef,
     setQuery,
     search,
     enterCatalog,
@@ -727,7 +763,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
 
   useMapRenderer({
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, keyboardUsed, cam,
+    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade,
   });
@@ -990,6 +1026,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         setQuery={setQuery}
         onSearch={runSearch}
         onClearSearch={clearSearch}
+        onSearchKeyDown={onSearchKeyDown}
+        onControlKeyDown={onControlKeyDown}
         onGoToSearch={goToSearch}
         maxQueryLength={config.search.maxQueryLength}
         cursorLabel={cursorLabel}

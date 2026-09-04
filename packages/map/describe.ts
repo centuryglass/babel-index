@@ -19,9 +19,15 @@
  * though it had a story it does not.
  *
  * `picture` is the third and rarest: the sidecar's optional `alt`, one
- * sentence about the IMAGE rather than about the room. It is never generated
- * here or anywhere else at runtime - it arrives with the corpus or it does not
- * arrive at all.
+ * sentence about the IMAGE rather than about the room. For a real room it is
+ * never generated here or anywhere else at runtime - it arrives with the
+ * corpus or it does not arrive at all. A generic cell is the one exception:
+ * every generic tile shows the same kind of image (a shelf wall of illegible
+ * spines) regardless of which of the placeholder files is drawn, so one fixed
+ * sentence here covers all of them - see the generic branch below, and
+ * design-history.md's "Hand-written captions for the generic tiles" entry for
+ * why a real PER-TILE caption is still deferred until that art is not
+ * placeholder.
  *
  * A generic cell gets a `description` too, unlike the center room - it is
  * shown in the dialog opened on it (`RoomOverlay`/`RoomDetails`), and the one
@@ -61,7 +67,23 @@ export function describeCell(x: number, y: number, { layout, order, metadata = n
       // rather than left wondering if they missed something.
       description:
         'A library wall, plain and identical to countless others, its shelves filled with nonsense. There is nothing to find here.',
-      picture: null,
+      // Shared by every generic tile - see the file comment above for why
+      // this is the one place `picture` is generated rather than read from a
+      // sidecar. Every UNIQUE room's own alt text is written to assume this
+      // base scene is already known and skip describing it (see
+      // `tools/curation/babel_index_review/core.py`'s `BASE_SCENE` and
+      // `default_alt_prompt` - the prompt literally says "assume the
+      // listener already knows that base scene... do not describe it"), so
+      // this is the one place in the whole app that scene gets spelled out
+      // for a reader who has not necessarily opened a unique room yet. If
+      // `BASE_SCENE` ever changes, this needs to change with it - nothing
+      // enforces that automatically across the Python/TypeScript split.
+      picture:
+        'A wooden bookshelf built into a dark wood-panelled wall: five shelves of ' +
+        'identical books with dull red spines and illegible gold lettering, a round ' +
+        'wall-mounted lamp glowing above the shelf, and a plain wooden column on ' +
+        'either side. This is the plain, unmodified scene every unique room is a ' +
+        'variation on, repeated here as filler with nothing of its own to find.',
     };
 
   return describeRoom(at.id, at.rank, order.length, metadata?.[at.id] ?? null);
