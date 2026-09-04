@@ -30,6 +30,9 @@ test('a generic cell reads as a Babel shelf', () => {
       // unindexed room. Not pinning the exact wording, just that there is
       // some.
       assert.ok(typeof d.description === 'string' && d.description.length > 0);
+      // Every generic tile shares one fixed caption too - unlike a real
+      // room's `alt`, which only exists when the sidecar supplies one.
+      assert.ok(typeof d.picture === 'string' && d.picture.length > 0);
       checked = true;
     }
   assert.ok(checked, 'no generic cell was available to check');
@@ -105,7 +108,7 @@ test('a room carries the picture caption separately from its story', () => {
   assert.doesNotMatch(d.name, /report of the image/);
 });
 
-test('no caption is null everywhere, and nothing invents one', () => {
+test('no caption is null for a real room or the center, and nothing invents one there', () => {
   const slot = roomAt(3);
   const id = order[3];
   const metadata = [];

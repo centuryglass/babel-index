@@ -166,9 +166,12 @@ export function RoomOverlay({
           The tile at its own native resolution by default, never upscaled
           past it - the same rule the map's opening view follows - and a
           right-click here reaches the browser's own "save image", which a
-          canvas-painted map tile could never offer. `alt` is the sidecar's
-          optional caption (`desc.picture`), empty when the corpus does not
-          carry one - nothing is invented.
+          canvas-painted map tile could never offer. `alt` is `desc.picture` -
+          for a real room, the sidecar's optional caption, empty when the
+          corpus does not carry one; for a generic cell, the one fixed
+          sentence every generic tile shares (`describe.ts`'s generic
+          branch) - the only case where this file invents a caption rather
+          than reading one.
         */}
         {src && <img className="overlay-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
 
