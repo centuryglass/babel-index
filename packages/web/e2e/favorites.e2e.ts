@@ -85,7 +85,7 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       const beforeShot = await fingerprint(page);
 
       // Open a room's card off-center and toggle its favorite.
-      const card = page.locator('.card');
+      const card = page.locator('.overlay');
       await page.mouse.click(box.x + box.width / 2 + 80, box.y + box.height / 2 + 40, { button: 'right' });
       await card.waitFor({ timeout: 5000 });
       const favBtn = card.locator('button.favorite-toggle');

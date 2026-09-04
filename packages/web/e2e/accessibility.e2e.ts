@@ -157,7 +157,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       await options.first().focus();
       await page.keyboard.press('Enter');
 
-      const card = page.locator('.card');
+      const card = page.locator('.overlay');
       await card.waitFor({ timeout: 5000 });
       // `.card-id`'s visible text now leads with the room's title when it has
       // one, so it can no longer be parsed back into "Room N" and compared to
@@ -274,7 +274,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
     const { page } = session;
-    const card = page.locator('.card');
+    const card = page.locator('.overlay');
 
     // This used to right-click a fixed pixel with no setup of its own,
     // trusting the camera/ratio state the tests before it happened to leave
@@ -303,7 +303,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // Focus moves in - otherwise a keyboard user is told a dialog opened and
     // has no way to reach a word of it.
     assert.ok(
-      await page.evaluate(() => document.activeElement?.classList.contains('card')),
+      await page.evaluate(() => document.activeElement?.classList.contains('overlay')),
       'the card must take focus when it opens'
     );
 
@@ -331,9 +331,9 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // What is NOT asserted here, because it is not yet true: returning focus to
     // whatever opened the card. Right-clicking the canvas blurs the focused
     // control to the body before the card ever mounts, so a pointer-opened card
-    // has no opener to go back to. `RoomCard` restores when there is one, and
-    // the path that gives it one is Enter on the map cursor (phase C). Assert
-    // it there, where it can actually fail.
+    // has no opener to go back to. `RoomOverlay` restores when there is one,
+    // and the path that gives it one is Enter on the map cursor (phase C).
+    // Assert it there, where it can actually fail.
     assert.ok(
       await page.evaluate(() => document.activeElement?.isConnected ?? false),
       'focus must not be left on a detached node'
@@ -436,39 +436,41 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
   // and a reload would wipe the search/ratio/camera state the tests above
   // this point lean on each other for.
 
-  test("a room's picture caption is shown when the corpus carries one, and nothing is invented when it does not", async () => {
+  test("a room's picture caption becomes real <img alt> text in the catalog and overlay, and nothing is invented when it is absent", async () => {
     const { page } = session;
     // Phase E is a format change plus a fallback, and producing the field is
     // the corpus generator's job upstream of this repo - so no corpus here
     // ships one, and the placeholder sidecar in `assets/corpus-sample/`
     // deliberately never will: a caption that describes nothing about the
-    // image it is attached to is exactly the padded, confident sentence §3.5
-    // says to write no caption instead of. Handing the PAGE a corpus that does
-    // carry one is the only honest way to see the whole path - fetch, join,
-    // describeCell, card - actually reach the screen.
-    //
-    // Sets its own camera and density rather than inheriting them: a reload
-    // resets both, and at the opening view the center room fills the screen so
-    // a fixed screen point would land on the one cell that is never a corpus
-    // room.
-    const openCard = async () => {
-      const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
-      await ratio.focus();
-      await ratio.press('End');
-      await page.locator('canvas').focus();
-      await page.keyboard.press('Home');
-      await page.waitForTimeout(session.flightMs + 200);
-      const card = page.locator('.card');
-      await page.mouse.click(880, 300, { button: 'right' });
-      await card.waitFor({ timeout: 5000 });
-      return card;
+    // image it is attached to is exactly the padded, confident sentence the
+    // curation tools' own guidance says to write no caption instead of.
+    // Handing the PAGE a corpus that does carry one is the only honest way to
+    // see the whole path - fetch, join, describeRoom, `<img alt>` - actually
+    // reach the screen.
+    const openCatalogHere = async () => {
+      await page.locator('.panel .mode-toggle').click();
+      await page.locator('.catalog').waitFor({ timeout: 5000 });
+      await page.locator('.catalog-row').first().waitFor({ timeout: 5000 });
+    };
+    const closeCatalogHere = async () => {
+      await page.locator('.catalog .mode-toggle').click();
+      await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
+      await settled(page);
     };
 
-    // Nothing invented, with the corpus exactly as it ships.
-    let card = await openCard();
-    assert.equal(await card.locator('.picture').count(), 0, 'no sidecar alt, no caption');
+    // Nothing invented, with the corpus exactly as it ships. Row 0 is the
+    // center; row 1 is the first real room.
+    await openCatalogHere();
+    let row = page.locator('.catalog-row').nth(1);
+    assert.equal(await row.locator('.catalog-tile').getAttribute('alt'), '', 'no sidecar alt, no invented caption');
+
+    await row.locator('.catalog-tile-button').click();
+    let overlay = page.locator('.overlay');
+    await overlay.waitFor({ timeout: 5000 });
+    assert.equal(await overlay.locator('.overlay-tile').getAttribute('alt'), '');
     await page.keyboard.press('Escape');
-    await card.waitFor({ state: 'detached', timeout: 5000 });
+    await overlay.waitFor({ state: 'detached', timeout: 5000 });
+    await closeCatalogHere();
 
     const caption = 'A shelved wall in green shadow, one brass rail catching the lamp.';
     await page.route('**/metadata.json', async (route) => {
@@ -484,16 +486,35 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
         { timeout: 30_000 }
       );
 
-      card = await openCard();
-      await card.locator('.picture').waitFor({ timeout: 5000 });
-      assert.equal(await card.locator('.picture').textContent(), caption);
+      await openCatalogHere();
+      row = page.locator('.catalog-row').nth(1);
+      assert.equal(await row.locator('.catalog-tile').getAttribute('alt'), caption);
+
+      await row.locator('.catalog-tile-button').click();
+      overlay = page.locator('.overlay');
+      await overlay.waitFor({ timeout: 5000 });
+      assert.equal(await overlay.locator('.overlay-tile').getAttribute('alt'), caption);
       // And it stays a different thing from the story. The story is fiction
       // about the room and the caption is a report of the image; a reader has
       // to be able to tell which they are being told, so they are two nodes.
-      const story = await card.locator('.story').textContent();
+      const story = await overlay.locator('.story').first().textContent();
       assert.notEqual(story, caption, 'the caption must not have replaced the story');
       await page.keyboard.press('Escape');
-      await card.waitFor({ state: 'detached', timeout: 5000 });
+      await overlay.waitFor({ state: 'detached', timeout: 5000 });
+      await closeCatalogHere();
+
+      // The one consumer with no `<img>` to put the caption on - the map
+      // canvas's own fallback content, read by a touch screen reader
+      // (accessibility-plan.md §4.2b) - still carries it as text.
+      const canvas = page.locator('canvas');
+      await canvas.focus();
+      await page.keyboard.press('Control+Home');
+      await page.waitForTimeout(session.flightMs + 200);
+      // `state: 'attached'`, not the default `'visible'` - canvas fallback
+      // content is never painted, so it can never satisfy Playwright's
+      // visibility check even though it is genuinely present in the tree.
+      await canvas.locator('.picture').waitFor({ state: 'attached', timeout: 5000 });
+      assert.equal(await canvas.locator('.picture').textContent(), caption);
     } finally {
       await page.unroute('**/metadata.json');
     }

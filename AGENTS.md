@@ -109,8 +109,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/components/`: presentational React components
     * `MapView.tsx`: The 2D map canvas view
     * `CatalogView.tsx`: Alternate catalog list view
-    * `RoomCard.tsx`: RoomDetails popup, shown on right-click/long press
-    * `RoomOverlay.tsx`: Modal showing full-size room image along with story content
+    * `RoomOverlay.tsx`: Modal showing a room's tile at full size along with its
+                        story - reached from the map (right-click, long press,
+                        Enter, a ranked result) or by expanding a catalog row
     * `RoomDetails.tsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
@@ -528,10 +529,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   non-zero `entries` means the keys drifted — from the map that looks exactly
   like having no sidecar, so both numbers go in the manifest and `index.mjs`
   warns.
-- **A room's optional `alt` is a caption, not a story.** The card shows it
-  above the story as a visibly different thing and it never feeds the search
-  index. Don't write one into `assets/corpus-sample/` — a placeholder caption
-  is the padded sentence the plan says to omit.
+- **A room's optional `alt` is a caption, not a story, and it lives on `<img
+  alt>`, not as visible text.** `RoomOverlay` and the catalog thumbnail both
+  put it on the real `<img>` tag; it never feeds the search index. The one
+  exception is the map canvas's fallback content
+  (`RoomDetails`'s `showPicture` prop), which has no `<img>` to hang it on and
+  renders it as a paragraph instead - fallback content is never painted, so
+  that isn't a second visible copy. Don't write one into
+  `assets/corpus-sample/` — a placeholder caption is the padded sentence the
+  plan says to omit.
 - **`tagLinks.json` is a flat keyword -> url map, not joined to anything.**
   Unlike `metadata.json` it has no per-room coverage to report — `scan.ts`
   only counts its keys (`TagLinksInfo.count`). It is hand-edited, not

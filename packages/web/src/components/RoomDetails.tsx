@@ -1,23 +1,24 @@
 /**
- * What a room says about itself: its keywords, what the picture shows, its
- * story, and - while a search is running - why the ranking put it where it did.
+ * What a room says about itself: its keywords, its story, and - while a search
+ * is running - why the ranking put it where it did.
  *
  * THREE consumers, which is the reason this is a component rather than markup
- * inside the card:
+ * inside the dialog:
  *
- *   - the room card, opened by right-click, long press or Enter;
+ *   - `RoomOverlay`, the one modal reached from right-click, long press or
+ *     Enter on the map, choosing a ranked result, or expanding a catalog row;
  *   - every row of the catalog;
  *   - the canvas's own nested fallback content, which is where a touch screen
  *     reader reads a room (accessibility-plan.md §4.2b) and which was the same
  *     story-and-chips markup written a second time.
  *
- * They differ in one thing, and it is a prop: the fallback's chips are
- * `tabIndex={-1}` so the map stays exactly one tab stop, while the card's and
- * the catalog's are ordinary tab stops.
- *
- * The reading order is the card's - keywords, then caption, then story - and
- * the fallback now follows it rather than the reverse order it used to have.
- * One order, so a reader who meets a room both ways meets it the same way.
+ * They differ in two props. The fallback's chips are `tabIndex={-1}` so the
+ * map stays exactly one tab stop, while the other two are ordinary tab stops.
+ * And the fallback alone sets `showPicture`: the sidecar's optional `alt` is
+ * real `<img alt>` text wherever a room's tile is an actual `<img>`
+ * (`RoomOverlay`, the catalog thumbnail), so this component only ever renders
+ * it as a paragraph for the one consumer with no `<img>` to put it on - see
+ * `showPicture`'s doc comment below.
  */
 import type { ReactNode } from 'react';
 import { explainRanking } from '../../../map/scoring.ts';
@@ -218,6 +219,7 @@ export function RoomDetails({
   result = null,
   weights = null,
   scoreLayout = 'table',
+  showPicture = false,
 }: {
   /** the room's metadata, from `joinMetadata()` */
   entry: RoomMeta | null;
@@ -241,6 +243,17 @@ export function RoomDetails({
   weights?: Config['search']['weights'] | null;
   /** a card has room for the table; a catalog row needs the one-line strip, or it clips */
   scoreLayout?: 'table' | 'strip';
+  /**
+   * Render the sidecar's optional `alt` as visible text (`desc.picture`).
+   * Everywhere a room's tile is a real `<img>` (`RoomOverlay`, the catalog's
+   * thumbnail), that text belongs on the `alt` attribute instead - false is
+   * right there. The one caller that sets this is the map's own
+   * canvas fallback content (`MapView`): the tile is canvas-painted, not an
+   * `<img>`, so there is no `alt` to put it on, and fallback content is never
+   * painted to the screen anyway - a sighted reader was never going to see
+   * this paragraph regardless of the flag.
+   */
+  showPicture?: boolean;
 }) {
   return (
     <>
@@ -282,15 +295,15 @@ export function RoomDetails({
       )}
 
       {/*
-        What the picture shows, above what the room is: the sidecar's optional
-        `alt` (accessibility-plan.md §3.5). VISIBLE rather than screen-reader
-        only, on §3.6's argument that an invisible layer rots - a caption nobody
-        sighted ever reads is one nobody notices has drifted from the image it
-        describes. Never highlighted: it is a report of the image and was never
-        part of the search index, so marking it would claim a match that did not
-        happen.
+        The sidecar's optional `alt` - what the picture shows, as against what
+        the room is. An ordinary `<img alt>` everywhere the tile is a real
+        `<img>` (see `RoomOverlay`, the catalog thumbnail); this paragraph
+        exists only for `showPicture`'s one caller, the map's canvas fallback,
+        which has no `<img>` to hang it on. Never highlighted: it is a report
+        of the image and was never part of the search index, so marking it
+        would claim a match that did not happen.
       */}
-      {desc?.picture && <p className="picture">{desc.picture}</p>}
+      {showPicture && desc?.picture && <p className="picture">{desc.picture}</p>}
 
       {desc?.description && (
         <p className="story">

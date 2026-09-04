@@ -314,16 +314,16 @@
         background: rgba(0,0,0,0.6); border-radius: 6px;
       }
 
-      /* The room card: a catalogue slip rather than a tooltip. */
-      .card {
-        position: absolute; width: 260px; max-height: 60vh; overflow-y: auto;
-        padding: 12px 14px 14px;
-        background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
-        backdrop-filter: blur(8px); box-shadow: 0 8px 28px rgba(0,0,0,0.55);
-      }
+      /*
+        The dialog chrome shared by `RoomOverlay`, `HelpDialog`,
+        `ArtistStatementOverlay` and `BabelBookOverlay` - the scrim/dialog
+        pair is each one's own (`.overlay-scrim`/`.overlay` below), but the
+        head row inside it is one appearance.
+      */
       .card-head {
         display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
         margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
+        flex: none;
       }
       .card-id { color: var(--dim); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
       .card-id b { font-weight: 700; color: var(--ink); }
@@ -333,10 +333,10 @@
       }
       .card-close:hover { color: var(--ink); background: none; }
       /*
-        The favorite control, in a card, in the overlay, and in a catalog row's
-        head - one appearance in all three, since the thing it reports (this
-        room's global count) is the same fact wherever it is met. The filled
-        star is `aria-hidden`; `aria-pressed` and the label are what a reader
+        The favorite control, in the overlay and in a catalog row's head - one
+        appearance in both, since the thing it reports (this room's global
+        count) is the same fact wherever it is met. The filled star is
+        `aria-hidden`; `aria-pressed` and the label are what a reader
         actually hears.
       */
       .favorite { display: flex; margin-bottom: 8px; }
@@ -586,18 +586,28 @@
         align-items: center; justify-content: center; padding: 24px;
         background: rgba(6,5,4,0.82); overflow-y: auto; touch-action: auto;
       }
+      /*
+        Wide enough for the tile at its native resolution (1024px, `BASE_TILE`)
+        plus the padding/border around it - a viewport that size or larger
+        shows the picture at full size, a smaller one shrinks it
+        (`.overlay-tile` below). Everything inside - tile and story alike -
+        scrolls as this one region: a long story and a native-resolution
+        picture compete for the same space rather than each getting a fixed
+        share.
+      */
       .overlay {
-        width: min(900px, 100%); max-height: 100%; overflow-y: auto;
+        width: min(1060px, 100%); max-height: 100%; overflow-y: auto;
         background: var(--panel); border: 1px solid var(--edge); border-radius: 6px;
         padding: 14px 16px 16px;
       }
       .overlay:focus { outline: none; }
       /*
-        Capped at the tile's own width so it is never upscaled past its pixels -
-        the same rule the map's opening view follows.
+        Sized to its own native resolution by default: `width: auto` with
+        `max-width: 100%` never blows it up past that, only shrinking it to
+        fit a narrower dialog - the same rule the map's opening view follows.
       */
       .overlay-tile {
-        display: block; width: 100%; max-width: 1024px; height: auto;
+        display: block; width: auto; max-width: 100%; height: auto;
         margin: 4px auto 14px; border-radius: 3px; background: #14110d;
       }
       /*
@@ -758,9 +768,12 @@
       .pager button[disabled] { opacity: 0.35; cursor: default; }
       .story.dim { color: var(--dim); font-style: italic; }
       /*
-       * The picture's own caption, above the room's story and visibly not the
-       * same kind of thing: one reports the image, the other is fiction about
-       * the room, and a reader must never mistake which they are being told.
+       * The sidecar's optional caption, rendered only inside the map canvas's
+       * fallback content (`RoomDetails`'s `showPicture` prop) - fallback
+       * content is never painted, so nothing here is actually seen; this
+       * styling only matters if a browser without canvas support ever renders
+       * it for real. Every other consumer puts the same text on an `<img
+       * alt>` instead.
        */
       .picture {
         margin: 0 0 8px; padding-left: 8px; font-size: 11.5px; line-height: 1.5;
