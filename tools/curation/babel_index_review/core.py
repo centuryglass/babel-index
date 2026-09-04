@@ -34,6 +34,7 @@ import json
 import os
 import re
 import random
+import tempfile
 from typing import Callable, Optional
 
 from PIL import Image
@@ -50,8 +51,11 @@ INDEX_JSON = "metadata.json"
 DEFAULT_KEYWORD_MAP = "data/keyword_map.json"
 
 # Sensitive-content tag vocabulary shared by the review GUI and the
-# batch tagger (babel_index_review.sensitive_tags). Stored on an entry as
-# "sensitive_content_tags": [...] when any apply, omitted otherwise.
+# batch tagger (babel_index_review.sensitive_tags). The GUI omits the key
+# when a human clears every tag by hand; the batch tagger instead writes an
+# explicit "sensitive_content_tags": [] for a tile it checked and found
+# clean, so a later run without --retag knows not to check it again. Either
+# way, a consumer should treat a missing key and an empty array the same.
 SENSITIVE_TAGS = [
     "gore",
     "body-horror",
@@ -78,8 +82,8 @@ QUESTIONS = [
     ("What's with the decor?", 1.0),
     ("What's the most interesting thing you could learn from reading here?", 1.0),
     ("What life-changing idea is only found in these pages?", 1.0),
-    ("Who'd burn this place down if they could?", 1.0),
-    ("What would the world lose if these volumes were destroyed?", 1.0),
+    ("Who'd burn this place down if they could?", 0.2),
+    ("What would the world lose if these volumes were destroyed?", 0.2),
     ("What's the worst book in the collection?", 1.0),
     ("What did this room replace?", 1.0),
     ("What's directly on the other side of that wall?", 1.0),
@@ -89,8 +93,8 @@ QUESTIONS = [
     ("How does a person end up working in this room?", 1.0),
     ("What's missing from this room?", 1.0),
     ("What is this room called on the building's floor plan?", 1.0),
-    ("What would be carried out of here first in a fire?", 1.0),
-    ("What's the oldest object in here, and what's the newest?", 1.0),
+    ("What would be carried out of here first in a fire?", 0.2),
+    ("What's the oldest object in here, and what's the newest?", 0.5),
     ("Where did the furniture come from?", 1.0),
     ("What does this room cost to keep, and who pays?", 1.0),
     ("What complaint has been filed about this room?", 1.0),
@@ -159,7 +163,12 @@ def default_prompt(keywords: list[str], k=4) -> str:
         "got a lot of those already, don't add another unless it's especially clever."
         "\n - Tedious business/industrial/bureaucratic minutia that doesn't tie into anything unexpected"
         "\n - Humidity/light need to be just right or the spines crack/ink fades"
-        "\n - Books that are only there to serve as ballast/counterbalance/support/some other form of convenient mass")
+        "\n - Books that are only there to serve as ballast/counterbalance/support/some other form of convenient mass"
+        "\n - The books being terribly fragile, dissolving/melting/crumbling/etc. without some special procedure."
+        "\n - Stories where burning the books would revert land property rights"
+        "\n - The phrase \"in truth,\"."
+        "\n - Text you can only read under a special light"
+        "\n - Characters named Vane or Vance")
 
 
 
@@ -173,9 +182,9 @@ def default_prompt(keywords: list[str], k=4) -> str:
 # the model to assume it's already known, describing only what this tile adds
 # or changes.
 BASE_SCENE = (
-    "a wooden bookshelf against a dark wood wall, five shelves of tidy books, "
-    "a round wall-mounted lamp centered above the shelf, and a wooden column "
-    "on each side"
+    "a wooden bookshelf against a dark wood wall, five shelves of identical"
+    "tidy books, a round wall-mounted lamp centered above the shelf, and a "
+    "wooden column on each side"
 )
 
 
@@ -194,7 +203,7 @@ def default_alt_prompt(keywords: list[str]) -> str:
         "shelf, and the architecture itself (ceiling, walls, floor, the shape "
         "of the shelf openings) -- not just the shelf's contents. These tiles "
         "often add things that have no equivalent in the base scene at all: "
-        "furniture, figures, props, unusual fixtures in place of the lamp, or "
+        "furniture, figures, props, unusual fixtures above the shelf, or "
         "the architecture itself doing something structurally strange (a "
         "warped or rolled ceiling, reshaped shelf openings, and so on). If "
         "anything like that is present, it is almost always the most important "
@@ -241,8 +250,16 @@ def index_path(tile_dir: str) -> str:
     return os.path.join(tile_dir, INDEX_JSON)
 
 
-def load_index(tile_dir: str) -> dict:
-    """Load ``metadata.json`` from ``tile_dir``, returning {} if absent/broken."""
+def load_index(tile_dir: str, strict: bool = False) -> dict:
+    """Load ``metadata.json`` from ``tile_dir``.
+
+    Returns {} for an absent file. A malformed file (e.g. a partial read of a
+    concurrent write, or genuine corruption) raises ``json.JSONDecodeError``
+    when ``strict`` is set, so a caller can tell "no metadata" apart from
+    "couldn't read the metadata" and avoid acting on an empty result; the
+    default stays tolerant, printing and returning {} for the batch callers
+    that just want best-effort.
+    """
     path = index_path(tile_dir)
     if not os.path.exists(path):
         return {}
@@ -250,14 +267,35 @@ def load_index(tile_dir: str) -> dict:
         try:
             return json.load(file)
         except json.JSONDecodeError as err:
+            if strict:
+                raise
             print(f"Failed to load {path}: {err}")
             return {}
 
 
 def save_index(tile_dir: str, index: dict) -> None:
-    """Write ``index`` back to ``metadata.json`` (pretty, UTF-8 preserved)."""
-    with open(index_path(tile_dir), "w", encoding="utf-8") as file:
-        json.dump(index, file, ensure_ascii=False, indent=2)
+    """Write ``index`` back to ``metadata.json`` (pretty, UTF-8 preserved).
+
+    The write is atomic: it lands in a temp file in the same directory and is
+    then ``os.replace``d over the target, so a concurrent reader (another tool,
+    or the GUI's file watcher) always sees either the whole old file or the
+    whole new one, never a truncated file mid-write. An in-place ``open(...,
+    "w")`` would expose a zero-byte window that reads back as
+    ``Expecting value: line 1 column 1``.
+    """
+    path = index_path(tile_dir)
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".metadata.", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            json.dump(index, file, ensure_ascii=False, indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
 
 
 @contextlib.contextmanager

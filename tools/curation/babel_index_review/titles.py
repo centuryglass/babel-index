@@ -80,7 +80,9 @@ def _validation_error(title: str, used_titles: SharedTitleSet) -> str | None:
     return None
 
 
-def propose_title(image_path: str, story: str, used_titles: SharedTitleSet, model: str) -> str | None:
+def propose_title(
+    image_path: str, story: str, used_titles: SharedTitleSet, model: str, key: str | None = None
+) -> str | None:
     """Ask the model for a unique 1-3 word title, retrying on rule violations.
 
     A title that passes validation is claimed via ``used_titles.try_reserve``
@@ -89,9 +91,14 @@ def propose_title(image_path: str, story: str, used_titles: SharedTitleSet, mode
     treated exactly like any other rule violation: tell the model why and
     ask again in the same conversation.
 
+    Every rejected reply (rule violation or duplicate) is logged to stdout,
+    tagged with `key` if given, so a run's failure modes are visible without
+    re-running with extra verbosity.
+
     Returns None if no valid, successfully claimed title emerged within
     MAX_ATTEMPTS.
     """
+    label = key or image_path
     prompt = (
         "Here is a bookshelf tile from an impossible library, along with a short "
         f"story written about it:\n\n\"{story}\"\n\n"
@@ -111,6 +118,7 @@ def propose_title(image_path: str, story: str, used_titles: SharedTitleSet, mode
                 f'"{title}" was just claimed by another tile. Propose a different one -- '
                 "respond with only the title."
             )
+        print(f"{label}: rejected {title!r} -- {error}")
         turns.append(("user", error))
     return None
 
@@ -131,7 +139,9 @@ def run(tile_dir: str, model: str, include_all: bool, workers: int) -> None:
     )
 
     def worker_fn(image_path: str, entry: dict) -> str | None:
-        return propose_title(image_path, entry["story"], used_titles, model)
+        return propose_title(
+            image_path, entry["story"], used_titles, model, key=os.path.basename(image_path)
+        )
 
     def apply_fn(index: dict, key: str, entry: dict, title: str | None) -> None:
         if title is None:

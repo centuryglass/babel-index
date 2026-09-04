@@ -41,10 +41,21 @@ navigation ever see; every entry stays loaded and intact on disk.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
-from PySide6.QtCore import Qt, QObject, QPoint, QRect, QRunnable, QThreadPool, QTimer, Signal
+from PySide6.QtCore import (
+    Qt,
+    QFileSystemWatcher,
+    QObject,
+    QPoint,
+    QRect,
+    QRunnable,
+    QThreadPool,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -233,6 +244,7 @@ class ReviewWindow(QMainWindow):
     def __init__(self, tile_dir: str, content_review: str | None = None):
         super().__init__()
         self.tile_dir = tile_dir
+        self.content_review = content_review
         self.index = core.load_index(tile_dir)
 
         # A one-time display filter: which keys the grid/navigation ever see.
@@ -261,6 +273,16 @@ class ReviewWindow(QMainWindow):
         self._alt_save_timer.timeout.connect(self._flush_alt)
         self._title_save_timer = QTimer(self, singleShot=True, interval=600)
         self._title_save_timer.timeout.connect(self._flush_title)
+
+        # Pick up edits another process (a batch script, or a second GUI)
+        # makes to metadata.json while this window is open. Re-added on every
+        # fire because some writers replace-via-rename, which drops a
+        # QFileSystemWatcher's inode-based watch.
+        self._metadata_path = core.index_path(tile_dir)
+        self._fs_watcher = QFileSystemWatcher(self)
+        if os.path.exists(self._metadata_path):
+            self._fs_watcher.addPath(self._metadata_path)
+        self._fs_watcher.fileChanged.connect(self._on_metadata_changed)
 
         self.setWindowTitle(f"babel-index review — {os.path.basename(os.path.abspath(tile_dir))}")
         self.resize(1200, 800)
@@ -724,6 +746,102 @@ class ReviewWindow(QMainWindow):
                 self.select_tile(key)
                 return
 
+    # -- Merge-safe persistence ----------------------------------------------
+    def _save_index_entry(self, key: str, entry: dict | None) -> None:
+        """Persist ``entry`` as ``key``'s metadata, merging with disk.
+
+        Goes through ``core.update_index`` rather than a plain
+        ``core.save_index(self.index)``: that re-reads metadata.json under
+        lock first, so a change an external process (a batch script, or a
+        second GUI) made to some OTHER tile since our last load is kept
+        rather than clobbered by writing back our whole in-memory snapshot.
+        Only ``key`` itself is overwritten with what's in memory here.
+        ``entry=None`` deletes the key. Updates ``self.index`` to the merged
+        result so it reflects whatever else was just picked up from disk.
+        """
+        def mutate(fresh: dict) -> dict:
+            if entry is None:
+                fresh.pop(key, None)
+            else:
+                fresh[key] = entry
+            return fresh
+
+        self.index = core.update_index(self.tile_dir, mutate)
+
+    # -- External changes (another process editing metadata.json) -----------
+    def _on_metadata_changed(self, _path: str):
+        if self._metadata_path not in self._fs_watcher.files() and os.path.exists(
+            self._metadata_path
+        ):
+            self._fs_watcher.addPath(self._metadata_path)  # re-add after replace-via-rename
+
+        # A malformed read means we caught the file mid-write (or it's genuinely
+        # corrupt); either way an empty {} here would reconcile as "every tile
+        # removed" and tear the whole grid down. Skip this event and wait for
+        # the next fire once the writer has finished rather than acting on it.
+        try:
+            fresh = core.load_index(self.tile_dir, strict=True)
+        except json.JSONDecodeError:
+            return
+
+        # The tile mid-edit keeps its in-memory value authoritative -- its
+        # pending autosave (debounced up to 600ms) hasn't reached disk yet,
+        # and overwriting it here would lose keystrokes. It gets folded into
+        # the merge the next time anything on it saves.
+        if self.current_key is not None and self.current_key in self.index:
+            fresh[self.current_key] = self.index[self.current_key]
+
+        added = [key for key in fresh if key not in self.index]
+        removed = [key for key in self.index if key not in fresh]
+        changed = [
+            key for key in fresh
+            if key != self.current_key and key in self.index and fresh[key] != self.index[key]
+        ]
+        if not added and not removed and not changed:
+            self.index = fresh
+            return
+
+        self.index = fresh
+        filtered_out = set()
+        if self.content_review == "flagged":
+            filtered_out = {k for k in added if not (fresh[k] or {}).get("sensitive_content_tags")}
+        elif self.content_review == "unflagged":
+            filtered_out = {k for k in added if (fresh[k] or {}).get("sensitive_content_tags")}
+
+        for key in removed:
+            if key == self.current_key:
+                continue  # don't rip the open tile out from under the editor
+            self._remove_tile(key)
+        for key in added:
+            if key in filtered_out:
+                continue
+            self._add_tile(key)
+        if added or removed:
+            self.keys.sort()
+            self._reflow(force=True)
+        for key in changed:
+            self._refresh_tile(key)
+        self._update_counts()
+
+    def _add_tile(self, key: str):
+        if key in self.tiles:
+            return
+        self.keys.append(key)
+        tile = TileButton(key, self._thumb(key))
+        tile.set_state(tile_state(self.index[key], self._exists(key)))
+        tile.clicked.connect(self.select_tile)
+        tile.entered.connect(self._on_tile_entered)
+        tile.left.connect(self._on_tile_left)
+        self.tiles[key] = tile
+
+    def _remove_tile(self, key: str):
+        tile = self.tiles.pop(key, None)
+        if tile is not None:
+            tile.setParent(None)
+            tile.deleteLater()
+        if key in self.keys:
+            self.keys.remove(key)
+
     # -- Story autosave -----------------------------------------------------
     def _on_story_changed(self):
         if not self._loading:
@@ -739,7 +857,7 @@ class ReviewWindow(QMainWindow):
         stored = entry.get("story") or ""
         if text != stored:
             entry["story"] = text or None
-            core.save_index(self.tile_dir, self.index)
+            self._save_index_entry(self.current_key, entry)
             self._refresh_tile(self.current_key)
 
     # -- Title autosave -------------------------------------------------------
@@ -756,7 +874,7 @@ class ReviewWindow(QMainWindow):
         stored = entry.get("title") or ""
         if text != stored:
             entry["title"] = text or None
-            core.save_index(self.tile_dir, self.index)
+            self._save_index_entry(self.current_key, entry)
 
     # -- Alt text autosave / generation --------------------------------------
     def _on_alt_changed(self):
@@ -772,7 +890,7 @@ class ReviewWindow(QMainWindow):
         stored = entry.get("alt") or ""
         if text != stored:
             entry["alt"] = text or None
-            core.save_index(self.tile_dir, self.index)
+            self._save_index_entry(self.current_key, entry)
 
     def _on_generate_alt(self):
         if self.current_key is None or self._alt_busy:
@@ -802,8 +920,9 @@ class ReviewWindow(QMainWindow):
         self._alt_busy = False
         self.alt_generate_button.setEnabled(True)
         self.alt_generate_button.setText("Generate alt")
-        self.index[key]["alt"] = text.strip()
-        core.save_index(self.tile_dir, self.index)
+        entry = self.index[key]
+        entry["alt"] = text.strip()
+        self._save_index_entry(key, entry)
         if self.current_key == key:
             self._loading = True
             self.alt_edit.setPlainText(text.strip())
@@ -820,8 +939,9 @@ class ReviewWindow(QMainWindow):
     def _on_final_toggled(self, checked: bool):
         if self._loading or self.current_key is None:
             return
-        self.index[self.current_key]["final"] = checked
-        core.save_index(self.tile_dir, self.index)
+        entry = self.index[self.current_key]
+        entry["final"] = checked
+        self._save_index_entry(self.current_key, entry)
         self._refresh_tile(self.current_key)
         self._update_action_button()
         if checked:
@@ -836,7 +956,7 @@ class ReviewWindow(QMainWindow):
             entry["needs_inpainting"] = True
         else:
             entry.pop("needs_inpainting", None)
-        core.save_index(self.tile_dir, self.index)
+        self._save_index_entry(self.current_key, entry)
 
     # -- Sensitive content tags ----------------------------------------------
     def _on_sensitive_toggled(self, _checked: bool):
@@ -848,7 +968,7 @@ class ReviewWindow(QMainWindow):
             entry["sensitive_content_tags"] = tags
         else:
             entry.pop("sensitive_content_tags", None)
-        core.save_index(self.tile_dir, self.index)
+        self._save_index_entry(self.current_key, entry)
 
     # -- Generate / Revise --------------------------------------------------
     def _update_action_button(self):
@@ -916,8 +1036,9 @@ class ReviewWindow(QMainWindow):
         # The user may have navigated away while Claude was working; write the
         # story back to the tile it was requested for, and only touch the
         # editor if that tile is still selected.
-        self.index[key]["story"] = text
-        core.save_index(self.tile_dir, self.index)
+        entry = self.index[key]
+        entry["story"] = text
+        self._save_index_entry(key, entry)
         self._refresh_tile(key)
         if self.current_key == key:
             self._loading = True
@@ -953,7 +1074,7 @@ class ReviewWindow(QMainWindow):
             return
         self._save_timer.stop()
         entry["story"] = None
-        core.save_index(self.tile_dir, self.index)
+        self._save_index_entry(self.current_key, entry)
         self._loading = True
         self.story_edit.setPlainText("")
         self._loading = False
@@ -979,8 +1100,7 @@ class ReviewWindow(QMainWindow):
         path = os.path.join(self.tile_dir, key)
         if os.path.exists(path):
             os.remove(path)
-        self.index.pop(key, None)
-        core.save_index(self.tile_dir, self.index)
+        self._save_index_entry(key, None)
 
         tile = self.tiles.pop(key)
         tile.setParent(None)
