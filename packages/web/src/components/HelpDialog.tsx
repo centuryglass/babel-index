@@ -129,32 +129,34 @@ export function HelpDialog({
             the map or move shelf/list focus, Enter activates whatever is focused, and
             Escape closes an open dialog.
           </p>
-          <p>
-            <strong>Keyboard, on the map:</strong> the shortcuts below apply once the map
-            itself has focus (Tab to it, or click it).
-          </p>
-          <dl className="help-keys">
-            <dt>Arrow keys</dt>
-            <dd>move one room at a time</dd>
-            <dt>Shift + arrow</dt>
-            <dd>jump a full screen in that direction</dd>
-            <dt>Ctrl/Cmd + arrow</dt>
-            <dd>jump to the next unique room in that direction, skipping generic ones</dd>
-            <dt>+ / - (or Page Up/Down)</dt>
-            <dd>zoom in or out, centered on the current room</dd>
-            <dt>Home</dt>
-            <dd>return to the center</dd>
-            <dt>Ctrl/Cmd + Home</dt>
-            <dd>jump to the top search result</dd>
-            <dt>Ctrl/Cmd + End</dt>
-            <dd>jump to the lowest-ranked search result</dd>
-            <dt>Enter / Space</dt>
-            <dd>open the current room</dd>
-            <dt>/</dt>
-            <dd>jump to the search box</dd>
-            <dt>?</dt>
-            <dd>hear a description of what's nearby</dd>
-          </dl>
+          <div className="help-keys-group">
+            <p>
+              <strong>Keyboard, on the map:</strong> the shortcuts below apply once the map
+              itself has focus (Tab to it, or click it).
+            </p>
+            <dl className="help-keys">
+              <dt>Arrow keys</dt>
+              <dd>move one room at a time</dd>
+              <dt>Shift + arrow</dt>
+              <dd>jump a full screen in that direction</dd>
+              <dt>Ctrl/Cmd + arrow</dt>
+              <dd>jump to the next unique room in that direction, skipping generic ones</dd>
+              <dt>+ / - (or Page Up/Down)</dt>
+              <dd>zoom in or out, centered on the current room</dd>
+              <dt>Home</dt>
+              <dd>return to the center</dd>
+              <dt>Ctrl/Cmd + Home</dt>
+              <dd>jump to the top search result</dd>
+              <dt>Ctrl/Cmd + End</dt>
+              <dd>jump to the lowest-ranked search result</dd>
+              <dt>Enter / Space</dt>
+              <dd>open the current room</dd>
+              <dt>/</dt>
+              <dd>jump to the search box</dd>
+              <dt>?</dt>
+              <dd>hear a description of what's nearby</dd>
+            </dl>
+          </div>
         </div>
 
         {availableTags.length > 0 && (
