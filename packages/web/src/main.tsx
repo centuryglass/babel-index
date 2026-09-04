@@ -383,6 +383,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(null);
   const expandRoom = useCallback((id: number, rank: number) => setOverlay({ id, rank }), []);
 
+  // "Show in the catalog", the map card's own reciprocal of a catalog row's
+  // "show on the map" - a one-shot instruction for `CatalogView` to scroll to
+  // and pick out this room, cleared once it has (see `spotlightId`'s own doc
+  // comment on `CatalogView`). Not the same state as `overlay` above: this
+  // names a row to jump to, not a room to render full-size.
+  const [catalogSpotlightId, setCatalogSpotlightId] = useState<number | null>(null);
+  const clearCatalogSpotlight = useCallback(() => setCatalogSpotlightId(null), []);
+
   // A reserved book on the center shelf opens this instead of running a
   // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
   const [helpOpen, setHelpOpen] = useState(false);
@@ -1065,7 +1073,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
       {(mode === 'catalog' || leaving) && (
         <CatalogView
-          manifest={manifest}
           config={config}
           urlFor={urlFor}
           order={catalogOrder}
@@ -1101,6 +1108,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           scrollRef={catalogScrollRef}
           firstTileRef={firstTileRef}
           leaving={leaving}
+          spotlightId={catalogSpotlightId}
+          onSpotlightHandled={clearCatalogSpotlight}
         />
       )}
 
@@ -1130,7 +1139,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             metadata?.[overlay.id] ?? null
           )}
           entry={metadata?.[overlay.id] ?? null}
-          file={manifest.rooms[overlay.id]?.file}
           src={urlFor(overlay.id, 0)}
           onClose={() => setOverlay(null)}
           onKeyword={searchKeyword}
@@ -1139,6 +1147,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={favoriteFor(overlay.id)}
+          view={(() => {
+            const cell = cellById.get(overlay.id);
+            return cell
+              ? { label: 'show on the map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
+              : null;
+          })()}
         />
       )}
 
@@ -1161,7 +1175,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           room={card}
           desc={cardDescription}
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
-          file={'id' in card ? manifest.rooms[card.id]?.file : undefined}
           src={cardSrc}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
@@ -1170,6 +1183,18 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={'id' in card ? favoriteFor(card.id) : null}
+          view={
+            'id' in card
+              ? {
+                  label: 'show in the catalog',
+                  onClick: () => {
+                    setCatalogSpotlightId(card.id);
+                    enterCatalog();
+                    setCard(null);
+                  },
+                }
+              : null
+          }
         />
       )}
     </>

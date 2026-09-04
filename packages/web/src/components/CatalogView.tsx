@@ -39,7 +39,6 @@ import { describeRoom } from '../../../map/describe.ts';
 import type { Description } from '../../../map/describe.ts';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
-import type { Manifest } from '../../../map/manifest.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import type { Config } from '../../../config/config.ts';
 import type { UrlFor } from '../lib/rooms.ts';
@@ -57,6 +56,7 @@ import {
   pageAtScroll,
   windowFor,
   storyLines,
+  focusScrollTop,
 } from '../lib/catalog.ts';
 import { CENTER } from '../lib/tiles.ts';
 
@@ -128,6 +128,15 @@ const STORY_LINE_PX = 19;
  */
 const SHELF_MIN_CH = 9;
 const SHELF_MAX_CH = 18;
+
+/**
+ * How long a room's row stays visibly picked out after "show in the catalog"
+ * lands it - long enough to find on a page full of identical rows, short
+ * enough that it reads as a one-time announcement rather than a persistent
+ * marker of anything. `SPOTLIGHT_MS` names the CSS animation's own duration
+ * (`catalog-spotlight` in index.html) so the two cannot drift apart.
+ */
+const SPOTLIGHT_MS = 1600;
 const shelfColumnCh = (slots: Slot[]): number =>
   Math.min(
     SHELF_MAX_CH,
@@ -135,7 +144,6 @@ const shelfColumnCh = (slots: Slot[]): number =>
   );
 
 export function CatalogView({
-  manifest,
   config,
   urlFor,
   order,
@@ -167,8 +175,9 @@ export function CatalogView({
   scrollRef,
   firstTileRef,
   leaving = false,
+  spotlightId = null,
+  onSpotlightHandled,
 }: {
-  manifest: Manifest;
   config: Config;
   urlFor: UrlFor;
   order: number[];
@@ -201,6 +210,16 @@ export function CatalogView({
   scrollRef: RefObject<HTMLDivElement | null>;
   firstTileRef: Ref<HTMLImageElement>;
   leaving?: boolean;
+  /**
+   * "Show in the catalog", from the map card's overlay: a room to scroll to
+   * and pick out, once. `null` the rest of the time - this is a one-shot
+   * trigger, not a standing "currently selected room," so a second visit to
+   * the same room fires again only because the caller sets it again.
+   */
+  spotlightId?: number | null;
+  /** Fired once `spotlightId` has been acted on (or found gone from `order`),
+   * so the caller can clear it back to `null` and arm the next one. */
+  onSpotlightHandled?: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const centreRowRef = useRef<HTMLLIElement>(null);
@@ -214,6 +233,15 @@ export function CatalogView({
   // the arithmetic does need is how tall it actually is, which is measured
   // rather than assumed.
   const [leadPx, setLeadPx] = useState(0);
+  // The row "show in the catalog" is currently picking out - see
+  // `spotlightId`'s effect below. Distinct from `spotlightId` itself: this is
+  // the standing visual state (until its own timer clears it), the prop is a
+  // one-shot instruction to start showing it.
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  // Which id the focus-move effect below has already acted on, so a `rows`
+  // identity change while the same room is still highlighted (e.g. a resize)
+  // does not steal focus back a second time.
+  const focusedIdRef = useRef<number | null>(null);
 
   // The list's own size, measured rather than assumed: the thumbnail width and
   // therefore the row height come from it, and so do the spacers.
@@ -278,11 +306,66 @@ export function CatalogView({
     if (scrollRef?.current) scrollRef.current.scrollTop = 0;
   }, [result, order, scrollRef]);
 
+  // "Show in the catalog": a one-shot trigger from the map card's overlay (see
+  // `spotlightId`'s own doc comment). Jump to the room's page in pagination
+  // mode, or scroll straight to its row (`focusScrollTop`) in scroll mode -
+  // either way, `highlightId` is what actually picks it out; that happens in
+  // its own effect below, once the row exists to pick out.
+  //
+  // Deliberately keyed on `spotlightId` alone: everything else this reads
+  // (`order`, `paging`, `rowPx`, ...) is read at the moment the trigger fires,
+  // not re-applied if one of them changes afterwards - this is a jump, not a
+  // standing constraint to keep re-satisfying.
+  useEffect(() => {
+    if (spotlightId == null) return;
+    const rank = order.indexOf(spotlightId);
+    if (rank < 0) {
+      // Filtered out (blocked tag) or otherwise gone from this ranking -
+      // nowhere to jump to, so just clear the trigger.
+      onSpotlightHandled?.();
+      return;
+    }
+    if (paging === 'pages') {
+      setActive(Math.floor(rank / perPage));
+    } else if (scrollRef.current) {
+      scrollRef.current.scrollTop = focusScrollTop(rank, { rowPx, leadPx, viewportPx: geom.height });
+    }
+    setHighlightId(spotlightId);
+    onSpotlightHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotlightId]);
+
+  // The pulse clears itself on a timer rather than staying until the next
+  // trigger - a highlight nobody asked to end reads as "this row means
+  // something now," which it doesn't.
+  useEffect(() => {
+    if (highlightId == null) return;
+    const timer = setTimeout(() => setHighlightId(null), SPOTLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightId]);
+
   const rows = useMemo(() => {
     const out = [];
     for (let p = first; p <= last; p++) out.push(...pageOf(order, p, perPage));
     return out;
   }, [order, first, last, perPage]);
+
+  // Moves keyboard/screen-reader focus onto the highlighted row, once it is
+  // actually mounted. Keyed on `rows` rather than firing straight out of the
+  // trigger effect above: scrolling to a row outside the currently mounted
+  // window does not mount it synchronously - the browser's own `scroll` event
+  // has to land, `onScroll` has to move `active`, and only then does this
+  // room show up in `rows`. Querying the DOM before that finds nothing.
+  useEffect(() => {
+    if (highlightId == null || focusedIdRef.current === highlightId) return;
+    if (!rows.some((r) => r.id === highlightId)) return;
+    const tile = hostRef.current?.querySelector<HTMLElement>(
+      `[data-room-id="${highlightId}"] .catalog-tile-button`
+    );
+    if (!tile) return;
+    focusedIdRef.current = highlightId;
+    tile.focus();
+  }, [highlightId, rows]);
 
   // Spacers stand in for pages the reader can SCROLL to. Paginated, there is
   // nowhere to scroll - the other pages are behind a button - so standing in
@@ -471,7 +554,6 @@ export function CatalogView({
               id={id}
               rank={rank}
               total={total}
-              file={manifest.rooms[id]?.file}
               entry={metadata?.[id] ?? null}
               src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
               thumbPx={thumbPx}
@@ -484,6 +566,7 @@ export function CatalogView({
               result={result}
               weights={config.search.weights}
               favorite={favoriteFor(id)}
+              spotlit={id === highlightId}
             />
           ))}
 
@@ -526,13 +609,13 @@ export function CatalogView({
  * answer matters.
  */
 function CatalogRow({
-  id, rank, total, file, entry, src, thumbPx, cell,
+  id, rank, total, entry, src, thumbPx, cell,
   onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights, favorite,
+  spotlit = false,
 }: {
   id: number;
   rank: number;
   total: number;
-  file?: string;
   entry: RoomMeta | null;
   src: string;
   thumbPx: number;
@@ -545,6 +628,8 @@ function CatalogRow({
   result: SearchResult | null;
   weights: Config['search']['weights'];
   favorite: FavoriteControl | null;
+  /** whether "show in the catalog" just landed here - see `CatalogView`'s `highlightId` */
+  spotlit?: boolean;
 }) {
   const storyRef = useRef<HTMLDivElement>(null);
   const [clipped, setClipped] = useState(false);
@@ -566,7 +651,12 @@ function CatalogRow({
   }, [desc.description, result, thumbPx]);
 
   return (
-    <li className="catalog-row" aria-setsize={total} aria-posinset={rank + 1}>
+    <li
+      className={spotlit ? 'catalog-row spotlight' : 'catalog-row'}
+      data-room-id={id}
+      aria-setsize={total}
+      aria-posinset={rank + 1}
+    >
       {/*
         The tile is a button, because pressing it does something - it opens the
         room at whatever size the display allows. A bare `<img>` with a click
@@ -608,7 +698,6 @@ function CatalogRow({
           <h2 className="catalog-name">
             <span className="catalog-rank">{rank + 1}</span>
             {roomTitle(entry, id)}
-            {file && <span className="catalog-file">{file}</span>}
           </h2>
           {/*
             A room past the "rooms on the map" slider has no cell to fly to, and

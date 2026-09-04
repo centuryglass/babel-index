@@ -10,6 +10,7 @@ import {
   thumbLevel,
   pageAtScroll,
   windowFor,
+  focusScrollTop,
   flipTransform,
   rectOf,
   storyLines,
@@ -186,6 +187,25 @@ test('a scroll position always lands inside the pages the window mounted', () =>
       `scrollTop ${scrollTop}: visible pages ${active}-${lastVisiblePage}, mounted ${first}-${last}`
     );
   }
+});
+
+test('a focused row lands centered in the viewport, regardless of which page it is on', () => {
+  const rowPx = 100;
+  const leadPx = 200;
+
+  // Centered: half a viewport's worth of rows above it, not flush to the top.
+  assert.equal(focusScrollTop(10, { rowPx, leadPx, viewportPx: 1000 }), leadPx + 10 * rowPx - 450);
+
+  // A page boundary is invisible to this arithmetic, exactly as it is to
+  // `pageAtScroll`'s - one rank further is one row further, full stop.
+  const a = focusScrollTop(9, { rowPx, leadPx, viewportPx: 1000 });
+  const b = focusScrollTop(10, { rowPx, leadPx, viewportPx: 1000 });
+  assert.equal(b - a, rowPx);
+});
+
+test('a focus near the top clamps to 0 rather than centering into negative scroll', () => {
+  assert.equal(focusScrollTop(0, { rowPx: 100, leadPx: 200, viewportPx: 1000 }), 0);
+  assert.equal(focusScrollTop(1, { rowPx: 100, leadPx: 0, viewportPx: 2000 }), 0);
 });
 
 test('the flip transform puts the destination exactly where the source was', () => {

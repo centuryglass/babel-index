@@ -341,6 +341,21 @@
       */
       .favorite { display: flex; margin-bottom: 8px; }
       .catalog-name .favorite { margin: 0; }
+      /*
+        The overlay's own row for the favorite toggle and the other reading's
+        link ("show on the map" / "show in the catalog") - `space-between` so
+        the link sits right-aligned against the toggle without either control
+        needing to know the other is there. Nested `.favorite` drops its own
+        margin since this row already carries one.
+      */
+      /*
+        `margin-left: auto` on the link rather than `justify-content:
+        space-between` - the favorite toggle is absent for a generic cell, and
+        `space-between` with one child left-aligns it instead of right.
+      */
+      .overlay-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .overlay-actions .favorite { margin-bottom: 0; }
+      .overlay-actions .catalog-show { margin-left: auto; }
       .favorite-toggle {
         flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
         padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
@@ -537,6 +552,19 @@
         border-bottom: 1px solid var(--edge); overflow: hidden;
       }
       /*
+        "Show in the catalog" (`RoomOverlay`'s view toggle) lands a reader on a
+        row that otherwise looks like any other - this is what actually picks
+        it out. A background pulse rather than a border: a border shifts
+        layout by its own width unless every row reserves it unused, and this
+        is transient by design (`SPOTLIGHT_MS`, `CatalogView.tsx`) rather than
+        a standing marker that would want a permanent outline.
+      */
+      .catalog-row.spotlight { animation: catalog-spotlight 1.6s ease-out; }
+      @keyframes catalog-spotlight {
+        0% { background: rgba(200,169,95,0.32); }
+        100% { background: transparent; }
+      }
+      /*
         The tile is a BUTTON - pressing it enlarges the room. A bare <img> with a
         click handler is unreachable by keyboard and announces as an image
         rather than as a control.
@@ -659,14 +687,12 @@
         /* One line: "Room 25" breaking in two pushed the whole row down. */
         white-space: nowrap; overflow: hidden;
       }
-      .catalog-file { overflow: hidden; text-overflow: ellipsis; }
       .catalog-show { flex: 0 0 auto; }
       .catalog-name .favorite-toggle { flex: 0 0 auto; }
       .catalog-rank {
         color: #c8a95f; font-variant-numeric: tabular-nums; font-size: 11px;
         min-width: 2.2em;
       }
-      .catalog-file { color: var(--dim); font-size: 10px; font-weight: 400; }
       .catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
       /*
         The clamp is a variable, not a literal: how many lines fit depends on
