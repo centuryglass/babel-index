@@ -352,7 +352,6 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
     const chips = card.locator('.chip');
     assert.equal(await chips.count(), 3, 'the sample corpus gives every room three keywords');
-    const term = await chips.first().textContent();
     assert.ok(await card.locator('.story').textContent(), 'the card shows a story');
 
     // Escape closes.
@@ -360,9 +359,16 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     await card.waitFor({ state: 'detached', timeout: 5000 });
 
     // A chip is a live search: reopen, click one, and the note must report a
-    // keyword-driven ranking for the term the chip carried.
+    // keyword-driven ranking for the term the chip carried. Read the term
+    // from THIS opening's chip, right before clicking it, rather than the
+    // one captured above - `chips` is a live locator, re-querying the DOM at
+    // click time, so if the room under this fixed point ever isn't the one
+    // the first open showed (a rearrangement landing between the two clicks,
+    // however unlikely), the assertion below must still match whatever chip
+    // was actually clicked, not a room-1 leftover it never asked about.
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
+    const term = await chips.first().textContent();
     await chips.first().click();
     await card.waitFor({ state: 'detached', timeout: 5000 });
 
