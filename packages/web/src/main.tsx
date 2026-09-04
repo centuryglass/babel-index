@@ -395,6 +395,19 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // A one-time visual nudge toward the "READ ME" book, for a reader who has
+  // never opened it. `showHelpHint` starts true exactly when the stored flag
+  // was never set; the flag is written back on this same mount so a reload -
+  // whether or not the book was ever opened - never shows the nudge again.
+  // Cleared early (`onOverride` in useCenterShelf.ts) the moment help is
+  // actually opened, so the nudge does not keep pulsing for the rest of a
+  // session that has already answered it.
+  const [showHelpHint, setShowHelpHint] = useState(() => !load(KEYS.seenHelpHint, false));
+  useEffect(() => {
+    if (showHelpHint) save(KEYS.seenHelpHint, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // The open book painted into a shelf gap - a distinct hotspot from the
   // lettered books above, reached the same way in both views: a tap routed
   // through `centerBookAtPoint` on the map, an ordinary click in the catalog.
@@ -691,7 +704,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setQuery,
     search,
     enterCatalog,
-    setHelpOpen,
+    setHelpOpen: useCallback((open: boolean) => {
+      setHelpOpen(open);
+      if (open) setShowHelpHint(false);
+    }, []),
     forgetSearches,
   });
 
@@ -1046,6 +1062,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         onMapKeyDown={onMapKeyDown}
         onKeyword={searchKeyword}
         centreSlots={centreSlots}
+        showHelpHint={showHelpHint}
         bookFocus={bookFocus}
         setBookFocus={setBookFocus}
         onBook={onBook}

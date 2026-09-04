@@ -113,6 +113,18 @@
       }
       .center-books button:hover { background: none; }
       .center-books button:focus-visible { outline-offset: 1px; }
+      /*
+        The one-time nudge toward the help book (`showHelpHint`, main.tsx) - a
+        soft pulse rather than anything that steals focus or blocks input, so
+        a reader who ignores it loses nothing. Turned off entirely rather than
+        held static under reduced motion: a book that never stops glowing
+        reads as broken, not as a hint.
+      */
+      .center-books button.hint { animation: book-hint 1.8s ease-in-out infinite; }
+      @keyframes book-hint {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(200,169,95,0.6); }
+        50% { box-shadow: 0 0 5px 2px rgba(200,169,95,0.9); }
+      }
 
       /*
        * The open book's hotspot - sized over the WHOLE cell like
@@ -475,6 +487,7 @@
       @keyframes catalog-out { from { opacity: 1; } to { opacity: 0; } }
       @media (prefers-reduced-motion: reduce) {
         .catalog, .catalog.leaving { animation: none; }
+        .center-books button.hint { animation: none; }
       }
 
       .catalog-bar {
@@ -649,8 +662,39 @@
 
       /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
       .help-overlay { width: min(520px, 100%); }
+      /*
+        `.card-id` is `--dim` everywhere else because it sits beside a room's
+        own title there - here it IS the dialog's title, with nothing brighter
+        on the line to defer to, so it takes `--ink` instead. Scoped to this
+        overlay rather than changed at the source: `.card-id` still needs to
+        read as secondary next to a room's title in `RoomOverlay`.
+      */
+      .help-overlay .card-id { color: var(--ink); }
       .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
       .help-body p:last-child { margin-bottom: 0; }
+      .help-keys {
+        display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 6px;
+        margin: 0 0 10px; font-size: 12px; line-height: 1.4;
+      }
+      .help-keys dt { color: var(--ink); font-weight: 600; white-space: nowrap; }
+      .help-keys dd { margin: 0; color: var(--dim); }
+      /*
+        Landscape gets a wider dialog laid out in two CSS columns instead of
+        one long scroll - the "giant pillar of text" a plain-language rewrite
+        produces once it says everything a diegetic hint used to leave
+        implicit. Gated on both orientation and a minimum width rather than
+        orientation alone, so a narrow landscape phone still gets one column
+        instead of two columns too thin to read. `column-fill` stays at its
+        `balance` default, so `break-inside: avoid` on each paragraph/group is
+        what keeps a block from splitting across the two, not manual placement -
+        there is no per-paragraph column assignment to keep in sync as the copy
+        changes.
+      */
+      @media (orientation: landscape) and (min-width: 560px) {
+        .help-overlay { width: min(820px, 94vw); }
+        .help-body { columns: 2; column-gap: 28px; column-rule: 1px solid var(--edge); }
+        .help-body p, .help-keys-group { break-inside: avoid; }
+      }
       /*
         Collapsed by default (see HelpDialog.tsx) - a reader who never opens
         this should see one quiet line, not a checklist. `summary` gets its
@@ -659,7 +703,7 @@
       */
       .help-block-panel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--edge); }
       .help-block-panel summary {
-        font-size: 11px; color: var(--dim); letter-spacing: 0.04em;
+        font-size: 11px; color: var(--ink); letter-spacing: 0.04em;
         text-transform: uppercase; cursor: pointer;
       }
       .help-block-panel summary:focus-visible { outline: 2px solid #c8a95f; outline-offset: 2px; }

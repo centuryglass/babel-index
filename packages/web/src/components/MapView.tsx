@@ -99,6 +99,7 @@ export function MapView({
   onMapKeyDown,
   onKeyword,
   centreSlots,
+  showHelpHint,
   bookFocus,
   setBookFocus,
   onBook,
@@ -154,6 +155,8 @@ export function MapView({
   onMapKeyDown: KeyboardEventHandler<HTMLCanvasElement>;
   onKeyword: (keyword: string) => void;
   centreSlots: Slot[];
+  /** True until the reader has ever opened the help book - see main.tsx's `showHelpHint`. */
+  showHelpHint: boolean;
   bookFocus: number;
   setBookFocus: (index: number) => void;
   onBook: (index: number) => void;
@@ -325,6 +328,7 @@ export function MapView({
               key={i}
               type="button"
               data-book={i}
+              className={showHelpHint && slot.action === 'help' ? 'hint' : undefined}
               tabIndex={i === bookFocus ? 0 : -1}
               style={BOOK_STYLES[i]}
               aria-label={describeBook(slot)}
