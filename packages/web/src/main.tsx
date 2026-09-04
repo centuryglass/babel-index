@@ -497,16 +497,24 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // camera to move, not ours, so this deliberately does not track window size.
   const opening = useMemo(() => {
     const rect = CENTER_OPENING_RECT;
+    // Floored the same way `goToSearch` floors its landing zoom: fitting the
+    // shelf+box union can bind on the wide shelf and land narrower than the
+    // search box itself needs, which is what made the button's flight zoom in
+    // slightly past where the page had opened. Match them so opening the page
+    // already shows a usable search field instead of relying on that flight.
     const zoom = Math.min(
       BASE_TILE.w,
-      fitZoom({
-        width: window.innerWidth,
-        height: window.innerHeight,
-        target: rect,
-        aspect: CELL_ASPECT,
-        limits: { min: config.camera.minZoom, max: config.camera.maxZoom },
-        margin: OPENING_MARGIN,
-      })
+      Math.max(
+        fitZoom({
+          width: window.innerWidth,
+          height: window.innerHeight,
+          target: rect,
+          aspect: CELL_ASPECT,
+          limits: { min: config.camera.minZoom, max: config.camera.maxZoom },
+          margin: OPENING_MARGIN,
+        }),
+        minZoomForSearchBox()
+      )
     );
     return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2, zoom };
     // Intentionally empty deps: the opening view is a one-time mount decision.
@@ -588,13 +596,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // useMapCamera's mount-time use of it, unmodified), so that offset has to
     // be cancelled here or the flight lands half a cell short on each axis.
     //
-    // `opening.zoom` alone is not enough: it fits the shelf+box UNION to the
-    // viewport, and on a narrow/portrait screen that fit binds on the wide
-    // shelf, landing a zoom where the box itself - gated on height, not
-    // width - is still under its usable minimum. Floor the landing zoom at
-    // what the box alone needs so this flight actually reaches a usable field.
-    const zoom = Math.max(opening.zoom, minZoomForSearchBox());
-    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, zoom);
+    // `opening.zoom` is already floored at what the search box alone needs
+    // (see its computation above), so no further floor is needed here.
+    const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
     if (landed) input.focus();
   }, [flyTo, opening, centreOverlay]);
 
