@@ -1073,7 +1073,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
       {(mode === 'catalog' || leaving) && (
         <CatalogView
-          manifest={manifest}
           config={config}
           urlFor={urlFor}
           order={catalogOrder}
@@ -1140,7 +1139,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             metadata?.[overlay.id] ?? null
           )}
           entry={metadata?.[overlay.id] ?? null}
-          file={manifest.rooms[overlay.id]?.file}
           src={urlFor(overlay.id, 0)}
           onClose={() => setOverlay(null)}
           onKeyword={searchKeyword}
@@ -1177,7 +1175,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           room={card}
           desc={cardDescription}
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
-          file={'id' in card ? manifest.rooms[card.id]?.file : undefined}
           src={cardSrc}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}

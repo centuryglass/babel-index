@@ -39,7 +39,6 @@ import { describeRoom } from '../../../map/describe.ts';
 import type { Description } from '../../../map/describe.ts';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
-import type { Manifest } from '../../../map/manifest.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import type { Config } from '../../../config/config.ts';
 import type { UrlFor } from '../lib/rooms.ts';
@@ -145,7 +144,6 @@ const shelfColumnCh = (slots: Slot[]): number =>
   );
 
 export function CatalogView({
-  manifest,
   config,
   urlFor,
   order,
@@ -180,7 +178,6 @@ export function CatalogView({
   spotlightId = null,
   onSpotlightHandled,
 }: {
-  manifest: Manifest;
   config: Config;
   urlFor: UrlFor;
   order: number[];
@@ -557,7 +554,6 @@ export function CatalogView({
               id={id}
               rank={rank}
               total={total}
-              file={manifest.rooms[id]?.file}
               entry={metadata?.[id] ?? null}
               src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
               thumbPx={thumbPx}
@@ -613,14 +609,13 @@ export function CatalogView({
  * answer matters.
  */
 function CatalogRow({
-  id, rank, total, file, entry, src, thumbPx, cell,
+  id, rank, total, entry, src, thumbPx, cell,
   onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights, favorite,
   spotlit = false,
 }: {
   id: number;
   rank: number;
   total: number;
-  file?: string;
   entry: RoomMeta | null;
   src: string;
   thumbPx: number;
@@ -703,7 +698,6 @@ function CatalogRow({
           <h2 className="catalog-name">
             <span className="catalog-rank">{rank + 1}</span>
             {roomTitle(entry, id)}
-            {file && <span className="catalog-file">{file}</span>}
           </h2>
           {/*
             A room past the "rooms on the map" slider has no cell to fly to, and
