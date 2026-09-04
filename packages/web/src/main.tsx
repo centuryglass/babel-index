@@ -1139,6 +1139,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={favoriteFor(overlay.id)}
+          view={(() => {
+            const cell = cellById.get(overlay.id);
+            return cell
+              ? { label: 'show on the map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
+              : null;
+          })()}
         />
       )}
 
@@ -1170,6 +1176,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={'id' in card ? favoriteFor(card.id) : null}
+          view={'id' in card ? { label: 'show in the catalog', onClick: () => { enterCatalog(); setCard(null); } } : null}
         />
       )}
     </>

@@ -34,7 +34,7 @@
  * rows already give a reader before anything is expanded.
  */
 import { useEffect, useRef } from 'react';
-import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
+import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
@@ -61,6 +61,7 @@ export function RoomOverlay({
   result,
   weights,
   favorite = null,
+  view = null,
 }: {
   room: RoomSubject;
   desc: Description;
@@ -74,8 +75,18 @@ export function RoomOverlay({
   tagLinks?: Record<string, string> | null;
   result?: SearchResult | null;
   weights?: Config['search']['weights'] | null;
-  /** this room's favorite state, passed straight through to `RoomDetails` */
+  /** this room's favorite state, rendered here rather than left to `RoomDetails` -
+   * see `view` below for why */
   favorite?: FavoriteControl | null;
+  /**
+   * The other reading's own way to reach this same room - "show on the map"
+   * from a catalog row's overlay, "show in the catalog" from a map card's -
+   * or `null` for a room past the map's slider (no cell to fly to) or a
+   * generic cell (in neither reading's list). Rendered beside the favorite
+   * toggle rather than inside `RoomDetails`, which has no notion of which
+   * reading opened it.
+   */
+  view?: { label: string; onClick: () => void } | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -175,6 +186,24 @@ export function RoomOverlay({
         */}
         {src && <img className="overlay-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
 
+        {/*
+          The favorite toggle and the other reading's link, one row, the link
+          right-aligned - the same pairing a catalog row makes in its head for
+          the same reason: two ways of *acting* on this room belong beside its
+          name, not folded into `RoomDetails`'s body alongside its chips and
+          story. `RoomDetails` renders neither (see `favorite={null}` below).
+        */}
+        {(favorite || view) && (
+          <div className="overlay-actions">
+            {favorite && <FavoriteToggle favorite={favorite} />}
+            {view && (
+              <button type="button" className="catalog-show" onClick={view.onClick}>
+                {view.label}
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="overlay-body">
           <RoomDetails
             entry={entry}
@@ -185,7 +214,7 @@ export function RoomOverlay({
             rank={'generic' in room ? undefined : room.rank}
             result={result}
             weights={weights}
-            favorite={favorite}
+            favorite={null}
           />
         </div>
       </div>

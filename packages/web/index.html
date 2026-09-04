@@ -341,6 +341,21 @@
       */
       .favorite { display: flex; margin-bottom: 8px; }
       .catalog-name .favorite { margin: 0; }
+      /*
+        The overlay's own row for the favorite toggle and the other reading's
+        link ("show on the map" / "show in the catalog") - `space-between` so
+        the link sits right-aligned against the toggle without either control
+        needing to know the other is there. Nested `.favorite` drops its own
+        margin since this row already carries one.
+      */
+      /*
+        `margin-left: auto` on the link rather than `justify-content:
+        space-between` - the favorite toggle is absent for a generic cell, and
+        `space-between` with one child left-aligns it instead of right.
+      */
+      .overlay-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .overlay-actions .favorite { margin-bottom: 0; }
+      .overlay-actions .catalog-show { margin-left: auto; }
       .favorite-toggle {
         flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
         padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
