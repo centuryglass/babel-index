@@ -24,7 +24,7 @@
  * arrive at all.
  *
  * A generic cell gets a `description` too, unlike the center room - it is
- * shown in the room card opened on it (`RoomCard`/`RoomDetails`), and the one
+ * shown in the dialog opened on it (`RoomOverlay`/`RoomDetails`), and the one
  * thing worth telling a reader who opens it is that it's wallpaper, not an
  * unindexed room.
  */

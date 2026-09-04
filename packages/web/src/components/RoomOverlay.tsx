@@ -1,24 +1,37 @@
 /**
- * One room, as large as the display allows: the tile at full size and the whole
- * story, with nothing clipped.
+ * One room (or generic cell), as large as the display allows: the tile at
+ * full size and the whole story, with nothing clipped.
  *
- * The catalog's rows are a fixed height - that is what lets the spacers standing
- * in for unmounted pages be arithmetic rather than estimates, and it is the
- * property the whole sliding window rests on. So a row cannot grow to fit a long
- * story, and the thumbnail in it is a thumbnail. Neither is a reason to send a
- * reader back to the map to find out what a room says.
+ * A full-page modal - a scrim, a centered dialog, Escape and a backdrop click
+ * both close it, Tab trapped inside while it is open - reached from either
+ * side of the app: right-click, long press or Enter on the map, choosing a
+ * result from the ranked listbox, or expanding a catalog row. All of those
+ * used to reach two different components (`RoomCard` for the map paths, this
+ * one for the catalog's), anchored and styled differently, but a comparison
+ * once RoomCard also became a modal turned up no remaining reason for the
+ * split - same dialog chrome, same focus/Tab/Escape handling, same
+ * `RoomDetails` body. The one real difference, that a map pick can name a
+ * generic cell and a catalog row never does, is a three-line conditional
+ * (`'generic' in room`), not a reason for a second file.
  *
- * Hence this: ONE affordance answering both. Pressing the tile opens it, and so
+ * The catalog row's own reason for a modal at all still holds: its rows are a
+ * fixed height (what lets the spacers standing in for unmounted pages be
+ * arithmetic rather than estimates), so a row cannot grow to fit a long story
+ * and the thumbnail in it is a thumbnail. Pressing the tile opens it, and so
  * does the "read the rest" button a clipped story ends with - the alternative
- * was expanding the story in place, which would make row heights vary, and then
- * either the spacers become estimates or every unmounted expansion has to be
- * remembered and measured. The trade is deliberate: rows stay uniform, and the
- * full thing is one press away rather than zero.
+ * was expanding the story in place, which would make row heights vary. The
+ * trade is deliberate: rows stay uniform, and the full thing is one press
+ * away rather than zero.
  *
- * It is a modal dialog rather than a card placed at the pointer, because unlike
- * `RoomCard` there is no gesture location to anchor to - a row is not a point -
- * and because what it exists to show is "as big as this screen allows", which is
- * the middle of it.
+ * The tile is sized to its own native resolution by default - `max-width:
+ * 100%; width: auto` on `.overlay-tile` never blows it up past that, only
+ * shrinking it to fit a narrower dialog - and a right-click on it reaches the
+ * browser's own "save image", which a canvas-painted map tile could never
+ * offer. It scrolls as part of the same region as the text below it
+ * (`.overlay` itself, not a split pane): a long story and a native-resolution
+ * picture compete for the same space rather than each getting a fixed share,
+ * which is the plain, unsurprising behavior the catalog's own tile-then-text
+ * rows already give a reader before anything is expanded.
  */
 import { useEffect, useRef } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
@@ -26,6 +39,14 @@ import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Config } from '../../../config/config.ts';
+
+/**
+ * Which room (or generic cell) this names. A map pick (`RoomPick`) carries
+ * `x`/`y` too, and a catalog row's `{id, rank}` doesn't - neither field is
+ * read here, so both shapes satisfy this without either caller padding out
+ * the other's.
+ */
+type RoomSubject = { id: number; rank?: number } | { generic: true };
 
 export function RoomOverlay({
   room,
@@ -41,10 +62,11 @@ export function RoomOverlay({
   weights,
   favorite = null,
 }: {
-  room: { id: number; rank: number };
+  room: RoomSubject;
   desc: Description;
   entry: RoomMeta | null;
   file?: string;
+  /** this room's (or generic cell's) tile - null while the manifest can't resolve one */
   src?: string | null;
   onClose: () => void;
   onKeyword: (keyword: string) => void;
@@ -57,27 +79,38 @@ export function RoomOverlay({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Focus in on open and back where it came from on close - the same contract
-  // `RoomCard` keeps, and for the same reason: a dialog that leaves focus behind
-  // it strands a keyboard reader at the top of the document.
+  // Focus moves in on open and goes back where it came from on close.
+  //
+  // The restore is conditional rather than unconditional for two reasons. The
+  // dialog is dismissed by clicking *anywhere else*, and that click has
+  // usually already put focus somewhere the reader chose - stealing it back
+  // would undo their own action. And it may be closed because the map is
+  // about to rearrange under it (`searchKeyword`), by which point the element
+  // that opened it may be gone. So: restore only if focus is still inside the
+  // dialog or has fallen to the body, which are exactly the cases where
+  // nobody else has claimed it.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     return () => {
+      // The body is not somewhere focus can be "put back" - it is where focus
+      // already is when nothing holds it, which is the ordinary case for a
+      // dialog opened by right-clicking the canvas. Nothing to restore.
       if (!opener || opener === document.body || !opener.isConnected) return;
       const active = document.activeElement;
       if (active && active !== document.body && !ref.current?.contains(active)) return;
       opener.focus();
     };
-    // Mount and unmount only.
+    // Mount and unmount only: re-running this on a re-render would drag focus
+    // back to the dialog while someone is reading a chip inside it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      // A dialog over a scrolling list has to hold focus, or Tab walks into the
-      // catalog behind it and the reader is editing a page they cannot see.
+      // A dialog over the map or a scrolling list has to hold focus, or Tab
+      // walks into whatever is behind the scrim.
       if (e.key !== 'Tab') return;
       const focusable = ref.current?.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -97,6 +130,16 @@ export function RoomOverlay({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Named by `desc.name` - the same string a listbox option and the map's own
+  // cursor say for this cell. The rank and the keywords are the reason to
+  // have opened it.
+  //
+  // The visible id, unlike `desc.name`, leads with the title (`roomTitle`
+  // falls back to "Room {id}" for a room the corpus hasn't retitled) and
+  // trails with the filename - the numeric id alone named nothing a reader
+  // could act on; the order it's listed in is never explained and rarely
+  // matches the room's actual filename, so showing the number ahead of the
+  // filename read as though it meant something it didn't.
   return (
     <div
       className="overlay-scrim"
@@ -104,14 +147,15 @@ export function RoomOverlay({
     >
       <div className="overlay" ref={ref} role="dialog" aria-modal="true" tabIndex={-1} aria-label={desc.name}>
         <div className="card-head">
-          {/*
-            Leads with the title (`roomTitle`'s "Room {id}" fallback for an
-            untitled room), trailing with the filename - see `RoomCard` for
-            why the numeric id no longer comes first.
-          */}
           <span className="card-id">
-            <b>{roomTitle(entry, room.id)}</b>
-            {file ? ` ${file}` : ''}
+            {'generic' in room ? (
+              'a Babel shelf'
+            ) : (
+              <>
+                <b>{roomTitle(entry, room.id)}</b>
+                {file ? ` ${file}` : ''}
+              </>
+            )}
           </span>
           <button className="card-close" onClick={onClose} aria-label="close">
             ×
@@ -119,12 +163,14 @@ export function RoomOverlay({
         </div>
 
         {/*
-          The tile at whatever size the viewport allows, capped so it is never
-          upscaled past its own pixels - the same rule the map's opening view
-          follows. `alt` is the sidecar's optional caption (`desc.picture`),
-          empty when the corpus does not carry one - nothing is invented.
+          The tile at its own native resolution by default, never upscaled
+          past it - the same rule the map's opening view follows - and a
+          right-click here reaches the browser's own "save image", which a
+          canvas-painted map tile could never offer. `alt` is the sidecar's
+          optional caption (`desc.picture`), empty when the corpus does not
+          carry one - nothing is invented.
         */}
-        <img className="overlay-tile" src={src ?? ''} alt={desc.picture ?? ''} decoding="async" />
+        {src && <img className="overlay-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
 
         <div className="overlay-body">
           <RoomDetails
@@ -133,7 +179,7 @@ export function RoomOverlay({
             onKeyword={onKeyword}
             highlight={highlight}
             tagLinks={tagLinks}
-            rank={room.rank}
+            rank={'generic' in room ? undefined : room.rank}
             result={result}
             weights={weights}
             favorite={favorite}

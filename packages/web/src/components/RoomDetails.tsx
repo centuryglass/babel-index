@@ -2,23 +2,23 @@
  * What a room says about itself: its keywords, its story, and - while a search
  * is running - why the ranking put it where it did.
  *
- * FOUR consumers, which is the reason this is a component rather than markup
- * inside the card:
+ * THREE consumers, which is the reason this is a component rather than markup
+ * inside the dialog:
  *
- *   - the room card, opened by right-click, long press or Enter;
+ *   - `RoomOverlay`, the one modal reached from right-click, long press or
+ *     Enter on the map, choosing a ranked result, or expanding a catalog row;
  *   - every row of the catalog;
- *   - the room overlay, opened from a catalog row;
  *   - the canvas's own nested fallback content, which is where a touch screen
  *     reader reads a room (accessibility-plan.md §4.2b) and which was the same
  *     story-and-chips markup written a second time.
  *
  * They differ in two props. The fallback's chips are `tabIndex={-1}` so the
- * map stays exactly one tab stop, while the other three are ordinary tab
- * stops. And the fallback alone sets `showPicture`: the sidecar's optional
- * `alt` is real `<img alt>` text wherever a room's tile is an actual `<img>`
- * (the card, the overlay, the catalog thumbnail), so this component only ever
- * renders it as a paragraph for the one consumer with no `<img>` to put it on
- * - see `showPicture`'s doc comment below.
+ * map stays exactly one tab stop, while the other two are ordinary tab stops.
+ * And the fallback alone sets `showPicture`: the sidecar's optional `alt` is
+ * real `<img alt>` text wherever a room's tile is an actual `<img>`
+ * (`RoomOverlay`, the catalog thumbnail), so this component only ever renders
+ * it as a paragraph for the one consumer with no `<img>` to put it on - see
+ * `showPicture`'s doc comment below.
  */
 import type { ReactNode } from 'react';
 import { explainRanking } from '../../../map/scoring.ts';
@@ -245,9 +245,9 @@ export function RoomDetails({
   scoreLayout?: 'table' | 'strip';
   /**
    * Render the sidecar's optional `alt` as visible text (`desc.picture`).
-   * Everywhere a room's tile is a real `<img>` (`RoomCard`, `RoomOverlay`, the
-   * catalog's thumbnail), that text belongs on the `alt` attribute instead -
-   * false is right there. The one caller that sets this is the map's own
+   * Everywhere a room's tile is a real `<img>` (`RoomOverlay`, the catalog's
+   * thumbnail), that text belongs on the `alt` attribute instead - false is
+   * right there. The one caller that sets this is the map's own
    * canvas fallback content (`MapView`): the tile is canvas-painted, not an
    * `<img>`, so there is no `alt` to put it on, and fallback content is never
    * painted to the screen anyway - a sighted reader was never going to see

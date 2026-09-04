@@ -153,7 +153,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // a room's content that right-click and long-press never gave a keyboard
     // user.
     await page.keyboard.press('Enter');
-    const card = page.locator('.card');
+    const card = page.locator('.overlay');
     await card.waitFor({ timeout: 5000 });
     // `.card-id` now leads with the room's title when it has one, so a real
     // room is confirmed via the dialog's own accessible name (`desc.name`,

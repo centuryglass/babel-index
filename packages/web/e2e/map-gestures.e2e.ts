@@ -327,7 +327,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // The gesture is the part no unit test can reach: `picking.js` proves what
     // is under a point, but only a browser proves that a right-click reaches it
     // at all, that the card renders, and that the chips are wired to search.
-    const card = page.locator('.card');
+    const card = page.locator('.overlay');
 
     // The previous test leaves the camera wherever its search was called
     // from (the search-trigger's zoomed-in opening view), not `defaultZoom` -
@@ -398,7 +398,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     const { page } = session;
     // The interaction that decides whether the map is usable on a phone: a
     // press that becomes a pan must NOT also open a card.
-    const card = page.locator('.card');
+    const card = page.locator('.overlay');
 
     await page.mouse.move(880, 300);
     await page.mouse.down();

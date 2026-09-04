@@ -157,7 +157,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       await options.first().focus();
       await page.keyboard.press('Enter');
 
-      const card = page.locator('.card');
+      const card = page.locator('.overlay');
       await card.waitFor({ timeout: 5000 });
       // `.card-id`'s visible text now leads with the room's title when it has
       // one, so it can no longer be parsed back into "Room N" and compared to
@@ -274,7 +274,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('the card takes focus, is named by its room, and Escape gives focus back', async () => {
     const { page } = session;
-    const card = page.locator('.card');
+    const card = page.locator('.overlay');
 
     // This used to right-click a fixed pixel with no setup of its own,
     // trusting the camera/ratio state the tests before it happened to leave
@@ -303,7 +303,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // Focus moves in - otherwise a keyboard user is told a dialog opened and
     // has no way to reach a word of it.
     assert.ok(
-      await page.evaluate(() => document.activeElement?.classList.contains('card')),
+      await page.evaluate(() => document.activeElement?.classList.contains('overlay')),
       'the card must take focus when it opens'
     );
 
@@ -331,9 +331,9 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // What is NOT asserted here, because it is not yet true: returning focus to
     // whatever opened the card. Right-clicking the canvas blurs the focused
     // control to the body before the card ever mounts, so a pointer-opened card
-    // has no opener to go back to. `RoomCard` restores when there is one, and
-    // the path that gives it one is Enter on the map cursor (phase C). Assert
-    // it there, where it can actually fail.
+    // has no opener to go back to. `RoomOverlay` restores when there is one,
+    // and the path that gives it one is Enter on the map cursor (phase C).
+    // Assert it there, where it can actually fail.
     assert.ok(
       await page.evaluate(() => document.activeElement?.isConnected ?? false),
       'focus must not be left on a detached node'

@@ -6,7 +6,6 @@ import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../ma
 import type { RoomMeta } from '../../map/metadata.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
 import type { Config } from '../../config/config.ts';
-import { RoomCard } from './components/RoomCard.tsx';
 import { MapView } from './components/MapView.tsx';
 import { CatalogView } from './components/CatalogView.tsx';
 import { RoomOverlay } from './components/RoomOverlay.tsx';
@@ -410,20 +409,21 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [layout, order]
   );
 
-  // The card's accessible name and its story text, from the one function that
-  // also names a listbox option: `describeCell`. Computed here rather than
-  // inside `RoomCard`, because this is where `layout`/`order`/`metadata` are
-  // already in scope - the card itself only knows the cell it was opened for.
+  // The map-opened card's accessible name and its story text, from the one
+  // function that also names a listbox option: `describeCell`. Computed here
+  // rather than inside `RoomOverlay`, because this is where
+  // `layout`/`order`/`metadata` are already in scope - the pick itself only
+  // knows the cell it was opened for.
   const cardDescription = useMemo(
     () => (card ? describeCell(card.x, card.y, { layout, order, metadata }) : null),
     [card, layout, order, metadata]
   );
 
-  // The card's own tile image, resolved the same way `RoomOverlay`'s is - a
-  // real room by id, a generic cell by the same positional face `render.ts`
-  // draws for that cell (`layout.genericIndexAt`, load-bearing: it must not
-  // depend on rank, see AGENTS.md). Level 0, the only level `urlFor` (an
-  // `<img src>`, not the canvas cache) can address.
+  // The map-opened card's own tile image, resolved the same way the
+  // catalog's overlay is - a real room by id, a generic cell by the same
+  // positional face `render.ts` draws for that cell (`layout.genericIndexAt`,
+  // load-bearing: it must not depend on rank, see AGENTS.md). Level 0, the
+  // only level `urlFor` (an `<img src>`, not the canvas cache) can address.
   const cardSrc = useMemo(() => {
     if (!card) return null;
     return urlFor('id' in card ? card.id : genericId(layout.genericIndexAt(card.x, card.y)), 0);
@@ -1134,8 +1134,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       )}
 
       {card && cardDescription && (
-        <RoomCard
-          card={card}
+        <RoomOverlay
+          room={card}
           desc={cardDescription}
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
           file={'id' in card ? manifest.rooms[card.id]?.file : undefined}
