@@ -420,6 +420,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [card, layout, order, metadata]
   );
 
+  // The card's own tile image, resolved the same way `RoomOverlay`'s is - a
+  // real room by id, a generic cell by the same positional face `render.ts`
+  // draws for that cell (`layout.genericIndexAt`, load-bearing: it must not
+  // depend on rank, see AGENTS.md). Level 0, the only level `urlFor` (an
+  // `<img src>`, not the canvas cache) can address.
+  const cardSrc = useMemo(() => {
+    if (!card) return null;
+    return urlFor('id' in card ? card.id : genericId(layout.genericIndexAt(card.x, card.y)), 0);
+  }, [card, layout, urlFor]);
+
   // The ranked listbox: every rank the search's gradient actually lifted above
   // the baseline (`gradedCount` - "the size of the cluster", 0 for a uniform
   // map), each named by the same `describeCell` the card uses. This is the
@@ -1134,6 +1144,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           desc={cardDescription}
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
           file={'id' in card ? manifest.rooms[card.id]?.file : undefined}
+          src={cardSrc}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
           highlight={highlight}

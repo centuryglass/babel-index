@@ -121,11 +121,10 @@ export function RoomOverlay({
         {/*
           The tile at whatever size the viewport allows, capped so it is never
           upscaled past its own pixels - the same rule the map's opening view
-          follows. `alt=""` because the room is named and described by the text
-          beside it; a second account of the same image, generated here, is
-          exactly what accessibility-plan.md §3.5 rules out.
+          follows. `alt` is the sidecar's optional caption (`desc.picture`),
+          empty when the corpus does not carry one - nothing is invented.
         */}
-        <img className="overlay-tile" src={src ?? ''} alt="" decoding="async" />
+        <img className="overlay-tile" src={src ?? ''} alt={desc.picture ?? ''} decoding="async" />
 
         <div className="overlay-body">
           <RoomDetails

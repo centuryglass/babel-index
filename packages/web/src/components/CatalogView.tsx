@@ -578,10 +578,18 @@ function CatalogRow({
         onClick={() => onExpand(id, rank)}
         aria-label={`enlarge room ${id}`}
       >
+        {/*
+          `alt` is the sidecar's optional caption (`desc.picture`), empty when
+          the corpus does not carry one. It is redundant for a screen reader
+          here - the wrapping button's `aria-label` wins the accessible name -
+          but the attribute is still correct: this is the room's real caption,
+          not decoration, for anything else that reads `alt` (view source, an
+          image-only crawler, a broken-image fallback).
+        */}
         <img
           className="catalog-tile"
           src={src}
-          alt=""
+          alt={desc.picture ?? ''}
           width={thumbPx}
           height={tileHeight(thumbPx)}
           loading="lazy"

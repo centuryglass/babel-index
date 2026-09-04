@@ -528,10 +528,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   non-zero `entries` means the keys drifted — from the map that looks exactly
   like having no sidecar, so both numbers go in the manifest and `index.mjs`
   warns.
-- **A room's optional `alt` is a caption, not a story.** The card shows it
-  above the story as a visibly different thing and it never feeds the search
-  index. Don't write one into `assets/corpus-sample/` — a placeholder caption
-  is the padded sentence the plan says to omit.
+- **A room's optional `alt` is a caption, not a story, and it lives on `<img
+  alt>`, not as visible text.** `RoomCard`, `RoomOverlay` and the catalog
+  thumbnail all put it on the real `<img>` tag; it never feeds the search
+  index. The one exception is the map canvas's fallback content
+  (`RoomDetails`'s `showPicture` prop), which has no `<img>` to hang it on and
+  renders it as a paragraph instead - fallback content is never painted, so
+  that isn't a second visible copy. Don't write one into
+  `assets/corpus-sample/` — a placeholder caption is the padded sentence the
+  plan says to omit.
 - **`tagLinks.json` is a flat keyword -> url map, not joined to anything.**
   Unlike `metadata.json` it has no per-room coverage to report — `scan.ts`
   only counts its keys (`TagLinksInfo.count`). It is hand-edited, not

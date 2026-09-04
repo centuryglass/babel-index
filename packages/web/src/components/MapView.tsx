@@ -244,6 +244,10 @@ export function MapView({
             highlight={highlight}
             tagLinks={tagLinks}
             favorite={favoriteFor(cursorId)}
+            // The tile here is canvas-painted, not an `<img>` - there is no
+            // `alt` to carry the sidecar's optional caption, so this is the
+            // one place `RoomDetails` still renders it as text.
+            showPicture
           />
         )}
       </canvas>

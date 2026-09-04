@@ -1,14 +1,22 @@
 /**
- * One room's keywords and story, opened by right-click or long press.
+ * One room's tile, keywords and story, opened by right-click or long press.
  *
  * Placed where the gesture happened and clamped back inside the viewport, so a
  * pick near an edge does not open a card half off screen. Escape and a click
  * anywhere outside close it, which are the two things anyone tries first.
  *
- * The body is `RoomDetails`, which the catalog's rows and the canvas's own
+ * Carries its own tile image now, rather than leaning on the map underneath
+ * being visible around the card - a card opened close to an edge used to cover
+ * the exact room it was describing. That also gets a right-click here to the
+ * browser's native "save image", which a canvas-painted tile could never
+ * offer. The image and the text below it scroll independently (`.card-tile`
+ * fixed, `.card-scroll` its own region) so a long story cannot push the
+ * picture out of view.
+ *
+ * The text is `RoomDetails`, which the catalog's rows and the canvas's own
  * fallback content also render - so a room reads the same however a reader
- * reached it. What is here is the dialog around it: where it sits, how it is
- * dismissed, and where focus goes.
+ * reached it. What is here beyond that is the dialog around it: where it
+ * sits, how it is dismissed, and where focus goes.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
@@ -44,6 +52,7 @@ export function RoomCard({
   desc,
   entry,
   file,
+  src,
   onClose,
   onKeyword,
   highlight,
@@ -56,6 +65,8 @@ export function RoomCard({
   desc: Description;
   entry: RoomMeta | null;
   file?: string;
+  /** this room's (or generic cell's) tile, at whatever size the card allows - null while the manifest can't resolve one */
+  src?: string | null;
   onClose: () => void;
   onKeyword: (keyword: string) => void;
   highlight?: { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
@@ -176,17 +187,34 @@ export function RoomCard({
         </button>
       </div>
 
-      <RoomDetails
-        entry={entry}
-        desc={desc}
-        onKeyword={onKeyword}
-        highlight={highlight}
-        tagLinks={tagLinks}
-        rank={'generic' in card ? undefined : card.rank}
-        result={result}
-        weights={weights}
-        favorite={favorite}
-      />
+      {/*
+        The tile itself, so the card no longer has to be positioned clear of
+        the room it describes to let a reader see it, and so a right-click
+        here reaches the browser's own "save image" - neither was possible
+        when the only picture of the room was the canvas underneath. `alt` is
+        the sidecar's optional caption (`desc.picture`), empty when the corpus
+        does not carry one.
+      */}
+      {src && <img className="card-tile" src={src} alt={desc.picture ?? ''} decoding="async" />}
+
+      {/*
+        Its own scrolling region, separate from the image above: a long story
+        must not push the tile off screen or force the whole card past
+        `max-height` before either can be read in full.
+      */}
+      <div className="card-scroll">
+        <RoomDetails
+          entry={entry}
+          desc={desc}
+          onKeyword={onKeyword}
+          highlight={highlight}
+          tagLinks={tagLinks}
+          rank={'generic' in card ? undefined : card.rank}
+          result={result}
+          weights={weights}
+          favorite={favorite}
+        />
+      </div>
     </div>
   );
 }
