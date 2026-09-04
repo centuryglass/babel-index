@@ -23,8 +23,9 @@ import {
   overlapsViewport,
   BOOK_RECTS,
   minZoomForSearchBox,
+  openingZoom,
 } from './center.ts';
-import { CELL_ASPECT, fitZoom } from './camera.ts';
+import { CELL_ASPECT } from './camera.ts';
 
 const GEO = layout({ width: 1, height: 1 });
 
@@ -119,19 +120,21 @@ test('centerBookAtPoint hits only inside the traced silhouette, never off-cell, 
   assert.equal(centerBookAtPoint(cornerX, cornerY, cell), false);
 });
 
-test('minZoomForSearchBox floors a portrait opening fit that would leave the box unusable', () => {
-  // A narrow, tall viewport: fitting CENTER_OPENING_RECT (the shelf+box
-  // union, wide relative to the box alone) to a portrait phone screen binds
-  // on width, landing a zoom the box's own height minimum does not survive -
-  // this is the reported bug. Flooring at minZoomForSearchBox must recover it.
+test('openingZoom always lands the search box usable, even on a narrow portrait viewport', () => {
+  // A portrait phone screen: fitting CENTER_OPENING_RECT (the shelf+box
+  // union, wide relative to the box alone) binds on width, landing a zoom the
+  // box's own height minimum would not survive unfloored.
   const portrait = { width: 360, height: 780 };
-  const openingZoom = fitZoom({ ...portrait, target: CENTER_OPENING_RECT, margin: 0.94 });
-  const cellFromOpeningAlone = { x: 0, y: 0, w: openingZoom, h: openingZoom * CELL_ASPECT };
-  assert.equal(isSearchBoxUsable(cellFromOpeningAlone), false);
+  const z = openingZoom(portrait);
+  const cell = { x: 0, y: 0, w: z, h: z * CELL_ASPECT };
+  assert.equal(isSearchBoxUsable(cell), true);
+  assert.ok(z >= minZoomForSearchBox());
 
-  const floored = Math.max(openingZoom, minZoomForSearchBox());
-  const cellFloored = { x: 0, y: 0, w: floored, h: floored * CELL_ASPECT };
-  assert.equal(isSearchBoxUsable(cellFloored), true);
+  // A wide desktop viewport, where the union fit already clears the floor.
+  const landscape = { width: 1600, height: 900 };
+  const zWide = openingZoom(landscape);
+  const cellWide = { x: 0, y: 0, w: zWide, h: zWide * CELL_ASPECT };
+  assert.equal(isSearchBoxUsable(cellWide), true);
 });
 
 test('minZoomForSearchBox is exactly the zoom where the box screen height hits its minimum', () => {
