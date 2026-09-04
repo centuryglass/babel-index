@@ -111,7 +111,7 @@ controls happen to be visible.
 | `Home` | Fly to (0, 0) at default zoom |
 | `Ctrl/Cmd+Home` | Fly to rank-0 room, or announce "no ranked rooms" |
 | `Ctrl/Cmd+End` | Fly to the last-ranked room, or announce "no ranked rooms" |
-| `Enter` / `Space` | Open the room overlay for the room under the cursor (no-op on the center/generic cell, matching click) |
+| `Enter` / `Space` | Open the room overlay for the room (or generic cell) under the cursor - no-op only on the center, matching right-click/long-press |
 | `/` | Focus search (fly home first if search is off-screen) |
 | `?` | Announce nearest ranked room in each direction + distance to boundary |
 | `Tab` | Leave the canvas forward - to whichever of the search input/shelf/`.center-book`/`.center-controls`/`.search-trigger` is first among those currently visible (see "Focus states and tab order" above) |

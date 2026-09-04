@@ -67,11 +67,23 @@ export function describeCell(x: number, y: number, { layout, order, metadata = n
       // rather than left wondering if they missed something.
       description:
         'A library wall, plain and identical to countless others, its shelves filled with nonsense. There is nothing to find here.',
-      // One sentence, shared by every generic tile - see the file comment
-      // above for why this is the one place `picture` is generated rather
-      // than read from a sidecar.
+      // Shared by every generic tile - see the file comment above for why
+      // this is the one place `picture` is generated rather than read from a
+      // sidecar. Every UNIQUE room's own alt text is written to assume this
+      // base scene is already known and skip describing it (see
+      // `tools/curation/babel_index_review/core.py`'s `BASE_SCENE` and
+      // `default_alt_prompt` - the prompt literally says "assume the
+      // listener already knows that base scene... do not describe it"), so
+      // this is the one place in the whole app that scene gets spelled out
+      // for a reader who has not necessarily opened a unique room yet. If
+      // `BASE_SCENE` ever changes, this needs to change with it - nothing
+      // enforces that automatically across the Python/TypeScript split.
       picture:
-        'A dim, wood-panelled shelf wall crowded with leather-bound spines, their titles blurred into illegible marks.',
+        'A wooden bookshelf built into a dark wood-panelled wall: five shelves of ' +
+        'identical books with dull red spines and illegible gold lettering, a round ' +
+        'wall-mounted lamp glowing above the shelf, and a plain wooden column on ' +
+        'either side. This is the plain, unmodified scene every unique room is a ' +
+        'variation on, repeated here as filler with nothing of its own to find.',
     };
 
   return describeRoom(at.id, at.rank, order.length, metadata?.[at.id] ?? null);

@@ -28,12 +28,8 @@ import {
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Config } from '../../../config/config.ts';
 
-interface OpenCardArgs {
-  id: number;
-  rank: number;
-  x: number;
-  y: number;
-}
+/** Same shape `roomAtPoint` returns (`picking.ts`'s `RoomPick`) - a real room, or a generic cell. */
+type OpenCardArgs = { id: number; rank: number; x: number; y: number } | { generic: true; x: number; y: number };
 
 interface FlyOpts {
   ms?: number;
@@ -57,7 +53,7 @@ interface UseMapCursorOpts {
   /** writes the one live region */
   setStatus: (status: string) => void;
   requestDraw: () => void;
-  /** Enter over a room opens its card */
+  /** Enter over a room or a generic cell opens its card - only the center is unopenable */
   onOpenCard: (args: OpenCardArgs) => void;
   /** `/` reaches the live search field */
   goToSearch: () => void;
@@ -368,14 +364,19 @@ export function useMapCursor({
       }
 
       if (e.key === 'Enter' || e.key === ' ') {
-        // Opening a card over the wallpaper would make the gesture read as
-        // broken rather than as empty - the same rule `picking.js` states for
-        // a click, applied here to a keypress.
+        // The center is the one cell this never opens - it's the controls,
+        // not a room, and has nothing a card could show. A generic cell DOES
+        // open: it has real content now (its shared alt caption, and the
+        // "this is filler" description), and right-click/long-press already
+        // opened it for a pointer - a keyboard-only reader had no way to
+        // reach either without this.
         const here = cursorNow();
         const at = layout.roomAt(here.x, here.y, order);
-        if (at.center || at.generic) return;
+        if (at.center) return;
         e.preventDefault();
-        onOpenCard({ id: at.id, rank: at.rank, x: here.x, y: here.y });
+        onOpenCard(
+          at.generic ? { generic: true, x: here.x, y: here.y } : { id: at.id, rank: at.rank, x: here.x, y: here.y }
+        );
         return;
       }
 
