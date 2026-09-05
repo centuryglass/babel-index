@@ -6,9 +6,7 @@ import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
 /**
  * The limits are injected everywhere below rather than assumed, both because
  * that is how the module is meant to be used and because it keeps these tests
- * from re-pinning themselves to whatever `camera.js` currently says. Wide enough
- * to contain the shipped `defaultZoom`, so a test about the zoom *range* is not
- * also a test about that default being pulled along with it.
+ * from re-pinning themselves to whatever `camera.js` currently says.
  */
 const LIMITS = { min: 10, max: 1000 };
 
@@ -55,7 +53,7 @@ test('a missing overlay is the same as an empty one', () => {
 test('config narrows the zoom range', () => {
   const c = resolveConfig(
     // Both zooms in-range, so nothing is clamped and the narrowing is silent.
-    { camera: { minZoom: 40, maxZoom: 80, defaultZoom: 60 } },
+    { camera: { minZoom: 40, maxZoom: 80 } },
     { zoomLimits: LIMITS }
   );
   assert.deepEqual(c.notes, []);
@@ -79,22 +77,20 @@ test('an inverted range falls back to the full one rather than locking the camer
   assert.match(c.notes.join('\n'), /above/);
 });
 
-test('defaultZoom is clamped into the configured range, not the hard one', () => {
-  const c = resolveConfig(
-    { camera: { minZoom: 400, maxZoom: 800, defaultZoom: 60 } },
-    { zoomLimits: LIMITS }
-  );
-  assert.equal(c.camera.defaultZoom, 400);
-  assert.match(c.notes.join('\n'), /defaultZoom/);
+test('minVisibleCells accepts a whole number, unrelated to the zoom range', () => {
+  const c = resolveConfig({ camera: { minVisibleCells: 8 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.minVisibleCells, 8);
+  assert.deepEqual(c.notes, []);
 });
 
-test('narrowing the range drags the opening zoom with it, and says so', () => {
-  // Narrowing past the default is legal, but the opening zoom moving is not
-  // something the reader asked for, so it is reported rather than silent.
-  // maxZoom must stay above the default minZoom (50) or the range inverts instead.
-  const c = resolveConfig({ camera: { maxZoom: 60 } }, { zoomLimits: ZOOM_LIMITS });
-  assert.equal(c.camera.defaultZoom, 60);
-  assert.match(c.notes.join('\n'), /defaultZoom/);
+test('a fractional minVisibleCells is rounded, and a non-positive one is floored at 1', () => {
+  const rounded = resolveConfig({ camera: { minVisibleCells: 3.4 } }, { zoomLimits: LIMITS });
+  assert.equal(rounded.camera.minVisibleCells, 3);
+  assert.match(rounded.notes.join('\n'), /minVisibleCells/);
+
+  const floored = resolveConfig({ camera: { minVisibleCells: 0 } }, { zoomLimits: LIMITS });
+  assert.equal(floored.camera.minVisibleCells, 1);
+  assert.match(floored.notes.join('\n'), /minVisibleCells/);
 });
 
 test('narrowing far enough to orphan a rung is allowed and silent', () => {
@@ -102,12 +98,7 @@ test('narrowing far enough to orphan a rung is allowed and silent', () => {
   // range can never invalidate what the ladder's reachability test asserted, so
   // leaving the finest levels unreachable needs no complaint. What it must not
   // do is quietly *widen* anything, which the tests above cover.
-  const c = resolveConfig(
-    // `defaultZoom` given in-range: a narrowed range would clamp it and report
-    // that, not stay silent, and this case is about the silent narrowing.
-    { camera: { minZoom: 26, maxZoom: 30, defaultZoom: 28 } },
-    { zoomLimits: ZOOM_LIMITS }
-  );
+  const c = resolveConfig({ camera: { minZoom: 26, maxZoom: 30 } }, { zoomLimits: ZOOM_LIMITS });
   assert.deepEqual(c.notes, []);
   assert.equal(c.camera.maxZoom, 30);
 });
@@ -115,13 +106,13 @@ test('narrowing far enough to orphan a rung is allowed and silent', () => {
 test('nonsense values fall back and say so, rather than throwing', () => {
   const c = resolveConfig(
     {
-      camera: { defaultZoom: 'big' },
+      camera: { minVisibleCells: 'big' },
       map: { contentRatio: 0, slotSeed: 2.7 },
       search: { weights: { tagExact: -1 }, minTokenLength: 0 },
     },
     { zoomLimits: LIMITS }
   );
-  assert.equal(c.camera.defaultZoom, DEFAULTS.camera.defaultZoom);
+  assert.equal(c.camera.minVisibleCells, DEFAULTS.camera.minVisibleCells);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio, 'a ratio of 0 is out of range');
   assert.equal(c.map.slotSeed, 3, 'a fractional seed is rounded');
   assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
@@ -170,7 +161,7 @@ test('the default weights satisfy every cross-signal inequality docs/search_rule
 test('the shipped defaults are valid against the real limits', () => {
   const c = resolveConfig({}, { zoomLimits: ZOOM_LIMITS });
   assert.deepEqual(c.notes, [], 'defaults must not need correcting');
-  assert.ok(c.camera.defaultZoom >= ZOOM_LIMITS.min && c.camera.defaultZoom <= ZOOM_LIMITS.max);
+  assert.ok(c.camera.minVisibleCells >= 1);
 });
 
 // --- the flight duration ---------------------------------------------------

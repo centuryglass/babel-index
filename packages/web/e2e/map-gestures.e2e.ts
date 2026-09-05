@@ -330,17 +330,18 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     const card = page.locator('.overlay');
 
     // The previous test leaves the camera wherever its search was called
-    // from (the search-trigger's zoomed-in opening view), not `defaultZoom` -
-    // return to the center button's view explicitly rather than relying on
-    // leftover state, so rooms are on screen at the coordinates below.
+    // from (the search-trigger's zoomed-in opening view), not the wider
+    // overview zoom - return to the center button's view explicitly rather
+    // than relying on leftover state, so rooms are on screen at the
+    // coordinates below.
     await page.locator('button', { hasText: 'center' }).click();
     await landed(page, flightMs);
     await page.mouse.move(640, 400);
 
     // The map is 100% non-generic by the time this runs (the sliders test,
     // earlier in this file, left the ratio maxed) - but the center CELL is
-    // reserved, so aim off it. (We just returned to the center at
-    // `defaultZoom`, not the fully-in page-load zoom, so rooms around the
+    // reserved, so aim off it. (We just returned to the center at the
+    // overview zoom, not the fully-in page-load zoom, so rooms around the
     // center are on screen here.) Every gesture test after this one in this
     // file reuses this same fixed point for the same reason.
     await page.mouse.click(880, 300, { button: 'right' });
@@ -396,7 +397,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
   //
   // Everything below reuses the dense map and the fixed screen point (880, 300)
   // the right-click test above established, rather than re-deriving either -
-  // by the time this runs the camera is back at `defaultZoom` and centered
+  // by the time this runs the camera is back at the overview zoom and centered
   // (that test explicitly returns it there), and the "non-generic" slider has
   // been at 100% since the sliders test near the top of this file.
 

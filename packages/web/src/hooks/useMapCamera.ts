@@ -218,10 +218,11 @@ export function useMapCamera({
   const cam = useRef<Camera>({
     // The PAGE-LOAD camera: centered on the center room's bookshelf and zoomed to
     // fit the display, computed by the caller from the viewport. Not the
-    // return-to-center view - `defaultZoom` (wider) is where the "center" button
-    // and the rearrangement park, so the animation has a wall of rooms to slide
-    // across. Derived from the display rather than configured, so it arrives
-    // whole; the zoom is re-clamped here only to defend the invariant.
+    // return-to-center view - `overviewZoom` (camera.ts, wider) is where the
+    // "center" button and the rearrangement park, so the animation has a wall
+    // of rooms to slide across. Derived from the display rather than
+    // configured, so it arrives whole; the zoom is re-clamped here only to
+    // defend the invariant.
     ...opening,
     zoom: clampZoom(opening.zoom, limits),
     limits,

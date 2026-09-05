@@ -33,7 +33,7 @@ import {
   countToggleAtPoint,
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
-import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera } from './lib/camera.ts';
+import { CELL_ASPECT, fitZoom, overviewZoom, pxPerCell, worldToScreen, type Camera } from './lib/camera.ts';
 import {
   createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON, genericId,
 } from './lib/tiles.ts';
@@ -866,9 +866,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
       setCard({ id, rank, x, y });
-      flyTo(x, y, config.camera.defaultZoom);
+      flyTo(x, y, overviewZoom(canvasRef.current, config.camera.minVisibleCells, cam.current));
     },
-    [flyTo, config]
+    [flyTo, config, canvasRef, cam]
   );
 
   // The catalog's own scroll position - not part of the mode transition, so
@@ -878,10 +878,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   /** A row's "show on the map" - aim the camera, then go and look. */
   const showOnMap = useCallback(
     (x: number, y: number) => {
-      flyTo(x, y, config.camera.defaultZoom);
+      flyTo(x, y, overviewZoom(canvasRef.current, config.camera.minVisibleCells, cam.current));
       exitCatalog();
     },
-    [flyTo, config, exitCatalog]
+    [flyTo, config, exitCatalog, canvasRef, cam]
   );
 
   // The panel's three map controls, as handlers rather than as inline bodies in
@@ -920,8 +920,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setSeed((s) => s + 1);
   }, [requestAnimation]);
   const recentre = useCallback(
-    () => flyTo(0, 0, config.camera.defaultZoom),
-    [flyTo, config]
+    () => flyTo(0, 0, overviewZoom(canvasRef.current, config.camera.minVisibleCells, cam.current)),
+    [flyTo, config, canvasRef, cam]
   );
 
   // Selecting a book on the center room. Off the center cell or on an empty

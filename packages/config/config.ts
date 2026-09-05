@@ -48,7 +48,7 @@ export interface ZoomLimits {
 interface CameraDefaults {
   minZoom: number | null;
   maxZoom: number | null;
-  defaultZoom: number;
+  minVisibleCells: number;
   flightMs: number;
   keyboardMoveMs: number;
 }
@@ -118,7 +118,7 @@ export interface Config {
   camera: {
     minZoom: number;
     maxZoom: number;
-    defaultZoom: number;
+    minVisibleCells: number;
     flightMs: number;
     keyboardMoveMs: number;
   };
@@ -147,19 +147,18 @@ export const DEFAULTS: Defaults = {
     maxZoom: null,
 
     /**
-     * Where the camera returns: the "center" button, and the zoom a search flies
-     * home to before rearranging. 220 px per cell shows a handful of rooms whole
-     * - enough that the map reads as a wall of rooms rather than one image, and
-     * enough that the reorder animation has cells to slide. Clamped into the
-     * range above.
-     *
-     * There is deliberately no companion `initialZoom` here: the PAGE-LOAD view
-     * is not a by-feel number but a derived one - `main.jsx` fits the center
-     * room's bookshelf to the display (`fitZoom` in camera.js), which is too far
-     * out on a phone and too far in on a wide monitor to state as one value. What
-     * belongs in config is what nothing derives; this now derives, so it left.
+     * How many whole rows and columns must be visible at once wherever the
+     * camera returns to - the "center" button, a room double-tap's zoom
+     * toggle, and the zoom a search flies home to before rearranging.
+     * `overviewZoom` (camera.ts) picks the largest zoom that still fits an
+     * n x n square of cells on the binding axis, so the map reads as a wall
+     * of rooms rather than one image and the reorder animation has cells to
+     * slide - on whatever display it is asked from, a stated pixels-per-cell
+     * number cannot: a viewport's binding axis (width on a phone, height on a
+     * wide monitor) is exactly what varies, and a cell count is the one unit
+     * that means the same thing regardless of which axis binds.
      */
-    defaultZoom: 300,
+    minVisibleCells: 5,
 
     /**
      * How long a camera flight takes - "center", and the fly home after a
@@ -483,18 +482,18 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     maxZoomResolved = zoomLimits.max;
   }
 
-  let defaultZoom = number(camIn.defaultZoom, DEFAULTS.camera.defaultZoom, 'camera.defaultZoom', notes);
-  if (defaultZoom < minZoomResolved || defaultZoom > maxZoomResolved) {
-    const clamped = Math.min(maxZoomResolved, Math.max(minZoomResolved, defaultZoom));
-    notes.push(`camera.defaultZoom ${defaultZoom} is outside ${minZoomResolved}-${maxZoomResolved}; using ${clamped}`);
-    defaultZoom = clamped;
-  }
+  const minVisibleCells = atLeast(
+    integer(camIn.minVisibleCells, DEFAULTS.camera.minVisibleCells, 'camera.minVisibleCells', notes),
+    1,
+    'camera.minVisibleCells',
+    notes
+  );
 
   return {
     camera: {
       minZoom: minZoomResolved,
       maxZoom: maxZoomResolved,
-      defaultZoom,
+      minVisibleCells,
       flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
       keyboardMoveMs: duration(
         camIn.keyboardMoveMs, DEFAULTS.camera.keyboardMoveMs, 'camera.keyboardMoveMs', notes

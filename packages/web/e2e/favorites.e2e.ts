@@ -102,8 +102,8 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       await card.waitFor({ state: 'detached', timeout: 5000 });
 
       // The camera must not have moved AT ALL - this is the behavior this
-      // test exists for. Already at `defaultZoom` here (the "center" button
-      // above), so `startRearrangement`'s zoom-out-in-place is a no-op and
+      // test exists for. Already at the overview zoom here (the "center"
+      // button above), so `startRearrangement`'s zoom-out-in-place is a no-op and
       // there is no flight to wait out - a regression would be a camera
       // FLIGHT. `landed`, not `settled`: `settled` only waits out the
       // tile-slide, not a flight still easing toward its target - reading

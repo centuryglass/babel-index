@@ -6,6 +6,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   WHEEL_ZOOM_RATE,
+  ZOOM_LIMITS,
   beginFlight,
   cameraAtCell,
   clampZoom,
@@ -14,6 +15,7 @@ import {
   flightAt,
   glideStep,
   glideToRest,
+  overviewZoom,
   panByCells,
   panByPixels,
   pickGranularity,
@@ -550,4 +552,41 @@ test('re-centering happens only inside the region, never against the damping', (
   const nudged = panByCells(outside, 1, 0, 0.1);
   assert.ok(Math.abs(nudged.x - 20.1) < 1e-9, `expected a damped 0.1, got ${nudged.x - 20}`);
   assert.equal(nudged.y, 0.3, 'the other axis must not snap while outside either');
+});
+
+test('overviewZoom binds to whichever axis a narrow viewport actually has less of', () => {
+  // A phone: narrower than it is tall, so 5 columns fill the width before 5
+  // rows fill the height - the zoom is bound by width.
+  const portrait = { clientWidth: 400, clientHeight: 800 };
+  const zoom = overviewZoom(portrait, 5, { x: 0, y: 0, zoom: 999, aspect: 1 });
+  assert.ok(Math.abs(zoom - portrait.clientWidth / 5) < 1e-9, String(zoom));
+  // 5 whole columns fit exactly, and at least 5 rows fit too (more, since the
+  // height is not the binding axis).
+  assert.ok(portrait.clientHeight / zoom >= 5 - 1e-9);
+});
+
+test('overviewZoom binds to height on a wide viewport, aspect included', () => {
+  const landscape = { clientWidth: 1600, clientHeight: 900 };
+  const aspect = 0.75;
+  const zoom = overviewZoom(landscape, 5, { x: 0, y: 0, zoom: 999, aspect });
+  assert.ok(Math.abs(zoom - landscape.clientHeight / (aspect * 5)) < 1e-9, String(zoom));
+  assert.ok(landscape.clientWidth / zoom >= 5 - 1e-9);
+});
+
+test('overviewZoom falls back to the camera aspect and the hard limits when the camera carries neither', () => {
+  const zoom = overviewZoom({ clientWidth: 100, clientHeight: 100 }, 5, { x: 0, y: 0, zoom: 999 });
+  assert.equal(zoom, clampZoom(100 / 5, ZOOM_LIMITS));
+});
+
+test('overviewZoom is clamped into the camera\'s own limits, like any other zoom', () => {
+  const limits = { min: 200, max: 900 };
+  // A huge viewport would want a zoom below the floor to fit 5 cells - clamped
+  // to the floor instead, same as `fitZoom` clamps any other target.
+  const zoom = overviewZoom({ clientWidth: 100, clientHeight: 100 }, 5, { x: 0, y: 0, zoom: 999, aspect: 1, limits });
+  assert.equal(zoom, limits.min);
+});
+
+test('overviewZoom falls back to the camera\'s own zoom with no canvas to measure', () => {
+  const cam = { x: 0, y: 0, zoom: 321 };
+  assert.equal(overviewZoom(null, 5, cam), cam.zoom);
 });

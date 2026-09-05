@@ -173,6 +173,34 @@ export function fitZoom({
   return clampZoom(Math.min(byWidth, byHeight), limits);
 }
 
+/**
+ * The zoom that shows at least `cells` whole rows and columns on a canvas -
+ * `fitZoom` with an n x n target, so a narrow phone and a wide monitor each
+ * zoom out only as far as their own shape actually requires rather than
+ * sharing one pixel-per-cell number tuned on a single display. This is what
+ * the "center" button, a room double-tap, and the rearrangement's park zoom
+ * out to - see `camera.minVisibleCells` in `packages/config`.
+ *
+ * Takes the canvas itself (or `null`, before the first paint) rather than a
+ * `ViewportRect`, so every call site can pass `canvasRef.current` directly
+ * instead of first checking it and building a rect - falling back to the
+ * camera's own zoom when there is nothing to measure yet.
+ */
+export function overviewZoom(
+  canvas: { clientWidth: number; clientHeight: number } | null,
+  cells: number,
+  cam: Camera
+): number {
+  if (!canvas) return cam.zoom;
+  return fitZoom({
+    width: canvas.clientWidth,
+    height: canvas.clientHeight,
+    target: { w: cells, h: cells },
+    aspect: cam.aspect ?? CELL_ASPECT,
+    limits: cam.limits ?? ZOOM_LIMITS,
+  });
+}
+
 /** Viewport pixel -> world cell coordinate. `rect` is the canvas bounding box. */
 export function screenToWorld(px: number, py: number, cam: Camera, rect: ViewportRect): WorldPoint {
   const perCell = pxPerCell(cam);
