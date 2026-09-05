@@ -105,12 +105,38 @@ const QUEUE_LIMIT = 256;
  * `HTMLImageElement`'s real `onload`/`onerror` take an `Event` nobody here
  * reads, so this narrows them to zero-arg callbacks rather than widening
  * every caller to accept one it would ignore.
+ *
+ * This is the LOADER, not the thing that gets painted. Setting `src` starts a
+ * load; when it finishes, `onload` fires and `bitmap` holds the decoded,
+ * drawable result. The renderer paints `bitmap` (via `TileHit.img`), never the
+ * loader itself - see `Drawable` and the default `createBitmapImage`.
  */
 export interface LoadableImage {
   src: string;
   onload: (() => void) | null;
   onerror: (() => void) | null;
+  /**
+   * The decoded, drawable image once the load finishes - an `ImageBitmap` in
+   * the browser, decoded off the main thread so the first draw never stalls on
+   * a decode and a later draw never silently re-decodes a discarded surface
+   * (the zoom cost profiling flagged). Null until `onload` fires.
+   */
+  bitmap: Drawable | null;
+  /**
+   * Release the decoded bitmap. An `ImageBitmap` holds its memory until closed
+   * explicitly - unlike an `<img>`, which GC reclaims - so the cache calls this
+   * whenever it drops an entry. Optional: a stand-in with nothing to free omits it.
+   */
+  close?: () => void;
 }
+
+/**
+ * What a 2d context actually paints for a tile. An `ImageBitmap` in the
+ * browser; `LoadableImage` is kept in the union so a test can hand its own
+ * loader stand-in back as its own drawable (`bitmap = self`) without minting a
+ * real bitmap - the same "narrow fakeable interface" the rest of this file uses.
+ */
+export type Drawable = ImageBitmap | LoadableImage;
 
 export type RoomId = number | string;
 type ImageState = 'loading' | 'ready' | 'error';
@@ -145,7 +171,7 @@ interface SheetImage {
 
 /** What `get()` reports for a room: the image to draw from, its sub-rect if sheet-backed, and which level it actually is. */
 export interface TileHit {
-  img: LoadableImage;
+  img: Drawable;
   rect: Rect | null;
   level: number;
 }
@@ -168,7 +194,7 @@ export interface CreateTileCacheOpts {
 
 export interface TileCache {
   beginFrame: () => void;
-  request: (id: RoomId, level: number) => { img: LoadableImage; rect: Rect | null } | null;
+  request: (id: RoomId, level: number) => { img: Drawable; rect: Rect | null } | null;
   get: (id: RoomId, want: number) => TileHit | null;
   prefetch: (id: RoomId, level: number) => void;
   pin: (id: RoomId) => void;
@@ -181,6 +207,54 @@ export interface TileCache {
   clear: () => void;
 }
 
+/**
+ * The browser's `LoadableImage`: fetch through a normal `<img>` (so the browser's
+ * image loading pipeline, priorities and HTTP cache still apply), then decode
+ * OFF the main thread into an owned `ImageBitmap`. Two things this buys over
+ * drawing the `<img>` directly, both from profiling zoom lag:
+ *
+ *   - the decode no longer happens synchronously on the render thread the first
+ *     time a tile (or a 48 MB sheet) is drawn, which was a per-level-transition
+ *     stall, and
+ *   - the decoded surface is JS-owned and never silently discarded, so a later
+ *     draw can never trigger a re-decode of a tile that never left the cache.
+ *
+ * `crossOrigin` is set because `createImageBitmap` refuses a CORS-tainted image;
+ * the remote corpus host already serves the tile bases with CORS (see
+ * `packages/server/remote.ts`), and a same-origin deployment ignores it.
+ */
+function createBitmapImage(): LoadableImage {
+  const el = new Image();
+  el.crossOrigin = 'anonymous';
+  const wrapper: LoadableImage = {
+    onload: null,
+    onerror: null,
+    bitmap: null,
+    get src() {
+      return el.src;
+    },
+    set src(url: string) {
+      el.src = url;
+    },
+    close() {
+      const b = wrapper.bitmap;
+      if (b && 'close' in b && typeof b.close === 'function') b.close();
+      wrapper.bitmap = null;
+    },
+  };
+  el.onload = () => {
+    createImageBitmap(el).then(
+      (bmp) => {
+        wrapper.bitmap = bmp;
+        wrapper.onload?.();
+      },
+      () => wrapper.onerror?.()
+    );
+  };
+  el.onerror = () => wrapper.onerror?.();
+  return wrapper;
+}
+
 export function createTileCache({
   locateTile,
   pyramid = PYRAMID,
@@ -188,7 +262,7 @@ export function createTileCache({
   neverEvictSheetLevels = [pyramid.fallbackLevel],
   onLoad,
   concurrency = PREFETCH.concurrency,
-  createImage = () => new Image() as unknown as LoadableImage,
+  createImage = createBitmapImage,
 }: CreateTileCacheOpts): TileCache {
   // level -> (id -> entry). A per-file entry is { img, rect: null, state, lastUsed, frame };
   // a sheet-backed entry is { sheetUrl, rect, lastUsed, frame } - its readiness
@@ -212,8 +286,8 @@ export function createTileCache({
 
   const sheetReady = (url: string) => sheetImages.get(url)?.state === 'ready';
   const entryReady = (e: Entry) => (isSheetBacked(e) ? sheetReady(e.sheetUrl) : e.state === 'ready');
-  const entryImg = (e: Entry): LoadableImage | undefined =>
-    isSheetBacked(e) ? sheetImages.get(e.sheetUrl)?.img : e.img;
+  const entryImg = (e: Entry): Drawable | null | undefined =>
+    isSheetBacked(e) ? sheetImages.get(e.sheetUrl)?.img.bitmap : e.img.bitmap;
   const isReady = (id: RoomId, level: number) => {
     const e = entry(id, level);
     return e != null && entryReady(e);
@@ -263,7 +337,7 @@ export function createTileCache({
    * Start the load for one level of one room, if it is not already here or on
    * its way. Returns `{img, rect}` if it happens to be ready.
    */
-  function request(id: RoomId, level: number): { img: LoadableImage; rect: Rect | null } | null {
+  function request(id: RoomId, level: number): { img: Drawable; rect: Rect | null } | null {
     const found = entry(id, level);
     if (found) {
       found.lastUsed = ++clock;
@@ -285,7 +359,7 @@ export function createTileCache({
       const fresh: SheetBackedEntry = { sheetUrl: loc.url, rect: loc.rect, lastUsed: ++clock, frame };
       store.set(id, fresh);
       evict(level);
-      return sheet.state === 'ready' ? { img: sheet.img, rect: loc.rect } : null;
+      return sheet.state === 'ready' ? { img: sheet.img.bitmap!, rect: loc.rect } : null;
     }
 
     const img = createImage();
@@ -423,7 +497,12 @@ export function createTileCache({
       .filter(([id, e]) => (isSheetBacked(e) || e.state !== 'loading') && !pinned.has(id) && !inUse(e))
       .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
 
-    for (const [id] of spare.slice(0, store.size - budget)) store.delete(id);
+    // A per-file entry owns its decoded bitmap; a sheet-backed one only points
+    // at a sheet that outlives it, so only the former is closed here.
+    for (const [id, e] of spare.slice(0, store.size - budget)) {
+      if (!isSheetBacked(e)) e.img.close?.();
+      store.delete(id);
+    }
   }
 
   /**
@@ -444,7 +523,10 @@ export function createTileCache({
       .filter(([, s]) => !neverEvict.has(s.level) && s.state !== 'loading' && !inUse(s))
       .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
 
-    for (const [url] of spare.slice(0, sheetImages.size - budget)) sheetImages.delete(url);
+    for (const [url, s] of spare.slice(0, sheetImages.size - budget)) {
+      s.img.close?.();
+      sheetImages.delete(url);
+    }
   }
 
   const size = () => [...levels.values()].reduce((n, store) => n + store.size, 0) + sheetImages.size;
@@ -466,7 +548,11 @@ export function createTileCache({
       ),
     pendingPrefetch: () => queue.length,
     clear: () => {
-      for (const store of levels.values()) store.clear();
+      for (const store of levels.values()) {
+        for (const e of store.values()) if (!isSheetBacked(e)) e.img.close?.();
+        store.clear();
+      }
+      for (const s of sheetImages.values()) s.img.close?.();
       sheetImages.clear();
       pinned.clear();
       queue.length = 0;

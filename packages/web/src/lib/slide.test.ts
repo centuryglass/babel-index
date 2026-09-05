@@ -52,13 +52,15 @@ function readyCache() {
   const cache = createTileCache({
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: (): LoadableImage => {
-      const img: FakeImage = { src: '', onload: null, onerror: null };
+      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null };
       made.push(img);
       return img;
     },
   });
   cache.pin(CENTER_TILE);
-  return { cache, settle: () => made.forEach((i) => i.onload?.()) };
+  // A settled fake is its own drawable (bitmap = self), matching the browser's
+  // ImageBitmap handoff, so a drawn tile's `img` carries a `src`.
+  return { cache, settle: () => made.forEach((i) => { i.bitmap = i; i.onload?.(); }) };
 }
 
 const arrangement = (roomCount, order, density = null) => ({

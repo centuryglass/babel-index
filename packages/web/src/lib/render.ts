@@ -28,7 +28,7 @@ import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON,
-  genericId, type LoadableImage, type RoomId, type TileCache,
+  genericId, type Drawable, type RoomId, type TileCache,
 } from './tiles.ts';
 import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
@@ -64,15 +64,15 @@ export interface DrawContext {
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
   fillText(text: string, x: number, y: number): void;
-  // `LoadableImage` is all this file ever passes; `CanvasImageSource` is added
-  // to the union purely so a real `CanvasRenderingContext2D` - whose own
+  // A `Drawable` is all this file ever passes; `CanvasImageSource` is added to
+  // the union purely so a real `CanvasRenderingContext2D` - whose own
   // `drawImage` only accepts the latter - still satisfies this interface.
   drawImage(
-    image: LoadableImage | CanvasImageSource,
+    image: Drawable | CanvasImageSource,
     dx: number, dy: number, dw: number, dh: number
   ): void;
   drawImage(
-    image: LoadableImage | CanvasImageSource,
+    image: Drawable | CanvasImageSource,
     sx: number, sy: number, sw: number, sh: number,
     dx: number, dy: number, dw: number, dh: number
   ): void;
