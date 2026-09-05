@@ -117,8 +117,7 @@ export function MapView({
   favoriteFor,
   cursorId,
   onRescatter,
-  sieveMode,
-  onToggleSieve,
+  distillTooltipRef,
   onRecentre,
   history,
   onForgetSearches,
@@ -178,9 +177,8 @@ export function MapView({
   /** the room under the keyboard cursor, null on the center cell and on wallpaper */
   cursorId: number | null;
   onRescatter: () => void;
-  /** whether generic rooms are currently hidden - see `useSieveMode.ts` */
-  sieveMode: boolean;
-  onToggleSieve: () => void;
+  /** the distill toggle's own floating tooltip - see `useMapRenderer.ts`'s `distillTooltipRef` */
+  distillTooltipRef: Ref<HTMLDivElement>;
   onRecentre: () => void;
   history: string[];
   onForgetSearches: () => void;
@@ -273,6 +271,13 @@ export function MapView({
         available on the card without a mouse.
       */}
       <div ref={favTooltipRef} className="favorite-tooltip" aria-hidden="true" />
+      {/*
+        The distill toggle's own tooltip - same one-floating-element treatment
+        as the favorite badge's above, and for the same reason: the toggle is
+        canvas-painted onto the center tile's lower right corner and has no
+        DOM element of its own to carry one.
+      */}
+      <div ref={distillTooltipRef} className="distill-tooltip" aria-hidden="true" />
       {/*
         The live search field, on the center tile itself rather than in the
         panel. Always mounted - Playwright's `inputValue()` and React's
@@ -549,14 +554,13 @@ export function MapView({
           shuffle/switch controls above - see AGENTS.md's Favorites section.
           `rescatter` and `center` stay: neither has a diegetic equivalent
           (rescatter reseeds which cells hold a room at all, not the ranking;
-          `center` is a plain camera reset).
+          `center` is a plain camera reset). Distill mode's own control lives
+          on the center tile instead, its lower right corner - see
+          `distillToggle.ts`.
         */}
         <div className="buttons">
           <button onClick={onRescatter}>rescatter</button>
           <button onClick={onRecentre}>center</button>
-          <button aria-pressed={sieveMode} onClick={onToggleSieve}>
-            {sieveMode ? 'unsieve' : 'sieve'}
-          </button>
         </div>
 
         {/*

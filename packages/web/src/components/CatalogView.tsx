@@ -58,7 +58,8 @@ import {
   storyLines,
   focusScrollTop,
 } from '../lib/catalog.ts';
-import { CENTER } from '../lib/tiles.ts';
+import { CENTER, DISTILL_OFF, DISTILL_ON } from '../lib/tiles.ts';
+import { distillIconScreenRect } from '../lib/distillToggle.ts';
 
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
@@ -192,6 +193,8 @@ export function CatalogView({
   centreSlots,
   onBook,
   onOpenArtistStatement,
+  distillMode,
+  onToggleDistill,
   cellOfId,
   history,
   onForgetSearches,
@@ -227,6 +230,9 @@ export function CatalogView({
   centreSlots: Slot[];
   onBook: (index: number) => void;
   onOpenArtistStatement: () => void;
+  /** whether generic rooms are currently hidden - see `useDistillMode.ts` */
+  distillMode: boolean;
+  onToggleDistill: () => void;
   cellOfId: (id: number) => { x: number; y: number } | null;
   history: string[];
   onForgetSearches: () => void;
@@ -286,6 +292,11 @@ export function CatalogView({
 
   const perPage = config.catalog.perPage;
   const thumbPx = thumbWidth(geom.width);
+  // The distill toggle's screen rect within the center row's fixed-size
+  // thumbnail - the same corner-anchor math the map's own canvas overlay
+  // uses (`distillIconScreenRect`), against this thumbnail's own pixel size
+  // rather than a moving camera's `cellPx`.
+  const distillRect = distillIconScreenRect({ x: thumbPx, y: tileHeight(thumbPx) }, 0, 0);
   // Narrow rows drop the map link and let the name wrap instead of clipping
   // it - see `NARROW_PX`. Both halves of that trade are priced below.
   const narrow = geom.width < NARROW_PX;
@@ -562,6 +573,23 @@ export function CatalogView({
                   </svg>
                 </button>
               )}
+              {/*
+                The distill toggle - the same lower right corner overlay the
+                map's own canvas draws (`render.ts`'s `drawDistillToggle`),
+                positioned here with plain pixels rather than per-frame
+                imperative style writes, since this thumbnail is a fixed size
+                and never moves.
+              */}
+              <button
+                type="button"
+                className="catalog-distill-toggle"
+                style={{ left: distillRect.x, top: distillRect.y, width: distillRect.w, height: distillRect.h }}
+                aria-pressed={distillMode}
+                aria-label={distillMode ? 'disable distillation' : 'enable distillation'}
+                onClick={onToggleDistill}
+              >
+                <img src={urlFor(distillMode ? DISTILL_ON : DISTILL_OFF, 0) ?? ''} alt="" decoding="async" />
+              </button>
             </div>
             <div className="catalog-body">
               <h2 className="catalog-name">the center of the library</h2>

@@ -10,6 +10,10 @@
  *   rects labelled "book0".."bookN" -> book spines, addressed by that label
  *   path labelled "center_book"  -> the open book painted into a shelf gap,
  *                                   a distinct hotspot from the lettered books
+ *   path labelled "distill_off"  -> the "enable distillation" icon's outline,
+ *                                   traced over the whole tile like center_book
+ *   path labelled "distill_on"   -> the "disable distillation" icon's outline,
+ *                                   same treatment as distill_off
  *   rect labelled "fav_mine_toggle"  -> hit region for the "my favorites" sort switch
  *   rect labelled "fav_count_toggle" -> hit region for the "most favorited" sort switch
  *   rect labelled "shuffle_button"   -> hit region for the reorder control
@@ -91,7 +95,7 @@ for (const g of svg.matchAll(/<g\b[\s\S]*?>/g)) {
 
 /** Argument count per path command letter, uppercased; A(rc) is unsupported. */
 const PATH_ARG_COUNT: Record<string, number> = {
-  M: 2, L: 2, H: 1, V: 1, C: 6, Z: 0,
+  M: 2, L: 2, H: 1, V: 1, C: 6, Z: 0, A: 7,
 };
 
 /**
@@ -105,12 +109,18 @@ const PATH_ARG_COUNT: Record<string, number> = {
  * lets the consumer (`center.ts`) hand the string straight to an SVG
  * `<path d>` with no further interpretation, and what lets `geometry.ts`
  * rescale it for an arbitrary tile size with a single regex over `x,y` pairs
- * rather than a second copy of this walk. S/Q/T/A are refused rather than
+ * rather than a second copy of this walk. S/Q/T are refused rather than
  * silently mishandled - the hand traced silhouette this importer exists for
  * has never needed them (see the trace itself, not a claim this file makes).
+ * `A` is accepted but APPROXIMATED as a lineto to its own endpoint, dropping
+ * the curve - `distill_off`/`distill_on`'s Inkscape-rounded corners are a
+ * couple of pixels of fillet on a tile-sized icon, invisible at the sampled
+ * precision a hover highlight needs (the same tradeoff `flattenPath` makes
+ * sampling a real cubic), and worth it against hand-deriving the elliptical
+ * arc-to-Bezier conversion for a curve nobody will ever see the difference on.
  */
 function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: number) {
-  const tokens = d.match(/[MmLlHhVvCcZz]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
+  const tokens = d.match(/[MmLlHhVvCcZzAa]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
   let i = 0;
   let cx = 0;
   let cy = 0;
@@ -146,7 +156,7 @@ function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: numb
     if (!cmd) throw new Error(`path has no leading command: ${d.slice(0, 40)}`);
     const letter = cmd.toUpperCase();
     if (!(letter in PATH_ARG_COUNT))
-      throw new Error(`path command '${letter}' is not supported by the importer (only M/L/H/V/C/Z)`);
+      throw new Error(`path command '${letter}' is not supported by the importer (only M/L/H/V/C/Z/A)`);
     const relative = cmd === cmd.toLowerCase();
     const argc = PATH_ARG_COUNT[letter];
     if (letter === 'Z') {
@@ -166,6 +176,14 @@ function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: numb
       out.push(`L${nx(cx)},${ny(cy)}`);
     } else if (letter === 'V') {
       cy = relative ? cy + nums[0] : nums[0];
+      visit(cx, cy);
+      out.push(`L${nx(cx)},${ny(cy)}`);
+    } else if (letter === 'A') {
+      // rx, ry, x-axis-rotation and the two flags (nums[0..4]) are dropped -
+      // see this function's doc comment on why the curve is approximated
+      // rather than converted.
+      cx = relative ? cx + nums[5] : nums[5];
+      cy = relative ? cy + nums[6] : nums[6];
       visit(cx, cy);
       out.push(`L${nx(cx)},${ny(cy)}`);
     } else if (letter === 'C') {
@@ -321,12 +339,18 @@ for (const m of svg.matchAll(/<rect\b[\s\S]*?\/>/g)) {
 }
 
 const centerBookPaths: { d: string; bbox: { x: number; y: number; w: number; h: number } }[] = [];
+const distillOffPaths: { d: string; bbox: { x: number; y: number; w: number; h: number } }[] = [];
+const distillOnPaths: { d: string; bbox: { x: number; y: number; w: number; h: number } }[] = [];
 for (const m of svg.matchAll(/<path\b[\s\S]*?\/>/g)) {
   const tag = m[0];
-  if (attr(tag, 'inkscape:label') !== 'center_book') continue;
+  const label = attr(tag, 'inkscape:label');
+  if (label !== 'center_book' && label !== 'distill_off' && label !== 'distill_on') continue;
   const rawD = attr(tag, 'd');
   if (!rawD) continue;
-  centerBookPaths.push(normalizePath(rawD, tx, ty, vbW, vbH));
+  const normalized = normalizePath(rawD, tx, ty, vbW, vbH);
+  if (label === 'center_book') centerBookPaths.push(normalized);
+  else if (label === 'distill_off') distillOffPaths.push(normalized);
+  else distillOnPaths.push(normalized);
 }
 
 const favoriteTogglePaths: { d: string; bbox: { x: number; y: number; w: number; h: number } }[] = [];
@@ -392,6 +416,8 @@ const mineToggle = mineToggleRects[0] ?? null;
 const countToggle = countToggleRects[0] ?? null;
 const shuffleButton = shuffleRects[0] ?? null;
 const centerBook = centerBookPaths[0] ?? null;
+const distillOff = distillOffPaths[0] ?? null;
+const distillOn = distillOnPaths[0] ?? null;
 const favoriteToggle = favoriteTogglePaths[0] ?? null;
 
 console.log(
@@ -405,6 +431,8 @@ console.log(`fav_mine_toggle: ${mineToggle ? nrect(mineToggle).join(', ') : 'non
 console.log(`fav_count_toggle: ${countToggle ? nrect(countToggle).join(', ') : 'none traced'}`);
 console.log(`shuffle_button: ${shuffleButton ? nrect(shuffleButton).join(', ') : 'none traced'}`);
 console.log(`center_book: ${centerBook ? `bbox ${nrect(centerBook.bbox).join(', ')}, ${centerBook.d.split(' ').length} path commands` : 'none traced'}`);
+console.log(`distill_off: ${distillOff ? `bbox ${nrect(distillOff.bbox).join(', ')}` : 'none traced'}`);
+console.log(`distill_on: ${distillOn ? `bbox ${nrect(distillOn.bbox).join(', ')}` : 'none traced'}`);
 console.log(`tile_fav_toggle: ${favoriteToggle ? `bbox ${nrect(favoriteToggle.bbox).join(', ')}` : 'none traced'}`);
 console.log(`opening: ${nrect(openingRect).join(', ')}`);
 console.log(`\n${shelves.length} shelves, ${spines.length} books total:`);
@@ -420,6 +448,8 @@ if (countToggleRects.length > 1) problems.push(`${countToggleRects.length} rects
 if (shuffleRects.length > 1) problems.push(`${shuffleRects.length} rects labelled shuffle_button, expected at most one`);
 if (!spines.length) problems.push('no rects labelled book<n>');
 if (centerBookPaths.length > 1) problems.push(`${centerBookPaths.length} paths labelled center_book, expected at most one`);
+if (distillOffPaths.length > 1) problems.push(`${distillOffPaths.length} paths labelled distill_off, expected at most one`);
+if (distillOnPaths.length > 1) problems.push(`${distillOnPaths.length} paths labelled distill_on, expected at most one`);
 if (favoriteTogglePaths.length > 1) problems.push(`${favoriteTogglePaths.length} ellipses labelled tile_fav_toggle, expected at most one`);
 if (problems.length) {
   console.error('\nPROBLEMS:');
@@ -470,6 +500,14 @@ export interface MeasuredData {
   shuffleButton: RectTuple | null;
   centerBook: CenterBook | null;
   /**
+   * The "enable distillation" icon's outline, traced over the whole tile the
+   * same way \`centerBook\` is - null on a trace with none, in which case the
+   * distill toggle draws no hover highlight.
+   */
+  distillOff: CenterBook | null;
+  /** The "disable distillation" icon's outline - see \`distillOff\`. */
+  distillOn: CenterBook | null;
+  /**
    * The on-tile favorite badge's non-transparent silhouette - an ellipse in
    * the trace, converted on import to the same M/L/C/Z grammar \`centerBook\`
    * uses. Traced over the WHOLE tile, not the badge's own icon, so it is in
@@ -490,6 +528,8 @@ export const MEASURED: MeasuredData = {
   countToggle: ${countToggle ? `[${nrect(countToggle).join(', ')}]` : 'null'},
   shuffleButton: ${shuffleButton ? `[${nrect(shuffleButton).join(', ')}]` : 'null'},
   centerBook: ${centerBook ? `{ d: ${JSON.stringify(centerBook.d)}, bbox: [${nrect(centerBook.bbox).join(', ')}] }` : 'null'},
+  distillOff: ${distillOff ? `{ d: ${JSON.stringify(distillOff.d)}, bbox: [${nrect(distillOff.bbox).join(', ')}] }` : 'null'},
+  distillOn: ${distillOn ? `{ d: ${JSON.stringify(distillOn.d)}, bbox: [${nrect(distillOn.bbox).join(', ')}] }` : 'null'},
   favoriteToggle: ${favoriteToggle ? `{ d: ${JSON.stringify(favoriteToggle.d)}, bbox: [${nrect(favoriteToggle.bbox).join(', ')}] }` : 'null'},
   shelves: [
 ${shelves

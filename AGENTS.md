@@ -35,7 +35,7 @@ npm run test:e2e                   # browser smoke test; needs `npx playwright i
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
-node tools/center-placement/import-shelf-svg.ts tools/center-placement/shelf_geometry.svg  # Recalculate diegetic control bounds
+npm run generate:shelf-geometry     # Recalculate diegetic control bounds from tools/center-placement/shelf_geometry.svg
 ```
 
 No compiled output ever hits disk. The demo server bundles the client with
@@ -158,6 +158,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `picking.ts`: Defines the roomAtPoint function
     * `favoriteBadge.ts`: Geometry and hit-test for the favorite badge painted
                           onto a room tile's upper right corner
+    * `distillToggle.ts`: Geometry and hit-test for the distill-mode toggle
+                          painted onto the center tile's lower right corner
     * `catalog.ts`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images

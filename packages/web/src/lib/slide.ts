@@ -63,7 +63,7 @@ import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/b
 import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import { drawFavoriteBadge, drawFavoriteSwitch, drawGenericFade, type DrawContext } from './render.ts';
+import { drawFavoriteBadge, drawFavoriteSwitch, drawDistillToggle, drawGenericFade, type DrawContext } from './render.ts';
 import { areSpinesLegible } from './center.ts';
 
 /**
@@ -369,8 +369,12 @@ export interface SlideDrawOpts {
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
-  /** sieve mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
+  /** distill mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
   genericFade?: number;
+  /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
+  distillMode?: boolean;
+  /** whether the pointer is over the distill toggle - see `render.ts`'s `DrawOpts.hoveredDistill` */
+  hoveredDistill?: boolean;
 }
 
 export interface SlideDrawResult {
@@ -390,7 +394,7 @@ export interface SlideDrawResult {
 export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
   function draw({
     ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
-    favorites = null, sortMode = 'relevance', genericFade = 0,
+    favorites = null, sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
   }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
@@ -492,6 +496,10 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       // never blinks out for the animation only to reappear once it lands.
       if (favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
         drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
+      // The distill toggle rides along the same way - independent of
+      // `favorites`, since distill mode needs no favorite store. Same
+      // `undefined` opt-out as `render.ts`'s own draw loop.
+      if (distillMode !== undefined) drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
     }
 
     return { drawn, blank, level, cells: wanted.length };

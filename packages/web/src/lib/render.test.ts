@@ -431,3 +431,52 @@ test('the badge follows the same zoom scale as the tile it sits on', () => {
   const big = at(220);
   assert.ok(Math.abs(big.w / small.w - 2) < 0.05, `badge did not scale with zoom: ${small.w} -> ${big.w}`);
 });
+
+// --- the distill toggle ------------------------------------------------------
+
+test('distillMode undefined draws no distill toggle at all', () => {
+  // Covered by 'no favorites option means no badge at all' too, but stated
+  // directly: a caller that never mentions distill mode gets no extra draw
+  // and no extra image request, the same opt-out `favorites: null` gives.
+  const w = world();
+  const ctx = fakeCtx();
+  frame(w, { zoom: 220, ctx });
+  for (const d of ctx.drawn) assert.ok(d.w > 100 || d.h > 300, 'unexpected small draw with distillMode omitted');
+});
+
+test('the distill toggle draws once, over the center tile, once its art has landed', () => {
+  const w = world();
+  w.renderer.draw({
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
+    cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode: false,
+  });
+  w.images.settleAll();
+
+  const ctx = fakeCtx();
+  w.renderer.draw({
+    ctx, width: 1600, height: 900, dpr: 1,
+    cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode: false,
+  });
+  const toggleDraws = ctx.drawn.filter((d) => d.w < 100 && d.h < 300);
+  assert.equal(toggleDraws.length, 1);
+});
+
+test('the distill toggle draws whichever face matches distillMode', () => {
+  const w = world();
+  const draw = (distillMode: boolean) => {
+    w.renderer.draw({
+      ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
+      cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode,
+    });
+    w.images.settleAll();
+    const ctx = fakeCtx();
+    w.renderer.draw({
+      ctx, width: 1600, height: 900, dpr: 1,
+      cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode,
+    });
+    return ctx.drawn.find((d) => d.w < 100 && d.h < 300)!.img.src;
+  };
+  const off = draw(false);
+  const on = draw(true);
+  assert.notEqual(off, on, 'the two states must draw different art');
+});

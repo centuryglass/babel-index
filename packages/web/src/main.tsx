@@ -35,9 +35,11 @@ import {
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
 import { CELL_ASPECT, fitZoom, overviewZoom, pxPerCell, worldToScreen, type Camera } from './lib/camera.ts';
 import {
-  createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON, genericId,
+  createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
+  DISTILL_OFF, DISTILL_ON, genericId,
 } from './lib/tiles.ts';
 import { favoriteIconScreenRect, favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
+import { distillToggleAtPoint } from './lib/distillToggle.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
@@ -49,7 +51,7 @@ import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.ts';
-import { useSieveMode } from './hooks/useSieveMode.ts';
+import { useDistillMode } from './hooks/useDistillMode.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
 import { useFavorites } from './hooks/useFavorites.ts';
 
@@ -104,6 +106,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // pointermove listener exactly like the overlays above, since a badge is
   // painted on every tile and has no DOM element of its own to anchor one to.
   const favTooltipRef = useRef<HTMLDivElement>(null);
+  // The distill toggle's own tooltip - same floating-element treatment as
+  // `favTooltipRef`, for the same reason: it is canvas-painted onto the
+  // center tile and has no DOM element of its own to anchor one to.
+  const distillTooltipRef = useRef<HTMLDivElement>(null);
   const total = manifest.count;
 
   // Every by-feel starting value comes from the manifest's config block rather
@@ -359,6 +365,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         tiles.pin(id);
         tiles.request(id, 0);
       }
+    }
+    // The distill toggle's two faces - pinned unconditionally, unlike the
+    // favorite art above, since distill mode needs no favorite store.
+    for (const id of [DISTILL_OFF, DISTILL_ON]) {
+      tiles.pin(id);
+      tiles.request(id, 0);
     }
     return tiles;
   }, [manifest, requestDraw, locateTile, favorites.enabled]);
@@ -772,15 +784,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
   requestAnimationRef.current = requestAnimation;
 
-  // --- sieve mode ------------------------------------------------------------
+  // --- distill mode ------------------------------------------------------------
   //
   // Hides every generic room and lets the corpus rooms already on the map
   // pack together to fill the space, then reverses it - see
-  // `useSieveMode.ts` for why a `contentRatio` flip is the whole mechanism
+  // `useDistillMode.ts` for why a `contentRatio` flip is the whole mechanism
   // and what the fade adds on top.
-  const { sieveMode, toggleSieve, genericFade } = useSieveMode({
+  const { distillMode, toggleDistill, genericFade } = useDistillMode({
     defaultRatio: config.map.contentRatio,
-    fadeMs: config.map.sieveFadeMs,
+    fadeMs: config.map.distillFadeMs,
     setContentRatio,
     requestAnimation,
     requestDraw,
@@ -789,7 +801,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
-    favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade,
+    favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
   });
 
   // Where the toggle above sends the camera once that resort has actually
@@ -974,6 +986,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       }
     }
 
+    // The distill toggle - another fixed hotspot, meaningless behind
+    // `favorites.enabled` above since distill mode needs no favorite store.
+    if (distillToggleAtPoint(px, py, { x: cell.w, y: cell.h }, cell.x, cell.y, distillMode)) {
+      toggleDistill();
+      return;
+    }
+
     const slotIndex = bookAtPoint(px, py, cell);
     if (slotIndex != null) {
       onBook(slotIndex);
@@ -1075,8 +1094,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         setContentRatio={setContentRatio}
         onReorder={reorder}
         onRescatter={rescatter}
-        sieveMode={sieveMode}
-        onToggleSieve={toggleSieve}
+        distillTooltipRef={distillTooltipRef}
         favorites={favorites.enabled}
         sortMode={sortMode}
         onToggleSort={toggleSort}
@@ -1114,6 +1132,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           centreSlots={centreSlots}
           onBook={onBook}
           onOpenArtistStatement={openArtistStatement}
+          distillMode={distillMode}
+          onToggleDistill={toggleDistill}
           cellOfId={(id) => cellById.get(id) ?? null}
           history={history}
           onForgetSearches={forgetSearches}

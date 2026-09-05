@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "generate:figures": "node --import ./build/register.mjs tools/center-placement/hexagon-plan.mjs",
+    "generate:shelf-geometry": "node --import ./build/register.mjs tools/center-placement/import-shelf-svg.ts tools/center-placement/shelf_geometry.svg",
     "generate:mips": "node --import ./build/register.mjs packages/pipeline/index.ts",
     "generate:embeddings": "node --import ./build/register.mjs tools/embed/embed.ts",
     "upload:r2": "node --import ./build/register.mjs tools/upload/upload-r2.ts",

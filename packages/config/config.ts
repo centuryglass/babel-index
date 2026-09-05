@@ -57,7 +57,7 @@ interface MapConfig {
   contentRatio: number;
   slotSeed: number;
   genericSeed: number;
-  sieveFadeMs: number;
+  distillFadeMs: number;
 }
 
 interface SlideConfig {
@@ -213,11 +213,11 @@ export const DEFAULTS: Defaults = {
     genericSeed: 1,
 
     /**
-     * How long sieve mode's fade to/from black takes, in milliseconds - the
+     * How long distill mode's fade to/from black takes, in milliseconds - the
      * phase that runs before the slide when hiding generic rooms, and after
-     * it when bringing them back. See `packages/web/src/hooks/useSieveMode.ts`.
+     * it when bringing them back. See `packages/web/src/hooks/useDistillMode.ts`.
      */
-    sieveFadeMs: 320,
+    distillFadeMs: 320,
   },
 
   slide: {
@@ -508,8 +508,8 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
       genericSeed: integer(
         mapIn.genericSeed, DEFAULTS.map.genericSeed, 'map.genericSeed', notes
       ),
-      sieveFadeMs: duration(
-        mapIn.sieveFadeMs, DEFAULTS.map.sieveFadeMs, 'map.sieveFadeMs', notes
+      distillFadeMs: duration(
+        mapIn.distillFadeMs, DEFAULTS.map.distillFadeMs, 'map.distillFadeMs', notes
       ),
     },
     search: {
