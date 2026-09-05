@@ -123,8 +123,8 @@ interface UseMapRendererOpts {
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
   /**
-   * Sieve mode's black fade over generic tiles, 0-1 - a ref rather than a
-   * plain value since it changes every rAF tick of `useSieveMode.ts`'s own
+   * Distill mode's black fade over generic tiles, 0-1 - a ref rather than a
+   * plain value since it changes every rAF tick of `useDistillMode.ts`'s own
    * fade loop, the same reason `anim`/`cam` are refs rather than props.
    */
   genericFade?: { current: number };

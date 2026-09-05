@@ -117,8 +117,8 @@ export function MapView({
   favoriteFor,
   cursorId,
   onRescatter,
-  sieveMode,
-  onToggleSieve,
+  distillMode,
+  onToggleDistill,
   onRecentre,
   history,
   onForgetSearches,
@@ -178,9 +178,9 @@ export function MapView({
   /** the room under the keyboard cursor, null on the center cell and on wallpaper */
   cursorId: number | null;
   onRescatter: () => void;
-  /** whether generic rooms are currently hidden - see `useSieveMode.ts` */
-  sieveMode: boolean;
-  onToggleSieve: () => void;
+  /** whether generic rooms are currently hidden - see `useDistillMode.ts` */
+  distillMode: boolean;
+  onToggleDistill: () => void;
   onRecentre: () => void;
   history: string[];
   onForgetSearches: () => void;
@@ -554,8 +554,8 @@ export function MapView({
         <div className="buttons">
           <button onClick={onRescatter}>rescatter</button>
           <button onClick={onRecentre}>center</button>
-          <button aria-pressed={sieveMode} onClick={onToggleSieve}>
-            {sieveMode ? 'unsieve' : 'sieve'}
+          <button aria-pressed={distillMode} onClick={onToggleDistill}>
+            {distillMode ? 'undistill' : 'distill'}
           </button>
         </div>
 

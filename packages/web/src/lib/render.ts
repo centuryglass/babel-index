@@ -50,7 +50,7 @@ export interface DrawContext {
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
   font: string;
-  /** 0-1. Used only for sieve mode's black fade over generic tiles - restored to 1 after. */
+  /** 0-1. Used only for distill mode's black fade over generic tiles - restored to 1 after. */
   globalAlpha: number;
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
@@ -137,15 +137,15 @@ export interface DrawOpts {
    */
   sortMode?: SortMode;
   /**
-   * Sieve mode's black fade over generic tiles - 0 (normal) to 1 (fully
+   * Distill mode's black fade over generic tiles - 0 (normal) to 1 (fully
    * hidden), or undefined/0 to draw generics as usual. See
-   * `packages/web/src/hooks/useSieveMode.ts`.
+   * `packages/web/src/hooks/useDistillMode.ts`.
    */
   genericFade?: number;
 }
 
 /**
- * Sieve mode's black overlay for a generic tile - drawn OVER the tile's own
+ * Distill mode's black overlay for a generic tile - drawn OVER the tile's own
  * art rather than skipping it, so the fade is a crossfade rather than a cut.
  * Shared with `slide.ts` so a generic tile mid-slide gets the same treatment.
  */

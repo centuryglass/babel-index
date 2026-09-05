@@ -49,7 +49,7 @@ import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useCorpus } from './hooks/useCorpus.ts';
 import { useRearrangement } from './hooks/useRearrangement.ts';
-import { useSieveMode } from './hooks/useSieveMode.ts';
+import { useDistillMode } from './hooks/useDistillMode.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
 import { useFavorites } from './hooks/useFavorites.ts';
 
@@ -772,15 +772,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
   requestAnimationRef.current = requestAnimation;
 
-  // --- sieve mode ------------------------------------------------------------
+  // --- distill mode ------------------------------------------------------------
   //
   // Hides every generic room and lets the corpus rooms already on the map
   // pack together to fill the space, then reverses it - see
-  // `useSieveMode.ts` for why a `contentRatio` flip is the whole mechanism
+  // `useDistillMode.ts` for why a `contentRatio` flip is the whole mechanism
   // and what the fade adds on top.
-  const { sieveMode, toggleSieve, genericFade } = useSieveMode({
+  const { distillMode, toggleDistill, genericFade } = useDistillMode({
     defaultRatio: config.map.contentRatio,
-    fadeMs: config.map.sieveFadeMs,
+    fadeMs: config.map.distillFadeMs,
     setContentRatio,
     requestAnimation,
     requestDraw,
@@ -1075,8 +1075,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         setContentRatio={setContentRatio}
         onReorder={reorder}
         onRescatter={rescatter}
-        sieveMode={sieveMode}
-        onToggleSieve={toggleSieve}
+        distillMode={distillMode}
+        onToggleDistill={toggleDistill}
         favorites={favorites.enabled}
         sortMode={sortMode}
         onToggleSort={toggleSort}

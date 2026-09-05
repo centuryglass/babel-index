@@ -1,10 +1,10 @@
 /**
- * Sieve mode: hide every generic room and let the corpus rooms already on
+ * Distill mode: hide every generic room and let the corpus rooms already on
  * the map pack together to fill the space, then reverse it.
  *
  * The heavy lifting - moving rooms without ever looking like a teleport - is
  * the sliding-tile animation `useRearrangement.ts` already drives off a
- * `layout`/`order` change; sieve mode is nothing more than a `contentRatio`
+ * `layout`/`order` change; distill mode is nothing more than a `contentRatio`
  * flip (1 to pack every corpus room into the smallest area near the origin,
  * back to `defaultRatio` to restore the usual sparseness) asked for through
  * `requestAnimation`, the same way the reorder button or a favorite sort
@@ -36,10 +36,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { prefersReducedMotion } from './useMapCamera.ts';
 
-export interface UseSieveModeOpts {
-  /** the ratio to restore when leaving sieve mode - `config.map.contentRatio` */
+export interface UseDistillModeOpts {
+  /** the ratio to restore when leaving distill mode - `config.map.contentRatio` */
   defaultRatio: number;
-  /** how long the black fade takes, each direction - `config.map.sieveFadeMs` */
+  /** how long the black fade takes, each direction - `config.map.distillFadeMs` */
   fadeMs: number;
   setContentRatio: (ratio: number) => void;
   /** from `useRearrangement.ts` */
@@ -47,14 +47,14 @@ export interface UseSieveModeOpts {
   requestDraw: () => void;
 }
 
-export function useSieveMode({
+export function useDistillMode({
   defaultRatio,
   fadeMs,
   setContentRatio,
   requestAnimation,
   requestDraw,
-}: UseSieveModeOpts) {
-  const [sieveMode, setSieveMode] = useState(false);
+}: UseDistillModeOpts) {
+  const [distillMode, setDistillMode] = useState(false);
   // Read every frame by `useMapRenderer.ts` - not React state, since it
   // changes every rAF tick and a frame's worth of re-renders is not the
   // architecture here (same reasoning as the camera ref).
@@ -89,22 +89,22 @@ export function useSieveMode({
     [fadeMs, requestDraw]
   );
 
-  const toggleSieve = useCallback(() => {
+  const toggleDistill = useCallback(() => {
     if (fading.current) return;
-    if (!sieveMode) {
+    if (!distillMode) {
       runFade(genericFade.current, 1, () => {
-        setSieveMode(true);
+        setDistillMode(true);
         requestAnimation('generic rooms hidden');
         setContentRatio(1);
       });
     } else {
-      setSieveMode(false);
+      setDistillMode(false);
       requestAnimation('generic rooms restored', {
         onSettled: () => runFade(genericFade.current, 0, () => {}),
       });
       setContentRatio(defaultRatio);
     }
-  }, [sieveMode, runFade, requestAnimation, setContentRatio, defaultRatio]);
+  }, [distillMode, runFade, requestAnimation, setContentRatio, defaultRatio]);
 
-  return { sieveMode, toggleSieve, genericFade };
+  return { distillMode, toggleDistill, genericFade };
 }

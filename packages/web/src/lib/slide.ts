@@ -369,7 +369,7 @@ export interface SlideDrawOpts {
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
-  /** sieve mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
+  /** distill mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
   genericFade?: number;
 }
 
