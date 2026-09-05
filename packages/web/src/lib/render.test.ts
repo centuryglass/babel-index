@@ -37,7 +37,7 @@ function fakeCtx(): FakeCtx {
     drawn,
     fills,
     strokes,
-    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', globalAlpha: 1,
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', globalAlpha: 1, imageSmoothingEnabled: true,
     // Either drawImage(img, dx, dy, dw, dh) or the 9-arg source-rect form
     // (img, sx, sy, sw, sh, dx, dy, dw, dh) - a sheet-backed tile uses the
     // latter, so both must be distinguishable to the test asserting on it.
