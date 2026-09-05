@@ -1,11 +1,24 @@
-# babel-index
+# The Index of Babel
 
-> TODO: one-line tagline for the project.
+https://centuryglass.us/babel-index/
 
-## Artist's statement
+This project is a love letter to the art of exploring and curating the
+infinite variation found in generative imagery. The search is instantiated
+as a vast library, where you can explore thousands of hand-picked variant
+shelves, each with its own story. To help in the hunt, you can rearrange the
+shelves, searching based on image content, tags used for image generation, and
+story text. You can tag your favorites, and view the ones that other people
+liked the most.
 
-- Brief description of the concept of the Library of Babel, linking to the
-  [original story](https://sites.evergreen.edu/politicalshakespeares/wp-content/uploads/sites/226/2015/12/Borges-The-Library-of-Babel.pdf).
+## The Library
+[The Library of Babel](https://sites.evergreen.edu/politicalshakespeares/wp-content/uploads/sites/226/2015/12/Borges-The-Library-of-Babel.pdf)
+is a short story by Jorge Luis Borges, published in 1941. It imagines a
+near-infinite library, containing every possible combination of letters, and
+therefore every possible book. It is a fascinating exercise in philosophy and
+set theory, and serves as a useful metaphor for exploring chaos. In a
+mathematical sense it's very real: you can explore it yourself at (https://libraryofbabel.info/).
+
+TODO:
 - Tie it back to the concept of divination: all the ways humanity has 
   searched the noise for meaning.
 - Connection: No one put meaning in that noise, but it often exists there
