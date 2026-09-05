@@ -699,6 +699,20 @@
         flex: 0 1 400px; width: 400px; min-width: 260px;
         padding-left: 24px; border-left: 1px solid var(--edge);
       }
+      /*
+        Split view only: the tile is usually taller than the text needs to
+        be, so `RoomOverlay`'s `measureColumns` drives this up past 1 until
+        the text fills that slack instead of leaving it blank - see the file
+        doc comment there. `calc()` off the ordinary size rather than a
+        second set of sizes, so raising `--split-text-scale` is the only
+        thing that ever moves these; the stacked layout, the card and the
+        catalog row never set the variable and read their usual px value.
+      */
+      .overlay-columns.columns { --split-text-scale: 1; }
+      .overlay-columns.columns .overlay-body .chip { font-size: calc(11px * var(--split-text-scale)); }
+      .overlay-columns.columns .overlay-body .chip-link { font-size: calc(10px * var(--split-text-scale)); }
+      .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
+      .overlay-columns.columns .overlay-body .score { font-size: calc(11px * var(--split-text-scale)); }
 
       /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
       .help-overlay { width: min(520px, 100%); }

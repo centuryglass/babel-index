@@ -36,13 +36,25 @@
  * The tile-and-text pair only moves into two columns when stacking them
  * would make the dialog scroll - a short story stays under the tile exactly
  * as it always has, because there's nothing wrong with that layout when it
- * fits. `measureColumns` below answers that by measuring, not guessing:
- * force the pair back to a single block column, read its natural height,
- * and compare against the room the scrim actually has (its own height minus
+ * fits. `decideColumns` below answers that by measuring, not guessing: force
+ * the pair back to a single block column, read its natural height, and
+ * compare against the room the scrim actually has (its own height minus
  * padding, read live off the scrim rather than assumed). Only when that
  * natural height would overflow, and the dialog is wide enough for a second
- * column to be worth it, does `.overlay-columns` get the class that turns
- * it into a row.
+ * column to be worth it, does `.overlay-columns` get the class that turns it
+ * into a row.
+ *
+ * Once it has, the tile is usually the taller of the two - the text was
+ * only ever sized to fit under it, not beside it, so there's slack even for
+ * a long story. `measureScale` spends that slack on size rather than
+ * whitespace: it binary-searches `--split-text-scale` up from 1 until
+ * growing the text any further would force the dialog to scroll, and stops
+ * exactly there. Scoped to the split view alone (`.overlay-columns.columns
+ * .overlay-body`'s font-size rules) - the stacked layout, the card, and the
+ * catalog row all read `.story`/`.chip`/`.score` at their ordinary size.
+ * It runs as its own effect, keyed off the `columns` state rather than
+ * folded into the same pass as `decideColumns` - see that effect's own
+ * comment for why the ordering matters.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
@@ -159,12 +171,19 @@ export function RoomOverlay({
   // switches the CSS to a row; toggling it off on the element being measured
   // is what makes `scrollHeight` answer "how tall would this be stacked",
   // regardless of which layout is live right now.
-  const measureColumns = useRef(() => {});
-  measureColumns.current = () => {
+  const decideColumns = useRef(() => {});
+  decideColumns.current = () => {
     const scrim = scrimRef.current;
     const overlayEl = ref.current;
     const cols = colsRef.current;
     if (!scrim || !overlayEl || !cols) return;
+
+    const scrimStyle = getComputedStyle(scrim);
+    const verticalPadding = parseFloat(scrimStyle.paddingTop) + parseFloat(scrimStyle.paddingBottom);
+    // A couple of pixels of slack against subpixel layout rounding - without
+    // it, a binary-searched scale that lands exactly on the limit can still
+    // trip the scrollbar it was meant to avoid.
+    const availableHeight = scrim.clientHeight - verticalPadding - 2;
 
     // The comparison is against the WHOLE dialog's height, not just the
     // tile-and-text pair - the head and the actions row above it take space
@@ -175,25 +194,72 @@ export function RoomOverlay({
     const neededHeight = overlayEl.scrollHeight;
     if (wasColumns) cols.classList.add('columns');
 
-    const scrimStyle = getComputedStyle(scrim);
-    const verticalPadding = parseFloat(scrimStyle.paddingTop) + parseFloat(scrimStyle.paddingBottom);
-    const availableHeight = scrim.clientHeight - verticalPadding;
     // Below this, a second column would be squeezed thinner than the tile
     // is tall enough to be worth reading beside - not a tuned constant,
     // just "does a text column plus a gap plausibly fit at all".
     const MIN_COLUMNS_WIDTH = 900;
-
     setColumns(neededHeight > availableHeight && scrim.clientWidth >= MIN_COLUMNS_WIDTH);
   };
 
+  // Split view only: the tile is usually the taller of the pair, which
+  // leaves the text sized for a stacked column it's no longer in. Binary
+  // search the largest `--split-text-scale` (read by the font-size rules
+  // scoped to `.overlay-columns.columns .overlay-body`) that still keeps the
+  // whole dialog within the room the scrim has - stop scaling exactly where
+  // growing the text any further would force a scroll, never before.
+  //
+  // This has to run as ITS OWN effect, keyed off `columns` rather than
+  // folded into `decideColumns` above - `.overlay`'s own `columns` class
+  // (which is what makes it `width: fit-content` instead of a fixed size)
+  // is set by React from state, not by this function, so reading widths
+  // here immediately after calling `setColumns(true)` can still see the
+  // OLD, narrower width React hasn't repainted yet. Keying this effect on
+  // `columns` guarantees it only ever runs once that class has actually
+  // landed - React re-renders synchronously off a layout effect's own
+  // `setState`, so by the time this effect's turn comes the DOM already
+  // reflects the true split-view width.
+  const measureScale = useRef(() => {});
+  measureScale.current = () => {
+    const scrim = scrimRef.current;
+    const overlayEl = ref.current;
+    const cols = colsRef.current;
+    if (!scrim || !overlayEl || !cols || !cols.classList.contains('columns')) return;
+
+    const scrimStyle = getComputedStyle(scrim);
+    const verticalPadding = parseFloat(scrimStyle.paddingTop) + parseFloat(scrimStyle.paddingBottom);
+    const availableHeight = scrim.clientHeight - verticalPadding - 2;
+
+    const MAX_SCALE = 2;
+    let lo = 1;
+    let hi = MAX_SCALE;
+    cols.style.setProperty('--split-text-scale', String(hi));
+    if (overlayEl.scrollHeight > availableHeight) {
+      for (let i = 0; i < 10; i++) {
+        const mid = (lo + hi) / 2;
+        cols.style.setProperty('--split-text-scale', String(mid));
+        if (overlayEl.scrollHeight <= availableHeight) lo = mid;
+        else hi = mid;
+      }
+      cols.style.setProperty('--split-text-scale', String(lo));
+    }
+  };
+
   useLayoutEffect(() => {
-    measureColumns.current();
-    const onResize = () => measureColumns.current();
+    decideColumns.current();
+    const onResize = () => decideColumns.current();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
     // Re-measure whenever the room being shown changes - the tile and the
     // story it's paired with are both new, and their combined height with it.
   }, [desc, entry, src]);
+
+  useLayoutEffect(() => {
+    measureScale.current();
+    if (!columns) return;
+    const onResize = () => measureScale.current();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [columns, desc, entry, src]);
 
   // Named by `desc.name` - the same string a listbox option and the map's own
   // cursor say for this cell. The rank and the keywords are the reason to
@@ -266,6 +332,12 @@ export function RoomOverlay({
             `onLoad` re-measures once the browser knows the tile's real
             height - before that, an unloaded `<img>` has none, and a
             measurement taken against zero would never decide to overflow.
+            Both calls, in this order: `decideColumns` may flip `columns`,
+            in which case its own effect above re-measures the scale once
+            React has actually applied the class; if `columns` was already
+            true, that effect won't fire again on its own, so the direct
+            `measureScale` call here is what picks up the tile's real
+            (rather than zero) height in that case.
           */}
           {src && (
             <img
@@ -273,7 +345,10 @@ export function RoomOverlay({
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
-              onLoad={() => measureColumns.current()}
+              onLoad={() => {
+                decideColumns.current();
+                measureScale.current();
+              }}
             />
           )}
 
