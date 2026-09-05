@@ -9,14 +9,24 @@
  * ### What is stored, and what deliberately is not
  *
  * Per room, a set of hashes - never an address, never a session, never a
- * timestamp. The hash is HMAC(salt, file + NUL + ip), and it is keyed PER ROOM
- * on purpose: the same visitor hashes differently in every room's set, so two
- * sets cannot be joined to reconstruct one person's favorites. The cost is that
- * this store cannot count distinct visitors, which is a thing we do not want to
- * be able to do. Hashing is not a security control here and is not claimed as
- * one - a small address space is enumerable by anyone holding the salt - it is
- * the shape that makes the per-visitor data useless while still letting a set
- * de-duplicate.
+ * timestamp. The hash is HMAC(salt, file + NUL + clientId), and it is keyed PER
+ * ROOM on purpose: the same visitor hashes differently in every room's set, so
+ * two sets cannot be joined to reconstruct one person's favorites. The cost is
+ * that this store cannot count distinct visitors, which is a thing we do not
+ * want to be able to do. Hashing is not a security control here and is not
+ * claimed as one - it is the shape that makes the per-visitor data useless
+ * while still letting a set de-duplicate.
+ *
+ * `clientId` is an opaque token the browser generates and keeps in
+ * `localStorage` (see `useFavorites.ts`), not an IP address - an address
+ * collides real visitors behind shared NAT/CGNAT together and reassigns
+ * itself out from under one visitor on a rotating connection, either of which
+ * reads here as a favorite that silently didn't register or one that silently
+ * came back. A generated token fixes both, at the cost of being exactly as
+ * easy to regenerate as clearing site data already was - which only ever
+ * reverts a visitor to "not yet favorited," never lets one push a count past
+ * one or pull it below zero, since that guarantee lives in the set semantics
+ * above, not in how hard the identity is to obtain.
  *
  * The salt is random per store and lives in the file, so counts survive a
  * restart. Delete the file and every count is gone: there is no second copy,
@@ -55,9 +65,9 @@ export interface FavoriteStore {
   /** Every room with at least one favorite. Rooms with none are absent, not zero. */
   counts(): Record<string, number>;
   /** @returns the room's new count */
-  add(file: string, ip: string): number;
+  add(file: string, clientId: string): number;
   /** @returns the room's new count */
-  remove(file: string, ip: string): number;
+  remove(file: string, clientId: string): number;
   /** Write any pending changes now. Called on shutdown; the debounce handles the rest. */
   flush(): Promise<void>;
 }
@@ -118,8 +128,8 @@ export async function createJsonFavoriteStore({ path, flushMs = 1000 }: JsonStor
     timer.unref?.();
   };
 
-  const hash = (file: string, ip: string) =>
-    createHmac('sha256', salt).update(`${file}\0${ip}`).digest('hex').slice(0, HASH_CHARS);
+  const hash = (file: string, clientId: string) =>
+    createHmac('sha256', salt).update(`${file}\0${clientId}`).digest('hex').slice(0, HASH_CHARS);
 
   return {
     counts() {
@@ -128,19 +138,19 @@ export async function createJsonFavoriteStore({ path, flushMs = 1000 }: JsonStor
       return out;
     },
 
-    add(file, ip) {
+    add(file, clientId) {
       let set = rooms.get(file);
       if (!set) rooms.set(file, (set = new Set<string>()));
       const before = set.size;
-      set.add(hash(file, ip));
+      set.add(hash(file, clientId));
       if (set.size !== before) touch();
       return set.size;
     },
 
-    remove(file, ip) {
+    remove(file, clientId) {
       const set = rooms.get(file);
       if (!set) return 0;
-      if (set.delete(hash(file, ip))) {
+      if (set.delete(hash(file, clientId))) {
         // An emptied room is dropped rather than left as an empty array, so the
         // snapshot does not accumulate a key per room anyone ever touched.
         if (!set.size) rooms.delete(file);

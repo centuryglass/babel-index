@@ -27,7 +27,7 @@
  * favorite control" rather than "zero favorites".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { load, save, clear, KEYS } from '../lib/persist.ts';
+import { load, save, clear, KEYS, getOrCreateFavoriteClientId } from '../lib/persist.ts';
 import type { ManifestResponse } from '../../../map/manifest.ts';
 
 interface UseFavoritesOpts {
@@ -79,6 +79,10 @@ export function useFavorites({ manifest, setStatus }: UseFavoritesOpts) {
 
   const fileOf = useCallback((id: number) => manifest.rooms[id]?.file ?? null, [manifest]);
 
+  // Generated once per page and reused for every write - see persist.ts for
+  // why the server hashes against this rather than the visitor's address.
+  const clientId = useMemo(() => (enabled ? getOrCreateFavoriteClientId() : ''), [enabled]);
+
   const toggle = useCallback(
     async (id: number) => {
       const file = fileOf(id);
@@ -96,6 +100,7 @@ export function useFavorites({ manifest, setStatus }: UseFavoritesOpts) {
       try {
         const res = await fetch(`api/favorites/${encodeURIComponent(file)}`, {
           method: on ? 'DELETE' : 'POST',
+          headers: { 'X-Favorite-Client': clientId },
         });
         if (!res.ok) throw new Error(`the library answered ${res.status}`);
         const body = await res.json();
@@ -113,7 +118,7 @@ export function useFavorites({ manifest, setStatus }: UseFavoritesOpts) {
         );
       }
     },
-    [enabled, fileOf, mine, setStatus]
+    [enabled, fileOf, mine, setStatus, clientId]
   );
 
   const isFavorite = useCallback((id: number) => {

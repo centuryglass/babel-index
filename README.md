@@ -87,15 +87,16 @@ npm run demo -- --favorites path/to/favorites.json [--trust-proxy 1]
 
 Without it, no counts are recorded and no favorite control appears - the
 server stays stateless, which is what the demo has always been. What is stored
-is, per room, a set of salted hashes of the favoriting address: enough to keep
-one visitor from favoriting the same room twice, and not enough to reconstruct
-anyone's list. Personal favorites are never sent anywhere; they live in the
-browser, like the search history.
+is, per room, a set of salted hashes of a random id the browser generates for
+itself: enough to keep one visitor from favoriting the same room twice, and
+not enough to reconstruct anyone's list. Personal favorites are never sent
+anywhere; they live in the browser, like the search history.
 
 `--trust-proxy` is needed behind a reverse proxy (it is Express's own
 `trust proxy` setting, verbatim), or every visitor arrives as the proxy's own
-address and every count stops at one. The proxy has to be sending
-`X-Forwarded-For` for it to help.
+address for rate-limiting purposes, and one visitor hammering the favorite
+endpoint can throttle it for everyone behind that proxy. The proxy has to be
+sending `X-Forwarded-For` for it to help.
 
 TODO: screenshot of the center room with the search box and book spines
 

@@ -552,24 +552,40 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### Favorites
 
 - **A count is a set's size, never a counter.** `packages/server/favorites.ts`
-  stores, per room, a set of `HMAC(salt, file + NUL + ip)`. Adding twice is one
-  favorite and removing what was never there is nothing, so no endpoint can
-  zero a room out or run it up - that property is the whole reason it is a set,
-  and a "just increment a number" simplification throws it away.
+  stores, per room, a set of `HMAC(salt, file + NUL + clientId)`. Adding twice
+  is one favorite and removing what was never there is nothing, so no endpoint
+  can zero a room out or run it up - that property is the whole reason it is a
+  set, and a "just increment a number" simplification throws it away.
 - **The hash is per ROOM on purpose.** The same visitor hashes differently in
   every room's set, so two sets cannot be joined into one person's list. The
   cost is that the store cannot count distinct visitors, which is not something
   we want to be able to do. Hashing is not claimed as a security control; it is
   the shape that makes the stored data useless while still de-duplicating.
+- **Identity is a client-generated token, not `req.ip`.** The browser mints a
+  random id once (`getOrCreateFavoriteClientId`, `persist.ts`) and sends it as
+  `X-Favorite-Client`; `app.ts` rejects a request whose header doesn't match
+  `CLIENT_ID_PATTERN` before it reaches the store. An address is a bad proxy
+  for "one visitor" in both directions - shared NAT/CGNAT collides real
+  visitors into one hash, and a rotating IP hands one visitor a fresh hash
+  mid-session - and a client-generated token fixes both. Trivially spoofable
+  by regenerating it, same as clearing site data always was, but that only
+  ever reverts a visitor to "not yet favorited" - the set semantics above are
+  what actually stop a run-up or a zero-out, not how hard the token is to get.
 - **Favorites are keyed by FILENAME everywhere - server, `localStorage`, and
   `packages/map/favorites.ts`.** Room ids are positional (`scan.ts` sorts
   filenames and indexes them), so one image added to a corpus renumbers every
   id after it and a stored id silently comes back pointing at a different room.
-- **`req.ip` behind a reverse proxy is the PROXY.** Without `--trust-proxy`
-  every visitor shares one hash and every count stops at 1 - and it must stay
-  off by default, since trusting `X-Forwarded-For` where nothing strips it lets
-  a client pick its own address, and here that means its own hash, once per
-  request. nginx must send `proxy_set_header X-Forwarded-For
+- **The favorite writes are still rate-limited by `req.ip`, deliberately on a
+  different key than identity.** `createRateBuckets` (`app.ts`) throttles how
+  fast one connection can spend requests; bucketing on `X-Favorite-Client`
+  instead would do nothing, since a script can mint a fresh token on every
+  request for free - the address is what actually costs something to change.
+  `req.ip` behind a reverse proxy is the PROXY, though, so without
+  `--trust-proxy` every visitor behind it shares one bucket and one abusive
+  visitor can throttle everyone else's favoriting - it must stay off by
+  default regardless, since trusting `X-Forwarded-For` where nothing strips it
+  lets a client pick its own address, and here that means its own rate budget,
+  once per request. nginx must send `proxy_set_header X-Forwarded-For
   $proxy_add_x_forwarded_for;` for the flag to mean anything.
 - **No store, no feature.** Without `--favorites` the routes are not mounted and
   `manifest.favorites` is null, which every consumer reads as "render no

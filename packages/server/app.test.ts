@@ -485,6 +485,9 @@ test('the favorite routes are absent, and the manifest says so, with no store', 
   });
 });
 
+/** A request carrying a valid `X-Favorite-Client` header. */
+const asClient = (id: string) => ({ headers: { 'X-Favorite-Client': id } });
+
 test('favoriting is a set membership, and the manifest advertises the feature', async () => {
   await withStore(async (favorites) => {
     await serving(
@@ -492,16 +495,43 @@ test('favoriting is a set membership, and the manifest advertises the feature', 
         const manifest = await (await get('/api/manifest')).json();
         assert.deepEqual(manifest.favorites, { enabled: true });
 
-        const post = () => fetch(`${base}/api/favorites/001.jpg`, { method: 'POST' });
+        const post = () => fetch(`${base}/api/favorites/001.jpg`, { method: 'POST', ...asClient('client-aaaaaaaa') });
         assert.deepEqual(await (await post()).json(), { file: '001.jpg', count: 1, favorited: true });
         assert.deepEqual(await (await post()).json(), { file: '001.jpg', count: 1, favorited: true },
-          'the same address favoriting twice is still one favorite');
+          'the same client id favoriting twice is still one favorite');
 
         const counts = await (await get('/api/favorites')).json();
         assert.deepEqual(counts, { counts: { '001.jpg': 1 } });
 
-        const del = await fetch(`${base}/api/favorites/001.jpg`, { method: 'DELETE' });
+        const del = await fetch(`${base}/api/favorites/001.jpg`, { method: 'DELETE', ...asClient('client-aaaaaaaa') });
         assert.deepEqual(await del.json(), { file: '001.jpg', count: 0, favorited: false });
+        assert.deepEqual(await (await get('/api/favorites')).json(), { counts: {} });
+      },
+      { favorites }
+    );
+  });
+});
+
+test('two client ids sharing one connection are two favorites, not one', async () => {
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ base, get }) => {
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST', ...asClient('client-aaaaaaaa') });
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST', ...asClient('client-bbbbbbbb') });
+        assert.deepEqual(await (await get('/api/favorites')).json(), { counts: { '001.jpg': 2 } },
+          'identity is the client id, not the address every request in this test shares');
+      },
+      { favorites }
+    );
+  });
+});
+
+test('a write with no client id, or one too short to trust, is rejected', async () => {
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ base, get }) => {
+        assert.equal((await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST' })).status, 400);
+        assert.equal((await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST', ...asClient('short') })).status, 400);
         assert.deepEqual(await (await get('/api/favorites')).json(), { counts: {} });
       },
       { favorites }
@@ -513,7 +543,10 @@ test('a room this corpus does not have cannot be favorited', async () => {
   await withStore(async (favorites) => {
     await serving(
       async ({ base, get }) => {
-        const res = await fetch(`${base}/api/favorites/${encodeURIComponent('../../etc/passwd')}`, { method: 'POST' });
+        const res = await fetch(`${base}/api/favorites/${encodeURIComponent('../../etc/passwd')}`, {
+          method: 'POST',
+          ...asClient('client-aaaaaaaa'),
+        });
         assert.equal(res.status, 404);
         assert.deepEqual(await (await get('/api/favorites')).json(), { counts: {} });
       },
