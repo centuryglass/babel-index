@@ -208,50 +208,65 @@ export interface TileCache {
 }
 
 /**
- * The browser's `LoadableImage`: fetch through a normal `<img>` (so the browser's
- * image loading pipeline, priorities and HTTP cache still apply), then decode
- * OFF the main thread into an owned `ImageBitmap`. Two things this buys over
- * drawing the `<img>` directly, both from profiling zoom lag:
+ * The browser's `LoadableImage`: fetch the encoded bytes, then decode OFF the
+ * main thread into an owned `ImageBitmap`. Two things this buys, both from
+ * profiling zoom lag:
  *
- *   - the decode no longer happens synchronously on the render thread the first
- *     time a tile (or a 48 MB sheet) is drawn, which was a per-level-transition
- *     stall, and
+ *   - the decode never happens on the render thread, so the first draw of a
+ *     tile (or a 48 MB sheet) no longer stalls it - the per-level-transition
+ *     jank, and
  *   - the decoded surface is JS-owned and never silently discarded, so a later
  *     draw can never trigger a re-decode of a tile that never left the cache.
  *
- * `crossOrigin` is set because `createImageBitmap` refuses a CORS-tainted image;
- * the remote corpus host already serves the tile bases with CORS (see
- * `packages/server/remote.ts`), and a same-origin deployment ignores it.
+ * Decoding from a `Blob` is what keeps the decode off-thread. Handing an
+ * `<img>` to `createImageBitmap` instead makes Firefox decode SYNCHRONOUSLY on
+ * the caller (`DecodePool::SyncRunIfPossible`, ~1.3s on the main thread in one
+ * capture); `createImageBitmap(blob)` is dispatched to the decode pool. So this
+ * uses `fetch` rather than an `<img>`, which also means CORS is enforced - the
+ * remote corpus host already serves the tile bases with it (see
+ * `packages/server/remote.ts`), and a same-origin deployment needs none.
  */
 function createBitmapImage(): LoadableImage {
-  const el = new Image();
-  el.crossOrigin = 'anonymous';
+  let url = '';
+  let aborted = false;
+  const controller = new AbortController();
   const wrapper: LoadableImage = {
     onload: null,
     onerror: null,
     bitmap: null,
     get src() {
-      return el.src;
+      return url;
     },
-    set src(url: string) {
-      el.src = url;
+    set src(u: string) {
+      url = u;
+      fetch(u, { signal: controller.signal })
+        .then((r) => {
+          if (!r.ok) throw new Error(`${r.status}`);
+          return r.blob();
+        })
+        .then((blob) => createImageBitmap(blob))
+        .then((bmp) => {
+          // Evicted (or the cache cleared) while the decode was in flight -
+          // the entry is gone, so free the bitmap rather than leaking it.
+          if (aborted) {
+            bmp.close();
+            return;
+          }
+          wrapper.bitmap = bmp;
+          wrapper.onload?.();
+        })
+        .catch(() => {
+          if (!aborted) wrapper.onerror?.();
+        });
     },
     close() {
+      aborted = true;
+      controller.abort();
       const b = wrapper.bitmap;
       if (b && 'close' in b && typeof b.close === 'function') b.close();
       wrapper.bitmap = null;
     },
   };
-  el.onload = () => {
-    createImageBitmap(el).then(
-      (bmp) => {
-        wrapper.bitmap = bmp;
-        wrapper.onload?.();
-      },
-      () => wrapper.onerror?.()
-    );
-  };
-  el.onerror = () => wrapper.onerror?.();
   return wrapper;
 }
 
