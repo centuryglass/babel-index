@@ -158,6 +158,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `picking.ts`: Defines the roomAtPoint function
     * `favoriteBadge.ts`: Geometry and hit-test for the favorite badge painted
                           onto a room tile's upper right corner
+    * `distillToggle.ts`: Geometry and hit-test for the distill-mode toggle
+                          painted onto the center tile's lower right corner
     * `catalog.ts`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images

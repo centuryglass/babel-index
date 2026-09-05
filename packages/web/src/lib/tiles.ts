@@ -93,6 +93,10 @@ export const FAV_CENTER_SWITCH_BASE = 'fav-center-switch-base';
 export const FAV_MINE_ON = 'fav-mine-on';
 export const FAV_COUNT_ON = 'fav-count-on';
 
+/** The distill-mode toggle's two faces, on the center tile - see `distillToggle.ts`. Shared ids, like `CENTER`. */
+export const DISTILL_OFF = 'distill-off';
+export const DISTILL_ON = 'distill-on';
+
 /** How many prefetches may be waiting at once. See prefetch() for why. */
 const QUEUE_LIMIT = 256;
 

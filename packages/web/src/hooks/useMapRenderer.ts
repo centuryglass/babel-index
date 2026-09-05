@@ -30,6 +30,7 @@ import {
 } from '../lib/center.ts';
 import { roomAtPoint } from '../lib/picking.ts';
 import { favoriteIconScreenRect, favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
+import { distillToggleAtPoint } from '../lib/distillToggle.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
@@ -128,6 +129,15 @@ interface UseMapRendererOpts {
    * fade loop, the same reason `anim`/`cam` are refs rather than props.
    */
   genericFade?: { current: number };
+  /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
+  distillMode?: boolean;
+  /**
+   * The distill toggle's own floating tooltip - the same "one element, no
+   * per-tile DOM node" treatment `favTooltipRef` gets, for the same reason:
+   * the toggle is canvas-painted onto the center tile and has no button of
+   * its own to hang a `.control-tooltip` off of.
+   */
+  distillTooltipRef?: { current: HTMLElement | null };
 }
 
 export function useMapRenderer({
@@ -154,6 +164,8 @@ export function useMapRenderer({
   favTooltipRef,
   sortMode = 'relevance',
   genericFade,
+  distillMode = false,
+  distillTooltipRef,
 }: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,6 +186,10 @@ export function useMapRenderer({
     // or null - same split as `hoveredBook` just above: read each frame by
     // `render()`, written by the `pointermove` listener below.
     let hoveredFavorite: { x: number; y: number } | null = null;
+    // Whether the pointer is over the distill toggle's traced silhouette -
+    // same split as `hoveredFavorite`, read each frame by `render()`, written
+    // by the `pointermove` listener below.
+    let hoveredDistill = false;
     // Gates the cursor ring (`render.ts`). Tied to the canvas's own focus
     // rather than to whether a key has ever been pressed: a reader who just
     // tabbed onto the map has no other way to tell the press landed, since
@@ -305,12 +321,13 @@ export function useMapRenderer({
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
         genericIndexAt: layout.genericIndexAt, favorites, sortMode, genericFade: genericFade?.current,
+        distillMode, hoveredDistill,
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
         layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
         cursor: focusVisible ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
-        genericFade: genericFade?.current,
+        genericFade: genericFade?.current, distillMode, hoveredDistill,
       };
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
 
@@ -426,6 +443,29 @@ export function useMapRenderer({
           ?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
       }
 
+      // The distill toggle - a DOM `.hover` class doesn't apply here (no
+      // per-tile element, same reason the favorite badge below has none), so
+      // both the highlight and the tooltip are driven from here, the same
+      // shape as the favorite badge's own hover handling just below.
+      const nextDistill = distillToggleAtPoint(
+        px, py, { x: cellRect.w, y: cellRect.h }, cellRect.x, cellRect.y, distillMode
+      );
+      if (nextDistill !== hoveredDistill) {
+        hoveredDistill = nextDistill;
+        draw.current();
+      }
+      const distillTooltip = distillTooltipRef?.current;
+      if (distillTooltip) {
+        if (nextDistill) {
+          distillTooltip.textContent = distillMode ? 'Disable distillation' : 'Enable distillation';
+          distillTooltip.style.left = `${px}px`;
+          distillTooltip.style.top = `${py}px`;
+          distillTooltip.style.display = 'block';
+        } else {
+          distillTooltip.style.display = 'none';
+        }
+      }
+
       const next = booksRef.current ? bookAtPoint(px, py, cellRect) : null;
       if (next !== hoveredBook) {
         hoveredBook = next;
@@ -474,8 +514,13 @@ export function useMapRenderer({
         ?.querySelectorAll('.hover')
         .forEach((n) => n.classList.remove('hover'));
       if (favTooltipRef?.current) favTooltipRef.current.style.display = 'none';
+      if (distillTooltipRef?.current) distillTooltipRef.current.style.display = 'none';
       if (hoveredFavorite !== null) {
         hoveredFavorite = null;
+        draw.current();
+      }
+      if (hoveredDistill) {
+        hoveredDistill = false;
         draw.current();
       }
       if (hoveredBook !== null) {
@@ -497,6 +542,6 @@ export function useMapRenderer({
   }, [
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
-    blockedCount, favorites, favTooltipRef, sortMode, genericFade,
+    blockedCount, favorites, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
   ]);
 }

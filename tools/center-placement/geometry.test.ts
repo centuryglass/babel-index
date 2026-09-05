@@ -54,6 +54,18 @@ test('the traced center book, if any, has a real bbox inside the tile and a path
   assert.ok(/Z$/.test(MEASURED.centerBook.d), 'centerBook.d must close its subpath');
 });
 
+for (const [label, key] of [['distillOff', 'distillOff'], ['distillOn', 'distillOn']] as const) {
+  test(`the traced ${label} icon, if any, has a real bbox inside the tile and a path that starts and ends closed`, () => {
+    const traced = MEASURED[key];
+    if (!traced) return;
+    const [x, y, w, h] = traced.bbox;
+    assert.ok(w > 0 && h > 0, `degenerate ${label} bbox ${traced.bbox}`);
+    assert.ok(x >= 0 && y >= 0 && x + w <= 1.0001 && y + h <= 1.0001, `${label} bbox outside tile: ${traced.bbox}`);
+    assert.ok(/^M/.test(traced.d), `${label}.d must start with an absolute moveto`);
+    assert.ok(/Z$/.test(traced.d), `${label}.d must close its subpath`);
+  });
+}
+
 test('layout scales linearly with tile size', () => {
   const a = layout({ width: 512 });
   const b = layout({ width: 1024 });

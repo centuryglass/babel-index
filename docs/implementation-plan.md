@@ -3,23 +3,6 @@
 Pending task list. Remove tasks as they are completed, the code and git logs will
 serve as completed task history.
 
-## Distill mode:
-1. Parse distill_on and distill_off paths from shelf_geometry.svg. They're
-   complex shapes, so use the same approach we use for center_book.
-2. Add raster overlays distill_on.png and distill_off.png to the set of files
-   uploaded by the R2 upload script.
-3. When rendering (standard, slide mode, and catalog), render either
-   distill_off or distill_on over the center tile as appropriate. They use
-   the same corner alignment trick as the fav_* assets, except these anchor on
-   the bottom right corner.
-4. On mouseover of the active distill_* path, highlight the traced path for
-   the current distill state, drawing highlighting after/on-top of the overlay
-   PNG, and show either "Enable distillation" or "Disable distillation" in a
-   tooltip.
-5. When clicking on the current distill_* path, toggle distill mode. Ensure
-   the PNG overlay and active vector are swapped appropriately before animating
-   the transition.
-
 ## A11y:
 - No actual screen reader testing has happened yet. Learn orca and test
   manually. See accessibility-plan.md for more details on what to check, and

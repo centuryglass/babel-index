@@ -429,3 +429,49 @@ test('no favorites option on the slide renderer means no badge at all', () => {
   const cellPx = { x: ZOOM, y: ZOOM * CELL_ASPECT };
   for (const d of ctx.drawn) assert.ok(d.w >= cellPx.x / 2, 'unexpected small draw with no favorites option');
 });
+
+test('the distill toggle rides along with the center room during a rearrangement', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  const frame = (motions) => {
+    const ctx = fakeCtx();
+    renderer.draw({
+      ctx, width: 1920, height: 1080, dpr: 1, cam,
+      board, origin: built.origin, motions, distillMode: true,
+    });
+    return ctx;
+  };
+
+  frame([]);
+  settle();
+
+  const hasDistillOn = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('distill-on'));
+
+  for (let t = 0; t <= show.totalMs; t += 41) {
+    const { motions } = show.advanceTo(t);
+    const ctx = frame(motions);
+    assert.ok(hasDistillOn(ctx), `no distill toggle drawn at t=${t}`);
+  }
+});
+
+test('distillMode undefined on the slide renderer means no distill toggle at all', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  settle();
+
+  const ctx = fakeCtx();
+  renderer.draw({ ctx, width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  const hasDistill = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('distill'));
+  assert.ok(!hasDistill(ctx), 'unexpected distill draw with distillMode omitted');
+});

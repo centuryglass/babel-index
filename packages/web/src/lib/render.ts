@@ -27,10 +27,12 @@ import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts
 import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
+  DISTILL_OFF, DISTILL_ON,
   genericId, type LoadableImage, type RoomId, type TileCache,
 } from './tiles.ts';
 import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
+import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { parsePath } from './svgPath.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
@@ -142,6 +144,19 @@ export interface DrawOpts {
    * `packages/web/src/hooks/useDistillMode.ts`.
    */
   genericFade?: number;
+  /**
+   * Whether distill mode is on, for the center tile's distill toggle (drawn
+   * whenever the center cell renders - see `drawDistillToggle`). Distinct
+   * from `genericFade`, which is the transition's own animation progress;
+   * this is the state the toggle's icon and hover highlight read.
+   */
+  distillMode?: boolean;
+  /**
+   * Whether the pointer is over the distill toggle's traced silhouette -
+   * same split as `hoveredBook`/`hoveredFavorite`: read here, written by
+   * `useMapRenderer.ts`'s `pointermove` listener.
+   */
+  hoveredDistill?: boolean;
 }
 
 /**
@@ -177,7 +192,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
     hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, hoveredFavorite = null,
-    sortMode = 'relevance', genericFade = 0,
+    sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -267,6 +282,14 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // enough to be worth reading, the same gate the shelf's own titles use.
         if (cell.center && favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
           drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
+        // The distill toggle, painted into the center tile's lower right
+        // corner - independent of `favorites`, since distill mode needs no
+        // favorite store. `distillMode` is undefined (not just false) for a
+        // caller that never mentions distill mode at all - a test asserting
+        // on level selection or prefetch order, say - so this draws nothing
+        // rather than requesting art nobody asked for.
+        if (cell.center && distillMode !== undefined)
+          drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
       }
     }
 
@@ -385,6 +408,69 @@ export function drawFavoriteBadge(
   if (hovered && FAVORITE_TOGGLE_PATH) {
     const path = ctx as PathContext;
     traceFavoriteToggle(path, cellPx, sx, sy);
+    path.fillStyle = FAVORITE_HOVER_GLOW_FILL;
+    path.fill();
+    path.lineWidth = 1;
+    path.strokeStyle = FAVORITE_HOVER_GLOW_STROKE;
+    path.stroke();
+  }
+}
+
+/**
+ * Trace `DISTILL_OFF_PATH`/`DISTILL_ON_PATH` (a per-axis tile fraction, like
+ * `FAVORITE_TOGGLE_PATH`) onto a real path at this tile's screen position,
+ * ready to `fill()`/`stroke()` - same replay-the-true-Bezier approach as
+ * `traceFavoriteToggle`.
+ */
+function traceDistillToggle(ctx: PathContext, cellPx: { x: number; y: number }, sx: number, sy: number, d: string): void {
+  ctx.beginPath();
+  for (const cmd of parsePath(d)) {
+    if (cmd.type === 'M') ctx.moveTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
+    else if (cmd.type === 'L') ctx.lineTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
+    else if (cmd.type === 'C')
+      ctx.bezierCurveTo(
+        sx + cmd.x1 * cellPx.x, sy + cmd.y1 * cellPx.y,
+        sx + cmd.x2 * cellPx.x, sy + cmd.y2 * cellPx.y,
+        sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y
+      );
+    else ctx.closePath();
+  }
+}
+
+/**
+ * Draw the center tile's distill toggle: whichever overlay PNG matches
+ * `distillMode` (off/on), anchored to the tile's lower right corner
+ * (`distillIconScreenRect`), plus a hover highlight traced onto the CURRENT
+ * state's own silhouette - same "shape, not a box" treatment
+ * `drawFavoriteBadge` gives the favorite badge, and the same reason it is
+ * drawn on the canvas rather than as a DOM overlay: there is no per-tile DOM
+ * element to hang a CSS `:hover` off of, and this control moves with the
+ * camera exactly like every other tile.
+ */
+export function drawDistillToggle(
+  ctx: DrawContext,
+  cache: TileCache,
+  distillMode: boolean,
+  hovered: boolean,
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number
+): void {
+  const id = distillMode ? DISTILL_ON : DISTILL_OFF;
+  const hit = cache.get(id, 0);
+  if (hit) {
+    const { x, y, w, h } = distillIconScreenRect(cellPx, sx, sy);
+    if (hit.rect) {
+      const { sx: rx, sy: ry, sw, sh } = hit.rect;
+      ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
+    } else {
+      ctx.drawImage(hit.img, x, y, w, h);
+    }
+  }
+  const activePath = distillMode ? DISTILL_ON_PATH : DISTILL_OFF_PATH;
+  if (hovered && activePath) {
+    const path = ctx as PathContext;
+    traceDistillToggle(path, cellPx, sx, sy, activePath);
     path.fillStyle = FAVORITE_HOVER_GLOW_FILL;
     path.fill();
     path.lineWidth = 1;
