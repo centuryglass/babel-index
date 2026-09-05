@@ -208,28 +208,99 @@ export interface TileCache {
 }
 
 /**
- * The browser's `LoadableImage`: fetch the encoded bytes, then decode OFF the
- * main thread into an owned `ImageBitmap`. Two things this buys, both from
- * profiling zoom lag:
+ * Fetch and decode one url into an `ImageBitmap`, on the calling thread. The
+ * fallback for when a decode worker cannot be created; also `toString()`ed into
+ * the worker below, so the two paths cannot drift. It references only globals
+ * (`fetch`, `createImageBitmap`), so it survives being stringified and run in a
+ * worker that shares none of this module's scope. `createImageBitmap` from a
+ * `Blob` (not an `<img>` - that makes Firefox decode synchronously on the
+ * caller) is what keeps the decode off the render thread. CORS is enforced
+ * because it is a `fetch`; the remote corpus host already serves the tile bases
+ * with it (see `packages/server/remote.ts`), and a same-origin deployment needs none.
+ */
+async function decodeOnThread(url: string): Promise<ImageBitmap> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(String(r.status));
+  return createImageBitmap(await r.blob());
+}
+
+/**
+ * A shared decoder that runs `DECODE_ON_THREAD` in a Web Worker and transfers
+ * the finished `ImageBitmap` back. This is what actually gets the decode off
+ * the CONTENT main thread: `createImageBitmap(blob)` on the main thread is
+ * still drained onto it by Firefox's `DecodePool::SyncRunIfPossible` whenever
+ * the event loop idles (~1.5s of main-thread decode in one zoom capture, the
+ * jank that survived moving off the `<img>` path). Requested from a worker, the
+ * content main thread never runs those jobs.
  *
- *   - the decode never happens on the render thread, so the first draw of a
- *     tile (or a 48 MB sheet) no longer stalls it - the per-level-transition
- *     jank, and
+ * Lazily built and shared across every tile, browser-only (tests inject their
+ * own `createImage` and never reach here). `undefined` means "not tried yet",
+ * `null` means "unavailable, use the on-thread fallback".
+ */
+let sharedDecoder: ((url: string) => Promise<ImageBitmap>) | null | undefined;
+
+function decodeInWorker(): ((url: string) => Promise<ImageBitmap>) | null {
+  if (sharedDecoder !== undefined) return sharedDecoder;
+  try {
+    // The worker resolves relative urls against its own blob: origin, not the
+    // page's, so the main thread hands it absolute urls (see `createBitmapImage`).
+    const src = `const decode = ${decodeOnThread.toString()};
+self.onmessage = (e) => {
+  const { id, url } = e.data;
+  decode(url).then(
+    (bitmap) => self.postMessage({ id, bitmap }, [bitmap]),
+    () => self.postMessage({ id, error: true })
+  );
+};`;
+    const blobUrl = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+    const worker = new Worker(blobUrl);
+    URL.revokeObjectURL(blobUrl);
+    const pending = new Map<number, { resolve: (b: ImageBitmap) => void; reject: () => void }>();
+    let nextId = 0;
+    worker.onmessage = (e: MessageEvent) => {
+      const { id, bitmap, error } = e.data as { id: number; bitmap?: ImageBitmap; error?: boolean };
+      const p = pending.get(id);
+      if (!p) {
+        bitmap?.close(); // resolved after the requester gave up - do not leak it
+        return;
+      }
+      pending.delete(id);
+      if (error || !bitmap) p.reject();
+      else p.resolve(bitmap);
+    };
+    // A worker-level failure (bad blob url, killed worker) must not hang every
+    // in-flight load forever: reject them so each falls back to a coarser tile,
+    // and disable the worker so later loads decode on-thread instead.
+    worker.onerror = () => {
+      sharedDecoder = null;
+      for (const p of pending.values()) p.reject();
+      pending.clear();
+    };
+    sharedDecoder = (url: string) =>
+      new Promise<ImageBitmap>((resolve, reject) => {
+        const id = nextId++;
+        pending.set(id, { resolve, reject });
+        worker.postMessage({ id, url });
+      });
+  } catch {
+    sharedDecoder = null;
+  }
+  return sharedDecoder;
+}
+
+/**
+ * The browser's `LoadableImage`: fetch the encoded bytes and decode OFF the
+ * content main thread into an owned `ImageBitmap` (see `decodeInWorker`). Buys
+ * two things, both from profiling zoom lag:
+ *
+ *   - the decode never runs on the render thread, so the first draw of a tile
+ *     (or a 48 MB sheet) no longer stalls it - the per-level-transition jank, and
  *   - the decoded surface is JS-owned and never silently discarded, so a later
  *     draw can never trigger a re-decode of a tile that never left the cache.
- *
- * Decoding from a `Blob` is what keeps the decode off-thread. Handing an
- * `<img>` to `createImageBitmap` instead makes Firefox decode SYNCHRONOUSLY on
- * the caller (`DecodePool::SyncRunIfPossible`, ~1.3s on the main thread in one
- * capture); `createImageBitmap(blob)` is dispatched to the decode pool. So this
- * uses `fetch` rather than an `<img>`, which also means CORS is enforced - the
- * remote corpus host already serves the tile bases with it (see
- * `packages/server/remote.ts`), and a same-origin deployment needs none.
  */
 function createBitmapImage(): LoadableImage {
   let url = '';
   let aborted = false;
-  const controller = new AbortController();
   const wrapper: LoadableImage = {
     onload: null,
     onerror: null,
@@ -239,29 +310,28 @@ function createBitmapImage(): LoadableImage {
     },
     set src(u: string) {
       url = u;
-      fetch(u, { signal: controller.signal })
-        .then((r) => {
-          if (!r.ok) throw new Error(`${r.status}`);
-          return r.blob();
-        })
-        .then((blob) => createImageBitmap(blob))
-        .then((bmp) => {
-          // Evicted (or the cache cleared) while the decode was in flight -
-          // the entry is gone, so free the bitmap rather than leaking it.
+      // The worker has no <base href>, so resolve against the document's first.
+      const absolute = new URL(u, document.baseURI).href;
+      const worker = decodeInWorker();
+      const decode = worker ? worker(absolute) : decodeOnThread(absolute);
+      decode.then(
+        (bmp: ImageBitmap) => {
+          // Evicted (or the cache cleared) while the decode was in flight - the
+          // entry is gone, so free the bitmap rather than leaking it.
           if (aborted) {
             bmp.close();
             return;
           }
           wrapper.bitmap = bmp;
           wrapper.onload?.();
-        })
-        .catch(() => {
+        },
+        () => {
           if (!aborted) wrapper.onerror?.();
-        });
+        }
+      );
     },
     close() {
       aborted = true;
-      controller.abort();
       const b = wrapper.bitmap;
       if (b && 'close' in b && typeof b.close === 'function') b.close();
       wrapper.bitmap = null;
