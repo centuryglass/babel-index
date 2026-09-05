@@ -512,6 +512,21 @@
       .catalog-search input[type="search"]:focus { border-color: #c8a95f; outline: none; }
       .catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
       .catalog-count { margin: 0; flex: 1 1 16em; color: var(--dim); font-size: 11px; }
+      /*
+        The count, the sort and the paging control fit on one line at this
+        width only because none of them insists on its own: the count gives up
+        its 16em basis and ellipsises (its text is trimmed to match - see
+        `narrow` in CatalogView), the sort keeps only its select, and the
+        paging buttons tighten. Wrapped instead, the three of them cost two
+        lines of a bar that is already a sixth of a phone's screen before the
+        first room.
+      */
+      .catalog.narrow .catalog-bar-row.sub { flex-wrap: nowrap; align-items: center; }
+      .catalog.narrow .catalog-count {
+        flex: 1 1 4em; min-width: 0; overflow-wrap: normal;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .catalog.narrow .paging button { padding: 4px 7px; }
       .catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
       .catalog-note { color: var(--dim); }
 
@@ -785,6 +800,20 @@
         /* One line: "Room 25" breaking in two pushed the whole row down. */
         white-space: nowrap; overflow: hidden;
       }
+      .catalog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      /*
+        A narrow row has no width to spare on the line the name sits on, so the
+        map link is gone (`CatalogRow`'s `narrow`) and the name is allowed the
+        second line the link was taking - clamped at two, and paid for in
+        `TITLE_LINE_PX` so the row stays exactly as tall as every other one.
+        `--catalog-title-line` is that same number, so what is reserved and
+        what is drawn cannot drift.
+      */
+      .catalog.narrow .catalog-name { white-space: normal; }
+      .catalog.narrow .catalog-title {
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        line-height: var(--catalog-title-line, 16px); text-overflow: clip;
+      }
       .catalog-show { flex: 0 0 auto; }
       .catalog-name .favorite-toggle { flex: 0 0 auto; }
       .catalog-rank {
@@ -865,6 +894,14 @@
         */
         max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
       }
+      /*
+        And a much harder cap on a phone, where 42vh of shelf plus the tile
+        above it is most of the screen and a reader arrives at a wall of
+        remembered searches rather than at the library. The shelf scrolls, and
+        it is ordered newest first, so what a lower cap costs is the oldest
+        titles' visibility - not their reachability.
+      */
+      .catalog.narrow .shelf-links { max-height: 22vh; }
       .shelf-link {
         font: inherit; font-size: 10px; cursor: pointer; padding: 3px 6px;
         border-radius: 3px; border: 1px solid transparent;
