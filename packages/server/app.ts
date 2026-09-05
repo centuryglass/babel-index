@@ -206,6 +206,14 @@ export function createApp({
    * no body parser is mounted; the room is named in the path and validated
    * against the corpus, which is also what keeps an arbitrary string out of the
    * store.
+   *
+   * Identity and throttling are two different axes, kept on two different
+   * keys. `X-Favorite-Client` (a token the browser generates once and keeps in
+   * `localStorage`, see `useFavorites.ts`) is who a favorite is recorded
+   * against - see `favorites.ts` for why that moved off `req.ip`. The rate
+   * bucket below stays keyed on `req.ip` regardless: a script cannot spend a
+   * fresh burst by minting a new client token per request, because the token
+   * is never what's rationed - the connection making the requests is.
    */
   if (favorites) {
     const favoriteBuckets = createRateBuckets();
@@ -221,11 +229,14 @@ export function createApp({
     const write = (method: 'add' | 'remove') => (req: Request, res: Response) => {
       const file = String(req.params.file);
       if (!roomFiles.has(file)) return res.status(404).json({ error: 'no such room' });
+      const clientId = req.get('X-Favorite-Client') ?? '';
+      if (!CLIENT_ID_PATTERN.test(clientId))
+        return res.status(400).json({ error: 'missing or invalid client id' });
       // req.ip is undefined only for a socket that has already gone away.
       const ip = req.ip ?? '';
       if (!favoriteBuckets.take(ip))
         return res.status(429).json({ error: 'too many favorites at once - try again in a moment' });
-      const count = favorites[method](file, ip);
+      const count = favorites[method](file, clientId);
       res.json({ file, count, favorited: method === 'add' });
     };
 
@@ -424,13 +435,24 @@ export function stubRanking(rooms: { id: number }[], query: string): number[] {
 }
 
 /**
+ * What a `X-Favorite-Client` header must look like to be trusted as a
+ * favorites identity - long enough to carry real randomness (a UUID is 36
+ * chars), short enough that a header full of garbage can't bloat the hash
+ * input `favorites.ts` stores a slice of.
+ */
+const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+
+/**
  * A token bucket per address for the favorite writes.
  *
- * Not a durability or a correctness measure - the set semantics already cap
- * what one address can do to a count - just a bound on how fast a script can
- * make this process hash things. In memory and never persisted, so it forgets
- * everyone on restart and holds no record of who asked for what: the same
- * reason favorites.ts stores no addresses.
+ * Keyed on `req.ip`, not on `X-Favorite-Client` - a client id is free to mint,
+ * so bucketing on it would let a script spend a fresh burst on every request
+ * just by sending a new one. The address is what actually costs something to
+ * change. Not a durability or a correctness measure either way - the set
+ * semantics already cap what one client id can do to a count - just a bound
+ * on how fast a script can make this process hash things. In memory and never
+ * persisted, so it forgets everyone on restart and holds no record of who
+ * asked for what: the same reason favorites.ts stores no addresses.
  */
 const RATE_BURST = 20;
 const RATE_REFILL_MS = 1000;

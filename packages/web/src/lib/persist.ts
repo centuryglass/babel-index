@@ -8,7 +8,7 @@
  * (`fitZoom` in main.jsx) precisely so it is right on whatever device is in
  * front of them rather than right on the one they used last.
  *
- * Five things earn an exception, all of them the reader's own choices rather
+ * Six things earn an exception, most of them the reader's own choices rather
  * than the map's state: which way they page the catalog, what they have
  * searched for, which sensitive-content tags they have blocked, which rooms
  * they have favorited, and whether they have already been shown the one-time
@@ -20,7 +20,10 @@
  * are a standing choice about what a reader does not want to see, so it has
  * to survive a reload the same way the choice to see it again would. The help
  * nudge is the odd one out - not a choice at all, just a flag so a returning
- * reader isn't shown the same "try this book" hint every visit.
+ * reader isn't shown the same "try this book" hint every visit. The sixth,
+ * the favorites client id, isn't a choice either - it's the random token a
+ * favorite toggle is recorded against on the server (`favorites.ts`), and it
+ * has to survive a reload or every visit would look like a new visitor.
  *
  * ### Why every call is wrapped
  *
@@ -66,7 +69,39 @@ export const KEYS = {
   favorites: `${PREFIX}favorites`,
   /** Whether the one-time nudge toward the "READ ME" book has already been shown. */
   seenHelpHint: `${PREFIX}seenHelpHint`,
+  /**
+   * This browser's own random id for global favorite writes - see
+   * `favorites.ts` for why it replaced the visitor's IP address as what the
+   * server hashes a favorite against.
+   */
+  favoriteClientId: `${PREFIX}favoriteClientId`,
 };
+
+/**
+ * This browser's id for favorite writes, generating and persisting one on
+ * first use.
+ *
+ * Not returned deterministically when storage is unavailable - a fresh id
+ * every call would make every write from that session look like a different
+ * visitor, which is worse than one id that happens not to survive a reload.
+ * Callers that need one id for the page's lifetime should call this once and
+ * hold the result, which is exactly what `useFavorites.ts` does.
+ */
+export function getOrCreateFavoriteClientId({ store }: { store?: StorageLike | null } = {}): string {
+  const existing = load<string>(KEYS.favoriteClientId, '', {
+    validate: (v) => typeof v === 'string' && v.length >= 8,
+    store,
+  });
+  if (existing) return existing;
+  const id = globalThis.crypto?.randomUUID?.() ?? randomFallbackId();
+  save(KEYS.favoriteClientId, id, { store });
+  return id;
+}
+
+/** Used only where `crypto.randomUUID` is unavailable - old browsers, non-secure contexts. */
+function randomFallbackId(): string {
+  return Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
+}
 
 /**
  * The storage to use, or null if there is none.
