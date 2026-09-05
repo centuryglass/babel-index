@@ -785,6 +785,20 @@
         /* One line: "Room 25" breaking in two pushed the whole row down. */
         white-space: nowrap; overflow: hidden;
       }
+      .catalog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      /*
+        A narrow row has no width to spare on the line the name sits on, so the
+        map link is gone (`CatalogRow`'s `narrow`) and the name is allowed the
+        second line the link was taking - clamped at two, and paid for in
+        `TITLE_LINE_PX` so the row stays exactly as tall as every other one.
+        `--catalog-title-line` is that same number, so what is reserved and
+        what is drawn cannot drift.
+      */
+      .catalog.narrow .catalog-name { white-space: normal; }
+      .catalog.narrow .catalog-title {
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        line-height: var(--catalog-title-line, 16px); text-overflow: clip;
+      }
       .catalog-show { flex: 0 0 auto; }
       .catalog-name .favorite-toggle { flex: 0 0 auto; }
       .catalog-rank {

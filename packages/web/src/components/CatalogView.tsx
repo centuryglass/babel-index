@@ -117,6 +117,30 @@ const STORY_RESERVED_PX = 98;
 const STORY_LINE_PX = 19;
 
 /**
+ * Where the row stops having width to spend on anything but the room itself.
+ *
+ * Measured from the list, not from a media query, because the two layouts do
+ * not differ only in CSS: the narrow one gives the title a second line, and
+ * that line has to be paid for in `TEXT_MIN` and `STORY_RESERVED_PX` or the
+ * spacer arithmetic every unmounted page rests on is wrong for every row. One
+ * flag, read by the class name and by the two constants together, is what
+ * keeps them from disagreeing - a media query could only move the CSS half.
+ *
+ * A width rather than an orientation: a phone in portrait is the case that
+ * prompted this, but a split-screen landscape phone and a narrow desktop
+ * window are the same row with the same problem.
+ */
+const NARROW_PX = 560;
+
+/**
+ * One line of the room's name, and what a second one costs.
+ *
+ * `--catalog-title-line` hands the same number to the clamp in CSS, so the
+ * height reserved here and the height the title actually takes are one value.
+ */
+const TITLE_LINE_PX = 16;
+
+/**
  * How wide a shelf link is, in characters.
  *
  * The shelf is a GRID of equal cells rather than a wrapped row of pill-shaped
@@ -262,10 +286,14 @@ export function CatalogView({
 
   const perPage = config.catalog.perPage;
   const thumbPx = thumbWidth(geom.width);
+  // Narrow rows drop the map link and let the name wrap instead of clipping
+  // it - see `NARROW_PX`. Both halves of that trade are priced below.
+  const narrow = geom.width < NARROW_PX;
+  const titleReserve = narrow ? TITLE_LINE_PX : 0;
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
   // exact, which is the property the sliding window rests on.
-  const rowPx = rowHeight(thumbPx, ROW_PAD, TEXT_MIN + (result?.breakdown ? SCORE_STRIP_PX : 0));
+  const rowPx = rowHeight(thumbPx, ROW_PAD, TEXT_MIN + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0));
   const level = thumbLevel(thumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
   const total = order.length;
@@ -286,7 +314,7 @@ export function CatalogView({
   // with it rather than leaving the story to be cut by `overflow: hidden`.
   const lines = storyLines(
     rowPx,
-    STORY_RESERVED_PX + (result?.breakdown ? SCORE_STRIP_PX : 0),
+    STORY_RESERVED_PX + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
     STORY_LINE_PX
   );
 
@@ -376,7 +404,7 @@ export function CatalogView({
 
   return (
     <div
-      className={`catalog${leaving ? ' leaving' : ''}`}
+      className={`catalog${narrow ? ' narrow' : ''}${leaving ? ' leaving' : ''}`}
       ref={hostRef}
       style={{
         '--catalog-thumb': `${thumbPx}px`,
@@ -384,6 +412,7 @@ export function CatalogView({
         '--catalog-lines': lines,
         '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
         '--catalog-line': `${STORY_LINE_PX}px`,
+        '--catalog-title-line': `${TITLE_LINE_PX}px`,
         '--catalog-out': `${config.catalog.transitionMs}ms`,
       } as CSSProperties}
     >
@@ -566,6 +595,7 @@ export function CatalogView({
               result={result}
               weights={config.search.weights}
               favorite={favoriteFor(id)}
+              narrow={narrow}
               spotlit={id === highlightId}
             />
           ))}
@@ -611,7 +641,7 @@ export function CatalogView({
 function CatalogRow({
   id, rank, total, entry, src, thumbPx, cell,
   onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights, favorite,
-  spotlit = false,
+  narrow = false, spotlit = false,
 }: {
   id: number;
   rank: number;
@@ -628,6 +658,8 @@ function CatalogRow({
   result: SearchResult | null;
   weights: Config['search']['weights'];
   favorite: FavoriteControl | null;
+  /** whether the list is too narrow to carry the map link beside the name - see `NARROW_PX` */
+  narrow?: boolean;
   /** whether "show in the catalog" just landed here - see `CatalogView`'s `highlightId` */
   spotlit?: boolean;
 }) {
@@ -648,7 +680,7 @@ function CatalogRow({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [desc.description, result, thumbPx]);
+  }, [desc.description, result, thumbPx, narrow]);
 
   return (
     <li
@@ -697,21 +729,29 @@ function CatalogRow({
         <div className="catalog-head">
           <h2 className="catalog-name">
             <span className="catalog-rank">{rank + 1}</span>
-            {roomTitle(entry, id)}
+            <span className="catalog-title">{roomTitle(entry, id)}</span>
           </h2>
           {/*
+            The map link is the first thing a narrow row gives up. It is the
+            widest fixed item on the line the room's own name has to share, and
+            a name clipped to "Room" to make space for it loses the thing the
+            row exists to show - while `RoomOverlay`, one tap away on the
+            thumbnail, carries the same link. Wide rows keep it: there the
+            width costs nothing and it saves the tap.
+
             A room past the "rooms on the map" slider has no cell to fly to, and
             saying so is more honest than a dead control - it is also the only
             place that slider's effect is visible as something other than a
             thinner map.
           */}
-          {cell ? (
-            <button className="catalog-show" onClick={() => onShowOnMap(cell.x, cell.y)}>
-              show on the map
-            </button>
-          ) : (
-            <span className="catalog-show dim">not on the map</span>
-          )}
+          {!narrow &&
+            (cell ? (
+              <button className="catalog-show" onClick={() => onShowOnMap(cell.x, cell.y)}>
+                show on the map
+              </button>
+            ) : (
+              <span className="catalog-show dim">not on the map</span>
+            ))}
           {/*
             In the head, NOT inside `RoomDetails` where the card and the
             overlay put it. A row is a fixed height - that is what lets the
