@@ -453,7 +453,16 @@ export function CatalogView({
               </>
             ) : (
               <>
-                <b>{total}</b> rooms, in alphabetical order
+                <b>{total}</b> rooms
+                {/*
+                  The order is named here and again by the sort select beside
+                  it, and on a narrow bar those two facts cost a whole line of
+                  a phone's screen between them. So the clause goes only where
+                  the select is there to carry it - a deployment without
+                  favorites has no select, and then this is the only thing
+                  that says what order the list is in.
+                */}
+                {!(narrow && favorites) && <>, in alphabetical order</>}
               </>
             )}
             {note && <span className="catalog-note"> · {note}</span>}
@@ -473,7 +482,13 @@ export function CatalogView({
           */}
           {favorites && (
             <label className="catalog-sort">
-              sort
+              {/*
+                The label is the select's accessible name, so a narrow bar
+                hides it from sight rather than dropping it - `display: none`
+                would take the name with it and leave a select announcing only
+                its own value.
+              */}
+              <span className={narrow ? 'sr-only' : undefined}>sort</span>
               <select value={sortMode} onChange={(e) => onSortMode(e.target.value as SortMode)}>
                 <option value="relevance">{result?.term ? 'by ranking' : 'alphabetically'}</option>
                 <option value="mine">my favorites first</option>
