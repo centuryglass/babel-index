@@ -18,7 +18,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
-import { CELL_ASPECT, pxPerCell, type Camera } from '../lib/camera.ts';
+import { CELL_ASPECT, overviewZoom, pxPerCell, type Camera } from '../lib/camera.ts';
 import { createSlideshow } from '../lib/slide.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
@@ -92,13 +92,14 @@ export function useRearrangement({
    * Slide the library from one arrangement into another.
    *
    * The camera zooms out IN PLACE first - eased to `min(current zoom,
-   * defaultZoom)` at the x/y it already has - rather than flying home to the
-   * center. Widening the view is what gives the slide a wall of rooms to work
-   * with; recentering was never necessary for that, and it cost every reader
-   * their position on the map for every rearrangement, search included. A
-   * reader already at or below `defaultZoom` gets no zoom flight at all - the
-   * slide runs immediately against wherever they are, exactly as it does when
-   * a favorite toggled live is asking for the same treatment mid-browse.
+   * overviewZoom(...))` at the x/y it already has - rather than flying home to
+   * the center. Widening the view is what gives the slide a wall of rooms to
+   * work with; recentering was never necessary for that, and it cost every
+   * reader their position on the map for every rearrangement, search
+   * included. A reader already at or below that zoom gets no zoom flight at
+   * all - the slide runs immediately against wherever they are, exactly as it
+   * does when a favorite toggled live is asking for the same treatment
+   * mid-browse.
    * `buildRearrangement` needs no particular position (the fixed tile - the
    * center room - not being in the on-camera rectangle at all is the ordinary
    * case, see `board.ts`). The guarantee is the same either way - nothing is
@@ -141,7 +142,10 @@ export function useRearrangement({
       // the opening view, to keep using the center tile's controls). Moot
       // when the camera never leaves in the first place.
       const returnZoom = cam.current.zoom;
-      const target = Math.min(returnZoom, config.camera.defaultZoom);
+      const target = Math.min(
+        returnZoom,
+        overviewZoom(canvas, config.camera.minVisibleCells, cam.current)
+      );
 
       // A reader mid-search keeps their place in the field: the zoom flight
       // and the slide both move focus-stealing content under the browser, and

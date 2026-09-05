@@ -18,6 +18,7 @@ import { describeCell, describeRoom, describeArrangement } from '../../../map/de
 import { nextRoom, type Cell } from '../../../map/nextRoom.ts';
 import {
   CELL_ASPECT,
+  overviewZoom,
   pxPerCell,
   cursorCell,
   pickGranularity,
@@ -330,17 +331,18 @@ export function useMapCursor({
 
       if (e.key === 'Home') {
         e.preventDefault();
+        const zoom = overviewZoom(canvasRef.current, camera.minVisibleCells, cam.current);
         if (e.ctrlKey || e.metaKey) {
           const best = layout.cellOfRank(0);
           if (!best) {
             setStatus('no ranked rooms to jump to');
             return;
           }
-          flyTo(best.x, best.y, camera.defaultZoom).then(
+          flyTo(best.x, best.y, zoom).then(
             (landed) => landed && announceCursorMove(best)
           );
         } else {
-          flyTo(0, 0, camera.defaultZoom).then(
+          flyTo(0, 0, zoom).then(
             (landed) => landed && announceCursorMove({ x: 0, y: 0 })
           );
         }
@@ -357,7 +359,7 @@ export function useMapCursor({
           setStatus('no ranked rooms to jump to');
           return;
         }
-        flyTo(best.x, best.y, camera.defaultZoom).then(
+        flyTo(best.x, best.y, overviewZoom(canvasRef.current, camera.minVisibleCells, cam.current)).then(
           (landed) => landed && announceCursorMove(best)
         );
         return;

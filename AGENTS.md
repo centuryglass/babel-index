@@ -484,17 +484,25 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   cycled to letter the whole wall). Assignment order is
   override → history (newest first) → tags, and override books are reserved
   first. Titles read top-to-bottom, as printed spines do.
-- **Two opening views, and they are not interchangeable.** The page-load view is
-  DERIVED, not configured: `main.tsx` computes it once at mount with `fitZoom`
-  (camera.ts), framing the center room's book-bounding box (`GEOMETRY.opening`,
-  exported as `CENTRE_SHELF_RECT` from `center.ts`) on the display so the spines are legible,
-  centered on the shelf and capped at the tile's NATIVE width so a page never
-  loads upscaled. It is passed to `useMapCamera` as `opening` — do not restate it
-  as a config number, and do not read the viewport inside the hook. `defaultZoom`
-  (220, config) is the return-to-center view, used by the "center" button and the
-  rearrangement's park; the split exists precisely so the reorder animation has a
-  wall of rooms to slide across rather than the one shelf the opening shows.
-  Collapsing them silently breaks whichever view loses.
+- **Two opening views, and they are not interchangeable.** Both are DERIVED
+  from the viewport, not configured as a fixed zoom, but from different
+  targets. The page-load view: `main.tsx` computes it once at mount with
+  `fitZoom` (camera.ts), framing the center room's book-bounding box
+  (`GEOMETRY.opening`, exported as `CENTRE_SHELF_RECT` from `center.ts`) on the
+  display so the spines are legible, centered on the shelf and capped at the
+  tile's NATIVE width so a page never loads upscaled. It is passed to
+  `useMapCamera` as `opening` — do not restate it as a config number, and do
+  not read the viewport inside the hook. The return-to-center view — used by
+  the "center" button, a room double-tap, `Home`/`Ctrl+Home`/`End`, and the
+  rearrangement's park — is `overviewZoom(canvas, config.camera.minVisibleCells,
+  cam)` (camera.ts): the largest zoom that still fits `minVisibleCells` (5,
+  config) whole rows and columns on the viewport's binding axis, computed at
+  each call site from the live canvas size rather than once at mount. The
+  split exists precisely so the reorder animation has a wall of rooms to slide
+  across rather than the one shelf the opening shows, and the return-to-center
+  view has to be figured per-viewport-shape or a phone's narrow width shows
+  almost nothing beyond the center room. Collapsing them silently breaks
+  whichever view loses.
 - **The zoom cap is `MAX_ZOOM_FACTOR` × the tile's native width** (2× = 2048 at
   1024w), derived in `ZOOM_LIMITS` so it tracks the tile, not a literal. Past 1×
   the flat center tile is upscaled and softens; the OPENING view is separately

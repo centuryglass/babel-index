@@ -100,7 +100,7 @@ test('/api/manifest carries the config, and never the operator notes', async () 
     const m = await (await get('/api/manifest')).json();
     // The client reads all three of these on its first render, so their absence
     // is not a degraded map, it is a crash.
-    assert.ok(m.config.camera.defaultZoom > 0);
+    assert.ok(m.config.camera.minVisibleCells > 0);
     assert.ok(m.config.map.contentRatio > 0);
     assert.ok(m.config.search.weights.clip >= 0);
     // `notes` is for whoever started the server; shipping it would invite the
@@ -124,7 +124,6 @@ test('a narrowed config reaches the client narrowed', async () => {
     async ({ get }) => {
       const m = await (await get('/api/manifest')).json();
       assert.equal(m.config.camera.maxZoom, 120);
-      assert.equal(m.config.camera.defaultZoom, 120, 'the opening zoom came with it');
     },
     { config: resolveConfig({ camera: { maxZoom: 120 } }) }
   );
