@@ -63,7 +63,10 @@ import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/b
 import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import { drawFavoriteBadge, drawFavoriteSwitch, drawDistillToggle, drawGenericFade, type DrawContext } from './render.ts';
+import {
+  drawFavoriteBadge, drawFavoriteSwitch, drawDistillToggle, drawGenericFade,
+  SMOOTHING_MAX_DOWNSCALE, type DrawContext,
+} from './render.ts';
 import { areSpinesLegible } from './center.ts';
 
 /**
@@ -404,6 +407,12 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
     const cellPx = pxPerCell(cam);
     const level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, null);
 
+    // Same per-frame smoothing gate as `render.ts`'s draw - a rearrangement runs
+    // zoomed out, exactly where shrinking every tile with bilinear filtering
+    // costs the most. See `SMOOTHING_MAX_DOWNSCALE`.
+    const src = pyramid.sizeOf(level);
+    ctx.imageSmoothingEnabled = !src || src.w <= cellPx.x * dpr * SMOOTHING_MAX_DOWNSCALE;
+
     const halfW = w / 2 / cellPx.x;
     const halfH = h / 2 / cellPx.y;
     const x0 = Math.floor(cam.x - halfW);
@@ -430,6 +439,14 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       const sx = (drawMx - cam.x) * cellPx.x + w / 2;
       const sy = (drawMy - cam.y) * cellPx.y + h / 2;
       const id = idFor(value, homeMx, homeMy, genericIndexAt);
+      // A generic tile faded to full black by distill mode shows none of its
+      // art, so scaling it under the fade is wasted - paint the black alone.
+      // Same skip as `render.ts`'s draw loop; the tile is still warmed below.
+      if (value === BOARD_GENERIC && genericFade >= 1) {
+        drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+        wanted.push(id);
+        return;
+      }
       const hit = cache.get(id, level);
       if (hit) {
         if (hit.rect) {

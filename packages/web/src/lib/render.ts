@@ -28,7 +28,7 @@ import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON,
-  genericId, type LoadableImage, type RoomId, type TileCache,
+  genericId, type Drawable, type RoomId, type TileCache,
 } from './tiles.ts';
 import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
@@ -54,18 +54,25 @@ export interface DrawContext {
   font: string;
   /** 0-1. Used only for distill mode's black fade over generic tiles - restored to 1 after. */
   globalAlpha: number;
+  /**
+   * Whether `drawImage` bilinearly filters. Set per frame from the draw's
+   * downscale ratio - see `SMOOTHING_MAX_DOWNSCALE`. A shrinking mip drawn
+   * with nearest-neighbour is far cheaper and, since the mip is already a
+   * clean downsample, indistinguishable at the sizes it happens.
+   */
+  imageSmoothingEnabled: boolean;
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
   fillText(text: string, x: number, y: number): void;
-  // `LoadableImage` is all this file ever passes; `CanvasImageSource` is added
-  // to the union purely so a real `CanvasRenderingContext2D` - whose own
+  // A `Drawable` is all this file ever passes; `CanvasImageSource` is added to
+  // the union purely so a real `CanvasRenderingContext2D` - whose own
   // `drawImage` only accepts the latter - still satisfies this interface.
   drawImage(
-    image: LoadableImage | CanvasImageSource,
+    image: Drawable | CanvasImageSource,
     dx: number, dy: number, dw: number, dh: number
   ): void;
   drawImage(
-    image: LoadableImage | CanvasImageSource,
+    image: Drawable | CanvasImageSource,
     sx: number, sy: number, sw: number, sh: number,
     dx: number, dy: number, dw: number, dh: number
   ): void;
@@ -80,6 +87,19 @@ export interface DrawContext {
  */
 const idOf = (cell: RoomAtResult, layout: MapLayout, gx: number, gy: number): RoomId =>
   cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
+
+/**
+ * How much larger than the drawn cell a tile may be before smoothing is turned
+ * off for the frame. `pickLevel` always hands back a tile at least as large as
+ * the demand, so this ratio is >= 1 for the visible field; below this it is a
+ * near-1:1 (or upscaled, when a coarser tile is substituted) draw where bilinear
+ * filtering earns its cost, and above it the tile is being shrunk enough that
+ * nearest-neighbour of an already-filtered mip looks the same for a fraction of
+ * the work. Bilinear downscaling of the whole visible field is the single
+ * largest cost in a zoomed-out frame (Skia's filtered sampler), and a zoomed-out
+ * frame is exactly where this ratio is high.
+ */
+export const SMOOTHING_MAX_DOWNSCALE = 1.25;
 
 export interface CreateRendererOpts {
   cache: TileCache;
@@ -215,6 +235,13 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
     // display. Both axes go in: a cell need not share the tile's aspect.
     level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, level);
 
+    // Turn off bilinear filtering once the tiles are being shrunk hard enough
+    // that a nearest-neighbour draw of the already-filtered mip is
+    // indistinguishable - see `SMOOTHING_MAX_DOWNSCALE`. Decided once per frame
+    // from the level all visible tiles share, not per cell.
+    const src = pyramid.sizeOf(level);
+    ctx.imageSmoothingEnabled = !src || src.w <= cellPx.x * dpr * SMOOTHING_MAX_DOWNSCALE;
+
     const toScreen = (wx: number, wy: number): [number, number] =>
       [(wx - cx) * cellPx.x + w / 2, (wy - cy) * cellPx.y + h / 2];
     // +1 kills hairline gaps from rounding, on each axis independently.
@@ -233,26 +260,36 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         visible.push(id);
 
         const [sx, sy] = toScreen(gx, gy);
-        const hit = cache.get(id, level);
 
-        if (hit) {
-          if (hit.rect) {
-            const { sx: rx, sy: ry, sw, sh } = hit.rect;
-            ctx.drawImage(hit.img, rx, ry, sw, sh, sx, sy, cw, ch);
-          } else {
-            ctx.drawImage(hit.img, sx, sy, cw, ch);
-          }
-          drawn++;
-          if (hit.level !== level) substituted++;
+        // A generic cell that distill mode has faded to full black shows nothing
+        // of its art, so drawing (and scaling) the tile beneath the fade is pure
+        // waste - and on a zoomed-out map generic cells are the majority. Paint
+        // the black fill alone. The tile is still warmed by the prefetch pass
+        // below, so toggling distill back off has it ready without a pop.
+        if (cell.generic && genericFade >= 1) {
+          drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
         } else {
-          // Rule 1's floor. Only reachable before the generic itself has
-          // loaded, or for a room the manifest does not have.
-          ctx.fillStyle = '#15120f';
-          ctx.fillRect(sx, sy, cw, ch);
-          blank++;
-        }
+          const hit = cache.get(id, level);
 
-        if (cell.generic && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+          if (hit) {
+            if (hit.rect) {
+              const { sx: rx, sy: ry, sw, sh } = hit.rect;
+              ctx.drawImage(hit.img, rx, ry, sw, sh, sx, sy, cw, ch);
+            } else {
+              ctx.drawImage(hit.img, sx, sy, cw, ch);
+            }
+            drawn++;
+            if (hit.level !== level) substituted++;
+          } else {
+            // Rule 1's floor. Only reachable before the generic itself has
+            // loaded, or for a room the manifest does not have.
+            ctx.fillStyle = '#15120f';
+            ctx.fillRect(sx, sy, cw, ch);
+            blank++;
+          }
+
+          if (cell.generic && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+        }
 
         if (chrome) drawChrome(ctx, cell, sx, sy, zoom);
         // The favorite badge - every real room, never the center (it is the

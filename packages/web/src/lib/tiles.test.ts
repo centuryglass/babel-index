@@ -24,16 +24,23 @@ const LADDER = createPyramid({
 function fakeImages() {
   const made: LoadableImage[] = [];
   const createImage = (): LoadableImage => {
-    const img: LoadableImage = { src: '', onload: null, onerror: null };
+    const img: LoadableImage = {
+      src: '', onload: null, onerror: null, bitmap: null,
+      close() { img.bitmap = null; },
+    };
     made.push(img);
     return img;
   };
+  // A settled load hands its own loader back as its drawable, exactly as the
+  // browser's `createBitmapImage` hands back an ImageBitmap - so `get()`'s
+  // reported `img` is this same object and identity assertions still hold.
+  const settle1 = (i: LoadableImage) => { i.bitmap = i; i.onload?.(); };
   return {
     createImage,
     made,
     urls: () => made.map((i) => i.src),
-    settleAll: () => made.forEach((i) => i.onload?.()),
-    settle: (url: string) => made.filter((i) => i.src === url).forEach((i) => i.onload?.()),
+    settleAll: () => made.forEach(settle1),
+    settle: (url: string) => made.filter((i) => i.src === url).forEach(settle1),
     fail: (url: string) => made.filter((i) => i.src === url).forEach((i) => i.onerror?.()),
     count: (url: string) => made.filter((i) => i.src === url).length,
   };
@@ -139,7 +146,7 @@ test('a missing level falls back to a coarser one, and says which', () => {
 
   const hit = cache.get(5, 0)!;
   assert.equal(hit.level, 2, 'a coarse tile upscales to something soft but correct');
-  assert.equal(hit.img.src, '/l2/5.jpg');
+  assert.equal((hit.img as LoadableImage).src, '/l2/5.jpg');
   // And the level actually wanted is now on its way, not abandoned.
   assert.ok(images.urls().includes('/l0/5.jpg'), 'the wanted level must still be requested');
 });

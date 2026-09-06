@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
 import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
-import { createTileCache, CENTER, type LoadableImage } from './tiles.ts';
+import { createTileCache, CENTER, type Drawable, type LoadableImage } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
 
@@ -37,11 +37,15 @@ function fakeCtx(): FakeCtx {
     drawn,
     fills,
     strokes,
-    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', globalAlpha: 1,
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', globalAlpha: 1, imageSmoothingEnabled: true,
     // Either drawImage(img, dx, dy, dw, dh) or the 9-arg source-rect form
     // (img, sx, sy, sw, sh, dx, dy, dw, dh) - a sheet-backed tile uses the
     // latter, so both must be distinguishable to the test asserting on it.
-    drawImage(img: LoadableImage, ...rest: number[]) {
+    // The renderer only ever hands us one of the test's own `LoadableImage`
+    // stand-ins (a settled fake is its own drawable), so record it as such -
+    // that keeps `d.img.src` available to the assertions below.
+    drawImage(image: Drawable | CanvasImageSource, ...rest: number[]) {
+      const img = image as LoadableImage;
       if (rest.length === 8) {
         const [sx, sy, sw, sh, x, y, w, h] = rest;
         drawn.push({ img, rect: { sx, sy, sw, sh }, x, y, w, h });
@@ -70,11 +74,14 @@ function fakeImages() {
   return {
     made,
     createImage: (): LoadableImage => {
-      const img: FakeImage = { src: '', onload: null, onerror: null };
+      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null };
       made.push(img);
       return img;
     },
-    settleAll: () => made.forEach((i) => i.onload?.()),
+    // A settled load is its own drawable (bitmap = self), so a drawn tile's
+    // `img` is this object and `img.src` still identifies it - the browser
+    // hands back an ImageBitmap here instead.
+    settleAll: () => made.forEach((i) => { i.bitmap = i; i.onload?.(); }),
     urls: () => made.map((i) => i.src),
     levelsRequested: () =>
       made.map((i) => Number(/^\/l(\d+)\//.exec(i.src)?.[1])).filter((n) => !Number.isNaN(n)),
