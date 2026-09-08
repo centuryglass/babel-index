@@ -176,14 +176,17 @@ def default_prompt(keywords: list[str], k=4) -> str:
 # ---------------------------------------------------------------------------
 # Alt text prompt
 # ---------------------------------------------------------------------------
-# Every tile is a variation on the same source scene, so a naive per-tile
-# description would force a screen-reader user to hear it re-enumerated on
-# every single tile. The prompt instead names that shared scene once and tells
-# the model to assume it's already known, describing only what this tile adds
-# or changes.
+# Every tile is a variation on the same recurring setting. Two failure modes
+# pull in opposite directions: re-enumerating that setting on every tile wastes
+# a screen-reader user's time, but describing a tile as a *delta* from it
+# ("the lamp is replaced with...", "the columns are absent") is meaningless to
+# a reader who hears only this one tile and was never shown the baseline. The
+# prompt threads between them: name the setting once so the model can keep its
+# fixed details brief, but require every sentence to describe what is actually
+# present, never a change to an unseen original.
 BASE_SCENE = (
-    "a wooden bookshelf against a dark wood wall, five shelves of identical"
-    "tidy books, a round wall-mounted lamp centered above the shelf, and a "
+    "a wooden bookcase against a dark wood wall, its shelves lined with rows of "
+    "identical tidy books, a round wall-mounted lamp centered above it, and a "
     "wooden column on each side"
 )
 
@@ -191,55 +194,56 @@ BASE_SCENE = (
 def default_alt_prompt(keywords: list[str]) -> str:
     """Return the default alt-text prompt for a tile's keyword list."""
     return (
-        "Write alt text for this image, for a screen-reader user. This tile "
-        f"belongs to a large series of variations on one source scene: {BASE_SCENE}. "
-        "Assume the listener already knows that base scene from earlier tiles in "
-        "the series -- do not describe it. Only mention any of those elements if "
-        "this particular tile changes, removes, damages, or draws special "
-        "attention to one of them; otherwise skip straight to what's distinctive "
-        "about this tile.\n\n"
-        "Before you write anything, look closely at the whole frame, corner to "
-        "corner, including the foreground, the space beside and around the "
-        "shelf, and the architecture itself (ceiling, walls, floor, the shape "
-        "of the shelf openings) -- not just the shelf's contents. These tiles "
-        "often add things that have no equivalent in the base scene at all: "
-        "furniture, figures, props, unusual fixtures above the shelf, or "
-        "the architecture itself doing something structurally strange (a "
-        "warped or rolled ceiling, reshaped shelf openings, and so on). If "
-        "anything like that is present, it is almost always the most important "
-        "thing to describe, and skipping it is a bigger failure than skipping a "
-        "plain style note. Name concretely what it is; don't fold it into a "
-        "vague texture/lighting comment.\n\n"
-        "Structure: a brief style/medium description first (a dozen words or "
-        "fewer, often less -- e.g. \"muted watercolor\" or \"cel-shaded, high "
-        "contrast\"), then, only if there's something notable beyond style, a "
-        "short note on content or a striking detail. The seed keywords for this "
-        f"tile were {', '.join(keywords)} -- they're shown to the reader "
-        "elsewhere, so don't restate them as words, just let them inform what "
-        "you actually see.\n\n"
-        "If something in the image is genuinely ambiguous or hard to make out -- "
-        "an object you can't identify, a shape that could be one thing or "
-        "another -- say so as part of the description rather than silently "
-        "picking one reading. Don't invent detail you can't actually see. This "
-        "applies especially to text: if there's writing in the image that isn't "
-        "clearly legible as real words, say that it's garbled, distorted, or "
-        "illegible -- do not transcribe or invent specific wording for it, and "
-        "do not invent a coherent story or identity for figures/objects you "
-        "can't actually resolve. A confident, specific, wrong description is "
-        "worse than an honest, vague one.\n\n"
-        "You have not seen any other tile in the series and can't compare this "
-        "one to them -- describe only what's in front of you, in isolation. "
-        "Never refer to \"the series,\" \"the standard/usual scene,\" \"other "
-        "tiles,\" or anything similar; just describe this image as if the base "
-        "scene were never mentioned to you.\n\n"
+        "Write alt text for this image, for a screen-reader user who will hear "
+        "only your description of this one tile and has no other context.\n\n"
+        "This tile is one of a large series that all share the same recurring "
+        f"setting: {BASE_SCENE}. Because that setting repeats across the whole "
+        "series, do NOT re-enumerate its fixed details (how many shelves, that "
+        "the books are tidy and identical, the side columns) -- a light touch is "
+        "enough to ground the reader, e.g. \"a shelved library wall\" or \"the "
+        "bookcase.\" Spend your words instead on what makes THIS tile distinctive: "
+        "its style, and anything added, altered, or unusual.\n\n"
+        "Critical: describe what is actually present, exactly as it appears. The "
+        "reader has never seen the base setting, so NEVER phrase anything as a "
+        "change to it. Do not use \"replaced,\" \"instead of,\" \"no longer,\" "
+        "\"absent,\" \"missing,\" \"used to,\" \"now a,\" \"has become,\" or "
+        "\"where the X was.\" If a clock sits above the bookcase, write \"a clock "
+        "sits above the bookcase\" -- not \"a clock instead of a lamp.\" If there "
+        "is no lamp, simply don't mention a lamp. Every sentence should read as a "
+        "plain description of this image on its own, never a comparison to another.\n\n"
+        "Before you write, look closely at the whole frame, corner to corner: the "
+        "foreground, the space beside and around the bookcase, and the "
+        "architecture itself (ceiling, walls, floor, the shape of the shelf "
+        "openings) -- not just the shelf contents. These tiles often add things "
+        "with no equivalent in the base setting: furniture, figures, props, "
+        "unusual fixtures above the shelf, or architecture doing something "
+        "structurally strange (a warped or rolled ceiling, reshaped openings). "
+        "When something like that is present it is usually the most important "
+        "thing to describe; name concretely what it is rather than folding it "
+        "into a vague texture/lighting note.\n\n"
+        "Structure: lead with a brief style/medium description (a dozen words or "
+        "fewer -- e.g. \"muted watercolor\" or \"cel-shaded, high contrast\"), "
+        "then, only if there's something notable beyond style, a short note on "
+        "content or a striking detail. Always keep the bookcase itself in view: "
+        "the reader should be able to tell this is a shelved library wall, even "
+        "when the distinctive elements are elsewhere in the frame. The seed "
+        f"keywords for this tile were {', '.join(keywords)} -- they're shown to "
+        "the reader elsewhere, so don't restate them as words, just let them "
+        "inform what you see.\n\n"
+        "If something is genuinely ambiguous or hard to make out, say so rather "
+        "than silently picking a reading, and don't invent detail you can't see. "
+        "This applies especially to text: if writing in the image isn't clearly "
+        "legible as real words, say it's garbled or illegible -- do not transcribe "
+        "or invent wording, and do not invent a story or identity for "
+        "figures/objects you can't resolve. A confident, specific, wrong "
+        "description is worse than an honest, vague one.\n\n"
         "Hard limit of 200 words. That's a budget, not a target -- most tiles are "
         "simple variations and should be far shorter, one or two sentences. Only "
-        "spend real length on a tile that actually has enough going on (multiple "
-        "added objects, an unusual structure) to need it. Plain, concrete, no "
-        "evaluative language (\"beautiful,\" \"stunning\"), no \"image of\" / \"a "
-        "picture of.\" Reply "
-        "with the alt text itself and nothing else: no preamble, no markdown "
-        "formatting, no quotation marks around it."
+        "spend real length on a tile that actually has enough going on to need "
+        "it. Plain, concrete, no evaluative language (\"beautiful,\" "
+        "\"stunning\"), no \"image of\" / \"a picture of.\" Reply with the alt "
+        "text itself and nothing else: no preamble, no markdown, no quotation "
+        "marks."
     )
 
 
