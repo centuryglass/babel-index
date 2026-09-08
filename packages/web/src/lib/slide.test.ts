@@ -42,8 +42,15 @@ function fakeCtx(): FakeCtx {
   };
 }
 
+// Same stand-in `render.test.ts` uses for a decoded overlay's own pixel size
+// - see that file's `FAKE_ICON_SIZE` doc for why the exact number doesn't
+// matter, only that it stays comfortably under a tile's own screen size.
+const FAKE_ICON_SIZE = { width: 96, height: 96 };
+
 interface FakeImage extends LoadableImage {
   src: string;
+  width: number;
+  height: number;
 }
 
 /** A cache whose images are always ready, so a frame's geometry is what is under test. */
@@ -52,7 +59,7 @@ function readyCache() {
   const cache = createTileCache({
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: (): LoadableImage => {
-      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null };
+      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null, ...FAKE_ICON_SIZE };
       made.push(img);
       return img;
     },

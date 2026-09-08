@@ -38,7 +38,7 @@ import {
   createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, genericId,
 } from './lib/tiles.ts';
-import { favoriteIconScreenRect, favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
+import { favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from './lib/distillToggle.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
@@ -1009,8 +1009,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       if (hit && !('generic' in hit)) {
         const cellPx = pxPerCell(camera);
         const { x: sx, y: sy } = worldToScreen(hit.x, hit.y, camera, rect);
-        const hitRect = favoriteHitRect(favoriteIconScreenRect(cellPx, sx, sy), cellPx, COARSE_POINTER);
-        if (pointInRect(px, py, hitRect)) favoriteFor(hit.id)?.toggle();
+        const hitRect = favoriteHitRect(cellPx, sx, sy, COARSE_POINTER);
+        if (hitRect && pointInRect(px, py, hitRect)) favoriteFor(hit.id)?.toggle();
       }
     }
   };

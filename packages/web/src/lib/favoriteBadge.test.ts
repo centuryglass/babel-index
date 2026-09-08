@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import {
-  FAV_ICON_SIZE,
   MIN_FAVORITE_HIT_TOUCH,
   favoriteIconScreenRect,
   favoriteHitRect,
@@ -13,70 +12,84 @@ import {
 import { BASE_TILE } from './pyramid.ts';
 
 const GEO = layout({ width: 1, height: 1 });
+// An arbitrary stand-in for the art's decoded pixel size - drawing no longer
+// reads a hardcoded constant, so these tests supply their own to exercise
+// the scaling math independent of whatever the real asset happens to be.
+const ICON_SIZE = { w: 92, h: 198 };
 
 test('the icon is anchored to the tile\'s upper right corner and scales with cellPx', () => {
   const cellPx = { x: BASE_TILE.w, y: BASE_TILE.h }; // 1x scale
-  const rect = favoriteIconScreenRect(cellPx, 100, 200);
-  assert.equal(rect.w, FAV_ICON_SIZE.w);
-  assert.equal(rect.h, FAV_ICON_SIZE.h);
+  const rect = favoriteIconScreenRect(cellPx, 100, 200, ICON_SIZE);
+  assert.equal(rect.w, ICON_SIZE.w);
+  assert.equal(rect.h, ICON_SIZE.h);
   // Right edge of the icon meets the right edge of the tile; top edges align.
   assert.equal(rect.x + rect.w, 100 + cellPx.x);
   assert.equal(rect.y, 200);
 });
 
-test('halving the scale halves the icon and its hit rect together', () => {
-  const full = favoriteIconScreenRect({ x: BASE_TILE.w, y: BASE_TILE.h }, 0, 0);
-  const half = favoriteIconScreenRect({ x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, 0, 0);
+test('halving the scale halves the icon', () => {
+  const full = favoriteIconScreenRect({ x: BASE_TILE.w, y: BASE_TILE.h }, 0, 0, ICON_SIZE);
+  const half = favoriteIconScreenRect({ x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, 0, 0, ICON_SIZE);
   assert.equal(half.w, full.w / 2);
   assert.equal(half.h, full.h / 2);
-
-  const fullHit = favoriteHitRect(full, { x: BASE_TILE.w, y: BASE_TILE.h }, false);
-  const halfHit = favoriteHitRect(half, { x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, false);
-  assert.equal(halfHit.w, fullHit.w / 2);
-  assert.equal(halfHit.h, fullHit.h / 2);
 });
 
-test('the hit rect sits inside the icon rect on a mouse', () => {
+test('the mouse hit rect matches the traced bbox scaled per axis, unrelated to icon draw size', () => {
+  assert.ok(GEO.favoriteToggle, 'the trace must carry a tile_fav_toggle bbox for this test to mean anything');
   const cellPx = { x: 400, y: 300 };
-  const icon = favoriteIconScreenRect(cellPx, 50, 60);
-  const hit = favoriteHitRect(icon, cellPx, false);
-  assert.ok(hit.x >= icon.x && hit.x + hit.w <= icon.x + icon.w);
-  assert.ok(hit.y >= icon.y && hit.y + hit.h <= icon.y + icon.h);
+  const sx = 50;
+  const sy = 60;
+  const hit = favoriteHitRect(cellPx, sx, sy, false);
+  assert.ok(hit);
+  const b = GEO.favoriteToggle!.bbox;
+  assert.ok(Math.abs(hit!.x - (sx + b.x * cellPx.x)) < 1e-9);
+  assert.ok(Math.abs(hit!.y - (sy + b.y * cellPx.y)) < 1e-9);
+  assert.ok(Math.abs(hit!.w - b.w * cellPx.x) < 1e-9);
+  assert.ok(Math.abs(hit!.h - b.h * cellPx.y) < 1e-9);
 });
 
-test('a mouse never pads the hit rect, no matter how small the badge', () => {
+test('halving cellPx halves the hit rect too', () => {
+  const full = favoriteHitRect({ x: BASE_TILE.w, y: BASE_TILE.h }, 0, 0, false);
+  const half = favoriteHitRect({ x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, 0, 0, false);
+  assert.ok(full && half);
+  assert.equal(half!.w, full!.w / 2);
+  assert.equal(half!.h, full!.h / 2);
+});
+
+test('a mouse never pads the hit rect, no matter how small the tile', () => {
   const cellPx = { x: 100, y: 100 };
-  const tiny = favoriteIconScreenRect(cellPx, 0, 0);
-  const hit = favoriteHitRect(tiny, cellPx, false);
-  assert.ok(hit.w < MIN_FAVORITE_HIT_TOUCH);
-  assert.ok(hit.h < MIN_FAVORITE_HIT_TOUCH);
+  const hit = favoriteHitRect(cellPx, 0, 0, false);
+  assert.ok(hit);
+  assert.ok(hit!.w < MIN_FAVORITE_HIT_TOUCH);
+  assert.ok(hit!.h < MIN_FAVORITE_HIT_TOUCH);
 });
 
-test('a coarse pointer pads a tiny badge up to the touch floor, centered on the art', () => {
-  const cellPx = { x: 1000, y: 1000 }; // large tile - the area cap doesn't bind here
-  const tiny = favoriteIconScreenRect({ x: 100, y: 100 }, 0, 0);
-  const unpadded = favoriteHitRect(tiny, cellPx, false);
-  const padded = favoriteHitRect(tiny, cellPx, true);
-  assert.equal(padded.w, MIN_FAVORITE_HIT_TOUCH);
-  assert.equal(padded.h, MIN_FAVORITE_HIT_TOUCH);
-  assert.ok(Math.abs(padded.x + padded.w / 2 - (unpadded.x + unpadded.w / 2)) < 1e-9);
-  assert.ok(Math.abs(padded.y + padded.h / 2 - (unpadded.y + unpadded.h / 2)) < 1e-9);
+test('a coarse pointer pads a tiny hit rect up to the touch floor, centered on the traced bbox', () => {
+  const cellPx = { x: 100, y: 100 }; // small enough that the bbox lands under the touch floor
+  const unpadded = favoriteHitRect(cellPx, 0, 0, false);
+  const padded = favoriteHitRect(cellPx, 0, 0, true);
+  assert.ok(unpadded && padded);
+  assert.ok(unpadded!.w < MIN_FAVORITE_HIT_TOUCH, 'unpadded must actually be under the floor for this test to mean anything');
+  assert.equal(padded!.w, MIN_FAVORITE_HIT_TOUCH);
+  assert.equal(padded!.h, MIN_FAVORITE_HIT_TOUCH);
+  assert.ok(Math.abs(padded!.x + padded!.w / 2 - (unpadded!.x + unpadded!.w / 2)) < 1e-9);
+  assert.ok(Math.abs(padded!.y + padded!.h / 2 - (unpadded!.y + unpadded!.h / 2)) < 1e-9);
 });
 
-test('a coarse pointer leaves a badge already past the touch floor unpadded', () => {
+test('a coarse pointer leaves a hit rect already past the touch floor unpadded', () => {
   const cellPx = { x: 4000, y: 4000 };
-  const big = favoriteIconScreenRect(cellPx, 0, 0);
-  const padded = favoriteHitRect(big, cellPx, true);
-  const unpadded = favoriteHitRect(big, cellPx, false);
-  assert.equal(padded.w, unpadded.w);
-  assert.equal(padded.h, unpadded.h);
+  const padded = favoriteHitRect(cellPx, 0, 0, true);
+  const unpadded = favoriteHitRect(cellPx, 0, 0, false);
+  assert.ok(padded && unpadded);
+  assert.equal(padded!.w, unpadded!.w);
+  assert.equal(padded!.h, unpadded!.h);
 });
 
 test('the touch pad is capped at 10% of the tile\'s own area', () => {
   const cellPx = { x: 30, y: 30 }; // small enough that MIN_FAVORITE_HIT_TOUCH would overshoot the cap
-  const tiny = favoriteIconScreenRect(cellPx, 0, 0);
-  const hit = favoriteHitRect(tiny, cellPx, true);
-  assert.ok(hit.w * hit.h <= cellPx.x * cellPx.y * 0.1 + 1e-9);
+  const hit = favoriteHitRect(cellPx, 0, 0, true);
+  assert.ok(hit);
+  assert.ok(hit!.w * hit!.h <= cellPx.x * cellPx.y * 0.1 + 1e-9);
 });
 
 test('pointInRect is inclusive on the low edge, exclusive on the high edge', () => {

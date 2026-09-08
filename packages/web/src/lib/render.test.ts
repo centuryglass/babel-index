@@ -65,8 +65,17 @@ function fakeCtx(): FakeCtx {
   };
 }
 
+// A stand-in for the badge/toggle/switch corner overlays' own decoded pixel
+// size - real art is comfortably under this at every zoom these tests use,
+// so a screen-space draw derived from it (`naturalIconSize`, render.ts)
+// still reads as "small" against the `w < 100 && h < 300` heuristic these
+// tests filter on to tell an overlay draw from a tile-sized one.
+const FAKE_ICON_SIZE = { width: 96, height: 96 };
+
 interface FakeImage extends LoadableImage {
   src: string;
+  width: number;
+  height: number;
 }
 
 function fakeImages() {
@@ -74,13 +83,13 @@ function fakeImages() {
   return {
     made,
     createImage: (): LoadableImage => {
-      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null };
+      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null, ...FAKE_ICON_SIZE };
       made.push(img);
       return img;
     },
     // A settled load is its own drawable (bitmap = self), so a drawn tile's
     // `img` is this object and `img.src` still identifies it - the browser
-    // hands back an ImageBitmap here instead.
+    // hands back an ImageBitmap here instead, `width`/`height` included.
     settleAll: () => made.forEach((i) => { i.bitmap = i; i.onload?.(); }),
     urls: () => made.map((i) => i.src),
     levelsRequested: () =>
