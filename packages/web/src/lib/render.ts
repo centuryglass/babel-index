@@ -501,9 +501,7 @@ export function drawClearHistoryBookOverlay(
 ): void {
   const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
   if (!hit) return;
-  const rect = clearHistoryBookScreenRect(cellPx, sx, sy, naturalIconSize(hit));
-  if (!rect) return;
-  const { x, y, w, h } = rect;
+  const { x, y, w, h } = clearHistoryBookScreenRect(cellPx, sx, sy, naturalIconSize(hit));
   if (hit.rect) {
     const { sx: rx, sy: ry, sw, sh } = hit.rect;
     ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
@@ -580,11 +578,16 @@ export function drawDistillToggle(
  * once favorites are enabled, plus whichever "on" face matches the active
  * sort - neither face for `'relevance'`, which is the switch's off position.
  * Each piece draws only once its own art has landed, same as
- * `drawFavoriteBadge`, and all three share one screen rect since the "on"
- * faces are painted to overlay the base plate exactly. Exported and shared
- * with `slide.ts` (same as `drawFavoriteBadge`) - the center tile is the
- * rearrangement's fixed tile, so its controls must keep drawing across the
- * handoff between renderers rather than blinking out for the animation.
+ * `drawFavoriteBadge`, anchored to the SAME tile corner but each sized off
+ * its OWN decoded pixels rather than sharing one rect - the three pieces are
+ * meant to overlay by sharing an anchor and canvas convention, not by being
+ * identically sized (`fav_mine_on.png`/`fav_count_on.png`/
+ * `fav_center_switch_base.png` are close but not pixel-identical in the real
+ * art), and forcing an "on" face into the base plate's own rect stretched it
+ * off the base's own indicator. Exported and shared with `slide.ts` (same as
+ * `drawFavoriteBadge`) - the center tile is the rearrangement's fixed tile,
+ * so its controls must keep drawing across the handoff between renderers
+ * rather than blinking out for the animation.
  */
 export function drawFavoriteSwitch(
   ctx: DrawContext,
@@ -594,20 +597,15 @@ export function drawFavoriteSwitch(
   sx: number,
   sy: number
 ): void {
-  // Both faces are asked for unconditionally, exactly as before, so an idle
-  // sort mode's "on" face still starts loading rather than waiting for a
-  // sort change to ask for it for the first time. Only the DRAW is gated:
-  // sized off the base plate's own decoded pixels rather than a hardcoded
-  // constant (see `favoriteBadge.ts`'s doc), so an "on" face only ever draws
-  // once the base plate it's meant to overlay has too, rather than floating
-  // over nothing on an unlucky load order.
-  const base = cache.get(FAV_CENTER_SWITCH_BASE, 0);
-  const onId = sortMode === 'mine' ? FAV_MINE_ON : sortMode === 'count' ? FAV_COUNT_ON : null;
-  const on = onId ? cache.get(onId, 0) : null;
-  if (!base) return;
-  const { x, y, w, h } = favoriteSwitchScreenRect(cellPx, sx, sy, naturalIconSize(base));
-  ctx.drawImage(base.img, x, y, w, h);
-  if (on) ctx.drawImage(on.img, x, y, w, h);
+  const draw = (id: RoomId) => {
+    const hit = cache.get(id, 0);
+    if (!hit) return;
+    const { x, y, w, h } = favoriteSwitchScreenRect(cellPx, sx, sy, naturalIconSize(hit));
+    ctx.drawImage(hit.img, x, y, w, h);
+  };
+  draw(FAV_CENTER_SWITCH_BASE);
+  if (sortMode === 'mine') draw(FAV_MINE_ON);
+  else if (sortMode === 'count') draw(FAV_COUNT_ON);
 }
 
 /** The rank labels. Cosmetic, and zoom-gated. */

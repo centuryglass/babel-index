@@ -1,36 +1,27 @@
 /**
- * The "forget searches" book's black spine overlay, anchored to that book's
- * own bottom-right corner within the center tile.
- *
- * Unlike `favoriteBadge.ts`/`distillToggle.ts`, which anchor to a whole TILE
- * corner, this anchors to one BOOK's corner - the bottom-right slot
- * `useCenterShelf.ts` reserves for "forget searches" (`center.ts`'s
- * `BOOK_RECTS[BOOK_COUNT - 1]`). Corner-anchored and mostly transparent
- * rather than stretched to fit that book's rect exactly, for the same reason
- * the favorite badge and distill toggle are: real art bleeds shading past a
- * silhouette's own outline into the surrounding surface, and fitting exactly
- * to a rect turns that bleed into a per-pixel alignment problem instead of a
- * non-issue the transparent margin absorbs for free.
+ * The "forget searches" book's black spine overlay, anchored to the center
+ * tile's own bottom-right corner - the same corner `distillToggle.ts`
+ * anchors to, and for the same reason: the art is authored with a
+ * mostly-transparent margin around the one book it actually paints black, so
+ * anchoring the whole image to a fixed tile corner lands that book exactly
+ * without the code needing to know where on the shelf it sits. An earlier
+ * version of this file anchored to the "forget searches" book's own traced
+ * bounding box instead (`center.ts`'s `BOOK_RECTS[BOOK_COUNT - 1]`) - that
+ * put the corner deep inside the shelf rather than at the tile's edge, which
+ * is why the real art rendered far up and to the left of where it belonged
+ * once it replaced the placeholder.
  *
  * No DOM - this is the pure geometry half, split out the same way
  * `favoriteBadge.ts` and `distillToggle.ts` are.
  *
- * Unlike `FAV_ICON_SIZE`/`DISTILL_ICON_SIZE`, this overlay's native pixel
- * size is NOT hardcoded - it is read off the decoded art itself
- * (`render.ts`'s `drawClearHistoryBookOverlay` passes `hit.img`'s natural
- * width/height in). Those two are hardcoded because they also anchor a
- * hand-measured hit-test region (`FAV_ICON_HIT_BOUNDS`) that has to be
- * stated in the same units and can't itself be inferred, and because they
- * feed pointer hit-testing that runs every `pointermove` independent of
- * whether the cache has that image loaded yet - a size read off the decoded
- * bitmap would have nothing to report before it loads. This overlay has
- * neither constraint: it carries no hit-test of its own (the book underneath
- * still owns that, via `center.ts`), and it already draws nothing until
- * `cache.get` returns a loaded hit - so reading the real size at that same
- * moment costs nothing and means a differently-sized asset just works
- * instead of silently mis-anchoring until some constant is updated to match.
+ * Unlike `distillIconScreenRect`'s two states, this overlay has no traced
+ * hit-test region of its own to keep independent of its size - the book
+ * underneath still owns its hit-test (`center.ts`), unaffected by this
+ * overlay's presence. Its native pixel size is read off the decoded art
+ * itself (`render.ts`'s `drawClearHistoryBookOverlay` passes `hit.img`'s
+ * natural width/height in) rather than hardcoded, exactly as
+ * `distillIconScreenRect`'s is.
  */
-import { BOOK_RECTS, BOOK_COUNT } from './center.ts';
 import { BASE_TILE } from './pyramid.ts';
 
 export interface Rect {
@@ -42,29 +33,20 @@ export interface Rect {
 
 /**
  * The overlay's full screen rect for a tile whose top left corner is at
- * `(sx, sy)` and whose width is `cellPx.x` - anchored to the "forget
- * searches" book's own bottom-right corner (not the whole tile's), scaled by
- * the same factor `render.ts` scales every corner overlay by: a cell's
- * pixels-per-cell-width divided by `BASE_TILE.w`. `iconSize` is the art's own
- * decoded pixel size (see this file's doc comment for why it isn't a
- * constant here). Null when the wall has no books at all (nothing to anchor
- * to).
+ * `(sx, sy)` and whose width is `cellPx.x` - anchored to the tile's LOWER
+ * right corner, scaled by the same factor `render.ts` scales every corner
+ * overlay by: a cell's pixels-per-cell-width divided by `BASE_TILE.w`.
+ * `iconSize` is the art's own decoded pixel size (see this file's doc
+ * comment for why it isn't a constant here).
  */
 export function clearHistoryBookScreenRect(
   cellPx: { x: number; y: number },
   sx: number,
   sy: number,
   iconSize: { w: number; h: number }
-): Rect | null {
-  if (BOOK_COUNT === 0) return null;
-  const book = BOOK_RECTS[BOOK_COUNT - 1];
+): Rect {
   const scale = cellPx.x / BASE_TILE.w;
   const w = iconSize.w * scale;
   const h = iconSize.h * scale;
-  return {
-    x: sx + (book.x + book.w) * cellPx.x - w,
-    y: sy + (book.y + book.h) * cellPx.y - h,
-    w,
-    h,
-  };
+  return { x: sx + cellPx.x - w, y: sy + cellPx.y - h, w, h };
 }

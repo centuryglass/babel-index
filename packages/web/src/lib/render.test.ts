@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
-import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
-import { createTileCache, CENTER, type Drawable, type LoadableImage } from './tiles.ts';
+import { createRenderer, drawFavoriteSwitch, type DrawContext, type DrawResult } from './render.ts';
+import { createTileCache, CENTER, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, type Drawable, type LoadableImage, type RoomId, type TileCache, type TileHit } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
 
@@ -446,6 +446,47 @@ test('the badge follows the same zoom scale as the tile it sits on', () => {
   const small = at(110);
   const big = at(220);
   assert.ok(Math.abs(big.w / small.w - 2) < 0.05, `badge did not scale with zoom: ${small.w} -> ${big.w}`);
+});
+
+test('the favorites-sort switch sizes each piece off its OWN decoded pixels, not the base plate\'s', () => {
+  // fav_mine_on.png/fav_count_on.png are close to fav_center_switch_base.png
+  // in size but not pixel-identical in the real art - an earlier version drew
+  // every piece into the base plate's own rect, stretching the "on" face off
+  // its intended alignment with the base whenever the two sizes disagreed.
+  const sizeFor: Record<string, { width: number; height: number }> = {
+    [FAV_CENTER_SWITCH_BASE]: { width: 281, height: 275 },
+    [FAV_MINE_ON]: { width: 255, height: 270 },
+  };
+  const cache: TileCache = {
+    beginFrame: () => {},
+    request: () => null,
+    get: (id: RoomId): TileHit | null => {
+      const size = sizeFor[String(id)];
+      if (!size) return null;
+      return { img: { ...size } as unknown as Drawable, rect: null, level: 0 };
+    },
+    prefetch: () => {},
+    pin: () => {},
+    size: () => 0,
+    sizeOf: () => 0,
+    sheetCount: () => 0,
+    overBudget: () => 0,
+    pendingPrefetch: () => 0,
+    clear: () => {},
+  };
+
+  const ctx = fakeCtx();
+  drawFavoriteSwitch(ctx, cache, 'mine', { x: 1024, y: 768 }, 0, 0);
+
+  const base = ctx.drawn.find((d) => (d.img as unknown as { width: number }).width === 281)!;
+  const mine = ctx.drawn.find((d) => (d.img as unknown as { width: number }).width === 255)!;
+  assert.ok(base && mine, 'both the base plate and the "mine" face must draw');
+  // Both anchor to the same corner...
+  assert.equal(base.x, mine.x);
+  assert.equal(base.y, mine.y);
+  // ...but each is sized off its own art, not stretched into the other's rect.
+  assert.equal(base.w, 281);
+  assert.equal(mine.w, 255);
 });
 
 // --- the distill toggle ------------------------------------------------------
