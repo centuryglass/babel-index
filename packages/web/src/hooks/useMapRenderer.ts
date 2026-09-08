@@ -26,7 +26,7 @@ import { useEffect } from 'react';
 import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
 import {
   bookAtPoint, centerBookAtPoint, centerCellRect,
-  shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint,
+  shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint, BOOK_COUNT,
 } from '../lib/center.ts';
 import { roomAtPoint } from '../lib/picking.ts';
 import { favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
@@ -322,6 +322,7 @@ export function useMapRenderer({
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
         genericIndexAt: layout.genericIndexAt, favorites, sortMode, genericFade: genericFade?.current,
         distillMode, hoveredDistill,
+        clearHistoryAvailable: centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory',
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,

@@ -484,3 +484,49 @@ test('distillMode undefined on the slide renderer means no distill toggle at all
   const hasDistill = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('distill'));
   assert.ok(!hasDistill(ctx), 'unexpected distill draw with distillMode omitted');
 });
+
+test('the clear-history book overlay rides along with the center room during a rearrangement', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  const frame = (motions) => {
+    const ctx = fakeCtx();
+    renderer.draw({
+      ctx, width: 1920, height: 1080, dpr: 1, cam,
+      board, origin: built.origin, motions, clearHistoryAvailable: true,
+    });
+    return ctx;
+  };
+
+  frame([]);
+  settle();
+
+  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('clear-history-book'));
+
+  for (let t = 0; t <= show.totalMs; t += 41) {
+    const { motions } = show.advanceTo(t);
+    const ctx = frame(motions);
+    assert.ok(hasClearHistoryBook(ctx), `no clear-history book overlay drawn at t=${t}`);
+  }
+});
+
+test('clearHistoryAvailable omitted on the slide renderer means no clear-history book overlay at all', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  settle();
+
+  const ctx = fakeCtx();
+  renderer.draw({ ctx, width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('clear-history-book'));
+  assert.ok(!hasClearHistoryBook(ctx), 'unexpected clear-history book draw with clearHistoryAvailable omitted');
+});
