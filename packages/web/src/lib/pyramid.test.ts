@@ -32,8 +32,8 @@ const VIEWPORT = { w: 2560, h: 1440 };
 const SHAPES = [
   { name: 'the current 4:3 tile', base: BASE_TILE },
   { name: 'a 16:9 wall', base: { w: 1280, h: 720 } },
-  { name: 'a tall 3:4 tile', base: { w: 768, h: 1024 } },
-  { name: 'a small square tile', base: { w: 512, h: 512 } },
+  { name: 'a tall 3:4 tile', base: { w: 864, h: 1152 } },
+  { name: 'a small square tile', base: { w: 832, h: 832 } },
   { name: 'an odd non-power-of-two tile', base: { w: 900, h: 675 } },
 ];
 

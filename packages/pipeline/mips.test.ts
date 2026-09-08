@@ -45,7 +45,7 @@ test('the plan follows the ladder, dividing both axes together', () => {
   assert.equal(plan.length, LEVELS.length);
   assert.deepEqual(
     plan.map((p) => p.w),
-    [1024, 512, 256, 128, 64]
+    [1024, 512, 256, 128, 64, 32]
   );
   for (const step of plan) assert.equal(step.w, step.h, 'a square source stays square');
 });
@@ -61,7 +61,7 @@ test('a non-square source keeps its aspect at every level', () => {
     );
   assert.deepEqual(
     plan.map((p) => `${p.w}x${p.h}`),
-    ['1280x720', '640x360', '320x180', '160x90', '80x45']
+    ['1280x720', '640x360', '320x180', '160x90', '80x45', '40x23']
   );
 });
 
@@ -77,9 +77,9 @@ test('a source too small for the ladder yields fewer levels, never duplicates', 
   assert.equal(new Set(widths).size, widths.length, `duplicate widths: ${widths}`);
   assert.ok(plan.length < LEVELS.length, `4px cannot support all ${LEVELS.length} levels`);
 
-  // 20px still can, though - rounding keeps every rung distinct, so the tool
+  // 40px still can, though - rounding keeps every rung distinct, so the tool
   // must not drop levels it is capable of writing.
-  assert.equal(mipPlan({ w: 20, h: 20 }).length, LEVELS.length);
+  assert.equal(mipPlan({ w: 40, h: 40 }).length, LEVELS.length);
 });
 
 // --- writing ---------------------------------------------------------------
