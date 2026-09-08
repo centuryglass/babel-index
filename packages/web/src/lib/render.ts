@@ -30,12 +30,10 @@ import {
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
   genericId, type Drawable, type RoomId, type TileCache,
 } from './tiles.ts';
-import {
-  composeSpines, areSpinesLegible, bookScreenRects, BOOK_COUNT,
-  type Slot, type SpineContext, type SpineFontLimits,
-} from './center.ts';
+import { composeSpines, areSpinesLegible, BOOK_COUNT, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
+import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { parsePath } from './svgPath.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
@@ -310,7 +308,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // "is there history" flag, so the two can never drift apart. Drawn
         // before the shelf's titles so the gilt text still composites on top.
         if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
-          drawClearHistoryBookOverlay(ctx, cache, { x: sx, y: sy, w: cellPx.x, h: cellPx.y });
+          drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
         // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
@@ -467,23 +465,23 @@ export function drawFavoriteBadge(
 /**
  * Draw the "forget searches" book's black spine overlay, if its art has
  * landed - rule 1 does not apply here, same as `drawFavoriteBadge`. Anchored
- * to the last book's own screen rect (`bookScreenRects`, `center.ts`) rather
- * than a fixed corner and native icon size the way `distillIconScreenRect`/
- * `favoriteIconScreenRect` are: this book's position is shelf geometry, not
- * app chrome, and it is exactly the slot `useCenterShelf.ts` reserves for the
- * override, so drawing over that book's own rect keeps the two from drifting
- * apart. No hover treatment - the book already gets one from `composeSpines`'s
+ * to that book's own bottom-right corner (`clearHistoryBookScreenRect`)
+ * rather than stretched to fit its rect exactly - see that function's doc for
+ * why. No hover treatment - the book already gets one from `composeSpines`'s
  * own hover glow, drawn on top of this.
  */
 export function drawClearHistoryBookOverlay(
   ctx: DrawContext,
   cache: TileCache,
-  cellRect: { x: number; y: number; w: number; h: number }
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number
 ): void {
-  if (BOOK_COUNT === 0) return;
+  const rect = clearHistoryBookScreenRect(cellPx, sx, sy);
+  if (!rect) return;
   const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
   if (!hit) return;
-  const { x, y, w, h } = bookScreenRects(cellRect)[BOOK_COUNT - 1];
+  const { x, y, w, h } = rect;
   if (hit.rect) {
     const { sx: rx, sy: ry, sw, sh } = hit.rect;
     ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
