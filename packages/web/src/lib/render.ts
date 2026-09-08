@@ -28,7 +28,7 @@ import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
-  genericId, type Drawable, type RoomId, type TileCache,
+  genericId, type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import { composeSpines, areSpinesLegible, BOOK_COUNT, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
@@ -463,12 +463,32 @@ export function drawFavoriteBadge(
 }
 
 /**
+ * `hit.img`'s own decoded pixel size - a sheet-packed hit's sub-rect if it
+ * has one (never actually true for a shared id like `CLEAR_HISTORY_BOOK`,
+ * which `rooms.ts` always resolves flat, but this stays consistent with
+ * every other tile lookup rather than assuming that of just this one id),
+ * else the whole image's natural width/height. `Drawable` is only ever a
+ * real `ImageBitmap` at runtime (see `tiles.ts`'s `TileHit` doc) - which
+ * `LoadableImage` is not typed to guarantee - so the cast here is the same
+ * "a real thing satisfies a wider interface" move as `ctx as SpineContext`.
+ */
+function naturalIconSize(hit: TileHit): { w: number; h: number } {
+  if (hit.rect) return { w: hit.rect.sw, h: hit.rect.sh };
+  const img = hit.img as unknown as { width: number; height: number };
+  return { w: img.width, h: img.height };
+}
+
+/**
  * Draw the "forget searches" book's black spine overlay, if its art has
  * landed - rule 1 does not apply here, same as `drawFavoriteBadge`. Anchored
  * to that book's own bottom-right corner (`clearHistoryBookScreenRect`)
  * rather than stretched to fit its rect exactly - see that function's doc for
- * why. No hover treatment - the book already gets one from `composeSpines`'s
- * own hover glow, drawn on top of this.
+ * why. Sized off the art's own decoded pixels (`naturalIconSize`) rather than
+ * a hardcoded constant, so a differently-sized asset just works - see
+ * `clearHistoryBook.ts`'s doc for why this overlay can do that where the
+ * favorite badge and distill toggle can't. No hover treatment - the book
+ * already gets one from `composeSpines`'s own hover glow, drawn on top of
+ * this.
  */
 export function drawClearHistoryBookOverlay(
   ctx: DrawContext,
@@ -477,10 +497,10 @@ export function drawClearHistoryBookOverlay(
   sx: number,
   sy: number
 ): void {
-  const rect = clearHistoryBookScreenRect(cellPx, sx, sy);
-  if (!rect) return;
   const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
   if (!hit) return;
+  const rect = clearHistoryBookScreenRect(cellPx, sx, sy, naturalIconSize(hit));
+  if (!rect) return;
   const { x, y, w, h } = rect;
   if (hit.rect) {
     const { sx: rx, sy: ry, sw, sh } = hit.rect;
