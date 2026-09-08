@@ -97,6 +97,15 @@ export const FAV_COUNT_ON = 'fav-count-on';
 export const DISTILL_OFF = 'distill-off';
 export const DISTILL_ON = 'distill-on';
 
+/**
+ * The "forget searches" book's black spine art, overlaid on the shelf's
+ * bottom-right book only while there is history to clear (see
+ * `render.ts`'s `drawClearHistoryBookOverlay`) - the base center tile paints
+ * that book brown, like every other closed book, so the override is only
+ * visually distinct while it is actually present. Shared id, like `CENTER`.
+ */
+export const CLEAR_HISTORY_BOOK = 'clear-history-book';
+
 /** How many prefetches may be waiting at once. See prefetch() for why. */
 const QUEUE_LIMIT = 256;
 

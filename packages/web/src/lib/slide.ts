@@ -64,7 +64,7 @@ import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.
 import type { Config } from '../../../config/config.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import {
-  drawFavoriteBadge, drawFavoriteSwitch, drawDistillToggle, drawGenericFade,
+  drawFavoriteBadge, drawFavoriteSwitch, drawDistillToggle, drawClearHistoryBookOverlay, drawGenericFade,
   SMOOTHING_MAX_DOWNSCALE, type DrawContext,
 } from './render.ts';
 import { areSpinesLegible } from './center.ts';
@@ -378,6 +378,16 @@ export interface SlideDrawOpts {
   distillMode?: boolean;
   /** whether the pointer is over the distill toggle - see `render.ts`'s `DrawOpts.hoveredDistill` */
   hoveredDistill?: boolean;
+  /**
+   * Whether the "forget searches" book's slot is currently claimed - i.e.
+   * whether `centreSlots[BOOK_COUNT - 1]?.action === 'forgetHistory'`, the
+   * same check `render.ts`'s own draw loop makes off `centreSlots` directly.
+   * This renderer never receives `centreSlots` itself (it draws no spine
+   * text at all), so the caller reduces it to this one boolean rather than
+   * this file learning the shelf's slot-assignment shape just to re-derive
+   * it.
+   */
+  clearHistoryAvailable?: boolean;
 }
 
 export interface SlideDrawResult {
@@ -398,6 +408,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
   function draw({
     ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
     favorites = null, sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
+    clearHistoryAvailable = false,
   }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
@@ -517,6 +528,12 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       // `favorites`, since distill mode needs no favorite store. Same
       // `undefined` opt-out as `render.ts`'s own draw loop.
       if (distillMode !== undefined) drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
+      // The "forget searches" book's black spine overlay rides along the same
+      // way - `clearHistoryAvailable` is the caller's reduction of
+      // `centreSlots[BOOK_COUNT - 1]?.action === 'forgetHistory'`, since this
+      // renderer never sees `centreSlots` itself (no spine text is drawn
+      // during a rearrangement at all).
+      if (clearHistoryAvailable) drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
     }
 
     return { drawn, blank, level, cells: wanted.length };

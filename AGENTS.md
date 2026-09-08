@@ -160,6 +160,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           onto a room tile's upper right corner
     * `distillToggle.ts`: Geometry and hit-test for the distill-mode toggle
                           painted onto the center tile's lower right corner
+    * `clearHistoryBook.ts`: Geometry for the "forget searches" book's black
+                             spine overlay, anchored to the center tile's own
+                             lower right corner
     * `catalog.ts`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images

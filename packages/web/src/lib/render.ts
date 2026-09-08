@@ -27,12 +27,13 @@ import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts
 import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON,
-  genericId, type Drawable, type RoomId, type TileCache,
+  DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
+  genericId, type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
-import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
+import { composeSpines, areSpinesLegible, BOOK_COUNT, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
+import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { parsePath } from './svgPath.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
@@ -300,6 +301,14 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
           );
         }
+        // The "forget searches" book's spine swaps to its black art whenever
+        // history has claimed that slot - see `drawClearHistoryBookOverlay`'s
+        // doc. Checked off `centreSlots` itself (the same override
+        // `useCenterShelf.ts` reserves the slot with) rather than a second
+        // "is there history" flag, so the two can never drift apart. Drawn
+        // before the shelf's titles so the gilt text still composites on top.
+        if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
+          drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
         // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
@@ -387,6 +396,28 @@ const FAVORITE_HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
 const FAVORITE_HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
 /**
+ * `hit.img`'s own decoded pixel size - a sheet-packed hit's sub-rect if it
+ * has one (never actually true for any of the shared, corner-overlay ids
+ * this feeds, which `rooms.ts` always resolves flat, but this stays
+ * consistent with every other tile lookup rather than assuming that of just
+ * those ids), else the whole image's natural width/height. What every corner
+ * overlay's own screen-rect function (`favoriteIconScreenRect`,
+ * `distillIconScreenRect`, `clearHistoryBookScreenRect`) is sized from,
+ * rather than a hardcoded size constant - hit-testing for all three is
+ * independent of this (see each's own doc for why), so a differently-sized
+ * asset only ever changes where it's drawn, never whether it's clickable.
+ * `Drawable` is only ever a real `ImageBitmap` at runtime (see `tiles.ts`'s
+ * `TileHit` doc) - which `LoadableImage` is not typed to guarantee - so the
+ * cast here is the same "a real thing satisfies a wider interface" move as
+ * `ctx as SpineContext`.
+ */
+function naturalIconSize(hit: TileHit): { w: number; h: number } {
+  if (hit.rect) return { w: hit.rect.sw, h: hit.rect.sh };
+  const img = hit.img as unknown as { width: number; height: number };
+  return { w: img.width, h: img.height };
+}
+
+/**
  * Trace `FAVORITE_TOGGLE_PATH` (a per-axis tile fraction, like every other
  * traced rect on a tile) onto a real path at this tile's screen position,
  * ready to `fill()`/`stroke()`. Replays the true Bezier curve rather than a
@@ -434,7 +465,7 @@ export function drawFavoriteBadge(
 ): void {
   const hit = cache.get(id, 0);
   if (hit) {
-    const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy);
+    const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy, naturalIconSize(hit));
     if (hit.rect) {
       const { sx: rx, sy: ry, sw, sh } = hit.rect;
       ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
@@ -450,6 +481,32 @@ export function drawFavoriteBadge(
     path.lineWidth = 1;
     path.strokeStyle = FAVORITE_HOVER_GLOW_STROKE;
     path.stroke();
+  }
+}
+
+/**
+ * Draw the "forget searches" book's black spine overlay, if its art has
+ * landed - rule 1 does not apply here, same as `drawFavoriteBadge`. Anchored
+ * to that book's own bottom-right corner (`clearHistoryBookScreenRect`)
+ * rather than stretched to fit its rect exactly - see that function's doc for
+ * why. No hover treatment - the book already gets one from `composeSpines`'s
+ * own hover glow, drawn on top of this.
+ */
+export function drawClearHistoryBookOverlay(
+  ctx: DrawContext,
+  cache: TileCache,
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number
+): void {
+  const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
+  if (!hit) return;
+  const { x, y, w, h } = clearHistoryBookScreenRect(cellPx, sx, sy, naturalIconSize(hit));
+  if (hit.rect) {
+    const { sx: rx, sy: ry, sw, sh } = hit.rect;
+    ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
+  } else {
+    ctx.drawImage(hit.img, x, y, w, h);
   }
 }
 
@@ -496,7 +553,7 @@ export function drawDistillToggle(
   const id = distillMode ? DISTILL_ON : DISTILL_OFF;
   const hit = cache.get(id, 0);
   if (hit) {
-    const { x, y, w, h } = distillIconScreenRect(cellPx, sx, sy);
+    const { x, y, w, h } = distillIconScreenRect(cellPx, sx, sy, naturalIconSize(hit));
     if (hit.rect) {
       const { sx: rx, sy: ry, sw, sh } = hit.rect;
       ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
@@ -521,11 +578,16 @@ export function drawDistillToggle(
  * once favorites are enabled, plus whichever "on" face matches the active
  * sort - neither face for `'relevance'`, which is the switch's off position.
  * Each piece draws only once its own art has landed, same as
- * `drawFavoriteBadge`, and all three share one screen rect since the "on"
- * faces are painted to overlay the base plate exactly. Exported and shared
- * with `slide.ts` (same as `drawFavoriteBadge`) - the center tile is the
- * rearrangement's fixed tile, so its controls must keep drawing across the
- * handoff between renderers rather than blinking out for the animation.
+ * `drawFavoriteBadge`, anchored to the SAME tile corner but each sized off
+ * its OWN decoded pixels rather than sharing one rect - the three pieces are
+ * meant to overlay by sharing an anchor and canvas convention, not by being
+ * identically sized (`fav_mine_on.png`/`fav_count_on.png`/
+ * `fav_center_switch_base.png` are close but not pixel-identical in the real
+ * art), and forcing an "on" face into the base plate's own rect stretched it
+ * off the base's own indicator. Exported and shared with `slide.ts` (same as
+ * `drawFavoriteBadge`) - the center tile is the rearrangement's fixed tile,
+ * so its controls must keep drawing across the handoff between renderers
+ * rather than blinking out for the animation.
  */
 export function drawFavoriteSwitch(
   ctx: DrawContext,
@@ -535,10 +597,11 @@ export function drawFavoriteSwitch(
   sx: number,
   sy: number
 ): void {
-  const { x, y, w, h } = favoriteSwitchScreenRect(cellPx, sx, sy);
   const draw = (id: RoomId) => {
     const hit = cache.get(id, 0);
-    if (hit) ctx.drawImage(hit.img, x, y, w, h);
+    if (!hit) return;
+    const { x, y, w, h } = favoriteSwitchScreenRect(cellPx, sx, sy, naturalIconSize(hit));
+    ctx.drawImage(hit.img, x, y, w, h);
   };
   draw(FAV_CENTER_SWITCH_BASE);
   if (sortMode === 'mine') draw(FAV_MINE_ON);

@@ -42,6 +42,7 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'sample/metadata.json',
     'sample/tagLinks.json',
     'shared/center_tile.png',
+    'shared/clear_history_book.png',
     'shared/distill_off.png',
     'shared/distill_on.png',
     'shared/fav_center_switch_base.png',
@@ -76,7 +77,7 @@ test('buildUploadList uploads one entry per sheet file for a sheet-packed level,
   assert.equal(sheet.local, 'corpus/256-sheets/sheet-0000.jpg');
 });
 
-test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have, but always uploads the fixed favorite badge and distill toggle art', () => {
+test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have, but always uploads the fixed favorite badge, distill toggle, and clear-history book art', () => {
   const m = manifest();
   m.metadata = null;
   m.tagLinks = null;
@@ -90,6 +91,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
       'sample/002.jpg',
       'sample/512/001.jpg',
       'sample/512/002.jpg',
+      'shared/clear_history_book.png',
       'shared/distill_off.png',
       'shared/distill_on.png',
       'shared/fav_center_switch_base.png',

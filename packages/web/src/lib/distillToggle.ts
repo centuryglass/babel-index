@@ -16,6 +16,14 @@
  *
  * No DOM - this is the pure geometry/hit-test half, split out the same way
  * `favoriteBadge.ts` and `center.ts` are.
+ *
+ * Hit-testing and drawing are independent here on purpose: `distillToggleAtPoint`
+ * tests against the traced silhouette alone and has never needed a native
+ * pixel size. `distillIconScreenRect` is the one place a size is needed at
+ * all, purely to place the drawn icon - and it takes that size as a
+ * parameter (the decoded art's own natural width/height, read by
+ * `render.ts`'s `drawDistillToggle` once the tile cache reports it loaded)
+ * rather than a hardcoded constant, so a differently-sized asset just works.
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { flattenPath, pointInPolygon, type Point } from './svgPath.ts';
@@ -39,18 +47,22 @@ export const DISTILL_ON_PATH: string | null = GEOMETRY.distillOn?.d ?? null;
 const DISTILL_OFF_POLYGON: Point[] | null = DISTILL_OFF_PATH ? flattenPath(DISTILL_OFF_PATH) : null;
 const DISTILL_ON_POLYGON: Point[] | null = DISTILL_ON_PATH ? flattenPath(DISTILL_ON_PATH) : null;
 
-/** The native pixel size of distill_on.png/distill_off.png. */
-export const DISTILL_ICON_SIZE = { w: 283, h: 206 };
-
 /**
  * The toggle's full screen rect for a tile whose top left corner is at
  * `(sx, sy)` and whose width is `cellPx.x` - anchored to the tile's LOWER
  * right corner, scaled by the same factor the tile itself is drawn at.
+ * `iconSize` is the art's own decoded pixel size (see this file's doc
+ * comment for why it isn't a constant here).
  */
-export function distillIconScreenRect(cellPx: { x: number; y: number }, sx: number, sy: number): Rect {
+export function distillIconScreenRect(
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number,
+  iconSize: { w: number; h: number }
+): Rect {
   const scale = cellPx.x / BASE_TILE.w;
-  const w = DISTILL_ICON_SIZE.w * scale;
-  const h = DISTILL_ICON_SIZE.h * scale;
+  const w = iconSize.w * scale;
+  const h = iconSize.h * scale;
   return { x: sx + cellPx.x - w, y: sy + cellPx.y - h, w, h };
 }
 

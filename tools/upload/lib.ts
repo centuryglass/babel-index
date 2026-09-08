@@ -82,6 +82,7 @@ export function buildUploadList(
     'fav_on.png', 'fav_off.png',
     'fav_center_switch_base.png', 'fav_mine_on.png', 'fav_count_on.png',
     'distill_off.png', 'distill_on.png',
+    'clear_history_book.png',
   ])
     uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
 

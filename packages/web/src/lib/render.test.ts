@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
-import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
-import { createTileCache, CENTER, type Drawable, type LoadableImage } from './tiles.ts';
+import { createRenderer, drawFavoriteSwitch, type DrawContext, type DrawResult } from './render.ts';
+import { createTileCache, CENTER, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, type Drawable, type LoadableImage, type RoomId, type TileCache, type TileHit } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
 
@@ -65,8 +65,17 @@ function fakeCtx(): FakeCtx {
   };
 }
 
+// A stand-in for the badge/toggle/switch corner overlays' own decoded pixel
+// size - real art is comfortably under this at every zoom these tests use,
+// so a screen-space draw derived from it (`naturalIconSize`, render.ts)
+// still reads as "small" against the `w < 100 && h < 300` heuristic these
+// tests filter on to tell an overlay draw from a tile-sized one.
+const FAKE_ICON_SIZE = { width: 96, height: 96 };
+
 interface FakeImage extends LoadableImage {
   src: string;
+  width: number;
+  height: number;
 }
 
 function fakeImages() {
@@ -74,13 +83,13 @@ function fakeImages() {
   return {
     made,
     createImage: (): LoadableImage => {
-      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null };
+      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null, ...FAKE_ICON_SIZE };
       made.push(img);
       return img;
     },
     // A settled load is its own drawable (bitmap = self), so a drawn tile's
     // `img` is this object and `img.src` still identifies it - the browser
-    // hands back an ImageBitmap here instead.
+    // hands back an ImageBitmap here instead, `width`/`height` included.
     settleAll: () => made.forEach((i) => { i.bitmap = i; i.onload?.(); }),
     urls: () => made.map((i) => i.src),
     levelsRequested: () =>
@@ -437,6 +446,47 @@ test('the badge follows the same zoom scale as the tile it sits on', () => {
   const small = at(110);
   const big = at(220);
   assert.ok(Math.abs(big.w / small.w - 2) < 0.05, `badge did not scale with zoom: ${small.w} -> ${big.w}`);
+});
+
+test('the favorites-sort switch sizes each piece off its OWN decoded pixels, not the base plate\'s', () => {
+  // fav_mine_on.png/fav_count_on.png are close to fav_center_switch_base.png
+  // in size but not pixel-identical in the real art - an earlier version drew
+  // every piece into the base plate's own rect, stretching the "on" face off
+  // its intended alignment with the base whenever the two sizes disagreed.
+  const sizeFor: Record<string, { width: number; height: number }> = {
+    [FAV_CENTER_SWITCH_BASE]: { width: 281, height: 275 },
+    [FAV_MINE_ON]: { width: 255, height: 270 },
+  };
+  const cache: TileCache = {
+    beginFrame: () => {},
+    request: () => null,
+    get: (id: RoomId): TileHit | null => {
+      const size = sizeFor[String(id)];
+      if (!size) return null;
+      return { img: { ...size } as unknown as Drawable, rect: null, level: 0 };
+    },
+    prefetch: () => {},
+    pin: () => {},
+    size: () => 0,
+    sizeOf: () => 0,
+    sheetCount: () => 0,
+    overBudget: () => 0,
+    pendingPrefetch: () => 0,
+    clear: () => {},
+  };
+
+  const ctx = fakeCtx();
+  drawFavoriteSwitch(ctx, cache, 'mine', { x: 1024, y: 768 }, 0, 0);
+
+  const base = ctx.drawn.find((d) => (d.img as unknown as { width: number }).width === 281)!;
+  const mine = ctx.drawn.find((d) => (d.img as unknown as { width: number }).width === 255)!;
+  assert.ok(base && mine, 'both the base plate and the "mine" face must draw');
+  // Both anchor to the same corner...
+  assert.equal(base.x, mine.x);
+  assert.equal(base.y, mine.y);
+  // ...but each is sized off its own art, not stretched into the other's rect.
+  assert.equal(base.w, 281);
+  assert.equal(mine.w, 255);
 });
 
 // --- the distill toggle ------------------------------------------------------

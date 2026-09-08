@@ -26,10 +26,10 @@ import { useEffect } from 'react';
 import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
 import {
   bookAtPoint, centerBookAtPoint, centerCellRect,
-  shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint,
+  shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint, BOOK_COUNT,
 } from '../lib/center.ts';
 import { roomAtPoint } from '../lib/picking.ts';
-import { favoriteIconScreenRect, favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
+import { favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from '../lib/distillToggle.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
@@ -322,6 +322,7 @@ export function useMapRenderer({
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
         genericIndexAt: layout.genericIndexAt, favorites, sortMode, genericFade: genericFade?.current,
         distillMode, hoveredDistill,
+        clearHistoryAvailable: centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory',
       };
       const roomDrawOpts = {
         ctx, width: w, height: h, dpr, cam: cam.current,
@@ -346,7 +347,10 @@ export function useMapRenderer({
         const renderStats = stats as DrawResult;
         const size = pyramidSizeOf(renderStats.level);
         const over = cache.overBudget();
-        const favHit = favoriteHitRect(favoriteIconScreenRect(pxPerCell(cam.current), 0, 0), pxPerCell(cam.current), COARSE_POINTER);
+        const favHit = favoriteHitRect(pxPerCell(cam.current), 0, 0, COARSE_POINTER);
+        const favHitLabel = favHit
+          ? `${favHit.w.toFixed(1)}×${favHit.h.toFixed(1)}px (${COARSE_POINTER ? 'touch-padded' : 'mouse'})`
+          : 'untraced';
         hud.textContent =
           `${renderStats.cells} cells · ${renderStats.drawn} drawn · ` +
           `level ${renderStats.level} (${size.w}px) · ${renderStats.substituted} substituted · ` +
@@ -357,7 +361,7 @@ export function useMapRenderer({
           `edge at r=${layout.boundaryRadius.toFixed(1)}` +
           (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '') +
           (blockedCount ? ` · ${blockedCount} blocked` : '') +
-          ` · fav hit ${favHit.w.toFixed(1)}×${favHit.h.toFixed(1)}px (${COARSE_POINTER ? 'touch-padded' : 'mouse'})`;
+          ` · fav hit ${favHitLabel}`;
       }
     };
 

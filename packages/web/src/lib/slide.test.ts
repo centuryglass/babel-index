@@ -42,8 +42,15 @@ function fakeCtx(): FakeCtx {
   };
 }
 
+// Same stand-in `render.test.ts` uses for a decoded overlay's own pixel size
+// - see that file's `FAKE_ICON_SIZE` doc for why the exact number doesn't
+// matter, only that it stays comfortably under a tile's own screen size.
+const FAKE_ICON_SIZE = { width: 96, height: 96 };
+
 interface FakeImage extends LoadableImage {
   src: string;
+  width: number;
+  height: number;
 }
 
 /** A cache whose images are always ready, so a frame's geometry is what is under test. */
@@ -52,7 +59,7 @@ function readyCache() {
   const cache = createTileCache({
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: (): LoadableImage => {
-      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null };
+      const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null, ...FAKE_ICON_SIZE };
       made.push(img);
       return img;
     },
@@ -476,4 +483,50 @@ test('distillMode undefined on the slide renderer means no distill toggle at all
   renderer.draw({ ctx, width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
   const hasDistill = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('distill'));
   assert.ok(!hasDistill(ctx), 'unexpected distill draw with distillMode omitted');
+});
+
+test('the clear-history book overlay rides along with the center room during a rearrangement', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  const frame = (motions) => {
+    const ctx = fakeCtx();
+    renderer.draw({
+      ctx, width: 1920, height: 1080, dpr: 1, cam,
+      board, origin: built.origin, motions, clearHistoryAvailable: true,
+    });
+    return ctx;
+  };
+
+  frame([]);
+  settle();
+
+  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('clear-history-book'));
+
+  for (let t = 0; t <= show.totalMs; t += 41) {
+    const { motions } = show.advanceTo(t);
+    const ctx = frame(motions);
+    assert.ok(hasClearHistoryBook(ctx), `no clear-history book overlay drawn at t=${t}`);
+  }
+});
+
+test('clearHistoryAvailable omitted on the slide renderer means no clear-history book overlay at all', () => {
+  const { built, moves } = rearrangement();
+  const { cache, settle } = readyCache();
+  const board = { ...built.start, cells: built.start.cells.slice() };
+  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
+  const renderer = createSlideRenderer({ cache });
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+
+  renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  settle();
+
+  const ctx = fakeCtx();
+  renderer.draw({ ctx, width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
+  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('clear-history-book'));
+  assert.ok(!hasClearHistoryBook(ctx), 'unexpected clear-history book draw with clearHistoryAvailable omitted');
 });

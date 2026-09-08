@@ -255,6 +255,11 @@ export function CatalogView({
   const centreRowRef = useRef<HTMLLIElement>(null);
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
+  // The distill toggle's own decoded pixel size, read off its `<img>` once it
+  // loads rather than hardcoded - see the `distillRect` comment below. Starts
+  // at {0, 0} so the button has no footprint (but the right corner it anchors
+  // to) until the first load reports real numbers.
+  const [distillIconSize, setDistillIconSize] = useState({ w: 0, h: 0 });
   // The center row's real height. It is the ONE row allowed to size itself -
   // it holds the whole shelf, forty titles that wrap to as many lines as the
   // width needs, and clipping them to a tile's height would hide the newest
@@ -295,8 +300,13 @@ export function CatalogView({
   // The distill toggle's screen rect within the center row's fixed-size
   // thumbnail - the same corner-anchor math the map's own canvas overlay
   // uses (`distillIconScreenRect`), against this thumbnail's own pixel size
-  // rather than a moving camera's `cellPx`.
-  const distillRect = distillIconScreenRect({ x: thumbPx, y: tileHeight(thumbPx) }, 0, 0);
+  // rather than a moving camera's `cellPx`. `distillIconSize` starts at
+  // {0, 0} (the button renders with no footprint, at the exact corner it
+  // will grow from) and is set once the `<img>` below actually reports its
+  // decoded size - same "read the real art, don't hardcode it" reasoning as
+  // `render.ts`'s canvas draw, just on a `load` event instead of a cache hit,
+  // since a DOM `<img>` has no synchronous decode signal to read before then.
+  const distillRect = distillIconScreenRect({ x: thumbPx, y: tileHeight(thumbPx) }, 0, 0, distillIconSize);
   // Narrow rows drop the map link and let the name wrap instead of clipping
   // it - see `NARROW_PX`. Both halves of that trade are priced below.
   const narrow = geom.width < NARROW_PX;
@@ -588,7 +598,16 @@ export function CatalogView({
                 aria-label={distillMode ? 'disable distillation' : 'enable distillation'}
                 onClick={onToggleDistill}
               >
-                <img src={urlFor(distillMode ? DISTILL_ON : DISTILL_OFF, 0) ?? ''} alt="" decoding="async" />
+                <img
+                  src={urlFor(distillMode ? DISTILL_ON : DISTILL_OFF, 0) ?? ''}
+                  alt=""
+                  decoding="async"
+                  onLoad={(e) => {
+                    const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                    if (!w || !h) return;
+                    setDistillIconSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+                  }}
+                />
               </button>
             </div>
             <div className="catalog-body">
