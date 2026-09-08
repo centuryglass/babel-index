@@ -44,6 +44,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import cast
 
 from PySide6.QtCore import (
     Qt,
@@ -69,8 +70,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QApplication,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -192,10 +196,10 @@ class TileButton(QFrame):
 
         # Room for the 4px selected border + 4px layout margin on each side.
         self.setFixedSize(THUMB + 16, THUMB + 16)
-        self.setCursor(Qt.PointingHandCursor)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         label = QLabel(self)
-        label.setAlignment(Qt.AlignCenter)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if pixmap is not None and not pixmap.isNull():
             label.setPixmap(pixmap)
         else:
@@ -224,7 +228,7 @@ class TileButton(QFrame):
         )
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.key)
         super().mousePressEvent(event)
 
@@ -238,11 +242,66 @@ class TileButton(QFrame):
 
 
 # ---------------------------------------------------------------------------
+# Collapsible editor section
+# ---------------------------------------------------------------------------
+class CollapsibleSection(QWidget):
+    """A titled header that folds its body away, freeing vertical space.
+
+    The header is a flat toggle button with an arrow that points down when open
+    and right when collapsed. `body` is any widget - a plain text box, or a row
+    holding one plus a button. Collapsing hides the body and drops the section's
+    vertical size policy to Fixed so the panel layout stops handing it stretch;
+    `ReviewWindow` reads `is_open()` to redistribute that freed space evenly
+    among the sections still open.
+    """
+
+    toggled = Signal(bool)  # re-emitted so the window can rebalance stretch
+
+    def __init__(self, title: str, body: QWidget):
+        super().__init__()
+        self.body = body
+        self.weight = 1  # its share of vertical space while open; set by the window
+
+        self.toggle = QToolButton()
+        self.toggle.setText(title)
+        self.toggle.setCheckable(True)
+        self.toggle.setChecked(True)
+        self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.toggle.setArrowType(Qt.ArrowType.DownArrow)
+        self.toggle.setAutoRaise(True)
+        self.toggle.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
+        self.toggle.toggled.connect(self._on_toggled)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self.toggle)
+        layout.addWidget(body, stretch=1)
+
+    def is_open(self) -> bool:
+        return self.toggle.isChecked()
+
+    def _on_toggled(self, checked: bool):
+        self.body.setVisible(checked)
+        self.toggle.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Expanding if checked else QSizePolicy.Policy.Fixed,
+        )
+        self.toggled.emit(checked)
+
+
+# ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
 class ReviewWindow(QMainWindow):
+    _MIN_FONT_POINT_SIZE = 6
+
     def __init__(self, tile_dir: str, content_review: str | None = None):
         super().__init__()
+        # The size the app launched with, so Ctrl+0 always lands back on it
+        # rather than on some rounded intermediate from repeated scaling.
+        self._base_font_point_size = cast(QApplication, QApplication.instance()).font().pointSize()
         self.tile_dir = tile_dir
         self.content_review = content_review
         self.index = core.load_index(tile_dir)
@@ -296,7 +355,7 @@ class ReviewWindow(QMainWindow):
         # carry it, so key-press/release alone is unreliable (and never fires
         # while the cursor sits still over a tile). Poll the real hardware
         # modifier state instead, and react whenever Ctrl/Shift changes.
-        self._last_mods = Qt.NoModifier
+        self._last_mods = Qt.KeyboardModifier.NoModifier
         self._mod_timer = QTimer(self, interval=100)
         self._mod_timer.timeout.connect(self._poll_modifiers)
         self._mod_timer.start()
@@ -307,14 +366,14 @@ class ReviewWindow(QMainWindow):
 
     # -- UI construction ----------------------------------------------------
     def _build_ui(self):
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left: scrolling grid.
         self.grid_host = QWidget()
         self.grid = QGridLayout(self.grid_host)
         self.grid.setContentsMargins(8, 8, 8, 8)
         self.grid.setSpacing(6)
-        self.grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -373,34 +432,39 @@ class ReviewWindow(QMainWindow):
         self.title_edit.textChanged.connect(self._on_title_changed)
         layout.addWidget(self.title_edit)
 
-        layout.addWidget(QLabel("Initial prompt"))
+        # The four multi-line boxes are collapsible. `_editor_layout` /
+        # `_edit_sections` let `_redistribute_editor_space` hand the vertical
+        # stretch to whichever sections are still open, evenly.
+        self._editor_layout = layout
+        self._edit_sections: list[CollapsibleSection] = []
+
         self.prompt_edit = QPlainTextEdit()
-        self.prompt_edit.setMaximumHeight(150)
+        self.prompt_edit.setMinimumHeight(60)
         self.prompt_edit.textChanged.connect(self._update_action_button)
-        layout.addWidget(self.prompt_edit)
+        self._add_section(layout, "Initial prompt", self.prompt_edit, weight=1)
 
-        layout.addWidget(QLabel("Story"))
         self.story_edit = QPlainTextEdit()
+        self.story_edit.setMinimumHeight(80)
         self.story_edit.textChanged.connect(self._on_story_changed)
-        layout.addWidget(self.story_edit, stretch=1)
+        self._add_section(layout, "Story", self.story_edit, weight=2)
 
-        layout.addWidget(QLabel("Revision request"))
         self.revision_edit = QPlainTextEdit()
-        self.revision_edit.setMaximumHeight(120)
+        self.revision_edit.setMinimumHeight(60)
         self.revision_edit.textChanged.connect(self._update_action_button)
-        layout.addWidget(self.revision_edit)
+        self._add_section(layout, "Revision request", self.revision_edit, weight=1)
 
-        layout.addWidget(QLabel("Alt text"))
-        alt_row = QHBoxLayout()
+        alt_body = QWidget()
+        alt_row = QHBoxLayout(alt_body)
+        alt_row.setContentsMargins(0, 0, 0, 0)
         self.alt_edit = QPlainTextEdit()
-        self.alt_edit.setMaximumHeight(70)
+        self.alt_edit.setMinimumHeight(50)
         self.alt_edit.textChanged.connect(self._on_alt_changed)
         alt_row.addWidget(self.alt_edit, stretch=1)
         self.alt_generate_button = QPushButton("Generate alt")
         self.alt_generate_button.setMaximumWidth(90)
         self.alt_generate_button.clicked.connect(self._on_generate_alt)
-        alt_row.addWidget(self.alt_generate_button)
-        layout.addLayout(alt_row)
+        alt_row.addWidget(self.alt_generate_button, alignment=Qt.AlignmentFlag.AlignTop)
+        self._add_section(layout, "Alt text", alt_body, weight=1)
 
         sensitive_row = QHBoxLayout()
         sensitive_row.addWidget(QLabel("Sensitive content:"))
@@ -457,7 +521,29 @@ class ReviewWindow(QMainWindow):
         controls.addWidget(self.delete_button)
 
         layout.addLayout(controls)
+        self._redistribute_editor_space()
         return panel
+
+    def _add_section(self, layout: QVBoxLayout, title: str, body: QWidget, weight: int):
+        """Wrap `body` in a collapsible section and track it for rebalancing.
+
+        `weight` is the section's share of the vertical space while open (story
+        gets 2 to the others' 1); collapsed sections drop to 0. Tweak these to
+        change the default balance.
+        """
+        section = CollapsibleSection(title, body)
+        section.weight = weight
+        section.toggled.connect(self._redistribute_editor_space)
+        self._edit_sections.append(section)
+        layout.addWidget(section, stretch=weight)
+
+    def _redistribute_editor_space(self):
+        """Give the vertical stretch only to open sections, each by its weight,
+        so they share the space collapsed ones gave back in that proportion."""
+        for section in self._edit_sections:
+            self._editor_layout.setStretchFactor(
+                section, section.weight if section.is_open() else 0
+            )
 
     # -- Hover preview overlay ----------------------------------------------
     def _build_overlay(self):
@@ -468,8 +554,8 @@ class ReviewWindow(QMainWindow):
         the mouse so the tile beneath keeps receiving hover events (no flicker).
         """
         self.overlay = QLabel(self)
-        self.overlay.setAlignment(Qt.AlignCenter)
-        self.overlay.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.overlay.setStyleSheet(
             "background: rgba(20,20,24,0.92); border: 2px solid #3498db;"
         )
@@ -502,8 +588,54 @@ class ReviewWindow(QMainWindow):
             (QKeySequence("Ctrl+Right"), 1),
         ):
             shortcut = QShortcut(keys, self)
-            shortcut.setContext(Qt.WindowShortcut)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
             shortcut.activated.connect(lambda d=delta: self._navigate(d))
+
+        # Ctrl+=/Ctrl++ grow, Ctrl+- shrinks, Ctrl+0 resets -- the same keys
+        # browsers use for page zoom. Bound to every key a keyboard layout
+        # might route "+"/"-" through (the shifted "=" key sends "+" on some
+        # layouts/platforms without triggering a separate KeypadPlus).
+        for keys, delta in (
+            (QKeySequence("Ctrl+="), 1),
+            (QKeySequence("Ctrl++"), 1),
+            (QKeySequence("Ctrl+Shift+="), 1),
+            (QKeySequence(QKeySequence.StandardKey.ZoomIn), 1),
+            (QKeySequence("Ctrl+-"), -1),
+            (QKeySequence(QKeySequence.StandardKey.ZoomOut), -1),
+        ):
+            shortcut = QShortcut(keys, self)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+            shortcut.activated.connect(lambda d=delta: self._adjust_font_scale(d))
+
+        reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), self)
+        reset_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        reset_shortcut.activated.connect(self._reset_font_scale)
+
+    def _adjust_font_scale(self, step: int):
+        """Grow/shrink every widget's font by one point, app-wide.
+
+        Applied to QApplication rather than this window's font because Qt
+        widgets resolve an unset font from their parent at construction time,
+        not live -- rescaling only `self` would leave already-built children
+        at their original size. `_base_font_point_size` is captured once (the
+        size the app launched with) so repeated shrink/grow/reset never
+        drifts from a rounded intermediate value.
+        """
+        app = cast(QApplication, QApplication.instance())
+        font = app.font()
+        new_size = max(self._MIN_FONT_POINT_SIZE, font.pointSize() + step)
+        if new_size == font.pointSize():
+            return
+        font.setPointSize(new_size)
+        app.setFont(font)
+
+    def _reset_font_scale(self):
+        app = cast(QApplication, QApplication.instance())
+        font = app.font()
+        if font.pointSize() == self._base_font_point_size:
+            return
+        font.setPointSize(self._base_font_point_size)
+        app.setFont(font)
 
     def _navigate(self, delta: int):
         """Select the tile `delta` steps from the current one (wrapping)."""
@@ -527,7 +659,7 @@ class ReviewWindow(QMainWindow):
         # queryKeyboardModifiers() reads the live hardware state, unlike
         # keyboardModifiers() which only reflects the last delivered event.
         mods = QGuiApplication.queryKeyboardModifiers() & (
-            Qt.ControlModifier | Qt.ShiftModifier
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
         )
         if mods != self._last_mods:
             self._last_mods = mods
@@ -543,8 +675,8 @@ class ReviewWindow(QMainWindow):
     def _update_overlay(self):
         mods = QGuiApplication.queryKeyboardModifiers()
         # Ctrl takes priority over Shift when both are held.
-        whole = bool(mods & Qt.ControlModifier)
-        limited = bool(mods & Qt.ShiftModifier)
+        whole = bool(mods & Qt.KeyboardModifier.ControlModifier)
+        limited = bool(mods & Qt.KeyboardModifier.ShiftModifier)
         key = self._hovered_key
 
         # A manual Ctrl/Shift hover preview wins when present. Otherwise, if the
@@ -576,7 +708,7 @@ class ReviewWindow(QMainWindow):
         self.overlay.setGeometry(rect)
         self.overlay.setPixmap(
             self._overlay_source.scaled(
-                rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+                rect.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
             )
         )
         self.overlay.show()
@@ -622,7 +754,7 @@ class ReviewWindow(QMainWindow):
         pix = QPixmap(path)
         if pix.isNull():
             return None
-        return pix.scaled(THUMB, THUMB, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        return pix.scaled(THUMB, THUMB, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
     def _populate_grid(self):
         total = len(self.keys)
@@ -1091,10 +1223,10 @@ class ReviewWindow(QMainWindow):
             self,
             "Delete tile",
             f"Delete {key} from disk and metadata? This cannot be undone.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         path = os.path.join(self.tile_dir, key)
