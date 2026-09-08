@@ -24,7 +24,7 @@
  */
 import {
   CENTER, genericId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON,
+  DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
 } from './tiles.ts';
 import { sheetPosition, sheetFileName } from '../../../pipeline/layout.ts';
 import type { Manifest } from '../../../map/manifest.ts';
@@ -71,6 +71,8 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // The distill-mode toggle's two faces - same fixed-app-art treatment.
   sharedUrls.set(DISTILL_OFF, `${manifest.sharedBase}/${encodeURIComponent('distill_off.png')}`);
   sharedUrls.set(DISTILL_ON, `${manifest.sharedBase}/${encodeURIComponent('distill_on.png')}`);
+  // The "forget searches" book's black spine overlay - same fixed-app-art treatment.
+  sharedUrls.set(CLEAR_HISTORY_BOOK, `${manifest.sharedBase}/${encodeURIComponent('clear_history_book.png')}`);
 
   return (id, level) => {
     if (sharedUrls.has(id)) return level === 0 ? { url: sharedUrls.get(id)!, rect: null } : null;

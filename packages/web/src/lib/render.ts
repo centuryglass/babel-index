@@ -27,10 +27,13 @@ import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts
 import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON,
+  DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
   genericId, type Drawable, type RoomId, type TileCache,
 } from './tiles.ts';
-import { composeSpines, areSpinesLegible, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
+import {
+  composeSpines, areSpinesLegible, bookScreenRects, BOOK_COUNT,
+  type Slot, type SpineContext, type SpineFontLimits,
+} from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { parsePath } from './svgPath.ts';
@@ -300,6 +303,14 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
           );
         }
+        // The "forget searches" book's spine swaps to its black art whenever
+        // history has claimed that slot - see `drawClearHistoryBookOverlay`'s
+        // doc. Checked off `centreSlots` itself (the same override
+        // `useCenterShelf.ts` reserves the slot with) rather than a second
+        // "is there history" flag, so the two can never drift apart. Drawn
+        // before the shelf's titles so the gilt text still composites on top.
+        if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
+          drawClearHistoryBookOverlay(ctx, cache, { x: sx, y: sy, w: cellPx.x, h: cellPx.y });
         // The center room's spines carry the search history. Content, not
         // chrome, so it is not gated on that flag - but it is gated on legible
         // spine width inside composeSpines, so far out it draws nothing.
@@ -450,6 +461,34 @@ export function drawFavoriteBadge(
     path.lineWidth = 1;
     path.strokeStyle = FAVORITE_HOVER_GLOW_STROKE;
     path.stroke();
+  }
+}
+
+/**
+ * Draw the "forget searches" book's black spine overlay, if its art has
+ * landed - rule 1 does not apply here, same as `drawFavoriteBadge`. Anchored
+ * to the last book's own screen rect (`bookScreenRects`, `center.ts`) rather
+ * than a fixed corner and native icon size the way `distillIconScreenRect`/
+ * `favoriteIconScreenRect` are: this book's position is shelf geometry, not
+ * app chrome, and it is exactly the slot `useCenterShelf.ts` reserves for the
+ * override, so drawing over that book's own rect keeps the two from drifting
+ * apart. No hover treatment - the book already gets one from `composeSpines`'s
+ * own hover glow, drawn on top of this.
+ */
+export function drawClearHistoryBookOverlay(
+  ctx: DrawContext,
+  cache: TileCache,
+  cellRect: { x: number; y: number; w: number; h: number }
+): void {
+  if (BOOK_COUNT === 0) return;
+  const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
+  if (!hit) return;
+  const { x, y, w, h } = bookScreenRects(cellRect)[BOOK_COUNT - 1];
+  if (hit.rect) {
+    const { sx: rx, sy: ry, sw, sh } = hit.rect;
+    ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);
+  } else {
+    ctx.drawImage(hit.img, x, y, w, h);
   }
 }
 
