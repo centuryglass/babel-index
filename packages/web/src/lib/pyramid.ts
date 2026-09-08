@@ -122,8 +122,9 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
  *       1   512x384      768 KB     800        600 MB                  99
  *       2   256x192      192 KB    1800        338 MB†                336
  *       3    128x96       48 KB    3200        150 MB†                1271
- *       4     64x48       12 KB   16400        192 MB†                7500
- *                                          ~1.7 GB nominal, ~2.5 GB real*
+ *       4     64x48       12 KB   16400        202 MB†                4740
+ *       5     32x24        3 KB   65000        200 MB†                7500
+ *                                          ~3.1 GB nominal, ~2.7 GB real*
  *
  * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
  * zoom in that level's band which shows the most of them. Every budget is
@@ -133,10 +134,13 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
  * trusting this comment - treat the table as illustrative, the test as true.
  * Going 4:3 is what last moved it: a shorter tile fits more rows on the same
  * screen, so the coarsest level's worst case rose past its old 7000 budget.
+ * Adding level 5 is what moved it again: the ~7500 that used to be level 4's
+ * open-ended worst case is now level 5's, and level 4's shrank to 4740 now
+ * that its own band has an upper bound.
  *
- * †Not real bytes - see above. Real bytes for levels 2-4 come from
+ * †Not real bytes - see above. Real bytes for levels 2-5 come from
  * `SHEETS.cacheBudget` sheets instead, at their own (much larger) per-image
- * size; "~2.5 GB real" adds a 2048-room corpus's full complement of sheets
+ * size; "~2.7 GB real" adds a 2048-room corpus's full complement of sheets
  * (SHEETS's own docblock) on top of levels 0-1's real cost, which is the
  * actual ceiling to budget a machine against, not the nominal table total.
  *
@@ -154,6 +158,7 @@ export const LEVELS: LevelSpec[] = [
   { level: 2, divisor: 4, budget: 1800 },
   { level: 3, divisor: 8, budget: 3200 },
   { level: 4, divisor: 16, budget: 16400 },
+  { level: 5, divisor: 32, budget: 65000 },
 ];
 
 /**
@@ -210,7 +215,7 @@ export const PREFETCH: PrefetchConfig = {
  * Which coarse levels get packed into shared fixed-grid tilesheets, and how.
  *
  * A zoomed-out scroll session requests distinct tiles at these levels the
- * fastest - level 4's worst-case-visible is ~7500 cells on one screen - so
+ * fastest - level 5's worst-case-visible is ~7500 cells on one screen - so
  * these are what turn a scroll into thousands of never-before-seen URLs and
  * trip Cloudflare's per-IP rate limit even for one real visitor (see
  * infra/README.md and docs/design-history.md). Packing `roomsPerSheet` rooms
@@ -243,7 +248,7 @@ export const SHEETS: SheetsConfig = {
    * whole coarse end of the pyramid fits in memory at once and a full scroll
    * of the map costs zero further sheet requests, ever, however far the
    * corpus grows past that point. 64 comfortably covers a 2048-room corpus
-   * (24 sheets total across levels 2-4); raise it for a much larger one.
+   * (32 sheets total across levels 2-5); raise it for a much larger one.
    */
   cacheBudget: 64,
 };
