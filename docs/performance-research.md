@@ -28,24 +28,53 @@ A rearrangement has two phases:
    (`packages/web/src/hooks/useRearrangement.ts:144-177`) eases the camera to
    `min(currentZoom, overviewZoom(canvas, config.camera.minVisibleCells, cam))`.
    `minVisibleCells` is **5** (`packages/config/config.ts:161`), and
-   `overviewZoom` fits a 5x5 cell target to the viewport
+   `overviewZoom` passes it to `fitZoom` as a 5x5 cell target
    (`packages/web/src/lib/camera.ts`). During this phase the ordinary renderer
    draws the *old* arrangement from the live, interpolating camera.
 2. **The slide.** The camera is parked; `slide.ts` draws a finite board every
    frame at one fixed level.
 
-The consequence: **the cell count stays tiny throughout.** The opening view
-frames the center room's shelf (roughly one cell); the overview shows about
-5-9 cells. It never approaches the ~7500-cell worst case the pyramid's budgets
-are sized against.
+A *cell* here is one grid square of the map — the slot that holds exactly one
+tile, whether that is a corpus room, a generic wallpaper tile, or the center
+room. It is the world's base unit, and it is **not square**: `zoom` is pixels
+per cell *width* and `pxPerCell` derives the height as `zoom * CELL_ASPECT`
+(0.75, from `BASE_TILE`'s 4:3).
+
+`minVisibleCells: 5` is easy to misread — it fits 5 cells on the **binding**
+axis (whichever runs out first), not 5 cells in total. The other axis shows
+more, and which axis binds flips with the viewport's shape. Running the real
+`overviewZoom` and `render.ts`'s own bounds arithmetic:
+
+| viewport | zoom | cell px | grid | cells |
+|----------|------|---------|------|-------|
+| 1920x1080 desktop | 288 | 288x216 | 8x6 | 48 |
+| 2560x1440 desktop | 384 | 384x288 | 8x6 | 48 |
+| 1440x900 laptop | 240 | 240x180 | 8x6 | 48 |
+| 844x390 phone landscape | 104 | 104x78 | 10x6 | 60 |
+| **390x844 phone portrait** | 78 | 78x59 | **6x16** | **96** |
+
+So: **roughly 50 cells on a desktop, and about 96 on a portrait phone** — the
+binding axis there is width, so the tall viewport fills with rows and the phone
+draws *twice* the cells a desktop does. That inverts the usual assumption that
+the small screen is doing less work, and it puts the highest cell count on the
+weakest hardware.
+
+The consequence, with that correction in hand: the cell count during a
+rearrangement is **two orders of magnitude below** the ~7500-cell worst case the
+pyramid's budgets are sized against, but it is not trivially small either,
+particularly on a phone.
 
 So per-cell costs — the allocation churn in `roomAt`, `locateTile`, the
-favorite badge, generic tiles drawn at full resolution — are **not** what drops
-frames during a rearrangement. They are real, they are worth fixing, and they
-dominate a different scenario (a reader manually zooming or panning far out).
-They are filed separately in §4 for that reason.
+favorite badge, generic tiles drawn at full resolution — are unlikely to be the
+*dominant* term during a rearrangement, and they dominate a different scenario
+(a reader manually zooming or panning far out), which is why they are filed
+separately in §4. But at ~96 cells with roughly a dozen allocations each, that
+is still on the order of a thousand allocations per frame plus ~96 `locateTile`
+chains, on phone-class hardware. Secondary, not negligible — and §4's items get
+*more* attractive, not less, once you notice the phone is the worst case for
+both cell count and CPU.
 
-What is left, at 5-9 cells, are the costs that do not scale with cell count:
+What is left, and what scales with frame count rather than cell count:
 
 - whatever the frame does per *level transition* (§3.1),
 - whatever the frame does per *frame* regardless of content (§3.2, §3.3),
@@ -337,9 +366,11 @@ under `DEBUG`, or asserting coverage in a test, would buy back the safety.
 
 ## 4. Candidates that matter when zoomed out, not during a rearrangement
 
-Everything here is real and worth fixing, but it scales with visible cell count
-and so is close to irrelevant at the 5-9 cells a rearrangement runs at. This is
-the "a reader zooms all the way out and pans" performance story. At the coarsest
+Everything here scales with visible cell count, so it is secondary during a
+rearrangement (~48 cells on a desktop, ~96 on a portrait phone — see §1) and
+dominant when a reader zooms all the way out and pans. Treat the phone figure as
+the reason not to dismiss this section on the strength of the desktop one. At
+the coarsest
 zoom the pyramid's own table puts the worst case at ~7500 visible cells, of
 which `contentRatio` 0.25 (`config.ts:202`) makes roughly 1875 real rooms.
 
@@ -614,10 +645,20 @@ on reasoning alone:
 4. **§3.1 alternative: pin the level for the duration of a flight** — possibly
    better than preloading, since it removes the transitions rather than paying
    for them faster. Try both.
-5. **§4.1 and §4.2 memoization** — the zoomed-out story, not the rearrangement
-   one, but the largest wins available there and mostly mechanical.
+5. **§4.1 and §4.2 memoization** — mostly the zoomed-out story, but they are
+   the largest wins available there, they are mechanical, and at ~96 cells they
+   are not nothing during a rearrangement on a phone either.
 6. Everything else as appetite allows.
 
 §3.5 (dpr during motion) is the wildcard: potentially the biggest single win for
 the exact symptom, but it interacts with level selection (§3.1) in a way that
 wants both designed together, so it is not a good first move.
+
+**If the dropped frames are reported on a phone rather than a desktop, reorder
+this list.** §1's table shows a portrait phone drawing ~96 cells during a
+rearrangement against a desktop's ~48 — twice the per-cell work on a fraction of
+the CPU and memory bandwidth, and with the tightest limits on the 48 MB textures
+§3.1 is about. On that hardware §4's per-cell family and §3.5's fill-rate
+argument both move up sharply, and §3.1's preloading option moves *down* (510 MB
+resident is a far worse trade on a phone than on a desktop). Establishing which
+device the symptom is on is therefore worth doing before anything in §2.
