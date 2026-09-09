@@ -41,7 +41,9 @@ npm run generate:shelf-geometry     # Recalculate diegetic control bounds from t
 No compiled output ever hits disk. The demo server bundles the client with
 esbuild in-process at startup (`packages/server/index.ts`), so editing web
 sources means restarting `npm run demo`. Demo run will fail if its port is in
-use.
+use. The one exception is `packages/web/style.css`, which is not part of the
+esbuild bundle - the server re-reads it on every request (like `index.html`
+itself), so a margin or color tweak just needs a browser refresh.
 
 Every `npm run` script that invokes `node` directly passes
 `--import ./build/register.mjs` (see `build/ts-loader.mjs`) so `.ts`/`.tsx`
@@ -104,6 +106,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
   `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure
+    * `style.css`: All of the app's CSS - one file, no CSS-in-JS, no
+                   per-component styles. Linked from `index.html` rather than
+                   inlined, and served by `app.ts`'s `/style.css` route the same
+                   way `index.html` itself is - re-read on each request, so a
+                   margin or color tweak needs no restart.
     * `src/main.tsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.

@@ -67,6 +67,9 @@ export interface CreateAppOptions {
   getBundleJs?: () => string;
   /** read on each request, so editing the page needs no restart */
   readIndexHtml?: () => Promise<string>;
+  /** read on each request, so editing a margin or a color needs no restart
+   *  either - see packages/web/style.css, index.html's one stylesheet link */
+  readStyleCss?: () => Promise<string>;
   /** dev convenience: serve the live-reload client and expose
    *  `app.locals.broadcastReload` for a rebuild to call */
   watch?: boolean;
@@ -98,6 +101,7 @@ export function createApp({
   bundleJs = '',
   getBundleJs,
   readIndexHtml,
+  readStyleCss,
   watch = false,
   basePath = '/',
   favorites = null,
@@ -265,6 +269,17 @@ export function createApp({
   app.get('/bundle.js', (_req, res) => {
     res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
   });
+
+  // Plain CSS, not part of the esbuild bundle - re-read on each request like
+  // index.html below, so a margin or color tweak needs no restart.
+  if (readStyleCss)
+    app.get('/style.css', async (_req, res, next) => {
+      try {
+        res.type('css').send(await readStyleCss());
+      } catch (err) {
+        next(err);
+      }
+    });
 
   if (readIndexHtml)
     app.get('/', async (_req, res, next) => {
