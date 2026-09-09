@@ -91,6 +91,7 @@ export function HelpDialog({
           </button>
         </div>
 
+        <div className="paper-sheet">
         <div className="help-body">
           <p>
             <strong>What this is:</strong> a zoomable, pannable map of library
@@ -184,6 +185,7 @@ export function HelpDialog({
             </ul>
           </details>
         )}
+        </div>
       </div>
     </div>
   );

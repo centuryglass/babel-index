@@ -81,6 +81,16 @@ const thumbWidth = (available: number): number =>
 const ROW_PAD = 22;
 
 /**
+ * The paper card's own vertical padding, both halves - the room's text column
+ * sits on a cream `.paper-sheet` (see `.catalog-row .catalog-body.paper-sheet`
+ * in index.html), and that inset costs height the story would otherwise have.
+ * Priced into `rowHeight` and `storyLines` below exactly like `ROW_PAD`, so the
+ * card cannot clip its own score strip or "read the rest" button - the same
+ * fixed-height invariant the spacer arithmetic rests on. Must match the CSS.
+ */
+const CARD_PAD = 24;
+
+/**
  * What the text column needs when the tile is too small to set the row's height.
  *
  * The room's name, its chips, two clamped lines of story and the "show on the
@@ -314,7 +324,7 @@ export function CatalogView({
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
   // exact, which is the property the sliding window rests on.
-  const rowPx = rowHeight(thumbPx, ROW_PAD, TEXT_MIN + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0));
+  const rowPx = rowHeight(thumbPx, ROW_PAD, TEXT_MIN + CARD_PAD + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0));
   const level = thumbLevel(thumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
   const total = order.length;
@@ -335,7 +345,7 @@ export function CatalogView({
   // with it rather than leaving the story to be cut by `overflow: hidden`.
   const lines = storyLines(
     rowPx,
-    STORY_RESERVED_PX + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
+    STORY_RESERVED_PX + CARD_PAD + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
     STORY_LINE_PX
   );
 
@@ -610,7 +620,7 @@ export function CatalogView({
                 />
               </button>
             </div>
-            <div className="catalog-body">
+            <div className="catalog-body paper-sheet">
               <h2 className="catalog-name">the center of the library</h2>
               <p className="catalog-sub">
                 the index shelf, where searches are recorded
@@ -781,7 +791,7 @@ function CatalogRow({
         />
       </button>
 
-      <div className="catalog-body">
+      <div className="catalog-body paper-sheet">
         {/*
           The room's identity on the left, the way out to the map on the right of
           the SAME row. It used to sit under the chips, which put a link and a
