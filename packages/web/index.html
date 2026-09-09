@@ -604,8 +604,28 @@
       .catalog-row {
         display: flex; gap: 14px; align-items: flex-start;
         height: var(--catalog-row); padding: 11px 16px;
-        border-bottom: 1px solid var(--edge); overflow: hidden;
+        overflow: hidden;
       }
+      /*
+        Each room's text column rides on a cream sheet (`.paper-sheet`), so the
+        list reads as a stack of cards floating on the dark gaps between rows
+        rather than one continuous scroll - the divider that used to separate
+        rows is gone, the row's own vertical padding is the gap. The image stays
+        OFF the paper, on the row's dark background. `.paper-sheet`'s reading-
+        dialog padding is trimmed to a row's scale here, and that inset is priced
+        into `CatalogView`'s `CARD_PAD` so the fixed row height still holds - the
+        card cannot clip its own score strip or "read the rest" button.
+      */
+      .catalog-row .catalog-body.paper-sheet { padding: 12px 16px; }
+      /*
+        The gold accents (`#c8a95f`) read on dark chrome but wash out on cream,
+        so the rank and "read the rest" drop to the paper's inked rust, the same
+        move the overlays' sheets make. The mismatch reading keeps its own colour.
+      */
+      .catalog-body.paper-sheet .catalog-rank,
+      .catalog-body.paper-sheet .catalog-more { color: var(--paper-accent); }
+      .catalog-body.paper-sheet .clip-certainty { color: var(--paper-dim); }
+      .catalog-body.paper-sheet .clip-certainty.mismatch { color: var(--mismatch); }
       /*
         "Show in the catalog" (`RoomOverlay`'s view toggle) lands a reader on a
         row that otherwise looks like any other - this is what actually picks
@@ -704,6 +724,37 @@
         padding: 14px 16px 16px;
       }
       .overlay:focus { outline: none; }
+      /*
+        A cream sheet that sits ON TOP of the dark `.overlay` cover, exactly as
+        BookOverlay floats its `.book` over the cover: the `.card-head` and its
+        close button stay on the cover outside the paper, so the content reads
+        as a sheet laid onto the dialog rather than the dialog itself turning to
+        paper. The book overlays get this look from `.book`/`.book-page`;
+        `.paper-sheet` is the same stock for the dialogs (RoomOverlay,
+        HelpDialog) that hold arbitrary content rather than book pages, so its
+        gradient/border/shadow are kept in step with `.book-page`. Remapping the
+        palette variables the shared `RoomDetails`/help markup reads recolours
+        everything inside to dark ink without restating a colour per element -
+        the reason the `--paper-*` set exists.
+      */
+      .paper-sheet {
+        color: var(--paper-ink);
+        --ink: var(--paper-ink);
+        --dim: var(--paper-dim);
+        --edge: var(--paper-edge);
+        background: linear-gradient(158deg, var(--paper-hi), var(--paper));
+        border: 1px solid var(--paper-edge); border-radius: 4px;
+        padding: 22px 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+      }
+      /*
+        The light-gold accent (`#c8a95f`) is tuned to read on the dark chrome;
+        on cream it washes out, so the focus ring and the favorited-star state
+        take the paper's inked rust instead. The faint gold washes on chips and
+        `<mark>` keep working over cream unchanged.
+      */
+      .paper-sheet :focus-visible { outline-color: var(--paper-accent); }
+      .paper-sheet .favorite-toggle.on { color: var(--paper-accent); border-color: var(--paper-accent); }
       /*
         Sized to its own native resolution by default: `width: auto` with
         `max-width: 100%` never blows it up past that, only shrinking it to
@@ -1039,7 +1090,6 @@
         the scroll arithmetic takes this row's measured height as its lead.
       */
       .catalog-center {
-        background: rgba(200,169,95,0.04);
         height: auto; min-height: var(--catalog-row); align-items: flex-start;
       }
       /*
@@ -1090,6 +1140,14 @@
       */
       .shelf-link.override { color: #c8a95f; border-color: #c8a95f; text-decoration: underline; }
       .shelf-link:hover { background: rgba(200,169,95,0.22); }
+      /*
+        The center row's shelf now sits on the same cream card the room rows
+        use (`.catalog-body.paper-sheet`). The default and history links follow
+        the remapped `--dim`/`--ink`/`--edge` onto paper, but the override links'
+        gold (`#c8a95f`) washes out on cream, so they take the paper's inked rust
+        - the same drop the rank and "read the rest" make.
+      */
+      .catalog-body.paper-sheet .shelf-link.override { color: var(--paper-accent); border-color: var(--paper-accent); }
 
       .catalog-spacer { padding: 0; border: none; }
       .pager {

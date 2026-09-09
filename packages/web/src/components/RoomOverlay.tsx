@@ -352,7 +352,7 @@ export function RoomOverlay({
             />
           )}
 
-          <div className="overlay-body">
+          <div className="overlay-body paper-sheet">
             <RoomDetails
               entry={entry}
               desc={desc}
