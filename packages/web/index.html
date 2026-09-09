@@ -162,6 +162,19 @@
       .center-book path { fill: transparent; stroke: none; }
       .center-book.hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
       .center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+      /*
+        The same one-time nudge `.center-books button.hint` gives the "READ
+        ME" book (below), aimed at this book instead - pulses the traced
+        path's own fill/stroke rather than a box-shadow, since the hotspot is
+        the silhouette, not a box. Off under reduced motion for the same
+        reason as the shelf's hint: a book that never stops glowing reads as
+        broken, not as a hint.
+      */
+      .center-book.hint path { animation: book-hint-path 1.8s ease-in-out infinite; }
+      @keyframes book-hint-path {
+        0%, 100% { fill: transparent; stroke: rgba(200,169,95,0.6); stroke-width: 0.004; }
+        50% { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.9); stroke-width: 0.004; }
+      }
 
       /*
        * The favorites-sort switch and reorder button - one container over
@@ -515,6 +528,7 @@
       @media (prefers-reduced-motion: reduce) {
         .catalog, .catalog.leaving { animation: none; }
         .center-books button.hint { animation: none; }
+        .center-book.hint path, .catalog-center-book.hint path { animation: none; }
       }
 
       .catalog-bar {
@@ -676,6 +690,8 @@
       .catalog-center-book path { fill: transparent; stroke: none; }
       .catalog-center-book:hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
       .catalog-center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+      /* Same one-time nudge as the map's `.center-book.hint` - see that rule. */
+      .catalog-center-book.hint path { animation: book-hint-path 1.8s ease-in-out infinite; }
       /*
        * The global `button:hover` rule below washes any plain button with a
        * tan fill - fine for a labelled control, wrong for a button that IS a

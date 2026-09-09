@@ -8,22 +8,23 @@
  * (`fitZoom` in main.jsx) precisely so it is right on whatever device is in
  * front of them rather than right on the one they used last.
  *
- * Six things earn an exception, most of them the reader's own choices rather
+ * Seven things earn an exception, most of them the reader's own choices rather
  * than the map's state: which way they page the catalog, what they have
  * searched for, which sensitive-content tags they have blocked, which rooms
  * they have favorited, and whether they have already been shown the one-time
- * nudge toward the help book. The
+ * nudges toward the help book and the artist's statement book. The
  * second is the consequential one - the search history titles the center
  * room's shelf, so persisting it means the wall of books becomes a record of
  * what this reader has asked the library instead of resetting to keyword tags
  * every session. Blocked tags are consequential in the other direction: they
  * are a standing choice about what a reader does not want to see, so it has
- * to survive a reload the same way the choice to see it again would. The help
- * nudge is the odd one out - not a choice at all, just a flag so a returning
- * reader isn't shown the same "try this book" hint every visit. The sixth,
- * the favorites client id, isn't a choice either - it's the random token a
- * favorite toggle is recorded against on the server (`favorites.ts`), and it
- * has to survive a reload or every visit would look like a new visitor.
+ * to survive a reload the same way the choice to see it again would. The two
+ * hint flags are the odd ones out - not a choice at all, just a flag apiece so
+ * a returning reader isn't shown the same "try this book" hint every visit.
+ * The seventh, the favorites client id, isn't a choice either - it's the
+ * random token a favorite toggle is recorded against on the server
+ * (`favorites.ts`), and it has to survive a reload or every visit would look
+ * like a new visitor.
  *
  * ### Why every call is wrapped
  *
@@ -69,6 +70,8 @@ export const KEYS = {
   favorites: `${PREFIX}favorites`,
   /** Whether the one-time nudge toward the "READ ME" book has already been shown. */
   seenHelpHint: `${PREFIX}seenHelpHint`,
+  /** Whether the one-time nudge toward the artist's statement book has already been shown. */
+  seenArtistStatementHint: `${PREFIX}seenArtistStatementHint`,
   /**
    * This browser's own random id for global favorite writes - see
    * `favorites.ts` for why it replaced the visitor's IP address as what the

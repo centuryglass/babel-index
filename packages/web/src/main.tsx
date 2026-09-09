@@ -424,7 +424,23 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // lettered books above, reached the same way in both views: a tap routed
   // through `centerBookAtPoint` on the map, an ordinary click in the catalog.
   const [artistStatementOpen, setArtistStatementOpen] = useState(false);
-  const openArtistStatement = useCallback(() => setArtistStatementOpen(true), []);
+
+  // The same one-time nudge `showHelpHint` gives the "READ ME" book, aimed at
+  // this one instead - a reader who has never opened the artist's statement
+  // gets a pulse until they do, on both the map's `.center-book` and the
+  // catalog's `.catalog-center-book`, which share this one flag rather than
+  // each tracking its own.
+  const [showArtistStatementHint, setShowArtistStatementHint] = useState(
+    () => !load(KEYS.seenArtistStatementHint, false)
+  );
+  useEffect(() => {
+    if (showArtistStatementHint) save(KEYS.seenArtistStatementHint, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const openArtistStatement = useCallback(() => {
+    setArtistStatementOpen(true);
+    setShowArtistStatementHint(false);
+  }, []);
 
   // Right-click or long press opens the room's card - a modal dialog now, so
   // there is no click point to anchor it to, only which room (or generic
@@ -1075,6 +1091,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         controlsRef={controlsRef}
         favTooltipRef={favTooltipRef}
         onOpenArtistStatement={openArtistStatement}
+        showArtistStatementHint={showArtistStatementHint}
         manifest={manifest}
         total={total}
         described={described}
@@ -1146,6 +1163,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           centreSlots={centreSlots}
           onBook={onBook}
           onOpenArtistStatement={openArtistStatement}
+          showArtistStatementHint={showArtistStatementHint}
           distillMode={distillMode}
           onToggleDistill={toggleDistill}
           cellOfId={(id) => cellById.get(id) ?? null}

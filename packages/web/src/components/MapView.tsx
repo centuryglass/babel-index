@@ -79,6 +79,7 @@ export function MapView({
   controlsRef,
   favTooltipRef,
   onOpenArtistStatement,
+  showArtistStatementHint,
   manifest,
   total,
   described,
@@ -132,6 +133,8 @@ export function MapView({
   controlsRef: Ref<HTMLDivElement>;
   favTooltipRef: Ref<HTMLDivElement>;
   onOpenArtistStatement: () => void;
+  /** True until the reader has ever opened the artist's statement book - see main.tsx's `showArtistStatementHint`. */
+  showArtistStatementHint: boolean;
   manifest: Manifest;
   total: number;
   described: number;
@@ -359,12 +362,14 @@ export function MapView({
         keeps every gesture, so a pan starting here still pans. The hover
         highlight is a CSS class toggled by the render loop's own pointermove
         listener, since `pointer-events: none` means this element never sees
-        `:hover` itself.
+        `:hover` itself. The `hint` class is the same one-time pulse
+        `.center-books button.hint` gives the "READ ME" book (index.html),
+        applied here while `showArtistStatementHint` is true.
       */}
       <button
         ref={centerBookRef}
         type="button"
-        className="center-book"
+        className={showArtistStatementHint ? 'center-book hint' : 'center-book'}
         aria-label="an artist's statement"
         onClick={onOpenArtistStatement}
         onKeyDown={onControlKeyDown}

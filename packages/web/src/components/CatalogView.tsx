@@ -203,6 +203,7 @@ export function CatalogView({
   centreSlots,
   onBook,
   onOpenArtistStatement,
+  showArtistStatementHint,
   distillMode,
   onToggleDistill,
   cellOfId,
@@ -240,6 +241,8 @@ export function CatalogView({
   centreSlots: Slot[];
   onBook: (index: number) => void;
   onOpenArtistStatement: () => void;
+  /** True until the reader has ever opened the artist's statement book - see main.tsx's `showArtistStatementHint`. */
+  showArtistStatementHint: boolean;
   /** whether generic rooms are currently hidden - see `useDistillMode.ts` */
   distillMode: boolean;
   onToggleDistill: () => void;
@@ -584,10 +587,17 @@ export function CatalogView({
                 not a moving camera, so there is nothing to reposition per
                 frame and a real `:hover` (this is a normal list, not the
                 gesture-owning canvas) is simpler than the map's
-                pointermove-driven highlight.
+                pointermove-driven highlight. The `hint` class is the same
+                one-time pulse the map's `.center-book` gets while
+                `showArtistStatementHint` is true.
               */}
               {CENTER_BOOK_PATH && (
-                <button type="button" className="catalog-center-book" aria-label="an artist's statement" onClick={onOpenArtistStatement}>
+                <button
+                  type="button"
+                  className={showArtistStatementHint ? 'catalog-center-book hint' : 'catalog-center-book'}
+                  aria-label="an artist's statement"
+                  onClick={onOpenArtistStatement}
+                >
                   <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
                     <path d={CENTER_BOOK_PATH} />
                   </svg>
