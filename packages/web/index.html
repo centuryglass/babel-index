@@ -27,6 +27,19 @@
         --panel: rgba(18, 15, 12, 0.88);
         --edge: rgba(180, 160, 120, 0.22);
         --mismatch: #c97b63;
+        /*
+          Paper: the open book's pages read as warm cream sheets with dark ink,
+          set inside the dark cover the rest of the app uses. Kept as its own
+          variable set (not the --ink/--panel palette) so it can be lifted into
+          a full light theme later without unpicking it from the book markup.
+        */
+        --paper: #ece2cb;
+        --paper-hi: #f4ecd9;
+        --paper-ink: #2c2620;
+        --paper-dim: #6a5f4c;
+        --paper-edge: rgba(70, 54, 30, 0.28);
+        --paper-accent: #7a4718;
+        --paper-gutter: rgba(52, 38, 18, 0.20);
       }
       * { box-sizing: border-box; }
       /*
@@ -826,22 +839,45 @@
         threshold to JS so a spread-at-a-time reader (the Babel book) advances
         by the matching amount.
 
-        The BOOK LOOK lives here: the rule between two pages when wide becomes
-        the seam above the second page when stacked. A book showing a single
-        page (the Babel book collapsed) has no second page, so no rule is drawn
-        either way. A paper/gutter or page-curl variant is a swap in this block,
-        not a change to the markup.
+        The BOOK LOOK lives here: cream paper pages (`--paper-*`) inside the
+        dark cover the `.overlay` frame draws, lifted off it with a shadow. When
+        wide the two pages meet over a shadowed gutter down the center seam;
+        when stacked the seam is a ruled line above the second page. A book
+        showing a single page (the Babel book collapsed) has no second page, so
+        no seam is drawn either way. This whole block is the swap point - a
+        page-curl or a different stock is a change here, not to the markup.
       */
       .book-overlay { container: book / inline-size; }
-      .book { display: grid; grid-template-columns: 1fr; gap: 20px; }
+      .book {
+        display: grid; grid-template-columns: 1fr; gap: 0;
+        color: var(--paper-ink);
+        background: linear-gradient(158deg, var(--paper-hi), var(--paper));
+        border: 1px solid var(--paper-edge); border-radius: 4px;
+        padding: 22px 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+      }
       .book-page { min-width: 0; }
-      .book > .book-page + .book-page { border-top: 1px solid var(--edge); padding-top: 16px; }
+      .book > .book-page + .book-page {
+        margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--paper-edge);
+      }
       @container book (min-width: 680px) {
-        .book { grid-template-columns: 1fr 1fr; gap: 0; }
-        .book > .book-page:first-child { padding-right: 28px; }
+        .book {
+          grid-template-columns: 1fr 1fr;
+          padding: 26px 30px;
+          /* The gutter: a soft valley of shadow down the center seam, over the
+             page paper. Pages keep their inner padding clear of it. */
+          background:
+            linear-gradient(to right,
+              transparent 42%,
+              rgba(52,38,18,0.05) 47%,
+              var(--paper-gutter) 50%,
+              rgba(52,38,18,0.05) 53%,
+              transparent 58%),
+            linear-gradient(158deg, var(--paper-hi), var(--paper));
+        }
+        .book > .book-page:first-child { padding-right: 34px; }
         .book > .book-page + .book-page {
-          border-top: none; padding-top: 0;
-          border-left: 1px solid var(--edge); padding-left: 28px;
+          margin-top: 0; padding-top: 0; border-top: none; padding-left: 34px;
         }
       }
 
@@ -851,34 +887,36 @@
       /* No title bar - the open book names itself. The lone close button keeps
          to the corner without the divider a titled head draws. */
       .statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
-      .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--ink); }
+      .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--paper-ink); }
       .statement-page p:last-child { margin-bottom: 0; }
-      .statement-page a { color: #c8a95f; }
-      .statement-page a:hover { color: var(--ink); }
+      .statement-page a { color: var(--paper-accent); text-decoration: underline; }
+      .statement-page a:hover, .statement-link:hover { color: #4a2a0e; }
       /*
         The shell one-liner. `overflow-x: auto` keeps it one scrollable line
         rather than wrapping mid-flag, which would misread as multiple commands.
+        A faint inked panel on the paper rather than a dark terminal block.
       */
       .statement-code {
         margin: 0 0 11px; padding: 8px 10px; overflow-x: auto;
-        background: rgba(0,0,0,0.35); border: 1px solid var(--edge); border-radius: 4px;
-        font-size: 11px; line-height: 1.4; color: var(--ink);
+        background: rgba(60,44,20,0.07); border: 1px solid var(--paper-edge); border-radius: 4px;
+        font-size: 11px; line-height: 1.4; color: var(--paper-ink);
       }
       /* "Click here to run some equivalent code" - a control that reads as link-text inline in the prose. */
       .statement-link {
         display: inline; padding: 0; border: none; background: none;
-        font: inherit; color: #c8a95f; text-decoration: underline; cursor: pointer;
+        font: inherit; color: var(--paper-accent); text-decoration: underline; cursor: pointer;
       }
-      .statement-link:hover { color: var(--ink); background: none; }
+      .statement-link:hover { background: none; }
 
       /* The Library of Babel book: the same open book, its pages fixed-width
-         monospace. Wider so two 80-column pages have room side by side; each
-         page still scrolls on its own if the column is narrower than a line. */
+         monospace inked on the paper. Wider so two 80-column pages have room
+         side by side; each page still scrolls on its own if the column is
+         narrower than a line. */
       .babel-overlay { width: min(1160px, 100%); }
       .babel-page {
         margin: 0; overflow-x: auto; white-space: pre;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 11px; line-height: 1.4; color: var(--ink);
+        font-size: 11px; line-height: 1.4; color: var(--paper-ink);
       }
 
       /*
