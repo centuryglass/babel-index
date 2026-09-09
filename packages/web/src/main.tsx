@@ -887,13 +887,27 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // it stays here rather than moving into `useModeTransition`.
   const catalogScrollRef = useRef<HTMLDivElement>(null);
 
+  // The canvas is `display: none` for the whole time `mode !== 'map'`
+  // (`.map-view[hidden]`), so it reports 0x0 for as long as the catalog is
+  // open or mid-exit - `overviewZoom` fed that shrinks its fit target to
+  // nothing and clamps to the widest zoom-out there is. It fills the full
+  // viewport whenever it IS shown (`#root, canvas { inset: 0; width/height:
+  // 100% }`), so the viewport is the size it would report if visible.
+  const mapViewport = useCallback(
+    (): { clientWidth: number; clientHeight: number } =>
+      mode === 'map' && canvasRef.current
+        ? canvasRef.current
+        : { clientWidth: window.innerWidth, clientHeight: window.innerHeight },
+    [canvasRef, mode]
+  );
+
   /** A row's "show on the map" - aim the camera, then go and look. */
   const showOnMap = useCallback(
     (x: number, y: number) => {
-      flyTo(x, y, overviewZoom(canvasRef.current, config.camera.minVisibleCells, cam.current));
+      flyTo(x, y, overviewZoom(mapViewport(), config.camera.minVisibleCells, cam.current));
       exitCatalog();
     },
-    [flyTo, config, exitCatalog, canvasRef, cam]
+    [flyTo, config, exitCatalog, mapViewport, cam]
   );
 
   // The panel's three map controls, as handlers rather than as inline bodies in
