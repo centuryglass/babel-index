@@ -114,6 +114,14 @@ describe('the library, in a browser: the artist statement', { concurrency: false
         'the book takes focus as the topmost dialog'
       );
 
+      // It is the same open book as the statement: on a wide display it shows a
+      // spread of two pages, not one.
+      assert.equal(
+        await page.locator('.babel-page').count(),
+        2,
+        'a wide display shows the Babel book as a two-page spread'
+      );
+
       // One Escape closes only the book. If the topmost-only guard regresses,
       // this is where it shows: both would close and the statement would detach
       // here instead of below.
@@ -156,7 +164,7 @@ describe('the library, in a browser: the artist statement', { concurrency: false
     const statement = page.locator('.statement-overlay');
     const tracks = () =>
       page.evaluate(() => {
-        const el = document.querySelector('.statement-book');
+        const el = document.querySelector('.statement-overlay .book');
         return getComputedStyle(el).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
       });
     try {
@@ -169,7 +177,7 @@ describe('the library, in a browser: the artist statement', { concurrency: false
       // device or pointer gate, so shrinking the window is enough to trigger it.
       await page.setViewportSize({ width: 460, height: 800 });
       await page.waitForFunction(() => {
-        const el = document.querySelector('.statement-book');
+        const el = document.querySelector('.statement-overlay .book');
         return el && getComputedStyle(el).gridTemplateColumns.split(/\s+/).filter(Boolean).length === 1;
       }, null, { timeout: 5000 });
       assert.equal(await tracks(), 1, 'a narrow display stacks the pages in one column');

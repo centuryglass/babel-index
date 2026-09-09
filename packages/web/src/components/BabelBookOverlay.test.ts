@@ -27,3 +27,20 @@ test('paginateBookText splits into fixed-size chunks of lines', () => {
 test('paginateBookText never returns zero pages', () => {
   assert.deepEqual(paginateBookText(''), ['']);
 });
+
+test('paginateBookText consumes the blank the generator writes between pages', () => {
+  // Two full "pages" of three lines each, separated by the generator's blank
+  // line. Without consuming it, the blank would ride onto page two and shove
+  // every later page down a line.
+  const text = generateRandomBookText(6, 4, 3);
+  const pages = paginateBookText(text, 3);
+  assert.equal(pages.length, 2);
+  for (const page of pages) {
+    const lines = page.split('\n');
+    assert.equal(lines.length, 3, 'each page holds exactly its line budget');
+    assert.ok(
+      lines.every((l) => l.length === 4),
+      'no blank separator leaked into a page'
+    );
+  }
+});
