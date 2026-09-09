@@ -368,6 +368,21 @@ test('/bundle.js is served as javascript', async () => {
   });
 });
 
+test('/style.css is served as css, re-read each request so edits need no restart', async () => {
+  let reads = 0;
+  await serving(
+    async ({ get }) => {
+      const res = await get('/style.css');
+      assert.equal(res.status, 200);
+      assert.match(res.headers.get('content-type'), /css/);
+      assert.equal(await res.text(), 'body { color: red; }');
+      await get('/style.css');
+      assert.equal(reads, 2);
+    },
+    { readStyleCss: async () => (reads++, 'body { color: red; }') }
+  );
+});
+
 test('/ serves the page, re-read each request so edits need no restart', async () => {
   let reads = 0;
   await serving(
