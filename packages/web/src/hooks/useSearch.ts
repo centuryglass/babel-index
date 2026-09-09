@@ -200,12 +200,12 @@ export function useSearch({
 /**
  * What actually decided this ranking, in the panel's own voice.
  *
- * `signals` reports which of the three found anything for this query, not
+ * `signals` reports which of the four found anything for this query, not
  * which were available - a corpus full of keywords that none of them matched
  * should not claim the ranking was keyword-driven.
  */
-export function describeSignals({ clip, keyword, story }: RankSignals, hasText: boolean): string {
-  const hits = [keyword && 'keywords', story && 'story', clip && 'CLIP'].filter(Boolean);
+export function describeSignals({ clip, keyword, title, story }: RankSignals, hasText: boolean): string {
+  const hits = [keyword && 'keywords', title && 'title', story && 'story', clip && 'CLIP'].filter(Boolean);
   // Nothing matched and no CLIP means every score is zero, so the sort falls
   // back to index order - which is a real rearrangement, not a no-op, and
   // saying "unchanged" while the map visibly moves would be the wrong lie.

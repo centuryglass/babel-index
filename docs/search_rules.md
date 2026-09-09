@@ -100,6 +100,8 @@ folded string and a phrase is tested as a substring the same way a word is:
 ```
 RoomIndex = {
   keywords: string[],      // folded, one entry per tag, NOT tokenised further
+  title: string | null,     // folded room title, or null - one string, not a
+                             // list, because a room has at most one
   story: Set<string>,       // lemmatised story words - order and adjacency are
 }                           // already gone; this is why story can't see phrases
 ```
@@ -117,6 +119,13 @@ RoomMatch = {
   tagPartialSum: number,      // sum of best-substring fractions over every term
                                // that matched partially (not exactly) - a SUM,
                                // not an average; see the tag assertions for why
+  titleExact: boolean,         // did some term match the room's title exactly -
+                                 // a bool, not a count: a room has one title, so
+                                 // there is only ever one to match - see "Title
+                                 // matching" for why this isn't folded into tagExact
+  titlePartial: number,         // best substring fraction over every term tested
+                                  // against the title - a MAX, not a sum, because
+                                  // every term is testing the SAME one string
   storyRatio: number,          // matched story chars / query chars, in [0, 1] -
                                 // a RANKING input; certainty reads the length below
   storyLongChars: number,       // longest CONTIGUOUS run of matched query words,
@@ -147,15 +156,17 @@ SearchResult = {
   },
   ranks: {                       // this rank's position if sorted by ONE signal
     tag: number[],                 // alone, plus how many rooms tie with it -
-    story: number[],                // what "Tag ranking" / "tied with N others"
-    clip: number[],                  // in the reporting rules needs. Ties are
-  },                                  // real for tag/story (integer-ish scores);
-  ties: {                               // CLIP ties are only exact-float coincidences
+    title: number[],                 // what "Tag ranking" / "tied with N others"
+    story: number[],                // in the reporting rules needs. Ties are
+    clip: number[],                  // real for tag/title/story (integer-ish
+  },                                  // scores); CLIP ties are only exact-float
+  ties: {                              // coincidences
     tag: number[],
+    title: number[],
     story: number[],
     clip: number[],
   },
-  signals: { keyword: boolean, story: boolean, clip: boolean },
+  signals: { keyword: boolean, title: boolean, story: boolean, clip: boolean },
 }
 ```
 
@@ -262,6 +273,67 @@ that whole phrase, never two.
 single-word term - it simply tests the whole phrase as the substring/equality
 candidate instead of one word.
 
+### Title matching
+
+A room's optional human-written `title` (`packages/map/metadata.ts`) is matched
+the same way a keyword is - exact/partial, term by term, no fuzziness beyond the
+substring rule tags already use - with one structural difference: a room has
+*one* title, not a list of them, so where the tag rules sum or count across
+several keywords, the title rules take the single best reading across the
+query's terms instead. And an exact title match is prioritized slightly above
+an exact tag match: naming the room by its actual title is the most specific
+thing a query can do, more specific than repeating one of its three generic
+style keywords.
+
+**A term matches a title exactly or partially, by the same rule a term matches
+a keyword.** Searching `"the unsurveyed room"` should match a room titled `The
+Unsurveyed Room` exactly; searching `unsurveyed` should match it partially.
+*Enforcement:* every term in the query (the same `tagTerms` the tag rules
+classify - one word, or one quoted phrase treated as a single unit) is tested
+against the room's title with `classifyTagTerm`, the identical function tag
+matching uses, called with the title as a one-element keyword list. Quoting
+behaves identically to the tag rule above: a quoted phrase is one match against
+the title, never one match per word it contains.
+
+**Multiple terms hitting the same title is the same evidence read twice, not
+new evidence.** Two different keywords partially matched is stronger proof
+than one - that's why `tagPartialSum` sums. Two different query terms landing
+inside the same one title string is not the same kind of stacking: they are
+both describing the identical piece of evidence.
+*Enforcement:* `titlePartial` is the **maximum** substring fraction over every
+term that matched partially, not a sum - unlike `tagPartialSum`. `titleExact`
+is a single boolean (did any term equal the title exactly), not a count -
+unlike `tagExact`, there is nothing for it to count past one, since a room only
+has one title to match.
+
+**An exact title match always outranks any non-exact-tag, non-exact-title
+evidence, and outranks a single exact tag match too - but not by much.** A room
+found by its exact title should edge out a room that only matched one of its
+generic tags, but two exact tag matches (a strong, specific hit on real
+generation keywords) should still beat one title.
+*Enforcement:* `titleExact` is worth a fixed `T = 5.5` points, chosen so it
+clears both bars with real margin: `T` is set above the combined ceiling of
+every non-exact signal (`T > tagPartial + titlePartial + story + storyLong +
+clip`, i.e. `5.5 > 0.45 + 0.2 + 0.4 + 2 + 1 = 4.05`), the same shape of
+guarantee `E` (tag-exact) makes for itself - and `T` clears `E` itself
+(`5.5 > 5`) by a deliberately small margin, "slightly", per the rule's own
+wording. `T` stays well under `2E = 10`, so two exact tag matches still beat
+one exact title match; `E` is unchanged and still clears every non-exact signal
+including `titlePartial` (`5 > 0.45 + 0.2 + 0.4 + 2 + 1 = 4.05`).
+
+**A partial title match is real evidence, weaker than a partial tag match.** A
+tag is one of three deliberately-chosen style keywords; the title is one
+string doing several jobs at once (display name, catalog sort key, spine
+label), so a substring landing inside it is somewhat less specific evidence
+of a real match than a substring landing inside a purpose-built tag.
+*Enforcement:* the title-partial weight is `Pt = 0.2`, below tag-partial's
+`P = 0.45`. `L` (the long-story bonus) still clears `clip + tagPartial +
+titlePartial` with `L`'s existing margin intact
+(`2 > 1 + 0.45 + 0.2 = 1.65`), so a long story match keeps outranking any
+combination of CLIP, a partial tag match, and a partial title match at once -
+the same guarantee "Story matching" makes below, now checked against one more
+signal in the ceiling.
+
 ### Story matching
 
 **A short, exact story match is real evidence, and beats an ordinary or weak
@@ -346,17 +418,19 @@ different distribution.
 **Nothing here is a hard tier - every guarantee above is one inequality inside
 a single weighted sum.** See "One sort, not tiers" in the overview.
 
-**These five constants ARE the search weights, not a separate accounting.**
-`E=5` (per exact tag), `P=0.45` (partial-tag budget), `S=0.4` (full short-story
-match), `L=2` (long contiguous-story bonus) and `C=1` (CLIP) are exactly what
+**These seven constants ARE the search weights, not a separate accounting.**
+`E=5` (per exact tag), `P=0.45` (partial-tag budget), `T=5.5` (exact title
+match), `Pt=0.2` (partial-title budget), `S=0.4` (full short-story match),
+`L=2` (long contiguous-story bonus) and `C=1` (CLIP) are exactly what
 `config.search.weights` carries - the target replaces the three-way
-`{keyword, story, clip}` it holds today with this five-way
-`{tagExact, tagPartial, story, storyLong, clip}` shape, because the exact/partial
-and short/long distinctions each need their own weight for the inequalities to
-hold. Each was chosen so its rule's inequality holds with real margin, not just
-at the boundary, so re-tuning any one requires re-checking the others' margins
-rather than eyeballing it alone. (The current three weights, and why the
-inequalities are false under them, are `docs/search-plan.md` §2.)
+`{keyword, story, clip}` it holds today with this seven-way
+`{tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip}`
+shape, because the exact/partial distinction needs its own weight for both tag
+and title, and short/long needs its own weight for story, for the inequalities
+to hold. Each was chosen so its rule's inequality holds with real margin, not
+just at the boundary, so re-tuning any one requires re-checking the others'
+margins rather than eyeballing it alone. (The current three weights, and why
+the inequalities are false under them, are `docs/search-plan.md` §2.)
 
 ### Computing certainty
 
@@ -378,6 +452,12 @@ and two weak agreeing signals count for more than either alone.
   by exact tags is `1`, one exact term among several is high but not `1`, and a
   lone partial match is moderate - which is what "an exact tag pushes certainty
   to 100%" has to mean once a query can have terms an exact tag does not cover.
+- `Kt` (title), the same coverage-scaled mean as `K`, but against the room's
+  one title instead of its list of keywords - each query term contributes `1`
+  for an exact title match, its substring fraction for a partial one, `0`
+  otherwise, meaned over the query's terms. A room with no title contributes
+  `Kt = 0` and drops out of the soft-OR below exactly as a room with no
+  metadata drops out of `K`.
 - `S` (story), from **absolute matched length**, not the query-relative
   `storyRatio` ranking uses: `S = STORY_FLOOR + (1 - STORY_FLOOR) x storyLongBonus01`
   when any story word matched, where `storyLongBonus01 = clamp01((storyLongChars
@@ -388,13 +468,15 @@ and two weak agreeing signals count for more than either alone.
 - `Cpos` / `Cneg` (CLIP), the positive and negative halves of the signed curve
   below: `Cpos = max(0, signedClip)`, `Cneg = max(0, -signedClip)`.
 
-The positive certainty is the soft-OR `pos = 1 - (1 - K)(1 - S)(1 - Cpos)`, and
-the signed result is `pos` when any positive signal fired, else `-Cneg`. A room
-with real text evidence is never reported as a mismatch just because CLIP is cool
-on its picture - the negative reading is only reached when nothing positive
-contradicts it. With no embedding blob `Cpos = Cneg = 0` and certainty is
-text-only; with no metadata `K = S = 0` and certainty is CLIP-only, free to go
-negative.
+The positive certainty is the soft-OR
+`pos = 1 - (1 - K)(1 - Kt)(1 - S)(1 - Cpos)`, and the signed result is `pos`
+when any positive signal fired, else `-Cneg`. A room with real text evidence is
+never reported as a mismatch just because CLIP is cool on its picture - the
+negative reading is only reached when nothing positive contradicts it. With no
+embedding blob `Cpos = Cneg = 0` and certainty is text-only; with no metadata
+`K = Kt = S = 0` and certainty is CLIP-only, free to go negative; with no title
+`Kt = 0` alone and certainty falls back to tags/story/CLIP exactly as it does
+today.
 
 **Certainty need not be monotone with rank; the map makes it so.** The blend
 above can hand back a later rank a higher certainty than an earlier one (they
@@ -430,23 +512,25 @@ certain the image content does not match the text", in a visually distinct style
 so it is not confused with a positive, if weaker, match. Internally this is the
 negative certainty value (e.g. `-0.73`); the phrasing is how it is surfaced.
 
-**Tags and story report counts, not percentages - certainty isn't the right
-question for them.** A tag match is either exact, partial, or absent; a story
-match is a run of characters. There's no meaningful "73% sure" reading for
-either.
+**Tags, titles, and story report counts, not percentages - certainty isn't the
+right question for them.** A tag match is either exact, partial, or absent; a
+title match is the same, once per room; a story match is a run of characters.
+There's no meaningful "73% sure" reading for any of them.
 *Enforcement:* the tag row shows `tagExact` and however many terms matched
-partially (derived from `tagPartialSum`'s contributing terms); the story row
-shows `storyLongChars`. Neither reads from the CLIP certainty curve - the
-distribution anchors exist only for the CLIP row.
+partially (derived from `tagPartialSum`'s contributing terms); the title row
+shows whether `titleExact` fired, or that the title matched partially; the
+story row shows `storyLongChars`. None of the three reads from the CLIP
+certainty curve - the distribution anchors exist only for the CLIP row.
 
 **Every room can be read on each axis independently, including how it compares
 only on that axis.** A reader should be able to see "this room ranks #4 by tag
-match, tied with 2 others" separately from its overall position.
+match, tied with 2 others" separately from its overall position - and the same
+for title.
 *Enforcement:* `SearchResult.ranks`/`ties` (see Data structures) are computed
-by sorting `breakdown.tagExact`/`tagPartialSum`, `breakdown.storyRatio`/
-`storyLongChars`, and `breakdown.clipCosine` independently of the composite
-`order` - three extra sorts of already-computed numbers, not three extra
-scoring passes.
+by sorting `breakdown.tagExact`/`tagPartialSum`, `breakdown.titleExact`/
+`titlePartial`, `breakdown.storyRatio`/`storyLongChars`, and
+`breakdown.clipCosine` independently of the composite `order` - four extra
+sorts of already-computed numbers, not four extra scoring passes.
 
 **The composite view shows one ranking and explains itself on demand.** The
 main display is just the overall rank (`x / unique_tile_count`); a tooltip

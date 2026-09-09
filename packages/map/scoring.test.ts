@@ -462,7 +462,7 @@ test('signals report what matched, not what was available', () => {
     weights: WEIGHTS,
     index: indexOf([['brutalism'], 'A room of concrete.'], [['oak'], null]),
   });
-  assert.deepEqual(signals, { clip: false, keyword: false, story: false });
+  assert.deepEqual(signals, { clip: false, keyword: false, title: false, story: false });
 });
 
 test('a zero weight silences a signal without removing it', () => {
@@ -490,20 +490,83 @@ test('rooms without metadata are ranked, not dropped', () => {
 test('an empty index behaves like no index', () => {
   const { order, signals } = rankHybrid({ query: 'oak', count: 3, weights: WEIGHTS, index: [null, null, null] });
   assert.deepEqual(order, [0, 1, 2]);
-  assert.deepEqual(signals, { clip: false, keyword: false, story: false });
+  assert.deepEqual(signals, { clip: false, keyword: false, title: false, story: false });
 });
 
 // --- the spec's own inequalities, checked directly against the resolved
 // weights, so a re-tune that breaks a margin fails loudly rather than
 // silently reordering results (docs/search_rules.md "Balancing signals").
 
-test('E clears the combined ceiling of every other signal', () => {
-  const { tagExact, tagPartial, story, storyLong, clip } = WEIGHTS;
-  assert.ok(tagExact > tagPartial + story + storyLong + clip, 'one exact tag always outranks everything else combined');
+test('E clears the combined ceiling of every other non-exact signal', () => {
+  const { tagExact, tagPartial, titlePartial, story, storyLong, clip } = WEIGHTS;
+  assert.ok(
+    tagExact > tagPartial + titlePartial + story + storyLong + clip,
+    'one exact tag always outranks everything else combined'
+  );
 });
 
-test('L (the long-story bonus) clears clip + tagPartial', () => {
-  assert.ok(WEIGHTS.storyLong > WEIGHTS.clip + WEIGHTS.tagPartial);
+test('T (an exact title match) clears the same ceiling, and clears E slightly', () => {
+  const { tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip } = WEIGHTS;
+  assert.ok(
+    titleExact > tagPartial + titlePartial + story + storyLong + clip,
+    'one exact title match always outranks everything else combined'
+  );
+  assert.ok(titleExact > tagExact, 'an exact title match is prioritized over an exact tag match');
+  assert.ok(titleExact < 2 * tagExact, 'two exact tag matches still beat one exact title match');
+});
+
+test('an exact title match outranks an exact tag match', () => {
+  const index = buildSearchIndex([
+    { keywords: [{ text: 'unsurveyed' }], story: null },
+    { title: 'Unsurveyed', story: null },
+  ]);
+  const { order, breakdown } = rankHybrid({ query: 'unsurveyed', count: 2, weights: WEIGHTS, index });
+
+  assert.equal(order[0], 1, 'the exact title match ranks first');
+  assert.equal(breakdown.titleExact[0], 1);
+  assert.equal(breakdown.tagExact[1], 1, 'the tag-only room is still an exact tag match, just ranked lower');
+});
+
+test('two exact tag matches still beat one exact title match', () => {
+  const index = buildSearchIndex([
+    { keywords: [{ text: 'brass' }, { text: 'oak' }], story: null },
+    { title: 'Brass Oak', story: null },
+  ]);
+  const { order } = rankHybrid({ query: 'brass oak', count: 2, weights: WEIGHTS, index });
+  assert.equal(order[0], 0, 'two exact tags outrank a single exact title match');
+});
+
+test('a partial title match does not sum across terms - it is the same string read twice', () => {
+  const index = buildSearchIndex([{ title: 'The Unsurveyed Room', story: null }]);
+  const { breakdown } = rankHybrid({ query: 'unsurveyed room', count: 1, weights: WEIGHTS, index });
+  // "unsurveyed" and "room" each partially match the same title; titlePartial
+  // is the best of the two, not their sum (docs/search_rules.md "Title matching").
+  const title = 'the unsurveyed room';
+  const best = Math.max('unsurveyed'.length / title.length, 'room'.length / title.length);
+  assert.ok(Math.abs(breakdown.titlePartial[0] - best) < 1e-6, `expected ${best}, got ${breakdown.titlePartial[0]}`);
+  assert.equal(breakdown.titleExact[0], 0);
+});
+
+test('a quoted phrase matching the whole title is one exact title match', () => {
+  const index = buildSearchIndex([{ title: 'The Unsurveyed Room', story: null }]);
+  const { breakdown } = rankHybrid({ query: '"the unsurveyed room"', count: 1, weights: WEIGHTS, index });
+  assert.equal(breakdown.titleExact[0], 1);
+});
+
+test('a room with no title contributes nothing on the title axis', () => {
+  const index = buildSearchIndex([{ keywords: [{ text: 'oak' }], story: null }]);
+  const { breakdown, signals } = rankHybrid({ query: 'oak', count: 1, weights: WEIGHTS, index });
+  assert.equal(breakdown.titleExact[0], 0);
+  assert.equal(breakdown.titlePartial[0], 0);
+  assert.equal(signals.title, false);
+});
+
+test('an exact title match is certain whatever the picture looks like', () => {
+  assert.equal(matchCertainty({ titleCoverage: 1 }), 1);
+});
+
+test('L (the long-story bonus) clears clip + tagPartial + titlePartial', () => {
+  assert.ok(WEIGHTS.storyLong > WEIGHTS.clip + WEIGHTS.tagPartial + WEIGHTS.titlePartial);
 });
 
 test('a reasonably certain CLIP match (gate >= 0.5) clears the partial-tag budget', () => {
@@ -957,6 +1020,7 @@ test('explainRanking omits an axis that found nothing, and returns null when not
   const explanation = explainRanking(0, { breakdown, certainty, ranks, ties, weights: WEIGHTS, total: 2 });
   assert.ok(explanation.tag, 'room 0 matched a tag');
   assert.equal(explanation.tag.exact, 1);
+  assert.equal(explanation.title, null, 'no title to report');
   assert.equal(explanation.story, null, 'no story to report');
   assert.equal(explanation.clip, null, 'no embeddings at all');
   assert.deepEqual(explanation.contributions.map((c) => c.key), ['tag'], 'the only axis that contributed anything');
@@ -966,6 +1030,20 @@ test('explainRanking omits an axis that found nothing, and returns null when not
     null,
     'room 1 matched nothing on any axis'
   );
+});
+
+test('explainRanking reports an exact vs. a partial title match', () => {
+  const index = buildSearchIndex([{ title: 'Unsurveyed', story: null }, { title: 'The Unsurveyed Room', story: null }]);
+  const { breakdown, certainty, ranks, ties } = rankHybrid({ query: 'unsurveyed', count: 2, weights: WEIGHTS, index });
+
+  const exact = explainRanking(0, { breakdown, certainty, ranks, ties, weights: WEIGHTS, total: 2 });
+  assert.ok(exact.title);
+  assert.equal(exact.title.exact, true);
+
+  const partial = explainRanking(1, { breakdown, certainty, ranks, ties, weights: WEIGHTS, total: 2 });
+  assert.ok(partial.title);
+  assert.equal(partial.title.exact, false);
+  assert.ok(partial.title.partial > 0 && partial.title.partial < 1);
 });
 
 test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosine underneath it', () => {

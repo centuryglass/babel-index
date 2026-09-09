@@ -150,11 +150,23 @@ test('an overlay changes only what it names', () => {
 test('the default weights satisfy every cross-signal inequality docs/search_rules.md names', () => {
   // Every non-CLIP signal is already an absolute ratio or count, and CLIP is
   // normalised to [0, 1] before weighting, so these are directly comparable -
-  // this is the property the five constants are chosen to express, checked
+  // this is the property the seven constants are chosen to express, checked
   // directly rather than by eyeballing a re-tune (docs/search-plan.md §2).
-  const { tagExact, tagPartial, story, storyLong, clip } = DEFAULTS.search.weights;
-  assert.ok(tagExact > tagPartial + story + storyLong + clip, 'one exact tag always outranks everything else combined');
-  assert.ok(storyLong > clip + tagPartial, 'a long story match outranks CLIP and a maxed partial tag together');
+  const { tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip } = DEFAULTS.search.weights;
+  assert.ok(
+    tagExact > tagPartial + titlePartial + story + storyLong + clip,
+    'one exact tag always outranks everything else combined'
+  );
+  assert.ok(
+    titleExact > tagPartial + titlePartial + story + storyLong + clip,
+    'one exact title match always outranks everything else combined'
+  );
+  assert.ok(titleExact > tagExact, 'an exact title match is prioritized slightly over an exact tag match');
+  assert.ok(titleExact < 2 * tagExact, 'two exact tag matches still beat one exact title match');
+  assert.ok(
+    storyLong > clip + tagPartial + titlePartial,
+    'a long story match outranks CLIP, a maxed partial tag, and a maxed partial title together'
+  );
   assert.ok(clip * 0.5 >= tagPartial, 'a reasonably certain CLIP match clears the partial-tag budget');
 });
 

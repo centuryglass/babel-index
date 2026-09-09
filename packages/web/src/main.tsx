@@ -1153,7 +1153,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           onForgetSearches={forgetSearches}
           note={
             result
-              ? describeSignals(result.signals ?? { clip: false, keyword: false, story: false }, Boolean(searchIndex))
+              ? describeSignals(
+                  result.signals ?? { clip: false, keyword: false, title: false, story: false },
+                  Boolean(searchIndex)
+                )
               : ''
           }
           scrollRef={catalogScrollRef}
