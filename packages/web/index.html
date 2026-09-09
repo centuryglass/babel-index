@@ -27,6 +27,19 @@
         --panel: rgba(18, 15, 12, 0.88);
         --edge: rgba(180, 160, 120, 0.22);
         --mismatch: #c97b63;
+        /*
+          Paper: the open book's pages read as warm cream sheets with dark ink,
+          set inside the dark cover the rest of the app uses. Kept as its own
+          variable set (not the --ink/--panel palette) so it can be lifted into
+          a full light theme later without unpicking it from the book markup.
+        */
+        --paper: #ece2cb;
+        --paper-hi: #f4ecd9;
+        --paper-ink: #2c2620;
+        --paper-dim: #6a5f4c;
+        --paper-edge: rgba(70, 54, 30, 0.28);
+        --paper-accent: #7a4718;
+        --paper-gutter: rgba(52, 38, 18, 0.32);
       }
       * { box-sizing: border-box; }
       /*
@@ -816,6 +829,130 @@
       .help-block-list label {
         display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); cursor: pointer;
       }
+
+      /*
+        The open book both reading dialogs share (BookOverlay): two pages side
+        by side when the dialog is wide enough for two readable columns, one
+        column when it is not. The collapse is a container query on the dialog's
+        OWN width - available width, not a device/pointer gate, so a shrunk
+        desktop window collapses too - and BookOverlay reports the same 680px
+        threshold to JS so a spread-at-a-time reader (the Babel book) advances
+        by the matching amount.
+
+        The BOOK LOOK lives here: cream paper (`--paper-*`) inside the dark
+        cover the `.overlay` frame draws, lifted off it with a shadow. The two
+        layouts render the paper differently on purpose. Stacked (narrow), each
+        page is its OWN sheet with a small gap between - the paper styling sits
+        on `.book-page`. Wide, the pages join into one continuous spread with a
+        shadowed gutter valley down the center seam - the paper styling moves to
+        `.book`, and the pages go transparent over it. A book showing a single
+        page (the Babel book collapsed) is just one sheet. This whole block is
+        the swap point - a page-curl or a different stock is a change here, not
+        to the markup.
+      */
+      .book-overlay { container: book / inline-size; }
+      /* Stacked: separate sheets. */
+      .book { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      .book-page {
+        min-width: 0;
+        color: var(--paper-ink);
+        background: linear-gradient(158deg, var(--paper-hi), var(--paper));
+        border: 1px solid var(--paper-edge); border-radius: 4px;
+        padding: 22px 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+      }
+      /* Wide: one spread. The paper moves to the .book; the pages ride over it
+         transparent, keeping only the inner padding that clears the gutter. */
+      @container book (min-width: 680px) {
+        .book {
+          grid-template-columns: 1fr 1fr; gap: 0;
+          color: var(--paper-ink);
+          border: 1px solid var(--paper-edge); border-radius: 4px;
+          padding: 26px 30px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+          background:
+            linear-gradient(to right,
+              transparent 40%,
+              rgba(52,38,18,0.08) 46%,
+              var(--paper-gutter) 50%,
+              rgba(52,38,18,0.08) 54%,
+              transparent 60%),
+            linear-gradient(158deg, var(--paper-hi), var(--paper));
+        }
+        .book-page {
+          background: none; border: none; border-radius: 0;
+          box-shadow: none; padding: 0;
+        }
+        .book > .book-page:first-child { padding-right: 34px; }
+        .book > .book-page + .book-page { padding-left: 34px; }
+      }
+
+      /* The artist's statement: wider than the help dialog because it carries
+         two reading columns, not one. */
+      .statement-overlay { width: min(1100px, 100%); }
+      /* No title bar - the open book names itself. The lone close button keeps
+         to the corner without the divider a titled head draws. */
+      .statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+      .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--paper-ink); }
+      .statement-page p:last-child { margin-bottom: 0; }
+      /* Running head, printed-book style: small italic line set well above the
+         text block and centered on its own page. Verso carries the book title
+         in caps, recto the "chapter" - decorative, so hidden from the reader. */
+      .statement-page .statement-head {
+        margin: 0 0 22px; text-align: center; font-style: italic;
+        font-size: 11px; letter-spacing: 0.08em; color: var(--paper-ink); opacity: 0.65;
+      }
+      .statement-story .statement-head { text-transform: uppercase; }
+      .statement-page a { color: var(--paper-accent); text-decoration: underline; }
+      .statement-page a:hover, .statement-link:hover { color: #4a2a0e; }
+      /*
+        The shell one-liner. `overflow-x: auto` keeps it one scrollable line
+        rather than wrapping mid-flag, which would misread as multiple commands.
+        A faint inked panel on the paper rather than a dark terminal block.
+      */
+      .statement-code {
+        margin: 0 0 11px; padding: 8px 10px; overflow-x: auto;
+        background: rgba(60,44,20,0.07); border: 1px solid var(--paper-edge); border-radius: 4px;
+        font-size: 11px; line-height: 1.4; color: var(--paper-ink);
+      }
+      /* "Click here to run some equivalent code" - a control that reads as link-text inline in the prose. */
+      .statement-link {
+        display: inline; padding: 0; border: none; background: none;
+        font: inherit; color: var(--paper-accent); text-decoration: underline; cursor: pointer;
+      }
+      .statement-link:hover { background: none; }
+
+      /* The Library of Babel book: the same open book, its pages fixed-width
+         monospace inked on the paper. Wide enough that two full 80-column pages
+         sit side by side without clipping; a page still scrolls on its own if
+         the dialog is forced narrower than a line. */
+      .babel-overlay { width: min(1280px, 100%); }
+      .babel-page {
+        margin: 0; overflow-x: auto; white-space: pre;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px; line-height: 1.4; color: var(--paper-ink);
+      }
+      /* The page-nav sits UNDER the book on the dark cover, its rule dividing it
+         from the pages above (a top border, not the card-head's bottom one). */
+      .book-nav {
+        display: flex; align-items: center; gap: 8px;
+        margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--edge);
+      }
+
+      /*
+        One overlay opening another (the statement opens the Babel book). The
+        book's scrim sits above the base z-index; the statement gets `behind`,
+        dimmed and set back so the book reads as sitting on top of it rather
+        than replacing it. Only the LOOK is here - which dialog reacts to Escape
+        is the shared dialog stack's job (useDialog), not z-index.
+      */
+      .overlay-scrim.stacked { z-index: 30; }
+      .overlay-scrim.behind .statement-overlay { opacity: 0.55; }
+      @media (prefers-reduced-motion: no-preference) {
+        .statement-overlay { transition: opacity 0.18s ease, transform 0.18s ease; }
+        .overlay-scrim.behind .statement-overlay { transform: translateY(-8px) scale(0.985); }
+      }
+
       .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
       /*
         The room's identity and the way out to the map share one row, with real
