@@ -391,6 +391,58 @@ under `DEBUG`, or asserting coverage in a test, would buy back the safety.
 
 ---
 
+### 3.7 The planner blocks the main thread between the flight and the slide
+
+**What it is.** `buildRearrangement` + `planMoves` run synchronously, and at the
+current settings they take **~20-25 ms** — one to two dropped frames, at the
+exact seam between the zoom-out landing and the slide starting, on every single
+rearrangement.
+
+**How it works.** `useRearrangement.ts:188-199` awaits the flight, then builds
+the board and plans the moves inline before the first slide frame. Measured on
+a 2048-room corpus, 1920x1080, median of 7 runs (Node, so treat as an order of
+magnitude rather than a browser number):
+
+| minVisibleCells | build | plan | total | moves | of which visible shifts |
+|---|---|---|---|---|---|
+| **5 (current)** | 3.3 ms | **21.6 ms** | 24.9 ms | 8122 | 72 (1%) |
+| 16 | 1.4 ms | 21.6 ms | 23.0 ms | 7537 | 512 (7%) |
+| 32 | 1.6 ms | 60.1 ms | 61.7 ms | 7545 | 1714 (23%) |
+| 64 | 3.2 ms | 252.8 ms | 256.0 ms | 12960 | 5152 (40%) |
+
+Note what dominates: `planMoves`, not `buildRearrangement`. And note that 99% of
+the moves at the current setting are invisible off-camera swaps — the planner is
+spending its time on board repair, not on anything the reader sees.
+
+**Significance.** Medium-high, and it is a *current* cost, not a hypothetical
+one. A 20-25 ms synchronous block lands precisely at the transition the eye is
+already tracking. It is also the single cheapest thing here to confirm: wrap the
+two calls in `performance.now()` and read the number.
+
+**Trade-offs.**
+
+- *Plan during the flight instead of after it.* The flight's destination is
+  fully determined before it starts — `flyTo(cam.current.x - 0.5,
+  cam.current.y - 0.5, target)` (`useRearrangement.ts:164`) — so the parked
+  camera, the view rect and therefore the whole plan are all knowable in
+  advance. The comment above that line says the plan "cannot be made until the
+  camera has stopped moving", which is true of *reading `cam.current`* but not
+  of the plan itself. Planning optimistically against the target and discarding
+  it if the flight is interrupted (a case already handled) moves the stall off
+  the seam. It does not remove it — a 20 ms block mid-flight is still a 20 ms
+  block, and arguably more visible while the camera is moving.
+- *Move it to a worker.* `board.ts` and `illusion.ts` are pure, DOM-free modules
+  operating on plain arrays, which makes this unusually tractable — the board is
+  a flat `BoardValue[]` that could be a transferable typed array. This is the
+  real fix, and it composes with the item above: plan in a worker during the
+  flight and the stall disappears entirely rather than moving.
+- *Make the planner cheaper.* 99% of its moves being invisible repair suggests
+  there may be headroom, but that is `illusion.ts`'s staging logic, which
+  `AGENTS.md` flags as subtle (the independence guarantees a `wave` stage
+  makes). Not a first move.
+
+---
+
 ## 4. Candidates that matter when zoomed out, not during a rearrangement
 
 Everything here scales with visible cell count, so it is secondary during a
@@ -778,7 +830,117 @@ the next.
 
 ---
 
-## 7. Suggested order
+## 7. What if the animation ran zoomed out further?
+
+`minVisibleCells` is 5, and nothing about the animation requires that. Zooming
+out further picks a coarser pyramid level, and a coarser level means much
+smaller tiles — so the render cost per tile falls sharply even as the number of
+tiles rises. That intuition is **correct on the axis it names**, and wrong about
+the thing that actually binds.
+
+### 7.1 Everything, measured, at 1920x1080 @2x
+
+`decoded MB` is the visible working set at that level under each `fromLevel`
+policy (§6); `plan ms` is §3.7's synchronous block; `duration` is
+`buildTimeline`'s own `totalMs` for the resulting plan.
+
+| minVis | zoom | level | tile | cells | rooms | MB @from2 | MB @from3 | plan ms | **duration** | peak lines |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **5** (now) | 288 | L0 | 1024x768 | 48 | 12 | 36.0 | 36.0 | 21.6 | **0.81 s** | 5 |
+| 8 | 180 | L1 | 512x384 | 120 | 30 | 22.5 | 22.5 | 16.4 | **1.43 s** | 7 |
+| 12 | 120 | L2 | 256x192 | 252 | 63 | **383.9** | 11.8 | 19.5 | **2.22 s** | 8 |
+| 16 | 90 | L2 | 256x192 | 432 | 108 | **384.0** | 20.3 | 21.6 | **3.79 s** | 10 |
+| 24 | 60 | L3 | 128x96 | 884 | 221 | 96.0 | 96.0 | 34.6 | **6.22 s** | 13 |
+| 32 | 45 | L3 | 128x96 | 1496 | 374 | 96.0 | 96.0 | 60.1 | **10.07 s** | 16 |
+| 48 | 30 | L4 | 64x48 | 3300 | 825 | 24.0 | 24.0 | 170.8 | **24.43 s** | 23 |
+
+### 7.2 The render cost does fall, as predicted
+
+From minVis 5 to 16, with level 2 unpacked per §6: the tile drops from 1024x768
+to 256x192 (**16x fewer pixels each**), the working set from 36 MB to 20 MB, and
+every newly-arriving room costs a ~15 KB fetch and a 192 KB decode instead of a
+full-resolution JPEG and a 3 MB decode. That is a direct hit on §3.1's corrected
+desktop hypothesis — full-resolution tiles arriving mid-animation — and it is
+exactly the effect you predicted.
+
+It also composes with §6 in both directions, which is worth being explicit
+about: **minVis 12-16 lands on level 2, so without §6 it walks straight into the
+384 MB sheet wall.** The two changes are much better together than either alone.
+Zooming out without unpacking level 2 is actively worse than doing nothing.
+
+The board, incidentally, barely moves: it stays 91x119 from minVis 5 through 32
+because it is sized by `boundaryRadius` (43.2 cells) rather than by the
+viewport, only growing to 121x157 at minVis 48 when the "region under a quarter
+of the board" rule finally bites.
+
+### 7.3 What actually binds: the animation gets *long*
+
+**0.81 s at minVis 5, 3.79 s at 16, 10.07 s at 32, 24.43 s at 48.**
+
+This is not a performance cost — no frames are dropped by it — but it is the
+constraint that decides the question. A rearrangement fires on every search, and
+a four-second one is a different feature from a 0.8-second one. Twenty-four
+seconds is not a feature at all.
+
+The cause is structural: zooming out puts more lines across the camera (72
+visible shifts at minVis 5, 512 at 16, 5152 at 48), and `buildTimeline`
+sequences them with a stagger between wave lanes and a cascade within sequential
+ones. More lines, more time.
+
+**Scaling the timings down does not rescue it.** `config.slide`'s docblock notes
+that lowering all five proportionally makes the same animation faster, so
+holding 0.8 s at minVis 16 means scaling by ~0.21: `base` 80 -> 17 ms,
+`perCell` 26 -> 5.5 ms. A ten-cell run would then cross 900 px in 72 ms — about
+12,500 px/s, which reads as a flicker, not a slide. The per-line speed is
+already near the top of what looks deliberate.
+
+**The lever that would actually work is parallelism.** Peak concurrent motions
+only rises from 5 to 10 across that whole range, so the planner is running these
+lines mostly in sequence even when far more of them could move at once. If a
+zoomed-out rearrangement ran 30-40 lanes concurrently instead of 10, it could
+stay near a second while looking considerably richer — arguably better than what
+it does now, since a sliding-tile illusion with five lines moving is a sparse
+picture. But that means changing which stages `illusion.ts` marks `wave`, and
+those marks encode real independence guarantees (`AGENTS.md`: a parking stage's
+extraction rotates a line and the swap after it depends on that rotation). Not a
+constant to twiddle.
+
+### 7.4 One constant, five call sites
+
+`config.camera.minVisibleCells` is not the animation's setting — it is the
+**return-to-center view**, shared by the rearrangement's park
+(`useRearrangement.ts:147`), `Home`/`End` (`useMapCursor.ts:334,362`), the
+double-tap-back and room navigation (`main.tsx:881,893`), and the center button
+(`main.tsx:935`).
+
+Raising it globally would zoom the reader way out every time they press Home,
+which is a navigation change nobody asked for. The animation needs its own
+constant — `config.slide.zoomOutCells`, say — with `minVisibleCells` left where
+it is. `AGENTS.md` already warns that these two views "are not interchangeable"
+and that collapsing them "silently breaks whichever view loses"; this would be
+splitting one of them further, in the same spirit.
+
+### 7.5 Where this lands
+
+- **minVis 8** is free money: level 1, 4x fewer pixels per tile, working set
+  36 -> 22.5 MB, planner slightly *cheaper*, and the animation goes 0.81 -> 1.43 s.
+  No dependency on §6. The duration cost is real but modest.
+- **minVis 12-16** is the interesting one — level 2, 16x smaller tiles, working
+  set down to 12-20 MB — but it **requires §6** (or it is a 384 MB regression),
+  and it takes the animation to 2.2-3.8 s, which needs the parallelism work in
+  §7.3 before it is acceptable.
+- **minVis 24+** is not worth pursuing. Level 3's sheets put the working set
+  back up to 96 MB, the planner starts costing more than the frames it saves,
+  and the duration is out of the question.
+
+So: a modest step is cheap and worth taking; the bigger step you have in mind is
+genuinely better for rendering and blocked on animation *pacing*, not on
+rendering cost. That is a more tractable problem than it sounds — the headroom
+is sitting in `illusion.ts`'s staging, unused.
+
+---
+
+## 8. Suggested order
 
 If the measurements in §2 come back inconclusive and something has to be picked
 on reasoning alone:
@@ -797,10 +959,19 @@ on reasoning alone:
 4. **§6 unpack level 2 to per-file** — one constant, one test rewrite, a corpus
    regeneration. Do it for the 94x memory amplification, not for the desktop
    symptom, which it will not touch.
-5. **§4.1 and §4.2 memoization** — mostly the zoomed-out story, but they are
+5. **§3.7 plan in a worker, during the flight** — a measured ~20-25 ms
+   synchronous block at the seam between the zoom-out and the slide, on every
+   rearrangement, today. `board.ts` and `illusion.ts` are pure array code, so
+   this is unusually tractable. Confirm it first with two `performance.now()`
+   calls; it is the cheapest measurement in this document.
+6. **§7.5 raise the animation's zoom to ~8 cells** — behind its own constant,
+   not `minVisibleCells` (§7.4). Level 1 instead of level 0 means 4x fewer
+   pixels per tile for a 0.81 -> 1.43 s animation. Going further is better for
+   rendering but blocked on animation pacing, not on rendering cost.
+7. **§4.1 and §4.2 memoization** — mostly the zoomed-out story, but they are
    the largest wins available there, they are mechanical, and at ~96 cells they
    are not nothing during a rearrangement on a phone either.
-6. Everything else as appetite allows.
+8. Everything else as appetite allows.
 
 §3.5 (dpr during motion) is the wildcard: potentially the biggest single win for
 the exact symptom, and now *more* attractive than when first written, since a
