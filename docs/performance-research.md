@@ -158,10 +158,41 @@ that calls `drawImage`. A 4096x3072 texture is ~48 MB across the bus, and
 and mobile hardware, where the 2D canvas backend may tile or fall back rather
 than take it in one piece.
 
-**Significance.** High, and the best fit for the symptom. It is per-transition
-rather than per-cell, which matches an animation that drops frames at
-particular moments rather than running uniformly slow. It also explains why the
-existing off-thread decode work helped without fixing it.
+**Significance — much narrower than first written, and this correction matters.**
+I ranked this the prime suspect before checking *which levels the rearrangement
+actually reaches*. Running the real `openingZoom`, `overviewZoom` and
+`idealLevel` over the flight's geometric zoom sweep:
+
+| viewport | opening | overview | levels traversed |
+|----------|---------|----------|------------------|
+| 1920x1080 @1x | L0 (zoom 1024) | L1 (zoom 288) | 0, 1 |
+| 1920x1080 @2x | L0 | L0 (zoom 288) | **0 only** |
+| 2560x1440 @2x | L0 | L0 (zoom 384) | **0 only** |
+| 390x844 phone @2x | L0 (zoom 421) | L2 (zoom 78) | 0, 1, 2 |
+
+Levels 0 and 1 are **per-file, not sheet-packed** (`SHEETS.fromLevel` is 2). So
+on a retina desktop the rearrangement never leaves level 0 — there is no level
+transition at all, and no sheet is touched at any point. On a non-retina desktop
+it crosses only into level 1, also per-file. **A sheet is reached only on a
+phone.**
+
+This kills the sheet hypothesis for desktop outright, and it points at a
+different and better one. At overview zoom on a desktop, every visible cell is
+drawing a **full-resolution 1024x768 tile — 3 MB decoded each, one HTTP request
+each**. A search-triggered rearrangement is precisely the case where the rooms
+sliding in were not previously on camera (the new `order` puts different ids
+there), so the animation is fetching, decoding and uploading on the order of
+48 brand-new full-resolution room images *while it runs*. Same mechanism as
+this section describes — decode plus first-draw upload — but at level 0 and
+per-file, not at level 2 and packed.
+
+That reframes the fix. Preloading sheets does nothing for a desktop
+rearrangement. What would help is warming the level-0 tiles for the incoming
+arrangement *before* the slide starts: the new `order` is known at
+`startRearrangement` time, and the zoom-out flight is several hundred
+milliseconds of otherwise idle network. `slide.ts:513-516` already prefetches a
+2-cell ring, but only once the slide is underway and only at the level it is
+drawing.
 
 **Trade-offs and options.**
 
@@ -182,13 +213,9 @@ existing off-thread decode work helped without fixing it.
   canvas at load time, so the texture is resident before any animation needs it.
   Unverified across browsers — worth testing, since some drivers may not retain
   the upload.
-- *Shrink level 2's sheets.* Halving the grid to 8x8 would make them 2048x1536
-  (12 MB) at the cost of 4x the sheet count and 4x the requests, which is
-  exactly the tradeoff `SHEETS`' docblock says sheets exist to avoid
-  (Cloudflare per-IP rate limiting — `infra/README.md`,
-  `docs/design-history.md`). A middle option is a smaller grid *only* at
-  level 2, where the per-sheet cost is pathological and the number of distinct
-  rooms visible at that zoom is lowest.
+- *Unpack the finest sheet level back to per-file.* The strongest option, and
+  it gets its own treatment in §7 — the packing economics invert across the
+  ladder and level 2 is on the wrong side of the crossover.
 - *Skip intermediate levels during a flight.* The flight knows its destination
   zoom before it starts. It could pin the level to the destination's for the
   whole flight (drawing a coarser-than-ideal or finer-than-ideal field during
@@ -630,7 +657,128 @@ cancellation.
 
 ---
 
-## 6. Suggested order
+## 6. Should the finest sheet level go back to per-file?
+
+Short answer: **yes, and the argument is stronger than "level 2's sheets are
+inconveniently large."** Sheet packing trades requests for bytes, and that trade
+inverts as you move down the ladder. Level 2 is on the losing side of it.
+
+### 6.1 The economics, measured
+
+For each sheet-packed level, at the zoom within its band that puts the most
+cells on screen (the worst case for that level), with `contentRatio` 0.25 and a
+2048-room corpus in 8 sheets per level:
+
+| level | tile | viewport | rooms visible | per-file | sheets |
+|-------|------|----------|---------------|----------|--------|
+| **2** | 256x192 | 1920x1080 @2x | 20 | 20 req, **3.8 MB** | 7.4 req, **357 MB** |
+| **2** | 256x192 | 1440x900 @2x | 12 | 12 req, **2.3 MB** | 6.4 req, **307 MB** |
+| 3 | 128x96 | 1920x1080 @2x | 56 | 56 req, 2.6 MB | 8.0 req, 95.9 MB |
+| 4 | 64x48 | 1920x1080 @2x | 192 | 192 req, 2.3 MB | 8.0 req, 24.0 MB |
+| 5 | 32x24 | 1920x1080 @2x | 713 | 713 req, 2.1 MB | 8.0 req, 6.0 MB |
+
+Read the two ends against each other:
+
+- **At level 5**, sheets turn 713 requests into 8 and cost 4 MB extra. That is
+  the trade the feature was built for, and it is an excellent one.
+- **At level 2**, sheets save 12 requests and cost **353 MB**. That is a ~94x
+  memory amplification to avoid a dozen HTTP requests.
+
+The crossover sits around level 3/4. Level 2 is not merely the largest sheet
+level — it is the one where the whole mechanism stops paying for itself.
+
+### 6.2 Why level 2 is so bad: two compounding factors
+
+**Utilization.** A sheet is 256 rooms. At level 2's zoom band only ~12-20 rooms
+are on screen, so you fetch 256 rooms' worth of pixels to display 20 — under 8%
+utilization. At level 5 hundreds of rooms are visible at once and a sheet is
+mostly used.
+
+**No locality, by construction.** Sheet packing assumes co-visible rooms share a
+sheet. This app guarantees they do not: the default order is
+`shuffledOrder(total, orderSeed)` seeded from `Date.now()`
+(`main.tsx:253`) — the map is a *random permutation* of room ids even with no
+search, and a search permutes it differently. Sheets are packed by room id, so
+20 visible rooms are 20 uniformly random ids landing in an expected
+`8 x (1 - (7/8)^20) = 7.4` of the 8 sheets. Nearly every sheet gets pulled in to
+show twenty tiles.
+
+That second point is worth dwelling on because it is not a tuning problem: no
+choice of grid size fixes it. Any packing keyed on room id is defeated by an
+order that is randomized per session. Sheets survive at coarse levels *despite*
+this only because there the visible rooms outnumber the sheets anyway.
+
+### 6.3 What it would cost
+
+**The code change is one constant.** `SHEETS.fromLevel: 2` -> `3`
+(`pyramid.ts:238`) is the entire switch:
+
+- `packages/pipeline/index.ts:103` filters which levels get packed, and the
+  `rm` that deletes a packed level's scratch per-file directory runs only for
+  those — so level 2's per-file directory is simply kept.
+- `packages/server/scan.ts:136` discovers level 2 as a per-file directory.
+- `rooms.ts` needs nothing: its sheet branch keys off `info.sheet` from the
+  manifest.
+
+I flipped it and ran the suite: **652/653, one failure**, and it is the right
+kind — `scan.test.ts:351` hardcodes level 2 as its sheet-packed example and
+finds level 2 missing (its fixture has a `256-sheets/` dir but no `256/` one).
+That test wants rewriting against level 3, not fixing. Reverted; the tree is
+clean.
+
+Beyond that: regenerate the pyramid and re-upload the corpus.
+
+**Lower level 2's budget in the same change.** `LEVELS`' budget of 1800 for
+level 2 (`pyramid.ts:158`) was set when it counted cheap sheet *pointers*. As a
+per-file level it counts real decoded images again, so 1800 becomes a 345 MB
+ceiling. Worst-case visible at level 2 is ~84 entries, so something in the
+400-600 range (77-115 MB) is the honest number. `pyramid.ts`'s own budget table
+and its "treat its rows for 2-4 as budget bytes no longer meaning real memory"
+note both need updating — the row for level 2 goes back to meaning real bytes.
+
+**Request cost, against the actual rate limit.** `infra/variables.tf` sets
+**200 requests per IP per 10 s**, blocking for 10 s, and crucially
+`abuse-protection.tf:38` sets `requests_to_origin = true` — **only cache misses
+count**, with a 24 h edge TTL. So:
+
+- A screenful at level 2 is ~12-20 origin requests cold, nothing warm. Fine.
+- The risk is sustained panning at level 2 on a cold edge: continuously
+  bringing new rooms into view could approach 200 misses in 10 s. Level 2 is a
+  fairly zoomed-in band though, so panning crosses few new rooms per second —
+  much less exposed than level 5, which is where the original problem was.
+- Every repeat visitor, and every visitor after the first through a given
+  region, is served from the edge and counts nothing.
+
+**A side benefit:** `SHEETS`' own docblock notes that a sheet re-uploads as a
+unit when any room in it changes, so per-file at level 2 shrinks the re-upload
+blast radius for the level with the largest files.
+
+### 6.4 What it does *not* fix
+
+Per §3.1's corrected traversal table: **a desktop rearrangement never reaches
+level 2**, so this changes nothing about the dropped frames on desktop. It helps
+the phone case (which does traverse into level 2, and where trading ~211 MB of
+sheets for ~1.1 MB of tiles mid-animation is a large win on the most
+memory-constrained device), and it helps the far-zoom-out browsing case
+generally.
+
+Worth doing on the memory argument alone — a 94x amplification to save twelve
+requests is indefensible once stated plainly — but it should not be expected to
+fix the desktop symptom that started this.
+
+### 6.5 Should level 3 go too?
+
+Level 3 is 96 MB of sheets against 2.6 MB per-file, for 56 requests saved. Less
+damning than level 2 but still a poor trade; the honest crossover is probably
+`fromLevel: 4`. The reason to stop at 3 for now is that level 4 and 5 are where
+the request counts get genuinely dangerous (192 and 713 for one screen), and
+level 3 sits close enough to that band to be worth keeping packed until there is
+a measurement rather than an argument. Move one rung, look at it, decide about
+the next.
+
+---
+
+## 7. Suggested order
 
 If the measurements in §2 come back inconclusive and something has to be picked
 on reasoning alone:
@@ -638,27 +786,39 @@ on reasoning alone:
 1. **§3.3 forced layout** — small, safe, verifiable in seconds, pays back on
    every frame the app ever draws.
 2. **§3.2 spine memoization** — small, well-bounded, and the best fit for "the
-   zoom-out specifically stutters".
-3. **§3.1 sheet preloading plus a forced first upload** — the prime suspect,
-   and cheap at this corpus size because `sheetBudget` already never evicts.
-   Do §2.3 first; this one is worth confirming before spending 510 MB on it.
-4. **§3.1 alternative: pin the level for the duration of a flight** — possibly
-   better than preloading, since it removes the transitions rather than paying
-   for them faster. Try both.
+   zoom-out specifically stutters". The flight *starts* framed on the shelf, so
+   this runs at full cost exactly where the symptom is reported.
+3. **Warm the incoming arrangement's level-0 tiles during the flight** (§3.1's
+   corrected reading). On desktop the rearrangement runs entirely at level 0 and
+   the rooms sliding in are new ids, so it is fetching ~48 full-resolution
+   images mid-animation. The new `order` is known at `startRearrangement` time
+   and the flight is several hundred ms of idle network — prefetch against it
+   before the slide begins.
+4. **§6 unpack level 2 to per-file** — one constant, one test rewrite, a corpus
+   regeneration. Do it for the 94x memory amplification, not for the desktop
+   symptom, which it will not touch.
 5. **§4.1 and §4.2 memoization** — mostly the zoomed-out story, but they are
    the largest wins available there, they are mechanical, and at ~96 cells they
    are not nothing during a rearrangement on a phone either.
 6. Everything else as appetite allows.
 
 §3.5 (dpr during motion) is the wildcard: potentially the biggest single win for
-the exact symptom, but it interacts with level selection (§3.1) in a way that
-wants both designed together, so it is not a good first move.
+the exact symptom, and now *more* attractive than when first written, since a
+desktop rearrangement turns out to run at level 0 — where every cell is a 3 MB
+tile being downscaled and fill cost is at its worst. It still interacts with
+level selection, so design it alongside item 3.
+
+**Note what the traversal table (§3.1) did to this list.** Sheet preloading was
+item 3 and is now gone entirely: a desktop rearrangement touches no sheet at any
+point, so ~510 MB of preloading would have bought nothing. That was the single
+most confident item in the first draft of this document, and it was wrong
+because it was never checked against which levels the animation actually
+reaches. Treat the rest of the ranking with the same suspicion until §2 has run.
 
 **If the dropped frames are reported on a phone rather than a desktop, reorder
-this list.** §1's table shows a portrait phone drawing ~96 cells during a
-rearrangement against a desktop's ~48 — twice the per-cell work on a fraction of
-the CPU and memory bandwidth, and with the tightest limits on the 48 MB textures
-§3.1 is about. On that hardware §4's per-cell family and §3.5's fill-rate
-argument both move up sharply, and §3.1's preloading option moves *down* (510 MB
-resident is a far worse trade on a phone than on a desktop). Establishing which
-device the symptom is on is therefore worth doing before anything in §2.
+again.** §1's table shows a portrait phone drawing ~96 cells against a desktop's
+~48, and the phone is the *only* configuration that traverses into a sheet
+level. There §6 stops being a memory-hygiene change and becomes a direct fix,
+and §4's per-cell family and §3.5's fill-rate argument both move up sharply.
+Establishing which device the symptom is on is therefore worth doing before
+anything in §2.
