@@ -71,6 +71,14 @@ function tagLine(tag: RankingExplanation['tag']): string | null {
   return `#${tag.rank} by tag, ${parts.join(', ')}${tie}`;
 }
 
+/** "#3 by title, matched, tied with 1 other" or "...partially matched..." - `null` when the title didn't match. */
+function titleLine(title: RankingExplanation['title']): string | null {
+  if (!title) return null;
+  const what = title.exact ? 'matched' : 'partially matched';
+  const tie = title.ties > 0 ? `, tied with ${title.ties} others` : '';
+  return `#${title.rank} by title, ${what}${tie}`;
+}
+
 /** "#2 by story, match length 41, tied with 1 other" - `null` when nothing matched the story. */
 function storyLine(story: RankingExplanation['story']): string | null {
   if (!story) return null;
@@ -110,13 +118,14 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
  * everything they have to say.
  */
 function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
-  const { contributions, tag, story, clip } = explanation;
+  const { contributions, tag, title, story, clip } = explanation;
   const compositeTooltip = contributions.map((c) => `${c.percent}% by ${c.label}`).join(', ');
   const composite = signedCertaintyText(explanation.percent, 'this');
   const compositeText = composite.mismatch
     ? `#${explanation.rank} of ${explanation.total}, ${composite.text}.`
     : `#${explanation.rank} of ${explanation.total}, ${Math.abs(explanation.percent).toFixed(2)}% match certainty.`;
   const tagText = tagLine(tag);
+  const titleText = titleLine(title);
   const storyText = storyLine(story);
 
   return (
@@ -125,6 +134,7 @@ function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
         {compositeText}
       </p>
       {tagText && <p className="score-line">{tagText}</p>}
+      {titleText && <p className="score-line">{titleText}</p>}
       {storyText && <p className="score-line">{storyText}</p>}
       {clip && <ClipLine clip={clip} />}
     </>

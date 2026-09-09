@@ -34,6 +34,8 @@ export interface StoryIndex {
 export interface SearchIndexEntry {
   /** Folded (not tokenised) keyword strings - matched whole as well as by token. */
   keywords: string[];
+  /** Folded room title, or `null` - one string, not a list; a room has at most one. */
+  title: string | null;
   story: StoryIndex;
 }
 
@@ -64,10 +66,11 @@ export interface ParsedQuery {
 /** `buildSearchIndex()`'s output: parallel to the manifest's `rooms`, by id. */
 export type SearchIndex = (SearchIndexEntry | null)[];
 
-/** Which of the three signals found anything for this query. */
+/** Which of the four signals found anything for this query. */
 export interface RankSignals {
   clip: boolean;
   keyword: boolean;
+  title: boolean;
   story: boolean;
 }
 
@@ -78,6 +81,10 @@ export interface ScoreBreakdown {
   tagPartialSum: Float32Array;
   /** how many terms `tagPartialSum` is a sum OVER - a count, not a fraction */
   tagPartialCount: Int32Array;
+  /** 0 or 1 - did some term match the room's title exactly (docs/search_rules.md "Title matching") */
+  titleExact: Float32Array;
+  /** the MAX substring fraction over every term tested against the title, not a sum - there is only one title */
+  titlePartial: Float32Array;
   /** `storyRatio` - query-relative, the ranking's short-story term */
   story: Float32Array;
   /** longest contiguous matched run, in characters - the long-story term */
@@ -101,6 +108,7 @@ export interface ScoreBreakdown {
  */
 export interface SignalRanks {
   tag: Int32Array;
+  title: Int32Array;
   story: Int32Array;
   clip: Int32Array;
 }
@@ -147,7 +155,7 @@ export interface MatchRange {
  * and omits any axis that contributed nothing.
  */
 export interface ContributionShare {
-  key: 'clip' | 'tag' | 'story';
+  key: 'clip' | 'tag' | 'title' | 'story';
   label: string;
   /** this axis's weighted term as a share of `breakdown.score`, 0-100 */
   percent: number;
@@ -160,6 +168,21 @@ export interface TagRankingSummary {
   /** count of terms that matched a keyword exactly */
   exact: number;
   /** count of terms that matched a keyword as a substring, not exactly */
+  partial: number;
+}
+
+/**
+ * The title axis's own rank/tie count (`SignalRanks.title`), plus what
+ * actually matched. Unlike `TagRankingSummary`, `exact` is a bool and
+ * `partial` a single fraction - a room has one title, not a list of them
+ * (docs/search_rules.md "Title matching").
+ */
+export interface TitleRankingSummary {
+  rank: number;
+  ties: number;
+  /** did some term match the title exactly */
+  exact: boolean;
+  /** the best substring fraction over every term, 0 when nothing matched */
   partial: number;
 }
 
@@ -200,6 +223,7 @@ export interface RankingExplanation {
   percent: number;
   contributions: ContributionShare[];
   tag: TagRankingSummary | null;
+  title: TitleRankingSummary | null;
   story: StoryRankingSummary | null;
   clip: ClipRankingSummary | null;
 }

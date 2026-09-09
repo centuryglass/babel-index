@@ -334,6 +334,7 @@ function tokeniseWithPositions(text: unknown, { minLength = 3, stopwords = true 
 /** The slice of a room's metadata `buildSearchIndex` actually reads - `RoomMeta` satisfies it. */
 export interface SearchIndexSource {
   keywords?: { text: string }[] | null;
+  title?: string | null;
   story?: string | null;
 }
 
@@ -371,6 +372,9 @@ export function buildSearchIndex(joined: (SearchIndexSource | null)[] | null | u
       // token, so that a query of "art nouveau" scores 1 against the keyword
       // "art nouveau" rather than the 0.45 its two tokens would average to.
       keywords: (entry.keywords ?? []).map((k) => fold(k.text)),
+      // Folded, same as a keyword - one string rather than a list, since a
+      // room has at most one title. See "Title matching".
+      title: entry.title ? fold(entry.title) : null,
       story: { sequence, set: new Set(sequence.map((t) => t.lemma)) },
     };
   });
@@ -710,6 +714,8 @@ export const STORY_FLOOR = 0.5;
 /** The named parts `matchCertainty` combines into one signed reading. */
 export interface CertaintyParts {
   tagCoverage?: number;
+  /** coverage-scaled, same shape as `tagCoverage` but read against the title - `Kt` in docs/search_rules.md */
+  titleCoverage?: number;
   storyLongChars?: number;
   storyMatched?: boolean;
   cosine?: number | null;
@@ -789,6 +795,8 @@ export function signedPercent(signed: number): number {
  * CLIP is cool on its picture.
  *
  * @param parts.tagCoverage K, already in [0, 1]
+ * @param parts.titleCoverage Kt, already in [0, 1] - the same coverage-scaled
+ *   reading as K, against the room's title instead of its keywords
  * @param parts.storyLongChars longest contiguous matched run, chars
  * @param parts.storyMatched did any story word match at all - a single
  *   matched word's `storyLongChars` can sit under the ramp's floor and read as
@@ -798,16 +806,17 @@ export function signedPercent(signed: number): number {
  * @returns signed, in [-1, 1]
  */
 export function matchCertainty(
-  { tagCoverage = 0, storyLongChars = 0, storyMatched = false, cosine = null }: CertaintyParts = {},
+  { tagCoverage = 0, titleCoverage = 0, storyLongChars = 0, storyMatched = false, cosine = null }: CertaintyParts = {},
   clip: ClipBand = CLIP_CERTAINTY
 ): number {
   const K = clamp01(tagCoverage);
+  const Kt = clamp01(titleCoverage);
   const S = storyMatched ? STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01(storyLongChars) : 0;
   const signed = signedClipCertainty(cosine, clip);
   const Cpos = Math.max(0, signed);
   const Cneg = Math.max(0, -signed);
 
-  const pos = 1 - (1 - K) * (1 - S) * (1 - Cpos);
+  const pos = 1 - (1 - K) * (1 - Kt) * (1 - S) * (1 - Cpos);
   // `-0` is technically correct when nothing at all fired, but reads as a
   // surprising sign flip on an otherwise-zero certainty - `Cneg` itself is
   // already 0 in that case, so this is just avoiding IEEE 754's negative zero.
@@ -821,6 +830,10 @@ interface ScoredRow {
   tagExact: number;
   tagPartialSum: number;
   tagPartialCount: number;
+  /** 0 or 1 - see docs/search_rules.md "Title matching" */
+  titleExact: number;
+  /** MAX substring fraction over every term, not a sum - there is only one title */
+  titlePartial: number;
   storyRatio: number;
   storyLongChars: number;
   clipNorm: number;
@@ -833,6 +846,9 @@ interface ScoredRow {
 /** Ascending per-room comparators `rankAxis` sorts by - one per independent axis. */
 function compareTagAxis(x: ScoredRow, y: ScoredRow): number {
   return x.tagExact - y.tagExact || x.tagPartialSum - y.tagPartialSum;
+}
+function compareTitleAxis(x: ScoredRow, y: ScoredRow): number {
+  return x.titleExact - y.titleExact || x.titlePartial - y.titlePartial;
 }
 function compareStoryAxis(x: ScoredRow, y: ScoredRow): number {
   return x.storyRatio - y.storyRatio || x.storyLongChars - y.storyLongChars;
@@ -875,12 +891,13 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
 /**
  * Rank the whole corpus by the blend of whatever signals are available.
  *
- * The weighted sum is the five constants docs/search_rules.md "Balancing
+ * The weighted sum is the seven constants docs/search_rules.md "Balancing
  * signals" names: `E` per exact tag, `P` for the saturating partial-tag
- * budget, `S` for a short story match, `L` for the saturating long-story
- * bonus, `C` for CLIP (`clipNorm * clipCertaintyGate` - the relative rank
- * position times the absolute confidence, so a query CLIP has no opinion
- * about cannot look confident just because it produced *some* top result).
+ * budget, `T` for an exact title match, `Pt` for the partial-title budget,
+ * `S` for a short story match, `L` for the saturating long-story bonus, `C`
+ * for CLIP (`clipNorm * clipCertaintyGate` - the relative rank position times
+ * the absolute confidence, so a query CLIP has no opinion about cannot look
+ * confident just because it produced *some* top result).
  * Missing signals are omitted rather than substituted: no embedding blob means
  * the ranking is text-only and honest about it, and no metadata means it is
  * CLIP-only. Both are real rankings. Only the case where neither exists needs
@@ -962,6 +979,7 @@ export function rankHybrid({
 
   const scored: ScoredRow[] = new Array(count);
   let sawKeyword = false;
+  let sawTitle = false;
   let sawStory = false;
 
   for (let id = 0; id < count; id++) {
@@ -969,6 +987,9 @@ export function rankHybrid({
     let tagPartialSum = 0;
     let tagPartialCount = 0;
     let tagCoverageSum = 0;
+    let titleExact = 0;
+    let titlePartial = 0;
+    let titleCoverageSum = 0;
     let storyRatio = 0;
     let storyLongChars = 0;
     let storyMatched = false;
@@ -976,6 +997,7 @@ export function rankHybrid({
     if (hasText) {
       const entry = index[id];
       if (entry) {
+        const titleKeywords = entry.title ? [entry.title] : null;
         for (const term of tagTerms) {
           const { exact, partial } = classifyTagTerm(term, entry.keywords);
           tagCoverageSum += exact ? 1 : partial;
@@ -983,6 +1005,13 @@ export function rankHybrid({
           else if (partial > 0) {
             tagPartialSum += partial;
             tagPartialCount++;
+          }
+
+          if (titleKeywords) {
+            const t = classifyTagTerm(term, titleKeywords);
+            titleCoverageSum += t.exact ? 1 : t.partial;
+            if (t.exact) titleExact = 1;
+            else if (t.partial > titlePartial) titlePartial = t.partial;
           }
         }
 
@@ -993,6 +1022,7 @@ export function rankHybrid({
           storyLongChars = Math.max(storyLongChars, storyPhraseRun(entry.story.sequence, phrase));
 
         if (tagExact > 0 || tagPartialSum > 0) sawKeyword = true;
+        if (titleExact > 0 || titlePartial > 0) sawTitle = true;
         if (storyMatched) sawStory = true;
       }
     }
@@ -1003,10 +1033,13 @@ export function rankHybrid({
     const clipCertaintyGate = Math.max(0, clipSigned);
     const storyLongBonus = storyLongBonus01(storyLongChars);
     const tagCoverage = hasTerms ? tagCoverageSum / tagTerms.length : 0;
+    const titleCoverage = hasTerms ? titleCoverageSum / tagTerms.length : 0;
 
     const score =
       weights.tagExact * tagExact +
       weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION) +
+      weights.titleExact * titleExact +
+      weights.titlePartial * titlePartial +
       weights.story * storyRatio +
       weights.storyLong * storyLongBonus +
       weights.clip * clipNorm * clipCertaintyGate;
@@ -1017,13 +1050,18 @@ export function rankHybrid({
       tagExact,
       tagPartialSum,
       tagPartialCount,
+      titleExact,
+      titlePartial,
       storyRatio,
       storyLongChars,
       clipNorm,
       clipCertaintyGate,
       clipSigned,
       cosine,
-      certainty: matchCertainty({ tagCoverage, storyLongChars, storyMatched, cosine }, clipCertainty),
+      certainty: matchCertainty(
+        { tagCoverage, titleCoverage, storyLongChars, storyMatched, cosine },
+        clipCertainty
+      ),
     };
   }
 
@@ -1033,6 +1071,7 @@ export function rankHybrid({
   // re-sorting for one display column never touches the composite `order`
   // (docs/search_rules.md "Data structures" §4, "Reporting").
   const tagRanking = rankAxis(scored, compareTagAxis);
+  const titleRanking = rankAxis(scored, compareTitleAxis);
   const storyRanking = rankAxis(scored, compareStoryAxis);
   const clipRanking = rankAxis(scored, compareClipAxis);
 
@@ -1046,6 +1085,8 @@ export function rankHybrid({
     tagExact: new Float32Array(count),
     tagPartialSum: new Float32Array(count),
     tagPartialCount: new Int32Array(count),
+    titleExact: new Float32Array(count),
+    titlePartial: new Float32Array(count),
     story: new Float32Array(count),
     storyLongChars: new Float32Array(count),
     clip: new Float32Array(count),
@@ -1055,11 +1096,13 @@ export function rankHybrid({
   };
   const ranks: SignalRanks = {
     tag: new Int32Array(count),
+    title: new Int32Array(count),
     story: new Int32Array(count),
     clip: new Int32Array(count),
   };
   const ties: SignalRanks = {
     tag: new Int32Array(count),
+    title: new Int32Array(count),
     story: new Int32Array(count),
     clip: new Int32Array(count),
   };
@@ -1070,6 +1113,8 @@ export function rankHybrid({
     breakdown.tagExact[rank] = row.tagExact;
     breakdown.tagPartialSum[rank] = row.tagPartialSum;
     breakdown.tagPartialCount[rank] = row.tagPartialCount;
+    breakdown.titleExact[rank] = row.titleExact;
+    breakdown.titlePartial[rank] = row.titlePartial;
     breakdown.story[rank] = row.storyRatio;
     breakdown.storyLongChars[rank] = row.storyLongChars;
     breakdown.clip[rank] = row.clipNorm;
@@ -1078,6 +1123,8 @@ export function rankHybrid({
     breakdown.cosine[rank] = row.cosine ?? NaN;
     ranks.tag[rank] = tagRanking.rank[row.id];
     ties.tag[rank] = tagRanking.ties[row.id];
+    ranks.title[rank] = titleRanking.rank[row.id];
+    ties.title[rank] = titleRanking.ties[row.id];
     ranks.story[rank] = storyRanking.rank[row.id];
     ties.story[rank] = storyRanking.ties[row.id];
     ranks.clip[rank] = clipRanking.rank[row.id];
@@ -1090,12 +1137,12 @@ export function rankHybrid({
     breakdown,
     ranks,
     ties,
-    signals: { clip: Boolean(clipNormAll), keyword: sawKeyword, story: sawStory },
+    signals: { clip: Boolean(clipNormAll), keyword: sawKeyword, title: sawTitle, story: sawStory },
   };
 }
 
-/** `explainRanking`'s three axes, in the order shown when every one contributed. */
-const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', story: 'story content' };
+/** `explainRanking`'s four axes, in the order shown when every one contributed. */
+const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 'title match', story: 'story content' };
 
 /**
  * One room's ranking, as a reader reads it rather than as the sum computed
@@ -1143,23 +1190,28 @@ export function explainRanking(
   const tagExact = at(breakdown?.tagExact);
   const tagPartialSum = at(breakdown?.tagPartialSum);
   const tagPartialCount = at(breakdown?.tagPartialCount);
+  const titleExact = at(breakdown?.titleExact);
+  const titlePartial = at(breakdown?.titlePartial);
   const storyRatio = at(breakdown?.story);
   const storyLongChars = at(breakdown?.storyLongChars);
   const cosine = at(breakdown?.cosine);
 
   const hasTag = tagExact > 0 || tagPartialCount > 0;
+  const hasTitle = titleExact > 0 || titlePartial > 0;
   const hasStory = storyRatio > 0 || storyLongChars > 0;
   const hasClip = Number.isFinite(cosine);
-  if (!hasTag && !hasStory && !hasClip) return null;
+  if (!hasTag && !hasTitle && !hasStory && !hasClip) return null;
 
   const tagWeighted = weights.tagExact * tagExact + weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION);
+  const titleWeighted = weights.titleExact * titleExact + weights.titlePartial * titlePartial;
   const storyWeighted = weights.story * storyRatio + weights.storyLong * storyLongBonus01(storyLongChars);
   const clipWeighted = hasClip ? weights.clip * at(breakdown?.clip) * at(breakdown?.clipCertaintyGate) : 0;
   const totalScore = at(breakdown?.score);
 
-  const contributionTerms: { key: 'clip' | 'tag' | 'story'; weighted: number }[] = [
+  const contributionTerms: { key: 'clip' | 'tag' | 'title' | 'story'; weighted: number }[] = [
     { key: 'clip', weighted: clipWeighted },
     { key: 'tag', weighted: tagWeighted },
+    { key: 'title', weighted: titleWeighted },
     { key: 'story', weighted: storyWeighted },
   ];
   const contributions = contributionTerms
@@ -1174,6 +1226,9 @@ export function explainRanking(
     contributions,
     tag: hasTag
       ? { rank: ranks.tag[rank], ties: ties.tag[rank], exact: tagExact, partial: tagPartialCount }
+      : null,
+    title: hasTitle
+      ? { rank: ranks.title[rank], ties: ties.title[rank], exact: titleExact > 0, partial: titlePartial }
       : null,
     story: hasStory ? { rank: ranks.story[rank], ties: ties.story[rank], length: storyLongChars } : null,
     clip: hasClip
