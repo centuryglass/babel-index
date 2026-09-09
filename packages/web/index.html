@@ -895,6 +895,14 @@
       .statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
       .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--paper-ink); }
       .statement-page p:last-child { margin-bottom: 0; }
+      /* Running head, printed-book style: small italic line set well above the
+         text block and centered on its own page. Verso carries the book title
+         in caps, recto the "chapter" - decorative, so hidden from the reader. */
+      .statement-page .statement-head {
+        margin: 0 0 22px; text-align: center; font-style: italic;
+        font-size: 11px; letter-spacing: 0.08em; color: var(--paper-ink); opacity: 0.65;
+      }
+      .statement-story .statement-head { text-transform: uppercase; }
       .statement-page a { color: var(--paper-accent); text-decoration: underline; }
       .statement-page a:hover, .statement-link:hover { color: #4a2a0e; }
       /*

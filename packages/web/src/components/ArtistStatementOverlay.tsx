@@ -37,6 +37,7 @@ export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
         scrimClassName={bookOpen ? 'behind' : undefined}
       >
         <div className="book-page statement-page statement-story">
+          <p className="statement-head" aria-hidden="true">The Index of Babel</p>
           <p>
             The Library of Babel holds every possible arrangement of letters
             on paper, stacked on endless shelves in senseless disorder. Every
@@ -91,6 +92,7 @@ export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="book-page statement-page statement-real">
+          <p className="statement-head" aria-hidden="true">Artist&rsquo;s Statement</p>
           <p>
             The{' '}
             <a href={WIKI_URL} target="_blank" rel="noopener noreferrer">
