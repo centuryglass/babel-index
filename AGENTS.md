@@ -291,6 +291,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                     input (its own density gradient), the camera
                                     "zoom out in place" change, and the invariant
                                     rewrites both imply. Implemented.
+- `docs/performance-research.md`: Survey of possible non-trivial performance
+                                  wins, aimed at the dropped frames during the
+                                  rearrangement's zoom-out and slide. Hypotheses
+                                  ranked by reasoning, NOT measurements - it
+                                  opens with the instrumentation that would rank
+                                  them for real. Nothing in it is implemented.
   
 ## Conventions
 
