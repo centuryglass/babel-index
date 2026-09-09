@@ -104,7 +104,7 @@ export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
           </pre>
           <p>
             <button className="statement-link" onClick={() => setBookOpen(true)}>
-              Click here to run some equivalent code
+              Run the same thing here
             </button>{' '}
             and you'll get an actual book from the library. It probably won't
             have anything interesting, but it's entirely possible that you'll
@@ -112,14 +112,14 @@ export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
             wrote.
           </p>
           <p>
-            People do things equivalent to searching the library every day. At
-            its core, most forms of divination are ways to search the library,
-            as are many forms of art. When a person flips the tarot cards or
-            tosses the yarrow for the I Ching, they're trying to find their
-            story in one of the library's books. When a sculptor looks for a
-            true shape within a piece of driftwood, that's searching the
-            library. Sometimes they manage to find something interesting or
-            even life-changing in the chaos. Usually they don't.
+            People search the library constantly, under other names. Most forms
+            of divination are ways to search the library, as are many types of
+            art. Someone drawing tarot cards, or casting yarrow stalks for the
+            I Ching, is trying to find their story in one of the library's
+            books. When a sculptor looks for a true shape within a piece of
+            driftwood, that's searching the library. Sometimes they manage to
+            find something interesting or even life-changing in the chaos.
+            Usually they don't.
           </p>
           <p>
             AI's most interesting artistic role is in accelerating the search.
@@ -137,14 +137,14 @@ export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
             kept, and many of the remaining rooms and stories had major flaws I
             needed to individually fix. It's still the same process I'd follow
             through automatic drawing, where I'd join meaningless scribbled
-            lines to form intricate cityscapes. This accelerates that search to
-            give me results I'd only dreamed of before.
+            lines to form intricate cityscapes. Diffusion models and LLMs give
+            me lines I never would have considered scribbling.
           </p>
           <p>
-            There's still a lot of room left for curation here, even after all
-            the time I spent. I'd love to see which of these shelves are most
-            interesting to you. Search for concepts that intrigue you, mark the
-            best with a ★, and join me in the search.
+            There's still a lot of room left for curation within this project,
+            even after all of the time I spent. I'd love to see which of these
+            shelves are most interesting to you. Search for concepts that
+            intrigue you, mark the best with a ★, and join me in the search.
           </p>
         </div>
       </BookOverlay>
