@@ -3,10 +3,13 @@
  * (mostly) meaningless text, paged a screenful at a time, in the spirit of
  * Borges's library where every possible book already exists on some shelf.
  *
- * Meant as an easter egg on the artist statement page, once that page
- * exists - not wired into the app yet.
+ * An easter egg on the artist's statement, opened by "Click here to run some
+ * equivalent code" and stacked on top of it - so it takes the shared dialog
+ * stack's focus/Escape/Tab-trap machinery (`useDialog`) and marks its scrim
+ * `stacked` to sit above the statement dimmed behind it.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useDialog } from '../hooks/useDialog.ts';
 
 const BOOK_CHARSET = 'abcdefghijklmnoprstuvy, .';
 
@@ -53,14 +56,19 @@ export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBook
   const book = useMemo(() => text ?? generateRandomBookText(), [text]);
   const pages = useMemo(() => paginateBookText(book, linesPerPage), [book, linesPerPage]);
   const [page, setPage] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  useDialog(ref, () => onClose?.());
 
   const clamped = Math.min(page, pages.length - 1);
   const atFirst = clamped === 0;
   const atLast = clamped === pages.length - 1;
 
   return (
-    <div className="overlay-scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className="overlay" role="dialog" aria-modal="true" aria-label="a random book">
+    <div
+      className="overlay-scrim stacked"
+      onPointerDown={(e) => e.target === e.currentTarget && onClose?.()}
+    >
+      <div className="overlay" ref={ref} role="dialog" aria-modal="true" tabIndex={-1} aria-label="a random book">
         <div className="card-head">
           <span className="card-id">
             page {clamped + 1} / {pages.length}

@@ -816,6 +816,71 @@
       .help-block-list label {
         display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); cursor: pointer;
       }
+
+      /*
+        The artist's statement is an open book of two pages (ArtistStatementOverlay):
+        the diegetic myth on the left, the real statement on the right. Wider than
+        the help dialog because it carries two reading columns, not one.
+      */
+      .statement-overlay { width: min(1100px, 100%); container: statement / inline-size; }
+      /* No title bar - the open book names itself. The lone close button keeps
+         to the corner without the divider a titled head draws. */
+      .statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+      /*
+        Stacked by default (the narrow case), story above statement, the spine
+        rendered as a horizontal rule that marks the myth->statement seam. The
+        container query below turns it into two pages side by side once there is
+        room for two readable columns - available width, not a device/pointer
+        gate, so a shrunk desktop window collapses too.
+
+        The BOOK LOOK lives entirely in this block and the three rules below it
+        (page padding, the spine rule, the code block) - a paper/gutter or
+        page-curl variant is a swap here, not a change to the markup.
+      */
+      .statement-book { display: grid; grid-template-columns: 1fr; gap: 20px; }
+      .statement-real { border-top: 1px solid var(--edge); padding-top: 16px; }
+      @container statement (min-width: 680px) {
+        .statement-book { grid-template-columns: 1fr 1fr; gap: 0; }
+        .statement-story { padding-right: 28px; }
+        .statement-real {
+          border-top: none; padding-top: 0;
+          border-left: 1px solid var(--edge); padding-left: 28px;
+        }
+      }
+      .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--ink); }
+      .statement-page p:last-child { margin-bottom: 0; }
+      .statement-page a { color: #c8a95f; }
+      .statement-page a:hover { color: var(--ink); }
+      /*
+        The shell one-liner. `overflow-x: auto` keeps it one scrollable line
+        rather than wrapping mid-flag, which would misread as multiple commands.
+      */
+      .statement-code {
+        margin: 0 0 11px; padding: 8px 10px; overflow-x: auto;
+        background: rgba(0,0,0,0.35); border: 1px solid var(--edge); border-radius: 4px;
+        font-size: 11px; line-height: 1.4; color: var(--ink);
+      }
+      /* "Click here to run some equivalent code" - a control that reads as link-text inline in the prose. */
+      .statement-link {
+        display: inline; padding: 0; border: none; background: none;
+        font: inherit; color: #c8a95f; text-decoration: underline; cursor: pointer;
+      }
+      .statement-link:hover { color: var(--ink); background: none; }
+
+      /*
+        One overlay opening another (the statement opens the Babel book). The
+        book's scrim sits above the base z-index; the statement gets `behind`,
+        dimmed and set back so the book reads as sitting on top of it rather
+        than replacing it. Only the LOOK is here - which dialog reacts to Escape
+        is the shared dialog stack's job (useDialog), not z-index.
+      */
+      .overlay-scrim.stacked { z-index: 30; }
+      .overlay-scrim.behind .statement-overlay { opacity: 0.55; }
+      @media (prefers-reduced-motion: no-preference) {
+        .statement-overlay { transition: opacity 0.18s ease, transform 0.18s ease; }
+        .overlay-scrim.behind .statement-overlay { transform: translateY(-8px) scale(0.985); }
+      }
+
       .catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
       /*
         The room's identity and the way out to the map share one row, with real

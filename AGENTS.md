@@ -120,14 +120,20 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
     * `HelpDialog.tsx`: The "READ ME" book's dialog
-    * `ArtistStatementOverlay.tsx`: The artist's statement dialog, reached by
-                                    the open book traced into the center
-                                    tile's shelf gap (`CENTER_BOOK_PATH` in
-                                    `lib/center.ts`). Ships with placeholder
-                                    content.
-    * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel, paged.
-                             Meant as an easter egg for the (not yet existing)
-                             artist statement page, not wired in yet
+    * `ArtistStatementOverlay.tsx`: The artist's statement, reached by the open
+                                    book traced into the center tile's shelf gap
+                                    (`CENTER_BOOK_PATH` in `lib/center.ts`). An
+                                    open book of two pages: the diegetic myth on
+                                    the left, the real statement on the right,
+                                    collapsing to one stacked column when too
+                                    narrow for two. The component is the source
+                                    of truth for both texts (JSX, not a parsed
+                                    doc). Opens `BabelBookOverlay` on top of
+                                    itself.
+    * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel,
+                             paged. An easter egg opened from the artist's
+                             statement ("Click here to run some equivalent
+                             code") and stacked over it.
   - `src/hooks/`: the subsystems `main.tsx` wires together - see
                  `docs/state-architecture-plan.md` §3 for why each exists and
                  what it hides
@@ -149,6 +155,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `useRearrangement.ts`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said
                              once it lands
+    * `useDialog.ts`: The modal-dialog machinery every overlay shares - focus
+                      in on open and back out on close, Escape, Tab-trap - plus
+                      a topmost-only dialog stack so a stacked overlay (the
+                      Babel book over the artist's statement) takes the key and
+                      the one beneath it does not. Adopted by
+                      `ArtistStatementOverlay`/`BabelBookOverlay`;
+                      `HelpDialog`/`RoomOverlay` still inline their own copies.
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
