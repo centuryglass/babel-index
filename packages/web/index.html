@@ -39,7 +39,7 @@
         --paper-dim: #6a5f4c;
         --paper-edge: rgba(70, 54, 30, 0.28);
         --paper-accent: #7a4718;
-        --paper-gutter: rgba(52, 38, 18, 0.20);
+        --paper-gutter: rgba(52, 38, 18, 0.32);
       }
       * { box-sizing: border-box; }
       /*
@@ -839,46 +839,52 @@
         threshold to JS so a spread-at-a-time reader (the Babel book) advances
         by the matching amount.
 
-        The BOOK LOOK lives here: cream paper pages (`--paper-*`) inside the
-        dark cover the `.overlay` frame draws, lifted off it with a shadow. When
-        wide the two pages meet over a shadowed gutter down the center seam;
-        when stacked the seam is a ruled line above the second page. A book
-        showing a single page (the Babel book collapsed) has no second page, so
-        no seam is drawn either way. This whole block is the swap point - a
-        page-curl or a different stock is a change here, not to the markup.
+        The BOOK LOOK lives here: cream paper (`--paper-*`) inside the dark
+        cover the `.overlay` frame draws, lifted off it with a shadow. The two
+        layouts render the paper differently on purpose. Stacked (narrow), each
+        page is its OWN sheet with a small gap between - the paper styling sits
+        on `.book-page`. Wide, the pages join into one continuous spread with a
+        shadowed gutter valley down the center seam - the paper styling moves to
+        `.book`, and the pages go transparent over it. A book showing a single
+        page (the Babel book collapsed) is just one sheet. This whole block is
+        the swap point - a page-curl or a different stock is a change here, not
+        to the markup.
       */
       .book-overlay { container: book / inline-size; }
-      .book {
-        display: grid; grid-template-columns: 1fr; gap: 0;
+      /* Stacked: separate sheets. */
+      .book { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      .book-page {
+        min-width: 0;
         color: var(--paper-ink);
         background: linear-gradient(158deg, var(--paper-hi), var(--paper));
         border: 1px solid var(--paper-edge); border-radius: 4px;
         padding: 22px 24px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
       }
-      .book-page { min-width: 0; }
-      .book > .book-page + .book-page {
-        margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--paper-edge);
-      }
+      /* Wide: one spread. The paper moves to the .book; the pages ride over it
+         transparent, keeping only the inner padding that clears the gutter. */
       @container book (min-width: 680px) {
         .book {
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr 1fr; gap: 0;
+          color: var(--paper-ink);
+          border: 1px solid var(--paper-edge); border-radius: 4px;
           padding: 26px 30px;
-          /* The gutter: a soft valley of shadow down the center seam, over the
-             page paper. Pages keep their inner padding clear of it. */
+          box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
           background:
             linear-gradient(to right,
-              transparent 42%,
-              rgba(52,38,18,0.05) 47%,
+              transparent 40%,
+              rgba(52,38,18,0.08) 46%,
               var(--paper-gutter) 50%,
-              rgba(52,38,18,0.05) 53%,
-              transparent 58%),
+              rgba(52,38,18,0.08) 54%,
+              transparent 60%),
             linear-gradient(158deg, var(--paper-hi), var(--paper));
         }
-        .book > .book-page:first-child { padding-right: 34px; }
-        .book > .book-page + .book-page {
-          margin-top: 0; padding-top: 0; border-top: none; padding-left: 34px;
+        .book-page {
+          background: none; border: none; border-radius: 0;
+          box-shadow: none; padding: 0;
         }
+        .book > .book-page:first-child { padding-right: 34px; }
+        .book > .book-page + .book-page { padding-left: 34px; }
       }
 
       /* The artist's statement: wider than the help dialog because it carries
@@ -909,14 +915,20 @@
       .statement-link:hover { background: none; }
 
       /* The Library of Babel book: the same open book, its pages fixed-width
-         monospace inked on the paper. Wider so two 80-column pages have room
-         side by side; each page still scrolls on its own if the column is
-         narrower than a line. */
-      .babel-overlay { width: min(1160px, 100%); }
+         monospace inked on the paper. Wide enough that two full 80-column pages
+         sit side by side without clipping; a page still scrolls on its own if
+         the dialog is forced narrower than a line. */
+      .babel-overlay { width: min(1280px, 100%); }
       .babel-page {
         margin: 0; overflow-x: auto; white-space: pre;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 11px; line-height: 1.4; color: var(--paper-ink);
+      }
+      /* The page-nav sits UNDER the book on the dark cover, its rule dividing it
+         from the pages above (a top border, not the card-head's bottom one). */
+      .book-nav {
+        display: flex; align-items: center; gap: 8px;
+        margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--edge);
       }
 
       /*

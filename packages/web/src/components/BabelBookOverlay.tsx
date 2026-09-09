@@ -91,7 +91,7 @@ export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBook
       onWideChange={setIsWide}
       head={<span className="card-id">{counter}</span>}
       footer={
-        <div className="card-head book-nav">
+        <div className="book-nav">
           <button disabled={atFirst} onClick={() => setPage(Math.max(0, left - step))}>
             previous
           </button>
