@@ -235,7 +235,17 @@ export interface TileCache {
 async function decodeOnThread(url: string): Promise<ImageBitmap> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(String(r.status));
-  return createImageBitmap(await r.blob());
+  // premultiplyAlpha/colorSpaceConversion 'none' match the GL upload's unpack
+  // state (UNPACK_PREMULTIPLY_ALPHA_WEBGL false, no colorspace convert in
+  // gl/context.ts). When they disagree Firefox cannot upload the bitmap
+  // straight to the GPU and repacks every texel on the CPU first
+  // (WebGLTexelConversions + an SSE2 swizzle on the CanvasRenderer thread,
+  // measured at ~1.2s over a 2min zoom capture); matching them keeps the
+  // upload zero-copy. Harmless to the Canvas2D path - the tiles are opaque.
+  return createImageBitmap(await r.blob(), {
+    premultiplyAlpha: 'none',
+    colorSpaceConversion: 'none',
+  });
 }
 
 /**

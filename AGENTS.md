@@ -33,6 +33,7 @@ npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--po
 npm run demo -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
+npm run test:parity                # manual Canvas2D-vs-WebGL render parity; real GPU, not a merge gate
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
@@ -162,10 +163,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `useMapCamera.ts`: React hook for camera changes, inputs entangled with
                          camera controls
     * `useMapRenderer.ts`: Map frame loop/redraw hook
-    * `useMapRendererGL.ts`: The experimental WebGL counterpart of
-                             `useMapRenderer.ts`, active only when
-                             `webglFlag.ts`'s `WEBGL` is true - see "The
-                             WebGL renderer (experimental)" below.
+    * `useMapRendererGL.ts`: The WebGL counterpart of `useMapRenderer.ts`,
+                             active when `webglFlag.ts`'s `WEBGL` is true (the
+                             default) - see "The WebGL renderer" below.
     * `useMapCursor.ts`: The keyboard cursor - where it is, what a reader
                          hears about it, and every key over the map
     * `useCenterShelf.ts`: The center room's bookshelf - titles, roving
@@ -220,10 +220,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       `requestAnimationFrame` gap detector alongside the native
                       observer as a cross-browser fallback - the same
                       technique RUM tooling used before Long Tasks existed.
-    * `webglFlag.ts`: `?webgl` and the WebGL2 capability probe - see "The
-                      WebGL renderer (experimental)" below.
-    * `glRenderer.ts`: The experimental WebGL counterpart of `render.ts`.
-    * `glSlideRenderer.ts`: The experimental WebGL counterpart of `slide.ts`.
+    * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl`/`?webgl=0` override and the
+                      WebGL2 capability probe - see "The WebGL renderer" below.
+    * `glRenderer.ts`: The WebGL counterpart of `render.ts`.
+    * `glSlideRenderer.ts`: The WebGL counterpart of `slide.ts`.
     * `gl/context.ts`: One shader program, VAO and quad-drawing primitives
                        (`drawFlatQuad`/`drawTexturedQuad`/`drawStrokeQuad`) -
                        the WebGL equivalent of a 2D context, created exactly
@@ -979,7 +979,13 @@ code, not a standing invariant.
   box. Scoring is O(tokens x keywords) per room, so a pasted tag list does not
   degrade, it stops.
 
-### The WebGL renderer (experimental)
+### The WebGL renderer
+
+WebGL is the default renderer (`webglFlag.ts`'s `DEFAULT_WEBGL`); Canvas2D
+(`render.ts`/`slide.ts`) is the second renderer, reachable with `?webgl=0` and
+the automatic fallback when `supportsWebGL2()` is false.
+`render-parity.parity.ts` (`npm run test:parity`) is what keeps the two in
+step - see "Testing and CI".
 
 - **It mirrors `render.ts`/`slide.ts`'s draw loop, in lockstep, on purpose.**
   `glRenderer.ts`/`glSlideRenderer.ts` are a second implementation of the
@@ -988,8 +994,8 @@ code, not a standing invariant.
   `gl/context.ts`'s quad primitives instead of `CanvasRenderingContext2D`
   calls - not a shared abstraction over both. A change to either file's draw
   loop needs the matching change on the other side, or the two renderers
-  drift and `?webgl` silently stops looking like the map it is supposed to
-  be a faster copy of. `GLDrawOpts`/`GLDrawResult` are derived from
+  drift and the map silently stops looking the same under one of them - the
+  parity suite is the check that catches this. `GLDrawOpts`/`GLDrawResult` are derived from
   `render.ts`'s real `DrawOpts`/`DrawResult` (`Omit<DrawOpts,'ctx'> &
   {gl}`) specifically so a shape change there is caught here at typecheck
   time rather than silently drifting too.
@@ -1011,16 +1017,30 @@ code, not a standing invariant.
   decoded-bitmap budget `pyramid.ts` already manages, and a `WeakMap` alone
   would leak GPU handles forever (JS garbage collection runs no cleanup code
   on a `WeakMap` eviction).
-- **The default-flip constant lives in `webglFlag.ts`.** `DEFAULT_WEBGL`
-  is the one line that turns this from an opt-in flag into the default
-  renderer - flip it once the remaining validation in
-  `docs/implementation-plan.md`'s Rendering section is done, not before.
-  `WEBGL` itself already folds in a WebGL2 capability probe, so an
-  unsupported device falls back to the Canvas2D renderer automatically
-  regardless of the flag.
+- **The renderer default lives in `webglFlag.ts`.** `DEFAULT_WEBGL` is `true`;
+  a plain visit gets WebGL. `?webgl=0` (also `off`/`false`/`no`) forces
+  Canvas2D, a bare `?webgl` or any other value forces WebGL, and `WEBGL` folds
+  in a WebGL2 capability probe so an unsupported device falls back to Canvas2D
+  automatically regardless of the flag. The `?webgl=0` hatch is load-bearing
+  for `render-parity.parity.ts`'s Canvas2D control session and for a reader who
+  hits a GL-specific glitch - don't drop it while Canvas2D still exists.
 
 ### Testing and CI
 
+- **The e2e suite pins its renderer with `openLibrary`'s `webgl` option, not
+  the production default.** `DEFAULT_WEBGL` is `true`, but every spec except
+  `webgl-map.e2e.ts` passes `webgl=0` (Canvas2D) because the suite's blank/
+  repaint probes (`fingerprint`, the `getImageData` reads) need a 2D context a
+  GL canvas doesn't have. GL behaviour is covered by `webgl-map.e2e.ts`
+  (`webgl: true`) and the parity suite below. Leaving a spec unpinned would let
+  the production default silently switch its renderer and break those reads.
+- **`render-parity.parity.ts` (`npm run test:parity`) is a SEPARATE manual
+  suite, not a merge gate.** The `.parity.ts` suffix matches neither `npm test`
+  nor `npm run test:e2e`'s glob on purpose - it needs a real GPU and boots two
+  sessions (Canvas2D + WebGL) to check the renderers draw the same map. Run it
+  by hand when touching either draw loop; it is the check behind the lockstep
+  invariant in "The WebGL renderer". See its header for the scene design (why
+  there's no far-zoom scene, why the pixel bounds are where they are).
 - **In a cloud agent container, running `npm run test:e2e` yourself is slow**
   (the pinned Chromium isn't preinstalled the way it is in CI, and each spec
   launches its own browser). If a change doesn't touch `packages/web/e2e/**`

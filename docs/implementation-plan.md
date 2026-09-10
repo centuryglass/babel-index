@@ -29,29 +29,14 @@ serve as completed task history.
   `FavoriteStore` rather than a lock on the file.
 
 ## Rendering:
-- **[2026-09-10] WebGL map renderer: remaining validation before flipping
-  `webglFlag.ts`'s `DEFAULT_WEBGL` to `true`.** The renderer (`glRenderer.ts`/
-  `glSlideRenderer.ts`/`useMapRendererGL.ts`, gated behind `?webgl`) is
-  feature-complete and measurably faster (Android Firefox now smooth,
-  previously the worst-case environment `docs/performance-research.md`
-  documented). What's left is validation, not code:
-  - Only Android Firefox and desktop Chrome/Firefox have been hands-on
-    tested. iOS/Safari has a history of WebGL2 edge cases that a bare
-    `supportsWebGL2()` capability check won't catch (it only rules out "no
-    support at all", not "reports support, behaves wrong") - needs an actual
-    device pass.
-  - No visual regression coverage between the GL and Canvas2D renderers -
-    `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call shape via
-    a recording fake, not pixels. A manual side-by-side at a few fixed camera
-    positions (spine legibility, hover-glow states, favorite badge) before
-    defaulting for every visitor would catch what the fakes can't.
-  - GPU memory was only checked informally (a short session, DevTools open,
-    "no console errors"). Worth one deliberate long session - many searches,
-    favorite toggles, rearrangements - watching the memory graph rather than
-    eyeballing it.
-
-  Once those three pass, flip `DEFAULT_WEBGL`. Whether Canvas2D is ever
-  removed after that is a separate, later decision.
+- **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
+  `?webgl=0` as the Canvas2D escape hatch and a `supportsWebGL2()` probe that
+  falls back automatically. Canvas2D is still a full second renderer, kept in
+  lockstep (see AGENTS.md's "The WebGL renderer") and covered by
+  `render-parity.parity.ts`. Open question, no work scheduled: whether to
+  eventually retire Canvas2D. Retiring it drops the parity suite, the
+  `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
+  only once WebGL has real production mileage and nothing has needed the hatch.
 
 ## Rearrangement / camera:
 - **[2026-09-10] A `flyTo` issued while a rearrangement is animating has no
@@ -104,10 +89,3 @@ serve as completed task history.
   gesture) does not currently do this. Confirm whether that's the intended
   reading of the invariant and, if so, wire `flyTo` to end an active
   rearrangement the same way a pointer grab does.
-
-## Other:
-- **Check the in-tile search field on an actual iOS device.** Its font size
-  is whatever `.center-search input` inherits (13px, the app's body size),
-  well under the ~16px that keeps iOS Safari from auto-zooming the viewport
-  on focus. The page's `maximum-scale=1, user-scalable=no` viewport meta
-  likely suppresses that already, but it needs testing.
