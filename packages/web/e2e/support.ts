@@ -76,8 +76,12 @@ export async function waitFor(predicate, timeoutMs, message) {
  * this suite omits it, which is why `manifest.favorites` is null and no
  * favorite control renders anywhere else in the suite - a favorites-specific
  * test needs the flag on purpose, not as an oversight to fix elsewhere.
+ *
+ * `extraParams` are appended to the page's query string alongside `?debug` -
+ * e.g. `['webgl']` for `webgl-map.e2e.ts`'s smoke spec, which needs
+ * `webglFlag.ts`'s `WEBGL` on before `main.tsx` ever mounts.
  */
-export async function openLibrary({ favorites = false } = {}) {
+export async function openLibrary({ favorites = false, extraParams = [] } = {}) {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
 
@@ -150,7 +154,8 @@ export async function openLibrary({ favorites = false } = {}) {
     // `?debug` mounts the dev panel and the cache/rearrangement HUD - both now
     // gated off by default (see `debug.js`), and this suite leans on them
     // throughout as its settling signal and its window into cache/level state.
-    await page.goto(`${origin}?debug`, { waitUntil: 'domcontentloaded' });
+    const query = ['debug', ...extraParams].join('&');
+    await page.goto(`${origin}?${query}`, { waitUntil: 'domcontentloaded' });
     // Rooms have to be decoded and drawn before any of this means anything.
     await page.waitForFunction(
       () => /[1-9]\d* drawn/.test(document.getElementById('hud')?.textContent ?? ''),
@@ -205,17 +210,24 @@ export async function hud(page) {
  * cannot parse at all.
  */
 export function parseHud(text) {
+  // The GL renderer prefixes every HUD line with `[gl] ` (`useMapRendererGL.ts`)
+  // so a screenshot/log makes obvious which renderer drew it - strip it before
+  // parsing rather than doubling the pattern below, and report it back so a
+  // GL-specific test can assert on it without its own regex.
+  const gl = text.startsWith('[gl] ');
+  const body = gl ? text.slice('[gl] '.length) : text;
   // `over` is only printed when a screen needs more than the level's cache
   // budget, and `clustered` only when a search's density gradient actually
   // lifted some ranks above the baseline (`layout.gradedCount > 0` - main.jsx)
   // - both optional here, but parsed rather than skipped, because both are
   // numbers a test might need.
-  const m = text.match(
+  const m = body.match(
     /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?(?: · (\d+) blocked)? · fav hit ([\d.]+)×([\d.]+)px \((touch-padded|mouse)\)$/
   );
   assert.ok(m, `could not read the hud: ${JSON.stringify(text)}`);
   const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered, blocked, favHitW, favHitH, favHitMode] = m;
   return {
+    gl,
     cells: +cells, drawn: +drawn, level: +level, tilePx: +tilePx,
     substituted: +substituted, blank: +blank, cached: +cached,
     over: over === undefined ? 0 : +over,
@@ -259,8 +271,12 @@ export async function settled(page) {
   // and go round again if one started underneath us.
   const deadline = Date.now() + 30_000;
   for (;;) {
+    // The GL renderer's HUD text carries the same `rearranging` body behind
+    // its own `[gl] ` prefix (`useMapRendererGL.ts`) - strip it before the
+    // check, same as `parseHud` does, rather than teaching this predicate a
+    // second "does it start with rearranging" rule.
     await page.waitForFunction(
-      () => !document.getElementById('hud')?.textContent?.startsWith('rearranging'),
+      () => !document.getElementById('hud')?.textContent?.replace(/^\[gl\] /, '').startsWith('rearranging'),
       null,
       { timeout: Math.max(1000, deadline - Date.now()) }
     );
@@ -269,7 +285,7 @@ export async function settled(page) {
     );
     const text = await page.locator('#hud').textContent();
     // Parse THIS text, not a freshly re-fetched one - see `parseHud`'s comment.
-    if (!text.startsWith('rearranging')) return parseHud(text);
+    if (!text.replace(/^\[gl\] /, '').startsWith('rearranging')) return parseHud(text);
     assert.ok(Date.now() < deadline, 'a rearrangement never finished');
   }
 }

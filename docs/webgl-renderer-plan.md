@@ -120,17 +120,33 @@ need before the camera moves.
 
 ## Phase E - testing
 
-- [ ] `glRenderer.test.ts` / `glSlideRenderer.test.ts`: a `fakeGLContext()`
+- [x] `glRenderer.test.ts` / `glSlideRenderer.test.ts`: a `fakeGLContext()`
       recording `drawFlatQuad`/`drawTexturedQuad`/`drawStrokeQuad`/`clear`/
       `resize`, mirroring `render.test.ts`'s `fakeCtx()` assertion style -
       level picked, one draw call per on-camera cell with the right dst
-      rect, badge/switch/toggle/overlay gating, spine-cache key changes only
-      on real change, prefetch/warm-level ordering.
-- [ ] `e2e/support.ts`: `openLibrary` needs to accept extra query params (it
-      hardcodes `${origin}?debug` today).
-- [ ] New `e2e/webgl-map.e2e.ts` smoke spec: map draws (`#hud` starts with
-      `[gl]`), a search completes and a rearrangement settles via the
-      existing `settled()` convention, no console errors.
+      rect, badge/switch/toggle/overlay gating, prefetch/warm-level
+      ordering. The real `createGLTextureCache`/`createGlowTextureCache`
+      only work against a real `ImageBitmap`/`document` (see those files'
+      own docs), neither of which exists under `node --test`, so both tests
+      pass their own fakes through `CreateGLRendererOpts`/
+      `CreateGLSlideRendererOpts` instead - the same "recording fake, not
+      the real GL runtime" split `textureCache.ts`'s doc already called out.
+      The spine-cache-key assertion ("changes only on real change") is
+      **not covered**: `gl/spineTexture.ts` needs a real `document` to bake
+      `composeSpines`' output at all, which is the same class of gap
+      `AGENTS.md`'s CDP-touch-injection note already accepts for
+      `map-gestures.e2e.ts` - out of scope for a Node-only unit test, and
+      `composeSpines` itself is otherwise untested (it was already untested
+      on the Canvas2D side before this renderer existed).
+- [x] `e2e/support.ts`: `openLibrary` now takes `extraParams` (appended to
+      `?debug` in the page's query string). `parseHud`/`settled` strip the
+      GL renderer's `[gl] ` HUD prefix (`useMapRendererGL.ts`) before
+      parsing/checking for `rearranging…`, and `parseHud` reports `gl` back
+      so a GL-specific assertion needs no regex of its own.
+- [x] New `e2e/webgl-map.e2e.ts` smoke spec: map draws (`hud(page).gl` is
+      true), a search completes and a rearrangement settles via the
+      existing `settled()` convention, no console errors. Verified it can
+      fail (flipped the `gl` assertion, confirmed the failure, reverted).
 - Visual regression testing (screenshot-diffing GL vs Canvas2D at fixed
   camera positions) is a good future idea - not scoped into this pass.
 
