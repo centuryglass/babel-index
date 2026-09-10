@@ -64,27 +64,35 @@ TODO: screenshot of the map zoomed out, showing the density cluster after a sear
 
 | | |
 | --- | --- |
+| `build/` | the Node-side TypeScript hook (`--import ./build/register.mjs`) that lets every script run `.ts` sources directly, no compile step |
 | `packages/server/` | offline demo server: scans a directory, serves a manifest |
 | `packages/web/` | React + canvas map — pan, zoom, search, live layout controls |
 | `packages/map/` | placement, ranking, scoring, the rearrangement animation — no DOM |
 | `packages/config/` | the by-feel numbers, with the reasoning behind each |
 | `packages/pipeline/` | the resolution-pyramid generator |
 | `tools/center-placement/` | tile geometry and the SVG importer |
+| `tools/embed/` | computes and stores CLIP image embeddings for a corpus |
+| `tools/upload/` | syncs a corpus to Cloudflare R2, incrementally by content hash |
+| `tools/font-lab/` | ad hoc design lab for the center shelf's spine titles (not wired into any npm script) |
+| `tools/curation/` | Python/Qt tools for turning generated tiles into `metadata.json` — a separate ecosystem, with its own `README.md` |
 | `assets/corpus-sample/` | a ready-to-run sample corpus |
 
-> TODO: expand if needed. See [`CLAUDE.md`](CLAUDE.md) for the full layout.
+> See [`CLAUDE.md`](CLAUDE.md) for the full file-by-file layout.
 
 ## Running it locally
 
-```sh
-# For a lighter test build without CLIP or image preprocessing:
-# npm install --omit=dev --omit=o
- 
-# For the full build:
-npm install
+Requires Node 20 or newer (CI runs 20/22/24).
 
+```sh
+npm install
 npm run demo        # http://localhost:5173, against assets/corpus-sample/
 ```
+
+CLIP-based search (`@huggingface/transformers`, via `onnxruntime-node`) is
+optional: it only supports win32/darwin/linux, so nothing else in the demo
+requires it, and it's never imported statically. Without it, search still
+works from keyword and story matching alone, just without the embedding
+signal.
 
 The base demo uses a tiny set of sample images included with this repo. To run it against a larger set of image tiles:
 
@@ -122,7 +130,6 @@ each with its reasoning. Override any subset with a `config.json`:
 ```sh
 npm run demo -- --config path/to/config.json     # defaults to ./config.json
 ```
-.
 
 ### Testing
 
