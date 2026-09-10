@@ -65,6 +65,7 @@ export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = cre
     favorites = null, genericFade = 0,
   }: GLSlideDrawOpts): GLSlideDrawResult {
     cache.beginFrame();
+    textures.beginFrame();
     gl.resize(w, h, dpr);
     gl.clear(BACKGROUND[0], BACKGROUND[1], BACKGROUND[2], 1);
 
@@ -104,7 +105,7 @@ export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = cre
         return;
       }
       const hit = cache.get(id, level);
-      const tex = hit ? textures.get(gl.gl, hit.img) : null;
+      const tex = hit ? textures.get(gl, hit.img) : null;
       if (hit && tex) {
         const src: Rect = hit.rect
           ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }

@@ -1,15 +1,26 @@
 /**
- * Spike: the WebGL counterpart of a 2D `CanvasRenderingContext2D` - one quad
- * shader (`shaders.ts`), a static unit-quad VBO, and two draw calls
- * (`drawFlatQuad`, `drawTexturedQuad`) that `glRenderer.ts`/
+ * The WebGL counterpart of a 2D `CanvasRenderingContext2D` - one quad shader
+ * (`shaders.ts`), a static unit-quad VBO, and drawing primitives
+ * (`drawFlatQuad`, `drawTexturedQuad`, `drawStrokeQuad`) that `glRenderer.ts`/
  * `glSlideRenderer.ts` build a whole frame out of, one draw call per cell for
- * this first cut (see the plan's "Draw strategy" - no instancing yet).
+ * this first cut (see AGENTS.md's WebGL renderer section - no instancing yet).
  *
  * Everything here works in DEVICE pixels, not CSS pixels - unlike the 2D
  * renderer's `ctx.setTransform(dpr, ...)` trick, a shader has no implicit
  * pixel-ratio scale, so `resize()` takes the CSS size and dpr and the caller
  * is responsible for multiplying every rect it passes to a draw call by the
  * same dpr `resize()` was last called with.
+ *
+ * `createGLContext` must be called exactly ONCE per canvas element's
+ * lifetime (see `useMapRendererGL.ts`'s canvas-lifetime effect) - it creates
+ * a shader program, VAO and buffer every call, and calling it again on the
+ * same canvas (which memoizes and returns the SAME underlying
+ * `WebGL2RenderingContext`) would leak the previous call's GL objects, since
+ * nothing but `dispose()` ever frees them. `dispose()` must be called before
+ * a context is discarded (unmount, or before `webglcontextlost`'s handler
+ * tears down the caller's own state) - a lost context invalidates every GL
+ * object anyway, but `dispose()` still clears local bookkeeping so a
+ * `restored` handler starts clean.
  */
 import { VERTEX_SRC, FRAGMENT_SRC } from './shaders.ts';
 
@@ -22,6 +33,8 @@ export interface Rect {
 
 export interface GLContext {
   gl: WebGL2RenderingContext;
+  /** `gl.getParameter(gl.MAX_TEXTURE_SIZE)`, queried once - see `textureCache.ts`'s upload guard. */
+  maxTextureSize: number;
   /** (cssWidth, cssHeight, dpr) - resizes the backing store and the viewport. */
   resize(w: number, h: number, dpr: number): void;
   clear(r: number, g: number, b: number, a: number): void;
@@ -41,6 +54,16 @@ export interface GLContext {
     dst: Rect,
     alpha?: number
   ): void;
+  /**
+   * A rectangle's outline, `width` device pixels thick, drawn as four flat
+   * quads rather than `gl.LINES` - a GL line's width above 1px is not
+   * reliably supported across GPUs/browsers (the spec allows implementations
+   * to clamp it to 1), so a shape built from quads is the portable choice
+   * for the keyboard cursor ring's 3px stroke.
+   */
+  drawStrokeQuad(dst: Rect, width: number, color: [number, number, number, number]): void;
+  /** Frees every GL object this context owns. Call before discarding it - see this file's doc. */
+  dispose(): void;
 }
 
 function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
@@ -70,7 +93,12 @@ function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShade
   return program;
 }
 
-/** Null on a browser/device with no WebGL2 - callers fall back to nothing drawn, not to Canvas2D (see the plan's "WebGL2 only, no fallback" non-goal). */
+/**
+ * Null on a browser/device with no WebGL2 - `webglFlag.ts`'s capability
+ * probe is what keeps a caller from reaching this function at all on such a
+ * device (falling back to the Canvas2D renderer instead), so returning null
+ * here is a last-resort guard, not the primary fallback path.
+ */
 export function createGLContext(canvas: HTMLCanvasElement): GLContext | null {
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
   if (!gl) return null;
@@ -102,6 +130,20 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext | null {
 
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  // Set explicitly, not left to the (already-matching) WebGL defaults - a
+  // future texture source added to only one of `textureCache.ts`/
+  // `spineTexture.ts` must not silently disagree with the other about
+  // whether alpha arrives premultiplied or the image arrives flipped. One
+  // fixed decision here, for every `texImage2D` call this renderer ever makes.
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+
+  const setupError = gl.getError();
+  if (setupError !== gl.NO_ERROR) {
+    throw new Error(`WebGL setup left a pending error: 0x${setupError.toString(16)}`);
+  }
+
+  const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
 
   let resolutionW = canvas.width;
   let resolutionH = canvas.height;
@@ -159,5 +201,22 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext | null {
     drawQuad(dst, uv, true, [0, 0, 0, 1], alpha, texture);
   }
 
-  return { gl, resize, clear, drawFlatQuad, drawTexturedQuad };
+  function drawStrokeQuad(dst: Rect, width: number, color: [number, number, number, number]) {
+    drawFlatQuad({ x: dst.x, y: dst.y, w: dst.w, h: width }, color); // top
+    drawFlatQuad({ x: dst.x, y: dst.y + dst.h - width, w: dst.w, h: width }, color); // bottom
+    drawFlatQuad({ x: dst.x, y: dst.y, w: width, h: dst.h }, color); // left
+    drawFlatQuad({ x: dst.x + dst.w - width, y: dst.y, w: width, h: dst.h }, color); // right
+  }
+
+  function dispose() {
+    gl.deleteProgram(program);
+    gl.deleteVertexArray(vao);
+    gl.deleteBuffer(quadBuffer);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+  }
+
+  return {
+    gl, maxTextureSize, resize, clear, drawFlatQuad, drawTexturedQuad, drawStrokeQuad, dispose,
+  };
 }

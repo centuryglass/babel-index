@@ -35,6 +35,10 @@ export interface SpineTextureCache {
     hoveredBook: number | null,
     fontLimits: SpineFontLimits
   ): GLSpineTexture | null;
+  /** Drops the cached texture without freeing GPU state - for a lost context, where it is already invalid. */
+  reset(): void;
+  /** Frees the resident texture via `gl.deleteTexture`, if any, then drops it. */
+  dispose(gl: WebGL2RenderingContext): void;
 }
 
 /** Buckets a size to the nearest 8 device pixels, so a smooth zoom doesn't re-render every frame - see this file's doc. */
@@ -84,5 +88,14 @@ export function createSpineTextureCache(): SpineTextureCache {
     return entry;
   }
 
-  return { get };
+  function reset(): void {
+    cached = null;
+  }
+
+  function dispose(gl: WebGL2RenderingContext): void {
+    if (cached) gl.deleteTexture(cached.entry.texture);
+    cached = null;
+  }
+
+  return { get, reset, dispose };
 }

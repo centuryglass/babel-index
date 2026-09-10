@@ -1,17 +1,24 @@
 /**
- * Spike: the WebGL counterpart of `useMapRenderer.ts`.
+ * The WebGL counterpart of `useMapRenderer.ts` - see AGENTS.md's "The WebGL
+ * renderer (experimental)" for the standing invariants this file exists to
+ * uphold, in particular: GL setup happens exactly ONCE per canvas element's
+ * lifetime, never per-frame or per-prop-change.
  *
- * A close port of that hook's DOM-overlay positioning, hover tracking,
- * pointerdown-ends-rearrangement handling, HUD text, and perfProbe wiring -
- * forked wholesale rather than factored into a shared helper first (an
- * acceptable shortcut for a spike per the plan; the two files will drift if
- * this goes any further than a spike). The one structural difference is the
- * draw call itself: `glRenderer.ts`/`glSlideRenderer.ts` instead of
- * `render.ts`/`slide.ts`, and no `ctx.setTransform` - see those files' own
- * docs for what they do and do not draw yet (no cursor ring, no
- * favorites-sort switch/distill toggle/clear-history overlay - so this hook
- * still tracks `hoveredDistill`/the switch's hover classes for later, but
- * nothing currently renders for them on the GL canvas itself).
+ * Two effects, not one, and that split is the whole point:
+ *
+ *   - The canvas-lifetime effect (deps `[canvasRef, cache]` only) creates the
+ *     GL context, the two renderers, and every pointer/resize/context-loss
+ *     listener EXACTLY ONCE per real canvas mount (or after a lost context
+ *     restores). `cache` is included because a genuinely new `TileCache`
+ *     (a reloaded corpus) really does need a fresh GL runtime bound to it -
+ *     unlike `layout`/`order`/`favorites`/etc., which change on almost every
+ *     search or toggle and must NOT tear this down.
+ *   - Everything that legitimately changes often is read through `latestRef`,
+ *     assigned during the render body itself (not inside an effect) so it is
+ *     always current before any effect runs this render, regardless of
+ *     effect declaration order. A second, tiny effect exists only to call
+ *     `draw.current()` when one of those values actually changes - the
+ *     redraw trigger a full effect-rebuild used to provide for free.
  *
  * `main.tsx` hands this hook the real `canvasRef` only when `WEBGL` is on
  * and a dummy always-null ref otherwise (see `webglFlag.ts`), the same way
@@ -19,8 +26,8 @@
  * the two ever calls `getContext` on the real canvas element, since a
  * canvas can only ever hand out one context type.
  */
-import { useEffect } from 'react';
-import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
+import { useEffect, useRef } from 'react';
+import { pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
 import {
   bookAtPoint, centerBookAtPoint, centerCellRect,
   shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint, BOOK_COUNT,
@@ -33,7 +40,7 @@ import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Slot, SpineFontLimits } from '../lib/center.ts';
-import { createGLContext } from '../lib/gl/context.ts';
+import { createGLContext, type GLContext } from '../lib/gl/context.ts';
 import { createGLRenderer, type GLDrawResult } from '../lib/glRenderer.ts';
 import { createGLSlideRenderer, type GLSlideDrawResult } from '../lib/glSlideRenderer.ts';
 import type { RunningAnim } from './useMapRenderer.ts';
@@ -74,19 +81,64 @@ interface UseMapRendererGLOpts {
   distillTooltipRef?: { current: HTMLElement | null };
 }
 
+/** Everything `render()`/the pointer handlers need that legitimately changes on almost every search or toggle - see this file's doc. */
+interface Latest {
+  mode: string;
+  layout: MapLayout;
+  order: number[];
+  centreSlots?: (Slot | null)[] | null;
+  spineFontLimits?: SpineFontLimits | null;
+  centreOverlay: (w: number, h: number) => CentreOverlay;
+  blockedCount: number;
+  favorites: { isFavorite: (id: number) => boolean } | null;
+  sortMode: SortMode;
+  distillMode: boolean;
+}
+
 export function useMapRendererGL({
   canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef,
   draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null, favTooltipRef, sortMode = 'relevance',
   genericFade, distillMode = false, distillTooltipRef,
 }: UseMapRendererGLOpts) {
+  // Assigned during the render body, not inside an effect - always correct
+  // before EITHER effect below runs this render, regardless of which is
+  // declared first. See this file's doc.
+  const latestRef = useRef<Latest>({
+    mode, layout, order, centreSlots, spineFontLimits, centreOverlay, blockedCount,
+    favorites, sortMode, distillMode,
+  });
+  latestRef.current = {
+    mode, layout, order, centreSlots, spineFontLimits, centreOverlay, blockedCount,
+    favorites, sortMode, distillMode,
+  };
+
+  // The redraw trigger a full effect-rebuild used to provide for free -
+  // nothing here touches GL.
+  useEffect(() => {
+    draw.current();
+  }, [
+    draw, mode, layout, order, centreSlots, spineFontLimits, centreOverlay,
+    blockedCount, favorites, sortMode, distillMode,
+  ]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const gl = createGLContext(canvas);
-    if (!gl) return;
-    const renderer = createGLRenderer({ cache });
-    const slideRenderer = createGLSlideRenderer({ cache, textures: renderer.textures });
+
+    let runtime: {
+      gl: GLContext;
+      renderer: ReturnType<typeof createGLRenderer>;
+      slideRenderer: ReturnType<typeof createGLSlideRenderer>;
+    } | null = null;
+
+    const setup = () => {
+      const gl = createGLContext(canvas);
+      if (!gl) return;
+      const renderer = createGLRenderer({ cache });
+      const slideRenderer = createGLSlideRenderer({ cache, textures: renderer.textures });
+      runtime = { gl, renderer, slideRenderer };
+    };
 
     let pending = 0;
     let hoveredBook: number | null = null;
@@ -95,7 +147,18 @@ export function useMapRendererGL({
 
     const render = () => {
       pending = 0;
-      if (mode !== 'map') return;
+      const {
+        mode: m, layout: lay, order: ord, centreSlots: slots, spineFontLimits: limits,
+        centreOverlay: overlay, blockedCount: blocked, favorites: favs, sortMode: sort,
+        distillMode: distill,
+      } = latestRef.current;
+      if (m !== 'map') return;
+      // A lost context (or a device that never got one) draws nothing -
+      // never throws. `webglcontextrestored` calls `setup()` again and the
+      // next `draw.current()` picks the new runtime back up.
+      if (!runtime) return;
+      const { gl, renderer, slideRenderer } = runtime;
+
       const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -106,7 +169,7 @@ export function useMapRendererGL({
       const bookEl = centerBookRef?.current;
       const controlsEl = controlsRef?.current;
       if (searchEl || booksEl || arrowEl || bookEl || controlsEl) {
-        const { box, usable, cellRect, books } = centreOverlay(w, h);
+        const { box, usable, cellRect, books } = overlay(w, h);
         if (searchEl) {
           searchEl.style.display = usable ? 'block' : 'none';
           if (usable) {
@@ -156,7 +219,7 @@ export function useMapRendererGL({
       }
 
       const running = anim.current;
-      const showing = running?.before ?? { layout, order };
+      const showing = running?.before ?? { layout: lay, order: ord };
 
       const t0 = PERF && running ? performance.now() : 0;
       const stats: GLDrawResult | GLSlideDrawResult = running?.board
@@ -166,18 +229,18 @@ export function useMapRendererGL({
             board: running.board,
             origin: running.origin as { x: number; y: number },
             motions: running.motions,
-            genericIndexAt: layout.genericIndexAt,
-            favorites, sortMode, genericFade: genericFade?.current,
-            distillMode, hoveredDistill,
-            clearHistoryAvailable: centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory',
+            genericIndexAt: lay.genericIndexAt,
+            favorites: favs, sortMode: sort, genericFade: genericFade?.current,
+            distillMode: distill, hoveredDistill,
+            clearHistoryAvailable: slots?.[BOOK_COUNT - 1]?.action === 'forgetHistory',
           })
         : renderer.draw({
             gl, width: w, height: h, dpr,
             cam: cam.current,
             layout: showing.layout, order: showing.order,
-            centreSlots, hoveredBook, spineFontLimits,
-            favorites, hoveredFavorite, sortMode,
-            genericFade: genericFade?.current, distillMode, hoveredDistill,
+            centreSlots: slots, hoveredBook, spineFontLimits: limits,
+            favorites: favs, hoveredFavorite, sortMode: sort,
+            genericFade: genericFade?.current, distillMode: distill, hoveredDistill,
           });
       if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);
 
@@ -191,7 +254,7 @@ export function useMapRendererGL({
         hud.textContent =
           `[gl] rearranging · ${pct}% · ${motions.length} lines moving · ` +
           `level ${slideStats.level} · ${slideStats.blank} blank · ${cache.size()} cached` +
-          (blockedCount ? ` · ${blockedCount} blocked` : '');
+          (blocked ? ` · ${blocked} blocked` : '');
       } else if (running && hud) {
         hud.textContent = '[gl] rearranging · preparing…';
       } else if (hud) {
@@ -209,9 +272,9 @@ export function useMapRendererGL({
           `${cache.size()} cached${over ? ` (+${over} over budget)` : ''} · ` +
           `zoom ${Math.round(renderStats.zoom)} · ` +
           `x ${cam.current.x.toFixed(1)} y ${cam.current.y.toFixed(1)} · ` +
-          `edge at r=${layout.boundaryRadius.toFixed(1)}` +
-          (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '') +
-          (blockedCount ? ` · ${blockedCount} blocked` : '') +
+          `edge at r=${lay.boundaryRadius.toFixed(1)}` +
+          (lay.gradedCount ? ` · ${lay.gradedCount} clustered` : '') +
+          (blocked ? ` · ${blocked} blocked` : '') +
           ` · fav hit ${favHitLabel}`;
       }
     };
@@ -221,7 +284,6 @@ export function useMapRendererGL({
       pending = requestAnimationFrame(render);
     };
 
-    render();
     const onResize = () => draw.current();
     const onDown = () => {
       const running = anim.current;
@@ -234,6 +296,7 @@ export function useMapRendererGL({
     canvas.addEventListener('pointerdown', onDown);
 
     const onMove = (e: PointerEvent) => {
+      const { layout: lay, order: ord, favorites: favs, distillMode: distill } = latestRef.current;
       const rect = canvas.getBoundingClientRect();
       const viewportRect = { width: canvas.clientWidth, height: canvas.clientHeight };
       const cellRect = centerCellRect(cam.current, viewportRect);
@@ -257,7 +320,7 @@ export function useMapRendererGL({
       }
 
       const nextDistill = distillToggleAtPoint(
-        px, py, { x: cellRect.w, y: cellRect.h }, cellRect.x, cellRect.y, distillMode
+        px, py, { x: cellRect.w, y: cellRect.h }, cellRect.x, cellRect.y, distill
       );
       if (nextDistill !== hoveredDistill) {
         hoveredDistill = nextDistill;
@@ -266,7 +329,7 @@ export function useMapRendererGL({
       const distillTooltip = distillTooltipRef?.current;
       if (distillTooltip) {
         if (nextDistill) {
-          distillTooltip.textContent = distillMode ? 'Disable distillation' : 'Enable distillation';
+          distillTooltip.textContent = distill ? 'Disable distillation' : 'Enable distillation';
           distillTooltip.style.left = `${px}px`;
           distillTooltip.style.top = `${py}px`;
           distillTooltip.style.display = 'block';
@@ -282,8 +345,8 @@ export function useMapRendererGL({
       }
 
       let nextFavorite: { x: number; y: number; id: number } | null = null;
-      if (favorites) {
-        const hit = roomAtPoint(px, py, cam.current, viewportRect, layout, order);
+      if (favs) {
+        const hit = roomAtPoint(px, py, cam.current, viewportRect, lay, ord);
         if (hit && !('generic' in hit)) {
           const cellPx = pxPerCell(cam.current);
           const { x: bsx, y: bsy } = worldToScreen(hit.x, hit.y, cam.current, viewportRect);
@@ -297,8 +360,8 @@ export function useMapRendererGL({
       }
       const tooltip = favTooltipRef?.current;
       if (tooltip) {
-        if (nextFavorite && favorites) {
-          tooltip.textContent = favorites.isFavorite(nextFavorite.id)
+        if (nextFavorite && favs) {
+          tooltip.textContent = favs.isFavorite(nextFavorite.id)
             ? 'Remove from favorites'
             : 'Add to favorites';
           tooltip.style.left = `${px}px`;
@@ -332,16 +395,43 @@ export function useMapRendererGL({
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerleave', onLeave);
 
+    // A lost context invalidates every GL object this runtime owns -
+    // `preventDefault()` is required or the browser never attempts recovery.
+    // `restored` just re-runs `setup()`, which builds a fresh GL context,
+    // renderers and texture caches from scratch; the old ones are simply
+    // dropped rather than reused; there is nothing worth salvaging from a
+    // runtime whose every handle is already invalid.
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+      runtime = null;
+    };
+    const onContextRestored = () => {
+      setup();
+      draw.current();
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost);
+    canvas.addEventListener('webglcontextrestored', onContextRestored);
+
+    setup();
+    render();
+
     return () => {
       if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerleave', onLeave);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+      canvas.removeEventListener('webglcontextrestored', onContextRestored);
+      if (runtime) {
+        runtime.renderer.textures.dispose(runtime.gl.gl);
+        runtime.renderer.spineTextures.dispose(runtime.gl.gl);
+        runtime.gl.dispose();
+      }
     };
-  }, [
-    canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef, draw, anim,
-    layout, order, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
-    blockedCount, favorites, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
-  ]);
+    // `latestRef`/`anim`/`cam`/`genericFade` are refs read fresh every call -
+    // deliberately excluded so this effect stays canvas-lifetime-only. See
+    // this file's doc and AGENTS.md's "The WebGL renderer (experimental)".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasRef, cache]);
 }

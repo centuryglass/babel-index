@@ -84,7 +84,7 @@ export function drawFavoriteBadgeGL(
   hovered: boolean
 ): void {
   const hit = cache.get(isFavorite ? FAV_ON : FAV_OFF, 0);
-  const tex = hit ? textures.get(gl.gl, hit.img) : null;
+  const tex = hit ? textures.get(gl, hit.img) : null;
   if (!hit || !tex) return;
   const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
   const rect: Rect = favoriteIconScreenRect(cellPx, sx, sy, iconSize);
@@ -105,6 +105,7 @@ export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGL
     centreSlots = null, hoveredBook = null, spineFontLimits = null,
   }: GLDrawOpts): GLDrawResult {
     cache.beginFrame();
+    textures.beginFrame();
     gl.resize(w, h, dpr);
     gl.clear(BACKGROUND[0], BACKGROUND[1], BACKGROUND[2], 1);
 
@@ -149,7 +150,7 @@ export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGL
           gl.drawFlatQuad(dst, [0, 0, 0, Math.min(1, genericFade)]);
         } else {
           const hit = cache.get(id, level);
-          const tex = hit ? textures.get(gl.gl, hit.img) : null;
+          const tex = hit ? textures.get(gl, hit.img) : null;
 
           if (hit && tex) {
             const src = hit.rect
@@ -205,5 +206,5 @@ export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGL
     return { cells, drawn, substituted, blank, level, bounds, zoom };
   }
 
-  return { draw, textures };
+  return { draw, textures, spineTextures };
 }
