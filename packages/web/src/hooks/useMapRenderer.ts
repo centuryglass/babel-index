@@ -40,6 +40,7 @@ import type { Slot } from '../lib/center.ts';
 import { createRenderer, type DrawResult } from '../lib/render.ts';
 import type { SpineFontLimits } from '../lib/center.ts';
 import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
+import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
 
 /** Same check `main.tsx`'s tap-hit test uses - a coarse pointer gets its hit rect padded (`favoriteHitRect`), a mouse stays precise. */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -209,7 +210,7 @@ export function useMapRenderer({
       // and the pyramid's LRU are all untouched meanwhile, which is what makes
       // coming back free.
       if (mode !== 'map') return;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
@@ -330,7 +331,13 @@ export function useMapRenderer({
         cursor: focusVisible ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
         genericFade: genericFade?.current, distillMode, hoveredDistill,
       };
+      // §2.1: which of the two rearrangement phases drops frames. Only
+      // recorded while an animation is actually running (`running` set by
+      // `useRearrangement.ts`) - an ordinary browsing frame is neither phase,
+      // and tagging it 'flight' would drown the real flight samples in noise.
+      const t0 = PERF && running ? performance.now() : 0;
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
+      if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);
 
       const hud = document.getElementById('hud');
       if (running?.board && hud) {
@@ -343,6 +350,16 @@ export function useMapRenderer({
           `rearranging · ${pct}% · ${motions.length} lines moving · ` +
           `level ${slideStats.level} · ${slideStats.blank} blank · ${cache.size()} cached` +
           (blockedCount ? ` · ${blockedCount} blocked` : '');
+      } else if (running && hud) {
+        // No board yet - still preparing (fetching the plan's tiles) or
+        // flying to the overview zoom before the slide can start. The HUD
+        // text has to keep saying "rearranging" here, not just once the
+        // board exists: `packages/web/e2e/support.ts`'s `settled()` waits for
+        // it to stop starting with that word, and `prepareRearrangement`
+        // (`useRearrangement.ts`) can now hold this state for seconds on a
+        // cold cache - leaving the ordinary HUD text showing here would read
+        // as "already settled" and return long before the camera even moves.
+        hud.textContent = 'rearranging · preparing…';
       } else if (hud) {
         const renderStats = stats as DrawResult;
         const size = pyramidSizeOf(renderStats.level);

@@ -170,7 +170,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                               the FLIP animation between them
     * `useRearrangement.ts`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said
-                             once it lands
+                             once it lands. `prepareRearrangement` builds the
+                             plan and fetches every tile it will show before
+                             the camera moves at all - see "The reorder
+                             animation" above
     * `useDialog.ts`: The modal-dialog machinery every overlay shares - focus
                       in on open and back out on close, Escape, Tab-trap - plus
                       a topmost-only dialog stack so a stacked overlay (the
@@ -200,6 +203,19 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     settings, blocked tags, the reader's own favorites)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
+    * `perfProbe.ts`: Rearrangement performance instrumentation behind
+                      `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
+                      store) - `docs/performance-research.md` §2's "measure
+                      first" step. Records phase-tagged frame timings, sheet
+                      fetch/decode/first-draw gaps, and `longtask` entries into
+                      ring buffers; `perfDump()` prints percentiles to the
+                      console once a rearrangement settles
+                      (`useRearrangement.ts`). Firefox and Safari report no
+                      `longtask` entries at all (neither has implemented the
+                      API), so `ensureFrameGapLoop` runs a continuous
+                      `requestAnimationFrame` gap detector alongside the native
+                      observer as a cross-browser fallback - the same
+                      technique RUM tooling used before Long Tasks existed.
 - `packages/config`: Central definition for numbers tuned by feel
   * `config.ts`: Defaults and validation (no fs)
   * `load.ts`: Load an optional config.json
@@ -300,10 +316,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                     rewrites both imply. Implemented.
 - `docs/performance-research.md`: Survey of possible non-trivial performance
                                   wins, aimed at the dropped frames during the
-                                  rearrangement's zoom-out and slide. Hypotheses
-                                  ranked by reasoning, NOT measurements - it
-                                  opens with the instrumentation that would rank
-                                  them for real. Nothing in it is implemented.
+                                  rearrangement's zoom-out and slide. §1-§8 are
+                                  hypotheses ranked by reasoning; §9 is the first
+                                  real `?perf` capture and reprioritizes them.
+                                  Most items remain unimplemented - the shipped
+                                  exception is `prepareRearrangement` (§9.7).
   
 ## Conventions
 
@@ -683,10 +700,25 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   center, so "parked" does not imply "at the origin." Anything that moves
   the camera mid-rearrangement (pan, zoom, `flyTo`) must end the animation
   instead.
+- **The plan is built and fetched entirely before the flight, not after it
+  lands.** `prepareRearrangement` (`useRearrangement.ts`) computes the
+  landing rectangle from the camera's CURRENT x/y — sound only because this
+  flight never changes position, only zoom (the `-0.5`/`+0.5` cancellation
+  in `startRearrangement`) — so the rectangle a plan needs is already known
+  before any camera motion starts. It then simulates the planned moves with
+  the real `applyMove` to find every room the slide will show (not just
+  `before`'s and `after`'s static viewport content — verified 27-48%
+  larger on a real corpus, because a `shiftRow`/`shiftCol` rotates a whole
+  line and the conveyor stages a needed value in from wherever it sits, see
+  `illusion.ts`), fetches all of it, and waits up to
+  `config.slide.prepareTimeoutMs` before proceeding with whatever's ready.
+  Past that budget, or if the reader interacts mid-prepare, it falls back to
+  exactly today's behaviour rather than blocking indefinitely.
 - **`board.ts` returning null is a real answer, not a failure.** With the
   rooms-on-the-map slider pulled back, a room the new order wants on camera may
   never have been on the old board; the caller falls back to an instant
-  rebuild rather than sliding in a tile that changes face mid-ride.
+  rebuild rather than sliding in a tile that changes face mid-ride. Discovered
+  during prepare now, before any flight starts for it — not after landing.
 - **A reserved cell is never a source** (`makeAvailable` skips them) — otherwise
   a copy staged for one slot gets handed back for another and the original
   reservation points at a cell holding something else.
@@ -899,7 +931,12 @@ code, not a standing invariant.
   blocks merges for everyone, so wait on a condition, never on a duration —
   `settled()` waits out the camera and animation only, not the network, so
   anything asserting on `blank` tiles or the HUD text must poll (bounded)
-  rather than trust the first reading after an interaction.
+  rather than trust the first reading after an interaction. `settled()`
+  itself works by waiting for the HUD to stop starting with `"rearranging"` —
+  `useMapRenderer.ts` sets that text for the WHOLE span from
+  `anim.current` first being set through prepare, the flight, and the slide,
+  not just once the slide's board exists, specifically so this holds even
+  while `prepareRearrangement` (`useRearrangement.ts`) is still fetching.
 - **Two reads of the same UI separated by a slow call can describe two
   different renders** (e.g. ranking still settling after a CDP round trip).
   Where genuine settling is needed, poll for two *agreeing* reads with a real

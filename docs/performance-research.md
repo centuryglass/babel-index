@@ -4,12 +4,13 @@ A read-through of the render path looking for non-trivial performance wins, with
 the dropped frames during the rearrangement's zoom-out and slide as the
 motivating case.
 
-**Status: hypotheses, not measurements.** Every finding below comes from reading
-the code and computing what it must cost, not from a profile. Several are
-arithmetic certainties (a 48 MB decode is a 48 MB decode); others are educated
-guesses whose real magnitude depends on the machine. Nothing here should be
-implemented on faith — §2 is the instrumentation that would rank them for real,
-and it is deliberately the first section after the framing.
+**Status: §1-§7 are hypotheses; §9 is measured.** §1-§7 come from reading the
+code and computing what each cost must be, not from a profile — several are
+arithmetic certainties (a 48 MB decode is a 48 MB decode), others educated
+guesses whose magnitude depends on the machine. §2 is the instrumentation
+(`packages/web/src/lib/perfProbe.ts`) that ranks them for real, and §9 is its
+output across four browser/device captures. Read §9 before trusting §8's
+ranking; it reprioritizes in a couple of places.
 
 Numbers assume the current corpus (~2048 rooms), `BASE_TILE` 1024x768, the
 `LEVELS` ladder in `packages/web/src/lib/pyramid.ts`, and `SHEETS` packing
@@ -158,10 +159,9 @@ that calls `drawImage`. A 4096x3072 texture is ~48 MB across the bus, and
 and mobile hardware, where the 2D canvas backend may tile or fall back rather
 than take it in one piece.
 
-**Significance — much narrower than first written, and this correction matters.**
-I ranked this the prime suspect before checking *which levels the rearrangement
-actually reaches*. Running the real `openingZoom`, `overviewZoom` and
-`idealLevel` over the flight's geometric zoom sweep:
+**Significance — narrower than it looks, and which levels the rearrangement
+actually reaches is what narrows it.** Running the real `openingZoom`,
+`overviewZoom` and `idealLevel` over the flight's geometric zoom sweep:
 
 | viewport | opening | overview | levels traversed |
 |----------|---------|----------|------------------|
@@ -772,11 +772,10 @@ this only because there the visible rooms outnumber the sheets anyway.
 - `rooms.ts` needs nothing: its sheet branch keys off `info.sheet` from the
   manifest.
 
-I flipped it and ran the suite: **652/653, one failure**, and it is the right
-kind — `scan.test.ts:351` hardcodes level 2 as its sheet-packed example and
-finds level 2 missing (its fixture has a `256-sheets/` dir but no `256/` one).
-That test wants rewriting against level 3, not fixing. Reverted; the tree is
-clean.
+The one test that breaks is the expected kind: `scan.test.ts:351` hardcodes
+level 2 as its sheet-packed example and would find level 2 missing (its fixture
+has a `256-sheets/` dir but no `256/` one). That test wants rewriting against
+level 3, not fixing.
 
 Beyond that: regenerate the pyramid and re-upload the corpus.
 
@@ -942,8 +941,10 @@ is sitting in `illusion.ts`'s staging, unused.
 
 ## 8. Suggested order
 
-If the measurements in §2 come back inconclusive and something has to be picked
-on reasoning alone:
+§9's measurements reprioritize this list — read it first; it promotes item 3
+above item 5 and downgrades item 5. This is the ranking reasoning alone
+produced, if the measurements in §2 come back inconclusive and something has to
+be picked without them:
 
 1. **§3.3 forced layout** — small, safe, verifiable in seconds, pays back on
    every frame the app ever draws.
@@ -974,17 +975,16 @@ on reasoning alone:
 8. Everything else as appetite allows.
 
 §3.5 (dpr during motion) is the wildcard: potentially the biggest single win for
-the exact symptom, and now *more* attractive than when first written, since a
-desktop rearrangement turns out to run at level 0 — where every cell is a 3 MB
-tile being downscaled and fill cost is at its worst. It still interacts with
-level selection, so design it alongside item 3.
+the exact symptom, and especially attractive because a desktop rearrangement
+runs at level 0 — where every cell is a 3 MB tile being downscaled and fill cost
+is at its worst. It still interacts with level selection, so design it alongside
+item 3.
 
-**Note what the traversal table (§3.1) did to this list.** Sheet preloading was
-item 3 and is now gone entirely: a desktop rearrangement touches no sheet at any
-point, so ~510 MB of preloading would have bought nothing. That was the single
-most confident item in the first draft of this document, and it was wrong
-because it was never checked against which levels the animation actually
-reaches. Treat the rest of the ranking with the same suspicion until §2 has run.
+**The traversal table (§3.1) removes sheet preloading from this list.** A
+desktop rearrangement touches no sheet at any point, so ~510 MB of preloading
+would buy nothing. Every item here is reasoning about which levels the
+animation reaches, not a measurement — treat the ranking as provisional until
+§2 has run (and §9 has: it does reorder this).
 
 **If the dropped frames are reported on a phone rather than a desktop, reorder
 again.** §1's table shows a portrait phone drawing ~96 cells against a desktop's
@@ -993,3 +993,112 @@ level. There §6 stops being a memory-hygiene change and becomes a direct fix,
 and §4's per-cell family and §3.5's fill-rate argument both move up sharply.
 Establishing which device the symptom is on is therefore worth doing before
 anything in §2.
+
+---
+
+## 9. Measured findings
+
+Four `?perf` captures (§2), same five-action script — search "fire", enable
+distill mode, search "ice", clear the search, disable distill mode — against the
+real 2048-room corpus (8 sheets per packed level): desktop Chrome, desktop
+Firefox, Android Chrome, Android Firefox.
+
+### 9.1 Instrumentation caveats
+
+Two limits, for whoever reuses this instrumentation:
+
+- **Firefox implements no `longtask` observer**, so its captures have only frame
+  timing and sheet timestamps. `perfProbe.ts`'s `ensureFrameGapLoop` (the rAF-gap
+  fallback) is the only cross-browser stall signal — validated against Chromium
+  CPU throttling to match native `longtask` in magnitude and timing, undercounting
+  only when two stalls fall inside one frame.
+- **A longtask's phase tag can lag one synchronous block.** The observer callback
+  runs after the block that produced the entry, by which point the phase variable
+  may have advanced — so a seam-timed stall (`planMoves`, at the tail of the
+  flight) can read as `'slide'`. The timestamps still pin the moment.
+
+### 9.2 Steady-state draw cost is not the bottleneck
+
+Per-draw-call timings stay well under budget everywhere (desktop p50 ~1ms / p90
+2-6ms; Android p50 3-6ms / p90 7-28ms). Dropped frames appear as stalls *between*
+frames, not as slow `draw()` calls — a clean negative result for §4's per-cell
+allocation candidates *during a rearrangement* (they still matter zoomed out and
+panning). Everything below is about stalls, not steady per-frame cost.
+
+### 9.3 The first rearrangement of a session is the worst
+
+The first action (nothing cached) carries a ~1s stall during the flight, larger
+than anything later in the session: up to ~995ms on desktop Chrome, ~950-1030ms
+on Android Chrome. This is §3.1's corrected reading — level-0 tiles for ~48 rooms
+never before on camera, fetched/decoded/uploaded mid-flight — landing as a
+visible freeze inside the animation. It is the motivating case for preparing
+every tile the animation will show before the camera moves
+(`prepareRearrangement`; see `AGENTS.md`, "The reorder animation").
+
+### 9.4 The planner's seam cost is real but lands before motion
+
+Every rearrangement after the first carries one ~75-125ms stall at the
+flight/slide seam, consistent with `planMoves` (§3.7). Because it lands *before*
+the slide moves, it reads as ordinary loading latency rather than a mid-slide
+stutter — which is why moving the planner to a worker stays low priority.
+Building the plan during prepare (the landing rectangle is known ahead of a
+flight that only changes zoom) removes the seam regardless.
+
+### 9.5 Level-2 sheet substitution is reachable from ordinary browsing
+
+`bestAvailable` draws a coarser *ready* level while a cell's intended art is
+mid-fetch. This fires whenever a warmed coarser cache meets a wave of rooms never
+before on camera — it is not distill-specific: every frame warms one level
+coarser (`warmLevels`), and sheets have no locality (§6.2 — a screenful of ~20
+rooms touches ~7.4 of 8 sheets), so any session long enough to warm level 2 hits
+it on the next rearrangement. The cost when it fires:
+
+| environment | fetch+decode per sheet | time to first draw |
+|---|---|---|
+| desktop Chrome | ~110-145ms | 1.5-1.8s |
+| Android Chrome | ~450-735ms | 1.3-1.5s |
+| desktop Firefox | ~110-530ms | 1.5-7.1s |
+| **Android Firefox** | **~1.5-1.8s** | 1.0-1.4s, then **10.3-10.5s for three of eight sheets** |
+
+This is the strongest evidence for §6 (retire level-2 sheet packing): it explains
+the worst stall measured and is reachable from a normal desktop session, not only
+from a phone. Android Firefox's fetch+decode alone matches the ~1.5s main-thread
+decode `tiles.ts` warns about — see §9.6.
+
+### 9.6 Why Firefox serializes decode
+
+`tiles.ts` uses `createImageBitmap()` specifically because the spec allows
+calling it from a Worker, which should buy off-main-thread decode. In Gecko it
+does not: `ImageBitmap` construction historically went through a Cairo-derived
+surface type ([bug 1778394](https://bugzilla.mozilla.org/show_bug.cgi?id=1778394))
+that required main-thread manipulation, so the call succeeds but Gecko dispatches
+the work back to the content main thread synchronously
+(`DecodePool::SyncRunIfPossible`, as `tiles.ts`'s own docblock notes). The Cairo
+dependency is gone but the bug to lift the restriction is still open. Firefox's
+ordinary `<img>`/CSS-background decode path *is* parallel
+([bug 716140](https://bugzilla.mozilla.org/show_bug.cgi?id=716140), 2012) — it is
+the `createImageBitmap` route that is pinned.
+
+The one API that decodes off-main-thread in Firefox is WebCodecs `ImageDecoder`,
+but it is unsupported in Firefox for Android — the worst-case environment here —
+so adopting it would mean a feature-detected third decode path for a win that
+misses the platform that hurts. Revisit if Firefox for Android ships it.
+
+### 9.7 What shipped, and what is still open
+
+`prepareRearrangement` fetches every tile the animation will show — the simulated
+on-camera set, measured 27-48% larger than the static union of `before`/`after`
+viewports — through the render path's concurrency cap, before the camera moves.
+On Android Chrome's cold start this holds the slide at ~56 frames with a worst
+stall of 127-456ms.
+
+Still open, for a future session:
+
+- **Android Firefox slide-phase stalling.** Even with every tile decoded before
+  the flight, its first rearrangement still shows ~1.9s of cumulative slide
+  stalling. The working hypothesis is a GPU texture-upload cost paid at the first
+  real `drawImage` (decode-ready is not upload-ready); two warm-up designs were
+  measured and neither helped on either Android browser, so nothing shipped for
+  it. The real mechanism — plausibly compositing/paint scheduling tied to
+  visibility rather than to the draw call — is not yet understood, and is worth a
+  fresh look rather than another warm-up variant.

@@ -68,6 +68,7 @@
  */
 import { PYRAMID, PREFETCH, SHEETS, type Pyramid } from './pyramid.ts';
 import type { Rect, LocateTile } from './rooms.ts';
+import { perfRecordSheetStart, perfRecordSheetLoaded } from './perfProbe.ts';
 
 /**
  * The shared-tile ids. Strings, so they can never collide with a numeric room id.
@@ -183,6 +184,8 @@ export interface TileHit {
   img: Drawable;
   rect: Rect | null;
   level: number;
+  /** The sheet this hit is packed into, if it is sheet-backed - see `perfProbe.ts`'s §2.3 instrumentation. */
+  sheetUrl?: string;
 }
 
 export interface CreateTileCacheOpts {
@@ -205,6 +208,8 @@ export interface TileCache {
   beginFrame: () => void;
   request: (id: RoomId, level: number) => { img: Drawable; rect: Rect | null } | null;
   get: (id: RoomId, want: number) => TileHit | null;
+  /** Whether this level of this room is decoded and ready to draw - see `useRearrangement.ts`'s `prepareRearrangement`. */
+  isReady: (id: RoomId, level: number) => boolean;
   prefetch: (id: RoomId, level: number) => void;
   pin: (id: RoomId) => void;
   size: () => number;
@@ -415,8 +420,10 @@ export function createTileCache({
     const img = createImage();
     const fresh: SheetImage = { img, level, state: 'loading', lastUsed: ++clock, frame };
     sheetImages.set(url, fresh);
+    perfRecordSheetStart(url, level);
     img.onload = () => {
       fresh.state = 'ready';
+      perfRecordSheetLoaded(url);
       onLoad?.();
     };
     img.onerror = () => {
@@ -512,7 +519,7 @@ export function createTileCache({
     const level = pyramid.bestAvailable((l) => isReady(id, l), want);
     if (level === null) return null;
     const e = entry(id, level)!;
-    return { img: entryImg(e)!, rect: e.rect, level };
+    return { img: entryImg(e)!, rect: e.rect, level, ...(isSheetBacked(e) ? { sheetUrl: e.sheetUrl } : {}) };
   }
 
   /**
@@ -629,6 +636,7 @@ export function createTileCache({
     beginFrame,
     request,
     get,
+    isReady,
     prefetch,
     pin,
     size,
