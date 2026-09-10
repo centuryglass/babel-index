@@ -8,6 +8,8 @@ infra/
 reference/
 tools/
 !tools/center-placement/lib/
+assets/animation/*/
+!assets/animation/sheets/
 performance_testing/
 test-results/
 screen_reader_issues.txt

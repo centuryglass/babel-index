@@ -243,7 +243,7 @@ export function createGLRenderer({
     gl, width: w, height: h, dpr, cam, layout, order, genericFade = 0,
     favorites = null, hoveredFavorite = null,
     centreSlots = null, hoveredBook = null, spineFontLimits = null,
-    sortMode = 'relevance', distillMode, hoveredDistill = false, cursor = null,
+    sortMode = 'relevance', distillMode, hoveredDistill = false, cursor = null, loadingFrame = null,
   }: GLDrawOpts): GLDrawResult {
     cache.beginFrame();
     textures.beginFrame();
@@ -344,6 +344,21 @@ export function createGLRenderer({
         // opt-out as `render.ts`.
         if (cell.center && distillMode !== undefined)
           drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy, glowTextures);
+        // The loading indicator's current frame - the WebGL counterpart of
+        // `render.ts`'s `drawLoadingFrame`. Same disjoint region, same last-in
+        // ordering; the sheet uploads through the ordinary texture cache.
+        if (cell.center && loadingFrame) {
+          const tex = textures.get(gl, loadingFrame.image);
+          if (tex) {
+            const r = loadingFrame.rect;
+            gl.drawTexturedQuad(
+              tex.texture,
+              { x: loadingFrame.src.x, y: loadingFrame.src.y, w: loadingFrame.src.w, h: loadingFrame.src.h },
+              tex.width, tex.height,
+              { x: sx + r.x * cellPx.x, y: sy + r.y * cellPx.y, w: r.w * cellPx.x, h: r.h * cellPx.y }
+            );
+          }
+        }
       }
     }
 

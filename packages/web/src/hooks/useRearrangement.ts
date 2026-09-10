@@ -18,6 +18,8 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { CELL_ASPECT, overviewZoom, pxPerCell, type Camera } from '../lib/camera.ts';
+import { centerCellRect, areSpinesLegible, overlapsViewport } from '../lib/center.ts';
+import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { createSlideshow } from '../lib/slide.ts';
 import { PYRAMID, PREFETCH } from '../lib/pyramid.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
@@ -87,6 +89,14 @@ interface UseRearrangementOpts {
    * when omitted, exactly like `announce`.
    */
   onPreparing?: (ids: ReadonlySet<number>, level: number) => void;
+  /**
+   * The center-tile loading indicator, or null when none is deployed. Played
+   * while `prepareRearrangement` fetches, and held to a full cycle boundary
+   * before the flight - but only when the center book is actually on screen to
+   * show it. A ref so it can be cancelled by the map-interrupt path in the
+   * render hooks (`useMapRenderer.ts`'s onDown) as well as here.
+   */
+  loadingAnim?: { current: LoadingAnimation | null };
 }
 
 export function useRearrangement({
@@ -104,6 +114,7 @@ export function useRearrangement({
   announce,
   cache,
   onPreparing,
+  loadingAnim,
 }: UseRearrangementOpts) {
   // Set by `requestAnimation` and consumed by the effect below. A slider drag
   // changes the layout too, and must not animate - so a caller has to ask.
@@ -311,17 +322,46 @@ export function useRearrangement({
         overviewZoom(canvas, config.camera.minVisibleCells, cam.current)
       );
 
+      // The loading indicator plays over the center book's page while the
+      // preload runs - but only when that page is actually on screen and large
+      // enough to read (the same legibility gate the shelf's own titles use).
+      // When it is not, the indicator is skipped entirely; a different one for
+      // the far-field case is still to come.
+      const cellRect = centerCellRect(cam.current, {
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+      });
+      const showLoading =
+        overlapsViewport(cellRect, canvas.clientWidth, canvas.clientHeight) &&
+        areSpinesLegible(cellRect);
+      const playingLoad = showLoading ? loadingAnim?.current?.play(requestDraw) ?? false : false;
+
       // Everything the animation will need - the plan and every tile it will
       // show - computed and fetched now, before the camera moves at all. See
       // `prepareRearrangement`'s own doc for why.
       const prepared = await prepareRearrangement(before, after, canvas, target);
-      if (anim.current?.before !== before) return true; // superseded during prepare; not ours to undo
+      if (anim.current?.before !== before) {
+        if (playingLoad) loadingAnim?.current?.cancel();
+        return true; // superseded during prepare; not ours to undo
+      }
       if (!prepared) {
         // Not animatable - discovered before ever starting a flight for it,
         // unlike the old post-landing check.
+        if (playingLoad) loadingAnim?.current?.cancel();
         anim.current = null;
         perfSetPhase('idle');
         return false;
+      }
+
+      // Hold the flight until the indicator has played at least one full cycle
+      // and reached a cycle boundary. It started when prepare did, so on a cold
+      // cache it has been running the whole fetch; on a warm one this is the
+      // deliberate minimum the reader sees it for. A grab mid-cycle cancels it
+      // (the render hooks' onDown) and resolves this wait, which also ends the
+      // rearrangement - re-checked below before the camera moves.
+      if (playingLoad) {
+        await loadingAnim?.current?.finish();
+        if (anim.current?.before !== before) return true;
       }
 
       // A reader mid-search keeps their place in the field: the zoom flight
@@ -388,7 +428,7 @@ export function useRearrangement({
       requestAnimationFrame(tick);
       return true;
     },
-    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement]
+    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement, loadingAnim]
   );
 
   // Every change to what is on the map arrives here. Only the ones a control

@@ -36,6 +36,7 @@ import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './dist
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { tracePathCommands } from './svgPath.ts';
 import { perfRecordSheetFirstDraw } from './perfProbe.ts';
+import type { LoadingFrame } from './loadingAnimation.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
@@ -177,6 +178,13 @@ export interface DrawOpts {
    * `useMapRenderer.ts`'s `pointermove` listener.
    */
   hoveredDistill?: boolean;
+  /**
+   * The center-tile loading indicator's current frame, or null to draw none.
+   * Composited over the center cell's book page while a rearrangement preloads
+   * (`loadingAnimation.ts`). Optional so tests and the slide renderer, which
+   * never pass it, draw no overlay.
+   */
+  loadingFrame?: LoadingFrame | null;
 }
 
 /**
@@ -192,6 +200,25 @@ export function drawGenericFade(
   ctx.fillStyle = '#000';
   ctx.fillRect(sx, sy, w, h);
   ctx.globalAlpha = 1;
+}
+
+/**
+ * Composite one loading-indicator frame onto the center cell. `cellRect` is the
+ * center cell's on-screen rectangle; the frame's cell-fraction `rect` places it
+ * within, per-axis (see `loadingAnimation.ts`). The source sub-rect is the
+ * frame's slot in the packed sheet. Shared with the WebGL renderer's own
+ * counterpart so the two draw the same placement (glRenderer.ts).
+ */
+export function drawLoadingFrame(
+  ctx: DrawContext,
+  frame: LoadingFrame,
+  cellRect: { x: number; y: number; w: number; h: number }
+): void {
+  const dx = cellRect.x + frame.rect.x * cellRect.w;
+  const dy = cellRect.y + frame.rect.y * cellRect.h;
+  const dw = frame.rect.w * cellRect.w;
+  const dh = frame.rect.h * cellRect.h;
+  ctx.drawImage(frame.image, frame.src.x, frame.src.y, frame.src.w, frame.src.h, dx, dy, dw, dh);
 }
 
 /** What the frame did, for the HUD and for tests. */
@@ -212,7 +239,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, centreSlots = null,
     hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, hoveredFavorite = null,
-    sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
+    sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false, loadingFrame = null,
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
@@ -335,6 +362,12 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // rather than requesting art nobody asked for.
         if (cell.center && distillMode !== undefined)
           drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
+        // The loading indicator's current frame, over the center book's page.
+        // Its region is disjoint from the spines/switch/toggle above, so the
+        // order among them is cosmetic; it draws last purely for symmetry with
+        // the GL renderer's own draw loop (glRenderer.ts).
+        if (cell.center && loadingFrame)
+          drawLoadingFrame(ctx, loadingFrame, { x: sx, y: sy, w: cellPx.x, h: cellPx.y });
       }
     }
 

@@ -122,6 +122,8 @@ export function MapView({
   history,
   onForgetSearches,
   onEnterCatalog,
+  hasLoadingAnimation,
+  onAnimationPreviewChange,
 }: {
   mode: 'map' | 'catalog';
   canvasRef: Ref<HTMLCanvasElement>;
@@ -183,6 +185,10 @@ export function MapView({
   history: string[];
   onForgetSearches: () => void;
   onEnterCatalog: () => void;
+  /** Whether a loading-animation manifest loaded - gates the dev-panel preview checkbox. */
+  hasLoadingAnimation: boolean;
+  /** Toggle the dev-panel's continuous loading-animation preview loop. */
+  onAnimationPreviewChange: (on: boolean) => void;
 }) {
   return (
     <>
@@ -562,6 +568,23 @@ export function MapView({
           <button onClick={onRescatter}>rescatter</button>
           <button onClick={onRecentre}>center</button>
         </div>
+
+        {/*
+          Debug-only: loop every loading-animation cycle in order, over the
+          center book's page, so each can be eyeballed in place. Off unless a
+          manifest actually loaded (`hasLoadingAnimation`). The current cycle's
+          name shows in the HUD below - see `loadingAnimation.ts`.
+        */}
+        {hasLoadingAnimation && (
+          <div className="row">
+            <label htmlFor="anim-preview">loop loading animations</label>
+            <input
+              id="anim-preview"
+              type="checkbox"
+              onChange={(e) => onAnimationPreviewChange(e.currentTarget.checked)}
+            />
+          </div>
+        )}
 
         {/*
           The second way in. The primary one is the first book on the center
