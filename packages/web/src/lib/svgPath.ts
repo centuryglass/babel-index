@@ -62,6 +62,53 @@ export function flattenPath(d: string, samples = 12): Point[] {
   return points;
 }
 
+/**
+ * The canvas-path surface a traced silhouette needs to replay itself -
+ * satisfied by a real `CanvasRenderingContext2D` (2D or offscreen) via duck
+ * typing, same as every other DOM-shaped interface in this codebase that
+ * still keeps this file itself DOM-free. `render.ts`'s `PathContext` is a
+ * superset (it adds `fill`/`stroke`, left with the caller since a live hover
+ * highlight and a baked GL texture fill/stroke in different colors).
+ */
+export interface PathTracer {
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void;
+  closePath(): void;
+}
+
+/**
+ * Trace the canonical M/L/C/Z grammar onto a real path via `parsePath`,
+ * scaling each coordinate per axis by `scale.x`/`scale.y` and offsetting by
+ * `ox`/`oy`. Replays the true Bezier curve rather than a flattened polygon -
+ * `flattenPath` is for hit-testing only. `render.ts`'s
+ * `traceFavoriteToggle`/`traceDistillToggle` call this with a tile's own
+ * `cellPx`/`sx`/`sy`; `gl/glowTexture.ts` calls it with a bake canvas's own
+ * pixel size and a zero offset, since a traced path's coordinates are
+ * fractions of the WHOLE tile either way.
+ */
+export function tracePathCommands(
+  ctx: PathTracer,
+  d: string,
+  scale: { x: number; y: number },
+  ox: number,
+  oy: number
+): void {
+  ctx.beginPath();
+  for (const cmd of parsePath(d)) {
+    if (cmd.type === 'M') ctx.moveTo(ox + cmd.x * scale.x, oy + cmd.y * scale.y);
+    else if (cmd.type === 'L') ctx.lineTo(ox + cmd.x * scale.x, oy + cmd.y * scale.y);
+    else if (cmd.type === 'C')
+      ctx.bezierCurveTo(
+        ox + cmd.x1 * scale.x, oy + cmd.y1 * scale.y,
+        ox + cmd.x2 * scale.x, oy + cmd.y2 * scale.y,
+        ox + cmd.x * scale.x, oy + cmd.y * scale.y
+      );
+    else ctx.closePath();
+  }
+}
+
 /** Even-odd ray-casting point-in-polygon test, pure and browser-free. */
 export function pointInPolygon(px: number, py: number, poly: Point[]): boolean {
   let inside = false;

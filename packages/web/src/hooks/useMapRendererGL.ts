@@ -152,7 +152,7 @@ export function useMapRendererGL({
       const gl = createGLContext(canvas);
       if (!gl) return;
       const renderer = createGLRenderer({ cache });
-      const slideRenderer = createGLSlideRenderer({ cache, textures: renderer.textures });
+      const slideRenderer = createGLSlideRenderer({ cache, textures: renderer.textures, glowTextures: renderer.glowTextures });
       runtime = { gl, renderer, slideRenderer };
     };
 
@@ -472,6 +472,7 @@ export function useMapRendererGL({
       if (runtime) {
         runtime.renderer.textures.dispose(runtime.gl.gl);
         runtime.renderer.spineTextures.dispose(runtime.gl.gl);
+        runtime.renderer.glowTextures.dispose(runtime.gl.gl);
         runtime.gl.dispose();
       }
     };
