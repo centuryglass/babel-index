@@ -327,6 +327,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     draw.current();
   }, []);
 
+  // The WebGL renderer's GPU-texture warmer, filled in by `useMapRendererGL`
+  // once its GL runtime exists - same "caller owns the ref, hook fills it
+  // in" shape as `draw` above. `onPreparingGL` is a stable wrapper
+  // (`useCallback` with no deps, closing only over the ref object itself)
+  // so `useRearrangement`'s own `useCallback` chain doesn't rebuild on every
+  // render - see `docs/webgl-renderer-plan.md`'s Phase C.
+  const warmTexturesRef = useRef((_ids: ReadonlySet<number>, _level: number) => {});
+  const onPreparingGL = useCallback((ids: ReadonlySet<number>, level: number) => {
+    warmTexturesRef.current(ids, level);
+  }, []);
+
   // The center shelf's webfont. `composeSpines` falls back to Georgia until
   // this resolves, so a spine composited on the first frame is legible but
   // not final - this redraws once the real face is registered on the
@@ -792,6 +803,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     anim,
     announce,
     cache,
+    onPreparing: WEBGL ? onPreparingGL : undefined,
   });
   requestAnimationRef.current = requestAnimation;
 
@@ -820,6 +832,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+    warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs,
   });
 
   // Where the toggle above sends the camera once that resort has actually

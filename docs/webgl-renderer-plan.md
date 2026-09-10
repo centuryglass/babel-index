@@ -53,7 +53,7 @@ does nothing when omitted.
       and warn once if a bitmap exceeds `gl.maxTextureSize`, instead of a
       silent broken/garbled upload.
 
-## Phase C - fix the flight-phase regression
+## Phase C - fix the flight-phase regression — DONE
 
 The spike's flight phase got *slower* under WebGL (~0.8-1.1ms → ~2.7-3.1ms
 p50, with 28-64ms stalls) because textures upload lazily on first draw,
@@ -61,18 +61,23 @@ exactly during the flight - even though `useRearrangement.ts`'s
 `prepareRearrangement` already fetches+decodes every tile the animation will
 need before the camera moves.
 
-- [ ] `useRearrangement.ts`: add `onPreparing?(ids: ReadonlySet<number>, level: number): void` to `UseRearrangementOpts`, fired once per prepare right after
-      the `applyMove` simulation builds its `ids` set - no new simulation
-      logic, just exposing what's already computed. Omitted by every
-      existing caller; changes nothing when unused.
-- [ ] New `gl/warm.ts`: `warmGLTextures(ids, level, cache, textures, timeoutMs)`
-      polling `cache.get(id, level)` on a bounded rAF loop (same
-      `config.slide.prepareTimeoutMs` budget), pushing ready bitmaps through
-      `textures.get()`. Idempotent for already-warm tiles.
-- [ ] `main.tsx`: wire `onPreparing` to `warmGLTextures` only when `WEBGL`
-      is active.
-- [ ] Re-run the `?perf&debug` vs `?perf&webgl&debug` script and confirm the
-      flight-phase numbers close toward the Canvas2D baseline.
+- [x] `useRearrangement.ts`: `onPreparing?(ids: ReadonlySet<number>, level: number): void` on `UseRearrangementOpts`, fired once per prepare right after
+      the `applyMove` simulation builds its `ids` set.
+- [x] New `gl/warm.ts`: `warmGLTextures(ids, level, cache, gl, textures, timeoutMs)`
+      polling `cache.get(id, level)` on a bounded rAF loop, pushing ready
+      bitmaps through `textures.get()`.
+- [x] `main.tsx`: a `warmTexturesRef`/`onPreparingGL` pair (mirroring
+      `draw`'s "caller owns the ref, hook fills it in" shape) wires
+      `useMapRendererGL`'s GL runtime to `useRearrangement`'s `onPreparing`,
+      active only when `WEBGL` is on.
+- [x] Re-measured with the `?perf&debug` vs `?perf&webgl&debug` script:
+      steady-state (2nd/3rd rearrangement) flight p50 went from ~2.7-3.1ms
+      (with 28-64ms stalls) to ~1.6ms with a 5.1ms max and zero long tasks -
+      close to the Canvas2D baseline's own ~0.9ms, while the slide phase
+      keeps its ~15x win untouched. The only remaining stall (~100ms) is on
+      the session's very first rearrangement (cold cache + first shader
+      compile), which the Canvas2D baseline also pays a version of - not
+      something this phase was meant to fix.
 
 ## Phase D - feature parity
 

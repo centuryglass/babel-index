@@ -41,6 +41,7 @@ import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Slot, SpineFontLimits } from '../lib/center.ts';
 import { createGLContext, type GLContext } from '../lib/gl/context.ts';
+import { warmGLTextures } from '../lib/gl/warm.ts';
 import { createGLRenderer, type GLDrawResult } from '../lib/glRenderer.ts';
 import { createGLSlideRenderer, type GLSlideDrawResult } from '../lib/glSlideRenderer.ts';
 import type { RunningAnim } from './useMapRenderer.ts';
@@ -79,6 +80,17 @@ interface UseMapRendererGLOpts {
   genericFade?: { current: number };
   distillMode?: boolean;
   distillTooltipRef?: { current: HTMLElement | null };
+  /**
+   * Assigned by this hook (mirroring `draw`'s own "caller owns the ref, hook
+   * fills it in" shape) to a function that uploads the given tiles' textures
+   * ahead of a rearrangement's flight - see `gl/warm.ts`. `main.tsx` wires
+   * this ref into `useRearrangement`'s `onPreparing` callback. A no-op until
+   * the GL runtime exists (or after it's lost), same as `draw` before this
+   * hook's effect has run.
+   */
+  warmTexturesRef?: { current: (ids: ReadonlySet<number>, level: number) => void };
+  /** Budget for `gl/warm.ts`'s polling loop - `config.slide.prepareTimeoutMs` in practice, matching `prepareRearrangement`'s own budget. */
+  warmTimeoutMs?: number;
 }
 
 /** Everything `render()`/the pointer handlers need that legitimately changes on almost every search or toggle - see this file's doc. */
@@ -95,11 +107,15 @@ interface Latest {
   distillMode: boolean;
 }
 
+/** Fallback when the caller (a test, or a build predating Phase C) doesn't pass `warmTimeoutMs`. */
+const DEFAULT_WARM_TIMEOUT_MS = 1200;
+
 export function useMapRendererGL({
   canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef,
   draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null, favTooltipRef, sortMode = 'relevance',
-  genericFade, distillMode = false, distillTooltipRef,
+  genericFade, distillMode = false, distillTooltipRef, warmTexturesRef,
+  warmTimeoutMs = DEFAULT_WARM_TIMEOUT_MS,
 }: UseMapRendererGLOpts) {
   // Assigned during the render body, not inside an effect - always correct
   // before EITHER effect below runs this render, regardless of which is
@@ -415,6 +431,15 @@ export function useMapRendererGL({
     setup();
     render();
 
+    // Assigned once, not inside `setup()` - it closes over the `runtime`
+    // variable itself (not a snapshot of one object), so a restore's fresh
+    // `runtime` is picked up automatically without reassigning this.
+    if (warmTexturesRef) {
+      warmTexturesRef.current = (ids, level) => {
+        if (runtime) warmGLTextures(ids, level, cache, runtime.gl, runtime.renderer.textures, warmTimeoutMs);
+      };
+    }
+
     return () => {
       if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('resize', onResize);
@@ -423,6 +448,7 @@ export function useMapRendererGL({
       canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       canvas.removeEventListener('webglcontextrestored', onContextRestored);
+      if (warmTexturesRef) warmTexturesRef.current = () => {};
       if (runtime) {
         runtime.renderer.textures.dispose(runtime.gl.gl);
         runtime.renderer.spineTextures.dispose(runtime.gl.gl);

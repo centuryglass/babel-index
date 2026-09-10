@@ -76,6 +76,18 @@ interface UseRearrangementOpts {
    * make, not this hook's; it only ever hands over the note.
    */
   announce: (note: string) => void;
+  /**
+   * Fired once per `prepareRearrangement`, with the ids/level it just
+   * computed by simulating the plan - see that function's own doc for why
+   * that set is not just the static before/after viewport union. Fired
+   * before the throttled readiness-polling loop starts, so a caller gets it
+   * as early as this hook can offer it. This hook stays renderer-agnostic -
+   * it doesn't know or care what a caller does with the ids, only that
+   * `main.tsx` wires it to the WebGL texture warmer
+   * (`gl/warm.ts`) when `?webgl` is active. Optional, and doing nothing
+   * when omitted, exactly like `announce`.
+   */
+  onPreparing?: (ids: ReadonlySet<number>, level: number) => void;
 }
 
 export function useRearrangement({
@@ -92,6 +104,7 @@ export function useRearrangement({
   anim,
   announce,
   cache,
+  onPreparing,
 }: UseRearrangementOpts) {
   // Set by `requestAnimation` and consumed by the effect below. A slider drag
   // changes the layout too, and must not animate - so a caller has to ask.
@@ -185,6 +198,7 @@ export function useRearrangement({
         applyMove(live, mv);
         if (mv.type !== 'swap') snapshot();
       }
+      onPreparing?.(ids, level);
 
       // Issue requests capped at the same concurrency `cache.prefetch` uses
       // in the ordinary render path (`PREFETCH.concurrency`), not all of them
@@ -233,7 +247,7 @@ export function useRearrangement({
       const show = createSlideshow({ board, moves, apply: applyMove, timing: config.slide });
       return { board, show, origin: built.origin };
     },
-    [cam, cache, config]
+    [cam, cache, config, onPreparing]
   );
 
   /**
