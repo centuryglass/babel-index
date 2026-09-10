@@ -440,6 +440,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   without re-judging every comment's worth.
 - Two-space indent, semicolons, single quotes, trailing commas in multi-line
   literals. Just follow the file you're in.
+- **An existing, undocumented bug found while doing unrelated work still gets
+  addressed, not filed away for later without action.** Trivial to fix (a
+  wrong assertion, an off-by-one, a stale comment) - fix it in the same pass,
+  same as any other cleanup a task turns up. Real investigation or design work
+  - a race condition whose root cause isn't yet nailed down, a fix that
+    touches code you weren't already changing - gets a dated entry in
+  `docs/implementation-plan.md` instead: what was observed, how to reproduce
+  it, and what's already been ruled out, so the next pass starts from
+  evidence rather than re-discovering the bug from scratch. Either way, the
+  bug does not just get silently noticed and left. "Unrelated to what I was
+  asked" is not a reason to leave a found bug undocumented and unfixed.
 
 ## Things that will bite you
 
@@ -1038,6 +1049,18 @@ code, not a standing invariant.
   `pointercancel`, or the real capture lifecycle — treat it as a known blind
   spot. Simulate suspected gesture bugs explicitly and confirm on a device
   with `?touchdebug`.
+- **A `flyTo` fired while a rearrangement is still animating is silently
+  swallowed** — confirmed by direct reproduction, not yet root-caused (see
+  `docs/implementation-plan.md`). The rearrangement's own camera control
+  keeps driving x/y/zoom regardless, so a plain click-then-`landed()` on the
+  'center' button can report a "settled" camera that never actually moved.
+  `e2e/support.ts`'s `recentre()` is the robust form: it waits out any
+  in-flight rearrangement before clicking and retries if the camera didn't
+  reach the target, rather than trusting one `landed()` read. Use it instead
+  of a bare click whenever a test's `before` state might follow a search or
+  any other `requestAnimation` trigger. Camera coordinates from `flyTo(x, y,
+  ...)` land on the cell's CENTER (`cameraAtCell`'s `+ 0.5`), so `recentre()`
+  (which calls `flyTo(0, 0, ...)`) checks for `(0.5, 0.5)`, not `(0, 0)`.
 
 ## Next up
 

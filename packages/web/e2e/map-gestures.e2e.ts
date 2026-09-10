@@ -30,7 +30,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SEARCH_TIMEOUT, closeLibrary, fingerprint, hud, landed, openLibrary,
-  pinch, sampleCamera, settled, touchDrag, waitFor,
+  pinch, recentre, sampleCamera, settled, touchDrag, waitFor,
 } from './support.ts';
 
 describe('the library, in a browser: map and gestures', { concurrency: false }, () => {
@@ -333,9 +333,11 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // from (the search-trigger's zoomed-in opening view), not the wider
     // overview zoom - return to the center button's view explicitly rather
     // than relying on leftover state, so rooms are on screen at the
-    // coordinates below.
-    await page.locator('button', { hasText: 'center' }).click();
-    await landed(page, flightMs);
+    // coordinates below. `recentre` (not a plain click + `landed`) because
+    // the previous test's rearrangement can still be settling here, and a
+    // `flyTo` issued mid-rearrangement is silently swallowed - see that
+    // helper's own doc.
+    await recentre(page, flightMs);
     await page.mouse.move(640, 400);
 
     // The map is 100% non-generic by the time this runs (the sliders test,

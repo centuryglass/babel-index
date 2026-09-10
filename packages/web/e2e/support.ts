@@ -317,6 +317,32 @@ export async function landed(page, flightMs, timeoutMs = 5000) {
 }
 
 /**
+ * Click the 'center' button and robustly wait for the camera to actually
+ * arrive at the center cell - `main.tsx`'s `recentre` calls `flyTo(0, 0,
+ * ...)`, and `cameraAtCell` (`camera.ts`) lands a flight on a cell's
+ * CENTER, so the camera the HUD reports ends at world (0.5, 0.5), not
+ * (0, 0). A `flyTo` issued while a rearrangement is still animating (or one
+ * that starts in the gap right after the click) is silently swallowed: the
+ * rearrangement's own camera control keeps driving x/y/zoom and the button
+ * click has no visible effect at all, so `landed()` alone can report a
+ * "settled" camera that never actually recentred (confirmed by direct
+ * reproduction - see docs/implementation-plan.md's note on this). Waiting
+ * out any rearrangement before clicking narrows the race but does not close
+ * it, so this also checks the outcome and retries the click if it didn't
+ * land at (0.5, 0.5), rather than trusting one `landed()` read.
+ */
+export async function recentre(page, flightMs, timeoutMs = SEARCH_TIMEOUT) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    await settled(page); // waits out any rearrangement already in flight
+    await page.locator('button', { hasText: 'center' }).click();
+    const after = await landed(page, flightMs);
+    if (after.x === 0.5 && after.y === 0.5) return after;
+    assert.ok(Date.now() < deadline, 'the map never recentred - stuck mid-rearrangement');
+  }
+}
+
+/**
  * Every distinct camera the HUD showed over a window, one sample per frame.
  *
  * Start it BEFORE the gesture under test and await it after, so the frames in
