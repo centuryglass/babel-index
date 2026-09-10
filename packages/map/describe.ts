@@ -24,10 +24,11 @@
  * corpus or it does not arrive at all. A generic cell is the one exception:
  * every generic tile shows the same kind of image (a shelf wall of illegible
  * spines) regardless of which of the placeholder files is drawn, so one fixed
- * sentence here covers all of them - see the generic branch below, and
- * design-history.md's "Hand-written captions for the generic tiles" entry for
- * why a real PER-TILE caption is still deferred until that art is not
- * placeholder.
+ * sentence here covers all of them - see the generic branch below. A real
+ * PER-TILE caption is deferred, not rejected: `assets/generic/` is
+ * placeholder art meant to be swapped for real inpainting output, and a
+ * caption written against art that is not the shipping art describes
+ * nothing.
  *
  * A generic cell gets a `description` too, unlike the center room - it is
  * shown in the dialog opened on it (`RoomOverlay`/`RoomDetails`), and the one

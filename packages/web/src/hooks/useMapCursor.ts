@@ -9,8 +9,7 @@
  *
  * It owns no camera. Everything that moves is `useMapCamera`'s (`flyTo`,
  * `nudgeBy`, `flightTarget`), because the cursor is DERIVED from the camera
- * rather than tracked beside it - see the block comment below, and the dead end
- * in `docs/design-history.md` that made the point the hard way.
+ * rather than tracked beside it - see the block comment below.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cellDistance, type MapLayout } from '../../../map/ordering.ts';

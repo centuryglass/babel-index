@@ -148,7 +148,6 @@ CI runs `npm test` and the e2e smoke test on Node 20/22/24.
 - [`docs/accessibility-plan.md`](docs/accessibility-plan.md) — the keyboard / screen-reader plan
 - [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
 - [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
-- [`docs/design-history.md`](docs/design-history.md) — decisions reversed and alternatives rejected
 - [`CLAUDE.md`](CLAUDE.md) — notes for coding agents, and the full file-by-file layout
 
 ## License

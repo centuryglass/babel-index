@@ -327,8 +327,6 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `docs/keyboard-controls.md`: The spec for every key the map view handles,
                                state by state - tab order, focus targets, what
                                each key does in each one.
-- `docs/design-history.md`: Record of all the dead ends we went down because
-                            of incomplete specifications.
 - `docs/search_rules.md`: The full specification of what a search does -
                           parsing, scoring, ranking-vs-certainty, and every
                           reporting rule. Matches the implementation
