@@ -1,0 +1,3 @@
+# Regenerable capture output - samples, traces, screenshots. Keep the
+# source (*.ts, README) in git, not the artefacts.
+out/

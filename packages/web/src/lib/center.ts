@@ -41,7 +41,7 @@
  * No DOM (the compositing takes a 2d context but reads nothing back).
  */
 import { layout, type Rect } from '../../../../tools/center-placement/lib/geometry.ts';
-import { prng, seedFrom } from '../../../../tools/center-placement/lib/prng.ts';
+import { prng, seedFrom } from '../../../map/prng.ts';
 import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera, type ViewportRect, type ZoomLimits } from './camera.ts';
 import { BASE_TILE } from './pyramid.ts';
 import type { DrawContext } from './render.ts';

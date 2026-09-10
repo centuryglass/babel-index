@@ -33,7 +33,9 @@ import {
   countToggleAtPoint,
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
-import { CELL_ASPECT, fitZoom, overviewZoom, pxPerCell, worldToScreen, type Camera } from './lib/camera.ts';
+import {
+  CELL_ASPECT, fitZoom, overviewZoom, pxPerCell, worldToScreen, clampZoom, ZOOM_LIMITS, type Camera,
+} from './lib/camera.ts';
 import {
   createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, genericId,
@@ -56,6 +58,8 @@ import { useRearrangement } from './hooks/useRearrangement.ts';
 import { useDistillMode } from './hooks/useDistillMode.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
 import { useFavorites } from './hooks/useFavorites.ts';
+import { DEBUG } from './lib/debug.ts';
+import { buildSequence, runSequence, DEFAULT_DURATION_MS, type DebugActions } from './lib/debugActions.ts';
 
 function App() {
   const [manifest, setManifest] = useState<ManifestResponse | null>(null);
@@ -1093,6 +1097,53 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     });
     flyTo(hit.x, hit.y, zoom);
   };
+
+  // `?debug`'s scripted action runner - a seeded, repeatable "aggressive
+  // random usage" session for perf/memory profiling (pan/zoom/search/
+  // favorite/catalog/shelf/reorder/sort/distill), driven from a browser
+  // console: `__babelDebug.run('some-seed')`. `debugActions.ts` builds and
+  // dispatches the sequence; this object is the only place that resolves a
+  // step's abstract args (a delta, a factor, a room id) against the live
+  // camera/layout/cellById the way a real gesture would - see that file's
+  // header for why the split exists. Recomputed every render, unmemoized,
+  // the same way `tapRef.current`/`doubleTapRef.current` above are - cheap,
+  // and the alternative is a dependency array naming nearly everything in
+  // this component.
+  if (DEBUG) {
+    const debugActions: DebugActions = {
+      pan: (dx, dy) => nudgeBy(dx, dy),
+      zoom: (factor) => flyTo(cam.current.x, cam.current.y, clampZoom(cam.current.zoom * factor, cam.current.limits ?? ZOOM_LIMITS)),
+      search: (term) => search(term),
+      favorite: (id) => favoriteFor(id)?.toggle(),
+      enterCatalog: () => enterCatalog(),
+      exitCatalog: () => exitCatalog(),
+      book: (index) => onBook(index),
+      reorder: () => reorder(),
+      rescatter: () => rescatter(),
+      sort: (mode) => changeSort(mode),
+      distill: () => toggleDistill(),
+      recentre: () => recentre(),
+      openCard: (id) => {
+        const cell = cellById.get(id);
+        if (cell) openRoom(cell.x, cell.y, id, order.indexOf(id));
+      },
+      closeCard: () => {
+        setCard(null);
+        setOverlay(null);
+      },
+      goToSearch: () => goToSearch(),
+    };
+    (window as typeof window & { __babelDebug?: unknown }).__babelDebug = {
+      actions: debugActions,
+      buildSequence: (seed: number | string, durationMs = DEFAULT_DURATION_MS) => buildSequence(seed, durationMs, total),
+      run: (seed: number | string, durationMs = DEFAULT_DURATION_MS) =>
+        runSequence(debugActions, buildSequence(seed, durationMs, total), {
+          mode: () => mode,
+          onStep: (step, i, skipped) =>
+            console.debug(`[babel-debug] ${i}: ${step.action}${skipped ? ' (skipped, catalog mode)' : ''}`, step.args),
+        }),
+    };
+  }
 
   return (
     <>

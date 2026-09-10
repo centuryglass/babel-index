@@ -259,6 +259,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
   * `board.ts`: Sliding animation illusion's board data structure
   * `describe.ts`: Build screen reader messages
+  * `prng.ts`: Seedable RNG (mulberry32) and a string-to-seed hash (FNV-1a) -
+              shared by `packages/web/src/lib/center.ts` and anything else that
+              needs a deterministic, repeatable random sequence.
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
   * `index.ts`: CLI
   * `mips.ts`: Generate+fill alternate image size directories
@@ -271,8 +274,6 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `shelf_geometry.svg`: Center tile geometry.
   * `lib/geometry.ts`: Book and search box placement structure
   * `lib/measured.ts`: Auto-generated svg geometry data
-  * `lib/prng.ts`: RNG utility function currently only used by web/src/lib/center.ts,
-                   should probably be moved elsewhere.
   * `lib/svg.ts`: Minimal SVG element builder; currently unused elsewhere.
 - `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
 - `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
@@ -298,6 +299,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `variants.ts`: The font/settings sweep matrix `render.ts` draws.
   * `render.ts`: Composite each variant onto the real center tile via Playwright
                  Chromium, three zooms to a labelled contact-sheet PNG.
+- `tools/perf-capture/capture.ts`: Fully automated Chrome memory/perf capture -
+                                   boots the demo server, launches Chromium,
+                                   runs a seeded `debugActions.ts` session
+                                   against either map renderer (`--renderer
+                                   canvas2d|webgl`), and samples
+                                   `Performance.getMetrics` over CDP the whole
+                                   time. `npm run profile:chrome`. See its
+                                   README for why this is Chrome-only - the
+                                   Firefox counterpart stays a manually
+                                   profiled console session, driven by the
+                                   same `debugActions.ts`.
 - `tools/curation`: Python/Qt tools for turning a batch of generated tiles
                     into `metadata.json` - keyword extraction, story
                     generation/review, alt text, titles, sensitive-content
