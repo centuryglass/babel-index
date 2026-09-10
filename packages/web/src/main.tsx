@@ -44,8 +44,10 @@ import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
+import { WEBGL } from './lib/webglFlag.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
 import { useMapRenderer } from './hooks/useMapRenderer.ts';
+import { useMapRendererGL } from './hooks/useMapRendererGL.ts';
 import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
@@ -76,6 +78,14 @@ type CardState = RoomPick;
 
 function Library({ manifest }: { manifest: ManifestResponse }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // A canvas only ever hands out one context type - the first `getContext`
+  // call wins for its whole lifetime. `?webgl` is read once at module scope
+  // and never changes mid-session, so rather than gate a context type inside
+  // `useMapRenderer.ts`/`useMapRendererGL.ts` (spike code, not meant to touch
+  // the production hook), whichever hook is NOT active gets this permanently-
+  // null ref instead of the real canvas - its effect bails before ever
+  // calling `getContext`, so only the active hook ever touches the element.
+  const inertCanvasRef = useRef<HTMLCanvasElement>(null);
   // The live search field lives on the center tile, not in the panel; its
   // position is driven imperatively from the render loop below, the same way
   // the canvas itself is - see `positionSearchBox`.
@@ -315,6 +325,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const draw = useRef(() => {});
   const requestDraw = useCallback(() => {
     draw.current();
+  }, []);
+
+  // The WebGL renderer's GPU-texture warmer, filled in by `useMapRendererGL`
+  // once its GL runtime exists - same "caller owns the ref, hook fills it
+  // in" shape as `draw` above. `onPreparingGL` is a stable wrapper
+  // (`useCallback` with no deps, closing only over the ref object itself)
+  // so `useRearrangement`'s own `useCallback` chain doesn't rebuild on every
+  // render - see `docs/webgl-renderer-plan.md`'s Phase C.
+  const warmTexturesRef = useRef((_ids: ReadonlySet<number>, _level: number) => {});
+  const onPreparingGL = useCallback((ids: ReadonlySet<number>, level: number) => {
+    warmTexturesRef.current(ids, level);
   }, []);
 
   // The center shelf's webfont. `composeSpines` falls back to Georgia until
@@ -782,6 +803,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     anim,
     announce,
     cache,
+    onPreparing: WEBGL ? onPreparingGL : undefined,
   });
   requestAnimationRef.current = requestAnimation;
 
@@ -800,9 +822,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
 
   useMapRenderer({
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
+    canvasRef: WEBGL ? inertCanvasRef : canvasRef,
+    searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+  });
+  useMapRendererGL({
+    canvasRef: WEBGL ? canvasRef : inertCanvasRef,
+    searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
+    mode, layout, order, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
+    favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+    warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs,
   });
 
   // Where the toggle above sends the camera once that resort has actually

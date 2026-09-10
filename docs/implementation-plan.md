@@ -28,6 +28,11 @@ serve as completed task history.
   serves this corpus, that is the moment for the Postgres adapter behind
   `FavoriteStore` rather than a lock on the file.
 
+## Rendering:
+- Hardening the experimental WebGL map renderer (`webgl-test` branch) toward
+  production quality - see `docs/webgl-renderer-plan.md` for the phased
+  work queue.
+
 ## Other:
 - **Check the in-tile search field on an actual iOS device.** Its font size
   is whatever `.center-search input` inherits (13px, the app's body size),

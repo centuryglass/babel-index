@@ -162,6 +162,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `useMapCamera.ts`: React hook for camera changes, inputs entangled with
                          camera controls
     * `useMapRenderer.ts`: Map frame loop/redraw hook
+    * `useMapRendererGL.ts`: The experimental WebGL counterpart of
+                             `useMapRenderer.ts`, active only when
+                             `webglFlag.ts`'s `WEBGL` is true - see "The
+                             WebGL renderer (experimental)" below.
     * `useMapCursor.ts`: The keyboard cursor - where it is, what a reader
                          hears about it, and every key over the map
     * `useCenterShelf.ts`: The center room's bookshelf - titles, roving
@@ -216,6 +220,21 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       `requestAnimationFrame` gap detector alongside the native
                       observer as a cross-browser fallback - the same
                       technique RUM tooling used before Long Tasks existed.
+    * `webglFlag.ts`: `?webgl` and the WebGL2 capability probe - see "The
+                      WebGL renderer (experimental)" below.
+    * `glRenderer.ts`: The experimental WebGL counterpart of `render.ts`.
+    * `glSlideRenderer.ts`: The experimental WebGL counterpart of `slide.ts`.
+    * `gl/context.ts`: One shader program, VAO and quad-drawing primitives
+                       (`drawFlatQuad`/`drawTexturedQuad`/`drawStrokeQuad`) -
+                       the WebGL equivalent of a 2D context, created exactly
+                       once per canvas lifetime.
+    * `gl/shaders.ts`: The quad shader's GLSL source.
+    * `gl/textureCache.ts`: `TileHit.img` -> `WebGLTexture`, with its own
+                            frame-aware eviction budget independent of
+                            `tiles.ts`'s.
+    * `gl/spineTexture.ts`: The center tile's spine text, composited via
+                            `composeSpines` onto an offscreen 2D canvas and
+                            cached as a texture.
 - `packages/config`: Central definition for numbers tuned by feel
   * `config.ts`: Defaults and validation (no fs)
   * `load.ts`: Load an optional config.json
@@ -321,6 +340,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   real `?perf` capture and reprioritizes them.
                                   Most items remain unimplemented - the shipped
                                   exception is `prepareRearrangement` (§9.7).
+- `docs/webgl-renderer-plan.md`: The gap between the experimental WebGL map
+                                 renderer's spike and a production-ready one,
+                                 and the steps to close it. Delete steps as
+                                 they land. See "The WebGL renderer
+                                 (experimental)" below for the invariants the
+                                 finished pieces must hold.
   
 ## Conventions
 
@@ -914,6 +939,51 @@ code, not a standing invariant.
   and a restored history entry all reach `search()` without passing through a
   box. Scoring is O(tokens x keywords) per room, so a pasted tag list does not
   degrade, it stops.
+
+### The WebGL renderer (experimental)
+
+- **It mirrors `render.ts`/`slide.ts`'s draw loop, in lockstep, on purpose.**
+  `glRenderer.ts`/`glSlideRenderer.ts` are a second implementation of the
+  same per-cell decisions (which pyramid level, which cell resolves to which
+  draw, favorite-badge gating, prefetch/warm-level ordering) using
+  `gl/context.ts`'s quad primitives instead of `CanvasRenderingContext2D`
+  calls - not a shared abstraction over both. A change to either file's draw
+  loop needs the matching change on the other side, or the two renderers
+  drift and `?webgl` silently stops looking like the map it is supposed to
+  be a faster copy of. `GLDrawOpts`/`GLDrawResult` are derived from
+  `render.ts`'s real `DrawOpts`/`DrawResult` (`Omit<DrawOpts,'ctx'> &
+  {gl}`) specifically so a shape change there is caught here at typecheck
+  time rather than silently drifting too.
+- **GL setup happens exactly once per canvas element's lifetime, never per
+  frame or per prop change.** `canvas.getContext('webgl2', ...)` is
+  memoized by the browser and returns the same underlying context on a
+  second call, but `gl/context.ts`'s `createGLContext` does not check for
+  that - it unconditionally creates a new shader program, VAO and buffer
+  every time it runs, and nothing but its own `dispose()` ever frees the
+  previous ones. `useMapRendererGL.ts`'s canvas-lifetime effect (dependency
+  array `[canvasRef, cache]` only) is what keeps this to once; anything
+  routed through it that starts depending on a value that changes often
+  (a search, a favorite toggle) reintroduces the leak this file's history
+  exists to warn about.
+- **The texture cache has its own eviction budget, independent of
+  `tiles.ts`'s.** `gl/textureCache.ts` mirrors `tiles.ts`'s frame-aware LRU
+  rule (current and previous frame are always protected) rather than
+  hooking into it - GPU memory pressure is a different resource than the
+  decoded-bitmap budget `pyramid.ts` already manages, and a `WeakMap` alone
+  would leak GPU handles forever (JS garbage collection runs no cleanup code
+  on a `WeakMap` eviction).
+- **Rank-label chrome text (`render.ts`'s `drawChrome`, the `#123` labels
+  past zoom 120) is permanently out of scope, not deferred.** It would
+  change every frame at exactly the zoom level where framerate matters
+  most, which defeats any texture-cache approach the way `gl/spineTexture.ts`
+  or the hover-glow silhouettes get to assume mostly-static content. Do not
+  "finish" this gap without solving that constraint first.
+- **The default-flip constant lives in `webglFlag.ts`.** `DEFAULT_WEBGL`
+  is the one line that turns this from an opt-in flag into the default
+  renderer - flip it once parity, testing, and real-device validation (see
+  `docs/webgl-renderer-plan.md`) justify it, not before. `WEBGL` itself
+  already folds in a WebGL2 capability probe, so an unsupported device
+  falls back to the Canvas2D renderer automatically regardless of the flag.
 
 ### Testing and CI
 
