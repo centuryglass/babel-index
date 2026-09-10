@@ -18,7 +18,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p jsconfig.json",
     "demo": "node --import ./build/register.mjs packages/server/index.ts",
-    "demo:watch": "node --watch --import ./build/register.mjs packages/server/index.ts --watch"
+    "demo:watch": "node --watch --import ./build/register.mjs packages/server/index.ts --watch",
+    "profile:chrome": "node --import ./build/register.mjs tools/perf-capture/capture.ts"
   },
   "dependencies": {
     "any-ascii": "^0.3.3",
