@@ -52,6 +52,29 @@ serve as completed task history.
 
   Once those three pass, flip `DEFAULT_WEBGL`. Whether Canvas2D is ever
   removed after that is a separate, later decision.
+- **[2026-09-10, resolved] The `createImageBitmap` unpack-matching fix removed
+  Firefox's texture-upload CPU conversion.** A 2-minute `?webgl` Firefox
+  profile (`tools/perf-capture/out`, canvas2d vs webgl, seed `babel-perf`)
+  showed the CanvasRenderer thread spending ~1.2s of CPU in
+  `WebGLTexelConversions::pack/unpack` + `gfx::Swizzle*_SSE2` +
+  `WebGLImageConverter::run` - work the Canvas2D run does not do at all,
+  sustained at ~0.3-0.38s per 10s window during tile churn. Cause: tiles were
+  decoded with a bare `createImageBitmap(blob)` (default premultiplied alpha +
+  colorspace conversion) but uploaded with `UNPACK_PREMULTIPLY_ALPHA_WEBGL`
+  false (`gl/context.ts`), so Firefox repacked every texel on the CPU instead
+  of uploading straight to the GPU. Fixed by decoding with
+  `{ premultiplyAlpha: 'none', colorSpaceConversion: 'none' }` in
+  `tiles.ts`'s `decodeOnThread` (also `toString()`'d into the decode worker,
+  so both paths change together). Confirmed by a fresh Firefox `?webgl`
+  capture (2026-09-10 11.39): all three symbols are gone from the
+  CanvasRenderer thread (nothing above 5ms), whose self-time is now purely the
+  NVIDIA driver upload path (`NvGlEglGetFunctions`, `libnvidia-eglcore`) and
+  GPU waits - the upload goes straight through the driver, no CPU repack, and
+  no color/premultiply regression (tiles are opaque). Other findings from the
+  original capture needed no action - WebGL already ~halves
+  JS heap (+68MB vs +168MB), main-thread CPU is a wash (~18% one core, both
+  renderers), and the node/listener growth in `summary.json` is an end-of-run
+  interaction spike, not a monotonic leak.
 
 ## Rearrangement / camera:
 - **[2026-09-10] A `flyTo` issued while a rearrangement is animating has no
