@@ -6,7 +6,7 @@
  * draw loop's own decisions against a recording `GLContext` fake - this file
  * is the one thing those cannot see: that a real `WebGL2RenderingContext`
  * actually accepts the calls this renderer makes, on a real GPU, in a real
- * browser (`docs/webgl-renderer-plan.md`'s Phase E).
+ * browser.
  *
  * `openLibrary({ extraParams: ['webgl'] })` boots the same corpus every other
  * file in this suite uses, with `?webgl` added to the query string so

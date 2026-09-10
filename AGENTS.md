@@ -345,13 +345,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   real `?perf` capture and reprioritizes them.
                                   Most items remain unimplemented - the shipped
                                   exception is `prepareRearrangement` (§9.7).
-- `docs/webgl-renderer-plan.md`: The gap between the experimental WebGL map
-                                 renderer's spike and a production-ready one,
-                                 and the steps to close it. Delete steps as
-                                 they land. See "The WebGL renderer
-                                 (experimental)" below for the invariants the
-                                 finished pieces must hold.
-  
+
 ## Conventions
 
 - **ESM everywhere** (`"type": "module"`). `.mjs` for anything Node runs
@@ -992,18 +986,13 @@ code, not a standing invariant.
   decoded-bitmap budget `pyramid.ts` already manages, and a `WeakMap` alone
   would leak GPU handles forever (JS garbage collection runs no cleanup code
   on a `WeakMap` eviction).
-- **Rank-label chrome text (`render.ts`'s `drawChrome`, the `#123` labels
-  past zoom 120) is permanently out of scope, not deferred.** It would
-  change every frame at exactly the zoom level where framerate matters
-  most, which defeats any texture-cache approach the way `gl/spineTexture.ts`
-  or the hover-glow silhouettes get to assume mostly-static content. Do not
-  "finish" this gap without solving that constraint first.
 - **The default-flip constant lives in `webglFlag.ts`.** `DEFAULT_WEBGL`
   is the one line that turns this from an opt-in flag into the default
-  renderer - flip it once parity, testing, and real-device validation (see
-  `docs/webgl-renderer-plan.md`) justify it, not before. `WEBGL` itself
-  already folds in a WebGL2 capability probe, so an unsupported device
-  falls back to the Canvas2D renderer automatically regardless of the flag.
+  renderer - flip it once the remaining validation in
+  `docs/implementation-plan.md`'s Rendering section is done, not before.
+  `WEBGL` itself already folds in a WebGL2 capability probe, so an
+  unsupported device falls back to the Canvas2D renderer automatically
+  regardless of the flag.
 
 ### Testing and CI
 

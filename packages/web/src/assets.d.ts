@@ -13,3 +13,16 @@ declare module '*.woff2' {
   const dataUri: string;
   export default dataUri;
 }
+
+// esbuild's `loader: { '.vert': 'text', '.frag': 'text' }` (packages/server/index.ts)
+// turns a GLSL shader source import into its raw text - same shape as the
+// `.svg` declaration above, used by `gl/shaders.ts`.
+declare module '*.vert' {
+  const source: string;
+  export default source;
+}
+
+declare module '*.frag' {
+  const source: string;
+  export default source;
+}

@@ -31,6 +31,11 @@ export interface Rect {
   h: number;
 }
 
+/** `rooms.ts`'s sheet-packed `Rect` (`sx/sy/sw/sh`, source-image pixels) to this file's `Rect` (`x/y/w/h`). */
+export function toGLRect(r: { sx: number; sy: number; sw: number; sh: number }): Rect {
+  return { x: r.sx, y: r.sy, w: r.sw, h: r.sh };
+}
+
 export interface GLContext {
   gl: WebGL2RenderingContext;
   /** `gl.getParameter(gl.MAX_TEXTURE_SIZE)`, queried once - see `textureCache.ts`'s upload guard. */

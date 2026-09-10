@@ -20,9 +20,18 @@ import { fileURLToPath } from 'node:url';
 import { transform } from 'esbuild';
 
 const TS_FILE = /\.tsx?$/;
+// esbuild's `loader: 'text'` extensions (packages/server/index.ts) that a .ts
+// module under test may import - mirrored here so `node --test` sees the same
+// raw-string shape the browser bundle gets, instead of Node's ESM loader
+// rejecting the extension outright.
+const TEXT_FILE = /\.(?:svg|vert|frag)$/;
 
 /** @type {import('node:module').LoadHook} */
 export async function load(url, context, nextLoad) {
+  if (TEXT_FILE.test(url)) {
+    const source = await readFile(fileURLToPath(url), 'utf8');
+    return { format: 'module', source: `export default ${JSON.stringify(source)};`, shortCircuit: true };
+  }
   if (!TS_FILE.test(url)) return nextLoad(url, context);
 
   const path = fileURLToPath(url);

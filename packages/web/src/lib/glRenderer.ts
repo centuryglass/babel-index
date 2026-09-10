@@ -34,9 +34,6 @@
  * them on the center tile's ride across the handoff too) or, for the
  * cursor, `gl/context.ts`'s `drawStrokeQuad`. The distill toggle's hover
  * highlight is the same baked-silhouette treatment as the favorite badge's.
- *
- * Rank-label chrome (`render.ts`'s `drawChrome`) is permanently out of scope
- * - see `AGENTS.md`'s WebGL section for why.
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
@@ -49,7 +46,7 @@ import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH 
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { areSpinesLegible, BOOK_COUNT } from './center.ts';
-import type { GLContext, Rect } from './gl/context.ts';
+import { toGLRect, type GLContext, type Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createSpineTextureCache, type SpineTextureCache } from './gl/spineTexture.ts';
 import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
@@ -138,7 +135,7 @@ export function drawFavoriteBadgeGL(
   const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
   const rect: Rect = favoriteIconScreenRect(cellPx, sx, sy, iconSize);
   const src = hit.rect
-    ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
+    ? toGLRect(hit.rect)
     : { x: 0, y: 0, w: tex.width, h: tex.height };
   gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
   if (hovered) drawGlow(gl, glowTextures, FAVORITE_TOGGLE_PATH, cellPx, sx, sy, rect);
@@ -169,7 +166,7 @@ export function drawFavoriteSwitchGL(
     const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
     const rect: Rect = favoriteSwitchScreenRect(cellPx, sx, sy, iconSize);
     const src: Rect = hit.rect
-      ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
+      ? toGLRect(hit.rect)
       : { x: 0, y: 0, w: tex.width, h: tex.height };
     gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
   };
@@ -202,7 +199,7 @@ export function drawDistillToggleGL(
   const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
   const rect: Rect = distillIconScreenRect(cellPx, sx, sy, iconSize);
   const src: Rect = hit.rect
-    ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
+    ? toGLRect(hit.rect)
     : { x: 0, y: 0, w: tex.width, h: tex.height };
   gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
   if (hovered) {
@@ -231,7 +228,7 @@ export function drawClearHistoryBookOverlayGL(
   const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
   const rect: Rect = clearHistoryBookScreenRect(cellPx, sx, sy, iconSize);
   const src: Rect = hit.rect
-    ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
+    ? toGLRect(hit.rect)
     : { x: 0, y: 0, w: tex.width, h: tex.height };
   gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
 }
@@ -298,7 +295,7 @@ export function createGLRenderer({
 
           if (hit && tex) {
             const src = hit.rect
-              ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
+              ? toGLRect(hit.rect)
               : { x: 0, y: 0, w: tex.width, h: tex.height };
             gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, dst);
             drawn++;
