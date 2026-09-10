@@ -14,12 +14,13 @@
  * literally `SlideDrawResult` - same "derive, don't restate" approach as
  * `glRenderer.ts`.
  *
- * Same known gaps as `glRenderer.ts` at this point in the spike: no
- * favorites-sort switch, no distill toggle, no clear-history overlay (all
- * center-tile "chrome", never drawn during a slide by the Canvas2D path
- * either until it lands - see `slide.ts`'s own `chrome` block). Spine text
- * is a non-issue here: `slide.ts` draws none during a rearrangement, so
- * neither does this file.
+ * The center tile's chrome - the favorites-sort switch, distill toggle, and
+ * clear-history overlay - rides along across the handoff between renderers
+ * exactly as `slide.ts`'s own `chrome` block does, using the same
+ * `drawFavoriteSwitchGL`/`drawDistillToggleGL`/`drawClearHistoryBookOverlayGL`
+ * `glRenderer.ts` draws them with (the center tile never moves, so its chrome
+ * needs no motion handling of its own). Spine text is a non-issue here:
+ * `slide.ts` draws none during a rearrangement, so neither does this file.
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell } from './camera.ts';
@@ -28,7 +29,10 @@ import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/b
 import type { BoardValue } from '../../../map/moves.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
-import { drawFavoriteBadgeGL } from './glRenderer.ts';
+import {
+  drawFavoriteBadgeGL, drawFavoriteSwitchGL, drawDistillToggleGL, drawClearHistoryBookOverlayGL,
+} from './glRenderer.ts';
+import { areSpinesLegible } from './center.ts';
 import type { SlideDrawOpts, SlideDrawResult } from './slide.ts';
 
 /** Same cache-id rule as `slide.ts`'s own (unexported) `idFor` - duplicated rather than imported so this file changes nothing about `slide.ts`. */
@@ -61,8 +65,9 @@ const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255
 
 export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = createGLTextureCache() }: CreateGLSlideRendererOpts) {
   function draw({
-    gl, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1,
-    favorites = null, genericFade = 0,
+    gl, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
+    favorites = null, sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
+    clearHistoryAvailable = false,
   }: GLSlideDrawOpts): GLSlideDrawResult {
     cache.beginFrame();
     textures.beginFrame();
@@ -150,6 +155,26 @@ export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = cre
       for (let mx = x0 - 2; mx <= x1 + 2; mx++)
         if (my < y0 || my > y1 || mx < x0 || mx > x1)
           cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, genericIndexAt), level);
+
+    if (chrome) {
+      // The center room, which by construction has not moved.
+      const sx = (0 - cam.x) * cellPx.x + wDev / 2;
+      const sy = (0 - cam.y) * cellPx.y + hDev / 2;
+      // The favorites-sort switch rides along with the center room across the
+      // handoff between renderers - same gate as `render.ts`'s/`slide.ts`'s
+      // own draw, using CSS-pixel `cellPxCss` for the legibility check the
+      // same way `glRenderer.ts` does.
+      if (favorites && areSpinesLegible({ x: 0, y: 0, w: cellPxCss.x, h: cellPxCss.y }))
+        drawFavoriteSwitchGL(gl, cache, textures, sortMode, cellPx, sx, sy);
+      // The distill toggle rides along the same way - independent of
+      // `favorites`, same `undefined` opt-out as `render.ts`'s/`slide.ts`'s
+      // own draw loop.
+      if (distillMode !== undefined) drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy);
+      // The "forget searches" book's black spine overlay rides along the same
+      // way - `clearHistoryAvailable` is the caller's reduction, same as
+      // `slide.ts`'s own draw.
+      if (clearHistoryAvailable) drawClearHistoryBookOverlayGL(gl, cache, textures, cellPx, sx, sy);
+    }
 
     return { drawn, blank, level, cells: wanted.length };
   }

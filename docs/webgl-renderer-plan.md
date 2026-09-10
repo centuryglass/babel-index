@@ -81,13 +81,23 @@ need before the camera moves.
 
 ## Phase D - feature parity
 
-- [ ] Favorites-sort switch, distill toggle icon, clear-history overlay in
+- [x] Favorites-sort switch, distill toggle icon, clear-history overlay in
       `glRenderer.ts` - same textured-quad technique as the favorite badge,
       reusing `favoriteSwitchScreenRect`/`distillIconScreenRect`/
-      `clearHistoryBookScreenRect`.
-- [ ] Keyboard cursor ring - `gl/context.ts` gained `drawStrokeQuad` (four
+      `clearHistoryBookScreenRect`. Also mirrored into `glSlideRenderer.ts`'s
+      own `chrome` block (`slide.ts` already draws all three on the center
+      tile during a rearrangement, so the GL slide renderer needed the same
+      three draw calls to keep the two lockstep, per `AGENTS.md`) via the
+      same exported `drawFavoriteSwitchGL`/`drawDistillToggleGL`/
+      `drawClearHistoryBookOverlayGL`.
+- [x] Keyboard cursor ring - `gl/context.ts` gained `drawStrokeQuad` (four
       flat quads, not `gl.LINES` - line width >1px isn't portable) in
-      Phase A; wire it into `glRenderer.ts`'s draw loop.
+      Phase A; wired into `glRenderer.ts`'s draw loop. `useMapRendererGL.ts`
+      gained the matching `:focus-visible` tracking `useMapRenderer.ts`
+      already had (duplicated, not shared - each hook owns its own
+      canvas-lifetime effect) so the ring is gated the same way in both
+      renderers. `slide.ts` draws no cursor ring during a rearrangement, so
+      `glSlideRenderer.ts` doesn't either.
 - [ ] Hover-glow silhouettes for the favorite badge and both distill-toggle
       states, done properly (not the flat-rect approximation the spike
       shipped) - bake each traced path to a static texture once via an

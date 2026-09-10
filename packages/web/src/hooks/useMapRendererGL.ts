@@ -27,7 +27,7 @@
  * canvas can only ever hand out one context type.
  */
 import { useEffect, useRef } from 'react';
-import { pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
+import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
 import {
   bookAtPoint, centerBookAtPoint, centerCellRect,
   shuffleButtonAtPoint, mineToggleAtPoint, countToggleAtPoint, BOOK_COUNT,
@@ -160,6 +160,10 @@ export function useMapRendererGL({
     let hoveredBook: number | null = null;
     let hoveredFavorite: { x: number; y: number } | null = null;
     let hoveredDistill = false;
+    // Gates the cursor ring (`glRenderer.ts`) - same `:focus-visible` tracking
+    // as `useMapRenderer.ts`'s own, duplicated rather than shared since each
+    // hook owns its own canvas-lifetime effect and listener set.
+    let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
     const render = () => {
       pending = 0;
@@ -257,6 +261,7 @@ export function useMapRendererGL({
             centreSlots: slots, hoveredBook, spineFontLimits: limits,
             favorites: favs, hoveredFavorite, sortMode: sort,
             genericFade: genericFade?.current, distillMode: distill, hoveredDistill,
+            cursor: focusVisible ? cursorCell(cam.current) : null,
           });
       if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);
 
@@ -310,6 +315,19 @@ export function useMapRendererGL({
     };
     window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onDown);
+
+    // Same focus/blur handling as `useMapRenderer.ts`'s own cursor-ring gate -
+    // see that file's doc for why `:focus-visible` rather than plain `:focus`.
+    const onFocus = () => {
+      focusVisible = canvas.matches(':focus-visible');
+      draw.current();
+    };
+    const onBlur = () => {
+      focusVisible = false;
+      draw.current();
+    };
+    canvas.addEventListener('focus', onFocus);
+    canvas.addEventListener('blur', onBlur);
 
     const onMove = (e: PointerEvent) => {
       const { layout: lay, order: ord, favorites: favs, distillMode: distill } = latestRef.current;
@@ -444,6 +462,8 @@ export function useMapRendererGL({
       if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('focus', onFocus);
+      canvas.removeEventListener('blur', onBlur);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('webglcontextlost', onContextLost);
