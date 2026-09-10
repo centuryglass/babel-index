@@ -40,11 +40,19 @@ serve as completed task history.
     `supportsWebGL2()` capability check won't catch (it only rules out "no
     support at all", not "reports support, behaves wrong") - needs an actual
     device pass.
-  - No visual regression coverage between the GL and Canvas2D renderers -
-    `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call shape via
-    a recording fake, not pixels. A manual side-by-side at a few fixed camera
-    positions (spine legibility, hover-glow states, favorite badge) before
-    defaulting for every visitor would catch what the fakes can't.
+  - Visual regression coverage between the GL and Canvas2D renderers now
+    exists as `packages/web/e2e/render-parity.parity.ts` (`npm run
+    test:parity`, deliberately outside `npm test`/`npm run test:e2e` - needs a
+    real GPU, boots two sessions). It drives both renderers to the same camera
+    and asserts (a) HUD parity on every per-frame draw decision and (b) a pixel
+    diff under a threshold at two fully-resolved scenes: center-zoom (spine
+    legibility, books, favorite badges) and post-search (slide-renderer end
+    state, clustered placement). On this GPU both scenes are deterministic at
+    meanAbs ~1 / <1% strong-diff pixels; a sabotage check confirmed a
+    tile-draw break spikes them to ~37 / ~50%. Still manual, not covered by the
+    suite: hover-glow states, and an iOS/Safari pass. A far-zoom "overview"
+    scene was intentionally left out - see that file's header for why (per-
+    session cache warm-up makes far-zoom tile resolution non-deterministic).
   - GPU memory was only checked informally (a short session, DevTools open,
     "no console errors"). Worth one deliberate long session - many searches,
     favorite toggles, rearrangements - watching the memory graph rather than
