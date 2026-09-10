@@ -235,6 +235,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `gl/spineTexture.ts`: The center tile's spine text, composited via
                             `composeSpines` onto an offscreen 2D canvas and
                             cached as a texture.
+    * `gl/glowTexture.ts`: A hover-glow silhouette (favorite badge, either
+                           distill-toggle state), baked once to an offscreen
+                           2D canvas and cached as a texture, keyed by path
+                           string rather than a content/size key like
+                           `gl/spineTexture.ts`'s - the shape never changes.
 - `packages/config`: Central definition for numbers tuned by feel
   * `config.ts`: Defaults and validation (no fs)
   * `load.ts`: Load an optional config.json

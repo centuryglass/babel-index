@@ -29,6 +29,7 @@ import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/b
 import type { BoardValue } from '../../../map/moves.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
+import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
 import {
   drawFavoriteBadgeGL, drawFavoriteSwitchGL, drawDistillToggleGL, drawClearHistoryBookOverlayGL,
 } from './glRenderer.ts';
@@ -53,6 +54,8 @@ export interface CreateGLSlideRendererOpts {
   pyramid?: Pyramid;
   /** Shared with `glRenderer.ts` so a tile decoded for one is already resident for the other. */
   textures?: GLTextureCache;
+  /** Shared with `glRenderer.ts`, same reason as `textures` - the distill toggle's hover glow rides along across the handoff too. */
+  glowTextures?: GlowTextureCache;
 }
 
 /** `slide.ts`'s `SlideDrawOpts` with the 2D context swapped for a GL one. */
@@ -63,7 +66,9 @@ export type GLSlideDrawResult = SlideDrawResult;
 const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255];
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 
-export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = createGLTextureCache() }: CreateGLSlideRendererOpts) {
+export function createGLSlideRenderer({
+  cache, pyramid = PYRAMID, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
+}: CreateGLSlideRendererOpts) {
   function draw({
     gl, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
     favorites = null, sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
@@ -124,7 +129,7 @@ export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = cre
       if (value === BOARD_GENERIC && genericFade)
         gl.drawFlatQuad(dst, [0, 0, 0, Math.min(1, genericFade)]);
       if (favorites && typeof value === 'number')
-        drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(value), cellPx, sx, sy, false);
+        drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(value), cellPx, sx, sy, false, glowTextures);
       wanted.push(id);
     };
 
@@ -169,7 +174,7 @@ export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = cre
       // The distill toggle rides along the same way - independent of
       // `favorites`, same `undefined` opt-out as `render.ts`'s/`slide.ts`'s
       // own draw loop.
-      if (distillMode !== undefined) drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy);
+      if (distillMode !== undefined) drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy, glowTextures);
       // The "forget searches" book's black spine overlay rides along the same
       // way - `clearHistoryAvailable` is the caller's reduction, same as
       // `slide.ts`'s own draw.
@@ -179,5 +184,5 @@ export function createGLSlideRenderer({ cache, pyramid = PYRAMID, textures = cre
     return { drawn, blank, level, cells: wanted.length };
   }
 
-  return { draw, textures };
+  return { draw, textures, glowTextures };
 }

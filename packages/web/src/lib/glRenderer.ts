@@ -17,10 +17,10 @@
  *
  * The favorite badge is a textured quad via the same texture cache, keyed by
  * `FAV_ON`/`FAV_OFF` exactly as `tiles.ts` already resolves them - see
- * `drawFavoriteBadgeGL` below. Its hover highlight is a flat translucent
- * rectangle over the badge's bounding box, not the traced silhouette
- * `render.ts`'s `drawFavoriteBadge` fills/strokes - an approximation, not
- * pixel-identical, per the plan's known gaps (no vector-path rendering here).
+ * `drawFavoriteBadgeGL` below. Its hover highlight is `render.ts`'s own
+ * traced silhouette (`FAVORITE_TOGGLE_PATH`), baked once to a GL texture by
+ * `gl/glowTexture.ts` rather than re-traced every frame - see that file's
+ * doc for why a bake works regardless of a tile's own pixel size.
  *
  * The center tile's spine text is a separately-cached texture
  * (`gl/spineTexture.ts`, re-rendering `composeSpines` onto an offscreen 2D
@@ -33,14 +33,10 @@
  * `drawClearHistoryBookOverlayGL`, exported so `glSlideRenderer.ts` can draw
  * them on the center tile's ride across the handoff too) or, for the
  * cursor, `gl/context.ts`'s `drawStrokeQuad`. The distill toggle's hover
- * highlight is still `render.ts`'s known approximation - a flat rect over
- * the icon's bounding box rather than the traced silhouette, same as the
- * favorite badge's own hover glow above.
+ * highlight is the same baked-silhouette treatment as the favorite badge's.
  *
- * Still NOT implemented: a properly-traced hover-glow silhouette (Phase D's
- * "done properly" step - baking each traced path to a texture), and the
- * rank-label chrome (`render.ts`'s `drawChrome`), permanently out of scope -
- * see `AGENTS.md`'s WebGL section for why.
+ * Rank-label chrome (`render.ts`'s `drawChrome`) is permanently out of scope
+ * - see `AGENTS.md`'s WebGL section for why.
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
@@ -49,13 +45,14 @@ import {
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
   genericId, type RoomId, type TileCache,
 } from './tiles.ts';
-import { favoriteIconScreenRect, favoriteSwitchScreenRect } from './favoriteBadge.ts';
-import { distillIconScreenRect } from './distillToggle.ts';
+import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
+import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { areSpinesLegible, BOOK_COUNT } from './center.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createSpineTextureCache, type SpineTextureCache } from './gl/spineTexture.ts';
+import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
 import type { DrawOpts, DrawResult } from './render.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
@@ -69,6 +66,8 @@ export interface CreateGLRendererOpts {
   pyramid?: Pyramid;
   /** Shared across `glRenderer.ts`/`glSlideRenderer.ts` so a tile decoded for one is already resident for the other. */
   textures?: GLTextureCache;
+  /** Shared with `glSlideRenderer.ts`, same reason as `textures` - the distill toggle's hover glow rides along across the handoff too. */
+  glowTextures?: GlowTextureCache;
 }
 
 /** `render.ts`'s `DrawOpts` with the 2D context swapped for a GL one. */
@@ -80,8 +79,39 @@ export type GLDrawResult = DrawResult;
 const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255];
 /** `#15120f`, `render.ts`'s blank-cell fallback fill, as float RGB. */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
-/** `render.ts`'s `FAVORITE_HOVER_GLOW_FILL` (`rgba(200,169,95,0.28)`), as a flat quad rather than the traced silhouette - see this file's doc. */
+/**
+ * `render.ts`'s `FAVORITE_HOVER_GLOW_FILL`, as a flat quad - the fallback
+ * used only when `gl/glowTexture.ts` has no offscreen canvas to bake with
+ * (e.g. `npm test`'s Node environment, which never exercises a hover state
+ * anyway); the real hover treatment is `drawGlow` below.
+ */
 const FAVORITE_HOVER_GLOW: [number, number, number, number] = [200 / 255, 169 / 255, 95 / 255, 0.28];
+
+/**
+ * Composite a hover-glow silhouette over a tile's full screen rect - `d`'s
+ * coordinates are fractions of the WHOLE tile (see `gl/glowTexture.ts`'s
+ * doc), so unlike every other textured quad in this file the destination is
+ * `{sx, sy, cellPx.x, cellPx.y}`, not an icon's own smaller rect. Falls back
+ * to the old flat-rect approximation over `fallbackRect` when no bake is
+ * available, so a headless test environment still draws something.
+ */
+function drawGlow(
+  gl: GLContext,
+  glowTextures: GlowTextureCache,
+  d: string | null,
+  cellPx: { x: number; y: number },
+  sx: number,
+  sy: number,
+  fallbackRect: Rect
+): void {
+  const glow = d ? glowTextures.get(gl.gl, d) : null;
+  if (glow) {
+    const rect: Rect = { x: sx, y: sy, w: cellPx.x, h: cellPx.y };
+    gl.drawTexturedQuad(glow.texture, { x: 0, y: 0, w: glow.width, h: glow.height }, glow.width, glow.height, rect);
+  } else {
+    gl.drawFlatQuad(fallbackRect, FAVORITE_HOVER_GLOW);
+  }
+}
 /** `render.ts`'s cursor-ring stroke color (`#e8e0d2`), as float RGBA. */
 const CURSOR_STROKE: [number, number, number, number] = [232 / 255, 224 / 255, 210 / 255, 1];
 
@@ -99,7 +129,8 @@ export function drawFavoriteBadgeGL(
   cellPx: { x: number; y: number },
   sx: number,
   sy: number,
-  hovered: boolean
+  hovered: boolean,
+  glowTextures: GlowTextureCache
 ): void {
   const hit = cache.get(isFavorite ? FAV_ON : FAV_OFF, 0);
   const tex = hit ? textures.get(gl, hit.img) : null;
@@ -110,7 +141,7 @@ export function drawFavoriteBadgeGL(
     ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
     : { x: 0, y: 0, w: tex.width, h: tex.height };
   gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
-  if (hovered) gl.drawFlatQuad(rect, FAVORITE_HOVER_GLOW);
+  if (hovered) drawGlow(gl, glowTextures, FAVORITE_TOGGLE_PATH, cellPx, sx, sy, rect);
 }
 
 /**
@@ -161,7 +192,8 @@ export function drawDistillToggleGL(
   hovered: boolean,
   cellPx: { x: number; y: number },
   sx: number,
-  sy: number
+  sy: number,
+  glowTextures: GlowTextureCache
 ): void {
   const id = distillMode ? DISTILL_ON : DISTILL_OFF;
   const hit = cache.get(id, 0);
@@ -173,7 +205,10 @@ export function drawDistillToggleGL(
     ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
     : { x: 0, y: 0, w: tex.width, h: tex.height };
   gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
-  if (hovered) gl.drawFlatQuad(rect, FAVORITE_HOVER_GLOW);
+  if (hovered) {
+    const activePath = distillMode ? DISTILL_ON_PATH : DISTILL_OFF_PATH;
+    drawGlow(gl, glowTextures, activePath, cellPx, sx, sy, rect);
+  }
 }
 
 /**
@@ -201,7 +236,9 @@ export function drawClearHistoryBookOverlayGL(
   gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
 }
 
-export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGLTextureCache() }: CreateGLRendererOpts) {
+export function createGLRenderer({
+  cache, pyramid = PYRAMID, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
+}: CreateGLRendererOpts) {
   let level: number | null = null;
   const spineTextures: SpineTextureCache = createSpineTextureCache();
 
@@ -282,7 +319,7 @@ export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGL
         // generic cell, same gate as `render.ts`.
         if (favorites && !cell.center && !cell.generic) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
-          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(cell.id), cellPx, sx, sy, hovered);
+          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(cell.id), cellPx, sx, sy, hovered, glowTextures);
         }
 
         // The "forget searches" book's black spine overlay - same gate as
@@ -309,7 +346,7 @@ export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGL
         // The distill toggle - independent of `favorites`, same `undefined`
         // opt-out as `render.ts`.
         if (cell.center && distillMode !== undefined)
-          drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy);
+          drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy, glowTextures);
       }
     }
 
@@ -345,5 +382,5 @@ export function createGLRenderer({ cache, pyramid = PYRAMID, textures = createGL
     return { cells, drawn, substituted, blank, level, bounds, zoom };
   }
 
-  return { draw, textures, spineTextures };
+  return { draw, textures, spineTextures, glowTextures };
 }
