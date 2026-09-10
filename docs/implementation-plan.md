@@ -33,6 +33,58 @@ serve as completed task history.
   production quality - see `docs/webgl-renderer-plan.md` for the phased
   work queue.
 
+## Rearrangement / camera:
+- **[2026-09-10] A `flyTo` issued while a rearrangement is animating has no
+  effect, and a search can sometimes trigger what looks like a SECOND full
+  rearrangement cycle with no further user action.** Found while chasing
+  flakiness in `map-gestures.e2e.ts`'s `right-clicking a room opens its
+  card`/`a long press opens the card` tests (both click the 'center' button,
+  then `landed()`, then act on a fixed screen point - see AGENTS.md's
+  Testing-and-CI note on `recentre()`, added as the practical fix for the
+  test suite).
+
+  Confirmed by direct instrumentation (a page-injected HUD-transition
+  recorder plus a `page.on('request')` listener during a run of `a search
+  reorders the library around wherever the camera already is` followed by
+  `right-clicking a room…`):
+  - Exactly ONE `/api/search` request fires for the one Enter press (ruled
+    out a duplicate submit).
+  - `useSearch.ts`'s `search()` only calls `requestAnimationRef.current(...)`
+    once per resolved fetch for a non-empty term (read the source; only one
+    branch executes).
+  - Despite that, the HUD shows a full `rearranging · preparing…` → `100%`
+    cycle landing back at the search field's camera position, and then -
+    with ZERO clicks or other interaction - a SECOND full `preparing…` →
+    `100%` cycle starts within ~150ms and runs for ~1.5-3s more.
+  - A plain `button[hasText=center].click()` issued during (or just before)
+    that second cycle has NO effect on the final camera position - it lands
+    exactly where the rearrangement itself was already headed, not at the
+    clicked target. `landed()` still reports "settled" because it only
+    checks for two consecutive stable reads, which a still-controlled camera
+    also produces.
+
+  Not yet root-caused. Candidates not yet ruled out: something downstream of
+  `setResult` (e.g. `sortResult`/`layout`'s `useMemo` in `main.tsx`, or
+  `pushHistory`) causing `useRearrangement.ts`'s effect to see `layout`/
+  `order` change twice for one `requestAnimation()` call; a legitimate
+  second animated pass that isn't a bug at all (e.g. a graded/clustered
+  density recompute) but should then update the "rearranging" HUD text or
+  `AGENTS.md`'s invariants to say so explicitly; or `startRearrangement`
+  itself re-triggering under some condition on a small/cold-cache corpus.
+  Worth an instrumented repro (the recorder script used above, not
+  committed) as the starting point rather than re-discovering this from
+  scratch.
+
+  Separately, whether this is a bug or not, `useMapCamera.ts`'s `flyTo`
+  currently has no way to interrupt an active rearrangement - AGENTS.md's
+  "Camera and gestures" section documents `pointerdown`/`wheel` each
+  dropping an in-flight flight, and the rearrangement section documents
+  "Anything that moves the camera mid-rearrangement (pan, zoom, `flyTo`)
+  must end the animation instead" - but a `flyTo` from a control (not a
+  gesture) does not currently do this. Confirm whether that's the intended
+  reading of the invariant and, if so, wire `flyTo` to end an active
+  rearrangement the same way a pointer grab does.
+
 ## Other:
 - **Check the in-tile search field on an actual iOS device.** Its font size
   is whatever `.center-search input` inherits (13px, the app's body size),
