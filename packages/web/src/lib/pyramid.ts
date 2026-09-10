@@ -120,11 +120,11 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
  *   level      size  bytes/tile  budget  budget bytes  worst-case visible*
  *       0  1024x768        3 MB     480      1,440 MB                  30
  *       1   512x384      768 KB     800        600 MB                  99
- *       2   256x192      192 KB    1800        338 MB†                336
+ *       2   256x192      192 KB    1200        225 MB                  336
  *       3    128x96       48 KB    3200        150 MB†                1271
  *       4     64x48       12 KB   16400        202 MB†                4740
  *       5     32x24        3 KB   65000        200 MB†                7500
- *                                          ~3.1 GB nominal, ~2.7 GB real*
+ *                                          ~2.6 GB nominal, ~2.4 GB real*
  *
  * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
  * zoom in that level's band which shows the most of them. Every budget is
@@ -138,10 +138,18 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
  * open-ended worst case is now level 5's, and level 4's shrank to 4740 now
  * that its own band has an upper bound.
  *
- * †Not real bytes - see above. Real bytes for levels 2-5 come from
+ * Level 2 is per-file, not sheet-packed (see SHEETS.fromLevel) - a sheet at
+ * that zoom band is under 8% utilized and, because room order is a random
+ * per-session permutation, nearly every sheet ends up pulled in to show a
+ * handful of rooms (docs/performance-research.md §6). Its budget is real
+ * decoded bytes again, sized well above both its own worst case (336) and
+ * level 1's budget (rule 3 needs each coarser level to hold strictly more
+ * than the one before it).
+ *
+ * †Not real bytes - see above. Real bytes for levels 3-5 come from
  * `SHEETS.cacheBudget` sheets instead, at their own (much larger) per-image
- * size; "~2.7 GB real" adds a 2048-room corpus's full complement of sheets
- * (SHEETS's own docblock) on top of levels 0-1's real cost, which is the
+ * size; "~2.4 GB real" adds a 2048-room corpus's full complement of sheets
+ * (SHEETS's own docblock) on top of levels 0-2's real cost, which is the
  * actual ceiling to budget a machine against, not the nominal table total.
  *
  * Note how far above its worst case level 0 is - 480 against 30. That is rule
@@ -155,7 +163,7 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
 export const LEVELS: LevelSpec[] = [
   { level: 0, divisor: 1, budget: 480 },
   { level: 1, divisor: 2, budget: 800 },
-  { level: 2, divisor: 4, budget: 1800 },
+  { level: 2, divisor: 4, budget: 1200 },
   { level: 3, divisor: 8, budget: 3200 },
   { level: 4, divisor: 16, budget: 16400 },
   { level: 5, divisor: 32, budget: 65000 },
@@ -222,12 +230,17 @@ export const PREFETCH: PrefetchConfig = {
  * into one grid image cuts that to one request per sheet, letting the edge
  * cache actually warm instead of perpetually seeing cold URLs.
  *
- * Levels below `fromLevel` stay one file per room: fewer of them are ever
- * visible at once (level 0's worst case is 30), and every room a sheet
- * contains re-uploads as a unit whenever any one of them changes (see
- * tools/upload/lib.ts) - the fewer rooms per sheet, the smaller that blast
- * radius, so leaving the request-cheap levels unpacked costs nothing and
- * avoids paying that tradeoff where it isn't needed.
+ * Levels below `fromLevel` stay one file per room. Level 2 used to be packed
+ * too, but sheet packing only pays for itself where visible rooms outnumber
+ * sheets - at level 2's zoom band only ~12-20 rooms are on screen against a
+ * 256-room sheet (under 8% utilization), and because room order is a random
+ * per-session permutation, sheets carry no locality: those 12-20 rooms land
+ * in nearly every sheet, not a shared few. Fetching whole sheets there cost
+ * ~94x the bytes of per-file tiles to save a dozen requests
+ * (docs/performance-research.md §6). Fewer rooms per sheet also means a
+ * smaller re-upload blast radius when one room in it changes (see
+ * tools/upload/lib.ts) - another reason to leave the request-cheap, room-
+ * sparse end of the ladder unpacked.
  *
  * `cols * rows` must equal `roomsPerSheet` - `packages/pipeline/sheets.ts`
  * and `packages/server/scan.ts` both assert this rather than deriving one
@@ -235,7 +248,7 @@ export const PREFETCH: PrefetchConfig = {
  * grid.
  */
 export const SHEETS: SheetsConfig = {
-  fromLevel: 2,
+  fromLevel: 3,
   roomsPerSheet: 256,
   cols: 16,
   rows: 16,
@@ -248,7 +261,7 @@ export const SHEETS: SheetsConfig = {
    * whole coarse end of the pyramid fits in memory at once and a full scroll
    * of the map costs zero further sheet requests, ever, however far the
    * corpus grows past that point. 64 comfortably covers a 2048-room corpus
-   * (32 sheets total across levels 2-5); raise it for a much larger one.
+   * (24 sheets total across levels 3-5); raise it for a much larger one.
    */
   cacheBudget: 64,
 };

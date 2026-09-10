@@ -12,9 +12,11 @@ guesses whose magnitude depends on the machine. §2 is the instrumentation
 output across four browser/device captures. Read §9 before trusting §8's
 ranking; it reprioritizes in a couple of places.
 
-Numbers assume the current corpus (~2048 rooms), `BASE_TILE` 1024x768, the
-`LEVELS` ladder in `packages/web/src/lib/pyramid.ts`, and `SHEETS` packing
-levels 2-5 at 16x16 rooms per sheet.
+Numbers assume the current corpus (~2048 rooms), `BASE_TILE` 1024x768, and the
+`LEVELS` ladder in `packages/web/src/lib/pyramid.ts`. Most of this was measured
+while `SHEETS` still packed levels 2-5; level 2 has since moved back to
+per-file (§6), so any number below quoting a level-2 sheet is describing a
+mechanism that no longer exists at that level.
 
 ---
 
@@ -710,6 +712,10 @@ cancellation.
 ---
 
 ## 6. Should the finest sheet level go back to per-file?
+
+**Implemented.** `SHEETS.fromLevel` is `3`; level 2 is per-file, at a real-bytes
+budget (`LEVELS[2].budget`, `packages/web/src/lib/pyramid.ts`). The analysis
+below is kept for the reasoning, not as a thing still to do.
 
 Short answer: **yes, and the argument is stronger than "level 2's sheets are
 inconveniently large."** Sheet packing trades requests for bytes, and that trade
