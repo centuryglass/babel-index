@@ -39,12 +39,10 @@ import {
 
 // `?debug` exposes the scripted-action runner on `window.__babelDebug`
 // (main.tsx) - the parity scenes drive deterministic camera/search state
-// through it. Only the two actions used here are typed; the object has more.
-declare global {
-  interface Window {
-    __babelDebug: { actions: { zoom(factor: number): void; search(term: string): void } };
-  }
-}
+// through it. Typed locally at each call site (not via a `declare global`
+// Window augmentation, which would leak this narrow shape across the whole
+// project and collide with main.tsx's own, fuller `__babelDebug`).
+type BabelDebug = { __babelDebug: { actions: { zoom(f: number): void; search(q: string): void } } };
 
 /**
  * The HUD fields that are a per-frame draw-loop DECISION rather than a raw
@@ -181,8 +179,8 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
     // Both sessions get the identical viewport and corpus openLibrary fixes, so
     // the only variable between them is the renderer.
     [c2d, gl] = await Promise.all([
-      openLibrary({ favorites: true }),
-      openLibrary({ favorites: true, extraParams: ['webgl'] }),
+      openLibrary({ favorites: true, webgl: false }),
+      openLibrary({ favorites: true, webgl: true }),
     ]);
     await mkdir(artifacts, { recursive: true });
   });
@@ -250,7 +248,7 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
     // land at the same camera centred on cell (0, 0).
     const diff = await compareScene('center-zoom', async (s) => {
       await recentre(s.page, s.flightMs);
-      await s.page.evaluate(() => window.__babelDebug.actions.zoom(4));
+      await s.page.evaluate(() => (window as unknown as BabelDebug).__babelDebug.actions.zoom(4));
       return landed(s.page, s.flightMs);
     });
     // Spine text and badge edges push this scene's diff up (meanAbs ~1.2,
@@ -263,7 +261,9 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
   test('searched: a search rearranges both to the same clustered layout', async () => {
     const diff = await compareScene('searched', async (s) => {
       await recentre(s.page, s.flightMs);
-      await s.page.evaluate(() => window.__babelDebug.actions.search('hexagonal galleries'));
+      await s.page.evaluate(
+        () => (window as unknown as BabelDebug).__babelDebug.actions.search('hexagonal galleries')
+      );
       // The first search on a cold machine downloads the CLIP text tower; the
       // rearrangement can lag well past a normal request, so settle generously.
       const deadline = Date.now() + SEARCH_TIMEOUT;

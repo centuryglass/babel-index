@@ -29,60 +29,14 @@ serve as completed task history.
   `FavoriteStore` rather than a lock on the file.
 
 ## Rendering:
-- **[2026-09-10] WebGL map renderer: remaining validation before flipping
-  `webglFlag.ts`'s `DEFAULT_WEBGL` to `true`.** The renderer (`glRenderer.ts`/
-  `glSlideRenderer.ts`/`useMapRendererGL.ts`, gated behind `?webgl`) is
-  feature-complete and measurably faster (Android Firefox now smooth,
-  previously the worst-case environment `docs/performance-research.md`
-  documented). What's left is validation, not code:
-  - Only Android Firefox and desktop Chrome/Firefox have been hands-on
-    tested. iOS/Safari has a history of WebGL2 edge cases that a bare
-    `supportsWebGL2()` capability check won't catch (it only rules out "no
-    support at all", not "reports support, behaves wrong") - needs an actual
-    device pass.
-  - Visual regression coverage between the GL and Canvas2D renderers now
-    exists as `packages/web/e2e/render-parity.parity.ts` (`npm run
-    test:parity`, deliberately outside `npm test`/`npm run test:e2e` - needs a
-    real GPU, boots two sessions). It drives both renderers to the same camera
-    and asserts (a) HUD parity on every per-frame draw decision and (b) a pixel
-    diff under a threshold at two fully-resolved scenes: center-zoom (spine
-    legibility, books, favorite badges) and post-search (slide-renderer end
-    state, clustered placement). On this GPU both scenes are deterministic at
-    meanAbs ~1 / <1% strong-diff pixels; a sabotage check confirmed a
-    tile-draw break spikes them to ~37 / ~50%. Still manual, not covered by the
-    suite: hover-glow states, and an iOS/Safari pass. A far-zoom "overview"
-    scene was intentionally left out - see that file's header for why (per-
-    session cache warm-up makes far-zoom tile resolution non-deterministic).
-  - GPU memory was only checked informally (a short session, DevTools open,
-    "no console errors"). Worth one deliberate long session - many searches,
-    favorite toggles, rearrangements - watching the memory graph rather than
-    eyeballing it.
-
-  Once those three pass, flip `DEFAULT_WEBGL`. Whether Canvas2D is ever
-  removed after that is a separate, later decision.
-- **[2026-09-10, resolved] The `createImageBitmap` unpack-matching fix removed
-  Firefox's texture-upload CPU conversion.** A 2-minute `?webgl` Firefox
-  profile (`tools/perf-capture/out`, canvas2d vs webgl, seed `babel-perf`)
-  showed the CanvasRenderer thread spending ~1.2s of CPU in
-  `WebGLTexelConversions::pack/unpack` + `gfx::Swizzle*_SSE2` +
-  `WebGLImageConverter::run` - work the Canvas2D run does not do at all,
-  sustained at ~0.3-0.38s per 10s window during tile churn. Cause: tiles were
-  decoded with a bare `createImageBitmap(blob)` (default premultiplied alpha +
-  colorspace conversion) but uploaded with `UNPACK_PREMULTIPLY_ALPHA_WEBGL`
-  false (`gl/context.ts`), so Firefox repacked every texel on the CPU instead
-  of uploading straight to the GPU. Fixed by decoding with
-  `{ premultiplyAlpha: 'none', colorSpaceConversion: 'none' }` in
-  `tiles.ts`'s `decodeOnThread` (also `toString()`'d into the decode worker,
-  so both paths change together). Confirmed by a fresh Firefox `?webgl`
-  capture (2026-09-10 11.39): all three symbols are gone from the
-  CanvasRenderer thread (nothing above 5ms), whose self-time is now purely the
-  NVIDIA driver upload path (`NvGlEglGetFunctions`, `libnvidia-eglcore`) and
-  GPU waits - the upload goes straight through the driver, no CPU repack, and
-  no color/premultiply regression (tiles are opaque). Other findings from the
-  original capture needed no action - WebGL already ~halves
-  JS heap (+68MB vs +168MB), main-thread CPU is a wash (~18% one core, both
-  renderers), and the node/listener growth in `summary.json` is an end-of-run
-  interaction spike, not a monotonic leak.
+- **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
+  `?webgl=0` as the Canvas2D escape hatch and a `supportsWebGL2()` probe that
+  falls back automatically. Canvas2D is still a full second renderer, kept in
+  lockstep (see AGENTS.md's "The WebGL renderer") and covered by
+  `render-parity.parity.ts`. Open question, no work scheduled: whether to
+  eventually retire Canvas2D. Retiring it drops the parity suite, the
+  `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
+  only once WebGL has real production mileage and nothing has needed the hatch.
 
 ## Rearrangement / camera:
 - **[2026-09-10] A `flyTo` issued while a rearrangement is animating has no
@@ -135,10 +89,3 @@ serve as completed task history.
   gesture) does not currently do this. Confirm whether that's the intended
   reading of the invariant and, if so, wire `flyTo` to end an active
   rearrangement the same way a pointer grab does.
-
-## Other:
-- **Check the in-tile search field on an actual iOS device.** Its font size
-  is whatever `.center-search input` inherits (13px, the app's body size),
-  well under the ~16px that keeps iOS Safari from auto-zooming the viewport
-  on focus. The page's `maximum-scale=1, user-scalable=no` viewport meta
-  likely suppresses that already, but it needs testing.

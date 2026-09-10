@@ -1,6 +1,6 @@
 /**
  * The WebGL counterpart of `useMapRenderer.ts` - see AGENTS.md's "The WebGL
- * renderer (experimental)" for the standing invariants this file exists to
+ * renderer" for the standing invariants this file exists to
  * uphold, in particular: GL setup happens exactly ONCE per canvas element's
  * lifetime, never per-frame or per-prop-change.
  *
@@ -478,7 +478,7 @@ export function useMapRendererGL({
     };
     // `latestRef`/`anim`/`cam`/`genericFade` are refs read fresh every call -
     // deliberately excluded so this effect stays canvas-lifetime-only. See
-    // this file's doc and AGENTS.md's "The WebGL renderer (experimental)".
+    // this file's doc and AGENTS.md's "The WebGL renderer".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasRef, cache]);
 }

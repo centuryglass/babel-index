@@ -1,16 +1,17 @@
 /**
- * The browser smoke test for the experimental WebGL map renderer
+ * The browser smoke test for the WebGL map renderer
  * (`?webgl` - see `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`/
- * `useMapRendererGL.ts` and `AGENTS.md`'s "The WebGL renderer (experimental)"
+ * `useMapRendererGL.ts` and `AGENTS.md`'s "The WebGL renderer"
  * section). `glRenderer.test.ts`/`glSlideRenderer.test.ts` already cover the
  * draw loop's own decisions against a recording `GLContext` fake - this file
  * is the one thing those cannot see: that a real `WebGL2RenderingContext`
  * actually accepts the calls this renderer makes, on a real GPU, in a real
  * browser.
  *
- * `openLibrary({ extraParams: ['webgl'] })` boots the same corpus every other
- * file in this suite uses, with `?webgl` added to the query string so
- * `webglFlag.ts`'s `WEBGL` is true before `main.tsx` ever mounts.
+ * `openLibrary({ webgl: true })` boots the same corpus every other file in this
+ * suite uses, with `?webgl` pinned on the query string so `webglFlag.ts`'s
+ * `WEBGL` is true before `main.tsx` ever mounts. The rest of the suite pins
+ * `webgl=0` (Canvas2D) for its 2D-canvas readbacks; this file is the GL smoke.
  *
  * None of the files in this directory are part of `npm test`; run them on
  * purpose:
@@ -24,11 +25,11 @@ import {
   SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, settled, waitFor,
 } from './support.ts';
 
-describe('the library, in a browser: the experimental WebGL renderer', { concurrency: false }, () => {
+describe('the library, in a browser: the WebGL renderer', { concurrency: false }, () => {
   let session;
 
   before(async () => {
-    session = await openLibrary({ extraParams: ['webgl'] });
+    session = await openLibrary({ webgl: true });
   });
 
   after(async () => {

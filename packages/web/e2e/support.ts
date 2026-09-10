@@ -77,11 +77,19 @@ export async function waitFor(predicate, timeoutMs, message) {
  * favorite control renders anywhere else in the suite - a favorites-specific
  * test needs the flag on purpose, not as an oversight to fix elsewhere.
  *
- * `extraParams` are appended to the page's query string alongside `?debug` -
- * e.g. `['webgl']` for `webgl-map.e2e.ts`'s smoke spec, which needs
- * `webglFlag.ts`'s `WEBGL` on before `main.tsx` ever mounts.
+ * `webgl` pins the renderer EXPLICITLY - `webgl=0` (Canvas2D) or `webgl`
+ * (WebGL) is always on the query string, never left to `webglFlag.ts`'s
+ * `DEFAULT_WEBGL`. The default there is now WebGL, so an unpinned suite would
+ * silently switch renderers under this suite's 2D-canvas readbacks
+ * (`fingerprint`, the blank-tile checks) and break them; pinning keeps every
+ * spec's renderer a fact of the test rather than a fact of production. Defaults
+ * to Canvas2D because that is what those readbacks need - the GL renderer has
+ * its own coverage in `webgl-map.e2e.ts` and `render-parity.parity.ts`.
+ *
+ * `extraParams` are appended to the page's query string alongside `?debug` for
+ * anything else a spec needs to set before `main.tsx` mounts.
  */
-export async function openLibrary({ favorites = false, extraParams = [] } = {}) {
+export async function openLibrary({ favorites = false, webgl = false, extraParams = [] } = {}) {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
 
@@ -154,7 +162,7 @@ export async function openLibrary({ favorites = false, extraParams = [] } = {}) 
     // `?debug` mounts the dev panel and the cache/rearrangement HUD - both now
     // gated off by default (see `debug.js`), and this suite leans on them
     // throughout as its settling signal and its window into cache/level state.
-    const query = ['debug', ...extraParams].join('&');
+    const query = ['debug', webgl ? 'webgl' : 'webgl=0', ...extraParams].join('&');
     await page.goto(`${origin}?${query}`, { waitUntil: 'domcontentloaded' });
     // Rooms have to be decoded and drawn before any of this means anything.
     await page.waitForFunction(
