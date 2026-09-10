@@ -98,22 +98,25 @@ need before the camera moves.
       canvas-lifetime effect) so the ring is gated the same way in both
       renderers. `slide.ts` draws no cursor ring during a rearrangement, so
       `glSlideRenderer.ts` doesn't either.
-- [ ] Hover-glow silhouettes for the favorite badge and both distill-toggle
+- [x] Hover-glow silhouettes for the favorite badge and both distill-toggle
       states, done properly (not the flat-rect approximation the spike
-      shipped) - bake each traced path to a static texture once via an
-      offscreen 2D canvas at the same cell-fraction coordinate space the
-      path is already defined in, upload once, composite over the cell's
-      screen rect only when hovered. Requires extracting `render.ts`'s
-      private `traceFavoriteToggle`/`traceDistillToggle` path-walking loop
-      into one new exported pure function in `svgPath.ts` that both files
-      call - `render.ts`'s own two functions become thin wrappers, behavior
-      unchanged, `render.test.ts` must keep passing unmodified.
-- [ ] Rank-label chrome text (`#123` labels, zoom>120): **not planned** -
-      dropped permanently. It would change every frame at exactly the zoom
-      level where framerate matters most, defeating any texture-cache
-      approach. Document this reasoning in `glRenderer.ts`'s file doc so a
-      future reader doesn't "fix" the gap without re-deriving why it was
-      skipped.
+      shipped) - each traced path is baked once to an offscreen 2D canvas
+      (`gl/glowTexture.ts`'s `createGlowTextureCache`, cached per path
+      string) and composited over the cell's full screen rect only when
+      hovered, since a traced path's coordinates are fractions of the WHOLE
+      tile, not just the icon. `svgPath.ts` gained the extracted
+      `tracePathCommands`/`PathTracer`; `render.ts`'s
+      `traceFavoriteToggle`/`traceDistillToggle` are now thin wrappers over
+      it, `render.test.ts` unmodified. The flat-rect quad remains as the
+      fallback for when no offscreen canvas exists (`npm test`'s Node
+      environment). Shared between `glRenderer.ts` and `glSlideRenderer.ts`
+      the same way `textures` already is, so the distill toggle's glow
+      rides along across the rearrangement handoff.
+- [x] Rank-label chrome text (`#123` labels, zoom>120): **not planned** -
+      dropped permanently, reasoning documented in `glRenderer.ts`'s file
+      doc (cross-referencing `AGENTS.md`'s WebGL section, which states it in
+      full) - it would change every frame at exactly the zoom level where
+      framerate matters most, defeating any texture-cache approach.
 
 ## Phase E - testing
 

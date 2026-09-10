@@ -34,7 +34,7 @@ import { composeSpines, areSpinesLegible, BOOK_COUNT, type Slot, type SpineConte
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
-import { parsePath } from './svgPath.ts';
+import { tracePathCommands } from './svgPath.ts';
 import { perfRecordSheetFirstDraw } from './perfProbe.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
@@ -423,22 +423,11 @@ function naturalIconSize(hit: TileHit): { w: number; h: number } {
  * Trace `FAVORITE_TOGGLE_PATH` (a per-axis tile fraction, like every other
  * traced rect on a tile) onto a real path at this tile's screen position,
  * ready to `fill()`/`stroke()`. Replays the true Bezier curve rather than a
- * flattened polygon - `parsePath` exists for exactly this, `flattenPath`
- * (`svgPath.ts`) is for hit-testing only.
+ * flattened polygon - `tracePathCommands` (`svgPath.ts`) exists for exactly
+ * this, `flattenPath` (same file) is for hit-testing only.
  */
 function traceFavoriteToggle(ctx: PathContext, cellPx: { x: number; y: number }, sx: number, sy: number): void {
-  ctx.beginPath();
-  for (const cmd of parsePath(FAVORITE_TOGGLE_PATH as string)) {
-    if (cmd.type === 'M') ctx.moveTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
-    else if (cmd.type === 'L') ctx.lineTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
-    else if (cmd.type === 'C')
-      ctx.bezierCurveTo(
-        sx + cmd.x1 * cellPx.x, sy + cmd.y1 * cellPx.y,
-        sx + cmd.x2 * cellPx.x, sy + cmd.y2 * cellPx.y,
-        sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y
-      );
-    else ctx.closePath();
-  }
+  tracePathCommands(ctx, FAVORITE_TOGGLE_PATH as string, cellPx, sx, sy);
 }
 
 /**
@@ -519,18 +508,7 @@ export function drawClearHistoryBookOverlay(
  * `traceFavoriteToggle`.
  */
 function traceDistillToggle(ctx: PathContext, cellPx: { x: number; y: number }, sx: number, sy: number, d: string): void {
-  ctx.beginPath();
-  for (const cmd of parsePath(d)) {
-    if (cmd.type === 'M') ctx.moveTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
-    else if (cmd.type === 'L') ctx.lineTo(sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y);
-    else if (cmd.type === 'C')
-      ctx.bezierCurveTo(
-        sx + cmd.x1 * cellPx.x, sy + cmd.y1 * cellPx.y,
-        sx + cmd.x2 * cellPx.x, sy + cmd.y2 * cellPx.y,
-        sx + cmd.x * cellPx.x, sy + cmd.y * cellPx.y
-      );
-    else ctx.closePath();
-  }
+  tracePathCommands(ctx, d, cellPx, sx, sy);
 }
 
 /**
