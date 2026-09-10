@@ -165,12 +165,16 @@ need before the camera moves.
       now) - the whole mechanism for eventually flipping the default, no
       rollout infrastructure or persisted preference needed at this scale.
       Whether Canvas2D is ever removed after that flip is a later decision.
-- [ ] `AGENTS.md`: add the new files to the Layout section, and a new
-      "Things that will bite you" subsection for the standing invariants
+- [x] `AGENTS.md`: the GL files are in the Layout section, and "The WebGL
+      renderer (experimental)" subsection covers the standing invariants
       (mirrors `render.ts`/`slide.ts` in lockstep, GL setup happens exactly
       once per canvas lifetime, the texture cache's own eviction budget,
       rank labels permanently out of scope, where the default-flip constant
-      lives).
+      lives) - though that last one is aspirational: `webglFlag.ts` has no
+      `DEFAULT_WEBGL` or `supportsWebGL2()` yet (see the unchecked items
+      below), so `AGENTS.md`'s claim that "`WEBGL` itself already folds in a
+      WebGL2 capability probe" is currently false and needs fixing alongside
+      that item, not before it.
 
 ## Verification, each phase
 

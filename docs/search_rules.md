@@ -7,10 +7,12 @@ behavior that the implementation (`packages/map/scoring.ts`, `packages/map/order
 `packages/config/config.ts`) has to satisfy. It supersedes every earlier draft of
 this file.
 
-This describes the finished behavior, not the code as it stands today. Where the
-two differ — and they do, in named ways — the gap and the steps to close it live
-in [`docs/search-plan.md`](search-plan.md), so this file can stay a clean
-statement of the target rather than a running diff against the present.
+This describes the finished behavior, and matches the implementation
+(`packages/map/scoring.ts`, `packages/map/ordering.ts`,
+`packages/config/config.ts`) as of this writing. Keep it that way: a change
+to a weight, a matching rule, or a certainty anchor updates this file in the
+same commit, rather than letting it drift back into being a target the code
+no longer implements.
 
 ## Overview: one evaluation, two questions
 
@@ -191,10 +193,8 @@ column never touches placement.
   checked against the story the same way it is against a keyword: the phrase's
   words must appear consecutively (by lemma), not merely somewhere in the room.
   This is the same machinery the "long story match" rule needs - a contiguous
-  run of matched query words - so quoted phrases get story credit for free once
-  that exists, rather than being a special case. (The word-set index this
-  replaces, and why the change is an architecture change rather than a parsing
-  one, is `docs/search-plan.md` §3.)
+  run of matched query words - so quoted phrases get story credit for the
+  same reason, not as a special case.
 
 ## Assertions
 
@@ -362,8 +362,7 @@ characters (roughly one or two words) the bonus is exactly zero; by 40 (roughly 
 full clause) it saturates at `L = 2`, and `L` is set above `clip + tagPartial`
 (`2 > 1 + 0.45 = 1.45`) - so it wins even against a room that is simultaneously
 CLIP's top, fully-confident pick AND has a maxed-out partial tag match. Measuring
-a contiguous run needs the story indexed as an ordered token sequence, not a set
-(`docs/search-plan.md` §3).
+a contiguous run needs the story indexed as an ordered token sequence, not a set.
 
 **A quoted phrase is one contiguous story match, same as one keyword match.**
 `"art nouveau"` credits the story only where those two words appear consecutively,
@@ -409,9 +408,9 @@ was the interesting result, not the expected one: a keysmash query embeds near
 the corpus's mean direction (genuinely no signal), while a coherent-but-wrong
 concept has its own specific direction that is actively dissimilar to library
 imagery - so real off-topic content reads as more confidently wrong than
-gibberish does. See `docs/search-plan.md` §5 for how each anchor was measured
-and `cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each read off a
-different distribution.
+gibberish does. See `tools/embed/cosine-range.ts` for how each anchor was
+measured and `cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each
+read off a different distribution.
 
 ### Balancing signals against each other
 
@@ -422,15 +421,13 @@ a single weighted sum.** See "One sort, not tiers" in the overview.
 `E=5` (per exact tag), `P=0.45` (partial-tag budget), `T=5.5` (exact title
 match), `Pt=0.2` (partial-title budget), `S=0.4` (full short-story match),
 `L=2` (long contiguous-story bonus) and `C=1` (CLIP) are exactly what
-`config.search.weights` carries - the target replaces the three-way
-`{keyword, story, clip}` it holds today with this seven-way
+`config.search.weights` carries, in this seven-way
 `{tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip}`
-shape, because the exact/partial distinction needs its own weight for both tag
-and title, and short/long needs its own weight for story, for the inequalities
-to hold. Each was chosen so its rule's inequality holds with real margin, not
+shape - the exact/partial distinction needs its own weight for both tag and
+title, and short/long needs its own weight for story, for the inequalities to
+hold. Each was chosen so its rule's inequality holds with real margin, not
 just at the boundary, so re-tuning any one requires re-checking the others'
-margins rather than eyeballing it alone. (The current three weights, and why
-the inequalities are false under them, are `docs/search-plan.md` §2.)
+margins rather than eyeballing it alone.
 
 ### Computing certainty
 

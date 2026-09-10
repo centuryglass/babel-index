@@ -86,7 +86,7 @@ export function cellHash(x: number, y: number, seed = 0): number {
 
 /**
  * The origin is reserved for the center room - the one with the search box and
- * the hidden controls painted into it (concept.md steps 5-6). It is never a
+ * the hidden controls painted into it (docs/concept.md steps 5-6). It is never a
  * corpus slot, so ranked rooms begin in the ring around it.
  */
 export const isCenter = (x: number, y: number): boolean => x === 0 && y === 0;

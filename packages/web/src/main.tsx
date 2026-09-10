@@ -247,12 +247,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const genericSeed = config.map.genericSeed;
 
   // The map's order AND its density profile, from one sort: an active favorite
-  // sort is a placement input exactly as a search is (see
-  // docs/favorites-density-plan.md), so the certainty a room lands with has to
-  // be derived from the same sort that placed it rather than from the search
-  // alone. `favoriteSort` composes the two - a search's own certainty, boosted
-  // to 1 for whatever the sort lifted to the front - so `layout` below reads
-  // one number per room instead of two that could disagree.
+  // sort is a placement input exactly as a search is, so the certainty a room
+  // lands with has to be derived from the same sort that placed it rather
+  // than from the search alone. `favoriteSort` composes the two - a search's
+  // own certainty, boosted to 1 for whatever the sort lifted to the front -
+  // so `layout` below reads one number per room instead of two that could
+  // disagree.
   //
   // A search ranks the whole corpus; the layout takes as many as it has slots.
   // A blocked room drops out of the ranking entirely - not hidden behind a

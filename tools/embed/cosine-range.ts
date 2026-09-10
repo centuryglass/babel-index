@@ -9,7 +9,8 @@
  * exact `embeddingScores()` the app ranks with, and reports the distribution:
  * overall (mostly unrelated pairs, the noise band and its centre), per
  * keyword (each keyword's own best match), and - if given - two more
- * calibrations docs/search-plan.md §5 names: `--universal` (the high extreme,
+ * calibrations `docs/search_rules.md`'s "Image-content (CLIP) matching"
+ * section names: `--universal` (the high extreme,
  * keywords known to be true of nearly every room) and `--irrelevant` (the low
  * extreme, keywords known to have nothing to do with the corpus). `--nonsense`
  * is a third, validation-only list (keysmash queries, expected to land near
@@ -79,7 +80,7 @@ interface Report {
   suggestion: ClipBoundsSuggestion;
   universal: UniversalCalibration | null;
   /**
-   * The low-extreme calibration docs/search-plan.md §5 calls for: known
+   * The low-extreme calibration `docs/search_rules.md` calls for: known
    * concepts CLIP should recognise but that have nothing to do with this
    * corpus (a "swimming pool" query against a library). Same shape and same
    * min-p10/median-p50 math as `universal` - `summarizeUniversal` is generic,
@@ -332,10 +333,10 @@ async function main() {
     universal = summarizeUniversal(universalPerKeyword);
   }
 
-  // The low-extreme calibration (docs/search-plan.md §5 step 1): same
-  // min-p10/median-p50 read `universal` uses for the high extreme, just off a
-  // list of concepts known to have nothing to do with this corpus instead of
-  // ones known to be true of nearly every room.
+  // The low-extreme calibration: same min-p10/median-p50 read `universal`
+  // uses for the high extreme, just off a list of concepts known to have
+  // nothing to do with this corpus instead of ones known to be true of
+  // nearly every room.
   let irrelevant: UniversalCalibration | null = null;
   if (irrelevantWords.length) {
     const { perKeyword: irrelevantPerKeyword } = await scoreList(

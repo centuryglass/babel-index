@@ -3,9 +3,9 @@
  * the FLIP animation that folds the center tile into the catalog's first row
  * (or back out) rather than cutting between them.
  *
- * Split out of `main.jsx` per `docs/state-architecture-plan.md` §3 step 3.
- * The most self-contained block in that file: `flipFrom`, `centreRectNow`,
- * `animatedSwitch` and the FLIP `useLayoutEffect` are read nowhere else.
+ * Split out of `main.jsx` - the most self-contained block in that file:
+ * `flipFrom`, `centreRectNow`, `animatedSwitch` and the FLIP
+ * `useLayoutEffect` are read nowhere else.
  *
  * The map itself stays mounted and hidden throughout - this hook only ever
  * says which mode is current, never whether `MapView` is in the tree.

@@ -151,7 +151,7 @@ test('the default weights satisfy every cross-signal inequality docs/search_rule
   // Every non-CLIP signal is already an absolute ratio or count, and CLIP is
   // normalised to [0, 1] before weighting, so these are directly comparable -
   // this is the property the seven constants are chosen to express, checked
-  // directly rather than by eyeballing a re-tune (docs/search-plan.md §2).
+  // directly rather than by eyeballing a re-tune.
   const { tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip } = DEFAULTS.search.weights;
   assert.ok(
     tagExact > tagPartial + titlePartial + story + storyLong + clip,
