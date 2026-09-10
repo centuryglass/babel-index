@@ -451,6 +451,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   evidence rather than re-discovering the bug from scratch. Either way, the
   bug does not just get silently noticed and left. "Unrelated to what I was
   asked" is not a reason to leave a found bug undocumented and unfixed.
+  "Trivial" is about the fix, not the effort spent finding it - if closing
+  it out needs more than one e2e run to confirm (a live-instrumented repro,
+  several rounds of re-running a browser suite to chase a race), that is a
+  sign it belongs in `docs/implementation-plan.md`, not a same-pass fix -
+  unless the user has explicitly asked for exactly that investigation.
 
 ## Things that will bite you
 
@@ -1061,6 +1066,11 @@ code, not a standing invariant.
   any other `requestAnimation` trigger. Camera coordinates from `flyTo(x, y,
   ...)` land on the cell's CENTER (`cameraAtCell`'s `+ 0.5`), so `recentre()`
   (which calls `flyTo(0, 0, ...)`) checks for `(0.5, 0.5)`, not `(0, 0)`.
+
+## Working with GitHub
+
+- **Don't ask whether to subscribe to a PR you just opened.** The answer is
+  effectively always no; if the user wants it watched they'll say so.
 
 ## Next up
 
