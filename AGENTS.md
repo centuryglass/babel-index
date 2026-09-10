@@ -289,6 +289,19 @@ inpainting pipeline, and isn't touched anywhere else in the project.
            a billing alert). Applied locally by hand, never from CI -
            credentials live in a gitignored `terraform.tfvars`. See
            `infra/README.md`.
+- `Dockerfile`: containerizes the demo server (`npm run demo`) - a deps stage
+               (`npm ci --omit=dev`, optionally `--omit=optional` via the
+               `WITH_CLIP` build arg to drop the CLIP text tower) plus a
+               runtime stage. No compiled output to copy (see "No compiled
+               output ever hits disk" above), so it's install-then-run, not a
+               build stage. Pulls in `tools/center-placement/lib` even though
+               nothing else under `tools/` is needed at runtime, because
+               `packages/web` imports tile geometry straight out of it at
+               bundle time.
+- `.dockerignore`: keeps the build context out of `node_modules`, `tools/`
+                   (except `center-placement/lib`, re-included), and anything
+                   dev/local-only (`docs`, `infra`, `reference`, `*.env`,
+                   `favorites.json`, `config.json`).
 
 ### Assets:
 - `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
