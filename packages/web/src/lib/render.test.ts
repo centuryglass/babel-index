@@ -347,9 +347,6 @@ test('the renderer never assumes a square cell', () => {
 });
 
 test('the keyboard cursor draws a ring only when passed, and only on screen', () => {
-  // `chrome: false` isolates the cursor's ring from the center room's own
-  // marker - at a 1600x900 screen and this zoom the origin is easily still in
-  // view of a room a couple of cells out, and chrome strokes it unconditionally.
   const w = world();
   const slot = w.layout.slots[0];
   const cam = { x: slot.x + 0.5, y: slot.y + 0.5, zoom: 220 };
@@ -357,7 +354,7 @@ test('the keyboard cursor draws a ring only when passed, and only on screen', ()
   const ctx = fakeCtx();
   w.renderer.draw({
     ctx, width: 1600, height: 900, dpr: 1,
-    cam, layout: w.layout, order: w.order, chrome: false,
+    cam, layout: w.layout, order: w.order,
     cursor: { x: slot.x, y: slot.y },
   });
   assert.equal(ctx.strokes.length, 1, 'a cursor on screen must draw exactly one ring');
@@ -365,14 +362,14 @@ test('the keyboard cursor draws a ring only when passed, and only on screen', ()
   const noCursor = fakeCtx();
   w.renderer.draw({
     ctx: noCursor, width: 1600, height: 900, dpr: 1,
-    cam, layout: w.layout, order: w.order, chrome: false,
+    cam, layout: w.layout, order: w.order,
   });
   assert.equal(noCursor.strokes.length, 0, 'no cursor argument must draw no ring at all');
 
   const offscreen = fakeCtx();
   w.renderer.draw({
     ctx: offscreen, width: 1600, height: 900, dpr: 1,
-    cam, layout: w.layout, order: w.order, chrome: false,
+    cam, layout: w.layout, order: w.order,
     cursor: { x: slot.x + 10000, y: slot.y + 10000 },
   });
   assert.equal(offscreen.strokes.length, 0, 'a cursor far off screen must not be drawn');

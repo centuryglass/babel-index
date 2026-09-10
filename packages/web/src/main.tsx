@@ -332,7 +332,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // in" shape as `draw` above. `onPreparingGL` is a stable wrapper
   // (`useCallback` with no deps, closing only over the ref object itself)
   // so `useRearrangement`'s own `useCallback` chain doesn't rebuild on every
-  // render - see `docs/webgl-renderer-plan.md`'s Phase C.
+  // render.
   const warmTexturesRef = useRef((_ids: ReadonlySet<number>, _level: number) => {});
   const onPreparingGL = useCallback((ids: ReadonlySet<number>, level: number) => {
     warmTexturesRef.current(ids, level);

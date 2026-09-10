@@ -8,8 +8,7 @@
  * Without this, the spike's own measurement showed the flight phase getting
  * SLOWER under WebGL (each newly-decoded bitmap paying its first
  * `texImage2D` upload during the one phase that's supposed to feel
- * instant) even though the slide phase it precedes got dramatically faster -
- * see `docs/webgl-renderer-plan.md`'s Phase C.
+ * instant) even though the slide phase it precedes got dramatically faster.
  *
  * Polls independently of `prepareRearrangement`'s own readiness loop rather
  * than sharing it - `cache.get(id, level)` is cheap to call repeatedly (it

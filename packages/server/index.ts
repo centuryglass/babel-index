@@ -191,7 +191,7 @@ const ctx = await context({
   // The center shelf's spine webfont is bundled the same self-hosted way, as a
   // base64 data URI, so a title renders without a font CDN request - see
   // spineFont.ts.
-  loader: { '.svg': 'text', '.woff2': 'dataurl' },
+  loader: { '.svg': 'text', '.woff2': 'dataurl', '.vert': 'text', '.frag': 'text' },
   plugins: [
     {
       name: 'live-reload',

@@ -121,8 +121,6 @@ export interface DrawOpts {
   layout: MapLayout;
   /** room ids, best first */
   order: number[];
-  /** draw the center-room marker and rank labels */
-  chrome?: boolean;
   /**
    * the history/tag titles to composite onto the center tile's spines, or
    * null to draw none. Optional so tests and the slide renderer, which never
@@ -212,7 +210,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
   let level: number | null = null;
 
   function draw({
-    ctx, width: w, height: h, dpr, cam, layout, order, chrome = true, centreSlots = null,
+    ctx, width: w, height: h, dpr, cam, layout, order, centreSlots = null,
     hoveredBook = null, spineFontLimits = null, cursor = null, favorites = null, hoveredFavorite = null,
     sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
   }: DrawOpts): DrawResult {
@@ -294,7 +292,6 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
           if (cell.generic && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
         }
 
-        if (chrome) drawChrome(ctx, cell, sx, sy, zoom);
         // The favorite badge - every real room, never the center (it is the
         // controls, not a room) and never a generic cell (nothing to favorite).
         if (favorites && !cell.center && !cell.generic) {
@@ -311,9 +308,9 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // before the shelf's titles so the gilt text still composites on top.
         if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
           drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
-        // The center room's spines carry the search history. Content, not
-        // chrome, so it is not gated on that flag - but it is gated on legible
-        // spine width inside composeSpines, so far out it draws nothing.
+        // The center room's spines carry the search history - gated on
+        // legible spine width inside composeSpines, so far out it draws
+        // nothing.
         //
         // `ctx` is only `DrawContext` here (see that interface's own doc) - a
         // real 2d context also satisfies `composeSpines`'s wider `SpineContext`,
@@ -586,19 +583,4 @@ export function drawFavoriteSwitch(
   draw(FAV_CENTER_SWITCH_BASE);
   if (sortMode === 'mine') draw(FAV_MINE_ON);
   else if (sortMode === 'count') draw(FAV_COUNT_ON);
-}
-
-/** The rank labels. Cosmetic, and zoom-gated. */
-function drawChrome(
-  ctx: DrawContext,
-  cell: RoomAtResult,
-  sx: number,
-  sy: number,
-  zoom: number
-): void {
-  if (!cell.center && !cell.generic && zoom > 120) {
-    ctx.fillStyle = 'rgba(232,224,210,0.55)';
-    ctx.font = '11px ui-monospace, monospace';
-    ctx.fillText(`#${cell.rank}`, sx + 8, sy + 18);
-  }
 }

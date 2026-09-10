@@ -27,7 +27,7 @@ import { pxPerCell } from './camera.ts';
 import { CENTER, genericId, type RoomId, type TileCache } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { BoardValue } from '../../../map/moves.ts';
-import type { GLContext, Rect } from './gl/context.ts';
+import { toGLRect, type GLContext, type Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
 import {
@@ -118,7 +118,7 @@ export function createGLSlideRenderer({
       const tex = hit ? textures.get(gl, hit.img) : null;
       if (hit && tex) {
         const src: Rect = hit.rect
-          ? { x: hit.rect.sx, y: hit.rect.sy, w: hit.rect.sw, h: hit.rect.sh }
+          ? toGLRect(hit.rect)
           : { x: 0, y: 0, w: tex.width, h: tex.height };
         gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, dst);
         drawn++;
