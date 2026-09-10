@@ -143,11 +143,12 @@ CI runs `npm test` and the e2e smoke test on Node 20/22/24.
 
 ## Documentation
 
-- [`concept.md`](concept.md): Initial project concept
+- [`docs/concept.md`](docs/concept.md): Initial project concept and a dated log of design decisions
 - [`docs/implementation-plan.md`](docs/implementation-plan.md) — how it gets there, and what's next
 - [`docs/accessibility-plan.md`](docs/accessibility-plan.md) — the keyboard / screen-reader plan
+- [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
+- [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
 - [`docs/design-history.md`](docs/design-history.md) — decisions reversed and alternatives rejected
-- [`docs/borges-parameters.md`](docs/borges-parameters.md) — every number from the story, with its passage
 - [`CLAUDE.md`](CLAUDE.md) — notes for coding agents, and the full file-by-file layout
 
 ## License

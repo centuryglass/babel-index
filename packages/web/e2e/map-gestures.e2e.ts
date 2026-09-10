@@ -294,8 +294,8 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     await page.locator('input[type=search]').press('Enter');
 
     // A search no longer recenters the camera - it zooms out IN PLACE to show
-    // off the rearrangement (docs/favorites-density-plan.md), then eases back
-    // to the zoom the reader was actually at, at the SAME x/y throughout. So
+    // off the rearrangement, then eases back to the zoom the reader was
+    // actually at, at the SAME x/y throughout. So
     // the final resting point is exactly where the search was triggered from,
     // not the center.
     await waitFor(

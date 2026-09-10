@@ -3,8 +3,7 @@
  * reply into one ranking via `rankHybrid`, and the two highlight
  * range-finders bound to whatever term that ranking is for.
  *
- * Split out of `main.jsx` per `docs/state-architecture-plan.md` §3 step 6,
- * and deliberately last. By the time this ran, `useRearrangement` had already
+ * Split out of `main.jsx`, deliberately last. By the time this ran, `useRearrangement` had already
  * collapsed "the next layout change should animate" and "here is the
  * sentence for it" into one call, `requestAnimation(note)` - so this hook has
  * one way to ask for an animation rather than two. Done first it would have

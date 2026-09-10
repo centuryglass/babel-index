@@ -3,8 +3,7 @@
  * another, and the state machine that decides whether a layout/order change
  * gets that treatment or is simply drawn.
  *
- * Split out of `main.jsx` per `docs/state-architecture-plan.md` §3 step 5.
- * What was implicit before this - "the next layout change should animate" and
+ * Split out of `main.jsx`. What was implicit before this - "the next layout change should animate" and
  * "here is the sentence for it" as two separate ref writes a caller had to
  * remember to make together - is now one call, `requestAnimation(note)`. That
  * also closes the search-error bug the plan names: a flag set before an

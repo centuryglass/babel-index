@@ -2,7 +2,7 @@
  * The keyboard cursor: where it is, what a reader hears about it, and what
  * every key over the map does.
  *
- * Split out of `main.jsx` per `docs/state-architecture-plan.md` §3 step 1. The
+ * Split out of `main.jsx`. The
  * four pieces this hides - the granularity hysteresis, the boundary-crossing
  * latch, `cursorNow`, and the key switch itself - had no reader anywhere else
  * in that file, which is what made this the seam to cut first.

@@ -2,7 +2,7 @@
  * The center room's bookshelf - the wall of history/tag/override books, the
  * roving-tabindex focus, and what a tap or an arrow key does against it.
  *
- * Split out of `main.jsx` per `docs/state-architecture-plan.md` §3 step 2. The
+ * Split out of `main.jsx`. The
  * three pieces this hides - `tags`, `overrides` and `onOverride` - had no
  * reader anywhere else in that file, which is what made this the second
  * cleanest seam after the cursor.
