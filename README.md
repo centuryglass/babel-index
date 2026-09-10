@@ -106,6 +106,26 @@ To record global favorite counts, point it at a file to keep them in:
 npm run demo -- --favorites path/to/favorites.json [--trust-proxy 1]
 ```
 
+## Running it with Docker
+
+```sh
+docker build -t babel-index .
+docker run -p 5173:5173 babel-index
+```
+
+Against your own image tiles instead of the sample corpus, mount them and pass
+`--images` the same way you would to `npm run demo`:
+
+```sh
+docker run -p 5173:5173 -v /path/to/rooms:/data:ro babel-index --images /data
+```
+
+Any flag from above works the same way, appended after the image name (they
+replace the default `CMD`, not the entrypoint). Pass `--build-arg
+WITH_CLIP=false` for a smaller image that skips the CLIP text tower and ranks
+by keywords and story only - the container equivalent of the lighter install
+above.
+
 Without it, no counts are recorded and no favorite control appears - the
 server stays stateless, which is what the demo has always been. What is stored
 is, per room, a set of salted hashes of a random id the browser generates for
