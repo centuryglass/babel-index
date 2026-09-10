@@ -66,6 +66,7 @@ interface SlideConfig {
   gap: number;
   stagger: number;
   cascade: number;
+  prepareTimeoutMs: number;
 }
 
 interface CatalogConfig {
@@ -275,6 +276,22 @@ export const DEFAULTS: Defaults = {
      * a room the new arrangement wants but which has no copy off camera.
      */
     cascade: 45,
+
+    /**
+     * How long `prepareRearrangement` (`useRearrangement.ts`) waits for the
+     * plan's tiles to fetch and decode before giving up and animating with
+     * whatever is ready - the fallback being exactly today's behaviour, not a
+     * failure. Not a composed beat like the timings above - it is a real wait
+     * on its own, so a sub-frame value here is exactly as suspicious as it
+     * looks.
+     *
+     * A real `?perf` capture across four browser/device combinations
+     * (`docs/performance-research.md` §9.11) measured cold-cache prepare
+     * taking up to ~2.1-2.8s on Android; this sits above that with headroom
+     * rather than cutting it close, while still reading as "gave up and
+     * proceeded" rather than "hung" on a genuinely bad connection.
+     */
+    prepareTimeoutMs: 5000,
   },
 
   catalog: {
@@ -656,6 +673,9 @@ function slideTiming(src: Section, notes: string[]): SlideConfig {
   const out = {} as SlideConfig;
   for (const key of ['base', 'perCell', 'gap', 'stagger', 'cascade'] as const)
     out[key] = duration(src[key], d[key], `slide.${key}`, notes, { composed: true });
+  // Not composed - see the constant's own doc comment for why this one is a
+  // real wait rather than a beat between moving things.
+  out.prepareTimeoutMs = duration(src.prepareTimeoutMs, d.prepareTimeoutMs, 'slide.prepareTimeoutMs', notes);
   return out;
 }
 

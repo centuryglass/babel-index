@@ -781,6 +781,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     config,
     anim,
     announce,
+    cache,
   });
   requestAnimationRef.current = requestAnimation;
 

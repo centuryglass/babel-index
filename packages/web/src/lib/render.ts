@@ -35,6 +35,7 @@ import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH 
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { parsePath } from './svgPath.ts';
+import { perfRecordSheetFirstDraw } from './perfProbe.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
@@ -279,6 +280,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             } else {
               ctx.drawImage(hit.img, sx, sy, cw, ch);
             }
+            if (hit.sheetUrl) perfRecordSheetFirstDraw(hit.sheetUrl);
             drawn++;
             if (hit.level !== level) substituted++;
           } else {

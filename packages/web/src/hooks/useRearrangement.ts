@@ -20,10 +20,36 @@ import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { CELL_ASPECT, overviewZoom, pxPerCell, type Camera } from '../lib/camera.ts';
 import { createSlideshow } from '../lib/slide.ts';
+import { PYRAMID, PREFETCH } from '../lib/pyramid.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
+import { perfSetPhase, perfDump, perfRecordPrepare } from '../lib/perfProbe.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Config } from '../../../config/config.ts';
+import type { TileCache } from '../lib/tiles.ts';
+import type { Board, Point } from '../../../map/moves.ts';
 import type { RunningAnim } from './useMapRenderer.ts';
+
+/**
+ * The on-camera rectangle a rearrangement's target zoom implies, and the
+ * pyramid level that zoom will actually want there - shared by
+ * `prepareRearrangement` (before the flight) and the plan it builds, which
+ * previously computed this same geometry again after landing. Correct for
+ * exactly the flight `startRearrangement` runs, which only ever changes
+ * zoom - never x/y (see the `-0.5`/`+0.5` cancellation there) - so `cam`'s
+ * CURRENT position is already the landing position.
+ */
+function landingRectangle(cam: Camera, canvas: HTMLCanvasElement, targetZoom: number) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cellPx = pxPerCell({ ...cam, zoom: targetZoom });
+  const level = PYRAMID.idealLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr });
+  const halfW = canvas.clientWidth / 2 / cellPx.x;
+  const halfH = canvas.clientHeight / 2 / cellPx.y;
+  const view = {
+    x0: Math.floor(cam.x - halfW), x1: Math.ceil(cam.x + halfW),
+    y0: Math.floor(cam.y - halfH), y1: Math.ceil(cam.y + halfH),
+  };
+  return { level, view };
+}
 
 interface UseRearrangementOpts {
   /** the current `createLayout` result */
@@ -42,6 +68,8 @@ interface UseRearrangementOpts {
   /** the whole config, not one section */
   config: Config;
   anim: { current: RunningAnim | null };
+  /** the tile cache - fetched and awaited for the incoming arrangement before the flight, see `prepareRearrangement` */
+  cache: TileCache;
   /**
    * `(note) => void` - what to say once this change has landed, in whatever
    * voice the current reading uses. Map or catalog is the caller's call to
@@ -63,6 +91,7 @@ export function useRearrangement({
   config,
   anim,
   announce,
+  cache,
 }: UseRearrangementOpts) {
   // Set by `requestAnimation` and consumed by the effect below. A slider drag
   // changes the layout too, and must not animate - so a caller has to ask.
@@ -86,6 +115,126 @@ export function useRearrangement({
       pendingOnSettledRef.current = opts?.onSettled ?? null;
     },
     []
+  );
+
+  /**
+   * §3.1/§3.7/§9's fix: prepare a rearrangement completely - the plan AND
+   * every tile the animation will show - before the camera moves at all,
+   * rather than fetching mid-flight (the previous approach, `warmIncoming`,
+   * which only helped once the cache was already warm - on a cold cache the
+   * flight is itself the moment of peak contention, and adding more fetches
+   * there measurably made things worse; see §9.7).
+   *
+   * Building the plan HERE rather than after landing also closes §3.7/§9.4's
+   * seam cost for free: the landing rectangle depends only on the camera's
+   * CURRENT x/y (this flight never changes position, only zoom - see the
+   * `-0.5`/`+0.5` cancellation in `startRearrangement`) and the target zoom,
+   * both already known before the flight starts.
+   *
+   * The id set to fetch is NOT just `before`'s and `after`'s static viewport
+   * rectangles. Verified directly against `board.ts`/`illusion.ts`: on a real
+   * 2048-room corpus the rooms actually shown during a rearrangement run
+   * 27-48% ahead of that static union, because `shiftRow`/`shiftCol` rotate a
+   * whole line and the conveyor (`makeParker`/`makeAvailable`) stages a
+   * needed value in from wherever it currently sits - which can be well
+   * outside either rectangle, and is a real, load-bearing part of the
+   * choreography rather than an edge case. So this simulates the actual
+   * planned sequence with the real `applyMove`, snapshotting every on-camera
+   * cell after each non-`swap` move (a `swap`'s both ends are guaranteed off
+   * camera - `moves.ts` - so it can never change what is on-camera, and
+   * skipping it is free correctness, not an approximation). Pure array work,
+   * cheap regardless of corpus size - confirmed on a 2048-room case.
+   *
+   * Generic and center cells are skipped entirely: a generic's face is
+   * fungible and resolved by POSITION at draw time (`slide.ts`'s "reads the
+   * generic index at each tile's home board cell"), and both it and the
+   * center tile are already pinned at corpus-load time (`main.tsx`), so
+   * neither ever needs fetching here.
+   *
+   * Returns `null` when `buildRearrangement` declines (not animatable) -
+   * before ever starting a flight for it, unlike the old post-landing check,
+   * which flew out and back for nothing in exactly this case.
+   */
+  const prepareRearrangement = useCallback(
+    async (
+      before: { layout: MapLayout; order: number[] },
+      after: { layout: MapLayout; order: number[] },
+      canvas: HTMLCanvasElement,
+      targetZoom: number
+    ): Promise<{ board: Board; show: ReturnType<typeof createSlideshow>; origin: Point } | null> => {
+      const { level, view } = landingRectangle(cam.current, canvas, targetZoom);
+
+      const built = buildRearrangement({ before, after, view, aspect: CELL_ASPECT });
+      if (!built) return null;
+      const moves = planMoves(built.start, built.end, built.bounds, built.fixed);
+
+      // Simulate the plan to find every room it will ever put on camera -
+      // see this function's own doc for why the static rectangles undercount.
+      const { xmin, xmax, ymin, ymax } = built.bounds;
+      const ids = new Set<number>();
+      const live = { width: built.width, height: built.height, cells: built.start.cells.slice() };
+      const snapshot = () => {
+        for (let y = ymin; y <= ymax; y++)
+          for (let x = xmin; x <= xmax; x++) {
+            const v = live.cells[y * built.width + x];
+            if (typeof v === 'number') ids.add(v);
+          }
+      };
+      snapshot();
+      for (const mv of moves) {
+        applyMove(live, mv);
+        if (mv.type !== 'swap') snapshot();
+      }
+
+      // Issue requests capped at the same concurrency `cache.prefetch` uses
+      // in the ordinary render path (`PREFETCH.concurrency`), not all of them
+      // at once. An unthrottled `cache.request` for every id here is what a
+      // real four-environment `?perf` capture caught regressing Android
+      // Chrome's cold-cache first rearrangement of a session - many large
+      // fetches competing for the same network/decode resources at exactly
+      // the moment the cache has nothing else to fall back on
+      // (`docs/performance-research.md` §9.11). `cache.prefetch` itself can't
+      // be reused directly: its queue is cleared on every `beginFrame()`,
+      // which keeps running for the CURRENT (pre-flight) arrangement while
+      // this function awaits, and would drop anything not yet started before
+      // its turn came up. So this drives `cache.request` (immediate, not
+      // queued) at a capped number in flight instead, polling readiness with
+      // `requestAnimationFrame` the same way the old wait loop did.
+      const prepareStart = performance.now();
+      const deadline = prepareStart + config.slide.prepareTimeoutMs;
+      const pending = [...ids];
+      let next = 0;
+      const inFlight = new Set<number>();
+      if (pending.length > 0) {
+        await new Promise<void>((resolve) => {
+          const step = () => {
+            for (const id of inFlight) if (cache.isReady(id, level)) inFlight.delete(id);
+            while (inFlight.size < PREFETCH.concurrency && next < pending.length) {
+              const id = pending[next++];
+              cache.request(id, level);
+              if (!cache.isReady(id, level)) inFlight.add(id);
+            }
+            if ((next >= pending.length && inFlight.size === 0) || performance.now() >= deadline) {
+              resolve();
+              return;
+            }
+            requestAnimationFrame(step);
+          };
+          step();
+        });
+      }
+
+      // §9.11: how long that took, and how much of it prepare gave up on -
+      // the number the "delay before motion" side of the tradeoff lives on.
+      let notReady = 0;
+      for (const id of ids) if (!cache.isReady(id, level)) notReady++;
+      perfRecordPrepare(performance.now() - prepareStart, ids.size, notReady);
+
+      const board = { width: built.width, height: built.height, cells: built.start.cells.slice() };
+      const show = createSlideshow({ board, moves, apply: applyMove, timing: config.slide });
+      return { board, show, origin: built.origin };
+    },
+    [cam, cache, config]
   );
 
   /**
@@ -134,6 +283,9 @@ export function useRearrangement({
       // show it, fly to it, and only then slide it in from the arrangement it
       // had already replaced.
       anim.current = { before };
+      // §2.1: tag every frame drawn from here through the flight and the
+      // slide, so `perfDump()` can report all three phases apart.
+      perfSetPhase('preparing');
 
       // Remembered so the map can return to it once the slide settles -
       // widening to the default zoom is only there to give the animation a
@@ -147,6 +299,19 @@ export function useRearrangement({
         overviewZoom(canvas, config.camera.minVisibleCells, cam.current)
       );
 
+      // Everything the animation will need - the plan and every tile it will
+      // show - computed and fetched now, before the camera moves at all. See
+      // `prepareRearrangement`'s own doc for why.
+      const prepared = await prepareRearrangement(before, after, canvas, target);
+      if (anim.current?.before !== before) return true; // superseded during prepare; not ours to undo
+      if (!prepared) {
+        // Not animatable - discovered before ever starting a flight for it,
+        // unlike the old post-landing check.
+        anim.current = null;
+        perfSetPhase('idle');
+        return false;
+      }
+
       // A reader mid-search keeps their place in the field: the zoom flight
       // and the slide both move focus-stealing content under the browser, and
       // some browsers blur an input whose containing scroll position moves
@@ -155,6 +320,7 @@ export function useRearrangement({
       const searchInput = searchFormRef.current?.querySelector('input');
       const hadFocus = !!searchInput && document.activeElement === searchInput;
 
+      perfSetPhase('flight');
       if (target !== returnZoom) {
         // Land before rearranging, rather than racing it: two animations
         // competing for the same attention and neither lands. It is also a
@@ -166,6 +332,7 @@ export function useRearrangement({
         if (!landed) {
           // The reader took the map. Not the moment to rebuild the library.
           anim.current = null;
+          perfSetPhase('idle');
           return false;
         }
       } else if (isFlying()) {
@@ -173,34 +340,16 @@ export function useRearrangement({
         // search, say). Not this call's place to fight it or wait it out -
         // the caller gets the same answer a legal-but-declined plan would.
         anim.current = null;
+        perfSetPhase('idle');
         return false;
       }
 
       const parked = { ...cam.current };
-      const perCell = pxPerCell(parked);
-      const halfW = canvas.clientWidth / 2 / perCell.x;
-      const halfH = canvas.clientHeight / 2 / perCell.y;
-      const view = {
-        x0: Math.floor(parked.x - halfW), x1: Math.ceil(parked.x + halfW),
-        y0: Math.floor(parked.y - halfH), y1: Math.ceil(parked.y + halfH),
-      };
-
-      const built = buildRearrangement({ before, after, view, aspect: CELL_ASPECT });
-      if (!built) {
-        anim.current = null;
-        return false;
-      }
-
-      const board = { width: built.width, height: built.height, cells: built.start.cells.slice() };
-      const show = createSlideshow({
-        board,
-        moves: planMoves(built.start, built.end, built.bounds, built.fixed),
-        apply: applyMove,
-        timing: config.slide,
-      });
       anim.current = {
-        before, show, board, origin: built.origin, cam: parked, motions: [], t0: performance.now(),
+        before, show: prepared.show, board: prepared.board, origin: prepared.origin,
+        cam: parked, motions: [], t0: performance.now(),
       };
+      perfSetPhase('slide');
 
       const tick = () => {
         const running = anim.current;
@@ -209,6 +358,8 @@ export function useRearrangement({
         running.motions = motions;
         if (done) {
           anim.current = null;
+          perfSetPhase('idle');
+          perfDump();
           if (target !== returnZoom) {
             flyTo(parked.x - 0.5, parked.y - 0.5, returnZoom).then((landedBack) => {
               if (landedBack && hadFocus) searchInput.focus();
@@ -225,7 +376,7 @@ export function useRearrangement({
       requestAnimationFrame(tick);
       return true;
     },
-    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim]
+    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement]
   );
 
   // Every change to what is on the map arrives here. Only the ones a control

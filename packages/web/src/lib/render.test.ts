@@ -465,6 +465,7 @@ test('the favorites-sort switch sizes each piece off its OWN decoded pixels, not
       if (!size) return null;
       return { img: { ...size } as unknown as Drawable, rect: null, level: 0 };
     },
+    isReady: () => false,
     prefetch: () => {},
     pin: () => {},
     size: () => 0,
