@@ -152,4 +152,20 @@ CI runs `npm test` and the e2e smoke test on Node 20/22/24.
 
 ## License
 
-> TODO: choose a license.
+This repository - code, the tile geometry, the sample corpus, and every
+document in it - is released under [the Unlicense](LICENSE): a public-domain
+dedication with no conditions attached.
+
+The full corpus of generated rooms hosted live at
+[centuryglass.us/babel-index](https://centuryglass.us/babel-index/) (images,
+keywords, and story text - synced to R2 by `tools/upload`, not checked into
+this repo) is dedicated to the public domain under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+Both dedications are offered as a matter of clarity rather than an
+acknowledgment that copyright otherwise applies: most of this material is
+AI-generated, and under current US Copyright Office guidance, purely
+AI-generated output with no human authorship is not eligible for copyright
+protection in the first place. Where a human edit (retouching an image,
+writing or revising a story) might arguably introduce enough authorship to
+matter, the Unlicense/CC0 dedication is what removes any doubt.
