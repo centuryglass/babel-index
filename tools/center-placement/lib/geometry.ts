@@ -9,9 +9,8 @@ import { MEASURED } from './measured.ts';
  * box, so this module's precision exists for the center alone.
  *
  * The center's own book count and shelf count are a UI choice - legible
- * search-history titles - not a restatement of Borges' 5 shelves x 32 books;
- * see docs/borges-parameters.md for the story's numbers, which this module no
- * longer tracks.
+ * search-history titles - not a restatement of Borges' 5 shelves x 32 books,
+ * which this module does not track.
  *
  * TWO CLASSES OF NUMBER LIVE HERE, and the difference matters:
  *

@@ -59,7 +59,7 @@ export const KEYS = {
   /**
    * The reader's own favorites, as room FILENAMES.
    *
-   * Here rather than on the server on purpose (concept.md, 8/30/26): the
+   * Here rather than on the server on purpose (docs/concept.md, 8/30/26): the
    * server records global counts and nothing per-visitor, so a personal list
    * is only ever kept by the person it belongs to. Filenames rather than room
    * ids because ids are positional - scan.ts sorts filenames and indexes them,

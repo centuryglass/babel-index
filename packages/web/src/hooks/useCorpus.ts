@@ -3,8 +3,7 @@
  * the search index built over them - three things fetched or derived from the
  * manifest and nothing else.
  *
- * Split out of `main.jsx` per `docs/state-architecture-plan.md` §3 step 4.
- * Small and obvious on its own; worth doing mostly so "load the corpus" is one
+ * Split out of `main.jsx`. Small and obvious on its own; worth doing mostly so "load the corpus" is one
  * call instead of two fetch effects and a memo scattered through `Library`.
  *
  * `embeddings` stays a ref holding `{ data, dim }` rather than becoming React

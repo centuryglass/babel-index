@@ -2,7 +2,7 @@
  * Global favorite counts: the first piece of state this server has ever owned.
  *
  * A room's count is the SIZE OF A SET, not a number anyone increments. That is
- * the whole design (concept.md, 8/30/26): `add` and `remove` are set operations
+ * the whole design (docs/concept.md, 8/30/26): `add` and `remove` are set operations
  * keyed on who is asking, so hammering either endpoint moves a count by at most
  * one, and nothing an endpoint accepts can zero a room out or run it up.
  *

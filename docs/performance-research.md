@@ -16,7 +16,11 @@ Numbers assume the current corpus (~2048 rooms), `BASE_TILE` 1024x768, and the
 `LEVELS` ladder in `packages/web/src/lib/pyramid.ts`. Most of this was measured
 while `SHEETS` still packed levels 2-5; level 2 has since moved back to
 per-file (§6), so any number below quoting a level-2 sheet is describing a
-mechanism that no longer exists at that level.
+mechanism that no longer exists at that level. Two more items have since
+shipped, each resolved by the same change and each in a form stronger than
+originally proposed — §3.1's mid-flight tile warming and §3.7's planner seam —
+see the "Implemented" notes inside those sections and §9.7 for what actually
+landed.
 
 ---
 
@@ -191,10 +195,13 @@ per-file, not at level 2 and packed.
 That reframes the fix. Preloading sheets does nothing for a desktop
 rearrangement. What would help is warming the level-0 tiles for the incoming
 arrangement *before* the slide starts: the new `order` is known at
-`startRearrangement` time, and the zoom-out flight is several hundred
-milliseconds of otherwise idle network. `slide.ts:513-516` already prefetches a
-2-cell ring, but only once the slide is underway and only at the level it is
+`startRearrangement` time. `slide.ts:513-516` already prefetches a 2-cell
+ring, but only once the slide is underway and only at the level it is
 drawing.
+
+**Implemented, but not as "during the flight."** `prepareRearrangement`
+(`useRearrangement.ts`) fetches every tile the animation will show *before
+the flight itself starts*, not during it — see §9.7 for what shipped and why.
 
 **Trade-offs and options.**
 
@@ -421,7 +428,17 @@ one. A 20-25 ms synchronous block lands precisely at the transition the eye is
 already tracking. It is also the single cheapest thing here to confirm: wrap the
 two calls in `performance.now()` and read the number.
 
-**Trade-offs.**
+**Implemented, resolved a different way than the trade-offs below propose.**
+`prepareRearrangement` moved `buildRearrangement` + `planMoves` to run
+*before* the flight, exactly as the first bullet below argues is possible —
+but rather than moving the stall off the seam invisibly, the flight itself is
+now held back until the plan (and every tile it needs) is ready, so the
+20-25 ms this section measured is gone (§9.4), not relocated. See §9.7 for
+why. The "move it to a worker" option below still stands as a way to shorten
+that up-front wait, not to hide a mid-animation stall — nobody has done it.
+
+**Trade-offs (as originally reasoned; kept for the "why," see above for what
+shipped).**
 
 - *Plan during the flight instead of after it.* The flight's destination is
   fully determined before it starts — `flyTo(cam.current.x - 0.5,
@@ -435,9 +452,10 @@ two calls in `performance.now()` and read the number.
   block, and arguably more visible while the camera is moving.
 - *Move it to a worker.* `board.ts` and `illusion.ts` are pure, DOM-free modules
   operating on plain arrays, which makes this unusually tractable — the board is
-  a flat `BoardValue[]` that could be a transferable typed array. This is the
-  real fix, and it composes with the item above: plan in a worker during the
-  flight and the stall disappears entirely rather than moving.
+  a flat `BoardValue[]` that could be a transferable typed array. Now that the
+  plan runs during the up-front prepare delay rather than mid-animation, a
+  worker would shorten that delay rather than remove a stutter — still worth
+  doing, lower urgency than originally framed.
 - *Make the planner cheaper.* 99% of its moves being invisible repair suggests
   there may be headroom, but that is `illusion.ts`'s staging logic, which
   `AGENTS.md` flags as subtle (the independence guarantees a `wave` stage
@@ -950,27 +968,26 @@ is sitting in `illusion.ts`'s staging, unused.
 §9's measurements reprioritize this list — read it first; it promotes item 3
 above item 5 and downgrades item 5. This is the ranking reasoning alone
 produced, if the measurements in §2 come back inconclusive and something has to
-be picked without them:
+be picked without them. **Items 3-5 have since shipped**, each in a form
+stronger than described here — see §9.7 and the "Implemented" notes on §3.1
+and §3.7 above for what actually landed and why it differs from the proposal
+below:
 
 1. **§3.3 forced layout** — small, safe, verifiable in seconds, pays back on
    every frame the app ever draws.
 2. **§3.2 spine memoization** — small, well-bounded, and the best fit for "the
    zoom-out specifically stutters". The flight *starts* framed on the shelf, so
    this runs at full cost exactly where the symptom is reported.
-3. **Warm the incoming arrangement's level-0 tiles during the flight** (§3.1's
-   corrected reading). On desktop the rearrangement runs entirely at level 0 and
-   the rooms sliding in are new ids, so it is fetching ~48 full-resolution
-   images mid-animation. The new `order` is known at `startRearrangement` time
-   and the flight is several hundred ms of idle network — prefetch against it
-   before the slide begins.
-4. **§6 unpack level 2 to per-file** — one constant, one test rewrite, a corpus
-   regeneration. Do it for the 94x memory amplification, not for the desktop
-   symptom, which it will not touch.
-5. **§3.7 plan in a worker, during the flight** — a measured ~20-25 ms
-   synchronous block at the seam between the zoom-out and the slide, on every
-   rearrangement, today. `board.ts` and `illusion.ts` are pure array code, so
-   this is unusually tractable. Confirm it first with two `performance.now()`
-   calls; it is the cheapest measurement in this document.
+3. ~~Warm the incoming arrangement's level-0 tiles during the flight~~ **Done,
+   and further-reaching than proposed** — `prepareRearrangement` fetches every
+   tile the animation will show, at any level, before the flight *starts*
+   rather than mid-flight (§9.7).
+4. **§6 unpack level 2 to per-file — done.** One constant, one test rewrite, a
+   corpus regeneration. Landed for the 94x memory amplification, not for the
+   desktop symptom, which it did not touch.
+5. ~~§3.7 plan in a worker, during the flight~~ **Done, differently** — the
+   ~20-25 ms synchronous block is gone, absorbed into the same up-front
+   `prepareRearrangement` delay as item 3, not moved to a worker (§9.4, §9.7).
 6. **§7.5 raise the animation's zoom to ~8 cells** — behind its own constant,
    not `minVisibleCells` (§7.4). Level 1 instead of level 0 means 4x fewer
    pixels per tile for a 0.81 -> 1.43 s animation. Going further is better for
@@ -1048,7 +1065,9 @@ flight/slide seam, consistent with `planMoves` (§3.7). Because it lands *before
 the slide moves, it reads as ordinary loading latency rather than a mid-slide
 stutter — which is why moving the planner to a worker stays low priority.
 Building the plan during prepare (the landing rectangle is known ahead of a
-flight that only changes zoom) removes the seam regardless.
+flight that only changes zoom) removes the seam regardless — this is what
+shipped (§9.7): the seam is gone, folded into the same up-front prepare delay
+that item 9.3's fetch already pays.
 
 ### 9.5 Level-2 sheet substitution is reachable from ordinary browsing
 
@@ -1097,6 +1116,11 @@ on-camera set, measured 27-48% larger than the static union of `before`/`after`
 viewports — through the render path's concurrency cap, before the camera moves.
 On Android Chrome's cold start this holds the slide at ~56 frames with a worst
 stall of 127-456ms.
+
+That is a deliberate trade, not a side effect of where the fetch happened to
+land: a wait before anything moves is legible as loading, the same time spent
+stuttering mid-flight or mid-slide is not. §3.1 and §3.7's "Implemented" notes
+cover the specific stalls this closed.
 
 Still open, for a future session:
 

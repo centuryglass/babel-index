@@ -1,9 +1,10 @@
 # AGENTS.md
 
 Notes for coding agents working in this repo. Human-facing docs are
-[`README.md`](README.md) (how to run it), [`concept.md`](concept.md) (what it is
-meant to become), and [`docs/implementation-plan.md`](docs/implementation-plan.md)
-(how it gets there, and what is next).
+[`README.md`](README.md) (how to run it), [`docs/concept.md`](docs/concept.md)
+(what it is meant to become), and
+[`docs/implementation-plan.md`](docs/implementation-plan.md) (how it gets
+there, and what is next).
 
 ## What this is
 
@@ -150,9 +151,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              step by two or one to match. An easter egg opened
                              from the artist's statement ("Click here to run
                              some equivalent code") and stacked over it.
-  - `src/hooks/`: the subsystems `main.tsx` wires together - see
-                 `docs/state-architecture-plan.md` §3 for why each exists and
-                 what it hides
+  - `src/hooks/`: the subsystems `main.tsx` wires together, each hiding state
+                 nobody outside it needs to see
     * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
     * `useFavorites.ts`: The reader's own favorites (localStorage) and the
                          library's global counts (`/api/favorites`), and the
@@ -322,22 +322,22 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           embeddings, image pyramid, and tag links included.
 
 ### Docs:
+- `docs/concept.md`: The original project concept and a dated log of
+                     significant design decisions made during implementation.
+                     A record of intent, not a spec - it is not kept in sync
+                     with the code and should not be edited to match it.
 - `docs/implementation-plan.md`: TODO list, temporary holding place for
                                  ongoing plans
 - `docs/accessibility-plan.md`: Keyboard/screen reader plan, mostly complete.
-- `docs/state-architecture-plan.md`: How `packages/web/src/main.jsx` gets taken
-                                     apart, and what is deliberately left alone.
-- `docs/design-history.md`: Record of all the dead ends we went down because
-                            of incomplete specifications.
-- `docs/search_rules.md`: The full end-state spec of search - parsing, scoring,
-                          ranking-vs-certainty, and every reporting rule. The
-                          target, not the current code.
-- `docs/search-plan.md`: The gap between `search_rules.md` and the code today,
-                         and the steps to close it. Delete steps as they land.
-- `docs/favorites-density-plan.md`: Making an active favorite sort a placement
-                                    input (its own density gradient), the camera
-                                    "zoom out in place" change, and the invariant
-                                    rewrites both imply. Implemented.
+- `docs/keyboard-controls.md`: The spec for every key the map view handles,
+                               state by state - tab order, focus targets, what
+                               each key does in each one.
+- `docs/search_rules.md`: The full specification of what a search does -
+                          parsing, scoring, ranking-vs-certainty, and every
+                          reporting rule. Matches the implementation
+                          (`packages/map/scoring.ts`); update this file
+                          alongside a scoring change rather than letting it
+                          drift back into a target/code gap.
 - `docs/performance-research.md`: Survey of possible non-trivial performance
                                   wins, aimed at the dropped frames during the
                                   rearrangement's zoom-out and slide. §1-§8 are
@@ -486,9 +486,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   active favorite sort (`'mine'`/`'count'`) is what may rebuild the layout,
   because each has a certainty profile that is an input to placement —
   `favoriteSort` (`packages/map/favorites.ts`) composes the two rather than
-  letting one override the other, see `docs/favorites-density-plan.md`. That
-  rebuild is the same O(slots) the ratio slider does on every drag. Nothing
-  else recomputes placement.
+  letting one override the other. That rebuild is the same O(slots) the ratio
+  slider does on every drag. Nothing else recomputes placement.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 
 ### The center tile and its generic tiles
@@ -690,9 +689,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   path, animation included) and must never rebuild the layout. An active
   favorite sort (`'mine'`/`'count'`) is the exception - it IS a placement
   input, exactly as a search is, because "sorted to the front" is itself a
-  certainty claim - see `docs/favorites-density-plan.md` and
-  `packages/map/favorites.ts`'s `favoriteSort`. And a catalog row is a fixed
-  height, so the row's favorite control sits beside "show on the map" rather
+  certainty claim - see `packages/map/favorites.ts`'s `favoriteSort`. And a
+  catalog row is a fixed height, so the row's favorite control sits beside
+  "show on the map" rather
   than inside `RoomDetails` where the card and the overlay put it; in the text
   column it would have to be reserved for in `TEXT_MIN`/`STORY_RESERVED_PX` and
   would cost two lines of story on every row.

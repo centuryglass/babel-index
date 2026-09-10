@@ -226,7 +226,7 @@ export const PREFETCH: PrefetchConfig = {
  * fastest - level 5's worst-case-visible is ~7500 cells on one screen - so
  * these are what turn a scroll into thousands of never-before-seen URLs and
  * trip Cloudflare's per-IP rate limit even for one real visitor (see
- * infra/README.md and docs/design-history.md). Packing `roomsPerSheet` rooms
+ * infra/README.md). Packing `roomsPerSheet` rooms
  * into one grid image cuts that to one request per sheet, letting the edge
  * cache actually warm instead of perpetually seeing cold URLs.
  *

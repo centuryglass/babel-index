@@ -10,7 +10,7 @@
  * search put them in.
  *
  * An active favorite sort is now also a certainty signal, exactly as a search
- * is - see `docs/favorites-density-plan.md`. `favoriteSort` folds it in: every
+ * is. `favoriteSort` folds it in: every
  * room the sort lifts to the front gets certainty 1, composed with (not
  * replacing) whatever certainty a running search already gave it. `'mine'` with
  * no search is a tight cluster of the reader's favorites against the center at
@@ -97,7 +97,7 @@ export interface FavoriteSortResult {
 
 /**
  * `favoriteOrder` plus the certainty profile an active sort now drives - see
- * the file comment and `docs/favorites-density-plan.md`.
+ * the file comment above.
  *
  * `search` is the running search's own order/certainty, independent of `base`
  * (which may already be filtered for blocked tags) - passing the search's own

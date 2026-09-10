@@ -10,7 +10,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
   {
-    ignores: ['node_modules/**', 'assets/**', 'docs/figures/**'],
+    ignores: ['node_modules/**', 'assets/**'],
   },
   js.configs.recommended,
   {
