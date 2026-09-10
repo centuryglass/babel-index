@@ -309,10 +309,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                     rewrites both imply. Implemented.
 - `docs/performance-research.md`: Survey of possible non-trivial performance
                                   wins, aimed at the dropped frames during the
-                                  rearrangement's zoom-out and slide. Hypotheses
-                                  ranked by reasoning, NOT measurements - it
-                                  opens with the instrumentation that would rank
-                                  them for real. Nothing in it is implemented.
+                                  rearrangement's zoom-out and slide. §1-§8 are
+                                  hypotheses ranked by reasoning; §9 is the first
+                                  real `?perf` capture and reprioritizes them.
+                                  Most items remain unimplemented - the shipped
+                                  exception is `prepareRearrangement` (§9.7).
   
 ## Conventions
 

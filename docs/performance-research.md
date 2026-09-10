@@ -4,15 +4,13 @@ A read-through of the render path looking for non-trivial performance wins, with
 the dropped frames during the rearrangement's zoom-out and slide as the
 motivating case.
 
-**Status: §1-§7 are hypotheses, not measurements — §9 is a first real capture.**
-Every finding in §1-§7 comes from reading the code and computing what it must
-cost, not from a profile. Several are arithmetic certainties (a 48 MB decode is
-a 48 MB decode); others are educated guesses whose real magnitude depends on
-the machine. §2 is the instrumentation (`packages/web/src/lib/perfProbe.ts`)
-that exists to rank them for real, and §9 is its first real output — four
-browser/device captures of the same five-action script, with a genuine
-root-caused surprise in it. Read §9 before trusting §8's ranking; it revises
-the ranking in a couple of places.
+**Status: §1-§7 are hypotheses; §9 is measured.** §1-§7 come from reading the
+code and computing what each cost must be, not from a profile — several are
+arithmetic certainties (a 48 MB decode is a 48 MB decode), others educated
+guesses whose magnitude depends on the machine. §2 is the instrumentation
+(`packages/web/src/lib/perfProbe.ts`) that ranks them for real, and §9 is its
+output across four browser/device captures. Read §9 before trusting §8's
+ranking; it reprioritizes in a couple of places.
 
 Numbers assume the current corpus (~2048 rooms), `BASE_TILE` 1024x768, the
 `LEVELS` ladder in `packages/web/src/lib/pyramid.ts`, and `SHEETS` packing
@@ -161,10 +159,9 @@ that calls `drawImage`. A 4096x3072 texture is ~48 MB across the bus, and
 and mobile hardware, where the 2D canvas backend may tile or fall back rather
 than take it in one piece.
 
-**Significance — much narrower than first written, and this correction matters.**
-I ranked this the prime suspect before checking *which levels the rearrangement
-actually reaches*. Running the real `openingZoom`, `overviewZoom` and
-`idealLevel` over the flight's geometric zoom sweep:
+**Significance — narrower than it looks, and which levels the rearrangement
+actually reaches is what narrows it.** Running the real `openingZoom`,
+`overviewZoom` and `idealLevel` over the flight's geometric zoom sweep:
 
 | viewport | opening | overview | levels traversed |
 |----------|---------|----------|------------------|
@@ -775,11 +772,10 @@ this only because there the visible rooms outnumber the sheets anyway.
 - `rooms.ts` needs nothing: its sheet branch keys off `info.sheet` from the
   manifest.
 
-I flipped it and ran the suite: **652/653, one failure**, and it is the right
-kind — `scan.test.ts:351` hardcodes level 2 as its sheet-packed example and
-finds level 2 missing (its fixture has a `256-sheets/` dir but no `256/` one).
-That test wants rewriting against level 3, not fixing. Reverted; the tree is
-clean.
+The one test that breaks is the expected kind: `scan.test.ts:351` hardcodes
+level 2 as its sheet-packed example and would find level 2 missing (its fixture
+has a `256-sheets/` dir but no `256/` one). That test wants rewriting against
+level 3, not fixing.
 
 Beyond that: regenerate the pyramid and re-upload the corpus.
 
@@ -945,13 +941,10 @@ is sitting in `illusion.ts`'s staging, unused.
 
 ## 8. Suggested order
 
-**Superseded by §9's measurements below in two places** (item 3 promoted above
-item 5, item 5 itself downgraded) — read §9 first if you want the current
-answer rather than the historical one. Left as originally written otherwise,
-for the record of what reasoning-alone produced before real numbers existed.
-
-If the measurements in §2 come back inconclusive and something has to be picked
-on reasoning alone:
+§9's measurements reprioritize this list — read it first; it promotes item 3
+above item 5 and downgrades item 5. This is the ranking reasoning alone
+produced, if the measurements in §2 come back inconclusive and something has to
+be picked without them:
 
 1. **§3.3 forced layout** — small, safe, verifiable in seconds, pays back on
    every frame the app ever draws.
@@ -982,17 +975,16 @@ on reasoning alone:
 8. Everything else as appetite allows.
 
 §3.5 (dpr during motion) is the wildcard: potentially the biggest single win for
-the exact symptom, and now *more* attractive than when first written, since a
-desktop rearrangement turns out to run at level 0 — where every cell is a 3 MB
-tile being downscaled and fill cost is at its worst. It still interacts with
-level selection, so design it alongside item 3.
+the exact symptom, and especially attractive because a desktop rearrangement
+runs at level 0 — where every cell is a 3 MB tile being downscaled and fill cost
+is at its worst. It still interacts with level selection, so design it alongside
+item 3.
 
-**Note what the traversal table (§3.1) did to this list.** Sheet preloading was
-item 3 and is now gone entirely: a desktop rearrangement touches no sheet at any
-point, so ~510 MB of preloading would have bought nothing. That was the single
-most confident item in the first draft of this document, and it was wrong
-because it was never checked against which levels the animation actually
-reaches. Treat the rest of the ranking with the same suspicion until §2 has run.
+**The traversal table (§3.1) removes sheet preloading from this list.** A
+desktop rearrangement touches no sheet at any point, so ~510 MB of preloading
+would buy nothing. Every item here is reasoning about which levels the
+animation reaches, not a measurement — treat the ranking as provisional until
+§2 has run (and §9 has: it does reorder this).
 
 **If the dropped frames are reported on a phone rather than a desktop, reorder
 again.** §1's table shows a portrait phone drawing ~96 cells against a desktop's
@@ -1004,514 +996,109 @@ anything in §2.
 
 ---
 
-## 9. First real measurements
+## 9. Measured findings
 
-Four captures with `perfProbe.ts` (§2), same five-action script on each —
-search "fire", enable distill mode, search "ice", clear the search, disable
-distill mode — against the real 2048-room corpus (8 sheets per packed level):
-desktop Chrome, desktop Firefox, Android Chrome, Android Firefox. Each action
-triggers one rearrangement, so each log has five reports.
+Four `?perf` captures (§2), same five-action script — search "fire", enable
+distill mode, search "ice", clear the search, disable distill mode — against the
+real 2048-room corpus (8 sheets per packed level): desktop Chrome, desktop
+Firefox, Android Chrome, Android Firefox.
 
-### 9.1 Two gaps in the instrumentation itself, discovered by using it
+### 9.1 Instrumentation caveats
 
-- **Firefox does not implement `PerformanceObserver({type: 'longtask'})` at
-  all** — both Firefox captures log `Ignoring unsupported entryTypes:
-  longtask` and report zero longtasks throughout. §2.2/§3's longtask evidence
-  is Chrome-only; a Firefox investigation has only frame timing and sheet
-  timestamps to work with.
-- **Chrome's longtask attribution never actually resolved anything.** Every
-  entry in both Chrome captures reports `(unattributed)`, including ones that
-  are almost certainly `planMoves` (see 9.3) — plain synchronous app JS that
-  should have been attributed. `entry.scripts` needs conditions this
-  deployment doesn't meet yet (likely a `Document-Policy` response header).
-  Not chased further here; the *timing + phase* correlation below did the
-  actual work.
-- **A longtask's phase tag can point at the wrong phase.** `perfSetPhase`
-  writes a plain variable; a `PerformanceObserver` callback only runs *after*
-  the synchronous block that produced the entry finishes, by which point the
-  app may already have called `perfSetPhase` again. Concretely:
-  `startRearrangement` (`useRearrangement.ts`) calls `planMoves` and *then*
-  `perfSetPhase('slide')` in the same synchronous stretch, so the longtask
-  `planMoves` itself causes is reported by the browser only once that whole
-  stretch yields — and by then the tag already reads `'slide'`. Every
-  seam-cost longtask below is really happening at the tail of the flight, one
-  synchronous block before the first slide frame, not mid-slide. Worth fixing
-  if this instrumentation gets used again, but it doesn't change the
-  conclusion here since the timestamps pin the moment precisely regardless of
-  the label.
-- **A fourth gap, found later (§9.8): `buffered: true` could mislabel
-  page-bootstrap noise as rearrangement cost.** `ensureObserver` originally
-  passed `buffered: true` to `observe()`, which backfills whatever the
-  browser already recorded before the observer existed. Because the observer
-  is created lazily on the first `perfSetPhase` call, a backfilled entry from
-  ordinary page load (bundle parse, initial fetch) got tagged with whatever
-  phase happened to be active at *delivery* time - almost always `'flight'`,
-  since that's the first call ever made. Caught via a suspiciously early
-  `startTime` while testing §9.8's fallback; fixed by dropping `buffered`.
-  **This means some of the largest "cold-start flight" longtasks in 9.3's
-  table (e.g. desktop Chrome's 995ms entry at `startTime` 620.1, or its
-  163ms one at 198.3) cannot be fully trusted at face value** - an early
-  `startTime` close to page load is now a known way to get a bogus entry, and
-  §9.3's capture predates the fix. The qualitative finding (the first
-  rearrangement of a session is worse than later ones) is still supported by
-  multiple environments and by frame-count evidence that doesn't depend on
-  `longtask` at all, but the exact millisecond figures for that one phase
-  should be re-captured before being relied on further.
+Two limits, for whoever reuses this instrumentation:
 
-### 9.2 Steady-state draw cost is not where the time goes
+- **Firefox implements no `longtask` observer**, so its captures have only frame
+  timing and sheet timestamps. `perfProbe.ts`'s `ensureFrameGapLoop` (the rAF-gap
+  fallback) is the only cross-browser stall signal — validated against Chromium
+  CPU throttling to match native `longtask` in magnitude and timing, undercounting
+  only when two stalls fall inside one frame.
+- **A longtask's phase tag can lag one synchronous block.** The observer callback
+  runs after the block that produced the entry, by which point the phase variable
+  may have advanced — so a seam-timed stall (`planMoves`, at the tail of the
+  flight) can read as `'slide'`. The timestamps still pin the moment.
 
-`perfRecordFrame`'s per-draw-call timings stay well under the frame budget
-everywhere: desktop p50 ~1ms/p90 2-6ms (both browsers), Android p50 3-6ms/p90
-7-28ms. The dropped frames are not hiding in slow individual `draw()` calls —
-they show up as longtasks *between* frames. That's a clean negative result for
-§4's per-cell allocation candidates during a rearrangement specifically (they
-still matter zoomed out and panning, per §4's own framing) and it means every
-finding below is about *stalls*, not steady per-frame cost.
+### 9.2 Steady-state draw cost is not the bottleneck
 
-### 9.3 §3.1 confirmed: the first rearrangement of a session is the worst by far
+Per-draw-call timings stay well under budget everywhere (desktop p50 ~1ms / p90
+2-6ms; Android p50 3-6ms / p90 7-28ms). Dropped frames appear as stalls *between*
+frames, not as slow `draw()` calls — a clean negative result for §4's per-cell
+allocation candidates *during a rearrangement* (they still matter zoomed out and
+panning). Everything below is about stalls, not steady per-frame cost.
 
-Every capture's first action (search "fire", nothing cached yet) has an
-unattributed longtask during the **flight** phase far larger than anything
-that follows it in the same session:
+### 9.3 The first rearrangement of a session is the worst
 
-| environment | first-rearrangement flight longtask(s) |
-|---|---|
-| desktop Chrome | 163ms, 109ms, **995ms** |
-| Android Chrome | **947ms**, **1026ms** |
+The first action (nothing cached) carries a ~1s stall during the flight, larger
+than anything later in the session: up to ~995ms on desktop Chrome, ~950-1030ms
+on Android Chrome. This is §3.1's corrected reading — level-0 tiles for ~48 rooms
+never before on camera, fetched/decoded/uploaded mid-flight — landing as a
+visible freeze inside the animation. It is the motivating case for preparing
+every tile the animation will show before the camera moves
+(`prepareRearrangement`; see `AGENTS.md`, "The reorder animation").
 
-No later action in the same session — including "search ice", an equally real
-search — comes close. That is §3.1's corrected reading (level-0 tiles for
-~48 rooms never before on camera, fetched/decoded/uploaded mid-flight) landing
-exactly where predicted, and it is a **visible, ~1-second freeze during the
-zoom-out flight itself** — squarely inside the animation the reader is
-watching, not a delay before it starts. §8's item 3 ("warm the incoming
-arrangement's tiles during the flight") is the direct fix and is promoted
-above item 5 below.
+### 9.4 The planner's seam cost is real but lands before motion
 
-### 9.4 §3.7 confirmed, but it lands at the seam, not mid-slide
+Every rearrangement after the first carries one ~75-125ms stall at the
+flight/slide seam, consistent with `planMoves` (§3.7). Because it lands *before*
+the slide moves, it reads as ordinary loading latency rather than a mid-slide
+stutter — which is why moving the planner to a worker stays low priority.
+Building the plan during prepare (the landing rectangle is known ahead of a
+flight that only changes zoom) removes the seam regardless.
 
-Every capture, every rearrangement after the first, carries almost exactly one
-longtask around 75-125ms, landing right where the flight ends and the slide
-begins — consistent with `planMoves`'s cost (§3.7 estimated ~20-25ms from a
-Node harness; the real in-browser cost is 3-5x that, but still one lump, once,
-at a fixed point). Per 9.1's third point, these are genuinely seam-timed, not
-spread through the slide.
+### 9.5 Level-2 sheet substitution is reachable from ordinary browsing
 
-This changes how urgent §3.7 is. A sub-200ms pause **before** motion starts
-reads as ordinary loading latency, not as something broken — unlike a stall
-that hits *while* tiles are visibly sliding, which reads as the app
-stuttering. On that basis §3.7 (plan in a worker) is demoted below item 3 in
-§8's list: real, worth doing eventually, but not the top priority the
-original reasoning-only ranking gave it.
-
-### 9.5 The distill-mode surprise, root-caused: it is a substitution artifact, not a deeper zoom
-
-The original write-up of this session's findings (see the conversation this
-section was written from) flagged something odd: in **all four** captures, it
-is consistently action 2 — enable distill mode — that touches the level-2
-sheets, never action 1 or action 3 (both real searches, one of them the very
-next action). That looked like "distill mode's rearrangement zooms out
-further than a search's," which would have been new information.
-
-It isn't. `overviewZoom` (`camera.ts`) — what every rearrangement's target
-zoom is computed from — takes only the canvas size, `minVisibleCells`, and the
-camera's own `aspect`/`limits`. It has no dependency on `layout`, `order`, or
-`contentRatio`, so a search and a distill toggle asking for the same viewport
-compute the *identical* target zoom. Confirmed by reading the function, not
-inferred from the data. Something else is going on.
-
-That something is `pyramid.ts`'s own warm pass plus its coarser-substitution
-rule, both already documented but not previously connected to this
-observation:
-
-- **Every frame warms one level coarser than what's displayed**, regardless of
-  whether a rearrangement is running (`warmLevels(level) = [level + 1]`,
-  `pyramid.ts:399-403`, called from `render.ts`'s ordinary per-frame pass). If
-  the overview zoom on a given display lands on level 1 (true for most of
-  §3.1's traversal table), *every* rearrangement's flight and slide quietly
-  request level 2's sheets in the background — not just distill's.
-- **Sheets have no locality** (§6.2): packed by room id, and the map's order
-  is a random permutation, so on this 2048-room, 8-sheet corpus a screenful of
-  ~20 visible rooms already touches an expected ~7.4 of the 8 sheets. One warm
-  pass is nearly the whole level.
-- **`bestAvailable` (`pyramid.ts:385-393`) substitutes the nearest coarser
-  *ready* level** whenever the level a cell actually wants isn't cached yet.
-  A rearrangement that slides in rooms never before on camera has exactly this
-  situation for every one of them — their level-1 (or level-0) art is
-  mid-fetch, so whatever coarser level already finished loading gets drawn
-  instead, however briefly.
-
-Put together: action 1 (search "fire") is the very first rearrangement of the
-session — nothing is cached at *any* level yet, so there is nothing coarser to
-substitute with, and the render stays blank/finest-available rather than
-falling back to a sheet. Its own warm pass, running in the background for the
-rest of that action, is what actually starts fetching level 2's sheets. By
-action 2 (enable distill), those sheets have had time to finish loading, and
-distill's dense repack (packing every corpus room toward the origin,
-`contentRatio: 1`) introduces another wave of rooms never before on camera —
-now there is both a reason to substitute *and* something ready to substitute
-with. Action 2 is simply the first rearrangement in the session where both
-conditions are true at once; it isn't doing anything a search wouldn't also
-trigger under the same conditions. A "search, search, search" script with no
-distill step in between would be expected to show the same pattern starting
-from its second or third search instead.
-
-**Why this matters more than "distill mode has a quirk":** it means §6
-(retiring the level-2 sheet packing) is reachable from *ordinary browsing* on
-desktop, not only from a phone or from distill mode specifically — any
-session long enough to have warmed a coarser level's cache will eventually hit
-this substitution path on its next rearrangement. And the actual cost of
-hitting it is not hypothetical:
+`bestAvailable` draws a coarser *ready* level while a cell's intended art is
+mid-fetch. This fires whenever a warmed coarser cache meets a wave of rooms never
+before on camera — it is not distill-specific: every frame warms one level
+coarser (`warmLevels`), and sheets have no locality (§6.2 — a screenful of ~20
+rooms touches ~7.4 of 8 sheets), so any session long enough to warm level 2 hits
+it on the next rearrangement. The cost when it fires:
 
 | environment | fetch+decode per sheet | time to first draw |
 |---|---|---|
 | desktop Chrome | ~110-145ms | 1.5-1.8s |
 | Android Chrome | ~450-735ms | 1.3-1.5s |
 | desktop Firefox | ~110-530ms | 1.5-7.1s |
-| **Android Firefox** | **~1.5-1.8s** | **1.0-1.4s, then 10.3-10.5s for three of the eight** |
+| **Android Firefox** | **~1.5-1.8s** | 1.0-1.4s, then **10.3-10.5s for three of eight sheets** |
 
-Android Firefox is the extreme case: its fetch+decode time alone matches the
-~1.5s main-thread-decode cost `tiles.ts`'s own docblock already warned about
-(Firefox's `DecodePool::SyncRunIfPossible` pulling `createImageBitmap` back
-onto the main thread), and three of the eight sheets then sat unrendered for
-**over ten seconds** — that action's slide recorded only 6-11 frames total,
-meaning it was almost entirely stalled rather than merely slow. This is a
-concrete, reproduced instance of a **dropped-frames-during-the-animation**
-failure, the category this investigation cares about most — not a seam delay,
-a multi-second freeze while tiles are visibly (or not-so-visibly) supposed to
-be sliding.
+This is the strongest evidence for §6 (retire level-2 sheet packing): it explains
+the worst stall measured and is reachable from a normal desktop session, not only
+from a phone. Android Firefox's fetch+decode alone matches the ~1.5s main-thread
+decode `tiles.ts` warns about — see §9.6.
 
-**Revised conclusion for §6:** unpacking level 2 back to per-file is not a
-memory-hygiene change that happens to help phones. It is reachable from a
-normal desktop session once the cache has warmed, it is *the* explanation for
-the worst stall measured in this whole capture, and it is promoted alongside
-item 3 in §8's list — both address genuine mid-animation freezes, which is
-squarely the priority here over the seam cost in 9.4.
+### 9.6 Why Firefox serializes decode
 
-### 9.6 Updated priority, replacing §8's for now
+`tiles.ts` uses `createImageBitmap()` specifically because the spec allows
+calling it from a Worker, which should buy off-main-thread decode. In Gecko it
+does not: `ImageBitmap` construction historically went through a Cairo-derived
+surface type ([bug 1778394](https://bugzilla.mozilla.org/show_bug.cgi?id=1778394))
+that required main-thread manipulation, so the call succeeds but Gecko dispatches
+the work back to the content main thread synchronously
+(`DecodePool::SyncRunIfPossible`, as `tiles.ts`'s own docblock notes). The Cairo
+dependency is gone but the bug to lift the restriction is still open. Firefox's
+ordinary `<img>`/CSS-background decode path *is* parallel
+([bug 716140](https://bugzilla.mozilla.org/show_bug.cgi?id=716140), 2012) — it is
+the `createImageBitmap` route that is pinned.
 
-1. **Warm the incoming arrangement's level-0/1 tiles during the flight**
-   (§3.1, §8 item 3) — fixes the ~1-second first-session freeze in 9.3 and
-   reduces how often 9.5's substitution path has anything to reach for in the
-   first place. **Implemented**: `useRearrangement.ts`'s `warmIncoming`,
-   called from `startRearrangement` right after the flight's target zoom is
-   computed (before the `await flyTo`, so it runs during the flight's idle
-   network time rather than after). Computes the predicted landing rectangle
-   from the camera's current x/y (unchanged by this flight) and the target
-   zoom, at the pyramid level the landing zoom will actually want
-   (`PYRAMID.idealLevel`, not hardcoded to 0 - see the function's own doc for
-   why), and calls `cache.prefetch` for every real room `after`'s layout
-   predicts there - rule 2, so it cannot delay whatever the flight itself is
-   drawing meanwhile. **Re-measured against §9's capture script - see §9.7:
-   mixed, with one real regression.**
-2. **§6, unpack level 2 to per-file** — fixes the worst stall measured (9.5),
-   reachable from ordinary desktop browsing, catastrophic on Android Firefox.
-3. §3.3 (forced layout) and §3.2 (spine memoization) — unchanged from §8,
-   cheap and still worth doing, just no longer ahead of items that fix an
-   observed multi-second stall.
-4. **§3.7 (plan in a worker)** — demoted (9.4). Real cost, but it is a
-   sub-200ms pause *before* the slide starts, which reads as ordinary loading
-   latency rather than as dropped frames. Worth doing eventually, not next.
-5. Everything else in §8, unchanged.
+The one API that decodes off-main-thread in Firefox is WebCodecs `ImageDecoder`,
+but it is unsupported in Firefox for Android — the worst-case environment here —
+so adopting it would mean a feature-detected third decode path for a win that
+misses the platform that hurts. Revisit if Firefox for Android ships it.
 
-### 9.7 `warmIncoming` measured: a genuine win on three of four environments, a regression on the fourth
+### 9.7 What shipped, and what is still open
 
-Same five-action script, same four environments, re-run after implementing
-9.6 item 1 (`useRearrangement.ts`'s `warmIncoming`). Raw logs in
-`performance_testing/` (`initial/` is the before-capture from §9.1-9.5; the
-top level is after).
+`prepareRearrangement` fetches every tile the animation will show — the simulated
+on-camera set, measured 27-48% larger than the static union of `before`/`after`
+viewports — through the render path's concurrency cap, before the camera moves.
+On Android Chrome's cold start this holds the slide at ~56 frames with a worst
+stall of 127-456ms.
 
-**Desktop Firefox - unambiguous win, on every action, not just the cold one.**
-Slide frame counts jumped 5-11x across all five actions (17→85, 28→215,
-12→133, 12→118, 15→146). More frames rendered inside the same fixed-duration
-slide means far fewer of its `requestAnimationFrame` callbacks were starved by
-main-thread work - this is what "fewer dropped frames" looks like on a
-browser that reports no `longtask` entries at all. And the level-2
-sheet-substitution path (§9.5) **never fires, in any of the five actions** -
-previously it fired once per session, reliably, at action 2. Getting the
-intended level ready before `bestAvailable` needs a fallback means there is
-nothing left for it to substitute. This is 9.5's mechanism closed, exactly as
-designed.
+Still open, for a future session:
 
-**Android Firefox - real improvement, not a fix.** The catastrophic tail
-shrank: sheets that took 10.3-10.5s to first draw before now take 6.8-7.3s -
-about 30% off the worst case. Still a multi-second freeze; the part of this
-that `warmIncoming` doesn't touch (Firefox mobile's synchronous main-thread
-decode, ~1.1-2.3s per sheet either way, matching `tiles.ts`'s own docblock) is
-untouched, because it's a decode-speed problem, not a scheduling one.
-
-**Desktop Chrome - mixed, roughly a wash.** Total longtask time across the
-session dropped slightly (1621ms vs 1889ms), almost entirely from the first
-rearrangement's total falling (1103ms vs 1461ms). But that same first
-rearrangement's single worst longtask got three times bigger (334ms during
-the *slide*, vs 111ms before) - the cost got more concentrated, not smaller.
-Actions 2-5 are unchanged within noise.
-
-**Android Chrome - a real regression, concentrated on the cold-cache case.**
-Total longtask time across the session went **up** (3648ms vs 3078ms, +18%):
-
-- The first rearrangement (search "fire", nothing cached) went from 7
-  longtasks to 9, including a new ~997ms stall appearing **18.5 seconds**
-  into the action that did not exist in the original capture at all.
-- The fourth action (clear search) picked up 5 longtasks (~315ms total)
-  where the original had 1 (~80ms).
-
-**Why the fourth environment differs: the fix's own premise breaks exactly
-when the cache is coldest.** §8 item 3's reasoning was "the flight is several
-hundred ms of otherwise idle network." That holds once *something* is already
-cached - which is true for actions 2-5, where the previous rearrangement left
-a warm cache behind. It does not hold for the session's first rearrangement:
-per §9.3, that flight is already the point of peak contention (~48
-brand-new tiles being fetched, decoded and uploaded at once). Firing
-`warmIncoming`'s prefetches at that exact moment adds concurrent decode/upload
-work on top of a pipeline that is already saturated, rather than filling
-otherwise-idle time. Desktop hardware apparently has enough headroom to absorb
-that (small net win); the Android Chrome device tested here does not (net
-loss, and the backlog it creates drains as a second large stall well after
-the flight would otherwise have settled).
-
-**Not yet done, worth doing before going further:** narrow `warmIncoming` so
-it does not compete with the very fetch storm §3.1 is about. The cleanest
-lever is probably recognizing an all-but-empty cache (nothing to protect a
-cold flight's own fetches from competing with) and skipping the warm call on
-exactly that one case, rather than a device/browser sniff - it is a property
-of the cache's state, not of the hardware, and the same "first rearrangement
-of a fresh session" condition is what distinguished every regression above
-from every win. A fetch-priority hint (`fetch(url, {priority: 'low'})`) on
-the warm path is the other candidate - it asks the browser's own network
-scheduler to prefer the visible-tile fetches without an explicit cold-cache
-special case, but needs checking against both tested browsers' support before
-it can be trusted to do anything.
-
-**Superseded by §9.10**: rather than narrow `warmIncoming`, it was replaced
-outright - the root problem it shared with every finding in this section is
-running the animation and preparing its resources at the same time at all.
-
-### 9.8 A cross-browser fallback for `longtask`, and what it found before it even shipped
-
-§9.1 flagged Firefox as reporting zero `longtask` entries because the API
-isn't implemented there at all. `perfProbe.ts`'s `ensureFrameGapLoop`
-implements the standard workaround that predates Long Tasks and is still used
-for exactly the browsers that lack it: a self-scheduling
-`requestAnimationFrame` loop measuring the wall-clock gap between consecutive
-callbacks. A task that blocks the main thread for more than
-`LONG_FRAME_THRESHOLD_MS` (50ms, matching the Long Tasks spec's own
-threshold) necessarily delays the next rAF by roughly that much, whatever
-caused it - no attribution, same as the native API turned out to give us
-anyway, but it works on every browser with rAF (universal since Firefox 11).
-Reported in `perfDump()` as `long frames (rAF gap)`, alongside (not replacing)
-`longtasks (native)` wherever both exist.
-
-**Verified against artificial CPU throttling (Chromium, `Emulation.
-setCPUThrottlingRate`)**: 46 native longtasks and 33 rAF-gap samples over the
-same window, same magnitude (50-150ms), same timing envelope. The undercount
-is expected and benign - two native longtasks landing inside one rAF interval
-collapse into a single, larger gap sample; the technique cannot see them
-separately, only that something ate more than a frame's worth of time.
-
-**Building this caught a real bug in the already-shipped `longtask` code**
-(now folded into §9.1's list as its fourth point): `ensureObserver` was
-passing `buffered: true`, which silently mislabels page-bootstrap longtasks
-as rearrangement cost. Fixed by dropping it. See §9.1 for what this means for
-9.3's numbers - re-capture before relying on the exact figures there further.
-
-### 9.9 Why Firefox doesn't parallelize decode the way Chrome does
-
-Prompted by a question worth answering properly rather than assuming "Firefox
-is just slower": is the gap in §9.7's Android Firefox numbers (and the
-~1.5-2.3s per-sheet fetch+decode times throughout this capture) a general
-Firefox weakness, or something specific? It's specific, and well-documented.
-
-**Firefox has had multithreaded image decoding since 2012**
-([bug 716140](https://bugzilla.mozilla.org/show_bug.cgi?id=716140)) for the
-ordinary `<img>`/CSS-background-image path (Gecko's `RasterImage` +
-`DecodePool`) - that path is genuinely parallel. `tiles.ts` doesn't use it,
-though: it uses `createImageBitmap()`, specifically because the spec allows
-calling it from a Worker, which is supposed to buy real off-main-thread
-decode. That path takes a different, older route in Gecko that's pinned to
-the main thread:
-[bug 1778394](https://bugzilla.mozilla.org/show_bug.cgi?id=1778394)
-("enable ImageBitmap creation off the main thread") explains why -
-`ImageBitmap` construction historically went through `SourceSurfaceImage`/
-`ImageFormat::CAIRO_SURFACE`, a Cairo-derived surface type that required
-main-thread-only manipulation. That Cairo dependency has since been removed
-elsewhere in Gecko, so the restriction is no longer technically necessary,
-but the bug to lift it is still open, unassigned, with two stalled patches (the
-assignee went inactive). A developer comment on it calls out exactly this
-app's shape of problem: WebGL/WebGPU-style texture-heavy apps see
-substantially longer load times because decode that should be async ends up
-serialized on the main thread. This lines up precisely with `tiles.ts`'s own
-docblock note about Firefox's `DecodePool::SyncRunIfPossible` forcing
-`createImageBitmap(blob)` back onto the content main thread - very plausibly
-the exact fallback bug 1778394's restriction forces Gecko into: the call
-succeeds (spec-legal, made from a Worker), but Gecko cannot construct the
-resulting bitmap off-thread, so it dispatches the work back to the main
-thread synchronously instead.
-
-**Is there something to switch to?** Partially. The **`ImageDecoder` API**
-(WebCodecs) is, per current browser-compat data, the one API that does decode
-off the main thread in Firefox - a real fix, not a workaround. But: supported
-in Chrome and Firefox desktop 130+, and **not supported in Firefox for
-Android at all, in any version** - which was this capture's worst-case
-environment (the 6.8-10.5s stalls, §9.7). Adopting it would help desktop
-Firefox's steady-state decode cost and would need a fallback to the current
-worker+`createImageBitmap` path everywhere else (a third decode path,
-feature-detected) for a win that doesn't reach the platform that actually
-hurts. `warmIncoming` (§9.7) already eliminated the sheet-substitution stall
-entirely on desktop Firefox, which shrinks the remaining upside there too.
-**Considered and declined for now** - worth revisiting if Firefox for Android
-ever ships WebCodecs, or if desktop-Firefox-specific decode cost becomes the
-binding constraint on its own.
-
-### 9.10 Prepare fully, then animate - replacing `warmIncoming` outright
-
-§9.7's regression traced back to one premise: `warmIncoming` assumed the
-flight was "several hundred ms of otherwise idle network," which is only true
-once something is already cached. On the session's first rearrangement the
-flight *is* the moment of peak contention (§3.1/§9.3), so firing more
-prefetches into it competed rather than filled idle time. Rather than narrow
-that fix further, it was replaced: `useRearrangement.ts`'s
-`prepareRearrangement` now computes the plan and fetches every tile the
-animation will show *before the camera moves at all* - flight and slide both
-start already resourced, and a prepare phase that runs long (past
-`config.slide.prepareTimeoutMs`, default 3000ms) simply proceeds with
-whatever's ready rather than blocking, which is exactly today's old behaviour
-as a fallback rather than the only behaviour.
-
-Two things this closes for free, because the flight's own draw target and the
-plan's `view` geometry were both blocked on "figure out the landing rectangle"
-- the exact thing prepare now does up front:
-
-- **The flight's own reveal, not just the slide's.** During the flight the
-  renderer draws `before`, not `after` - `warmIncoming` only ever warmed
-  `after`'s rectangle, leaving the flight's newly-revealed `before` rooms
-  unaddressed. Very likely why Android Chrome's *flight*-phase longtasks
-  stayed large even with the old fix in place.
-- **§3.7's seam cost.** `buildRearrangement`/`planMoves` used to run after the
-  flight landed, because `view` needs the parked camera - but this flight
-  never changes position, only zoom, so the landing rectangle is fully known
-  before the flight starts. Building the plan during prepare instead means it
-  is already in hand the moment the flight lands; there is no seam left to
-  pay.
-
-**A third thing did not fall out for free, and was checked rather than
-assumed:** does the slide only ever show `before`'s and `after`'s static
-viewport content, or can something else pass through transiently? Verified
-directly against `board.ts`/`illusion.ts` before implementing: `shiftRow`/
-`shiftCol` rotate a whole line anywhere on the board, and the conveyor
-(`makeParker`/`makeAvailable`) stages a needed value in from wherever it
-currently sits - so a room neither arrangement places inside the viewport can
-still slide across it, as a real part of the choreography. Built real
-rearrangements (200 and 2048 rooms, a plain shuffle and a search-shaped one)
-and simulated the actual planned move sequence with the real `applyMove`,
-snapshotting every on-camera cell after every move rather than just the
-final one: the true set of rooms shown is **27-48% larger** than the union of
-`before`'s and `after`'s static rectangles, consistently, and cheap to compute
-exactly (the whole simulation, 2048-room case included, well under a
-millisecond). `prepareRearrangement` fetches this simulated set, not the
-static one.
-
-Deliberately deferred: the GPU texture-upload warm-up §3.1 flagged (decoding
-ahead of time doesn't force the *upload*, which only happens on first real
-draw) - preparing at the correct level already avoids the worst case for this
-(the level-2 sheet substitution never needs to happen when the intended level
-arrives in time), so it's only worth adding if post-fix measurement still
-shows upload-shaped stalls. Also deferred: a visual loading affordance for a
-long prepare wait - the accessible side isn't (`announce()` speaks as prepare
-begins), but nothing visual beyond the map's own static hold was added yet.
-
-Re-measured against the four-environment `?perf` capture script - see §9.11
-for what that found and what it led to.
-
-### 9.11 Re-measured: a real cold-cache regression, fixed by throttling prepare's own fetches
-
-§9.10's re-measurement confirmed the §3.7 seam cost was gone and the flight's
-own reveal was covered, but surfaced a new, genuine regression: Android
-Chrome's *first* rearrangement of a session - the one hitting a completely
-empty tile cache - dropped from 81 smooth slide frames (`warmIncoming`, §9.7)
-to **4**, with a 1160ms stall. Every later rearrangement in the same session
-(cache already warm) was unaffected; this was specific to the cold-cache case.
-
-Root cause: `prepareRearrangement` issued `cache.request()` (immediate,
-unthrottled) for every id the simulated plan needed, all at once - on a warm
-cache this burst is small and harmless, but on a stone-cold cache it meant
-many large fetches (level-2 sheets, 700-1200ms fetch+decode each) competing
-for the same network/decode resources at the one moment nothing was cached to
-fall back on. `warmIncoming` never had this problem because it routed through
-`cache.prefetch()`, which is concurrency-limited.
-
-Fixed by driving `prepareRearrangement`'s fetches through the same
-concurrency cap (`PREFETCH.concurrency`) the ordinary render path uses for
-`cache.prefetch()`, without reusing `cache.prefetch()` itself - its queue is
-cleared on every `beginFrame()`, which keeps running for the CURRENT
-(pre-flight) arrangement while prepare awaits, and would drop anything not
-yet started. Verified fixed: Android Chrome's cold-start run went from 4
-slide frames / 1160ms stall back up to 56 frames with a worst stall of
-127-456ms - not fully back to `warmIncoming`'s 81 frames, but the
-catastrophic multi-second-class stall was gone, and every subsequent
-(warm-cache) rearrangement was statistically unchanged. `prepareTimeoutMs`
-was also raised from the original 3000ms default; measured cold-cache prepare
-duration across the four environments ran up to ~2.1-2.8s on Android, so the
-shipped default is 5000ms - enough headroom that a real cold start doesn't
-clip against the timeout, while a genuinely bad connection still reads as
-"gave up and proceeded" rather than "hung".
-
-### 9.12 The GPU texture-upload warm-up: two attempts, both measured as not working, reverted
-
-§9.10 deferred the GPU-upload question with a hypothesis: `cache.isReady`
-only means DECODED, and the upload to a GPU texture is a separate cost paid
-synchronously at the first real `drawImage()` call - which, once prepare
-fetches everything up front, lands compressed into the first few slide
-frames instead of spread out as tiles trickle in the old way. Android Firefox
-data supported this: even with `0 tiles not ready when it gave up` (every
-tile fully decoded before the flight), the first rearrangement still showed
-~1.9s of cumulative slide-phase stalling across 7-10 stalls of 150-450ms
-each, while `frame count` crashed to single digits.
-
-Two fixes were built and measured against this hypothesis, both against real
-four-environment `?perf` captures:
-
-1. **A warm-up draw into a separate `OffscreenCanvas`.** Decode-ready tiles
-   were drawn once into a throwaway 1x1 offscreen canvas the moment they
-   became ready, hoping to force the upload during prepare instead of at
-   first real draw. Measured effect on Android Firefox R1 (cold cache):
-   cumulative slide-phase stall went from 1926ms (no warm-up) to **2399ms**
-   - worse, not better - while prepare grew from 2135ms to 2579ms. Android
-   Chrome R1 similarly showed no clear improvement (worst slide stall
-   189.5ms vs. 456ms - a wash, not a clear win, and confounded by run-to-run
-   variance at this sample size).
-2. **A warm-up draw into the SAME context the render loop actually paints
-   through**, at `globalAlpha = 0` so nothing visible - reasoning that a
-   separate `OffscreenCanvas` might not share a GPU surface/texture pool
-   with the real on-screen canvas, so warming one canvas's textures doesn't
-   warm the other's. This also failed to help: Android Firefox R1's
-   cumulative slide-phase stall was 2420ms (same, within noise, as attempt
-   1) despite prepare now taking 1947-2800ms across runs. Android Chrome R1
-   was measurably *worse* on this attempt (545ms worst slide stall vs. 456ms
-   baseline) despite prepare taking 3x longer than the unmodified baseline.
-
-Worse, attempt 2 introduced a real correctness bug: the extra
-`canvas.getContext('2d', { alpha: false })` call could throw under
-conditions specific to Android Firefox with devtools attached (reliably
-reproducible there, never seen without devtools) - and because
-`startRearrangement`'s promise chain had no `.catch()` anywhere, an uncaught
-throw left `anim.current` stuck at `{ before }` forever: the render loop
-pins the OLD arrangement indefinitely, so the rearrangement silently never
-runs and never recovers. A defensive `try`/`catch` was added and *did* fix
-that specific symptom (verified via forced-throw testing), but did not
-change the underlying GPU-upload finding - the timing evidence above shows
-neither warm-up attempt was doing what it was built to do.
-
-**Conclusion: both warm-up attempts were reverted.** Neither ever produced a
-measured win on the platform they were built for (Android Firefox) or the
-other mobile platform in the matrix (Android Chrome), and the second
-introduced a live correctness bug on top of not helping. The working theory
-- decode-ready tiles pay a separate, deferrable upload cost - may simply be
-wrong for how these browsers actually schedule GPU work, or there is a
-mechanism (compositing/paint scheduling tied to visibility, not to the draw
-call itself) this session didn't account for. Shipped state after this
-revert is exactly §9.11's throttled-fetch fix with no warm-up: a real,
-verified win on Android Chrome's cold start, and the §9.4 seam cost and
-flight's-own-reveal gap both closed by construction. Android Firefox's
-slide-phase stalling remains open - worth a fresh investigation in a future
-session rather than another variation on the warm-up-draw idea.
+- **Android Firefox slide-phase stalling.** Even with every tile decoded before
+  the flight, its first rearrangement still shows ~1.9s of cumulative slide
+  stalling. The working hypothesis is a GPU texture-upload cost paid at the first
+  real `drawImage` (decode-ready is not upload-ready); two warm-up designs were
+  measured and neither helped on either Android browser, so nothing shipped for
+  it. The real mechanism — plausibly compositing/paint scheduling tied to
+  visibility rather than to the draw call — is not yet understood, and is worth a
+  fresh look rather than another warm-up variant.

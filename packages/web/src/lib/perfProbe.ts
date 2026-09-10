@@ -53,7 +53,7 @@ interface LongtaskSample {
   attribution: string;
 }
 
-/** §9.11: how long one `prepareRearrangement` call took, and what it waited for. */
+/** §9: how long one `prepareRearrangement` call took, and what it waited for. */
 interface PrepareSample {
   ms: number;
   requested: number;
@@ -190,12 +190,12 @@ export function perfRecordSheetFirstDraw(url: string): void {
 }
 
 /**
- * §9.11: `prepareRearrangement`'s own wall-clock cost - the plan/build/sim
- * work plus however long it waited on `cache.isReady` for the tiles it
- * fetched, up to `config.slide.prepareTimeoutMs`. This is the number the
- * "prepare fully before animating" tradeoff lives or dies on: a large value
- * here is the delay a reader sees before the zoom-out even starts, traded
- * against the mid-animation stalls §9.10 exists to remove.
+ * §9: `prepareRearrangement`'s own wall-clock cost - the plan/build/sim work
+ * plus however long it waited on `cache.isReady` for the tiles it fetched, up
+ * to `config.slide.prepareTimeoutMs`. This is the number the "prepare fully
+ * before animating" tradeoff lives or dies on: a large value here is the delay
+ * a reader sees before the zoom-out even starts, traded against the
+ * mid-animation stalls prepare exists to remove.
  */
 export function perfRecordPrepare(ms: number, requested: number, timedOut: number): void {
   if (!PERF) return;

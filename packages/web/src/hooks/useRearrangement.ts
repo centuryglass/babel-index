@@ -118,14 +118,14 @@ export function useRearrangement({
   );
 
   /**
-   * §3.1/§3.7/§9's fix: prepare a rearrangement completely - the plan AND
-   * every tile the animation will show - before the camera moves at all,
-   * rather than fetching mid-flight (the previous approach, `warmIncoming`,
-   * which only helped once the cache was already warm - on a cold cache the
-   * flight is itself the moment of peak contention, and adding more fetches
-   * there measurably made things worse; see §9.7).
+   * Prepare a rearrangement completely - the plan AND every tile the
+   * animation will show - before the camera moves at all, rather than
+   * fetching mid-flight. The flight is itself the moment of peak contention
+   * on a cold cache (§3.1), so fetches issued during it compete for the same
+   * network/decode budget with nothing to fall back on; doing the work up
+   * front is what keeps them off that critical path.
    *
-   * Building the plan HERE rather than after landing also closes §3.7/§9.4's
+   * Building the plan HERE rather than after landing also closes §3.7's
    * seam cost for free: the landing rectangle depends only on the camera's
    * CURRENT x/y (this flight never changes position, only zoom - see the
    * `-0.5`/`+0.5` cancellation in `startRearrangement`) and the target zoom,
@@ -188,13 +188,12 @@ export function useRearrangement({
 
       // Issue requests capped at the same concurrency `cache.prefetch` uses
       // in the ordinary render path (`PREFETCH.concurrency`), not all of them
-      // at once. An unthrottled `cache.request` for every id here is what a
-      // real four-environment `?perf` capture caught regressing Android
-      // Chrome's cold-cache first rearrangement of a session - many large
-      // fetches competing for the same network/decode resources at exactly
-      // the moment the cache has nothing else to fall back on
-      // (`docs/performance-research.md` §9.11). `cache.prefetch` itself can't
-      // be reused directly: its queue is cleared on every `beginFrame()`,
+      // at once. Unthrottled, a cold-cache first rearrangement fires many
+      // large fetches at the one moment the cache has nothing to fall back on,
+      // and they compete for the same network/decode budget - a measured
+      // regression on Android Chrome (`docs/performance-research.md` §9).
+      // `cache.prefetch` itself can't be reused directly to get the cap: its
+      // queue is cleared on every `beginFrame()`,
       // which keeps running for the CURRENT (pre-flight) arrangement while
       // this function awaits, and would drop anything not yet started before
       // its turn came up. So this drives `cache.request` (immediate, not
@@ -224,8 +223,8 @@ export function useRearrangement({
         });
       }
 
-      // §9.11: how long that took, and how much of it prepare gave up on -
-      // the number the "delay before motion" side of the tradeoff lives on.
+      // How long that took, and how much of it prepare gave up on - the number
+      // the "delay before motion" side of the tradeoff lives on (§9).
       let notReady = 0;
       for (const id of ids) if (!cache.isReady(id, level)) notReady++;
       perfRecordPrepare(performance.now() - prepareStart, ids.size, notReady);

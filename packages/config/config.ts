@@ -280,16 +280,15 @@ export const DEFAULTS: Defaults = {
     /**
      * How long `prepareRearrangement` (`useRearrangement.ts`) waits for the
      * plan's tiles to fetch and decode before giving up and animating with
-     * whatever is ready - the fallback being exactly today's behaviour, not a
-     * failure. Not a composed beat like the timings above - it is a real wait
-     * on its own, so a sub-frame value here is exactly as suspicious as it
-     * looks.
+     * whatever is ready - proceeding on a timeout is a fallback, not a failure.
+     * Not a composed beat like the timings above - it is a real wait on its
+     * own, so a sub-frame value here is exactly as suspicious as it looks.
      *
      * A real `?perf` capture across four browser/device combinations
-     * (`docs/performance-research.md` §9.11) measured cold-cache prepare
-     * taking up to ~2.1-2.8s on Android; this sits above that with headroom
-     * rather than cutting it close, while still reading as "gave up and
-     * proceeded" rather than "hung" on a genuinely bad connection.
+     * (`docs/performance-research.md` §9) measured cold-cache prepare taking up
+     * to ~2.1-2.8s on Android; this sits above that with headroom rather than
+     * cutting it close, while still reading as "gave up and proceeded" rather
+     * than "hung" on a genuinely bad connection.
      */
     prepareTimeoutMs: 5000,
   },
