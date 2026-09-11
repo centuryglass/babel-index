@@ -87,7 +87,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### Client/Server code:
 - `packages/server`: the demo server
   * `index.ts`: CLI
-  * `app.ts`: Express setup, manifest/rescan/search/images endpoints
+  * `app.ts`: Express setup, manifest/search/favorites/images endpoints
   * `scan.ts`: Image tile directory loading
   * `remote.ts`: Reading a corpus manifest from a remote host (R2/Cloudflare)
                  instead of a local directory

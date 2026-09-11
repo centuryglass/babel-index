@@ -32,7 +32,6 @@ async function serving(
   const app = createApp({
     manifest: await scanDirectory(dir),
     imagesDir: dir,
-    rescan: () => scanDirectory(dir),
     bundleJs: 'console.log("bundle")',
     ...opts,
   });
@@ -160,7 +159,6 @@ test('shared tiles are served from a shared directory outside the corpus', async
       manifest: await scanDirectory(imagesDir, { sharedDir: root }),
       imagesDir,
       sharedDir: root,
-      rescan: () => scanDirectory(imagesDir, { sharedDir: root }),
     });
     const server = app.listen(0);
     await new Promise<void>((r) => server.once('listening', () => r()));
@@ -226,18 +224,6 @@ test('tagLinks.json is advertised and actually serves', async () => {
       },
     }
   );
-});
-
-test('/api/rescan picks up new rooms', async () => {
-  await serving(async ({ get, dir, base }) => {
-    await writeFile(join(dir, '004.jpg'), fixture.jpeg(64, 64));
-    const res = await fetch(`${base}/api/rescan`, { method: 'POST' });
-    assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { count: 4 });
-
-    const m = await (await get('/api/manifest')).json();
-    assert.equal(m.count, 4, 'the manifest must reflect the rescan, not the startup scan');
-  });
 });
 
 // --- search -----------------------------------------------------------------
