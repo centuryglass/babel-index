@@ -21,7 +21,6 @@ import {
   pxPerCell,
   cursorCell,
   pickGranularity,
-  ZOOM_STEP_FACTOR,
   type Camera,
   type CursorGranularity,
 } from '../lib/camera.ts';
@@ -149,7 +148,9 @@ export function useMapCursor({
 
       const canvas = canvasRef.current;
       const cellPxWidth = canvas ? pxPerCell(cam.current).x * (window.devicePixelRatio || 1) : 0;
-      granularityRef.current = pickGranularity(cellPxWidth, granularityRef.current);
+      granularityRef.current = pickGranularity(
+        cellPxWidth, granularityRef.current, camera.cursorGranularityPx, camera.granularityHysteresis
+      );
 
       const base =
         granularityRef.current === 'region'
@@ -169,7 +170,7 @@ export function useMapCursor({
 
       setStatus(lead ? `${lead}. ${said}` : said);
     },
-    [cam, canvasRef, layout, order, metadata, setStatus]
+    [cam, canvasRef, layout, order, metadata, setStatus, camera]
   );
 
   /**
@@ -318,7 +319,7 @@ export function useMapCursor({
         // effect rather than compounding it - `flightTarget()` chains off the
         // fully-resolved target of whatever is already in flight instead.
         const zoomingIn = e.key === 'PageUp' || e.key === '+' || e.key === '=';
-        const factor = zoomingIn ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
+        const factor = zoomingIn ? camera.zoomStepFactor : 1 / camera.zoomStepFactor;
         const zoom = flightTarget().zoom * factor;
         const here = cursorNow();
         flyTo(here.x, here.y, zoom, { ms: camera.keyboardMoveMs });

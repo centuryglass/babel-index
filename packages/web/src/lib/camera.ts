@@ -248,6 +248,11 @@ export function zoomBy(cam: Camera, px: number, py: number, factor: number, rect
 /**
  * How much of a wheel delta becomes zoom. Exponential so the feel is the same
  * at every scale - a notch is a fixed *ratio*, not a fixed number of pixels.
+ *
+ * The value that ships, not the only statement of it: `packages/config` imports
+ * this as `camera.wheelZoomRate`, so a `config.json` can retune it - see
+ * `FLIGHT_MS`'s doc comment for why the default lives here and the live number
+ * lives there.
  */
 export const WHEEL_ZOOM_RATE = 0.0014;
 
@@ -255,6 +260,9 @@ export const WHEEL_ZOOM_RATE = 0.0014;
  * How much one discrete zoom "step" scales the camera - PageUp/PageDown on the
  * keyboard, and a two-finger tap on the map. One constant so a step means the
  * same ratio regardless of which input asked for it.
+ *
+ * Imported into `packages/config` as `camera.zoomStepFactor`, same as
+ * `WHEEL_ZOOM_RATE` above.
  */
 export const ZOOM_STEP_FACTOR = 1.6;
 
@@ -263,9 +271,13 @@ export const ZOOM_STEP_FACTOR = 1.6;
  *
  * @param px viewport-relative pointer x
  * @param py viewport-relative pointer y
+ * @param rate `camera.wheelZoomRate` from config; defaults to the shipped rate
+ *   for callers (tests, mostly) with no config to hand.
  */
-export function zoomAt(cam: Camera, px: number, py: number, deltaY: number, rect: ViewportRect): Camera {
-  return zoomBy(cam, px, py, Math.exp(-deltaY * WHEEL_ZOOM_RATE), rect);
+export function zoomAt(
+  cam: Camera, px: number, py: number, deltaY: number, rect: ViewportRect, rate: number = WHEEL_ZOOM_RATE
+): Camera {
+  return zoomBy(cam, px, py, Math.exp(-deltaY * rate), rect);
 }
 
 /**
@@ -424,11 +436,17 @@ export function cursorCell(cam: Camera): { x: number; y: number } {
  * naming one cell (§3.1's "semantic zoom on the announcement"). A by-feel
  * number, like the chrome thresholds elsewhere: nothing derives from it and no
  * test pins its value.
+ *
+ * Imported into `packages/config` as `camera.cursorGranularityPx`, same as
+ * `WHEEL_ZOOM_RATE` above.
  */
-const CURSOR_GRANULARITY_PX = 24;
+export const CURSOR_GRANULARITY_PX = 24;
 
-/** How much the threshold moves once picked, so a zoom held near it does not flicker. */
-const GRANULARITY_HYSTERESIS = 0.35;
+/**
+ * How much the threshold moves once picked, so a zoom held near it does not
+ * flicker. Imported into `packages/config` as `camera.granularityHysteresis`.
+ */
+export const GRANULARITY_HYSTERESIS = 0.35;
 
 /**
  * 'cell' or 'region': what kind of thing the cursor names at this zoom.
@@ -441,17 +459,20 @@ const GRANULARITY_HYSTERESIS = 0.35;
  *
  * @param cellPx device pixels per cell width, e.g. `pxPerCell(cam).x * dpr`
  * @param current the granularity last announced
+ * @param threshold `camera.cursorGranularityPx` from config
+ * @param hysteresis `camera.granularityHysteresis` from config
  */
 export function pickGranularity(
   cellPx: number,
-  current: CursorGranularity | null = null
+  current: CursorGranularity | null = null,
+  threshold: number = CURSOR_GRANULARITY_PX,
+  hysteresis: number = GRANULARITY_HYSTERESIS
 ): CursorGranularity {
-  const ideal: CursorGranularity = cellPx >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
+  const ideal: CursorGranularity = cellPx >= threshold ? 'cell' : 'region';
   if (current == null || current === ideal) return ideal;
 
-  const biased =
-    ideal === 'region' ? cellPx * (1 + GRANULARITY_HYSTERESIS) : cellPx / (1 + GRANULARITY_HYSTERESIS);
-  const rebiased: CursorGranularity = biased >= CURSOR_GRANULARITY_PX ? 'cell' : 'region';
+  const biased = ideal === 'region' ? cellPx * (1 + hysteresis) : cellPx / (1 + hysteresis);
+  const rebiased: CursorGranularity = biased >= threshold ? 'cell' : 'region';
   return rebiased === current ? current : ideal;
 }
 

@@ -35,8 +35,66 @@
  * No side effects and no filesystem: this is defaults plus validation, so it can
  * be exercised at any limits without a disk or a server. `load.ts` is the part
  * that reads a file.
+ *
+ * ### See also
+ *
+ * This is not the only place a tunable number lives - some by-feel constants are
+ * deliberately kept elsewhere, either because they are read by more than one
+ * runtime (server and client) that this client-shaped config does not reach, or
+ * because changing them safely takes more than validating a range - it means
+ * re-checking a derived invariant (a test, an inequality in a doc) that a
+ * `config.json` overlay has no way to verify at load time. Each of the
+ * following is worth knowing about if you're looking for something to tune:
+ *
+ *   - `packages/web/src/lib/pyramid.ts`: tile resolution ladder, per-level cache
+ *     budgets, prefetch ring and sheet-packing - its own tuning surface, kept
+ *     separate because a bad override here can violate an invariant this file's
+ *     validation cannot check (a budget below its own worst-case-visible count
+ *     thrashes the cache within a single frame). Only `BASE_TILE` (tile size and
+ *     aspect) is genuinely derived rather than tuned; everything else in that
+ *     file trades off memory, bandwidth and request-count deliberately.
+ *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
+ *     HARD zoom range. Stays in code on purpose - this file's `camera.minZoom`/
+ *     `maxZoom` may only narrow it, never widen it, and that asymmetry has to
+ *     live somewhere config itself cannot override.
+ *   - `packages/map/scoring.ts`'s `TAG_PARTIAL_SATURATION`/`STORY_FLOOR`: paired
+ *     with `search.weights` above in the inequalities `docs/search_rules.md`
+ *     states and `scoring.test.ts` checks - move one without the others and the
+ *     inequalities need re-deriving, not just re-tuning.
+ *   - `packages/web/src/lib/center.ts`: the center shelf's spine sizing
+ *     (`SPINE_SIZE_SCALE`, `SPINE_HALO_SCALE`, `SPINE_HALO_FLOOR`) and opening
+ *     fit (`OPENING_MARGIN`) - visual tuning in the same by-feel spirit as
+ *     `center.spineMinPx`/`spineMaxPx` above, not yet plumbed through here.
+ *   - `packages/web/src/lib/favoriteBadge.ts`'s `MIN_FAVORITE_HIT_TOUCH`/
+ *     `TOUCH_HIT_AREA_CAP`: the favorite badge's touch target floor and area
+ *     cap - UX policy, not yet plumbed through here.
+ *   - `packages/web/src/components/CatalogView.tsx`'s layout constants
+ *     (`ROW_PAD`, `TEXT_MIN`, `STORY_RESERVED_PX`, and neighbours): NOT safe to
+ *     move here even though they look tunable - the catalog's fixed-row
+ *     virtualization computes real pixel arithmetic (`spacerHeight`) from these
+ *     exact numbers, so an independent override would desync the scroll math
+ *     from what is actually rendered and corrupt scroll position, not just look
+ *     different.
+ *   - `packages/server/app.ts`'s `RATE_BURST`/`RATE_REFILL_MS`/
+ *     `RATE_MAX_TRACKED`/`EMBED_CACHE_SIZE`: server-side rate-limit and cache
+ *     tuning. Not plumbed through here yet, but a reasonable candidate - this
+ *     file is currently client-config-shaped (rides to the browser on the
+ *     manifest), which server-only knobs have no need to do.
+ *   - `tools/center-placement/lib/measured.ts`: generated from a traced SVG, not
+ *     tunable by feel at all - never hand-edit it, see `AGENTS.md`.
+ *   - `tools/upload`, `tools/embed`, `tools/perf-capture`, `tools/font-lab`: each
+ *     has its own offline/dev-tool constants (concurrency, batch sizes, timeouts).
+ *     Deliberately outside this file's reach - they run outside the demo server
+ *     entirely, and `config.json` has no business shaping a one-off script.
  */
-import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
+import {
+  CURSOR_GRANULARITY_PX,
+  FLIGHT_MS,
+  GRANULARITY_HYSTERESIS,
+  WHEEL_ZOOM_RATE,
+  ZOOM_LIMITS,
+  ZOOM_STEP_FACTOR,
+} from '../web/src/lib/camera.ts';
 import { CERTAINTY_FLOOR } from '../map/ordering.ts';
 import { CLIP_CERTAINTY } from '../map/scoring.ts';
 
@@ -45,12 +103,27 @@ export interface ZoomLimits {
   max: number;
 }
 
+interface GestureConfig {
+  longPressMs: number;
+  pressSlopPx: number;
+  doubleTapMs: number;
+  doubleTapSlopPx: number;
+  twoFingerTapMs: number;
+  twoFingerTapGapMs: number;
+  twoFingerTapSlopPx: number;
+}
+
 interface CameraDefaults {
   minZoom: number | null;
   maxZoom: number | null;
   minVisibleCells: number;
   flightMs: number;
   keyboardMoveMs: number;
+  wheelZoomRate: number;
+  zoomStepFactor: number;
+  cursorGranularityPx: number;
+  granularityHysteresis: number;
+  gesture: GestureConfig;
 }
 
 interface MapConfig {
@@ -124,6 +197,11 @@ export interface Config {
     minVisibleCells: number;
     flightMs: number;
     keyboardMoveMs: number;
+    wheelZoomRate: number;
+    zoomStepFactor: number;
+    cursorGranularityPx: number;
+    granularityHysteresis: number;
+    gesture: GestureConfig;
   };
   slide: SlideConfig;
   catalog: CatalogConfig;
@@ -194,6 +272,78 @@ export const DEFAULTS: Defaults = {
      * every keyboard move through `flyTo` with this as the duration override.
      */
     keyboardMoveMs: 140,
+
+    /**
+     * How much of a wheel delta becomes zoom - exponential, so a notch is a
+     * fixed ratio rather than a fixed pixel count. `WHEEL_ZOOM_RATE` in
+     * `camera.ts`, imported rather than restated, same as `flightMs` above.
+     */
+    wheelZoomRate: WHEEL_ZOOM_RATE,
+
+    /**
+     * How much one discrete zoom "step" scales the camera - PageUp/PageDown
+     * and a two-finger tap. `ZOOM_STEP_FACTOR` in `camera.ts`.
+     */
+    zoomStepFactor: ZOOM_STEP_FACTOR,
+
+    /**
+     * Below this many device pixels per cell width, the keyboard cursor names
+     * a region rather than a single cell (accessibility-plan.md §3.1).
+     * `CURSOR_GRANULARITY_PX` in `camera.ts`.
+     */
+    cursorGranularityPx: CURSOR_GRANULARITY_PX,
+
+    /**
+     * How far past `cursorGranularityPx` a zoom must move before the
+     * announced granularity flips, so holding a zoom near the boundary does
+     * not flicker between naming a cell and naming a region.
+     * `GRANULARITY_HYSTERESIS` in `camera.ts`.
+     */
+    granularityHysteresis: GRANULARITY_HYSTERESIS,
+
+    /**
+     * Press/tap gesture thresholds for the map's pointer handling
+     * (`useMapCamera.ts`) - timing windows and pixel slop for telling a long
+     * press from a drag, a double tap from two unrelated taps, and a
+     * two-finger tap from a pinch. By-feel, like the slide and catalog
+     * timings elsewhere: nothing derives from these, and no test pins their
+     * exact values, only the logic that compares against them.
+     */
+    gesture: {
+      /** How long a press must be held before it opens the metadata overlay. */
+      longPressMs: 500,
+
+      /**
+       * How far a press or a one-finger tap may wander and still count as a
+       * press/tap rather than a drag.
+       */
+      pressSlopPx: 8,
+
+      /** How soon a second tap must land to read as a double tap. */
+      doubleTapMs: 300,
+
+      /**
+       * How close a second tap must land to the first. Wider than
+       * `pressSlopPx` because a second tap lands wherever the same finger
+       * comes back down, not wherever the first one drifted to.
+       */
+      doubleTapSlopPx: 40,
+
+      /**
+       * How long a two-finger tap (zoom out one step) may take from touchdown
+       * to its first liftoff before it reads as a hold instead.
+       */
+      twoFingerTapMs: 400,
+
+      /** How far apart the two liftoffs of a two-finger tap may land. */
+      twoFingerTapGapMs: 250,
+
+      /**
+       * How far the span or midpoint between two fingers may drift and still
+       * count as a tap rather than the start of a pinch.
+       */
+      twoFingerTapSlopPx: 12,
+    },
   },
 
   map: {
@@ -520,6 +670,20 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
       keyboardMoveMs: duration(
         camIn.keyboardMoveMs, DEFAULTS.camera.keyboardMoveMs, 'camera.keyboardMoveMs', notes
       ),
+      wheelZoomRate: nonNegative(camIn.wheelZoomRate, DEFAULTS.camera.wheelZoomRate, 'camera.wheelZoomRate', notes),
+      zoomStepFactor: nonNegative(
+        camIn.zoomStepFactor, DEFAULTS.camera.zoomStepFactor, 'camera.zoomStepFactor', notes
+      ),
+      cursorGranularityPx: atLeast(
+        integer(
+          camIn.cursorGranularityPx, DEFAULTS.camera.cursorGranularityPx, 'camera.cursorGranularityPx', notes
+        ),
+        1, 'camera.cursorGranularityPx', notes
+      ),
+      granularityHysteresis: nonNegative(
+        camIn.granularityHysteresis, DEFAULTS.camera.granularityHysteresis, 'camera.granularityHysteresis', notes
+      ),
+      gesture: gesture(asSection(camIn.gesture, 'camera.gesture', notes), notes),
     },
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
     catalog: catalog(asSection(src.catalog, 'catalog', notes), notes),
@@ -536,21 +700,21 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     },
     search: {
       weights: {
-        tagExact: weight(weightsIn.tagExact, DEFAULTS.search.weights.tagExact, 'search.weights.tagExact', notes),
-        tagPartial: weight(
+        tagExact: nonNegative(weightsIn.tagExact, DEFAULTS.search.weights.tagExact, 'search.weights.tagExact', notes),
+        tagPartial: nonNegative(
           weightsIn.tagPartial, DEFAULTS.search.weights.tagPartial, 'search.weights.tagPartial', notes
         ),
-        titleExact: weight(
+        titleExact: nonNegative(
           weightsIn.titleExact, DEFAULTS.search.weights.titleExact, 'search.weights.titleExact', notes
         ),
-        titlePartial: weight(
+        titlePartial: nonNegative(
           weightsIn.titlePartial, DEFAULTS.search.weights.titlePartial, 'search.weights.titlePartial', notes
         ),
-        story: weight(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
-        storyLong: weight(
+        story: nonNegative(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
+        storyLong: nonNegative(
           weightsIn.storyLong, DEFAULTS.search.weights.storyLong, 'search.weights.storyLong', notes
         ),
-        clip: weight(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
+        clip: nonNegative(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
       },
       minTokenLength: tokenLength(
         searchIn.minTokenLength, DEFAULTS.search.minTokenLength, 'search.minTokenLength', notes
@@ -627,6 +791,31 @@ function center(src: Section, notes: string[]): CenterConfig {
     return { spineMinPx: d.spineMinPx, spineMaxPx: d.spineMaxPx };
   }
   return { spineMinPx, spineMaxPx };
+}
+
+/**
+ * The map's press/tap gesture thresholds - `camera.gesture` in the overlay.
+ *
+ * Every `*Ms` field is a duration (see `duration()` below); every `*Px` field
+ * is floored at 1 the same way `catalog()`'s counts are - a slop of zero or
+ * less is nonsensical as a gesture threshold, not a meaningful "off".
+ */
+function gesture(src: Section, notes: string[]): GestureConfig {
+  const d = DEFAULTS.camera.gesture;
+  const path = (key: keyof GestureConfig) => `camera.gesture.${key}`;
+  const px = (key: keyof GestureConfig): number =>
+    atLeast(integer(src[key], d[key], path(key), notes), 1, path(key), notes);
+  const ms = (key: keyof GestureConfig): number => duration(src[key], d[key], path(key), notes);
+
+  return {
+    longPressMs: ms('longPressMs'),
+    pressSlopPx: px('pressSlopPx'),
+    doubleTapMs: ms('doubleTapMs'),
+    doubleTapSlopPx: px('doubleTapSlopPx'),
+    twoFingerTapMs: ms('twoFingerTapMs'),
+    twoFingerTapGapMs: ms('twoFingerTapGapMs'),
+    twoFingerTapSlopPx: px('twoFingerTapSlopPx'),
+  };
 }
 
 /** Floor a value with a note, for the two counts above. */
@@ -802,8 +991,12 @@ function clipTextDtype(value: unknown, notes: string[]): string {
   return value;
 }
 
-/** A search weight: any non-negative number. Zero is a legitimate "ignore this signal". */
-function weight(value: unknown, fallback: number, path: string, notes: string[]): number {
+/**
+ * Any non-negative number - a search weight (zero is a legitimate "ignore
+ * this signal"), or a camera rate/factor (zero is a legitimate "this input
+ * does nothing", the same reasoning `duration()` gives zero).
+ */
+function nonNegative(value: unknown, fallback: number, path: string, notes: string[]): number {
   const n = number(value, fallback, path, notes);
   if (n < 0) {
     notes.push(`${path} should not be negative; using ${fallback}`);
