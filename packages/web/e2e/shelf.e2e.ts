@@ -2,7 +2,7 @@
  * The browser smoke test: the center room's shelf
  * (docs/accessibility-plan.md phase D) - the diegetic search controls painted
  * into the center tile, and their keyboard interface. One of five files split
- * out of the original `smoke.e2e.mjs` (see `docs/implementation-plan.md`);
+ * out of the original `smoke.e2e.mjs` (see `docs/pending_task_list.md`);
  * see `map-gestures.e2e.ts` for the shared header comment on why and how.
  *
  * The center room's forty spines were painted pixels behind a hit-test - the

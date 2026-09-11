@@ -3,7 +3,7 @@
  * sweeps, the panel's accessible names, the card's focus handling, the live
  * region, reduced motion, and the sidecar's optional `alt` caption. One of
  * five files split out of the original `smoke.e2e.mjs` (see
- * `docs/implementation-plan.md`); see `map-gestures.e2e.ts` for the shared
+ * `docs/pending_task_list.md`); see `map-gestures.e2e.ts` for the shared
  * header comment on why and how. The map's own keyboard interface (phase C)
  * is `keyboard-cursor.e2e.ts`, and the center room's shelf (phase D) is
  * `shelf.e2e.ts`.
@@ -474,11 +474,13 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // client (see the base-path notes in AGENTS.md), rather than guessing where
     // the sidecar is served from.
     const captions = new Set(
-      Object.values(
-        await page.evaluate(async () => {
-          const manifest = await (await fetch('api/manifest')).json();
-          return (await fetch(manifest.metadata.url)).json();
-        })
+      (
+        Object.values(
+          await page.evaluate(async () => {
+            const manifest = await (await fetch('api/manifest')).json();
+            return (await fetch(manifest.metadata.url)).json();
+          })
+        ) as { alt?: unknown }[]
       )
         .map((room) => room.alt)
         .filter((alt) => typeof alt === 'string' && alt.length > 0)

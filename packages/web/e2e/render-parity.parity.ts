@@ -3,7 +3,7 @@
  * the Canvas2D renderer and the experimental WebGL one (`?webgl` -
  * `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`), and check the two draw
  * the same map. This is the "manual side-by-side" that
- * `docs/implementation-plan.md`'s Rendering section names as the last thing
+ * `docs/pending_task_list.md`'s Rendering section names as the last thing
  * standing between the GL renderer and flipping `DEFAULT_WEBGL` - the recording
  * fakes in `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call
  * shape, never pixels or a real GPU.

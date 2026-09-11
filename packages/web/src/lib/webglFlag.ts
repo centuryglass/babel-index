@@ -5,7 +5,7 @@
  * `DEBUG` and `perfProbe.ts`'s `PERF`.
  *
  * `DEFAULT_WEBGL` is which one a plain visit gets. It is now WebGL: the
- * validation in `docs/implementation-plan.md`'s Rendering section (cross-device
+ * validation in `docs/pending_task_list.md`'s Rendering section (cross-device
  * Safari/BrowserStack, glow outlines, the parity suite) came back clean.
  * `?webgl=0` (also `off`/`false`/`no`) is the escape hatch back to Canvas2D -
  * kept because the render-parity suite needs a Canvas2D control session and a
