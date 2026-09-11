@@ -10,6 +10,9 @@ __pycache__/
 # Screenshots the browser smoke test leaves behind.
 packages/web/e2e/artifacts/
 
+# Center icon animation images not combined into sheets
+assets/animation/center_*
+
 # Blender source file (too large for git; kept local only) and its
 # texture cache/backups.
 reference/blender/babel_shelf.blend

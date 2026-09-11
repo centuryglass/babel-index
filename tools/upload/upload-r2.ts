@@ -105,6 +105,7 @@ import { scanDirectory } from '../../packages/server/scan.ts';
 import { REMOTE_MANIFEST_NAME } from '../../packages/server/remote.ts';
 import { createLimiter } from '../../packages/server/search-cache.ts';
 import { contentHash } from '../../packages/pipeline/mips.ts';
+import type { AnimationManifest } from '../center-animation/lib.ts';
 import { buildUploadList, crossOriginFetchedKeys, diffAgainstManifest, guessContentType } from './lib.ts';
 
 const MANIFEST_NAME = 'upload-manifest.json';
@@ -144,6 +145,23 @@ function makeClient() {
       secretAccessKey: requireEnv('R2_SECRET_ACCESS_KEY'),
     },
   });
+}
+
+/**
+ * The on-disk loading-animation manifest under `<sharedDir>/animation/`, or
+ * null when there is none - a corpus deployed without the indicator, exactly
+ * the "no manifest = no indicator" case the client already tolerates. Read and
+ * handed to buildUploadList/crossOriginFetchedKeys so its sheets ride up to
+ * `shared/animation/`; the corpus `Manifest` says nothing about it.
+ */
+async function loadAnimationManifest(sharedDir: string): Promise<AnimationManifest | null> {
+  try {
+    const body = await readFile(join(sharedDir, 'animation', 'manifest.json'), 'utf8');
+    const parsed = JSON.parse(body);
+    return parsed && Array.isArray(parsed.cycles) ? (parsed as AnimationManifest) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The previous run's manifest, or {} if there isn't one yet (first run). */
@@ -248,7 +266,8 @@ async function main() {
   const bucket = (argv.bucket as string) ?? requireEnv('R2_BUCKET');
 
   const manifest = await scanDirectory(imagesDir, { center: argv.center as string | undefined, sharedDir });
-  const uploads = buildUploadList(manifest, { imagesDir, sharedDir, prefix }, join);
+  const animation = await loadAnimationManifest(sharedDir);
+  const uploads = buildUploadList(manifest, { imagesDir, sharedDir, prefix, animation }, join);
   console.log(`${uploads.length} file(s) make up this corpus (prefix "${prefix}")`);
 
   const limiter = createLimiter(CONCURRENCY);
@@ -341,7 +360,7 @@ async function main() {
     ...new Set([
       ...toUpload.map(({ key }) => key),
       `${prefix}/${REMOTE_MANIFEST_NAME}`,
-      ...crossOriginFetchedKeys(manifest, prefix),
+      ...crossOriginFetchedKeys(manifest, prefix, animation),
     ]),
   ];
   if (dryRun) {

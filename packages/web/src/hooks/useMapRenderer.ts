@@ -38,6 +38,7 @@ import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
 import type { Slot } from '../lib/center.ts';
 import { createRenderer, type DrawResult } from '../lib/render.ts';
+import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import type { SpineFontLimits } from '../lib/center.ts';
 import type { createSlideRenderer, createSlideshow, SlideDrawResult } from '../lib/slide.ts';
 import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
@@ -139,6 +140,14 @@ interface UseMapRendererOpts {
    * its own to hang a `.control-tooltip` off of.
    */
   distillTooltipRef?: { current: HTMLElement | null };
+  /**
+   * The center-tile loading indicator, or null when none is deployed. Read
+   * every frame for the current frame to composite onto the center cell (see
+   * `render.ts`'s `DrawOpts.loadingFrame`), and cancelled when the map is
+   * grabbed mid-rearrangement. A ref, like `anim`/`cam`, so the render loop is
+   * not rebuilt when it changes.
+   */
+  loadingAnim?: { current: LoadingAnimation | null };
 }
 
 export function useMapRenderer({
@@ -167,6 +176,7 @@ export function useMapRenderer({
   genericFade,
   distillMode = false,
   distillTooltipRef,
+  loadingAnim,
 }: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -330,6 +340,7 @@ export function useMapRenderer({
         layout: showing.layout, order: showing.order, centreSlots, hoveredBook, spineFontLimits,
         cursor: focusVisible ? cursorCell(cam.current) : null, favorites, hoveredFavorite, sortMode,
         genericFade: genericFade?.current, distillMode, hoveredDistill,
+        loadingFrame: loadingAnim?.current?.frame() ?? null,
       };
       // §2.1: which of the two rearrangement phases drops frames. Only
       // recorded while an animation is actually running (`running` set by
@@ -359,7 +370,8 @@ export function useMapRenderer({
         // (`useRearrangement.ts`) can now hold this state for seconds on a
         // cold cache - leaving the ordinary HUD text showing here would read
         // as "already settled" and return long before the camera even moves.
-        hud.textContent = 'rearranging · preparing…';
+        const anim = loadingAnim?.current?.activeName();
+        hud.textContent = 'rearranging · preparing…' + (anim ? ` · anim ${anim}` : '');
       } else if (hud) {
         const renderStats = stats as DrawResult;
         const size = pyramidSizeOf(renderStats.level);
@@ -378,7 +390,10 @@ export function useMapRenderer({
           `edge at r=${layout.boundaryRadius.toFixed(1)}` +
           (layout.gradedCount ? ` · ${layout.gradedCount} clustered` : '') +
           (blockedCount ? ` · ${blockedCount} blocked` : '') +
-          ` · fav hit ${favHitLabel}`;
+          ` · fav hit ${favHitLabel}` +
+          // The dev-panel preview loop (`loadingAnimation.ts`) runs while no
+          // rearrangement is in flight, so its current cycle name belongs here.
+          (loadingAnim?.current?.activeName() ? ` · anim ${loadingAnim.current.activeName()}` : '');
       }
     };
 
@@ -395,6 +410,11 @@ export function useMapRenderer({
     const onDown = () => {
       const running = anim.current;
       if (!running) return;
+      // A grab mid-preload ends the whole rearrangement (below), so the loading
+      // indicator must stop with it rather than keep playing over a map the
+      // reader has taken - its `finish()` await in `useRearrangement.ts`
+      // resolves off this cancel.
+      loadingAnim?.current?.cancel();
       // Mid-slide, the remaining moves land at once - which is the instant
       // rebuild this replaced. Still flying home, there is no slideshow yet and
       // nothing to finish; dropping the hold is enough, and the next draw shows
@@ -564,5 +584,6 @@ export function useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
     blockedCount, favorites, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+    loadingAnim,
   ]);
 }

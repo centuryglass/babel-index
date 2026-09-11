@@ -45,6 +45,7 @@ import { warmGLTextures } from '../lib/gl/warm.ts';
 import { createGLRenderer, type GLDrawResult } from '../lib/glRenderer.ts';
 import { createGLSlideRenderer, type GLSlideDrawResult } from '../lib/glSlideRenderer.ts';
 import type { RunningAnim } from './useMapRenderer.ts';
+import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
 
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -91,6 +92,8 @@ interface UseMapRendererGLOpts {
   warmTexturesRef?: { current: (ids: ReadonlySet<number>, level: number) => void };
   /** Budget for `gl/warm.ts`'s polling loop - `config.slide.prepareTimeoutMs` in practice, matching `prepareRearrangement`'s own budget. */
   warmTimeoutMs?: number;
+  /** The center-tile loading indicator, a ref - see `useMapRenderer.ts`'s own `loadingAnim`. */
+  loadingAnim?: { current: LoadingAnimation | null };
 }
 
 /** Everything `render()`/the pointer handlers need that legitimately changes on almost every search or toggle - see this file's doc. */
@@ -115,7 +118,7 @@ export function useMapRendererGL({
   draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null, favTooltipRef, sortMode = 'relevance',
   genericFade, distillMode = false, distillTooltipRef, warmTexturesRef,
-  warmTimeoutMs = DEFAULT_WARM_TIMEOUT_MS,
+  warmTimeoutMs = DEFAULT_WARM_TIMEOUT_MS, loadingAnim,
 }: UseMapRendererGLOpts) {
   // Assigned during the render body, not inside an effect - always correct
   // before EITHER effect below runs this render, regardless of which is
@@ -262,6 +265,7 @@ export function useMapRendererGL({
             favorites: favs, hoveredFavorite, sortMode: sort,
             genericFade: genericFade?.current, distillMode: distill, hoveredDistill,
             cursor: focusVisible ? cursorCell(cam.current) : null,
+            loadingFrame: loadingAnim?.current?.frame() ?? null,
           });
       if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);
 
@@ -277,7 +281,8 @@ export function useMapRendererGL({
           `level ${slideStats.level} · ${slideStats.blank} blank · ${cache.size()} cached` +
           (blocked ? ` · ${blocked} blocked` : '');
       } else if (running && hud) {
-        hud.textContent = '[gl] rearranging · preparing…';
+        const anim = loadingAnim?.current?.activeName();
+        hud.textContent = '[gl] rearranging · preparing…' + (anim ? ` · anim ${anim}` : '');
       } else if (hud) {
         const renderStats = stats as GLDrawResult;
         const size = pyramidSizeOf(renderStats.level);
@@ -296,7 +301,8 @@ export function useMapRendererGL({
           `edge at r=${lay.boundaryRadius.toFixed(1)}` +
           (lay.gradedCount ? ` · ${lay.gradedCount} clustered` : '') +
           (blocked ? ` · ${blocked} blocked` : '') +
-          ` · fav hit ${favHitLabel}`;
+          ` · fav hit ${favHitLabel}` +
+          (loadingAnim?.current?.activeName() ? ` · anim ${loadingAnim.current.activeName()}` : '');
       }
     };
 
@@ -309,6 +315,9 @@ export function useMapRendererGL({
     const onDown = () => {
       const running = anim.current;
       if (!running) return;
+      // Stop the loading indicator with the rearrangement it belongs to - see
+      // `useMapRenderer.ts`'s own onDown.
+      loadingAnim?.current?.cancel();
       running.show?.advanceTo(running.show.totalMs);
       anim.current = null;
       draw.current();

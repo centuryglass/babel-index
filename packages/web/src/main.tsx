@@ -47,6 +47,7 @@ import { createRenderer } from './lib/render.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
+import { loadLoadingAnimation, type LoadingAnimation } from './lib/loadingAnimation.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
 import { useMapRenderer } from './hooks/useMapRenderer.ts';
 import { useMapRendererGL } from './hooks/useMapRendererGL.ts';
@@ -411,6 +412,38 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // camera it was planned for, which is the one the frame must be drawn at
   // however the live camera has been nudged since.
   const anim = useRef(null);
+
+  // The center-tile loading indicator (`loadingAnimation.ts`), loaded once from
+  // the shared assets and held in a ref for the same reason `anim` is: the
+  // render hooks read its current frame every tick and must not rebuild when it
+  // changes. Null until the manifest loads, and stays null on a corpus deployed
+  // without one - read as "no indicator" everywhere, like a missing favorite
+  // store. `hasLoadingAnim` is the reactive mirror the dev panel's preview
+  // checkbox is gated on.
+  const loadingAnim = useRef<LoadingAnimation | null>(null);
+  const [hasLoadingAnim, setHasLoadingAnim] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadLoadingAnimation(manifest.sharedBase).then((anim) => {
+      if (cancelled || !anim) return;
+      loadingAnim.current = anim;
+      setHasLoadingAnim(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [manifest.sharedBase]);
+
+  // The dev panel's "loop loading animations" checkbox - a standalone preview
+  // that walks every cycle in order so each can be eyeballed in place. Toggled
+  // straight on the controller; the current cycle name shows in the HUD.
+  const setAnimationPreview = useCallback(
+    (on: boolean) => {
+      if (on) loadingAnim.current?.startDebug(requestDraw);
+      else loadingAnim.current?.stopDebug();
+    },
+    [requestDraw]
+  );
 
   const resistanceAt = useCallback((x: number, y: number) => layout.resistanceAt(x, y), [layout]);
 
@@ -808,6 +841,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     announce,
     cache,
     onPreparing: WEBGL ? onPreparingGL : undefined,
+    loadingAnim,
   });
   requestAnimationRef.current = requestAnimation;
 
@@ -830,13 +864,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+    loadingAnim,
   });
   useMapRendererGL({
     canvasRef: WEBGL ? canvasRef : inertCanvasRef,
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
-    warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs,
+    warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs, loadingAnim,
   });
 
   // Where the toggle above sends the camera once that resort has actually
@@ -1200,6 +1235,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         history={history}
         onForgetSearches={forgetSearches}
         onEnterCatalog={enterCatalog}
+        hasLoadingAnimation={hasLoadingAnim}
+        onAnimationPreviewChange={setAnimationPreview}
       />
 
       {(mode === 'catalog' || leaving) && (

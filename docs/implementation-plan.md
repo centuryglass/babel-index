@@ -11,6 +11,19 @@ serve as completed task history.
   dev panel, which is `?debug`-only. Give it a non-debug home before this
   matters for anyone relying on the lossless reading of a search.
 
+## Loading indicator:
+- The center-tile loading indicator (`loadingAnimation.ts`) only plays when the
+  center book is on screen and legible (`useRearrangement.ts`'s `showLoading`
+  gate). A rearrangement triggered from the far field - a favorite toggle or a
+  relevance re-sort while browsing away from the center - shows nothing during
+  its preload. Design and build a second indicator for that case (a small
+  on-canvas spinner near the viewport centre, or a HUD-adjacent affordance).
+  Until then the far-field preload pause is silent, same as before this feature.
+- The indicator always runs at least one full cycle before the slide, so an
+  on-center search now has a deliberate ~1.6s floor before the map rearranges,
+  even on a warm cache. Intended (a diegetic loading beat, not just a spinner),
+  but revisit if it ever feels like padding on fast searches.
+
 ## Hosting:
 - The Cloudflare abuse protection in `infra/abuse-protection.tf` only scopes
   `assets_hostname` (the R2 bucket). `/api/search` is a much better DoS target

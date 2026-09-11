@@ -1,0 +1,114 @@
+{
+  "frameDurationMs": 100,
+  "tile": {
+    "w": 1024,
+    "h": 768
+  },
+  "cycles": [
+    {
+      "name": "center_0",
+      "sheet": "sheets/center_0.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    },
+    {
+      "name": "center_1",
+      "sheet": "sheets/center_1.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    },
+    {
+      "name": "center_2",
+      "sheet": "sheets/center_2.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    },
+    {
+      "name": "center_3",
+      "sheet": "sheets/center_3.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    },
+    {
+      "name": "center_4",
+      "sheet": "sheets/center_4.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    },
+    {
+      "name": "center_5",
+      "sheet": "sheets/center_5.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    },
+    {
+      "name": "center_6",
+      "sheet": "sheets/center_6.png",
+      "frames": 7,
+      "columns": 3,
+      "rows": 3,
+      "frameWidth": 64,
+      "frameHeight": 90,
+      "rect": {
+        "x": 0.5068359375,
+        "y": 0.5104166666666666,
+        "w": 0.0625,
+        "h": 0.1171875
+      }
+    }
+  ]
+}

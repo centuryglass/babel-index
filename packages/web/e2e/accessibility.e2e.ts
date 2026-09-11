@@ -121,6 +121,16 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       );
       assert.ok(count > 0, 'a query with a known match must produce at least one result');
 
+      // Let the search's rearrangement fully settle before moving on. Later
+      // tests in this file lean on its announcement still being in the live
+      // region, and the announcement fires only once the rearrangement settles
+      // AND is still the current arrangement - so if this test returned while it
+      // was mid-animation, a later layout change would drop it as stale before
+      // it was ever announced. The center-tile loading indicator
+      // (`loadingAnimation.ts`) holds that settle a full cycle longer now,
+      // which is what first surfaced the latent dependency.
+      await settled(page);
+
       const label = await page.locator('#results-label').textContent();
       const first = results.locator('li').first();
       const posinset = await first.getAttribute('aria-posinset');

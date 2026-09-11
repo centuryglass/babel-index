@@ -5,11 +5,32 @@
  * calls in here for the decisions.
  */
 import type { Manifest } from '../../packages/map/manifest.ts';
+import type { AnimationManifest } from '../center-animation/lib.ts';
 import { sheetFileName } from '../../packages/pipeline/layout.ts';
 
 export interface UploadEntry {
   local: string;
   key: string;
+}
+
+/**
+ * The loading-animation manifest and every sheet it names, under
+ * `shared/animation/`. Unlike the corpus's own files these aren't described by
+ * the corpus `Manifest` at all - the client fetches `<sharedBase>/animation/
+ * manifest.json` and each sheet directly (`loadingAnimation.ts`), tolerating a
+ * 404 as "no indicator deployed" - so the caller loads the on-disk animation
+ * manifest itself and hands it in. Null (no manifest on disk) uploads nothing,
+ * matching that same "no indicator" case. Shared across corpora like the rest
+ * of `shared/`, so it isn't gated on any one corpus's prefix.
+ */
+function animationKeys(animation: AnimationManifest | null | undefined): string[] {
+  if (!animation) return [];
+  const keys = ['shared/animation/manifest.json'];
+  for (const cycle of animation.cycles) {
+    const key = `shared/animation/${cycle.sheet}`;
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
 }
 
 export interface HashedUploadEntry extends UploadEntry {
@@ -36,7 +57,12 @@ export type JoinPath = (...parts: string[]) => string;
  */
 export function buildUploadList(
   manifest: Manifest,
-  { imagesDir, sharedDir, prefix }: { imagesDir: string; sharedDir: string; prefix: string },
+  {
+    imagesDir,
+    sharedDir,
+    prefix,
+    animation,
+  }: { imagesDir: string; sharedDir: string; prefix: string; animation?: AnimationManifest | null },
   join: JoinPath
 ): UploadEntry[] {
   const uploads: UploadEntry[] = [];
@@ -86,6 +112,12 @@ export function buildUploadList(
   ])
     uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
 
+  // The loading-animation manifest + sheets, present only when the caller found
+  // one on disk (see animationKeys). key `shared/animation/...` -> local under
+  // sharedDir, the same relationship the center/generic tiles use.
+  for (const key of animationKeys(animation))
+    uploads.push({ local: join(sharedDir, key.slice('shared/'.length)), key });
+
   return uploads;
 }
 
@@ -134,8 +166,16 @@ export function diffAgainstManifest(
  * response for them is still the one CORS headers were configured against -
  * so the upload tool purges these every run regardless of `toUpload`, same
  * list `buildUploadList` guards with the same manifest fields.
+ *
+ * The loading-animation manifest and its sheets are fetched the same way
+ * (`loadingAnimation.ts`'s `fetch()`, not an `<img>` tag), so they belong here
+ * too - a stale cached response missing CORS headers breaks them identically.
  */
-export function crossOriginFetchedKeys(manifest: Manifest, prefix: string): string[] {
+export function crossOriginFetchedKeys(
+  manifest: Manifest,
+  prefix: string,
+  animation?: AnimationManifest | null
+): string[] {
   const keys: string[] = [];
   if (manifest.metadata) keys.push(`${prefix}/metadata.json`);
   if (manifest.tagLinks) keys.push(`${prefix}/tagLinks.json`);
@@ -143,6 +183,7 @@ export function crossOriginFetchedKeys(manifest: Manifest, prefix: string): stri
     keys.push(`${prefix}/embeddings.bin`);
     keys.push(`${prefix}/embeddings.json`);
   }
+  keys.push(...animationKeys(animation));
   return keys;
 }
 
