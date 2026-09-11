@@ -10,7 +10,6 @@ import {
   panByPixels,
   zoomAt,
   zoomBy,
-  ZOOM_STEP_FACTOR,
   type Camera,
 } from '../lib/camera.ts';
 import type { Config } from '../../../config/config.ts';
@@ -60,34 +59,12 @@ import type { Config } from '../../../config/config.ts';
  * outside the content region and be pulled back afterwards instead of being
  * fought all the way there.
  *
+ *
+ * Every gesture threshold below (press/tap timing and slop) comes off
+ * `camera.gesture` rather than a local constant - see
+ * `packages/config/config.ts`'s `gesture` block (nested under `camera`) for
+ * the shipped defaults and the reasoning behind each one.
  */
-
-/** How long a press must be held, and how far it may wander before it is a drag. */
-const LONG_PRESS_MS = 500;
-const PRESS_SLOP_PX = 8;
-
-/**
- * How soon a second tap must land, and how close to the first, to read as a
- * double tap rather than two unrelated ones. Wider than `PRESS_SLOP_PX`
- * because a second tap lands wherever the same finger comes back down, not
- * wherever the first one drifted to.
- */
-const DOUBLE_TAP_MS = 300;
-const DOUBLE_TAP_SLOP_PX = 40;
-
-/**
- * Two-finger tap: zoom out one step, centered where the fingers were - the
- * touch equivalent of the keyboard's PageDown. A tap rather than a pinch
- * means both fingers came down and lifted again without drifting -
- * `TWO_FINGER_TAP_SLOP_PX` bounds that drift, the same role `PRESS_SLOP_PX`
- * plays for a one-finger tap. The two liftoffs need not be simultaneous -
- * `TWO_FINGER_TAP_GAP_MS` is how far apart they may land - but the whole
- * gesture must be quick, not a two-finger hold - `TWO_FINGER_TAP_MS` bounds
- * touchdown to the first liftoff.
- */
-const TWO_FINGER_TAP_MS = 400;
-const TWO_FINGER_TAP_GAP_MS = 250;
-const TWO_FINGER_TAP_SLOP_PX = 12;
 
 /**
  * Someone who has asked for less motion gets the old teleport.
@@ -155,12 +132,13 @@ interface UseMapCameraOpts {
    */
   onTap?: OnTap;
   /**
-   * canvas-relative point of a second tap landing within `DOUBLE_TAP_MS` and
-   * `DOUBLE_TAP_SLOP_PX` of a qualifying first one. Fires in addition to
-   * `onTap` (both fire for the second tap), never instead of it - a single
-   * tap must not wait to find out whether a second one is coming, or every
-   * ordinary tap (selecting a book, focusing the search field) picks up a
-   * `DOUBLE_TAP_MS` delay it never used to have.
+   * canvas-relative point of a second tap landing within
+   * `camera.gesture.doubleTapMs` and `camera.gesture.doubleTapSlopPx` of a
+   * qualifying first one. Fires in addition to `onTap` (both fire for the
+   * second tap), never instead of it - a single tap must not wait to find
+   * out whether a second one is coming, or every ordinary tap (selecting a
+   * book, focusing the search field) picks up a `doubleTapMs` delay it never
+   * used to have.
    */
   onDoubleTap?: OnTap;
   /**
@@ -182,8 +160,8 @@ interface TapCandidate extends PointerPoint {
  * to `firstLiftAt` (still `null` while both fingers are down) to the second
  * liftoff, which is what commits it. `cx`/`cy` are the midpoint at
  * touchdown, fixed rather than tracked, because ANY drift beyond
- * `TWO_FINGER_TAP_SLOP_PX` cancels the candidate outright - see the pinch
- * branch of `onPointerMove`.
+ * `camera.gesture.twoFingerTapSlopPx` cancels the candidate outright - see
+ * the pinch branch of `onPointerMove`.
  */
 interface TwoTapCandidate extends PointerPoint {
   dist0: number;
@@ -398,7 +376,7 @@ export function useMapCamera({
             // the tap candidate so lifting the finger does not fire onTap too.
             tap.current = null;
             pick(clientX, clientY);
-          }, LONG_PRESS_MS),
+          }, camera.gesture.longPressMs),
         };
       }
     };
@@ -413,12 +391,18 @@ export function useMapCamera({
       // working on a touchscreen, where a finger never holds perfectly still -
       // cancelling on the first pixel of jitter would make the gesture
       // unreachable on exactly the devices it exists for.
-      if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > PRESS_SLOP_PX)
+      if (
+        press.current &&
+        Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > camera.gesture.pressSlopPx
+      )
         cancelPress();
 
       // A tap that wanders past the slop is a pan, by the same measure the long
       // press uses.
-      if (tap.current && Math.hypot(e.clientX - tap.current.x, e.clientY - tap.current.y) > PRESS_SLOP_PX)
+      if (
+        tap.current &&
+        Math.hypot(e.clientX - tap.current.x, e.clientY - tap.current.y) > camera.gesture.pressSlopPx
+      )
         tap.current.moved = true;
 
       if (pinch.current && pointers.current.size >= 2) {
@@ -431,8 +415,8 @@ export function useMapCamera({
         // time the way it would if this compared each move to the last.
         if (
           twoTap.current &&
-          (Math.abs(span.dist - twoTap.current.dist0) > TWO_FINGER_TAP_SLOP_PX ||
-            Math.hypot(span.cx - twoTap.current.x, span.cy - twoTap.current.y) > TWO_FINGER_TAP_SLOP_PX)
+          (Math.abs(span.dist - twoTap.current.dist0) > camera.gesture.twoFingerTapSlopPx ||
+            Math.hypot(span.cx - twoTap.current.x, span.cy - twoTap.current.y) > camera.gesture.twoFingerTapSlopPx)
         ) {
           twoTap.current = null;
         }
@@ -522,14 +506,14 @@ export function useMapCamera({
         two &&
         e.type !== 'pointercancel' &&
         two.firstLiftAt != null &&
-        two.firstLiftAt - two.downAt <= TWO_FINGER_TAP_MS &&
-        performance.now() - two.firstLiftAt <= TWO_FINGER_TAP_GAP_MS
+        two.firstLiftAt - two.downAt <= camera.gesture.twoFingerTapMs &&
+        performance.now() - two.firstLiftAt <= camera.gesture.twoFingerTapGapMs
       ) {
         // A hand back on the map beats anything the map was doing to itself -
         // same rule `onPointerDown` applies to a flight already in the air.
         endFlight(false);
         const rect = canvas.getBoundingClientRect();
-        const to = zoomBy(cam.current, two.x - rect.left, two.y - rect.top, 1 / ZOOM_STEP_FACTOR, rect);
+        const to = zoomBy(cam.current, two.x - rect.left, two.y - rect.top, 1 / camera.zoomStepFactor, rect);
         beginFlightTo(to);
         report(e.type, e);
         return;
@@ -555,8 +539,8 @@ export function useMapCamera({
         if (
           onDoubleTap &&
           prior &&
-          now - prior.time <= DOUBLE_TAP_MS &&
-          Math.hypot(t.x - prior.x, t.y - prior.y) <= DOUBLE_TAP_SLOP_PX
+          now - prior.time <= camera.gesture.doubleTapMs &&
+          Math.hypot(t.x - prior.x, t.y - prior.y) <= camera.gesture.doubleTapSlopPx
         ) {
           lastTap.current = null;
           onDoubleTap(px, py, cam.current);
@@ -573,7 +557,9 @@ export function useMapCamera({
       // still easing its own zoom underneath would fight every notch.
       endFlight(false);
       const rect = canvas.getBoundingClientRect();
-      cam.current = zoomAt(cam.current, e.clientX - rect.left, e.clientY - rect.top, e.deltaY, rect);
+      cam.current = zoomAt(
+        cam.current, e.clientX - rect.left, e.clientY - rect.top, e.deltaY, rect, camera.wheelZoomRate
+      );
       onChange?.();
     };
 
@@ -604,7 +590,7 @@ export function useMapCamera({
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDoubleTap, onDebug, endFlight, beginFlightTo]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDoubleTap, onDebug, endFlight, beginFlightTo, camera]);
 
   // Step whichever of the two things is moving the camera on its own: a flight
   // while one is in the air, otherwise the glide back toward the content region
