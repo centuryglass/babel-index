@@ -44,16 +44,18 @@
  * column to be worth it, does `.overlay-columns` get the class that turns it
  * into a row.
  *
- * Once it has, the tile is usually the taller of the two - the text was
- * only ever sized to fit under it, not beside it, so there's slack even for
- * a long story. `measureScale` spends that slack on size rather than
- * whitespace: it binary-searches `--split-text-scale` up from 1 until
- * growing the text any further would force the dialog to scroll, and stops
- * exactly there. Scoped to the split view alone (`.overlay-columns.columns
- * .overlay-body`'s font-size rules) - the stacked layout, the card, and the
- * catalog row all read `.story`/`.chip`/`.score` at their ordinary size.
- * It runs as its own effect, keyed off the `columns` state rather than
- * folded into the same pass as `decideColumns` - see that effect's own
+ * Once split, the tile keeps its own height and the text page stretches to
+ * match it (`.overlay-columns.columns .overlay-body`'s `align-self: stretch`),
+ * so the page is always the image's size. `measureScale` then spends that
+ * height on the prose rather than whitespace: it binary-searches
+ * `--split-text-scale` up from 1 until growing the story any further would
+ * force the dialog to scroll, and stops there. The keyword chips are held out
+ * of the scale on purpose - widening every pill pushes a set that fit on one
+ * line onto two, and a single row of tags reads far better - so only the story
+ * and score grow. A generic cell, whose short caption can't fill a tall tile
+ * even at the cap, simply leaves a mostly-empty page rather than being blown up
+ * to an absurd size. `measureScale` runs as its own effect, keyed off
+ * `columns` rather than folded into `decideColumns` - see that effect's own
  * comment for why the ordering matters.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -202,12 +204,12 @@ export function RoomOverlay({
     setColumns(neededHeight > availableHeight && scrim.clientWidth >= MIN_COLUMNS_WIDTH);
   };
 
-  // Split view only: the tile is usually the taller of the pair, which
-  // leaves the text sized for a stacked column it's no longer in. Binary
-  // search the largest `--split-text-scale` (read by the font-size rules
-  // scoped to `.overlay-columns.columns .overlay-body`) that still keeps the
-  // whole dialog within the room the scrim has - stop scaling exactly where
-  // growing the text any further would force a scroll, never before.
+  // Split view only: the text page is stretched to the tile's height, so the
+  // story usually has slack under it. Binary search the largest
+  // `--split-text-scale` (read by the font-size rules scoped to
+  // `.overlay-columns.columns .overlay-body`) that still keeps the whole dialog
+  // within the room the scrim has - stop scaling exactly where growing the text
+  // any further would force a scroll, never before.
   //
   // This has to run as ITS OWN effect, keyed off `columns` rather than
   // folded into `decideColumns` above - `.overlay`'s own `columns` class
@@ -316,7 +318,7 @@ export function RoomOverlay({
         </div>
 
         {/*
-          Two columns only when one would overflow - see `measureColumns`
+          Two columns only when one would overflow - see `decideColumns`
           above. A short story stays under the tile exactly as it always has;
           only a story tall enough to force scrolling moves beside it, and
           only when the dialog is wide enough for that to be worth doing.

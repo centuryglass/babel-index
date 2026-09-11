@@ -789,7 +789,7 @@ mark {
 /*
   Default: stacked, same as always - a short story sits under the tile
   with nothing clipped, exactly as before this pass. `.columns` is
-  added by `RoomOverlay`'s `measureColumns`, never by a media query:
+  added by `RoomOverlay`'s `decideColumns`, never by a media query:
   it measures whether the stacked pair actually overflows the scrim
   before switching layouts, so a story that already fits never moves.
 */
@@ -803,9 +803,13 @@ mark {
 */
 .overlay.columns { width: fit-content; max-width: min(1500px, 96vw); }
 /*
-  Centered, not top-aligned - a short story next to a tall tile reads
-  as a caption beside a picture this way instead of a paragraph
-  stranded at the top of an otherwise empty column.
+  The tile keeps its natural height and the text page (`.overlay-body`,
+  `align-self: stretch` below) fills to match it, so the page is always the
+  image's size rather than resizing to its own story. A short story sits at the
+  top of a mostly-empty page - commonplace enough to read as natural, and
+  steadier than a page whose height changes per room. flex-start on the
+  container, not stretch: only the body stretches, or the tile image, which has
+  no set height, would stretch too and lose its aspect ratio.
 */
 .overlay-columns.columns { display: flex; align-items: flex-start; gap: 24px; }
 /*
@@ -823,21 +827,22 @@ mark {
   the split as deliberate rather than an accidental gap.
 */
 .overlay-columns.columns .overlay-body {
-  flex: 0 1 400px; width: 400px; min-width: 260px;
+  flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
   padding-left: 24px; border-left: 1px solid var(--edge);
 }
 /*
-  Split view only: the tile is usually taller than the text needs to
-  be, so `RoomOverlay`'s `measureColumns` drives this up past 1 until
-  the text fills that slack instead of leaving it blank - see the file
-  doc comment there. `calc()` off the ordinary size rather than a
-  second set of sizes, so raising `--split-text-scale` is the only
-  thing that ever moves these; the stacked layout, the card and the
-  catalog row never set the variable and read their usual px value.
+  Split view only: the tile is usually taller than the text needs to be, so
+  `RoomOverlay`'s `measureScale` drives this up past 1 until the text fills
+  that slack instead of leaving it blank - see the file doc comment there.
+  `calc()` off the ordinary size rather than a second set of sizes, so raising
+  `--split-text-scale` is the only thing that ever moves these; the stacked
+  layout, the card and the catalog row never set the variable and read their
+  usual px value. The keyword chips are held at their base size and left OUT of
+  the scale: growing the pills widens every one and pushes a set that fit on one
+  line onto two, and a single row of tags reads better - so only the story and
+  score grow to fill.
 */
 .overlay-columns.columns { --split-text-scale: 1; }
-.overlay-columns.columns .overlay-body .chip { font-size: calc(11px * var(--split-text-scale)); }
-.overlay-columns.columns .overlay-body .chip-link { font-size: calc(10px * var(--split-text-scale)); }
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
 .overlay-columns.columns .overlay-body .score { font-size: calc(11px * var(--split-text-scale)); }
 
