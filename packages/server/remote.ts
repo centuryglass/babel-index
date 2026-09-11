@@ -76,6 +76,7 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
     shared: {
       center: manifest.shared?.center && { ...manifest.shared.center, url: toShared(manifest.shared.center.url) },
       generic: (manifest.shared?.generic ?? []).map((g) => ({ ...g, url: toShared(g.url) })),
+      genericDistill: (manifest.shared?.genericDistill ?? []).map((g) => g && { ...g, url: toShared(g.url) }),
     },
   };
 }

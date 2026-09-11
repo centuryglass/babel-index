@@ -46,6 +46,16 @@ export const TAG_LINKS_FILE = 'tagLinks.json';
 export const GENERIC_DIR = 'generic';
 
 /**
+ * The subdirectory holding distill mode's paired alternates for the generic
+ * tiles - the art a generic tile fades to instead of flat black once distill
+ * mode hides the library's filler. Matched to `GENERIC_DIR`'s files by
+ * filename stem (extension may differ, e.g. `generic1.webp` <-> `generic1.jpg`),
+ * not by directory sort order, since the two directories need not use the
+ * same image format or agree on sort order for that to hold.
+ */
+export const GENERIC_DISTILL_DIR = 'generic_distill';
+
+/**
  * Read pixel dimensions from a file header, without decoding the image.
  * Returns null for anything unrecognised - the client falls back to the
  * natural size once the image loads, so this is an optimisation, not a
@@ -197,6 +207,11 @@ async function describeShared(sharedDir: string, sub: string, file: string): Pro
  * The generic tiles are every image in the `generic/` subdirectory, sorted.
  * There may be none (an empty or absent folder), which is the "only the
  * center tile" case the renderers fall back to.
+ *
+ * Distill mode's paired alternates come from `generic_distill/`, matched to
+ * `generic`'s files by filename stem - `genericDistill[i]` is `generic[i]`'s
+ * match, or null where the stem has none, so the two arrays always run
+ * parallel even if `generic_distill/` is missing entries or absent entirely.
  */
 async function scanShared(
   sharedDir: string,
@@ -216,7 +231,18 @@ async function scanShared(
     genericFiles.map((f) => describeShared(sharedDir, GENERIC_DIR, f))
   );
 
-  return { center: centerAsset ?? null, generic };
+  const distillFiles = await listImages(join(sharedDir, GENERIC_DISTILL_DIR)).catch(() => []);
+  const distillByStem = new Map<string, string>(
+    distillFiles.map((f): [string, string] => [basename(f, extname(f)), f])
+  );
+  const genericDistill = await Promise.all(
+    genericFiles.map(async (f) => {
+      const match = distillByStem.get(basename(f, extname(f)));
+      return match ? await describeShared(sharedDir, GENERIC_DISTILL_DIR, match) : null;
+    })
+  );
+
+  return { center: centerAsset ?? null, generic, genericDistill };
 }
 
 /**

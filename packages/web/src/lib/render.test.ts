@@ -272,6 +272,82 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
   assert.ok(genericsSeen.size > 1, `expected several generic tiles on screen, saw ${genericsSeen.size}`);
 });
 
+test('genericFade crossfades toward each generic tile\'s own distill alternate', () => {
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
+    createImage: images.createImage,
+  });
+  const GENERICS = 3;
+  for (let i = 0; i < GENERICS; i++) {
+    cache.pin(`generic:${i}`);
+    cache.pin(`generic-distill:${i}`);
+  }
+  cache.pin(CENTER);
+  const layout = createLayout({
+    roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT,
+    genericCount: GENERICS, genericSeed: 3,
+  });
+  const renderer = createRenderer({ cache });
+  const order = shuffledOrder(ROOMS, 1);
+  const drawOnce = (ctx: DrawContext, genericFade: number) =>
+    renderer.draw({
+      ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order, genericFade,
+    });
+
+  drawOnce(fakeCtx(), 0.5); // kicks off every tile's load
+  images.settleAll();
+
+  const partial = fakeCtx();
+  drawOnce(partial, 0.5);
+  const partialUrls = partial.drawn.map((d) => d.img.src);
+  assert.ok(
+    partialUrls.some((u) => /\/generic:\d+\.jpg$/.test(u)),
+    'the base generic tile is still drawn under a partial fade'
+  );
+  assert.ok(
+    partialUrls.some((u) => /\/generic-distill:\d+\.jpg$/.test(u)),
+    'its distill alternate is crossfaded in over it'
+  );
+
+  const full = fakeCtx();
+  drawOnce(full, 1);
+  const fullUrls = full.drawn.map((d) => d.img.src);
+  assert.ok(
+    !fullUrls.some((u) => /\/generic:\d+\.jpg$/.test(u)),
+    'fully faded: drawing the hidden base tile is skipped as waste'
+  );
+  assert.ok(
+    fullUrls.some((u) => /\/generic-distill:\d+\.jpg$/.test(u)),
+    'fully faded: the distill alternate is drawn in the base tile\'s place'
+  );
+});
+
+test('genericFade falls back to a flat black fill when a generic tile has no distill alternate', () => {
+  const images = fakeImages();
+  const cache = createTileCache({
+    // No location for a `generic-distill:` id - the "index has no matching
+    // alternate on disk" case `genericDistillId`'s doc describes.
+    locateTile: (id, level) =>
+      String(id).startsWith('generic-distill:') ? null : { url: `/l${level}/${id}.jpg`, rect: null },
+    createImage: images.createImage,
+  });
+  cache.pin(CENTER);
+  cache.pin('generic:0');
+  const layout = createLayout({
+    roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT, genericCount: 1, genericSeed: 3,
+  });
+  const renderer = createRenderer({ cache });
+  const order = shuffledOrder(ROOMS, 1);
+  images.settleAll();
+
+  const ctx = fakeCtx();
+  renderer.draw({
+    ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order, genericFade: 1,
+  });
+  assert.ok(ctx.fills.length > 0, 'no distill art available for any generic index: falls back to a flat fill');
+});
+
 // --- rule 2: load ahead -----------------------------------------------------
 
 test('a ring outside the viewport is warmed, behind everything visible', () => {

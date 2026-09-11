@@ -169,7 +169,52 @@ test('no generic folder means no generic tiles, not a failure', async () => {
   await corpus({ ...three(), 'center_tile.png': fixture.png(1024, 768) }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.deepEqual(m.shared.generic, []);
+    assert.deepEqual(m.shared.genericDistill, []);
   });
+});
+
+test('distill mode\'s paired alternates are matched to the generic tiles by filename stem, not directory order', async () => {
+  await corpus(
+    {
+      ...three(),
+      'center_tile.png': fixture.png(1024, 768),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      'generic/v2.webp': fixture.webpVp8(1024, 768),
+      // Stems match v1/v2 despite a different extension and reverse file order,
+      // which is exactly the case index-based pairing would get wrong.
+      'generic_distill/v2.jpg': fixture.jpeg(1024, 768),
+      'generic_distill/v1.jpg': fixture.jpeg(1024, 768),
+      'generic_distill/stray.jpg': fixture.jpeg(1024, 768),
+    },
+    async (dir) => {
+      const m = await scanDirectory(dir);
+      assert.deepEqual(
+        m.shared.genericDistill.map((v) => v && [v.file, v.url]),
+        [
+          ['v1.jpg', 'shared/generic_distill/v1.jpg'],
+          ['v2.jpg', 'shared/generic_distill/v2.jpg'],
+        ]
+      );
+    }
+  );
+});
+
+test('a generic tile with no matching distill alternate gets a null entry, not a dropped index', async () => {
+  await corpus(
+    {
+      ...three(),
+      'center_tile.png': fixture.png(1024, 768),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      'generic/v2.webp': fixture.webpVp8(1024, 768),
+      'generic_distill/v1.jpg': fixture.jpeg(1024, 768),
+    },
+    async (dir) => {
+      const m = await scanDirectory(dir);
+      assert.equal(m.shared.genericDistill.length, 2, 'stays parallel to shared.generic');
+      assert.equal(m.shared.genericDistill[0]?.file, 'v1.jpg');
+      assert.equal(m.shared.genericDistill[1], null);
+    }
+  );
 });
 
 test('a shared directory outside the corpus leaves every corpus image a room', async () => {

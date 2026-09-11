@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTileLocator, createUrlFor } from './rooms.ts';
-import { CENTER, FAV_ON, FAV_OFF, genericId } from './tiles.ts';
+import { CENTER, FAV_ON, FAV_OFF, genericId, genericDistillId } from './tiles.ts';
 
 function manifest(extraLevels: any[] = []): any {
   return {
@@ -10,7 +10,8 @@ function manifest(extraLevels: any[] = []): any {
     sharedBase: 'shared',
     shared: {
       center: { file: 'center.png', url: 'shared/center.png' },
-      generic: [{ file: 'g1.png', url: 'shared/generic/g1.png' }],
+      generic: [{ file: 'g1.png', url: 'shared/generic/g1.png' }, { file: 'g2.png', url: 'shared/generic/g2.png' }],
+      genericDistill: [{ file: 'g1.jpg', url: 'shared/generic_distill/g1.jpg' }, null],
     },
     rooms: [
       { id: 0, file: '001.jpg', url: 'images/001.jpg', bytes: 1 },
@@ -62,6 +63,12 @@ test('the center and generic tiles resolve flat, at level 0 only', () => {
   assert.deepEqual(locate(CENTER, 0), { url: 'shared/center.png', rect: null });
   assert.equal(locate(CENTER, 1), null, 'shared tiles have no coarser levels yet');
   assert.deepEqual(locate(genericId(0), 0), { url: 'shared/generic/g1.png', rect: null });
+});
+
+test('a generic tile\'s distill alternate resolves only where one exists on disk', () => {
+  const locate = createTileLocator(manifest());
+  assert.deepEqual(locate(genericDistillId(0), 0), { url: 'shared/generic_distill/g1.jpg', rect: null });
+  assert.equal(locate(genericDistillId(1), 0), null, 'index 1 has no matching distill alternate');
 });
 
 test('the favorite badge faces resolve flat off sharedBase, even absent from manifest.shared', () => {

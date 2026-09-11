@@ -58,7 +58,7 @@
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
-import { CENTER, FAV_ON, FAV_OFF, genericId, type RoomId, type TileCache } from './tiles.ts';
+import { CENTER, FAV_ON, FAV_OFF, genericId, genericDistillId, type RoomId, type TileCache } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
@@ -450,11 +450,13 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       const sx = (drawMx - cam.x) * cellPx.x + w / 2;
       const sy = (drawMy - cam.y) * cellPx.y + h / 2;
       const id = idFor(value, homeMx, homeMy, genericIndexAt);
-      // A generic tile faded to full black by distill mode shows none of its
-      // art, so scaling it under the fade is wasted - paint the black alone.
-      // Same skip as `render.ts`'s draw loop; the tile is still warmed below.
+      const distillId = value === BOARD_GENERIC ? genericDistillId(genericIndexAt(homeMx, homeMy)) : null;
+      // A generic tile fully faded by distill mode shows none of the base
+      // tile's art, only its distill alternate, so scaling the base under the
+      // fade is wasted. Same skip as `render.ts`'s draw loop; the tile is
+      // still warmed below.
       if (value === BOARD_GENERIC && genericFade >= 1) {
-        drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+        drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
         wanted.push(id);
         return;
       }
@@ -472,7 +474,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
         ctx.fillRect(sx, sy, cw, ch);
         blank++;
       }
-      if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+      if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
       // The favorite badge rides along with a sliding tile - never the center
       // or a generic face, only a real room, which is exactly when `value` is
       // its numeric id rather than one of the two shared board values.

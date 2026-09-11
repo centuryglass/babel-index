@@ -40,6 +40,7 @@ function manifest(): Manifest {
     shared: {
       center: { file: 'center_tile.png', url: '/shared/center_tile.png' },
       generic: [{ file: 'a.jpg', url: '/shared/generic/a.jpg' }],
+      genericDistill: [{ file: 'a.jpg', url: '/shared/generic_distill/a.jpg' }],
     },
   };
 }
@@ -66,6 +67,7 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'shared/fav_off.png',
     'shared/fav_on.png',
     'shared/generic/a.jpg',
+    'shared/generic_distill/a.jpg',
   ]);
 
   const level0 = uploads.find((u) => u.key === 'sample/001.jpg');
@@ -97,7 +99,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   m.metadata = null;
   m.tagLinks = null;
   m.embeddings = null;
-  m.shared = { center: null, generic: [] };
+  m.shared = { center: null, generic: [], genericDistill: [] };
   const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(
     uploads.map((u) => u.key).sort(),
