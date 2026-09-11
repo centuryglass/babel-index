@@ -3,6 +3,35 @@
 What is still to do, and nothing else. Remove a task as it is completed — the
 code and the git log are the record of what was.
 
+## Paper-chrome pass:
+The palette is now warm dark-leather with cream `.paper-sheet` cards floating on
+it (see the color/texture commits). The remaining problem is that the DOM chrome
+still mixes light-on-dark controls with the dark-on-cream cards, which reads as
+awkward. Direction decided: move the chrome onto paper too, rather than either
+leaving the mix or turning the whole background cream (which would kill the
+floating-paper effect). Scope is everything DOM, both modes — the one exception
+is the painted center-shelf book spines, which are canvas art and stay as they
+are. Notes that will bite: `.paper-sheet` locally rebinds `--dim`/`--ink`/
+`--edge`, and the gold accent washes out on cream, so paper controls take
+`--paper-accent` (the focus ring / favorited-star already do). Pieces:
+- **Buttons and search bars → paper background + ink text**, matching the
+  catalog history's shelf-link look. Covers the catalog top-bar controls, the
+  map-mode ranked panel's controls, AND the diegetic center-tile search input.
+  The center input sits over a brass panel in the tile art, so paper should work
+  there with at most minor adjustment - confirm on the real center tile.
+- **Short text labels → small fit-to-text paper rectangles**, not stretched to
+  fill. The catalog "N rooms, …" count/sort line is the type case. Fit-to-text
+  (unlike the larger card blocks, which stretch) is a guess - confirm visually.
+- **Catalog thumbnails → a thin paper mat** (a few px of cream around the
+  image) so they stand out over the black. The right-side card height must match
+  the MAT/page height, not the inner image (the cards already stretch to the
+  image height today - this refines that target). Keep the mat→card gap equal to
+  the current image→card gap, and do NOT let the mat's added margin widen the
+  black gap between rows - that black gap stays constant. Needs a `MAT_PAD`-style
+  constant priced into `CatalogView`'s `rowHeight`/spacer arithmetic, the same
+  fixed-row coupling as `CARD_PAD`/`ROW_PAD`.
+- **Painted map book titles stay unchanged** - the one deliberate exception.
+
 ## A11y:
 - No actual screen reader testing has happened yet. Learn orca and test
   manually. See accessibility-plan.md for more details on what to check, and

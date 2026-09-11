@@ -6,11 +6,21 @@
  */
 :root {
   color-scheme: dark;
-  --ink: #e8e0d2;
-  --dim: #9a8f7d;
-  --panel: rgba(18, 15, 12, 0.88);
-  --edge: rgba(180, 160, 120, 0.22);
-  --mismatch: #c97b63;
+  --ink: #fdf4e5;
+  --dim: #e1d9cc;
+  --panel: rgba(18, 5, 3, 0.88);
+  --edge: rgba(180, 160, 120, 0.42);
+  --mismatch: #941b1b;
+  /*
+    The gold chrome accent - the search badge, focus rings, the favorited
+    star, the faint washes behind chips and hovered controls. One value in
+    two forms: --accent as a hex for solid strokes/text, --accent-rgb as the
+    bare channels so a translucent wash is rgba(var(--accent-rgb), a). Tuned
+    to read on the dark chrome; on the cream paper sheets it washes out, so
+    those swap to --paper-accent (see .paper-sheet) rather than reading this.
+  */
+  --accent: #c49654;
+  --accent-rgb: 196, 150, 84;
   /*
     Paper: the open book's pages read as warm cream sheets with dark ink,
     set inside the dark cover the rest of the app uses. Kept as its own
@@ -20,7 +30,7 @@
   --paper: #ece2cb;
   --paper-hi: #f4ecd9;
   --paper-ink: #2c2620;
-  --paper-dim: #6a5f4c;
+  --paper-dim: #5a4f3b;
   --paper-edge: rgba(70, 54, 30, 0.28);
   --paper-accent: #7a4718;
   --paper-gutter: rgba(52, 38, 18, 0.32);
@@ -35,7 +45,7 @@
  * instead of the pinch.
  */
 html, body {
-  margin: 0; height: 100%; overflow: hidden; background: #0a0908;
+  margin: 0; height: 100%; overflow: hidden; background: #110302;
   touch-action: none; overscroll-behavior: none;
 }
 body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
@@ -84,9 +94,9 @@ body:has(.overlay-scrim, .catalog),
 .center-search input[type="search"] {
   width: 100%; height: 100%; padding: 0 26px 0 10px; text-align: center;
   background: rgba(10,8,6,0.55); color: var(--ink);
-  border: 1px solid rgba(200,169,95,0.45); border-radius: 4px; font: inherit;
+  border: 1px solid rgba(var(--accent-rgb),0.45); border-radius: 4px; font: inherit;
 }
-.center-search input[type="search"]:focus { border-color: #c8a95f; background: rgba(10,8,6,0.75); }
+.center-search input[type="search"]:focus { border-color: var(--accent); background: rgba(10,8,6,0.75); }
 
 /*
  * The clear-x, shared markup between both search homes (SearchForm.tsx)
@@ -137,8 +147,8 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 */
 .center-books button.hint { animation: book-hint 1.8s ease-in-out infinite; }
 @keyframes book-hint {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(200,169,95,0.6); }
-  50% { box-shadow: 0 0 5px 2px rgba(200,169,95,0.9); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb),0.6); }
+  50% { box-shadow: 0 0 5px 2px rgba(var(--accent-rgb),0.9); }
 }
 
 /*
@@ -162,8 +172,8 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 .center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .center-book path { fill: transparent; stroke: none; }
-.center-book.hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
-.center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+.center-book.hover path { fill: rgba(var(--accent-rgb),0.28); stroke: rgba(var(--accent-rgb),0.55); stroke-width: 0.004; }
+.center-book:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /*
  * The favorites-sort switch and reorder button - one container over
@@ -183,9 +193,9 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
   position: absolute; margin: 0; padding: 0; border: none;
   background: none; border-radius: 2px;
 }
-.center-controls button.hover { background: rgba(200,169,95,0.28); box-shadow: 0 0 0 1px rgba(200,169,95,0.55); }
-.center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(200,169,95,0.75); }
-.center-controls button:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+.center-controls button.hover { background: rgba(var(--accent-rgb),0.28); box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.55); }
+.center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),0.75); }
+.center-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /*
  * A custom tooltip, not the native `title` popup: the button it is
  * inside has `pointer-events: none` (inherited from `.center-controls`),
@@ -248,12 +258,12 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .row { margin-bottom: 12px; }
 .row label { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 4px; }
 .row label b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
-input[type="range"] { width: 100%; accent-color: #c8a95f; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
 input[type="search"] {
   width: 100%; padding: 7px 9px; background: rgba(0,0,0,0.4); color: var(--ink);
   border: 1px solid var(--edge); border-radius: 5px; font: inherit;
 }
-input[type="search"]:focus { border-color: #c8a95f; }
+input[type="search"]:focus { border-color: var(--accent); }
 /*
  * One focus ring for everything, and it must stay visible. The search
  * fields used to say `outline: none` and lean on a border-colour shift
@@ -267,7 +277,7 @@ input[type="search"]:focus { border-color: #c8a95f; }
  * reached for in the first place.
  */
 :focus-visible {
-  outline: 2px solid #c8a95f;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -289,11 +299,11 @@ input[type="search"]:focus { border-color: #c8a95f; }
 .results-list li + li { margin-top: 3px; }
 .result {
   display: block; width: 100%; text-align: left; padding: 5px 8px;
-  background: rgba(200,169,95,0.08); color: var(--ink);
+  background: rgba(var(--accent-rgb),0.08); color: var(--ink);
   border: 1px solid var(--edge); border-radius: 4px; font: inherit; font-size: 11px;
   line-height: 1.4; cursor: pointer;
 }
-.result:hover { background: rgba(200,169,95,0.2); }
+.result:hover { background: rgba(var(--accent-rgb),0.2); }
 
 .buttons { display: flex; gap: 7px; }
 /*
@@ -304,10 +314,10 @@ input[type="search"]:focus { border-color: #c8a95f; }
   below rather than this being narrowed under the panel it was written for.
 */
 button {
-  flex: 1; padding: 6px 8px; background: rgba(200,169,95,0.12); color: var(--ink);
+  flex: 1; padding: 6px 8px; background: rgba(var(--accent-rgb),0.12); color: var(--ink);
   border: 1px solid var(--edge); border-radius: 5px; font: inherit; cursor: pointer;
 }
-button:hover { background: rgba(200,169,95,0.24); }
+button:hover { background: rgba(var(--accent-rgb),0.24); }
 .search-trigger { width: 100%; }
 /*
   The map's own search affordance - not part of the panel, so it has to
@@ -362,7 +372,7 @@ button:hover { background: rgba(200,169,95,0.24); }
   head row inside it is one appearance.
 */
 .card-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
   flex: none;
 }
@@ -383,28 +393,32 @@ button:hover { background: rgba(200,169,95,0.24); }
 .favorite { display: flex; margin-bottom: 8px; }
 .catalog-name .favorite { margin: 0; }
 /*
-  The overlay's own row for the favorite toggle and the other reading's
-  link ("show on the map" / "show in the catalog") - `space-between` so
-  the link sits right-aligned against the toggle without either control
-  needing to know the other is there. Nested `.favorite` drops its own
-  margin since this row already carries one.
+  The room overlay's head carries its two actions - the favorite toggle and
+  the other reading's link ("show on the map" / "show in the catalog") -
+  in the head rather than on a row of their own. The star tucks in right
+  after the name (which truncates rather than pushing it off); `.room-head-end`
+  takes the row's slack so the link and close button group at the far right.
+  The actions drop their own vertical margins since the head already spaces
+  itself. On a narrow display the link swaps its full phrase for the short
+  relabel, which its accessible name keeps regardless.
 */
-/*
-  `margin-left: auto` on the link rather than `justify-content:
-  space-between` - the favorite toggle is absent for a generic cell, and
-  `space-between` with one child left-aligns it instead of right.
-*/
-.overlay-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.overlay-actions .favorite { margin-bottom: 0; }
-.overlay-actions .catalog-show { margin-left: auto; }
+.room-head .card-id { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-head .favorite { margin: 0; flex: none; }
+.room-head-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.room-head .catalog-show { flex: none; }
+.catalog-show-short { display: none; }
+@media (max-width: 600px) {
+  .room-head .catalog-show-full { display: none; }
+  .room-head .catalog-show-short { display: inline; }
+}
 .favorite-toggle {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
-  color: var(--dim); background: rgba(200,169,95,0.08);
+  color: var(--dim); background: rgba(var(--accent-rgb),0.08);
   border: 1px solid var(--edge); border-radius: 999px;
 }
-.favorite-toggle:hover { color: var(--ink); background: rgba(200,169,95,0.22); border-color: #c8a95f; }
-.favorite-toggle.on { color: #c8a95f; background: rgba(200,169,95,0.24); border-color: #c8a95f; }
+.favorite-toggle:hover { color: var(--ink); background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+.favorite-toggle.on { color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
 .favorite-count { font-variant-numeric: tabular-nums; }
 /*
   Sized to its own text, like every other catalog-bar control - the
@@ -417,16 +431,16 @@ button:hover { background: rgba(200,169,95,0.24); }
 }
 .catalog-sort select {
   font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
-  background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 3px 6px;
 }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .chip {
   flex: 0 0 auto; padding: 3px 8px; font-size: 11px;
-  background: rgba(200,169,95,0.14); border: 1px solid var(--edge); border-radius: 999px;
+  background: rgba(var(--accent-rgb),0.14); border: 1px solid var(--edge); border-radius: 999px;
   color: var(--ink); cursor: pointer;
 }
-.chip:hover { background: rgba(200,169,95,0.3); border-color: #c8a95f; }
+.chip:hover { background: rgba(var(--accent-rgb),0.3); border-color: var(--accent); }
 /*
   A chip with a recorded external link grows a second, narrower pill
   fused to it - the search action and "read more about this" stay two
@@ -438,10 +452,10 @@ button:hover { background: rgba(200,169,95,0.24); }
 .chip-link {
   flex: 0 0 auto; display: flex; align-items: center; padding: 3px 6px;
   font-size: 10px; line-height: 1; text-decoration: none;
-  background: rgba(200,169,95,0.14); border: 1px solid var(--edge);
+  background: rgba(var(--accent-rgb),0.14); border: 1px solid var(--edge);
   border-radius: 0 999px 999px 0; color: var(--dim);
 }
-.chip-link:hover { background: rgba(200,169,95,0.3); border-color: #c8a95f; color: var(--ink); }
+.chip-link:hover { background: rgba(var(--accent-rgb),0.3); border-color: var(--accent); color: var(--ink); }
 .story { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
 /*
   A match, marked where it matched. Deliberately a wash of the accent
@@ -451,11 +465,11 @@ button:hover { background: rgba(200,169,95,0.24); }
   palette, so both colours are restated.
 */
 mark {
-  background: rgba(200,169,95,0.26); color: var(--ink);
+  background: rgba(var(--accent-rgb),0.26); color: var(--ink);
   border-radius: 2px; padding: 0 1px;
-  box-shadow: 0 0 0 1px rgba(200,169,95,0.35);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.35);
 }
-.chip mark { background: rgba(200,169,95,0.45); box-shadow: none; }
+.chip mark { background: rgba(var(--accent-rgb),0.45); box-shadow: none; }
 
 /*
   Why a room ranked where it did - see RoomDetails' ScoreBreakdown. One
@@ -502,7 +516,7 @@ mark {
 
 .catalog {
   position: absolute; inset: 0; display: flex; flex-direction: column;
-  background: #0a0908; touch-action: auto;
+  background: #150805; touch-action: auto;
   animation: catalog-in 240ms ease both;
 }
 /*
@@ -538,7 +552,7 @@ mark {
   width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--ink);
   background: rgba(10,8,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
 }
-.catalog-search input[type="search"]:focus { border-color: #c8a95f; outline: none; }
+.catalog-search input[type="search"]:focus { border-color: var(--accent); outline: none; }
 .catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
 .catalog-count { margin: 0; flex: 1 1 16em; color: var(--dim); font-size: 11px; }
 /*
@@ -568,10 +582,10 @@ mark {
 .catalog .mode-toggle, .paging button, .pager button { flex: 0 0 auto; }
 .paging button, .mode-toggle, .catalog-show, .pager button {
   font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
-  background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 4px 9px;
 }
-.paging button.on { color: var(--ink); background: rgba(200,169,95,0.24); border-color: #c8a95f; }
+.paging button.on { color: var(--ink); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
 .mode-toggle { color: var(--ink); }
 /*
   The panel's `.forget { width: 100% }` is sized for its own block-layout
@@ -581,7 +595,7 @@ mark {
 */
 .catalog .forget {
   width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--dim);
-  cursor: pointer; background: rgba(200,169,95,0.08); border: 1px solid var(--edge);
+  cursor: pointer; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 4px 9px;
 }
 
@@ -605,7 +619,7 @@ mark {
 */
 .catalog-row {
   display: flex; gap: 14px; align-items: flex-start;
-  height: var(--catalog-row); padding: 11px 16px;
+  height: var(--catalog-row); padding: 7px 16px;
   overflow: hidden;
 }
 /*
@@ -620,7 +634,7 @@ mark {
 */
 .catalog-row .catalog-body.paper-sheet { padding: 12px 16px; }
 /*
-  The gold accents (`#c8a95f`) read on dark chrome but wash out on cream,
+  The gold accents (`--accent`) read on dark chrome but wash out on cream,
   so the rank and "read the rest" drop to the paper's inked rust, the same
   move the overlays' sheets make. The mismatch reading keeps its own colour.
 */
@@ -638,7 +652,7 @@ mark {
 */
 .catalog-row.spotlight { animation: catalog-spotlight 1.6s ease-out; }
 @keyframes catalog-spotlight {
-  0% { background: rgba(200,169,95,0.32); }
+  0% { background: rgba(var(--accent-rgb),0.32); }
   100% { background: transparent; }
 }
 /*
@@ -650,7 +664,7 @@ mark {
   flex: 0 0 auto; padding: 0; border: none; background: none;
   cursor: zoom-in; line-height: 0; border-radius: 2px;
 }
-.catalog-tile-button:focus-visible { outline: 2px solid #c8a95f; outline-offset: 2px; }
+.catalog-tile-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-tile {
   display: block; width: var(--catalog-thumb); height: auto;
   border-radius: 2px; background: #14110d; transform-origin: 0 0;
@@ -676,8 +690,8 @@ mark {
 }
 .catalog-center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .catalog-center-book path { fill: transparent; stroke: none; }
-.catalog-center-book:hover path { fill: rgba(200,169,95,0.28); stroke: rgba(200,169,95,0.55); stroke-width: 0.004; }
-.catalog-center-book:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+.catalog-center-book:hover path { fill: rgba(var(--accent-rgb),0.28); stroke: rgba(var(--accent-rgb),0.55); stroke-width: 0.004; }
+.catalog-center-book:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /*
  * The global `button:hover` rule below washes any plain button with a
  * tan fill - fine for a labelled control, wrong for a button that IS a
@@ -697,10 +711,10 @@ mark {
   background: none; cursor: pointer;
 }
 .catalog-distill-toggle img { display: block; width: 100%; height: 100%; }
-.catalog-distill-toggle:focus-visible { outline: 2px solid #c8a95f; outline-offset: 1px; }
+.catalog-distill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Shown only on a story the clamp actually cut - see CatalogRow. */
 .catalog-more {
-  font: inherit; font-size: 10px; color: #c8a95f; cursor: pointer;
+  font: inherit; font-size: 10px; color: var(--accent); cursor: pointer;
   background: none; border: none; padding: 2px 0; text-decoration: underline;
 }
 
@@ -724,6 +738,22 @@ mark {
   width: min(1060px, 100%); max-height: 100%; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--edge); border-radius: 6px;
   padding: 14px 16px 16px;
+}
+/*
+  A single seamless leather grain over the dark chrome - the side panels, the
+  dialog shells (room/help/statement overlays all carry `.overlay`) and the
+  catalog backdrop. `overlay` blend-mode blends the tile against each surface's
+  OWN base colour, so the tint still comes from --panel / .catalog's #150805 and
+  the image only adds grain; this rule sets no background-color of its own. It
+  must stay AFTER those three set their `background:` shorthands, or the
+  shorthand resets background-image back to none. Served from the shared dir as
+  a RELATIVE url so it survives the subpath deploy like every other asset. The
+  map canvas is already painted art and the scrim is translucent over it, so
+  neither takes the grain.
+*/
+.panel, .overlay, .catalog {
+  background-image: url(shared/leather_texture_tile.png);
+  background-blend-mode: overlay;
 }
 .overlay:focus { outline: none; }
 /*
@@ -750,7 +780,7 @@ mark {
   box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
 }
 /*
-  The light-gold accent (`#c8a95f`) is tuned to read on the dark chrome;
+  The light-gold accent (`--accent`) is tuned to read on the dark chrome;
   on cream it washes out, so the focus ring and the favorited-star state
   take the paper's inked rust instead. The faint gold washes on chips and
   `<mark>` keep working over cream unchanged.
@@ -777,7 +807,7 @@ mark {
 /*
   Default: stacked, same as always - a short story sits under the tile
   with nothing clipped, exactly as before this pass. `.columns` is
-  added by `RoomOverlay`'s `measureColumns`, never by a media query:
+  added by `RoomOverlay`'s `decideColumns`, never by a media query:
   it measures whether the stacked pair actually overflows the scrim
   before switching layouts, so a story that already fits never moves.
 */
@@ -791,11 +821,15 @@ mark {
 */
 .overlay.columns { width: fit-content; max-width: min(1500px, 96vw); }
 /*
-  Centered, not top-aligned - a short story next to a tall tile reads
-  as a caption beside a picture this way instead of a paragraph
-  stranded at the top of an otherwise empty column.
+  The tile keeps its natural height and the text page (`.overlay-body`,
+  `align-self: stretch` below) fills to match it, so the page is always the
+  image's size rather than resizing to its own story. A short story sits at the
+  top of a mostly-empty page - commonplace enough to read as natural, and
+  steadier than a page whose height changes per room. flex-start on the
+  container, not stretch: only the body stretches, or the tile image, which has
+  no set height, would stretch too and lose its aspect ratio.
 */
-.overlay-columns.columns { display: flex; align-items: center; gap: 24px; }
+.overlay-columns.columns { display: flex; align-items: flex-start; gap: 24px; }
 /*
   The tile keeps its own natural size (`flex-basis: auto` reads that
   from the image itself) rather than stretching to fill whatever the
@@ -811,21 +845,22 @@ mark {
   the split as deliberate rather than an accidental gap.
 */
 .overlay-columns.columns .overlay-body {
-  flex: 0 1 400px; width: 400px; min-width: 260px;
+  flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
   padding-left: 24px; border-left: 1px solid var(--edge);
 }
 /*
-  Split view only: the tile is usually taller than the text needs to
-  be, so `RoomOverlay`'s `measureColumns` drives this up past 1 until
-  the text fills that slack instead of leaving it blank - see the file
-  doc comment there. `calc()` off the ordinary size rather than a
-  second set of sizes, so raising `--split-text-scale` is the only
-  thing that ever moves these; the stacked layout, the card and the
-  catalog row never set the variable and read their usual px value.
+  Split view only: the tile is usually taller than the text needs to be, so
+  `RoomOverlay`'s `measureScale` drives this up past 1 until the text fills
+  that slack instead of leaving it blank - see the file doc comment there.
+  `calc()` off the ordinary size rather than a second set of sizes, so raising
+  `--split-text-scale` is the only thing that ever moves these; the stacked
+  layout, the card and the catalog row never set the variable and read their
+  usual px value. The keyword chips are held at their base size and left OUT of
+  the scale: growing the pills widens every one and pushes a set that fit on one
+  line onto two, and a single row of tags reads better - so only the story and
+  score grow to fill.
 */
 .overlay-columns.columns { --split-text-scale: 1; }
-.overlay-columns.columns .overlay-body .chip { font-size: calc(11px * var(--split-text-scale)); }
-.overlay-columns.columns .overlay-body .chip-link { font-size: calc(10px * var(--split-text-scale)); }
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
 .overlay-columns.columns .overlay-body .score { font-size: calc(11px * var(--split-text-scale)); }
 
@@ -875,7 +910,7 @@ mark {
   font-size: 11px; color: var(--ink); letter-spacing: 0.04em;
   text-transform: uppercase; cursor: pointer;
 }
-.help-block-panel summary:focus-visible { outline: 2px solid #c8a95f; outline-offset: 2px; }
+.help-block-panel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .help-block-panel[open] summary { margin-bottom: 8px; }
 .help-block-note { margin: 0 0 8px; font-size: 11px; line-height: 1.5; color: var(--dim); }
 .help-block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
@@ -988,9 +1023,21 @@ mark {
 /* The page-nav sits UNDER the book on the dark cover, its rule dividing it
    from the pages above (a top border, not the card-head's bottom one). */
 .book-nav {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--edge);
 }
+/*
+  Light chrome pills at the spread's two corners, not the global stretched
+  button - the same faint gold-wash the catalog's paging controls carry, so
+  the nav reads as delicate as the book it sits under rather than two dark
+  slabs. prev holds the left edge, next the right (space-between above).
+*/
+.book-nav button {
+  flex: 0 0 auto; font-size: 11px; color: var(--dim); padding: 5px 14px;
+  background: rgba(var(--accent-rgb),0.08);
+}
+.book-nav button:hover { color: var(--ink); background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+.book-nav button[disabled] { opacity: 0.35; cursor: default; }
 
 /*
   One overlay opening another (the statement opens the Babel book). The
@@ -1006,7 +1053,15 @@ mark {
   .overlay-scrim.behind .statement-overlay { transform: translateY(-8px) scale(0.985); }
 }
 
-.catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+/*
+  Stretch the cream card to the row's full height - which the image column
+  sets in the common case - so every card is the SAME height rather than
+  shrinking to its own story and letting the dark padding claim the leftover.
+  The row stays fixed-height (the spacer arithmetic rests on that); this only
+  changes what fills it. The self-sizing center row (`.catalog-center`) is
+  unaffected - its body is already its tallest child, so stretch is a no-op there.
+*/
+.catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
 /*
   The room's identity and the way out to the map share one row, with real
   space under it. They used to be at opposite ends of the row with the
@@ -1041,7 +1096,7 @@ mark {
 .catalog-show { flex: 0 0 auto; }
 .catalog-name .favorite-toggle { flex: 0 0 auto; }
 .catalog-rank {
-  color: #c8a95f; font-variant-numeric: tabular-nums; font-size: 11px;
+  color: var(--accent); font-variant-numeric: tabular-nums; font-size: 11px;
   min-width: 2.2em;
 }
 .catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
@@ -1079,7 +1134,7 @@ mark {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .score-strip .score-composite { color: var(--ink); font-weight: 500; }
-.score-strip .clip-certainty { color: #8a7c66; }
+.score-strip .clip-certainty { color: #6a5f4c; }
 .score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
 .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
@@ -1128,7 +1183,7 @@ mark {
 .shelf-link {
   font: inherit; font-size: 10px; cursor: pointer; padding: 3px 6px;
   border-radius: 3px; border: 1px solid transparent;
-  background: rgba(200,169,95,0.08); color: var(--dim);
+  background: rgba(var(--accent-rgb),0.08); color: var(--dim);
   /* One line, ellipsised - a long search term must not set the row's height. */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: left;
@@ -1140,13 +1195,13 @@ mark {
   font/text pass decides, but the distinction has to be visible before
   then, not only in the colour.
 */
-.shelf-link.override { color: #c8a95f; border-color: #c8a95f; text-decoration: underline; }
-.shelf-link:hover { background: rgba(200,169,95,0.22); }
+.shelf-link.override { color: var(--accent); border-color: var(--accent); text-decoration: underline; }
+.shelf-link:hover { background: rgba(var(--accent-rgb),0.22); }
 /*
   The center row's shelf now sits on the same cream card the room rows
   use (`.catalog-body.paper-sheet`). The default and history links follow
   the remapped `--dim`/`--ink`/`--edge` onto paper, but the override links'
-  gold (`#c8a95f`) washes out on cream, so they take the paper's inked rust
+  gold (`--accent`) washes out on cream, so they take the paper's inked rust
   - the same drop the rank and "read the rest" make.
 */
 .catalog-body.paper-sheet .shelf-link.override { color: var(--paper-accent); border-color: var(--paper-accent); }

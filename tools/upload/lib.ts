@@ -107,15 +107,17 @@ export function buildUploadList(
         key: `shared/generic_distill/${distill.file}`,
       });
 
-  // Fixed app art, not part of any corpus's manifest.shared - see
-  // packages/web/src/lib/rooms.ts, which resolves these filenames off
-  // manifest.sharedBase unconditionally. Always uploaded, unlike center/
-  // generic, because there's no manifest field to gate on.
+  // Fixed app art, not part of any corpus's manifest.shared - resolved off
+  // manifest.sharedBase in packages/web/src/lib/rooms.ts (the badges and
+  // toggles) or by a relative `url(shared/...)` in style.css (the leather
+  // grain behind the dark chrome). Always uploaded, unlike center/generic,
+  // because there's no manifest field to gate on.
   for (const file of [
     'fav_on.png', 'fav_off.png',
     'fav_center_switch_base.png', 'fav_mine_on.png', 'fav_count_on.png',
     'distill_off.png', 'distill_on.png',
     'clear_history_book.png',
+    'leather_texture_tile.png',
   ])
     uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
 

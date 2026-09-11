@@ -78,7 +78,7 @@ const thumbWidth = (available: number): number =>
   Math.round(Math.min(240, Math.max(120, available * 0.26)));
 
 /** A row's vertical padding, both halves - the one number CSS and JS must agree on. */
-const ROW_PAD = 22;
+const ROW_PAD = 14;
 
 /**
  * The paper card's own vertical padding, both halves - the room's text column
