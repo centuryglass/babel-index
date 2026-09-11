@@ -2,8 +2,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildUploadList, crossOriginFetchedKeys, diffAgainstManifest, guessContentType } from './lib.ts';
 import type { Manifest } from '../../packages/map/manifest.ts';
+import type { AnimationManifest } from '../center-animation/lib.ts';
 
 const join = (...parts: string[]) => parts.join('/');
+
+function animation(): AnimationManifest {
+  const cycle = (name: string) => ({
+    name,
+    sheet: `sheets/${name}.png`,
+    frames: 7,
+    columns: 3,
+    rows: 3,
+    frameWidth: 64,
+    frameHeight: 90,
+    rect: { x: 0.5, y: 0.5, w: 0.06, h: 0.11 },
+  });
+  return { frameDurationMs: 100, tile: { w: 1024, h: 768 }, cycles: [cycle('center_0'), cycle('center_1')] };
+}
 
 function manifest(): Manifest {
   return {
@@ -103,6 +118,27 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   );
 });
 
+test('buildUploadList uploads the loading-animation manifest and one entry per sheet when the caller found one', () => {
+  const uploads = buildUploadList(
+    manifest(),
+    { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample', animation: animation() },
+    join
+  );
+  const byKey = new Map(uploads.map((u) => [u.key, u.local]));
+  assert.equal(byKey.get('shared/animation/manifest.json'), 'assets/animation/manifest.json');
+  assert.equal(byKey.get('shared/animation/sheets/center_0.png'), 'assets/animation/sheets/center_0.png');
+  assert.equal(byKey.get('shared/animation/sheets/center_1.png'), 'assets/animation/sheets/center_1.png');
+});
+
+test('buildUploadList uploads no animation entries when the caller found no manifest', () => {
+  const uploads = buildUploadList(
+    manifest(),
+    { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample', animation: null },
+    join
+  );
+  assert.ok(!uploads.some((u) => u.key.startsWith('shared/animation/')));
+});
+
 test('diffAgainstManifest uploads new and changed files, skips matching hashes present in the bucket', () => {
   const uploads = [
     { local: '/a', key: 'k/a' },
@@ -161,6 +197,18 @@ test('crossOriginFetchedKeys lists the fetch()-read sidecars, omitting what the 
   m.tagLinks = null;
   m.embeddings = null;
   assert.deepEqual(crossOriginFetchedKeys(m, 'sample'), []);
+});
+
+test('crossOriginFetchedKeys includes the animation manifest and sheets, which are fetch()-read too', () => {
+  assert.deepEqual(crossOriginFetchedKeys(manifest(), 'sample', animation()).sort(), [
+    'sample/embeddings.bin',
+    'sample/embeddings.json',
+    'sample/metadata.json',
+    'sample/tagLinks.json',
+    'shared/animation/manifest.json',
+    'shared/animation/sheets/center_0.png',
+    'shared/animation/sheets/center_1.png',
+  ]);
 });
 
 test('guessContentType covers every extension this tool uploads', () => {
