@@ -40,7 +40,7 @@ import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
-  genericId, type RoomId, type TileCache,
+  genericId, genericDistillId, type RoomId, type TileCache,
 } from './tiles.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
@@ -111,6 +111,35 @@ function drawGlow(
 }
 /** `render.ts`'s cursor-ring stroke color (`#e8e0d2`), as float RGBA. */
 const CURSOR_STROKE: [number, number, number, number] = [232 / 255, 224 / 255, 210 / 255, 1];
+
+/**
+ * `render.ts`'s `drawGenericFade`, GL twin: the generic tile's paired distill
+ * alternate, drawn as a textured quad at `fade` alpha over the base tile
+ * already drawn beneath it - a real crossfade, not a flat overlay. Falls back
+ * to a flat black quad when the alternate has no resident texture yet (or,
+ * per `genericDistillId`'s doc, does not exist for this index), same "rule 1
+ * does not apply here" fallback `drawFavoriteBadgeGL` uses. Shared with
+ * `glSlideRenderer.ts` so a generic tile mid-slide gets the same treatment.
+ */
+export function drawGenericFadeGL(
+  gl: GLContext,
+  cache: TileCache,
+  textures: GLTextureCache,
+  distillId: RoomId,
+  fade: number,
+  dst: Rect
+): void {
+  if (fade <= 0) return;
+  const alpha = Math.min(1, fade);
+  const hit = cache.get(distillId, 0);
+  const tex = hit ? textures.get(gl, hit.img) : null;
+  if (hit && tex) {
+    const src: Rect = hit.rect ? toGLRect(hit.rect) : { x: 0, y: 0, w: tex.width, h: tex.height };
+    gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, dst, alpha);
+  } else {
+    gl.drawFlatQuad(dst, [0, 0, 0, alpha]);
+  }
+}
 
 /**
  * The favorite badge, if its art has landed - same "rule 1 does not apply
@@ -286,9 +315,10 @@ export function createGLRenderer({
 
         const [sx, sy] = toScreen(gx, gy);
         const dst = { x: sx, y: sy, w: cw, h: ch };
+        const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
         if (cell.generic && genericFade >= 1) {
-          gl.drawFlatQuad(dst, [0, 0, 0, Math.min(1, genericFade)]);
+          drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
         } else {
           const hit = cache.get(id, level);
           const tex = hit ? textures.get(gl, hit.img) : null;
@@ -309,7 +339,7 @@ export function createGLRenderer({
           }
 
           if (cell.generic && genericFade)
-            gl.drawFlatQuad(dst, [0, 0, 0, Math.min(1, genericFade)]);
+            drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
         }
 
         // The favorite badge - every real room, never the center or a

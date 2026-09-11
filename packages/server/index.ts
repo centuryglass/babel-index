@@ -146,7 +146,12 @@ logger.info(
 const manifest = await rescan();
 const centerFile = manifest.shared.center?.file ?? '(none)';
 logger.info(
-  { rooms: manifest.count, centerFile, genericTiles: manifest.shared.generic.length },
+  {
+    rooms: manifest.count,
+    centerFile,
+    genericTiles: manifest.shared.generic.length,
+    genericDistillTiles: manifest.shared.genericDistill.filter(Boolean).length,
+  },
   'corpus scanned'
 );
 // A shared directory with no center means the map has no blank tile to draw at

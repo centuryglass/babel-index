@@ -28,7 +28,7 @@ import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
-  genericId, type Drawable, type RoomId, type TileCache, type TileHit,
+  genericId, genericDistillId, type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import { composeSpines, areSpinesLegible, BOOK_COUNT, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
@@ -160,8 +160,9 @@ export interface DrawOpts {
    */
   sortMode?: SortMode;
   /**
-   * Distill mode's black fade over generic tiles - 0 (normal) to 1 (fully
-   * hidden), or undefined/0 to draw generics as usual. See
+   * Distill mode's crossfade over generic tiles - 0 (normal) to 1 (fully
+   * replaced by the tile's paired distill alternate, `genericDistillId`), or
+   * undefined/0 to draw generics as usual. See
    * `packages/web/src/hooks/useDistillMode.ts`.
    */
   genericFade?: number;
@@ -188,17 +189,33 @@ export interface DrawOpts {
 }
 
 /**
- * Distill mode's black overlay for a generic tile - drawn OVER the tile's own
- * art rather than skipping it, so the fade is a crossfade rather than a cut.
- * Shared with `slide.ts` so a generic tile mid-slide gets the same treatment.
+ * Distill mode's crossfade for a generic tile: its paired distill alternate
+ * (`distillId`, from `genericDistillId`), drawn OVER the tile's own art at
+ * `fade` opacity rather than a flat overlay - a real crossfade between the
+ * two images rather than a fade to black. Falls back to flat black when the
+ * alternate has not loaded yet (or, per `genericDistillId`'s doc, does not
+ * exist for this index) so a slow load never shows the base art bleeding
+ * through at an opacity that reads as broken. Shared with `slide.ts` so a
+ * generic tile mid-slide gets the same treatment.
  */
 export function drawGenericFade(
-  ctx: DrawContext, fade: number, sx: number, sy: number, w: number, h: number
+  ctx: DrawContext, cache: TileCache, distillId: RoomId, fade: number,
+  sx: number, sy: number, w: number, h: number
 ): void {
   if (fade <= 0) return;
+  const hit = cache.get(distillId, 0);
   ctx.globalAlpha = Math.min(1, fade);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(sx, sy, w, h);
+  if (hit) {
+    if (hit.rect) {
+      const { sx: rx, sy: ry, sw, sh } = hit.rect;
+      ctx.drawImage(hit.img, rx, ry, sw, sh, sx, sy, w, h);
+    } else {
+      ctx.drawImage(hit.img, sx, sy, w, h);
+    }
+  } else {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(sx, sy, w, h);
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -287,14 +304,16 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         visible.push(id);
 
         const [sx, sy] = toScreen(gx, gy);
+        const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
-        // A generic cell that distill mode has faded to full black shows nothing
-        // of its art, so drawing (and scaling) the tile beneath the fade is pure
-        // waste - and on a zoomed-out map generic cells are the majority. Paint
-        // the black fill alone. The tile is still warmed by the prefetch pass
-        // below, so toggling distill back off has it ready without a pop.
+        // A generic cell that distill mode has fully faded shows nothing of the
+        // base tile's art - only its distill alternate - so drawing (and
+        // scaling) the tile beneath the fade is pure waste, and on a zoomed-out
+        // map generic cells are the majority. The base tile is still warmed by
+        // the prefetch pass below, so toggling distill back off has it ready
+        // without a pop.
         if (cell.generic && genericFade >= 1) {
-          drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+          drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
         } else {
           const hit = cache.get(id, level);
 
@@ -316,7 +335,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             blank++;
           }
 
-          if (cell.generic && genericFade) drawGenericFade(ctx, genericFade, sx, sy, cw, ch);
+          if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
         }
 
         // The favorite badge - every real room, never the center (it is the

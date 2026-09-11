@@ -31,10 +31,19 @@ export interface SharedAsset extends Partial<ImageSize> {
   url: string;
 }
 
-/** The shared tiles: the blank center (if any) and the generic alternates. */
+/**
+ * The shared tiles: the blank center (if any), the generic alternates, and
+ * distill mode's paired alternates for them - `genericDistill[i]` is
+ * `generic[i]`'s replacement art (a dim star field, in this project's actual
+ * corpus) when distill mode fades it in, matched by filename stem in
+ * `scan.ts`'s `scanShared`. Null at an index whose generic tile has no
+ * matching distill alternate on disk - the fade falls back to a flat black
+ * overlay for that one rather than failing the whole corpus.
+ */
 export interface SharedAssets {
   center: SharedAsset | null;
   generic: SharedAsset[];
+  genericDistill: (SharedAsset | null)[];
 }
 
 /**

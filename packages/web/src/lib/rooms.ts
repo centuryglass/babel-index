@@ -23,7 +23,7 @@
  * is a later step.)
  */
 import {
-  CENTER, genericId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
+  CENTER, genericId, genericDistillId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
 } from './tiles.ts';
 import { sheetPosition, sheetFileName } from '../../../pipeline/layout.ts';
@@ -59,6 +59,11 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   const sharedUrls = new Map<number | string, string>();
   if (shared.center?.url) sharedUrls.set(CENTER, shared.center.url);
   shared.generic.forEach((v, i) => sharedUrls.set(genericId(i), v.url));
+  // Only an index whose generic tile has a matching distill alternate on disk
+  // gets an entry - see `genericDistillId`'s doc for what a missing one means.
+  shared.genericDistill?.forEach((v, i) => {
+    if (v) sharedUrls.set(genericDistillId(i), v.url);
+  });
   // The favorite badge's two faces are fixed app art, not part of a scanned
   // corpus, so they are not in `manifest.shared` - but they live in the same
   // `--shared-dir` and are served flat from it exactly like the center tile.

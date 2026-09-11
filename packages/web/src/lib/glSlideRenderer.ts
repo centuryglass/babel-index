@@ -24,14 +24,14 @@
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell } from './camera.ts';
-import { CENTER, genericId, type RoomId, type TileCache } from './tiles.ts';
+import { CENTER, genericId, genericDistillId, type RoomId, type TileCache } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { BoardValue } from '../../../map/moves.ts';
 import { toGLRect, type GLContext, type Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
 import {
-  drawFavoriteBadgeGL, drawFavoriteSwitchGL, drawDistillToggleGL, drawClearHistoryBookOverlayGL,
+  drawFavoriteBadgeGL, drawFavoriteSwitchGL, drawDistillToggleGL, drawClearHistoryBookOverlayGL, drawGenericFadeGL,
 } from './glRenderer.ts';
 import { areSpinesLegible } from './center.ts';
 import type { SlideDrawOpts, SlideDrawResult } from './slide.ts';
@@ -108,9 +108,10 @@ export function createGLSlideRenderer({
       const sy = (drawMy - cam.y) * cellPx.y + hDev / 2;
       const dst = { x: sx, y: sy, w: cw, h: ch };
       const id = idFor(value, homeMx, homeMy, genericIndexAt);
+      const distillId = value === BOARD_GENERIC ? genericDistillId(genericIndexAt(homeMx, homeMy)) : null;
 
       if (value === BOARD_GENERIC && genericFade >= 1) {
-        gl.drawFlatQuad(dst, [0, 0, 0, Math.min(1, genericFade)]);
+        drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
         wanted.push(id);
         return;
       }
@@ -127,7 +128,7 @@ export function createGLSlideRenderer({
         blank++;
       }
       if (value === BOARD_GENERIC && genericFade)
-        gl.drawFlatQuad(dst, [0, 0, 0, Math.min(1, genericFade)]);
+        drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
       if (favorites && typeof value === 'number')
         drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(value), cellPx, sx, sy, false, glowTextures);
       wanted.push(id);

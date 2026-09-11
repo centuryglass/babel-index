@@ -38,7 +38,7 @@ import {
 } from './lib/camera.ts';
 import {
   createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON, genericId,
+  DISTILL_OFF, DISTILL_ON, genericId, genericDistillId,
 } from './lib/tiles.ts';
 import { favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from './lib/distillToggle.ts';
@@ -375,10 +375,19 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     });
     // The shared tiles are rule 1's floor: pinned and preloaded so every cell has
     // something to draw however little of its own room has arrived. That is now
-    // the blank center plus one entry per generic tile - a bounded handful,
-    // so pinning them all still fits under the level's budget. They are served
-    // flat (level 0), so preload and pin there rather than at the coarsest rung.
-    for (const id of [CENTER, ...(manifest.shared?.generic ?? []).map((_, i) => genericId(i))]) {
+    // the blank center plus one entry per generic tile, plus distill mode's
+    // paired alternates (only where one actually exists on disk - see
+    // `genericDistillId`'s doc) - a bounded handful, so pinning them all still
+    // fits under the level's budget. Pinning the distill alternates up front is
+    // what keeps the first-ever toggle from showing a flat black fallback while
+    // they load. They are served flat (level 0), so preload and pin there
+    // rather than at the coarsest rung.
+    const genericDistillIds = (manifest.shared?.genericDistill ?? [])
+      .map((v, i) => (v ? genericDistillId(i) : null))
+      .filter((id): id is number | string => id != null);
+    for (const id of [
+      CENTER, ...(manifest.shared?.generic ?? []).map((_, i) => genericId(i)), ...genericDistillIds,
+    ]) {
       tiles.pin(id);
       tiles.request(id, 0);
     }

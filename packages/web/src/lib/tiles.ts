@@ -81,6 +81,17 @@ import { perfRecordSheetStart, perfRecordSheetLoaded } from './perfProbe.ts';
 export const CENTER = 'center';
 export const genericId = (i: number): number | string => (i < 0 ? CENTER : `generic:${i}`);
 
+/**
+ * Distill mode's paired alternate for generic tile `i` - the art a generic
+ * cell fades to instead of flat black (`manifest.shared.genericDistill[i]`,
+ * see `scan.ts`'s `scanShared`). Same shared-id treatment as `genericId`;
+ * whether this id actually resolves to anything is a `rooms.ts` question,
+ * not this one - an index with no matching distill alternate on disk simply
+ * has no entry in `createTileLocator`'s url map, and `drawGenericFade`
+ * (`render.ts`) falls back to flat black when the cache has nothing for it.
+ */
+export const genericDistillId = (i: number): number | string => `generic-distill:${i}`;
+
 /** The favorite badge's two faces - see `favoriteBadge.ts`. Shared ids, like `CENTER`. */
 export const FAV_ON = 'fav-on';
 export const FAV_OFF = 'fav-off';
