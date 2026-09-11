@@ -472,15 +472,14 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // the relative urls resolve through `<base href>` exactly as they do in the
     // client (see the base-path notes in AGENTS.md), rather than guessing where
     // the sidecar is served from.
+    const sidecar = (await page.evaluate(async () => {
+      const manifest = await (await fetch('api/manifest')).json();
+      return (await fetch(manifest.metadata.url)).json();
+    })) as Record<string, { alt?: unknown }>;
     const captions = new Set(
-      Object.values(
-        await page.evaluate(async () => {
-          const manifest = await (await fetch('api/manifest')).json();
-          return (await fetch(manifest.metadata.url)).json();
-        })
-      )
+      Object.values(sidecar)
         .map((room) => room.alt)
-        .filter((alt) => typeof alt === 'string' && alt.length > 0)
+        .filter((alt): alt is string => typeof alt === 'string' && alt.length > 0)
     );
     assert.ok(captions.size > 0, 'the sample corpus must ship captions for this test to mean anything');
 
