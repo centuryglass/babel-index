@@ -601,7 +601,7 @@ mark {
 */
 .catalog-row {
   display: flex; gap: 14px; align-items: flex-start;
-  height: var(--catalog-row); padding: 11px 16px;
+  height: var(--catalog-row); padding: 7px 16px;
   overflow: hidden;
 }
 /*
@@ -1035,7 +1035,15 @@ mark {
   .overlay-scrim.behind .statement-overlay { transform: translateY(-8px) scale(0.985); }
 }
 
-.catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+/*
+  Stretch the cream card to the row's full height - which the image column
+  sets in the common case - so every card is the SAME height rather than
+  shrinking to its own story and letting the dark padding claim the leftover.
+  The row stays fixed-height (the spacer arithmetic rests on that); this only
+  changes what fills it. The self-sizing center row (`.catalog-center`) is
+  unaffected - its body is already its tallest child, so stretch is a no-op there.
+*/
+.catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
 /*
   The room's identity and the way out to the map share one row, with real
   space under it. They used to be at opposite ends of the row with the
