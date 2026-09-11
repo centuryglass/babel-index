@@ -474,11 +474,13 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // client (see the base-path notes in AGENTS.md), rather than guessing where
     // the sidecar is served from.
     const captions = new Set(
-      Object.values(
-        await page.evaluate(async () => {
-          const manifest = await (await fetch('api/manifest')).json();
-          return (await fetch(manifest.metadata.url)).json();
-        })
+      (
+        Object.values(
+          await page.evaluate(async () => {
+            const manifest = await (await fetch('api/manifest')).json();
+            return (await fetch(manifest.metadata.url)).json();
+          })
+        ) as { alt?: unknown }[]
       )
         .map((room) => room.alt)
         .filter((alt) => typeof alt === 'string' && alt.length > 0)

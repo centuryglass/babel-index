@@ -34,9 +34,10 @@ serve as completed task history.
   making future hosting changes easier would be a good idea.
 
 ## Favorites:
-- No e2e coverage yet. A spec favoriting a room from a catalog row, switching
-  the sort and reloading would cover the whole path; it needs the demo server
-  the suite starts to be given a throwaway `--favorites` path.
+- `favorites.e2e.ts` covers the map badge and the in-place resort that follows
+  a toggle while sorted by favorites. The catalog side is still uncovered: a
+  spec favoriting a room from a catalog ROW, switching the sort and reloading
+  would close the remaining half of the path.
 - The JSON store is one file written by one process. If a second process ever
   serves this corpus, that is the moment for the Postgres adapter behind
   `FavoriteStore` rather than a lock on the file.
