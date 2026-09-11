@@ -42,6 +42,26 @@ serve as completed task history.
   serves this corpus, that is the moment for the Postgres adapter behind
   `FavoriteStore` rather than a lock on the file.
 
+## Search:
+- **[2026-09-11] The int8 quantisation scale is stated twice, once on each side
+  of `embeddings.bin`.** `tools/embed/embed.ts`'s `QUANT_SCALE` writes the blob
+  and `packages/map/ordering.ts`'s `EMBEDDING_SCALE` reads it, both `127`, with
+  no import binding them. Each file's comment names the other, so the pair was
+  written knowingly, but nothing fails if one moves: ranking is immune (a
+  monotone factor cannot reorder), so the only symptom would be `matchCertainty`
+  quietly reading the wrong absolute cosine and the density gradient clustering
+  at the wrong confidence - the failure mode the certainty-vs-ranking invariant
+  exists to prevent.
+
+  Not a mechanical fix, which is why this is an entry rather than a commit.
+  `ordering.ts` is 557 lines of placement logic, so importing it into the
+  offline embedding tool for one constant is worse than the duplication. Two
+  real options: give the scale its own tiny module both sides import, or - since
+  `embeddings.json` already records `scale` in the sidecar and nothing reads it
+  back - carry it through the manifest and have the client dequantise by what
+  the blob says it was written at. The second removes the constant from the
+  client entirely and is the one worth doing if the format is ever revisited.
+
 ## Rendering:
 - **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
   `?webgl=0` as the Canvas2D escape hatch and a `supportsWebGL2()` probe that
