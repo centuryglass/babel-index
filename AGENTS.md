@@ -550,11 +550,16 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `createLayout()`, not build-time settings. Growing the corpus must keep
   existing slots where they are and append further out; that property is what
   makes the sliders usable and is asserted in `ordering.test.mjs`.
-- **Re-ranking swaps one array; only a search or an active favorite sort may
-  move slots.** A reorder (the shuffle button, a relevance re-sort) stays a
-  swap of `order` — the map rearranges, it does not reload. A search or an
-  active favorite sort (`'mine'`/`'count'`) is what may rebuild the layout,
-  because each has a certainty profile that is an input to placement —
+- **A relevance re-sort swaps one array; the shuffle button rebuilds the
+  layout too.** A relevance re-sort stays a swap of `order` — the map
+  rearranges, it does not reload. The shuffle button is a full reshuffle: it
+  rerolls `seed` (which cells are content slots at all, the same scatter
+  `rescatter` reruns) alongside `order`, and clears any active search or
+  favorite sort first — a reorder that left the current search's certainty
+  profile or an active favorite sort in place would rescatter everything
+  except the one thing already pinning the layout. A search or an active
+  favorite sort (`'mine'`/`'count'`) is the other thing that may rebuild the
+  layout, because each has a certainty profile that is an input to placement —
   `favoriteSort` (`packages/map/favorites.ts`) composes the two rather than
   letting one override the other. That rebuild is the same O(slots) the ratio
   slider does on every drag. Nothing else recomputes placement.

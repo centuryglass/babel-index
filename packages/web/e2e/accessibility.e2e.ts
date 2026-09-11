@@ -389,13 +389,12 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
         `the drag must leave the center, got (${before.x}, ${before.y})`
       );
 
-      // "rescatter", not "reorder", and the difference is load-bearing: the
-      // ranked-listbox test's search is still active by the time this runs, so
-      // `order` is then `result.order` - the same array by reference no matter
-      // how often `orderSeed` is bumped - so the render effect's deps never
-      // change and "reorder" rearranges nothing at all. Rescatter bumps the
-      // layout seed, which rebuilds `layout` and always triggers a
-      // rearrangement. Written down because this test passed against a
+      // "rescatter", not "reorder": "reorder" now clears any active search as
+      // part of its own reshuffle, which would confound this test's own
+      // camera-didn't-move assertion with a second rearrangement it didn't
+      // ask for. Rescatter only bumps the layout seed, which rebuilds
+      // `layout` and always triggers a rearrangement on its own, with no
+      // search to clear. Written down because this test passed against a
       // deliberately broken app until the button was swapped.
       await page.getByRole('button', { name: 'rescatter' }).click();
       const after = await settled(page);
