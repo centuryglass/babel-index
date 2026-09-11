@@ -37,6 +37,12 @@ display filter: "flagged" shows only tiles with a non-empty
 ``sensitive_content_tags``, "unflagged" shows only tiles without one. This
 never touches ``metadata.json`` -- it just narrows which keys the grid and
 navigation ever see; every entry stays loaded and intact on disk.
+
+``sample_update=True`` (the ``--sample-update`` CLI flag) adds a "Save to
+samples" button beside Clear/Delete that copies the selected tile's image and
+a subset of its metadata into ``assets/corpus-sample``
+(``core.add_to_sample_corpus``), for hand-picking a representative demo
+corpus without a separate script.
 """
 
 from __future__ import annotations
@@ -297,13 +303,14 @@ class CollapsibleSection(QWidget):
 class ReviewWindow(QMainWindow):
     _MIN_FONT_POINT_SIZE = 6
 
-    def __init__(self, tile_dir: str, content_review: str | None = None):
+    def __init__(self, tile_dir: str, content_review: str | None = None, sample_update: bool = False):
         super().__init__()
         # The size the app launched with, so Ctrl+0 always lands back on it
         # rather than on some rounded intermediate from repeated scaling.
         self._base_font_point_size = cast(QApplication, QApplication.instance()).font().pointSize()
         self.tile_dir = tile_dir
         self.content_review = content_review
+        self.sample_update = sample_update
         self.index = core.load_index(tile_dir)
 
         # A one-time display filter: which keys the grid/navigation ever see.
@@ -514,6 +521,14 @@ class ReviewWindow(QMainWindow):
         self.clear_button.setMaximumWidth(80)
         self.clear_button.clicked.connect(self._on_clear)
         controls.addWidget(self.clear_button)
+
+        if self.sample_update:
+            self.sample_button = QPushButton("Save to samples")
+            self.sample_button.setToolTip(
+                "Copy this tile and its keywords/story/title/alt into assets/corpus-sample."
+            )
+            self.sample_button.clicked.connect(self._on_save_to_sample)
+            controls.addWidget(self.sample_button)
 
         self.delete_button = QPushButton("Delete")
         self.delete_button.setMaximumWidth(80)
@@ -1213,6 +1228,24 @@ class ReviewWindow(QMainWindow):
         self._refresh_tile(self.current_key)
         self._update_action_button()
         self._advance_to_next_reviewable()
+
+    # -- Save to samples ------------------------------------------------------
+    def _on_save_to_sample(self):
+        if self.current_key is None:
+            return
+        key = self.current_key
+        webp_path = os.path.join(self.tile_dir, key)
+        if not os.path.exists(webp_path):
+            QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
+            return
+        try:
+            name = core.add_to_sample_corpus(self.tile_dir, key, self.index[key])
+        except OSError as err:
+            QMessageBox.critical(self, "Save to samples failed", str(err))
+            return
+        QMessageBox.information(
+            self, "Saved to samples", f"Copied {key} to assets/corpus-sample as {name}."
+        )
 
     # -- Delete -------------------------------------------------------------
     def _on_delete(self):

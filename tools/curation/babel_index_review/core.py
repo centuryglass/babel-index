@@ -34,6 +34,7 @@ import json
 import os
 import re
 import random
+import shutil
 import tempfile
 from typing import Callable, Optional
 
@@ -49,6 +50,18 @@ from util.metadata import do_update as copy_metadata
 
 INDEX_JSON = "metadata.json"
 DEFAULT_KEYWORD_MAP = "data/keyword_map.json"
+
+# The repo's demo corpus (packages/server's --images default), for the
+# review GUI's --sample-update "save to samples" button. This file lives at
+# tools/curation/babel_index_review/core.py, three levels below the repo root.
+SAMPLE_CORPUS_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "corpus-sample")
+)
+
+# Fields worth carrying from a curated tile onto a hand-picked sample: the
+# review workflow's own bookkeeping (final, sensitive_content_tags,
+# needs_inpainting) and the upload tool's content hash don't belong on it.
+SAMPLE_FIELDS = ("keywords", "story", "title", "alt")
 
 # Sensitive-content tag vocabulary shared by the review GUI and the
 # batch tagger (babel_index_review.sensitive_tags). The GUI omits the key
@@ -430,6 +443,53 @@ def ingest_tiles(tile_dir: str, keyword_map: dict, index: Optional[dict] = None)
         print(f"ingested {os.path.basename(tile_path)} -> {key}")
         os.remove(tile_path)
     return index
+
+
+# ---------------------------------------------------------------------------
+# Sample corpus updates (review GUI's --sample-update button)
+# ---------------------------------------------------------------------------
+def _next_sample_name(sample_dir: str, index: dict, ext: str) -> str:
+    """First free zero-padded ``NNN<ext>`` name, matching the corpus's width.
+
+    The sample corpus predates this tool's 5-digit ``NNNNN.webp`` ingest
+    naming and uses 3-digit stems (``001.jpg``); a new tile keeps whatever
+    width is already there (read from the first numeric stem found) so it
+    doesn't stick out, falling back to 3 for an empty corpus.
+    """
+    width = 3
+    stems = {os.path.splitext(name)[0] for name in os.listdir(sample_dir)} if os.path.isdir(
+        sample_dir
+    ) else set()
+    for name in index:
+        stem = os.path.splitext(name)[0]
+        stems.add(stem)
+        if stem.isdigit():
+            width = len(stem)
+    i = 1
+    while True:
+        stem = f"{i:0{width}}"
+        if stem not in stems:
+            return f"{stem}{ext}"
+        i += 1
+
+
+def add_to_sample_corpus(
+    src_tile_dir: str, key: str, entry: dict, sample_dir: str = SAMPLE_CORPUS_DIR
+) -> str:
+    """Copy tile ``key`` and a subset of its metadata into the sample corpus.
+
+    No locking and no pyramid/embedding regeneration -- this is a manual,
+    occasional curation action on a small demo corpus, not something run
+    concurrently with anything else touching it. Returns the new filename.
+    """
+    os.makedirs(sample_dir, exist_ok=True)
+    index = load_index(sample_dir)
+    ext = os.path.splitext(key)[1]
+    name = _next_sample_name(sample_dir, index, ext)
+    shutil.copyfile(os.path.join(src_tile_dir, key), os.path.join(sample_dir, name))
+    index[name] = {field: entry[field] for field in SAMPLE_FIELDS if entry.get(field) is not None}
+    save_index(sample_dir, index)
+    return name
 
 
 # ---------------------------------------------------------------------------

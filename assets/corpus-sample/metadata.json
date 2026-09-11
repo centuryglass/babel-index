@@ -1,290 +1,505 @@
 {
-  "001.jpg": {
+  "001.webp": {
     "keywords": [
       {
-        "text": "magma",
-        "type": "material"
-      },
-      {
-        "text": "ambient occlusion",
-        "type": "technique"
-      },
-      {
-        "text": "city",
-        "type": "setting"
-      }
-    ],
-    "story": "A private study in a building that survived whatever happened to the city outside. The mural of the volcanic mountains isn't decoration—it's a window, or used to be, before someone painted over the glass to match what's still visible through the actual gaps. The clock keeps a time that stopped mattering. Someone still dusts the books.",
-    "hash": "572f99c36b15a98d496e304ca7c2ac0d08274f63d704da91bd51edfd93415266",
-    "title": "Still Room"
-  },
-  "002.jpg": {
-    "keywords": [
-      {
-        "text": "Eileen Agar",
+        "text": "Alfred Richard Gurrey",
         "type": "artist"
       },
       {
-        "text": "polished",
+        "text": "outsider art",
+        "type": "movement/style"
+      },
+      {
+        "text": "databending",
+        "type": "technique/process"
+      }
+    ],
+    "story": "The green smear across the walls happens whenever the indexing buffer overruns. The original estate was lost to the surf decades ago, so the entire reading room must be reconstructed from raw, salt-damaged glass plates every time someone steps through the door. \n\nThe central shelf holds up because it was milled from dry redwood, but the surrounding architecture is mostly unparsed light and compression artifacts. If you stand too close to the fluted pillars at the perimeter, your clothes take on the pixelated texture of the scan lines, though a brisk walk in the sun usually shakes it out within an hour.",
+    "title": "Unparsed Light",
+    "alt": "Glitch art with heavy horizontal databending artifacts in glowing teal, emerald green, and dark tones. The books are pixelated into dense, mosaic-like static and fragmented patterns. The entire background wall opens into a deep digital perspective, showing corridors of glowing green scanlines and horizontally streaked data stacks flanking the bookshelf. A bright glitch of yellowish light streaks down from the center of the ceiling.",
+    "hash": "fdbe208fce9bed337cb89666cc6cc4dea149baf92bf8ecddb8d70a0ea7c12669"
+  },
+  "002.webp": {
+    "keywords": [
+      {
+        "text": "Weirdcore",
+        "type": "genre/aesthetic"
+      },
+      {
+        "text": "opal",
+        "type": "medium/material"
+      },
+      {
+        "text": "superfluid",
+        "type": "medium/material"
+      }
+    ],
+    "story": "After sundown, the crest over the crown stops holding its breath. The cold luminescence rises from the meniscus until the alcove is completely submerged. You cannot drown in it; you simply lose your footing and drift upward toward the rafters, watching the spines turn translucent as the pages drink the current. Any volume pulled while floating through the dark reads backward, starting from final memories and working toward the title page. By dawn, the sphere draws the blue tide back up into itself, leaving your clothes completely dry and your head full of someone else's tomorrow.",
+    "title": "Sunken Tomorrows",
+    "alt": "Digital surreal fantasy art. The bookcase is outlined in glowing, electric-cyan crystalline fluid that splashes along its top edge. Centered directly above the top shelf, a radiant aqua sphere sits in an erupting splash of luminous liquid, sending out a flat, translucent turquoise waterline that stretches horizontally across the wall. Behind the bookcase, the dark back wall is filled with a swirling vortex of deep blue and purple, speckled with suspended, glowing turquoise and neon-green droplets. The books inside the shelves have muted, pastel-toned spines in faded pink, sage green, and parchment tones, tinted coolly by the cyan light of the glowing shelf frames.",
+    "hash": "25cc0a2cab98f20017ad25375487bed9eb6a4521a96e13bb3f2648516c4c7500"
+  },
+  "003.webp": {
+    "keywords": [
+      {
+        "text": "liquid nitrogen",
+        "type": "medium/material"
+      },
+      {
+        "text": "Rayonism",
+        "type": "movement/style"
+      },
+      {
+        "text": "atomic",
+        "type": "descriptive"
+      }
+    ],
+    "story": "Never break the vapor seal without an insulated retrieval rod. It is not the frostbite that kills you; the deep sub-zero immersion is the only thing keeping the ink inert. At standard room temperature, the dense script decays rapidly, radiating forty years of someone else’s unshielded memory into the room in less than three seconds. \n\nIf the overhead mantle ever shifts from dull orange to blinding white, do not attempt to salvage a single volume. Drop the lead shutters and evacuate the floor immediately. It means one of the histories has reached critical mass.",
+    "title": "Radiant Histories",
+    "alt": "Cool-toned digital rendering. The bookcase is housed inside a wide, glass-fronted refrigeration or laboratory chamber with metallic framing. Billowing plumes of dense, icy blue vapor fill the glass compartments flanking the shelves, pooling along the floor. The overhead lamp glows with a warm, diffuse orange core wrapped in frosted vapor, venting a trickle of white smoke downward. The shelves themselves are thin gray metal racks, holding uniform rows of pale, frost-bleached books on the upper tiers and darker, reddish volumes obscured by low-lying fog along the bottom shelf.",
+    "hash": "3efc5825e4e056ced2554beba0c02df6f776963424d58fc634dbe7428a03067e"
+  },
+  "004.webp": {
+    "keywords": [
+      {
+        "text": "Juan Gris",
+        "type": "artist"
+      },
+      {
+        "text": "Hendrik Willem Mesdag",
+        "type": "artist"
+      },
+      {
+        "text": "mosaic",
+        "type": "technique/process"
+      }
+    ],
+    "story": "The port authority lined the alcove with cut stone after the winter gales proved that ordinary plaster could not hold back the sea damp. The frieze above was laid out by the harbor’s chief surveyor, who distrusted traditional painters and their vanishing points. He believed that perspective tricked helmsmen into misjudging the shoals, so he reduced the entire roadstead to flat triangles and sharp, fractured angles. Even the sphere lodged in the peak is deliberate: it marks the mean high-water mark of the 1887 surge. As long as the masonry stays dry above that line, the sounding logs remain safe from the tide.",
+    "title": "Above the Surge",
+    "alt": "Mosaic tile style. The back wall is covered in light blue mosaic tesserae, and the books and bookshelf edges are composed of small stone-like tiles in shades of cream, ochre, and brown. Across the top section of the wall above the shelf runs a wide horizontal mosaic frieze depicting stylized, geometric book shapes and angled planes in cream, yellow, brown, and blue, framing the round lamp.",
+    "hash": "46dbbb59398c0abe24618b9b69f65c2d3113885358262b376f39f380729fb832"
+  },
+  "005.webp": {
+    "keywords": [
+      {
+        "text": "geologic strata",
+        "type": "object/subject"
+      },
+      {
+        "text": "Crystal Cubism",
+        "type": "movement/style"
+      },
+      {
+        "text": "Saul Steinberg",
+        "type": "artist"
+      }
+    ],
+    "story": "Nothing here was ever printed on wood pulp. The chamber sits directly beneath the municipal court's floorboards, where centuries of dry testimony and unresolved boundary disputes have filtered down through the bedrock. \n\nUnder constant lithic pressure, the rhetoric simply precipitates out of the groundwater along strict cleavage planes, sorting itself into neat, calcified tiers. You do not turn pages here. To consult an old property deed or a forgotten easement, an archivist strikes a tuning fork against the spine and listens for the pitch of the agreement.",
+    "title": "Petrified Precedent",
+    "alt": "A faceted, crystalline relief in shades of pale gray and white marble. The bookcase and flanking walls are rendered as sharp, geometric rock strata, with books appearing as pale, striated horizontal blocks on faceted stone shelves. To the left and right, the walls fracture into jagged, multi-angled crystalline planes and deep geometric crevices reminiscent of a quarry wall. A small diamond-shaped facet sits centered along the top rail above the books, all framed by dark polished wooden side columns and flooring.",
+    "hash": "1e70ca7c6a67d8c98c2ee46c17e9ec6aa3ed659f0b655ed16b0d3de08750316e"
+  },
+  "006.webp": {
+    "keywords": [
+      {
+        "text": "thermal paper",
+        "type": "medium/material"
+      },
+      {
+        "text": "clockwork",
+        "type": "object/subject"
+      },
+      {
+        "text": "shoelaces",
+        "type": "medium/material"
+      }
+    ],
+    "story": "Young Hartley from the courier syndicate came banging on the door an hour after the grand trial fell apart. The firm's clerk told him through the mail slot that they were no longer hiring test riders, that five miles of turnpike smeared with panicked sonnets was quite enough for one patent, and that the master mechanic had already stripped the handlebar escapement and mounted the drive cog on the cabinet as a headstone. When Hartley insisted he could keep his balance while correcting typos on the fly, the clerk added that any man who caught his bootstrings in the pedal-platen twice in one morning had no business steering literature into traffic.",
+    "title": "Turnpike Sonnets",
+    "alt": "Digital render with muted tones. The fixture mounted above the bookshelf is an exposed metal gear and clockwork mechanism. Each shelf is packed with books bound in pale, receipt-like paper printed with faded, illegible text, barcodes, and mechanical scribbles.",
+    "hash": "88e06b371d17700641cdf5bf555aca1deac885baa4c3bd5dea536611126b0e85"
+  },
+  "007.webp": {
+    "keywords": [
+      {
+        "text": "verdigris",
+        "type": "medium/material"
+      },
+      {
+        "text": "cast iron",
+        "type": "medium/material"
+      },
+      {
+        "text": "gnostic",
+        "type": "descriptive"
+      }
+    ],
+    "story": "If destroyed, the world would lose eighty-four accounts of the mistake that built the sun. Every volume contains the exact same stammered testimony, transcribed during the weeks the architect spent begging the higher spheres for an annulment. \n\nIf they burn, scholarship loses nothing of philosophy, but our parish loses its only steady counterweight. So long as the confession remains wedged beneath the flue, the sheer density of the maker's regret keeps the ceiling from floating away into the dark.",
+    "title": "Solar Ballast",
+    "alt": "Weathered digital illustration with dark green and patinated tones. An oxidized green architectural mantel supported by decorative scroll brackets spans above the shelving unit. A round, tarnished golden medallion with stylized leaf flourishes is mounted at the center of the mantel. The background wall, shelf unit, and wide plinth base all share the mottled, patinated green finish.",
+    "hash": "26e303d2d61d94248203c464ad520a26fa9de2eb289e7b9217c40f70a34a63a7"
+  },
+  "008.webp": {
+    "keywords": [
+      {
+        "text": "Gustave Moreau",
+        "type": "artist"
+      },
+      {
+        "text": "Dada",
+        "type": "movement/style"
+      },
+      {
+        "text": "ferrofluid",
+        "type": "medium/material"
+      }
+    ],
+    "story": "The two brass turning knobs that once projected below the wainscoting. The founders assembled the entire shrine as a tavern prank, a crude magnetic drawing toy rigged to drag iron filings through oil and sketch caricatures of the faculty dean. \n\nWhen the next regime inherited the hall and mistook it for an occult reliquary, the restorers treated the jagged black silhouettes frozen behind the convex glass as sacred architecture caught mid-revelation. To ensure these holy obelisks remained undisturbed forever, they sawed off the drive-shafts, lacquered the woodwork into liturgical solemnity, and imposed silence upon all visitors. The room now commands breathless veneration before a schoolyard gag whose controls were destroyed so the punchline would never be wiped clean.",
+    "title": "The Canonized Jest",
+    "alt": "Dark, intricate assemblage style with ornate relief carving and metallic textures. The central bookcase is packed with antique, faded leather-bound books. Flanking the shelves are two heavy black side panels covered in elaborate, spiky biomechanical reliefs with radiating rays. Embedded in the center of each side panel is a large, circular convex glass porthole with dark interior reflections. Centered directly above the bookcase sits a round black medallion surrounded by dense, needle-like radiating spikes. An intricately sculpted black frieze runs along the upper edge between the outer wooden columns.",
+    "hash": "36ec1fedefd692fab2490323067a1c09097dbaea934b80dfb9d1008cdacf755e"
+  },
+  "009.webp": {
+    "keywords": [
+      {
+        "text": "Giovanni Boldini",
+        "type": "artist"
+      },
+      {
+        "text": "pictographs",
+        "type": "technique/process"
+      },
+      {
+        "text": "outer space",
+        "type": "setting/environment"
+      }
+    ],
+    "story": "These hold the exact celestial coordinates of the first three thousand colony hulks sent adrift during the Great Expansion. Without these hand-inked ephemerides, the tomb ships coasting through the silent corridor between Jupiter and the outer rim would become untraceable ghosts forever. Three generations of unbroken dynastic lineages, resting in cryogenic suspension under gilded rocket glyphs, would never be retrieved from the void.",
+    "title": "The Drift Ephemeris",
+    "alt": "Digital illustration. The bookshelf structure is flanked by two tall vertical black panels decorated with stylized white diagrams of retro-futuristic rockets, orbital rings, planets, and geometric star charts. Along the upper shelf above the books sits a 3D planetary model with spherical planets connected along wire orbits, alongside miniature globes on stands, Saturn-like ringed spheres, and small spire-like figurines. The central shelves hold rows of uniform tan books, with four horizontal book stacks resting on the topmost shelf opening.",
+    "hash": "08fec3775156d6bc11ebac21a0f3e8e30cedd32cd9d9023880bfe3191e8893cf"
+  },
+  "010.webp": {
+    "keywords": [
+      {
+        "text": "amethyst",
+        "type": "medium/material"
+      },
+      {
+        "text": "mother-of-pearl inlay",
+        "type": "technique/process"
+      },
+      {
+        "text": "Italian Futurist architecture",
+        "type": "era/cultural"
+      }
+    ],
+    "story": "Volume forty-four on the third tier, marked by the violet seepage. It contains three hundred pages of civic banquet toasts composed by Arch-Synthesist Nell during his third year of acute mercury poisoning. Every rhyming couplet celebrates the velocity of streetcars, yet none scan properly, and the final eighty folios simply repeat the word *dynamo* in diminishing cursive until the quill broke through the vellum.",
+    "title": "The Violet Seepage",
+    "alt": "Polished digital rendering. A library wall featuring a bookcase framed in vivid violet, polished mineral stone against a crystalline purple and lavender mosaic wall arranged in radiating geometric facets. Above the bookcase sits a diamond-shaped gold plaque inlaid with a purple crystal facet. The shelves hold uniform pale parchment books, with one book near the center displaying a small bright purple patch on its spine. The entire niche is framed by dark polished wooden columns and a dark wooden beam overhead with a faint gold floral inlay.",
+    "hash": "e93b23bf5756847a08fed27ddcfa5b9756c1833added5a8d5e0cf3571b181580"
+  },
+  "011.webp": {
+    "keywords": [
+      {
+        "text": "flaming",
         "type": "descriptive"
       },
       {
-        "text": "Dora Maar",
-        "type": "artist"
+        "text": "abstract",
+        "type": "descriptive"
+      },
+      {
+        "text": "granite",
+        "type": "medium/material"
       }
     ],
-    "story": "A private study in a townhouse owned by a collector of Surrealist ephemera. The shelf holds a complete run of exhibition catalogues, bound in matching leather by color and year rather than by artist or movement—a private taxonomy known only to the owner. The small brass orb mounted above is a telescope lens repurposed as a doorbell, salvaged from a demolished observatory. Visitors are asked not to touch the spines; the color-coding indicates a lending history that no longer exists.",
-    "hash": "9c6e45f3fcd16f6830740f9efa74f9635c1b7a030d4ffa9ce076b1f6d1190093",
-    "title": "Taxonomy"
+    "story": "Worst one is on the third shelf, a maroon quarto rebound in the eighties with synthetic adhesive. Everything here is meant to be read at burn speed, roughly a page per two seconds, and the glue in that spine chokes its own flame and puts out black smoke that ruins the neighbors' legibility for a quarter hour. The text underneath is a decent regional history, so nobody will pull it, but the family that donated it should have paid the rebinding surcharge and used hide glue like everyone else. The stone mantel and the slab underfoot are sized to hold the heat steady; the shelf itself never finishes burning.",
+    "title": "Burn Speed",
+    "alt": "Surreal digital illustration. The bookcase frame, base platform, and a wide overhanging upper mantel are formed from polished, black-and-white veined stone. Vibrant orange and yellow flames blaze along the entire top ledge, flare out from behind the structure, and lick through gaps between the books on the lower and middle shelves.",
+    "hash": "d98521cf7f92a33e283dc4c2e64db7c8b4407cea68aa3dc18d991ee826c68205"
   },
-  "003.jpg": {
+  "012.webp": {
     "keywords": [
       {
-        "text": "Jackson Pollock",
+        "text": "tessellation",
+        "type": "technique/process"
+      },
+      {
+        "text": "oil paint",
+        "type": "medium/material"
+      },
+      {
+        "text": "electrified",
+        "type": "descriptive"
+      }
+    ],
+    "story": "The Conservatory of Mains was constructed to indulge the temperamental tastes of the municipal grid. Current here is famously finicky; pull bare wire through plain drywall and the supply simply refuses to flow, pooling in the substations until the line curdles from boredom. \n\nTo coax power across the study, the builders dressed the brickwork in heavy, saturated pigments arranged in interlocking chevron paths. The current glides effortlessly along the exposed line behind the shelf only because it enjoys the progression from vivid prism to cold shadow. It hums contentedly across the partition, dropping just enough wattage into the pendant cord to read by. If anyone were to bleach the plaster or hang a plain curtain, the room would plunge into an indignant, permanent dark.",
+    "title": "Chromatic Circuit",
+    "alt": "Painted in thick, visible oil brushstrokes. The back wall features an angular geometric tessellation pattern, shifting from bright warm rainbow chevrons on the left to dark navy and black maze-like patterns on the right. A thin horizontal light strip glows across the upper wall behind the hanging lamp, shining pinkish-violet on the left and bright electric blue on the right. The central bookshelf is painted white.",
+    "hash": "fbf4a155661ea55983c44ff45f6b1667770208e2520a7752372e0499ba6e6a73"
+  },
+  "013.webp": {
+    "keywords": [
+      {
+        "text": "Eyvind Earle",
         "type": "artist"
+      },
+      {
+        "text": "mystical",
+        "type": "genre/aesthetic"
+      },
+      {
+        "text": "filthy",
+        "type": "descriptive"
+      }
+    ],
+    "story": "The blueprints still label it *Atrium IV*, drawn up decades before the estate foundation cracked open and let the low woods swallow the western wing. The surveyors refused to redraw the perimeter, so the official directory lists the canopy as vaulted plaster and the muck underfoot as unfinished parquet. As long as the steel stack holds the old boundary line, the city tax assessors legally cannot declare the manor abandoned.",
+    "title": "Atrium IV",
+    "alt": "Stylized graphic fantasy illustration in the manner of mid-century animation backgrounds. The bookcase stands in an open clearing within an eerie, misty forest, framed on either side by the dark wooden columns and ceiling of the room. Behind the shelves, a pale full moon rises in a glowing yellow-green sky above stylized trees with flat, dark green foliage and twisted branches. Slender silhouettes of bare trunks fade into foggy distance across a purple-tinted, grassy ground. At the base of the left-hand tree, a tiny, silhouetted figure perches on an exposed root. The books on the shelves are uniformly bound in alternating blocks of muted teal-gray and rust orange.",
+    "hash": "79e2b4606f640cc8fee1663aed34d95ea54819d2bd4fba717c498532e26ba282"
+  },
+  "014.webp": {
+    "keywords": [
+      {
+        "text": "lora:Graphic_Portrait_SD15",
+        "type": "LoRA model"
+      },
+      {
+        "text": "Exekias",
+        "type": "artist"
+      },
+      {
+        "text": "Psychedelic art",
+        "type": "movement/style"
+      }
+    ],
+    "story": "Step between the sisters without breaking your stride, press your forehead lightly against the pale disc above the top shelf, and exhale whatever dialect you spoke outside. The keepers require a complete clearing of syntax before you touch any volume. If you approach carrying outside grammar, the teal currents along the plaster will peel away from the wall and knit themselves directly into your sleeves.",
+    "title": "The Syntax Keepers",
+    "alt": "Psychedelic digital illustration with swirling teal, turquoise, and violet linework. Flanking the purple-framed bookshelf on both sides are large stylized female portraits rendered in the same intricate, fluid swirls that cover the entire back wall. The round lamp above the shelves is absorbed into a circular teal swirl pattern. The books have beige and turquoise spines marked with illegible decorative scribbles. Dark, leafy patterns border the ceiling and floor.",
+    "hash": "3095768ec13c717cbc1dd7bd8b3775dc57d9dd0a08dae3f15d695c652fe14d13"
+  },
+  "015.webp": {
+    "keywords": [
+      {
+        "text": "Henri Rousseau",
+        "type": "artist"
+      },
+      {
+        "text": "Hubert Robert",
+        "type": "artist"
+      },
+      {
+        "text": "clockwork",
+        "type": "object/subject"
+      }
+    ],
+    "story": "The clock above the shelf keeps its own time, always eleven minutes fast, and nobody's bothered fixing it since old Verrier died. He built it to run that way on purpose, said a library should always think it's later than it is, otherwise scholars linger till the leaves outside start looking painted rather than real. The smaller timepieces on the side table were his practice attempts, failures he couldn't bring himself to melt down. Only the great instrument by the right column actually keeps correct time, and it's checked weekly against the tower clock across the garden.",
+    "title": "The Painted Hour",
+    "alt": "Painterly with detailed mechanical fixtures and naive botanical wallpaper. \n\nThe recessed wall behind the bookcase features dark green, layered jungle leaf wallpaper. Various antique brass clocks and clockwork devices are placed around the scene:\n\n- A tall, pedestal-mounted brass clock with spoke-like handles stands to the right of the bookcase.\n- Two small brass desk clocks rest on the ledge to the left.\n- A semi-circular sunburst brass clock mechanism is slotted among the books on the second shelf down.\n- A tall dual-dial clock mechanism interrupts the row of books on the third shelf.\n- An additional small brass dial is affixed to the trim at the top center of the frame above the main clock fixture.",
+    "hash": "d136bf032da7ac9aa69e705e45572ac0c26f45d401e8043bfa7d4ba0c8b65d48"
+  },
+  "016.webp": {
+    "keywords": [
+      {
+        "text": "clockwork",
+        "type": "object/subject"
+      },
+      {
+        "text": "heaven",
+        "type": "setting/environment"
+      },
+      {
+        "text": "canyon",
+        "type": "setting/environment"
+      }
+    ],
+    "story": "You survive a fall from the upper heights with your pocket watch still ticking. When you wake on the ledge, the escapement overhead has already factored your mass into the counter-balance. \n\nWalking away is out of the question; step off the flagstones and the sudden loss of ballast sends the entire partition tipping down into the mist. The previous keeper simply dried out and grew too light to hold the equilibrium. Now your only task is to log the brass dials against the celestial arc, turn the winding arbor at every strike, and wait for someone heavier to drop in.",
+    "title": "The Escapement",
+    "alt": "Digital fantasy painting with dramatic, warm lighting. \n\nThe back wall opens into a vast landscape of illuminated rocky canyons and stepped cliffs rising toward a cloudy, glowing sky. Across the arched ceiling overhead, large interlocking clockwork gears, dials, and cogs are embedded in the architecture. \n\nThe central bookcase is a wide, two-column unit topped by a circular brass gear clock. The books within are arranged in mixed orientations, with some stacked flat and others leaning. The floor consists of broken, tiered stone slabs, with small stacks of loose books sitting on the ground in the foreground corners.",
+    "hash": "6e75a11b023c17b1495dc52a6599db20adbe5ec1c6ec207e7a3896f947198b20"
+  },
+  "017.webp": {
+    "keywords": [
+      {
+        "text": "plasma",
+        "type": "medium/material"
       },
       {
         "text": "Joan Miró",
         "type": "artist"
       },
       {
-        "text": "sinkhole",
-        "type": "setting"
-      }
-    ],
-    "story": "A private study in a house built over reclaimed sinkhole ground. The owner catalogs geological survey reports alongside art monographs, the two red volumes on the middle shelf marking where the property line documents begin. The painting was left by the previous tenant, who departed before the last inspection.",
-    "hash": "f3d6a411eb255462ea86fcb0792db5b1b4e9278951031d0e35d5c85c6504cc64",
-    "title": "Sinkhole Study"
-  },
-  "004.jpg": {
-    "keywords": [
-      {
-        "text": "adventure",
-        "type": "movement/genre/style"
-      },
-      {
-        "text": "lora:ral-frctlgmtry",
-        "type": "LoRA model"
-      },
-      {
-        "text": "political cartoon",
-        "type": "medium"
-      }
-    ],
-    "story": "The Archivist's Wing houses restricted texts behind decorative gearwork that isn't decorative at all—each wheel a lock, each panel keyed to a different clearance level. The overhead mechanism tracks which shelf was last opened and by whom. Librarians here don't recommend books; they authorize retrieval requests, and denials are common.",
-    "hash": "aa183f12bdb0a1d1ec28840ab41e770b7b16711665d71fa163c4f1864a508a89",
-    "title": "Geargate"
-  },
-  "005.jpg": {
-    "keywords": [
-      {
-        "text": "16-bit",
-        "type": "descriptive"
-      },
-      {
-        "text": "Jean-Michel Basquiat",
-        "type": "artist"
-      },
-      {
-        "text": "lora:crayon-v1.1-000005",
+        "text": "lora:SolarPunk_Buildings",
         "type": "LoRA model"
       }
     ],
-    "story": "A study in a building that shifts floor plans depending on who's counting the doors. The scrolls flanking the shelf are transcripts of arguments the previous owner had with people who no longer visit. The orb above the books is warm to the touch year-round, source unknown. Nobody has successfully removed a book from the third shelf and put it back in the same place twice.",
-    "hash": "c666fd6114c6d24244dc35f04a81c1bc22ae1d386298502d5c6a5a8e27317645",
-    "title": "Shifting Volumes"
+    "story": "The building was cast from photosynthetic resin during the second expansion of the canopy commune. Every dwelling in the south wing curves along the same structural tension lines, allowing the sculpted mural-channels in the walls to circulate warm ionized gas between adjacent apartments. \n\nIt behaves less like a tower and more like a calcified reef, settling half an inch deeper into the coastal limestone with every solar cycle. The upper domes still catch enough direct glare to power the district's distillation vats, while the residential flats below rely entirely on the radiant heat bleeding downward through the vaulted ceiling reliefs.",
+    "title": "The Calcified Reef",
+    "alt": "Surrealist architectural interior with biomorphic abstract motifs. The curved ceiling and upper walls feature sculpted, organic relief panels and murals with abstract shapes in navy, red, black, and yellow. To the left, a tall wall panel is decorated with colorful starburst and crescent shapes, while to the right stands a rounded, cylindrical glass display cabinet. The central bookcase has undulating wooden shelves set against a textured, light-colored plaster backboard, sparsely holding dark, teardrop-shaped sculptures and small clusters of books. The floor beneath forms an oval of raked, concentric ripples.",
+    "hash": "6e2f21e8f7f4054789a70ad046e06b484056cea88d1d3a83f59e138f194076a5"
   },
-  "006.jpg": {
+  "018.webp": {
     "keywords": [
       {
-        "text": "Antoni Gaudí",
+        "text": "ray tracing",
+        "type": "lighting/optical"
+      },
+      {
+        "text": "Winslow Homer",
         "type": "artist"
       },
       {
-        "text": "Anne Nasmyth",
-        "type": "artist"
-      },
-      {
-        "text": "bread",
-        "type": "material"
+        "text": "reflection",
+        "type": "lighting/optical"
       }
     ],
-    "story": "A private study in an old Barcelona apartment building, converted decades ago by a tenant obsessed with mosaic work who never explained why bread crumbs kept appearing between the tiles of the side panels. The books on the shelf are ledgers, not literature—unmarked spines, numbered by hand. Neighbors say the lamp never goes out, even during power failures.",
-    "hash": "6a656979e5067f899aa8924fa2051450ddf04dbe0aef2a71ef6939bf41e8a627",
-    "title": "Ledger Light"
+    "story": "A newcomer always steps toward the glass expecting an orangery or a second hall, misled by the painted arch. There is nothing behind it but the granite bluff and thirty fathoms of cold salt water. \n\nThe master glazier silvered the pane using leaded sand specifically to throw the low afternoon glare back into the room, doubling the reach of the short winter days so the manifests could be audited without striking a lantern. What looks like a vast, sunlit gallery behind the mahogany is only the room you are standing in, thrown back at you with the dark timber of the ceiling turned to copper. If you lay your palm against the glass, it is as cold as the tide.",
+    "title": "The Silvered Pane",
+    "alt": "Atmospheric digital painting with warm amber illumination and polished reflections. The wall behind the central bookcase opens into an expansive, arched conservatory-style library framed by dark iron tracery, foliage, and rows of glowing, multi-tiered bookshelves. A small arched, brightly lit window opening sits directly above the top center of the shelf. Horizontal bands of warm light and shadow fall across the book spines, while the glossy wooden floor in the foreground reflects the bookcase and surrounding warm tones.",
+    "hash": "b6d93f49ea171a2d80f1fc2bbf10f0f004999eabb0828f5eb9cc59ece3dad0d3"
   },
-  "007.jpg": {
+  "019.webp": {
     "keywords": [
       {
-        "text": "Ana Mendieta",
-        "type": "artist"
+        "text": "aquarium lighting",
+        "type": "lighting/optical"
       },
       {
-        "text": "Jean Dubuffet",
-        "type": "artist"
+        "text": "western",
+        "type": "genre/aesthetic"
       },
       {
-        "text": "Robert Motherwell",
-        "type": "artist"
-      }
-    ],
-    "story": "A private archive room in a shuttered gallery, the shelves holding uniform spines with no visible titles—provenance records for works that were pulled from circulation decades ago. The target symbol above marks which section responds to a specific key card, though the wallpaper's pattern was chosen to make the door behind it harder to locate on a cursory glance.",
-    "hash": "d60de0890b85933b0db3e599409cf9222d230b897490af2de07115a188d3263f",
-    "title": "Pulled Archives"
-  },
-  "008.jpg": {
-    "keywords": [
-      {
-        "text": "arcade",
-        "type": "setting"
-      },
-      {
-        "text": "corrupted",
-        "type": "descriptive"
-      },
-      {
-        "text": "unhinged",
+        "text": "realistic",
         "type": "descriptive"
       }
     ],
-    "story": "A back-room archive in an arcade that shouldn't exist anymore—cabinets flanking a shelf of unmarked spine-cases, labels glitched into unreadable neon glyphs. The machines still run, looping demo attract-modes for games no one remembers installing. Staff logs mention restocking the shelf but never touching it.",
-    "hash": "a74e473f7e69b069dbe8b3b11afe83a6a6c389e531bbe3dcbcf6ba09d0a710cd",
-    "title": "Neon Archives"
+    "story": "The club sits at the tip of the municipal pier, balanced on sixty creosoted redwood pilings that groan whenever Pacific swells roll beneath the floor joists. Most of the county assumes the lower landing is merely cold storage for salt beef and paraffin, but three flights below the waterline, the harbor damp vanishes entirely into the dry warmth of calfskin bindings and pressurized glass. It was commissioned in 1884 by the rail syndicate's chief engineer, an eccentric who insisted on keeping the territory's complete legislative records within sight of the ocean he was hired to conquer.",
+    "title": "The Sunken Ledger",
+    "alt": "Realistic digital render. The bookcase is integrated into a large aquarium system, flanked on both sides by tall built-in glass tanks filled with glowing deep-blue water. Red, orange, and yellow fish swim above coral formations, aquatic plants, and sandy substrate along the bottom of the side tanks. Blue water and surface light ripples also fill the space behind the central book-lined shelves. An antique brass pendant lamp hangs from the ceiling above the center of the unit.",
+    "hash": "aa72778902423dc57e808942a5cf67d5ebcd2706d568064ec6399ce0aaa8efd9"
   },
-  "009.jpg": {
+  "020.webp": {
     "keywords": [
       {
-        "text": "gesture drawing",
-        "type": "technique"
-      },
-      {
-        "text": "Antoni Gaudí",
+        "text": "Juan Gris",
         "type": "artist"
       },
       {
-        "text": "engraving",
-        "type": "medium"
-      }
-    ],
-    "story": "A private archive in a converted chapel, catalogued by a librarian who insisted every spine face outward in perfect symmetry. The shelving was custom-built by a craftsman who normally worked on cathedral facades—hence the ornamental panels flanking the books, more suited to a reliquary than a reading room. No labels indicate subject matter. Staff who worked there described the middle shelf as \"the one you don't reorganize.\"",
-    "hash": "461f282248dfb276a7045194d6ed5a95bcb51170deac09c93eaba6b534212f75",
-    "title": "Symmetry's Weight"
-  },
-  "010.jpg": {
-    "keywords": [
-      {
-        "text": "lora:psychedelic_noir",
-        "type": "LoRA model"
+        "text": "abstract animation",
+        "type": "technique/process"
       },
       {
-        "text": "Sonia Delaunay",
+        "text": "matchbox",
+        "type": "object/subject"
+      }
+    ],
+    "story": "The proof is simply that three dimensions are an administrative vanity. Across the middle volumes, our history and physics are compressed into ninety-four orthogonal primitives. By stripping out curves, organic noise, and unobserved margins, the compilers fit every consequence between two wooden uprights. \n\nTo parse the syntax is to understand that depth is merely a rendering buffer left running by mistake. Those who finish the second shelf lose the reflex to perceive distance. They walk into flat walls without breaking stride, perfectly content to exist as planar arithmetic, lighter than before and impossible to hurt.",
+    "title": "Planar Arithmetic",
+    "alt": "A flat, graphic cubist illustration rendered in warm ochre, cream, orange, and muted slate-gray with stark angular black shadows. The bookcase contains books abstracted into flat geometric rectangles, with several shelves dominated by long horizontal bars and blocky cutout shapes. Resting on the center top edge of the bookcase is a chunky, yellow geometric block casting a long diagonal black shadow, intersected by a thin horizontal pale yellow beam spanning the wall behind it. Sharp, hard-edged lighting casts an angular trapezoidal pool of light onto the floor at the base.",
+    "hash": "6d0ceca3bedf879e0e1cb2d289b409f8c02eafe83ab4e4d884fb6e74043ea6f0"
+  },
+  "021.webp": {
+    "keywords": [
+      {
+        "text": "holographic",
+        "type": "technology"
+      },
+      {
+        "text": "Giovanni Francesco Barbieri",
         "type": "artist"
       },
       {
-        "text": "precise",
-        "type": "descriptive"
+        "text": "lenticular",
+        "type": "technology"
       }
     ],
-    "story": "A private archive in a building that shouldn't have basements but does. The shelf catalogs recordings, not books—reel labels facing out, color-coded by a system only the previous archivist understood. The single hanging lens above tracks whoever stands here too long. Nobody remembers commissioning the murals.",
-    "hash": "acd706d18f38c8e2dd8cb376bfbbd5ceae69acee4341457e1b92718b15dc2271",
-    "title": "Archive Echo"
+    "story": "The Surveyor-General from the Third Rift was turned away last autumn. He carried a valid bronze seal, but the threshold prism refused to split for his gaze; after forty years of mapping open vacuum, his retinas could no longer resolve multiple planes of depth at once. The warden told him to go sit under an orchard canopy until his pupils learned how to hold a shadow again. A man who only perceives flat distances will reach straight through the glass and knock the leaning folios into the void beneath the floorboards.",
+    "title": "The Threshold Prism",
+    "alt": "Digital illustration with glowing neon and cosmic lighting. A glass-framed bookcase stands on a dark wooden floor against a starry, deep-space background traversed by horizontal rays of violet, cyan, and amber light. Directly above the bookcase, a brilliant point of white light projects upward into a wide, fan-shaped canopy of radiant magenta, purple, and blue light across the ceiling. Faint geometric lines radiate downward from the light source behind the shelves. The bookcase holds books in varied arrangements, with several leaning diagonally and others stacked horizontally. On the bottom shelf, two pairs of books lean against each other. Dark wooden columns flank the scene on the left and right.",
+    "hash": "29ee0236df605469462c21ee2eb66d3e45e214c18af0c13ba443464199f1e183"
   },
-  "011.jpg": {
+  "022.webp": {
     "keywords": [
       {
-        "text": "bonsai",
-        "type": "other"
-      },
-      {
-        "text": "Maximalism",
-        "type": "movement/genre/style"
-      },
-      {
-        "text": "peaceful",
+        "text": "distorted",
         "type": "descriptive"
-      }
-    ],
-    "story": "A curator's private chamber in a building that no longer exists on any map. The shelf holds five rows of identical spines—no titles, no author names, just uniform gilt bindings that have never been opened. The bonsai on top grows from a pot that's slightly too small for its root system, yet it hasn't died in three hundred years. The two flanking trees are older than the wallpaper, which has been replaced eleven times without disturbing them. Someone dusts this room daily. No one remembers being assigned the task.",
-    "hash": "f33e651b118478ef33ddefa9b80732456b36f5d8bd13ccb511c9843771c542fc",
-    "title": "Forgotten Duty"
-  },
-  "012.jpg": {
-    "keywords": [
+      },
       {
-        "text": "Henri Matisse",
+        "text": "Milton Avery",
         "type": "artist"
       },
       {
-        "text": "vignette",
-        "type": "technique"
-      },
-      {
-        "text": "slate",
-        "type": "material"
+        "text": "observatory",
+        "type": "setting/environment"
       }
     ],
-    "story": "The study belonged to a man who catalogued botanical specimens for a museum that closed decades ago. He kept coming in anyway, cataloguing plants that no longer existed except in his index cards. The wall behind the shelf still bears the outline of a mural he painted over one winter—leaves and thorns, copied from a book he never let anyone else read. The single bulb above the shelf burns at all hours; nobody remembers installing a switch for it.",
-    "hash": "9449bcad23589e48a9e69acc1f1a32b505b386eaeaaccef97e11d2307e5552ab",
-    "title": "Botanist's Study"
+    "story": "Every volume holds a transcript of the deep sky's radio drift, mapped strictly into long rows of base-six integers. They record the subtle deformities that pass across the upper atmosphere whenever an uncataloged mass grazes the horizon. None of it makes for pleasant reading; without an ephemeris to decode the shifts in pitch, the pages look like miles of gray arithmetic. Still, if you cross-reference the volume from the winter solstice against the mural’s oldest seam, the cadence matches the breathing of whatever is currently sleeping through our transit.",
+    "title": "Transit Ephemeris",
+    "alt": "Stylized painting in muted teal, beige, and brown tones with visible grain textures.\n\nThe teal back wall features two painted, pale green figures flanking the bookcase. Both figures have wide, flattened heads with calm facial features and cocoon-like, ribbed or wrapped bodies. A horizontal cream-colored bar extends outward from both sides of the central lamp above the shelf, resembling a propeller. The bookshelf rests on a low, dark bench-like platform.",
+    "hash": "6c9abf87aa75121e57eb6c98caf0a1de35b1f98647e53357b797b04f37fa3f93"
   },
-  "013.jpg": {
+  "023.webp": {
     "keywords": [
       {
-        "text": "Shel Silverstein",
+        "text": "broken",
+        "type": "descriptive"
+      },
+      {
+        "text": "camera obscura",
+        "type": "technology"
+      },
+      {
+        "text": "adorable",
+        "type": "descriptive"
+      }
+    ],
+    "story": "Every house on this terrace was built with a lens set into the panelling, back when the harbour traffic was worth watching from indoors and nobody trusted a window in winter. Ours stopped throwing the street around 1961. The glass took a knock and since then it puts out one image only, stalled on the far wall behind you: a fat puppy sat crooked in a wicker basket, caught mid-yawn on an afternoon nobody wrote down. You can't look at it without making a noise.",
+    "title": "The Caught Yawn",
+    "alt": "Realistic digital rendering in warm, muted tones. Built into the top crest of the central bookcase is a vintage camera obscura apparatus with a large glass lens, housed inside a small arched wooden frame between two shallow drawers. The books on the shelves show varied aged spines in shades of faded red, brown, tan, and dusty blue.",
+    "hash": "d44df31cdf8796298ae5c7a5f8ef788c605b976b8631b05cfb2661ef1a8186e4"
+  },
+  "024.webp": {
+    "keywords": [
+      {
+        "text": "nightmare",
+        "type": "genre/aesthetic"
+      },
+      {
+        "text": "Joan Miró",
         "type": "artist"
       },
       {
-        "text": "ethanol",
-        "type": "material"
-      },
-      {
-        "text": "crystal",
-        "type": "material"
+        "text": "scan",
+        "type": "technology"
       }
     ],
-    "story": "The archive room of a distillery that never legally existed. Every book on these shelves is a fake spine—hollow, holding bottles instead of pages. The crystals growing at the top and scattered mid-shelf aren't decoration; they're byproduct, some reaction between spilled proof and old varnish that nobody's bothered to explain. Whoever ran this place had a sense of humor about hiding things in plain sight, labeling the fake bindings after children's poems.",
-    "hash": "68fcbc72cdbe32cf263ba4a0224a71ade54eb4aaba5089768bd19268c63e1132",
-    "title": "Proof Shelves"
+    "story": "Keep your eyes lowered until the star on the top shelf finishes its pulse. It scans the threshold for lingering waking thoughts, and making direct eye contact with the red center will wipe your last three hours of memory.\n\nThe harlequin mounted on the left tracks your breathing. If your pulse spikes, it detaches from the paneling to assist with immediate sedation. To keep it dormant, match your breath to the low hum in the woodwork, step forward smoothly, and draw your assigned record without brushing the adjacent bindings. Once your log is filed, back out of the chamber facing the alcove; turning your spine to them resets the entire intake cycle.",
+    "title": "The Intake Protocol",
+    "alt": "Glossy 3D render with surrealist sculptures. Resting on top of the bookcase is a black, star-shaped creature sculpture with five spiky arms and a central cream eye containing a red pupil. Hanging on the dark wall to the left of the bookcase is a tall, abstract sculptural figure patterned with red, yellow, and black diamonds, featuring small pointed face-like protrusions at the top. The books on the top shelf have blue-grey spines, while the lower four shelves hold pale cream books with faint, illegible vertical text.",
+    "hash": "bb6f1f6b21407a9d6090b8dbe3f0a4dfd09b47f685a991797c017d93500e22e7"
   },
-  "014.jpg": {
+  "025.webp": {
     "keywords": [
       {
-        "text": "Floris van Schooten",
-        "type": "artist"
+        "text": "Folk art",
+        "type": "movement/style"
       },
       {
-        "text": "arthropoid",
-        "type": "descriptive"
+        "text": "magma",
+        "type": "object/subject"
       },
       {
-        "text": "alien",
-        "type": "descriptive"
+        "text": "wire",
+        "type": "medium/material"
       }
     ],
-    "story": "The archive room aboard the derelict cataloged specimens by shelf rather than species—five rows, five clearance levels. The two mounted arthropoids flanking the shelf weren't decorative; they were the last curators, preserved mid-climb by whatever stopped the ship's systems. The books themselves are sealed logs, spines uniform because the binding material is grown, not manufactured. Someone lit this room recently. The circular fixture above the shelf isn't a light—it's a lens, still watching for who comes to read.",
-    "hash": "a28453455c402baafee314dfecd2cc6c33f0f0b0c0baca8cbf09fabafe667ff0",
-    "title": "Curators"
+    "story": "The Parish of the Vent keeps this station. Generations of soot-stained parishioners bent every strand of that iron mesh by hand, hammering salvaged fencing to cage the volumes before the subterranean heat could warp their calfskin covers. They monitor the slow drift of the molten rock half a league down, logging each tremor into the heavy spines. \n\nTo the parish, the texts are both ancestral relics and safety gauges; if the filament overhead begins to pulse orange, it means the deep flow is surging, and the elders have precisely eight minutes to ring the borough chimes before the floorboards ignite.",
+    "title": "The Ember Cage",
+    "alt": "Textured digital rendering with warm ambient lighting. The entire bookshelf is built from a thin, dark wire cage suspended between the columns along horizontal wires. An exposed, glowing bare light bulb sits in a curved wire cradle centered at the top, illuminating the books behind the wire grid in glowing amber, orange, and golden tones against a coarse woven wall.",
+    "hash": "305ff3cd70f0f2f3a4447ad9038f3e6213aab1c25e7f5adb99120f7a66181c80"
   },
-  "015.jpg": {
-    "keywords": [
-      {
-        "text": "cute",
-        "type": "descriptive"
-      },
-      {
-        "text": "lora:J_comic_book",
-        "type": "LoRA model"
-      },
-      {
-        "text": "lucid",
-        "type": "descriptive"
-      }
-    ],
-    "story": "A private archive kept by someone who catalogs dreams instead of books. Each spine's color corresponds to a specific recurring dream state, ordered by frequency of occurrence rather than title. The circular light above isn't decorative—it's a monitoring device, always on, always recording who visits and what they touch.",
-    "hash": "87f1cefdf552389cb3906da33942ece7ece365c5d29fa4acc33699c916fb9745",
-    "title": "Dream Catalog"
-  },
-  "016.jpg": {
+  "026.webp": {
     "keywords": [
       {
         "text": "Utagawa Kunisada",
@@ -299,198 +514,9 @@
         "type": "artist"
       }
     ],
-    "story": "The library belongs to a private society that catalogs marriages between mismatched things—East and West, flesh and ornament, symmetry and its violation. The twin carved forms flanking the shelves are said to be a matched pair, though no one who tends the room remembers if they were made together or found separately and forced into correspondence. The books between them are uniform in spine but not in language; borrowing one requires leaving something of equal weight behind. The lamp above has never been changed, though the building has been rebuilt twice.",
-    "hash": "e5ff24af7727a494306d2703086d760d30983ab396d3c5b3f16c28abc1628be9",
-    "title": "Correspondence"
-  },
-  "017.jpg": {
-    "keywords": [
-      {
-        "text": "peaceful",
-        "type": "descriptive"
-      },
-      {
-        "text": "Koloman Moser",
-        "type": "artist"
-      },
-      {
-        "text": "Giorgio de Chirico",
-        "type": "artist"
-      }
-    ],
-    "story": "A private archive room in a building that shouldn't have one—the panels flanking the shelf carry carved script no cataloguer has translated, and the single overhead light never flickers or dims, on a timer no one set. The shelf itself holds five rows of identical spines, unmarked, in a language of stitching rather than letters. Visitors report the room is always the same temperature, regardless of season.",
-    "hash": "327c100166f62f06810ec46921a90cce97519253004b0f9187539b2ac462515c",
-    "title": "The Archivist's Shelf"
-  },
-  "018.jpg": {
-    "keywords": [
-      {
-        "text": "Joan Miró",
-        "type": "artist"
-      },
-      {
-        "text": "gigantic",
-        "type": "descriptive"
-      },
-      {
-        "text": "Egon von Vietinghoff",
-        "type": "artist"
-      }
-    ],
-    "story": "A private reading room in a building that shouldn't have one—an archive kept by whoever maintains the two watching figures on either wall. The books are uniform enough to suggest they were never meant to be read individually, only as a set. The lamp stays on regardless of whether anyone's there.",
-    "hash": "606b1967bad05491447eebfa31458829166d4752e1ad42cba7a1afeca6d69a2a",
-    "title": "Archive Bloom"
-  },
-  "019.jpg": {
-    "keywords": [
-      {
-        "text": "atomic",
-        "type": "descriptive"
-      },
-      {
-        "text": "Color Field painting",
-        "type": "movement/genre/style"
-      },
-      {
-        "text": "village",
-        "type": "setting"
-      }
-    ],
-    "story": "The archive room beneath the village hall, built after the reactor incident. Every book on these five shelves documents radiation readings from a single well, recorded daily by whoever drew the shift. The wallpaper's pattern was chosen to mimic the isotope decay charts once pinned to these walls—someone found it easier to live with the data as decoration than to look at it directly. The pendant lamp burns continuously; nobody remembers deciding that, but nobody's turned it off in years either.",
-    "hash": "5825b42d32c3a60768eff4270b3af04f16c543442601e527bb8a9b6d027eecfe",
-    "title": "Decay Chart"
-  },
-  "020.jpg": {
-    "keywords": [
-      {
-        "text": "Concrete art",
-        "type": "movement/genre/style"
-      },
-      {
-        "text": "Annibale Carracci",
-        "type": "artist"
-      },
-      {
-        "text": "stinking",
-        "type": "descriptive"
-      }
-    ],
-    "story": "The archive room beneath the gallery, where restorers store the pigment ledgers nobody wants upstairs. Each spine logs a formula—linseed ratios, drying times, the smell of a particular varnish that made three conservators quit that decade. The single lamp runs on a timer tied to the building's original wiring, not the renovation. Nobody remembers who catalogued them by scent rather than date.",
-    "hash": "7f0873a9d4fff91e1b04ad1db79bab0df54690ab17f41d2232d42646600706c9",
-    "title": "Pigment Ledgers"
-  },
-  "021.jpg": {
-    "keywords": [
-      {
-        "text": "Franz Marc",
-        "type": "artist"
-      },
-      {
-        "text": "Pieter Jansz Saenredam",
-        "type": "artist"
-      },
-      {
-        "text": "vibrant",
-        "type": "descriptive"
-      }
-    ],
-    "story": "A private archive maintained by a collector who trades exclusively in symmetry—texts, masks, and light fixtures acquired only when they come in matched pairs. The bookshelf itself was rejected twice before being accepted into the collection, on grounds no one else was permitted to examine.",
-    "hash": "5929aef0fa00486686f8dc203636849cf3a89f0c6a5e8d522ed2e76851668881",
-    "title": "Matched Archive"
-  },
-  "022.jpg": {
-    "keywords": [
-      {
-        "text": "Adolph Gottlieb",
-        "type": "artist"
-      },
-      {
-        "text": "badlands",
-        "type": "setting"
-      },
-      {
-        "text": "Josef Albers",
-        "type": "artist"
-      }
-    ],
-    "story": "A hidden archive behind a condemned wall, sealed after the town's disappearance. The circular device above the shelf hums faintly when someone reads the spines aloud in order. The mural beneath the paint was here first—someone painted over it, badly, then built the shelf to hide what remained. No one currently living knows what the blue light does when all the books are removed at once.",
-    "hash": "a1cccce4ee18c87ac17a948de0948713a08da60521a9e0504e8a8cedb7017567",
-    "title": "Echo Archive"
-  },
-  "023.jpg": {
-    "keywords": [
-      {
-        "text": "coral",
-        "type": "material"
-      },
-      {
-        "text": "deranged",
-        "type": "descriptive"
-      },
-      {
-        "text": "Joan Miró",
-        "type": "artist"
-      }
-    ],
-    "story": "A private study in a research station built into a reef wall. The wallpaper's molecular diagrams mark abandoned attempts to classify something that resists classification—a specimen, rendered crudely above the shelf, that keeps changing shape between observations. The books are the station's log, decades of entries by researchers who stopped agreeing on what they were looking at. The lamp stays on because the last person to leave didn't plan on being gone long.",
-    "hash": "ec5285b7c734ff2b6175f2dff56c6e791b2d959f288d5024e4236389f4aa8333",
-    "title": "Residue"
-  },
-  "024.jpg": {
-    "keywords": [
-      {
-        "text": "Georg Jensen",
-        "type": "artist"
-      },
-      {
-        "text": "abstract",
-        "type": "descriptive"
-      },
-      {
-        "text": "Frutiger Aero",
-        "type": "movement/genre/style"
-      }
-    ],
-    "story": "A private archive maintained by a defunct design house, cataloging every silhouette ever approved for production. The pendant lamp overhead is the only fixture still wired—everything else in the room runs on battery or memory. One volume on the second shelf sits slightly forward, pulled and never fully replaced, marking the last entry anyone bothered to check.",
-    "hash": "a82c0858762a872b8f48d3209b18387afde335bc36a1fa1ef79802bae6ef7b57",
-    "title": "Archive Shadow"
-  },
-  "025.jpg": {
-    "keywords": [
-      {
-        "text": "Ernst Haeckel",
-        "type": "artist"
-      },
-      {
-        "text": "Cecilia Beaux",
-        "type": "artist"
-      },
-      {
-        "text": "Cubism",
-        "type": "movement/genre/style"
-      }
-    ],
-    "story": "A private study in an institute that catalogs impossible organisms. The circular device above the shelf records the reading habits of whoever stands before it, cross-referenced against radiolarian symmetry patterns etched into the walls—patterns that shift slightly whenever a book is removed. The librarian insists this is coincidental.",
-    "hash": "771281c34fb847cc244a005e53f9855121b5fc16e472947c67fe902f3cabaebf",
-    "title": "Radiolarian Echoes"
-  },
-  "026.jpg": {
-    "keywords": [
-      {
-        "text": "biomimicry",
-        "type": "descriptive"
-      },
-      {
-        "text": "Hans Holbein the Younger",
-        "type": "artist"
-      },
-      {
-        "text": "Maxfield Parrish",
-        "type": "artist"
-      }
-    ],
-    "story": "A private study built into a cliffside archive, where the shelves themselves were grown rather than carved—wood trained over decades to hold books without nails or glue. The murals flanking the case aren't decoration; they're windows into the two valleys the archive once served before the mountain split them apart. The lamp above marks where a third door used to be.",
-    "hash": "b03619ada9cf47fecdecfb5352516ecb24444076d3938b82a8fd91b0ff26f3ff",
-    "title": "Cliffside Archive"
+    "story": "The Sisterhood of the Pale Chrysalis maintains the archive, ensuring no page is turned until the previous reader's scent has completely dissipated. They are daughters of royal silk-spinners who took vows of absolute stillness. Though they possess no written doctrine of their own, they guard these lineage registries with quiet fanaticism, oiling the woodwork twice daily with almond fat. Visitors must surrender all iron hairpins and buckles at the threshold, as cold metal is believed to distress the ancestral cocoons enshrined beside the stacks.",
+    "title": "The Chrysalis Archive",
+    "alt": "Polished digital illustration with Art Nouveau ornamentation. The central bookcase is enclosed in a thick, bright white frame, with a narrow additional tier of books resting above it. Flanking the bookcase on either side are tall, dark-green wall panels decorated with symmetrical white floral scrollwork framing pale, organic, teardrop-shaped sculptural motifs. The glowing circular lamp hangs down from a metallic mount on the ceiling.",
+    "hash": "2c87831be63f4e97030441383b24f1735e5a6068ded51379da87f51d2f194b0f"
   }
 }

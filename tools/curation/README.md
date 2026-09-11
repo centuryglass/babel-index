@@ -63,12 +63,15 @@ story on every tile that still lacks one, `--workers N` many at a time
 **Review and revise stories (desktop)**
 
 ```sh
-python -m babel_index_review DIR [--content-review flagged|unflagged]
+python -m babel_index_review DIR [--content-review flagged|unflagged] [--sample-update]
 ```
 
 The full Qt review GUI: browse tiles in a grid, generate/revise/finalize
 stories, generate alt text, and set sensitive-content tags by hand. See
 `babel_index_review/gui.py`'s module docstring for the panel layout.
+`--sample-update` adds a "Save to samples" button that copies the selected
+tile's image and a subset of its metadata (keywords, story, title, alt) into
+`assets/corpus-sample`, for hand-picking a representative demo corpus.
 
 **Review from a phone**
 
