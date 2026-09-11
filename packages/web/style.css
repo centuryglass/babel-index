@@ -46,16 +46,19 @@ canvas.dragging { cursor: grabbing; }
 /*
   touch-action only ever restricts, never re-enables: the used value at a
   touch point is the intersection of every element's value from the hit
-  target up to html, so a descendant's `auto` (`.overlay-scrim` below) cannot
-  undo the `none` above it - a pinch over an open room overlay still crosses
-  `#root`/`body`/`html`'s `none` on its way up and gets eaten as a two-finger
-  map gesture with nothing under it to pan. `:has()` relaxes the whole chain
-  back to `auto` exactly while an overlay is mounted (`.overlay-scrim` is
-  shared by RoomOverlay/HelpDialog/BookOverlay, so this one rule covers every
-  dialog), leaving the map's own gesture handling - the reason for `none` up
-  here - untouched at every other time.
+  target up to html, so a descendant's `auto` (`.overlay-scrim`/`.catalog`
+  below) cannot undo the `none` above it - a pinch over an open room overlay,
+  or a finger drag down the catalog list, still crosses `#root`/`body`/
+  `html`'s `none` on its way up and gets eaten as a two-finger map gesture
+  with nothing under it to pan. `:has()` relaxes the whole chain back to
+  `auto` exactly while one of those is mounted (`.overlay-scrim` is shared by
+  RoomOverlay/HelpDialog/BookOverlay, so this one rule covers every dialog),
+  leaving the map's own gesture handling - the reason for `none` up here -
+  untouched at every other time.
 */
-html:has(.overlay-scrim), body:has(.overlay-scrim), #root:has(.overlay-scrim) {
+html:has(.overlay-scrim, .catalog),
+body:has(.overlay-scrim, .catalog),
+#root:has(.overlay-scrim, .catalog) {
   touch-action: auto;
 }
 
