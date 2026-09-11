@@ -60,14 +60,6 @@ are. Notes that will bite: `.paper-sheet` locally rebinds `--dim`/`--ink`/
   origin. Add a second ruleset (rate limit + short-TTL cache keyed on the
   query string) scoped to the app's hostname for that endpoint specifically.
 
-## Security:
-- **The query length cap is enforced in the browser only.** `useSearch.ts`
-  slices to `config.search.maxQueryLength` and both inputs carry `maxLength`,
-  but `/api/search` reads `req.query.q` without checking it — a direct GET
-  hands an arbitrarily long string to the CLIP tokeniser and then keys the LRU
-  cache on it, and that cache bounds entries, not bytes. Enforce the same cap
-  server-side.
-
 ## CI:
 - **`npm run typecheck` is not a gate**, so it sits red between the times
   someone runs it by hand. TypeScript is the default for every new file; the

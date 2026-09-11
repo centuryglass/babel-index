@@ -268,6 +268,18 @@ test('search is trimmed, so a stray space is the same search', async () => {
   });
 });
 
+test('a query over maxQueryLength is truncated server-side, not just in the browser', async () => {
+  await serving(
+    async ({ get }) => {
+      const short = await (await get('/api/search?q=hexagonqq')).json();
+      const long = await (await get('/api/search?q=hexagonqqqqqqqqqqqqqqqqqqqqqqqqqqqqq')).json();
+      assert.equal(short.query, 'hexagonqq');
+      assert.equal(long.query, 'hexagonqq', 'a direct request past the client cap must still be sliced');
+    },
+    { config: resolveConfig({ search: { maxQueryLength: 9 } }) }
+  );
+});
+
 test('the ranking survives corpus growth without depending on corpus size', async () => {
   // Ids are what the ranking is keyed on, so a room's score must not depend on
   // how many other rooms happen to be present.
