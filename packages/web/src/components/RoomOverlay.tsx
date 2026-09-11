@@ -105,9 +105,10 @@ export function RoomOverlay({
    * or `null` for a room past the map's slider (no cell to fly to) or a
    * generic cell (in neither reading's list). Rendered beside the favorite
    * toggle rather than inside `RoomDetails`, which has no notion of which
-   * reading opened it.
+   * reading opened it. `shortLabel` is the abbreviated form CSS swaps in on a
+   * narrow display (see the head's comment); `label` stays the accessible name.
    */
-  view?: { label: string; onClick: () => void } | null;
+  view?: { label: string; shortLabel: string; onClick: () => void } | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -284,32 +285,35 @@ export function RoomOverlay({
         tabIndex={-1}
         aria-label={desc.name}
       >
-        <div className="card-head">
+        {/*
+          The favorite toggle and the other reading's link sit in the head
+          itself rather than each on a row of their own - the head has the
+          horizontal room to spare. The star tucks in right after the name;
+          the link and the close button group at the far right (`.room-head-end`
+          takes the row's slack), so the free space falls between the two
+          groups. `RoomDetails` renders neither (see `favorite={null}` below).
+          The view button carries a short relabel (`view.shortLabel`) that CSS
+          swaps in on a narrow display, where its full phrase plus the title
+          and star would crowd the row; the full phrase stays its accessible
+          name regardless.
+        */}
+        <div className="card-head room-head">
           <span className="card-id">
             {'generic' in room ? 'a Babel shelf' : <b>{roomTitle(entry, room.id)}</b>}
           </span>
-          <button className="card-close" onClick={onClose} aria-label="close">
-            ×
-          </button>
-        </div>
-
-        {/*
-          The favorite toggle and the other reading's link, one row, the link
-          right-aligned - the same pairing a catalog row makes in its head for
-          the same reason: two ways of *acting* on this room belong beside its
-          name, not folded into `RoomDetails`'s body alongside its chips and
-          story. `RoomDetails` renders neither (see `favorite={null}` below).
-        */}
-        {(favorite || view) && (
-          <div className="overlay-actions">
-            {favorite && <FavoriteToggle favorite={favorite} />}
+          {favorite && <FavoriteToggle favorite={favorite} />}
+          <div className="room-head-end">
             {view && (
-              <button type="button" className="catalog-show" onClick={view.onClick}>
-                {view.label}
+              <button type="button" className="catalog-show" onClick={view.onClick} aria-label={view.label}>
+                <span className="catalog-show-full">{view.label}</span>
+                <span className="catalog-show-short" aria-hidden="true">{view.shortLabel}</span>
               </button>
             )}
+            <button className="card-close" onClick={onClose} aria-label="close">
+              ×
+            </button>
           </div>
-        )}
+        </div>
 
         {/*
           Two columns only when one would overflow - see `measureColumns`

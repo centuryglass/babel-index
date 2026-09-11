@@ -1351,7 +1351,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           view={(() => {
             const cell = cellById.get(overlay.id);
             return cell
-              ? { label: 'show on the map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
+              ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
               : null;
           })()}
         />
@@ -1388,6 +1388,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             'id' in card
               ? {
                   label: 'show in the catalog',
+                  shortLabel: 'catalog',
                   onClick: () => {
                     setCatalogSpotlightId(card.id);
                     enterCatalog();

@@ -344,7 +344,7 @@ button:hover { background: rgba(200,169,95,0.24); }
   head row inside it is one appearance.
 */
 .card-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
   flex: none;
 }
@@ -365,20 +365,24 @@ button:hover { background: rgba(200,169,95,0.24); }
 .favorite { display: flex; margin-bottom: 8px; }
 .catalog-name .favorite { margin: 0; }
 /*
-  The overlay's own row for the favorite toggle and the other reading's
-  link ("show on the map" / "show in the catalog") - `space-between` so
-  the link sits right-aligned against the toggle without either control
-  needing to know the other is there. Nested `.favorite` drops its own
-  margin since this row already carries one.
+  The room overlay's head carries its two actions - the favorite toggle and
+  the other reading's link ("show on the map" / "show in the catalog") -
+  in the head rather than on a row of their own. The star tucks in right
+  after the name (which truncates rather than pushing it off); `.room-head-end`
+  takes the row's slack so the link and close button group at the far right.
+  The actions drop their own vertical margins since the head already spaces
+  itself. On a narrow display the link swaps its full phrase for the short
+  relabel, which its accessible name keeps regardless.
 */
-/*
-  `margin-left: auto` on the link rather than `justify-content:
-  space-between` - the favorite toggle is absent for a generic cell, and
-  `space-between` with one child left-aligns it instead of right.
-*/
-.overlay-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.overlay-actions .favorite { margin-bottom: 0; }
-.overlay-actions .catalog-show { margin-left: auto; }
+.room-head .card-id { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-head .favorite { margin: 0; flex: none; }
+.room-head-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.room-head .catalog-show { flex: none; }
+.catalog-show-short { display: none; }
+@media (max-width: 600px) {
+  .room-head .catalog-show-full { display: none; }
+  .room-head .catalog-show-short { display: inline; }
+}
 .favorite-toggle {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
