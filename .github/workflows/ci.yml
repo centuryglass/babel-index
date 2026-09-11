@@ -122,24 +122,72 @@ jobs:
       - name: npm run lint
         run: npm run lint
 
+  # TypeScript is the default for every new file (AGENTS.md), so `tsc
+  # --noEmit` is what makes that mean anything rather than sitting red
+  # between the times someone runs it by hand. Doesn't vary by Node version
+  # (types, not runtime), so it runs once like lint.
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: npm run typecheck
+        run: npm run typecheck
+
+  # Informational, not a gate: `sharp`/`onnxruntime-node`/`adm-zip` (all
+  # dev/optional, never on a request path) carry high-severity advisories
+  # with no fix available upstream, so a hard failure here would stay red
+  # forever for reasons unrelated to a given PR. This still prints the full
+  # report on every run so a NEW, fixable advisory doesn't slip in silently.
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: npm audit
+        run: npm audit || true
+
   # A single check to require for merging, so branch protection does not need
   # updating every time the matrix changes - or every time a job is added.
   ci:
     name: ci
     if: always()
-    needs: [test, e2e, lint]
+    needs: [test, e2e, lint, typecheck]
     runs-on: ubuntu-latest
     steps:
       # `e2e` is allowed to be `skipped` - the `changes` job decided this PR
       # cannot have touched anything the browser smoke test can see - but
-      # never anything else.
+      # never anything else. `audit` is deliberately not required (see its
+      # own comment above).
       - name: All checks passed
         if: |
           needs.test.result != 'success' ||
           (needs.e2e.result != 'success' && needs.e2e.result != 'skipped') ||
-          needs.lint.result != 'success'
+          needs.lint.result != 'success' ||
+          needs.typecheck.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
           echo "e2e result: ${{ needs.e2e.result }}"
           echo "lint result: ${{ needs.lint.result }}"
+          echo "typecheck result: ${{ needs.typecheck.result }}"
           exit 1
