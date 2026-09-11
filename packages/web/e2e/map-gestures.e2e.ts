@@ -290,7 +290,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     await page.locator('button.search-trigger').click();
     const atField = await landed(page, flightMs);
     assert.notEqual(atField.x, wandered.x, 'the search trigger did not fly to the field');
-    await page.locator('input[type=search]').fill('hexagonal galleries');
+    await page.locator('input[type=search]').fill('clockwork');
     await page.locator('input[type=search]').press('Enter');
 
     // A search no longer recenters the camera - it zooms out IN PLACE to show

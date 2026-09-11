@@ -49,7 +49,7 @@ describe('the library, in a browser: the WebGL renderer', { concurrency: false }
     await page.locator('button.search-trigger').click();
     const atField = await landed(page, flightMs);
 
-    await page.locator('input[type=search]').fill('hexagonal galleries');
+    await page.locator('input[type=search]').fill('clockwork');
     await page.locator('input[type=search]').press('Enter');
 
     // A search zooms out in place to show the rearrangement, then eases back
