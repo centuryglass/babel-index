@@ -107,6 +107,23 @@ code and the git log are the record of what was.
   `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
   only once WebGL has real production mileage and nothing has needed the hatch.
 
+## Gestures / touch:
+- **[2026-09-11] `.catalog`'s `touch-action: auto` (style.css) is likely the
+  same dead-code bug just fixed for `.overlay-scrim`.** Both sit under
+  `html`/`body`/`#root`'s `touch-action: none`, and touch-action only ever
+  restricts along the hit-test chain, never re-enables - a descendant's
+  `auto` can't undo an ancestor's `none` (see the comment now above the
+  `html:has(.overlay-scrim)` rule in style.css). If that holds for `.catalog`
+  too, single-finger scrolling of `.catalog-scroll` on a real touch device
+  may be relying on something other than native touch scrolling to work at
+  all, or may be broken outright. Not confirmed - AGENTS.md's own note on
+  `map-gestures.e2e.ts` applies here too: CDP touch injection bypasses real
+  gesture arbitration, so this needs checking on an actual phone, not a
+  simulator or the e2e suite. If confirmed, the fix is the same shape: an
+  `html:has(.catalog), body:has(.catalog), #root:has(.catalog)` rule (or
+  folding `.catalog` into the existing selector) rather than another
+  independent `touch-action: auto` that only looks like it works.
+
 ## Rearrangement / camera:
 - **[2026-09-10] A `flyTo` issued while a rearrangement is animating has no
   effect, and a search can sometimes trigger what looks like a SECOND full
