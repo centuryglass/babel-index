@@ -1,6 +1,6 @@
 /**
  * Shared harness for the browser smoke suite, split across this directory's
- * `*.e2e.ts` files (see `docs/implementation-plan.md`'s note on why - one
+ * `*.e2e.ts` files (see `docs/pending_task_list.md`'s note on why - one
  * 2440-line file sharing one `page` meant a single stranded piece of state
  * turned one failure into several unrelated ones).
  *
@@ -334,7 +334,7 @@ export async function landed(page, flightMs, timeoutMs = 5000) {
  * rearrangement's own camera control keeps driving x/y/zoom and the button
  * click has no visible effect at all, so `landed()` alone can report a
  * "settled" camera that never actually recentred (confirmed by direct
- * reproduction - see docs/implementation-plan.md's note on this). Waiting
+ * reproduction - see docs/pending_task_list.md's note on this). Waiting
  * out any rearrangement before clicking narrows the race but does not close
  * it, so this also checks the outcome and retries the click if it didn't
  * land at (0.5, 0.5), rather than trusting one `landed()` read.

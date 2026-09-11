@@ -389,21 +389,6 @@ function controlUsable(rect: Rect | null, cellRect: Rect): boolean {
   return r.w >= MIN_CONTROL_PX && r.h >= MIN_CONTROL_PX;
 }
 
-/** The reorder ("shuffle") control's rect in screen pixels, or null if untraced. */
-export function shuffleButtonScreenRect(cellRect: Rect): Rect | null {
-  return CENTER_SHUFFLE_RECT && rectOnCell(CENTER_SHUFFLE_RECT, cellRect);
-}
-
-/** The "sort by my favorites" switch's rect in screen pixels, or null if untraced. */
-export function mineToggleScreenRect(cellRect: Rect): Rect | null {
-  return CENTER_MINE_TOGGLE_RECT && rectOnCell(CENTER_MINE_TOGGLE_RECT, cellRect);
-}
-
-/** The "sort by most favorited" switch's rect in screen pixels, or null if untraced. */
-export function countToggleScreenRect(cellRect: Rect): Rect | null {
-  return CENTER_COUNT_TOGGLE_RECT && rectOnCell(CENTER_COUNT_TOGGLE_RECT, cellRect);
-}
-
 /** Whether a screen point lands on the reorder ("shuffle") control. */
 export function shuffleButtonAtPoint(px: number, py: number, cellRect: Rect): boolean {
   if (!controlUsable(CENTER_SHUFFLE_RECT, cellRect)) return false;

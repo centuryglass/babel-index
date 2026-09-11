@@ -1,7 +1,7 @@
-# The Index of Babel — implementation plan
+# The Index of Babel — pending task list
 
-Pending task list. Remove tasks as they are completed, the code and git logs will
-serve as completed task history.
+What is still to do, and nothing else. Remove a task as it is completed — the
+code and the git log are the record of what was.
 
 ## A11y:
 - No actual screen reader testing has happened yet. Learn orca and test
@@ -30,16 +30,72 @@ serve as completed task history.
   than static asset serving - it's CPU-bound ML inference on an unprotected
   origin. Add a second ruleset (rate limit + short-TTL cache keyed on the
   query string) scoped to the app's hostname for that endpoint specifically.
-- Although I intend to host it in my VPS, dockerizing it for the sake of
-  making future hosting changes easier would be a good idea.
+
+## Security:
+- **The query length cap is enforced in the browser only.** `useSearch.ts`
+  slices to `config.search.maxQueryLength` and both inputs carry `maxLength`,
+  but `/api/search` reads `req.query.q` without checking it — a direct GET
+  hands an arbitrarily long string to the CLIP tokeniser and then keys the LRU
+  cache on it, and that cache bounds entries, not bytes. Enforce the same cap
+  server-side.
+
+## CI:
+- **`npm run typecheck` is not a gate**, so it sits red between the times
+  someone runs it by hand. TypeScript is the default for every new file; the
+  check that makes that mean anything belongs beside `lint` in `ci.yml`.
+- **Nothing builds the `Dockerfile`.** It exists so hosting can move without a
+  rewrite, and it will drift out of step with `package.json` unnoticed until
+  the day that matters. A build-only job is enough — no push, no registry.
+- **No dependency automation, and `npm audit` runs nowhere.** Dependabot or
+  Renovate, plus an audit step. Today `qs` carries a moderate advisory inside
+  Express's request path, fixable by a lockfile bump; `sharp` and
+  `onnxruntime-node` carry high-severity ones with no fix available, on paths
+  no request ever touches.
+
+## The public face:
+- **Nothing tells a visitor what the site stores.** Favoriting mints a token in
+  `localStorage` and sends it to the server, and the whole shape of
+  `favorites.ts` is an argument about refusing to spy on people — an argument
+  no reader can currently see. A short paragraph in `HelpDialog` would say it.
+- **The library cannot be found from outside itself.** No `<meta
+  name="description">`, no Open Graph or Twitter card, no `robots.txt`, no
+  sitemap, and `/favicon.ico` answers 204 while `index.html` links one. Nothing
+  is server-rendered either, so a crawler or a link unfurler sees an empty
+  `<div id="root">` and a shared URL previews as bare text. A server-rendered
+  catalog page closes both without touching the map — and discoverability is
+  the reason the catalog exists (concept.md, 8/22/26).
+- **`README.md` describes a center tile that no longer exists** — "5 shelves ×
+  32 books = 160 books", abandoned in concept.md's 8/18/26 entry — and its
+  "What it is" section is still a TODO while the site is live at the URL
+  printed above it.
+
+## Corpus loading:
+- **A corpus that half-loads says nothing.** All three fetches in
+  `useCorpus.ts` end in `.catch(() => {})`, so a missing `metadata.json` or
+  `embeddings.bin` — a plausible result of an interrupted `tools/upload` sync —
+  renders a library that searches and ranks with quietly degraded results. The
+  manifest fetch has an error state; these deserve one too, or at least a line
+  in the HUD.
 
 ## Favorites:
-- No e2e coverage yet. A spec favoriting a room from a catalog row, switching
-  the sort and reloading would cover the whole path; it needs the demo server
-  the suite starts to be given a throwaway `--favorites` path.
+- `favorites.e2e.ts` covers the map badge and the in-place resort that follows
+  a toggle while sorted by favorites. The catalog side is still uncovered: a
+  spec favoriting a room from a catalog ROW, switching the sort and reloading
+  would close the remaining half of the path.
 - The JSON store is one file written by one process. If a second process ever
   serves this corpus, that is the moment for the Postgres adapter behind
   `FavoriteStore` rather than a lock on the file.
+
+## Search:
+- **The int8 quantisation scale is stated twice, once on each side of
+  `embeddings.bin`** — `QUANT_SCALE` in `tools/embed/embed.ts` writes it,
+  `EMBEDDING_SCALE` in `packages/map/ordering.ts` reads it, both 127, with no
+  import binding them. Ranking is immune to a drift between them (a monotone
+  factor cannot reorder), so the symptom would be `matchCertainty` reading the
+  wrong absolute cosine and the density gradient clustering at the wrong
+  confidence. `embeddings.json` already records `scale` and nothing reads it
+  back — carrying it through the manifest removes the constant from the client
+  entirely.
 
 ## Rendering:
 - **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with

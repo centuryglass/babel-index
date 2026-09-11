@@ -3,7 +3,7 @@
 Uploads a corpus - room images at every generated pyramid level, the
 keyword/story sidecar, the optional keyword -> external-link map, the CLIP
 embeddings blob, and the shared center/generic tiles - to Cloudflare R2. See
-`docs/implementation-plan.md`'s Hosting section.
+`docs/pending_task_list.md`'s Hosting section.
 
 R2 is S3-compatible, so this uses `@aws-sdk/client-s3` rather than a bespoke
 client.

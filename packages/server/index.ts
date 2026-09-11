@@ -135,7 +135,7 @@ const trustProxyArg = argv['trust-proxy'];
 const trustProxy =
   trustProxyArg === undefined ? false : typeof trustProxyArg === 'string' && /^\d+$/.test(trustProxyArg) ? Number(trustProxyArg) : trustProxyArg;
 
-const rescan = remoteBase
+const scan = remoteBase
   ? () => scanRemote(remoteBase, argv.prefix as string)
   : () => scanDirectory(imagesDir as string, { center: argv.center as string | undefined, sharedDir: sharedDir as string | undefined });
 
@@ -143,7 +143,7 @@ logger.info(
   remoteBase ? { remoteBase, prefix: argv.prefix } : { imagesDir },
   remoteBase ? 'fetching manifest' : 'scanning'
 );
-const manifest = await rescan();
+const manifest = await scan();
 const centerFile = manifest.shared.center?.file ?? '(none)';
 logger.info(
   {
@@ -218,7 +218,6 @@ app = createApp({
   imagesDir,
   sharedDir,
   config,
-  rescan,
   getBundleJs: () => bundleJs,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
   readStyleCss: () => readFile(join(webDir, 'style.css'), 'utf8'),

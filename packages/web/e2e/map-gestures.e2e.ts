@@ -1,7 +1,7 @@
 /**
  * The browser smoke test: map rendering, the camera, pointer/touch gestures,
  * and search's rearrangement of the map. One of five files split out of the
- * original `smoke.e2e.mjs` (see `docs/implementation-plan.md`) along the
+ * original `smoke.e2e.mjs` (see `docs/pending_task_list.md`) along the
  * seams that file's own section comments already marked - this one covers
  * everything that isn't accessibility-plan work (that's `accessibility.e2e.ts`,
  * `keyboard-cursor.e2e.ts`, `shelf.e2e.ts`) or the catalog (`catalog.e2e.ts`).

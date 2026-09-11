@@ -2,7 +2,7 @@
 /**
  * Upload a corpus to Cloudflare R2: room images at every generated pyramid
  * level, the keyword/story sidecar, the CLIP embeddings blob, and the shared
- * center/generic tiles. See docs/implementation-plan.md's Hosting section.
+ * center/generic tiles. See docs/pending_task_list.md's Hosting section.
  *
  * R2 is S3-compatible, so this talks to it with @aws-sdk/client-s3 rather
  * than a bespoke client.

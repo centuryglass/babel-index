@@ -56,8 +56,6 @@ export interface CreateAppOptions {
   /** directory the shared tiles are served from, under /shared (local mode
    *  default: the images directory) */
   sharedDir?: string | null;
-  /** re-read the corpus (directory or remote manifest) */
-  rescan: () => Promise<Manifest>;
   /** resolved config (see packages/config); the defaults when absent */
   config?: ResolvedConfig;
   /** the built client, fixed for the process's lifetime */
@@ -96,7 +94,6 @@ export function createApp({
   manifest,
   imagesDir,
   sharedDir = imagesDir,
-  rescan,
   config,
   bundleJs = '',
   getBundleJs,
@@ -133,20 +130,10 @@ export function createApp({
     res.json({ ...manifest, favorites: favoritesInfo, config: clientConfig })
   );
 
-  // Which room files exist, for the favorite routes to validate against. Kept
-  // in step with `manifest` through the rescan below - a room that has left the
-  // corpus stops being favoritable the moment the scan says so.
-  let roomFiles = new Set(manifest.rooms.map((room) => room.file));
-
-  app.post('/api/rescan', async (_req, res, next) => {
-    try {
-      manifest = await rescan();
-      roomFiles = new Set(manifest.rooms.map((room) => room.file));
-      res.json({ count: manifest.count });
-    } catch (err) {
-      next(err);
-    }
-  });
+  // Which room files exist, for the favorite routes to validate against. Fixed
+  // for the process's lifetime, like the manifest it reads: the corpus is
+  // scanned once at startup (index.ts) and nothing re-reads it while serving.
+  const roomFiles = new Set(manifest.rooms.map((room) => room.file));
 
   /**
    * Search.

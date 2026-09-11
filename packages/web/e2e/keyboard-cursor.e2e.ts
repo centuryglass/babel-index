@@ -3,7 +3,7 @@
  * (docs/accessibility-plan.md phase C) - the keyboard cursor, arrow panning,
  * the boundary announcement, PageUp/PageDown zoom, and the `/`/`?` shortcuts.
  * One of five files split out of the original `smoke.e2e.mjs` (see
- * `docs/implementation-plan.md`); see `map-gestures.e2e.ts` for the shared
+ * `docs/pending_task_list.md`); see `map-gestures.e2e.ts` for the shared
  * header comment on why and how.
  *
  * `role="application"` on the canvas turns off a screen reader's browse-mode
