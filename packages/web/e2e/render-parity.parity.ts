@@ -262,7 +262,7 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
     const diff = await compareScene('searched', async (s) => {
       await recentre(s.page, s.flightMs);
       await s.page.evaluate(
-        () => (window as unknown as BabelDebug).__babelDebug.actions.search('hexagonal galleries')
+        () => (window as unknown as BabelDebug).__babelDebug.actions.search('clockwork')
       );
       // The first search on a cold machine downloads the CLIP text tower; the
       // rearrangement can lag well past a normal request, so settle generously.

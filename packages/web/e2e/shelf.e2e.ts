@@ -63,7 +63,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       // there is something to clear (SearchForm.tsx), so it takes typing a
       // query - not merely submitting one - to put it right after the input
       // and give it the first Tab; the shelf is the stop after that.
-      await page.locator('input[type=search]').fill('brass');
+      await page.locator('input[type=search]').fill('clockwork');
       await page.keyboard.press('Tab');
       assert.ok(
         await page.evaluate(() => document.activeElement?.classList.contains('search-clear')),
@@ -165,7 +165,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     const live = page.locator('[role=status]');
     await page.locator('button.search-trigger').click();
     await landed(page, session.flightMs);
-    await page.locator('input[type=search]').fill('brass');
+    await page.locator('input[type=search]').fill('clockwork');
     await page.locator('input[type=search]').press('Enter');
 
     await waitFor(

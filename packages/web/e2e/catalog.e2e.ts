@@ -116,7 +116,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     // held until the second has been fulfilled, so "out of order" is
     // guaranteed here rather than raced for.
     const slow = 'magma';
-    const fast = 'peaceful';
+    const fast = 'mosaic';
     let releasedBy = null;
     let release;
     const held = new Promise((r) => (release = r));
@@ -189,7 +189,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     try {
       const before = await page.locator('.catalog-count').textContent();
       const box = page.locator('.catalog-search input');
-      await box.fill('brass');
+      await box.fill('clockwork');
       await box.press('Enter');
 
       // Nothing rearranged, so the effect that normally speaks for a search

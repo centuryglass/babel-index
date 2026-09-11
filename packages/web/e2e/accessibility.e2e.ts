@@ -76,16 +76,16 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // which is exactly what made a flake here harder to diagnose than it
     // needed to be.
     try {
-      // "brass" is a confirmed hit in the sample corpus's own metadata - see
-      // `map-gestures.e2e.ts`'s keyword chips test, which reads real keywords
-      // off a real card. Anything that finds zero matches would test the empty
-      // state instead of this one, so a query known to match is not a
-      // convenience, it is the point. This search is also what several tests
-      // later in this file lean on staying active - see the live-region and
-      // reduced-motion tests below.
+      // "clockwork" is a confirmed keyword hit in the sample corpus's own
+      // metadata - three rooms carry it - so it is guaranteed to rank real
+      // results rather than fall back to CLIP alone. Anything that finds zero
+      // matches would test the empty state instead of this one, so a query
+      // known to match is not a convenience, it is the point. This search is
+      // also what several tests later in this file lean on staying active -
+      // see the live-region and reduced-motion tests below.
       await page.locator('button.search-trigger').click();
       await landed(page, session.flightMs);
-      await page.locator('input[type=search]').fill('brass');
+      await page.locator('input[type=search]').fill('clockwork');
       await page.locator('input[type=search]').press('Enter');
 
       const results = page.locator('.results-list');
@@ -322,8 +322,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     //
     // Matched case-insensitively on purpose: `.card-id` is styled
     // `text-transform: uppercase`, and Chrome folds that INTO the computed
-    // accessible name, so the reader is handed "ROOM 21 · 022.JPG" rather than
-    // the DOM's own "room 21 · 022.jpg". Harmless for a word that is still
+    // accessible name, so the reader is handed "ROOM 21 · 022.WEBP" rather than
+    // the DOM's own "room 21 · 022.webp". Harmless for a word that is still
     // pronounceable, worth knowing before naming anything after an acronym, and
     // it goes away when the card takes its label from `describeCell` (phase B)
     // rather than from a visually-transformed node.
@@ -356,7 +356,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // simply updated a div nothing was listening to. The hint must stay OUT of
     // the live region - a node that falls back to the instructions would read
     // them aloud again every time a status cleared. Leans on the ranked-listbox
-    // test's search ("brass") still being active.
+    // test's search ("clockwork") still being active.
     const live = page.locator('[role=status]');
     await live.waitFor({ timeout: 5000 });
     await waitFor(
@@ -448,15 +448,13 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test("a room's picture caption becomes real <img alt> text in the catalog and overlay, and nothing is invented when it is absent", async () => {
     const { page } = session;
-    // Phase E is a format change plus a fallback, and producing the field is
-    // the corpus generator's job upstream of this repo - so no corpus here
-    // ships one, and the placeholder sidecar in `assets/corpus-sample/`
-    // deliberately never will: a caption that describes nothing about the
-    // image it is attached to is exactly the padded, confident sentence the
-    // curation tools' own guidance says to write no caption instead of.
-    // Handing the PAGE a corpus that does carry one is the only honest way to
-    // see the whole path - fetch, join, describeRoom, `<img alt>` - actually
-    // reach the screen.
+    // Phase E is a format change plus a fallback. The sample corpus now ships a
+    // real caption for every room (the curation tools produce it upstream of
+    // this repo), so the whole path - fetch, join, describeRoom, `<img alt>` -
+    // can be seen end to end against the corpus exactly as it ships. The absent
+    // case - a corpus that carries no caption, where nothing may be invented in
+    // its place - no longer occurs in the shipped corpus, so it is produced by
+    // routing the sidecar's `alt` back out.
     const openCatalogHere = async () => {
       await page.locator('.panel .mode-toggle').click();
       await page.locator('.catalog').waitFor({ timeout: 5000 });
@@ -468,24 +466,76 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       await settled(page);
     };
 
-    // Nothing invented, with the corpus exactly as it ships. Row 0 is the
-    // center; row 1 is the first real room.
+    // Every caption the corpus actually ships, so the assertions can check "a
+    // real one reached the screen" without pinning which room lands in row 1 or
+    // what its exact text is - both free to move as the sample set does. Read it
+    // the way the app does - `api/manifest`, then `manifest.metadata.url` - so
+    // the relative urls resolve through `<base href>` exactly as they do in the
+    // client (see the base-path notes in AGENTS.md), rather than guessing where
+    // the sidecar is served from.
+    const captions = new Set(
+      Object.values(
+        await page.evaluate(async () => {
+          const manifest = await (await fetch('api/manifest')).json();
+          return (await fetch(manifest.metadata.url)).json();
+        })
+      )
+        .map((room) => room.alt)
+        .filter((alt) => typeof alt === 'string' && alt.length > 0)
+    );
+    assert.ok(captions.size > 0, 'the sample corpus must ship captions for this test to mean anything');
+
+    // As it ships: the room's own caption reaches the tag, unchanged. Row 0 is
+    // the center; row 1 is the first real room.
     await openCatalogHere();
     let row = page.locator('.catalog-row').nth(1);
-    assert.equal(await row.locator('.catalog-tile').getAttribute('alt'), '', 'no sidecar alt, no invented caption');
+    const shipped = await row.locator('.catalog-tile').getAttribute('alt');
+    assert.ok(
+      captions.has(shipped),
+      `the catalog tile must carry the room's shipped caption, got ${JSON.stringify(shipped)}`
+    );
 
     await row.locator('.catalog-tile-button').click();
     let overlay = page.locator('.overlay');
     await overlay.waitFor({ timeout: 5000 });
-    assert.equal(await overlay.locator('.overlay-tile').getAttribute('alt'), '');
+    assert.equal(
+      await overlay.locator('.overlay-tile').getAttribute('alt'),
+      shipped,
+      'the overlay must show the same caption as the row it opened from'
+    );
+    // And it stays a different thing from the story. The story is fiction about
+    // the room and the caption is a report of the image; a reader has to be able
+    // to tell which they are being told, so they are two nodes.
+    const story = await overlay.locator('.story').first().textContent();
+    assert.notEqual(story, shipped, 'the caption must not have replaced the story');
     await page.keyboard.press('Escape');
     await overlay.waitFor({ state: 'detached', timeout: 5000 });
     await closeCatalogHere();
 
-    const caption = 'A shelved wall in green shadow, one brass rail catching the lamp.';
+    // The one consumer with no `<img>` to put the caption on - the map canvas's
+    // own fallback content, read by a touch screen reader (accessibility-plan.md
+    // §4.2b) - still carries it as text.
+    const canvas = page.locator('canvas');
+    await canvas.focus();
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(session.flightMs + 200);
+    // `state: 'attached'`, not the default `'visible'` - canvas fallback content
+    // is never painted, so it can never satisfy Playwright's visibility check
+    // even though it is genuinely present in the tree.
+    await canvas.locator('.picture').waitFor({ state: 'attached', timeout: 5000 });
+    assert.ok(
+      captions.has(await canvas.locator('.picture').textContent()),
+      'the map fallback must carry the room\'s real caption'
+    );
+
+    // Absent: strip every caption back out, and nothing may be invented to fill
+    // the gap - the empty-alt case the shipped corpus no longer provides.
     await page.route('**/metadata.json', async (route) => {
       const sidecar = await (await route.fetch()).json();
-      for (const key of Object.keys(sidecar)) sidecar[key] = { ...sidecar[key], alt: caption };
+      for (const key of Object.keys(sidecar)) {
+        const { alt: _drop, ...rest } = sidecar[key];
+        sidecar[key] = rest;
+      }
       await route.fulfill({ json: sidecar });
     });
     try {
@@ -498,33 +548,15 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
       await openCatalogHere();
       row = page.locator('.catalog-row').nth(1);
-      assert.equal(await row.locator('.catalog-tile').getAttribute('alt'), caption);
+      assert.equal(await row.locator('.catalog-tile').getAttribute('alt'), '', 'no sidecar alt, no invented caption');
 
       await row.locator('.catalog-tile-button').click();
       overlay = page.locator('.overlay');
       await overlay.waitFor({ timeout: 5000 });
-      assert.equal(await overlay.locator('.overlay-tile').getAttribute('alt'), caption);
-      // And it stays a different thing from the story. The story is fiction
-      // about the room and the caption is a report of the image; a reader has
-      // to be able to tell which they are being told, so they are two nodes.
-      const story = await overlay.locator('.story').first().textContent();
-      assert.notEqual(story, caption, 'the caption must not have replaced the story');
+      assert.equal(await overlay.locator('.overlay-tile').getAttribute('alt'), '');
       await page.keyboard.press('Escape');
       await overlay.waitFor({ state: 'detached', timeout: 5000 });
       await closeCatalogHere();
-
-      // The one consumer with no `<img>` to put the caption on - the map
-      // canvas's own fallback content, read by a touch screen reader
-      // (accessibility-plan.md §4.2b) - still carries it as text.
-      const canvas = page.locator('canvas');
-      await canvas.focus();
-      await page.keyboard.press('Control+Home');
-      await page.waitForTimeout(session.flightMs + 200);
-      // `state: 'attached'`, not the default `'visible'` - canvas fallback
-      // content is never painted, so it can never satisfy Playwright's
-      // visibility check even though it is genuinely present in the tree.
-      await canvas.locator('.picture').waitFor({ state: 'attached', timeout: 5000 });
-      assert.equal(await canvas.locator('.picture').textContent(), caption);
     } finally {
       await page.unroute('**/metadata.json');
     }

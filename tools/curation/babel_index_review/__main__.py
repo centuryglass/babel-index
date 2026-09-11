@@ -22,6 +22,15 @@ def main() -> int:
             "is loaded and saved in full either way."
         ),
     )
+    parser.add_argument(
+        "--sample-update",
+        action="store_true",
+        help=(
+            "Add a 'Save to samples' button that copies the selected tile and "
+            "its metadata into assets/corpus-sample, for picking a representative "
+            "demo corpus by hand."
+        ),
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.dir):
@@ -29,7 +38,7 @@ def main() -> int:
         return 1
 
     app = QApplication(sys.argv)
-    window = ReviewWindow(args.dir, content_review=args.content_review)
+    window = ReviewWindow(args.dir, content_review=args.content_review, sample_update=args.sample_update)
     window.show()
     return app.exec()
 
