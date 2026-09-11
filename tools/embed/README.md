@@ -2,7 +2,7 @@
 
 Runs the CLIP **image** tower over a directory of room images, once, offline,
 and writes a static blob the browser ranks against at search time. This is the
-pipeline's `embed` stage (see `docs/implementation-plan.md` §4 and Phase 4).
+pipeline's `embed` stage (see `docs/pending_task_list.md` §4 and Phase 4).
 
 It is Node, not Python: it uses the same `@huggingface/transformers` CLIP model
 (`Xenova/clip-vit-base-patch32`) the demo server loads for the **text** tower, so

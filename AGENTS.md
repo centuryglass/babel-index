@@ -3,8 +3,8 @@
 Notes for coding agents working in this repo. Human-facing docs are
 [`README.md`](README.md) (how to run it), [`docs/concept.md`](docs/concept.md)
 (what it is meant to become), and
-[`docs/implementation-plan.md`](docs/implementation-plan.md) (how it gets
-there, and what is next).
+[`docs/pending_task_list.md`](docs/pending_task_list.md) (what is still
+to do).
 
 ## What this is
 
@@ -386,8 +386,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                      significant design decisions made during implementation.
                      A record of intent, not a spec - it is not kept in sync
                      with the code and should not be edited to match it.
-- `docs/implementation-plan.md`: TODO list, temporary holding place for
-                                 ongoing plans
+- `docs/pending_task_list.md`: What is still to do - open tasks, known bugs
+                               not yet chased down, and decisions deferred.
+                               Not a design doc: a task leaves by being done.
 - `docs/accessibility-plan.md`: Keyboard/screen reader plan, mostly complete.
 - `docs/keyboard-controls.md`: The spec for every key the map view handles,
                                state by state - tab order, focus targets, what
@@ -500,7 +501,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   same as any other cleanup a task turns up. Real investigation or design work
   - a race condition whose root cause isn't yet nailed down, a fix that
     touches code you weren't already changing - gets a dated entry in
-  `docs/implementation-plan.md` instead: what was observed, how to reproduce
+  `docs/pending_task_list.md` instead: what was observed, how to reproduce
   it, and what's already been ruled out, so the next pass starts from
   evidence rather than re-discovering the bug from scratch. Either way, the
   bug does not just get silently noticed and left. "Unrelated to what I was
@@ -508,7 +509,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   "Trivial" is about the fix, not the effort spent finding it - if closing
   it out needs more than one e2e run to confirm (a live-instrumented repro,
   several rounds of re-running a browser suite to chase a race), that is a
-  sign it belongs in `docs/implementation-plan.md`, not a same-pass fix -
+  sign it belongs in `docs/pending_task_list.md`, not a same-pass fix -
   unless the user has explicitly asked for exactly that investigation.
 
 ## Things that will bite you
@@ -1161,7 +1162,7 @@ step - see "Testing and CI".
   with `?touchdebug`.
 - **A `flyTo` fired while a rearrangement is still animating is silently
   swallowed** — confirmed by direct reproduction, not yet root-caused (see
-  `docs/implementation-plan.md`). The rearrangement's own camera control
+  `docs/pending_task_list.md`). The rearrangement's own camera control
   keeps driving x/y/zoom regardless, so a plain click-then-`landed()` on the
   'center' button can report a "settled" camera that never actually moved.
   `e2e/support.ts`'s `recentre()` is the robust form: it waits out any
@@ -1179,4 +1180,4 @@ step - see "Testing and CI".
 
 ## Next up
 
-See `docs/implementation-plan.md`
+See `docs/pending_task_list.md`

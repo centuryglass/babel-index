@@ -3,7 +3,7 @@
  * sweeps, the panel's accessible names, the card's focus handling, the live
  * region, reduced motion, and the sidecar's optional `alt` caption. One of
  * five files split out of the original `smoke.e2e.mjs` (see
- * `docs/implementation-plan.md`); see `map-gestures.e2e.ts` for the shared
+ * `docs/pending_task_list.md`); see `map-gestures.e2e.ts` for the shared
  * header comment on why and how. The map's own keyboard interface (phase C)
  * is `keyboard-cursor.e2e.ts`, and the center room's shelf (phase D) is
  * `shelf.e2e.ts`.

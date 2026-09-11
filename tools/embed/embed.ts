@@ -1,7 +1,7 @@
 /**
  * Compute CLIP image embeddings for a corpus of room images, offline.
  *
- * This is Phase 4's expensive half (docs/implementation-plan.md): the image
+ * This is Phase 4's expensive half (docs/pending_task_list.md): the image
  * tower runs here, once, and ships as a static blob the browser ranks against.
  * Only the text tower runs at request time, in the demo server's /api/search.
  *
