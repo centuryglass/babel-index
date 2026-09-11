@@ -993,10 +993,29 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // the markup: "a reorder" is bumping a seed AND asking for the next layout
   // change to animate, which is a fact about this file's machinery and not
   // something a presenter should have to know.
+  //
+  // A full reshuffle, not just a swap of `order`: it also rerolls `seed`, the
+  // same scatter `rescatter` reruns, so which cells are content slots at all
+  // changes along with which room lands in each - "reorder the library" reads
+  // as a promise to remix the whole shelf, not just the room-to-slot mapping
+  // on top of a scatter that never moves. `startRearrangement` already treats
+  // a combined layout+order change as one arrangement (a search does the same
+  // two things at once), so this needs no new animation path.
+  //
+  // A reshuffle this total also has to drop whatever the current arrangement
+  // was standing on: an active search's certainty profile no longer describes
+  // anything (clearing it is itself a rearrangement, exactly as clearing the
+  // box by hand is), and an active favorite sort is a placement input the new
+  // scatter would otherwise be laid out around - leaving either in place would
+  // make "reorder" reroll everything except the one thing the reader is
+  // looking at.
   const reorder = useCallback(() => {
     requestAnimation('');
     setOrderSeed((s) => s + 1);
-  }, [requestAnimation]);
+    setSeed((s) => s + 1);
+    setSortMode('relevance');
+    clearSearch();
+  }, [requestAnimation, clearSearch]);
   // Changing the sort is a RE-RANK, exactly like the reorder above it: it
   // swaps `order` and lets the sliding-tile animation carry the map from one
   // arrangement to the other. It must not rebuild the layout - only a search

@@ -389,13 +389,12 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
         `the drag must leave the center, got (${before.x}, ${before.y})`
       );
 
-      // "rescatter", not "reorder", and the difference is load-bearing: the
-      // ranked-listbox test's search is still active by the time this runs, so
-      // `order` is then `result.order` - the same array by reference no matter
-      // how often `orderSeed` is bumped - so the render effect's deps never
-      // change and "reorder" rearranges nothing at all. Rescatter bumps the
-      // layout seed, which rebuilds `layout` and always triggers a
-      // rearrangement. Written down because this test passed against a
+      // "rescatter", not "reorder": "reorder" now clears any active search as
+      // part of its own reshuffle, which would confound this test's own
+      // camera-didn't-move assertion with a second rearrangement it didn't
+      // ask for. Rescatter only bumps the layout seed, which rebuilds
+      // `layout` and always triggers a rearrangement on its own, with no
+      // search to clear. Written down because this test passed against a
       // deliberately broken app until the button was swapped.
       await page.getByRole('button', { name: 'rescatter' }).click();
       const after = await settled(page);
@@ -473,17 +472,14 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // the relative urls resolve through `<base href>` exactly as they do in the
     // client (see the base-path notes in AGENTS.md), rather than guessing where
     // the sidecar is served from.
+    const sidecar = (await page.evaluate(async () => {
+      const manifest = await (await fetch('api/manifest')).json();
+      return (await fetch(manifest.metadata.url)).json();
+    })) as Record<string, { alt?: unknown }>;
     const captions = new Set(
-      (
-        Object.values(
-          await page.evaluate(async () => {
-            const manifest = await (await fetch('api/manifest')).json();
-            return (await fetch(manifest.metadata.url)).json();
-          })
-        ) as { alt?: unknown }[]
-      )
+      Object.values(sidecar)
         .map((room) => room.alt)
-        .filter((alt) => typeof alt === 'string' && alt.length > 0)
+        .filter((alt): alt is string => typeof alt === 'string' && alt.length > 0)
     );
     assert.ok(captions.size > 0, 'the sample corpus must ship captions for this test to mean anything');
 
