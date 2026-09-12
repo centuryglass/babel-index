@@ -399,22 +399,23 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 }
 /*
   The card head sits on the dialog's dark cover, same as the catalog bar
-  sits on the dark backdrop - so its own text label and buttons take the
-  same paper chrome, not the light-on-dark chrome the rest of the app
-  used to use everywhere (AGENTS.md's "Paper-chrome pass").
+  sits on the dark backdrop - light-on-dark, like `.favorite-toggle`/
+  `.catalog-show` elsewhere. A paper fill was tried here (see git history)
+  and pulled the eye toward the frame instead of whatever it was framing -
+  a tile and story in `RoomOverlay`, the prose itself in the other three.
 */
 .card-id {
-  padding: 2px 6px; color: var(--paper-dim); font-size: 10px;
+  padding: 2px 6px; color: var(--dim); font-size: 10px;
   letter-spacing: 0.06em; text-transform: uppercase;
-  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 2px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 4px;
 }
-.card-id b { font-weight: 700; color: var(--paper-ink); }
+.card-id b { font-weight: 700; color: var(--ink); }
 .card-close {
   flex: none; width: 20px; height: 20px; padding: 0; line-height: 1;
-  font-size: 15px; color: var(--paper-ink); background: var(--paper);
-  border: 1px solid var(--paper-edge); border-radius: 3px; cursor: pointer;
+  font-size: 15px; color: var(--ink); background: rgba(var(--accent-rgb),0.08);
+  border: 1px solid var(--edge); border-radius: 4px; cursor: pointer;
 }
-.card-close:hover { background: var(--paper-hi); }
+.card-close:hover { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
 /*
   The favorite control, in the overlay and in a catalog row's head - one
   appearance in both, since the thing it reports (this room's global
@@ -434,8 +435,6 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   itself. On a narrow display the link swaps its full phrase for the short
   relabel, which its accessible name keeps regardless.
 */
-.room-head .card-id { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.room-head .favorite { margin: 0; flex: none; }
 .room-head-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
 .room-head .catalog-show { flex: none; }
 .catalog-show-short { display: none; }
@@ -453,19 +452,29 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 .favorite-toggle.on { color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
 .favorite-count { font-variant-numeric: tabular-nums; }
 /*
-  In the room overlay's head, the favorite toggle and the "show in the
-  catalog" link sit directly on the dark cover, not on a `.paper-sheet`
-  card - unlike the same two classes in a catalog row, which already read
-  as a gold wash over cream for free (the row's card remaps --dim/--ink/
-  --edge to paper tones under them). These need a real paper fill instead.
+  The title and the favorite count are one fact about the room (what it is,
+  how loved it is), not two separate controls, so they share one chip
+  instead of each carrying its own button chrome - a rectangle and a pill
+  side by side read as two buttons, and the title isn't one (it does
+  nothing on click). The favorite toggle nested inside keeps its own hit
+  target and hover/on color, just without a second background/border -
+  `.card-id`'s own chip is stripped out here for the same reason.
 */
-.card-head .favorite-toggle {
-  color: var(--paper-ink); background: var(--paper); border-color: var(--paper-edge);
+.room-id {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 4px 8px; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; flex: 0 1 auto;
 }
-.card-head .favorite-toggle:hover { background: var(--paper-hi); border-color: var(--paper-accent); }
-.card-head .favorite-toggle.on { color: var(--paper-accent); background: var(--paper-hi); border-color: var(--paper-accent); }
-.card-head .catalog-show { color: var(--paper-ink); background: var(--paper); border-color: var(--paper-edge); }
-.card-head .catalog-show:hover { background: var(--paper-hi); }
+.room-id .card-id {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0; background: none; border: none; border-radius: 0;
+}
+.room-id .favorite { margin: 0; flex: none; padding-left: 6px; border-left: 1px solid var(--edge); }
+.room-id .favorite-toggle {
+  padding: 0; background: none; border: none; border-radius: 0;
+}
+.room-id .favorite-toggle:hover { background: none; }
+.room-id .favorite-toggle.on { background: none; }
 /*
   Sized to its own text, like every other catalog-bar control - the
   panel's `button { flex: 1 }` would otherwise stretch the select across
@@ -983,7 +992,7 @@ mark {
   overlay rather than changed at the source: `.card-id` still needs to
   read as secondary next to a room's title in `RoomOverlay`.
 */
-.help-overlay .card-id { color: var(--paper-ink); }
+.help-overlay .card-id { color: var(--ink); }
 .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
 .help-body p:last-child { margin-bottom: 0; }
 .help-keys {
@@ -1091,9 +1100,8 @@ mark {
 /*
   No title bar - the open book names itself. The lone close button keeps
   to the corner without the divider a titled head draws, but still needs
-  clearance below it: `.card-close` is a real paper square now (the
-  paper-chrome pass), not a bare glyph, so a zero margin here used to be
-  invisible and now would sit its border flush against the book.
+  clearance below it: `.card-close` is a bordered square, not a bare
+  glyph, so a zero margin here would sit its border flush against the book.
 */
 .statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 12px; }
 .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--paper-ink); }

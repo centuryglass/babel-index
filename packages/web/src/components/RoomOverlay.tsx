@@ -300,10 +300,12 @@ export function RoomOverlay({
           name regardless.
         */}
         <div className="card-head room-head">
-          <span className="card-id">
-            {'generic' in room ? 'a Babel shelf' : <b>{roomTitle(entry, room.id)}</b>}
-          </span>
-          {favorite && <FavoriteToggle favorite={favorite} />}
+          <div className="room-id">
+            <span className="card-id">
+              {'generic' in room ? 'a Babel shelf' : <b>{roomTitle(entry, room.id)}</b>}
+            </span>
+            {favorite && <FavoriteToggle favorite={favorite} />}
+          </div>
           <div className="room-head-end">
             {view && (
               <button type="button" className="catalog-show" onClick={view.onClick} aria-label={view.label}>
