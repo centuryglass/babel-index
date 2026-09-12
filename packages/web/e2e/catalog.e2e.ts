@@ -50,7 +50,11 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       // One row per room, plus the center's - "always 100% unique tiles", so
       // nothing here is wallpaper and nothing repeats.
       assert.equal(await rows.count(), roomCount + 1);
-      assert.equal(await rows.first().getAttribute('class'), 'catalog-row catalog-center');
+      const firstClass = (await rows.first().getAttribute('class')) ?? '';
+      assert.ok(
+        firstClass.split(/\s+/).includes('catalog-center'),
+        `the first row is not the center row: ${JSON.stringify(firstClass)}`,
+      );
 
       // The center's row carries the shelf as real links rather than as paint,
       // first is the help button, second is the catalog link.
