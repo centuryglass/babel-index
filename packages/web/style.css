@@ -959,13 +959,20 @@ mark {
 */
 .overlay-body .story { display: block; overflow: visible; white-space: pre-line; }
 /*
-  Default: stacked, same as always - a short story sits under the tile
-  with nothing clipped, exactly as before this pass. `.columns` is
-  added by `RoomOverlay`'s `decideColumns`, never by a media query:
-  it measures whether the stacked pair actually overflows the scrim
-  before switching layouts, so a story that already fits never moves.
+  One paper sheet holds the tile and the text together, stacked or split
+  alike - a picture floating on the dark cover with a separate cream card
+  under or beside it read as two things laid on top of each other, not
+  one page. `.overlay-body` below still carries `.paper-sheet` for its
+  ink color variables, but its own background/border/shadow are switched
+  off (`.overlay-body.paper-sheet` further down) so it never draws a
+  second, redundant card nested inside this one.
 */
-.overlay-columns { display: block; }
+.overlay-columns {
+  display: block; padding: 22px 24px;
+  background: linear-gradient(158deg, var(--paper-hi), var(--paper));
+  border: 1px solid var(--paper-edge); border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+}
 /*
   Hug the content instead of always claiming a fixed width - `fit-
   content` so a small generic tile's dialog doesn't open with a wide
@@ -979,24 +986,16 @@ mark {
   `align-self: stretch` below) fills to match it, so the page is always the
   image's size rather than resizing to its own story. A short story sits at the
   top of a mostly-empty page - commonplace enough to read as natural, and
-  steadier than a page whose height changes per room. flex-start on the
-  container, not stretch: only the body stretches, or the tile image, which has
-  no set height, would stretch too and lose its aspect ratio.
+  steadier than a page whose height changes per room. Only the body stretches
+  on the cross axis; the tile image, which has no set height, would stretch
+  too and lose its aspect ratio if it did. `align-items: center` (rather than
+  flex-start) is what centers a tile shorter than the text column instead of
+  pinning it to the top of the row - `.columns` is added by `RoomOverlay`'s
+  `decideColumns`, never by a media query: it measures whether the stacked
+  pair actually overflows the scrim before switching layouts, so a story that
+  already fits never moves.
 */
-/*
-  The paper is one sheet under both the tile and the text, not a card
-  floating beside a picture on the dark cover - `.overlay-body` below still
-  carries `.paper-sheet` for its ink color variables, but its own
-  background/border/shadow are switched off here so the two don't draw as
-  two stacked cards. Padding moves to this container so the tile sits
-  inset from the paper's edge the same way the text does.
-*/
-.overlay-columns.columns {
-  display: flex; align-items: flex-start; gap: 0; padding: 22px 24px;
-  background: linear-gradient(158deg, var(--paper-hi), var(--paper));
-  border: 1px solid var(--paper-edge); border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
-}
+.overlay-columns.columns { display: flex; align-items: center; gap: 0; }
 /*
   The tile keeps its own natural size (`flex-basis: auto` reads that
   from the image itself) rather than stretching to fill whatever the
@@ -1014,9 +1013,21 @@ mark {
 */
 .overlay-columns.columns .overlay-body {
   flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
-  padding: 0 0 0 24px; margin: 0; background: none; box-shadow: none;
-  border: none; border-left: 1px solid var(--edge); border-radius: 0;
+  padding: 0 0 0 24px; border-left: 1px solid var(--edge);
 }
+/*
+  Strips `.paper-sheet`'s own background/border/shadow/padding - the
+  shared sheet above (`.overlay-columns`) already draws the card, so this
+  would otherwise nest a second one under the tile. What's left, the color
+  variables `.paper-sheet` remaps, still cascades to everything inside.
+*/
+.overlay-body.paper-sheet { background: none; border: none; box-shadow: none; border-radius: 0; padding: 0; }
+/*
+  Stacked only: the one divider between the tile and the text becomes a
+  rule across the page instead of down its side, in the gap the tile's
+  own bottom margin already opens.
+*/
+.overlay-columns:not(.columns) .overlay-body { border-top: 1px solid var(--edge); padding-top: 14px; }
 /*
   Split view only: the tile is usually taller than the text needs to be, so
   `RoomOverlay`'s `measureScale` drives this up past 1 until the text fills
