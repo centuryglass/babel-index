@@ -180,11 +180,12 @@ export function describeCatalog({ total, query = '', note = '' }: DescribeCatalo
  * nothing because nothing is favorited yet looks identical on the map, and
  * this is the only thing that can say so.
  */
-export function describeSort(mode: 'relevance' | 'mine' | 'count', mineCount: number): string {
+export function describeSort(mode: 'relevance' | 'mine' | 'count' | 'random', mineCount: number): string {
   if (mode === 'mine')
     return mineCount
       ? `sorted by your favorites — ${mineCount} ${mineCount === 1 ? 'room' : 'rooms'} first`
       : 'sorted by your favorites — you have not favorited any rooms yet';
   if (mode === 'count') return 'sorted by how often each room has been favorited';
+  if (mode === 'random') return 'shuffled into a new random order';
   return 'sorted by search ranking again';
 }

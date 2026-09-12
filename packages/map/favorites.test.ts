@@ -130,6 +130,28 @@ test('favoriteSort certainty is monotone non-increasing with rank', () => {
   }
 });
 
+test('random mode is a permutation, seed-stable, and differs across seeds', () => {
+  const base = [0, 1, 2, 3, 4, 5, 6, 7];
+  const input = (randomSeed: number) =>
+    ({ mode: 'random', files, counts: {}, mine: new Set<string>(), randomSeed }) as const;
+  const a = favoriteOrder(base, input(1));
+  assert.deepEqual([...a].sort((x, y) => x - y), base, 'still every id, just reordered');
+  assert.deepEqual(a, favoriteOrder(base, input(1)), 'same seed reproduces the same order');
+  assert.notDeepEqual(a, favoriteOrder(base, input(2)), 'a different seed gives a different order');
+});
+
+test('favoriteSort in random mode shuffles order but passes certainty through untouched', () => {
+  const certainty = new Float32Array([0.9, 0.4, 0.1, 0]);
+  const base = [3, 1, 0, 2];
+  const result = favoriteSort(
+    base,
+    { mode: 'random', files, counts: {}, mine: new Set(), randomSeed: 5 },
+    { order: base, certainty }
+  );
+  assert.equal(result.certainty, certainty, 'a shuffle carries no confidence claim, so certainty passes by identity');
+  assert.deepEqual([...result.order].sort((a, b) => a - b), base.slice().sort((a, b) => a - b));
+});
+
 test('favoriteSort with count mode boosts every room with a nonzero count', () => {
   const base = [0, 1, 2, 3];
   const result = favoriteSort(base, {

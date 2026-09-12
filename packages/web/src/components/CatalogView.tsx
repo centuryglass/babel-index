@@ -627,44 +627,55 @@ export function CatalogView({
                   The order is named here and again by the sort select beside
                   it, and on a narrow bar those two facts cost a whole line of
                   a phone's screen between them. So the clause goes only where
-                  the select is there to carry it - a deployment without
-                  favorites has no select, and then this is the only thing
-                  that says what order the list is in.
+                  the select is there to carry it.
                 */}
-                {!(narrow && favorites) && <>, in alphabetical order</>}
+                {!narrow && (
+                  <>
+                    ,{' '}
+                    {sortMode === 'mine'
+                      ? 'sorted by your favorites'
+                      : sortMode === 'count'
+                        ? 'sorted by favorite count'
+                        : sortMode === 'random'
+                          ? 'in random order'
+                          : 'in alphabetical order'}
+                  </>
+                )}
               </>
             )}
             {note && <span className="catalog-note"> · {note}</span>}
           </p>
 
           {/*
-            A select rather than the paging radiogroup's shape: these are three
+            A select rather than the paging radiogroup's shape: these are
             mutually exclusive orderings of the same list, one of which is the
             default, which is exactly what a select says natively - and unlike
             paging, a reader is choosing WHAT they are looking at rather than
-            how it advances.
+            how it advances. Shown regardless of `favorites` - 'random' needs
+            no favorite data, only the 'mine'/'count' options do.
 
             Sorting is a re-rank, not a search: it moves rooms within the
             ranking already in force (see `favoriteOrder`), so a term stays
             searched and the row a room sits in stays the row the map would
-            fly to.
+            fly to. Picking 'random' while a search is running clears it
+            first (`main.tsx`'s `changeSort`) - reshuffling underneath a
+            search's own order would otherwise look like the sort did nothing.
           */}
-          {favorites && (
-            <label className="catalog-sort">
-              {/*
-                The label is the select's accessible name, so a narrow bar
-                hides it from sight rather than dropping it - `display: none`
-                would take the name with it and leave a select announcing only
-                its own value.
-              */}
-              <span className={narrow ? 'sr-only' : 'catalog-sort-label'}>sort</span>
-              <select value={sortMode} onChange={(e) => onSortMode(e.target.value as SortMode)}>
-                <option value="relevance">{result?.term ? 'by ranking' : 'alphabetically'}</option>
-                <option value="mine">my favorites first</option>
-                <option value="count">most favorited</option>
-              </select>
-            </label>
-          )}
+          <label className="catalog-sort">
+            {/*
+              The label is the select's accessible name, so a narrow bar
+              hides it from sight rather than dropping it - `display: none`
+              would take the name with it and leave a select announcing only
+              its own value.
+            */}
+            <span className={narrow ? 'sr-only' : 'catalog-sort-label'}>sort</span>
+            <select value={sortMode} onChange={(e) => onSortMode(e.target.value as SortMode)}>
+              <option value="relevance">{result?.term ? 'by ranking' : 'alphabetically'}</option>
+              {favorites && <option value="mine">my favorites first</option>}
+              {favorites && <option value="count">most favorited</option>}
+              <option value="random">random</option>
+            </select>
+          </label>
 
           {/*
             A radiogroup rather than two buttons: these are two states of one
