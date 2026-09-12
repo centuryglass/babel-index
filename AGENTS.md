@@ -217,6 +217,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     settings, blocked tags, the reader's own favorites)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
+    * `nativeZoom.ts`: Resets native page zoom the instant the last
+                       `.overlay-scrim`/`.catalog` element unmounts, since
+                       that is exactly when style.css's `html:has(...)` rule
+                       locks touch-action back to `none` on the map - see the
+                       module's own comment
     * `perfProbe.ts`: Rearrangement performance instrumentation behind
                       `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
                       store) - `docs/performance-research.md` §2's "measure
