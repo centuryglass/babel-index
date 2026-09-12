@@ -112,6 +112,15 @@ test('a row never gets shorter than the column of text beside the tile', () => {
   assert.equal(rowHeight(120, 22, 160), 182);
 });
 
+test('the thumbnail mat counts toward the row, on both sides', () => {
+  // The mat sits outside the image on every edge, so it costs the row two
+  // mats' worth of height, not one - matching a CSS `border` rather than a
+  // single-sided margin.
+  assert.equal(rowHeight(320, 0, 0, 6), tileHeight(320) + 12);
+  // Still capped by the text column when the text needs more than tile+mat.
+  assert.equal(rowHeight(120, 0, tileHeight(120) + 100, 6), tileHeight(120) + 100);
+});
+
 test('a thumbnail asks for a level that can actually cover it', () => {
   for (const cssWidth of [80, 160, 320, 640, 1024]) {
     for (const dpr of [1, 2, 3]) {

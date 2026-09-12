@@ -153,9 +153,10 @@ export function tileHeight(thumbWidth: number): number {
  * @param thumbWidth css pixels
  * @param padding the row's vertical padding, both halves
  * @param textMin what the text column needs at minimum
+ * @param matPad the thumbnail's paper mat, one side - see `CatalogView`'s `MAT_PAD`
  */
-export function rowHeight(thumbWidth: number, padding = 0, textMin = 0): number {
-  return Math.max(tileHeight(thumbWidth), Math.round(textMin)) + padding;
+export function rowHeight(thumbWidth: number, padding = 0, textMin = 0, matPad = 0): number {
+  return Math.max(tileHeight(thumbWidth) + 2 * matPad, Math.round(textMin)) + padding;
 }
 
 /**
