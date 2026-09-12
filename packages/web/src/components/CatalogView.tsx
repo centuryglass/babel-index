@@ -816,6 +816,9 @@ export function CatalogView({
 
         {paging === 'pages' && (
           <nav className="pager" aria-label="catalog pages">
+            <button disabled={active === 0} onClick={() => setActive(0)}>
+              « first
+            </button>
             <button disabled={active === 0} onClick={() => setActive((p) => Math.max(0, p - 1))}>
               ← previous
             </button>
@@ -827,6 +830,9 @@ export function CatalogView({
               onClick={() => setActive((p) => Math.min(pages - 1, p + 1))}
             >
               next →
+            </button>
+            <button disabled={active >= pages - 1} onClick={() => setActive(pages - 1)}>
+              last »
             </button>
           </nav>
         )}
