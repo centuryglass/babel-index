@@ -45,6 +45,7 @@ import { distillToggleAtPoint } from './lib/distillToggle.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
+import { watchZoomUnlock } from './lib/nativeZoom.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
 import { loadLoadingAnimation, type LoadingAnimation } from './lib/loadingAnimation.ts';
@@ -355,6 +356,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // See lib/nativeZoom.ts: without this, a reader who pinch-zooms a room
+  // overlay's tile and then closes the overlay is left with the whole page
+  // (map included) stuck zoomed in, with no gesture left to zoom back out -
+  // touch-action locks the map to `none` again the instant the overlay's
+  // gone.
+  useEffect(() => {
+    const root = document.getElementById('root');
+    return root ? watchZoomUnlock(root) : undefined;
   }, []);
 
   // Where a room's tile lives, at a level. `createTileLocator` is the full
