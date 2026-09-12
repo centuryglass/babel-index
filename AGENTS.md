@@ -1038,9 +1038,30 @@ code, not a standing invariant.
     every wide row whose story had already finished. `CatalogRow` compares the
     bottom of the card's in-flow children against the edge the card clips at,
     skipping the float and the absolutely positioned affordances.
-  The center room keeps the old two-column shape: its art carries addressable
-  hotspots (`CENTER_BOOK_PATH`, the distill toggle) positioned against the
-  image's own box, and a float moves that box out from under them.
+  The center room has its own layout (`.catalog-center` in style.css): ONE
+  shared column grid at every width above a phone, and a single stacked column
+  on a phone (`.ultra-narrow`, which also carries `.narrow`, so its rules
+  reassign every item off the shared grid's span vars via `grid-area`). On the
+  shared grid the spines wrap around the picture AND stay aligned above and
+  below it: the picture is a grid item spanning `--pic-cols` columns and
+  `--pic-rows` rows of the shelf's own column grid, the title and index-shelf
+  line take the columns to its right, and the spines auto-flow into every
+  remaining cell - beside the picture, then full width beneath it, all on one
+  set of column lines. A wide display just fits more columns (more spines
+  beside the picture before any wrap); the layout is identical. A float cannot
+  do this: its beside run starts at the picture's edge and its below run at the
+  card's left, two grids that do not line up. The spans are fitted in JS
+  (`CatalogView`'s layout effect) from the grid's own RESOLVED track sizes,
+  and `--pic-cols` always rounds UP - the cover picture may be larger than the
+  spines but never snapped smaller than its natural width. The shelf's wrapper
+  is dissolved with `display: contents` so each spine is its own grid item
+  rather than one rigid box beside the picture. The picture's hotspots
+  (`CENTER_BOOK_PATH`, the distill toggle) are positioned as FRACTIONS of the
+  thumbnail (the book's SVG fills it; the distill toggle is `iconSize /
+  BASE_TILE` of it), so being sized by the grid never knocks them off the art.
+  The card carries a 7px top margin (its one exterior gap) so it does not butt
+  against the top of the list - matching the gap a room row's top padding
+  leaves beneath it.
 - **What a row cannot show, it counts - it never just stops.** A fixed-height
   row cannot promise a room's keywords fit: no reserve can, at an arbitrary
   width with arbitrary keyword lengths. So `chipLines` sizes the chip box from

@@ -487,11 +487,11 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 .catalog-sort {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px; font-size: 11px;
-  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 4px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 4px;
 }
-.catalog-sort-label { color: var(--paper-dim); }
+.catalog-sort-label { color: var(--dim); }
 .catalog-sort select {
-  font: inherit; font-size: 11px; color: var(--paper-ink); cursor: pointer;
+  font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
   background: none; border: none; padding: 0; margin: 0;
 }
 /*
@@ -500,10 +500,10 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   chrome a control gets: nothing inside it is interactive.
 */
 .pager-count {
-  padding: 2px 6px; color: var(--paper-dim); font-size: 11px;
-  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 2px;
+  padding: 2px 6px; color: var(--dim); font-size: 11px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 2px;
 }
-.pager-count b { color: var(--paper-ink); font-variant-numeric: tabular-nums; }
+.pager-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 /*
   A keyword too long for its column ellipsises rather than being sliced.
@@ -645,8 +645,8 @@ mark {
 */
 .catalog-count {
   flex: 0 1 auto; margin: 0 auto 0 0; padding: 2px 6px; overflow-wrap: anywhere;
-  color: var(--paper-dim); font-size: 11px;
-  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 2px;
+  color: var(--dim); font-size: 11px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 2px;
 }
 /*
   The count, the sort and the paging control fit on one line at this
@@ -665,8 +665,8 @@ mark {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .catalog.narrow .paging button { padding: 4px 7px; }
-.catalog-count b { color: var(--paper-ink); font-variant-numeric: tabular-nums; }
-.catalog-note { color: var(--paper-dim); }
+.catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.catalog-note { color: var(--dim); }
 
 .paging { display: flex; gap: 4px; }
 /*
@@ -676,21 +676,24 @@ mark {
 */
 .catalog .mode-toggle, .paging button, .pager button { flex: 0 0 auto; }
 /*
-  Paper chrome: these three sit directly on the dark bar/backdrop rather
-  than on a `.paper-sheet` card, so they need a real paper fill to read as
-  paper, not the gold wash a card would tint. `.catalog-show` is excluded -
-  it lives inside a room row's `.paper-sheet` card already and keeps the
-  gold-wash-over-cream look that gets it for free (see the rule below it).
+  Light-on-dark, like `.card-id`/`.card-close` in a dialog head (see git
+  history for the paper-chrome version this replaced) - these three sit
+  directly on the dark bar/backdrop, same as that chrome does on a dialog's
+  dark cover. `.catalog-show` is excluded - it lives inside a room row's
+  `.paper-sheet` card already and keeps the gold-wash-over-cream look that
+  gets it for free (see the rule below it).
 */
 .paging button, .mode-toggle, .pager button {
-  font: inherit; font-size: 11px; color: var(--paper-ink); cursor: pointer;
-  background: var(--paper); border: 1px solid var(--paper-edge);
+  font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 4px 9px;
 }
-.paging button:hover, .mode-toggle:hover, .pager button:hover { background: var(--paper-hi); }
+.paging button:hover, .mode-toggle:hover, .pager button:hover {
+  background: rgba(var(--accent-rgb),0.22); border-color: var(--accent);
+}
 .paging button.on {
-  background: var(--paper-hi); border-color: var(--paper-accent);
-  box-shadow: inset 0 0 0 1px var(--paper-accent);
+  color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .catalog-show {
   font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
@@ -704,11 +707,11 @@ mark {
   across the row and shoves the toggle onto the next line.
 */
 .catalog .forget {
-  width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--paper-ink);
-  cursor: pointer; background: var(--paper); border: 1px solid var(--paper-edge);
+  width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--ink);
+  cursor: pointer; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 4px 9px;
 }
-.catalog .forget:hover { background: var(--paper-hi); }
+.catalog .forget:hover { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
 
 .catalog-scroll { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
 .catalog-list { list-style: none; margin: 0; padding: 0; }
@@ -818,7 +821,7 @@ mark {
   one thumbnail that needs a positioning parent at all.
 */
 .catalog-tile-wrap {
-  position: relative; flex: 0 0 auto; line-height: 0;
+  position: relative; line-height: 0;
   background: var(--paper); border: var(--catalog-mat, 0px) solid var(--paper);
   border-radius: 3px;
 }
@@ -850,14 +853,19 @@ mark {
  */
 .catalog-center-book:hover, .catalog-distill-toggle:hover { background: none; }
 /*
- * The distill toggle on the catalog's center-row thumbnail - positioned
- * with plain pixels (inline `style`, computed once from
- * `distillIconScreenRect`) rather than percentages, since it is
- * anchored to the tile's own corner and never moves.
+ * The distill toggle on the catalog's center-row thumbnail - anchored to the
+ * tile's bottom right corner and sized as a FRACTION of the thumbnail
+ * (`--distill-w`/`--distill-h`, `iconSize / BASE_TILE` from CatalogView), not
+ * a pixel rect. The map's canvas overlay scales this icon by the tile's own
+ * size, so as a share of the tile it is constant - percentages let the
+ * picture be sized by the center-row grid (below) with no pixel rect to keep
+ * in step. Both vars are `0` until the `<img>` decodes, so the button has no
+ * footprint before then.
  */
 .catalog-distill-toggle {
-  position: absolute; margin: 0; padding: 0; border: none;
+  position: absolute; right: 0; bottom: 0; margin: 0; padding: 0; border: none;
   background: none; cursor: pointer;
+  width: var(--distill-w, 0); height: var(--distill-h, 0);
 }
 .catalog-distill-toggle img { display: block; width: 100%; height: 100%; }
 .catalog-distill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -1243,7 +1251,8 @@ mark {
   shrinking to its own story and letting the dark padding claim the leftover.
   The row stays fixed-height (the spacer arithmetic rests on that); this only
   changes what fills it. The self-sizing center row (`.catalog-center`) is
-  unaffected - its body is already its tallest child, so stretch is a no-op there.
+  unaffected - its body is unwrapped with `display: contents` there (see
+  "The center room's row" below), so this box never exists to stretch.
 */
 .catalog-body { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
 /*
@@ -1439,8 +1448,107 @@ mark {
   the scroll arithmetic takes this row's measured height as its lead.
 */
 .catalog-center {
-  height: auto; min-height: var(--catalog-row); align-items: flex-start;
+  height: auto; min-height: var(--catalog-row);
 }
+/*
+  The picture, the title, the index-shelf line and the shelf's spines all
+  live on ONE column grid, at every width above a phone, so the spine columns
+  beside the picture and the columns beneath it land on the same grid lines -
+  the alignment two independent runs (beside starting at the picture's edge,
+  below at the card's left) could never promise. `.paper-sheet` is on the row
+  itself so one cream card holds all of it, and `.catalog-body` is unwrapped
+  with `display: contents` so its title/sub/shelf become grid items of the
+  row directly. The picture is a grid item spanning `--pic-cols` columns and
+  `--pic-rows` rows (CatalogView's layout effect fits both from the grid's own
+  resolved tracks, always rounding the columns UP so the cover picture is
+  never snapped smaller than its natural width); the title and index-shelf
+  line take the columns to its right; and the spines auto-flow into every cell
+  the three leave - filling the columns beside the picture top to bottom, then
+  the full width once past its bottom edge. A wide display simply fits more
+  columns, so more spines sit beside the picture before any wrap below; the
+  layout is the same. `--shelf-col` is each column's minimum and `1fr`
+  stretches them to fill, so the columns stay uniform ("identical spines, not
+  rubble") and every one aligns. Tab order follows DOM order, not the grid's
+  visual placement.
+
+  The margin restates the 16px gutter `.catalog-row`'s own padding gives every
+  room row (grid needs its own padding, so the row padding is overridden and
+  the horizontal inset has to come back as a margin). The 7px TOP is the
+  card's one exterior gap: without it the sheet butts against the top of the
+  list while every gap below is a strip of backdrop, so it matches the 7px a
+  room row's top padding leaves between this card and the first one under it
+  (`.catalog-row`'s `padding: 7px 16px`). Bottom stays 0 - that gap is the
+  next row's own top padding.
+*/
+.catalog-center.paper-sheet {
+  display: grid; margin: 7px 16px 0; padding: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--shelf-col, 12ch), 1fr));
+  grid-auto-rows: 24px; column-gap: 4px; row-gap: 4px;
+  align-content: start;
+}
+.catalog-center .catalog-body { display: contents; }
+.catalog-center .catalog-tile-wrap {
+  grid-column: 1 / span var(--pic-cols, 2);
+  grid-row: 1 / span var(--pic-rows, 4);
+  align-self: start;
+}
+.catalog-center .catalog-tile { width: 100%; height: auto; }
+/*
+  The title and the index-shelf line sit in the columns to the right of the
+  picture (`--pic-next` is the grid line just past it); the spines flow in
+  beneath them.
+*/
+.catalog-center .catalog-name {
+  grid-column: var(--pic-next, 3) / -1;
+  grid-row: 1 / span var(--title-rows, 1);
+  margin: 0; align-self: center;
+}
+.catalog-center .catalog-sub {
+  grid-column: var(--pic-next, 3) / -1;
+  grid-row: var(--sub-start, 2) / span var(--sub-rows, 1);
+  margin: 0; align-self: center;
+}
+/*
+  The shelf's wrapper is dissolved (`display: contents`) so each spine is a
+  grid item of the row directly, auto-placed into the cells the picture and
+  the two text lines leave. A surviving wrapper box would be one grid item
+  instead, sitting beside the picture as a single rigid column.
+  `min-width: 0` lets a long title ellipsise to its track instead of a grid
+  item's default `min-width: auto` widening the whole column to fit it.
+*/
+.catalog-center .shelf-links { display: contents; }
+.catalog-center .shelf-link { width: auto; margin: 0; min-width: 0; }
+/* Narrow only tightens the card's padding; the shared grid above is unchanged. */
+.catalog.narrow:not(.ultra-narrow) .catalog-center.paper-sheet { padding: 12px; }
+/*
+  Below `ULTRA_NARROW_PX` there is no width left to share between the picture
+  and a text column at all - see the equivalent room-row shape in
+  `CatalogView.tsx`. The shared grid collapses to a single stacked column
+  (named areas, `grid-area` reassigning every item off the span vars the grid
+  above set): the title moves above the picture since a caption reads before
+  the thing it names, the picture goes full width, the index-shelf line sits
+  between it and the shelf it describes, and the shelf goes back to its own
+  two-column scrolling box (`.shelf-links` below) - a phone has no room to
+  wrap spines around the picture. `grid-auto-rows: auto` undoes the shared
+  grid's fixed row height so each stacked block takes the height it needs.
+*/
+.catalog.ultra-narrow .catalog-center.paper-sheet {
+  padding: 16px;
+  grid-template-columns: 1fr;
+  grid-auto-rows: auto;
+  grid-template-areas:
+    "name"
+    "tile"
+    "sub"
+    "shelf";
+}
+.catalog.ultra-narrow .catalog-center .catalog-tile-wrap { grid-area: tile; align-self: stretch; }
+.catalog.ultra-narrow .catalog-center .catalog-name { grid-area: name; }
+.catalog.ultra-narrow .catalog-center .catalog-sub { grid-area: sub; }
+.catalog.ultra-narrow .catalog-center .shelf-links {
+  grid-area: shelf; display: grid; max-height: 22vh; overflow-y: auto;
+}
+.catalog.ultra-narrow .catalog-center .shelf-link { min-width: 0; }
 /*
   A GRID of equal cells, not a wrapped row of pills sized to their own
   text. Forty tags at forty different widths read as rubble; the wall this
@@ -1465,13 +1573,16 @@ mark {
   max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
 }
 /*
-  And a much harder cap on a phone, where 42vh of shelf plus the tile
-  above it is most of the screen and a reader arrives at a wall of
-  remembered searches rather than at the library. The shelf scrolls, and
-  it is ordered newest first, so what a lower cap costs is the oldest
-  titles' visibility - not their reachability.
+  A much harder cap on a true phone (`.catalog.ultra-narrow .catalog-center
+  .shelf-links` above), where 42vh of shelf plus the picture above it is
+  most of the screen and a reader arrives at a wall of remembered searches
+  rather than at the library. The shelf scrolls there, and it is ordered
+  newest first, so what a lower cap costs is the oldest titles' visibility -
+  not their reachability. Plain `.narrow` drops the cap - it wraps around
+  the picture instead of sitting in its own scrollable box (see
+  `.catalog.narrow:not(.ultra-narrow) .catalog-center .shelf-links` above), so there is no
+  separate box left to cap.
 */
-.catalog.narrow .shelf-links { max-height: 22vh; }
 .shelf-link {
   font: inherit; font-size: 10px; cursor: pointer; padding: 3px 6px;
   border-radius: 3px; border: 1px solid transparent;
@@ -1490,13 +1601,13 @@ mark {
 .shelf-link.override { color: var(--accent); border-color: var(--accent); text-decoration: underline; }
 .shelf-link:hover { background: rgba(var(--accent-rgb),0.22); }
 /*
-  The center row's shelf now sits on the same cream card the room rows
-  use (`.catalog-body.paper-sheet`). The default and history links follow
-  the remapped `--dim`/`--ink`/`--edge` onto paper, but the override links'
-  gold (`--accent`) washes out on cream, so they take the paper's inked rust
-  - the same drop the rank and "read the rest" make.
+  The center row's shelf sits on the same cream sheet the room rows use
+  (`.paper-sheet`, now on `.catalog-center` itself - see above). The default
+  and history links follow the remapped `--dim`/`--ink`/`--edge` onto paper,
+  but the override links' gold (`--accent`) washes out on cream, so they take
+  the paper's inked rust - the same drop the rank and "read the rest" make.
 */
-.catalog-body.paper-sheet .shelf-link.override { color: var(--paper-accent); border-color: var(--paper-accent); }
+.catalog-center.paper-sheet .shelf-link.override { color: var(--paper-accent); border-color: var(--paper-accent); }
 
 .catalog-spacer { padding: 0; border: none; }
 .pager {

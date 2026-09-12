@@ -60,7 +60,7 @@ import {
   focusScrollTop,
 } from '../lib/catalog.ts';
 import { CENTER, DISTILL_OFF, DISTILL_ON } from '../lib/tiles.ts';
-import { distillIconScreenRect } from '../lib/distillToggle.ts';
+import { BASE_TILE } from '../lib/pyramid.ts';
 
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
@@ -117,6 +117,23 @@ const ULTRA_NARROW_PX = 400;
 const ULTRA_ROW_HPAD = 64;
 const ultraThumbWidth = (available: number, matPad: number): number =>
   Math.max(80, available - ULTRA_ROW_HPAD - 2 * matPad);
+
+/**
+ * The center row's own outer margin and inner padding, one side each -
+ * `.catalog-center.paper-sheet`'s `margin`/`padding` in style.css. JS and
+ * CSS must agree on both for the same reason `CARD_PAD` does: together they
+ * are what `centreUltraThumbWidth` trims the full-bleed thumbnail by.
+ */
+const CENTRE_MARGIN = 16;
+const CENTRE_PAD = 16;
+/**
+ * How wide the center row's own thumbnail is under ultra-narrow - full-bleed
+ * across the sheet exactly like `ultraThumbWidth` gives every other row, just
+ * trimmed by the center sheet's own margin and padding on both sides
+ * (`CENTRE_MARGIN`, `CENTRE_PAD`) rather than a room row's row-plus-card inset.
+ */
+const centreUltraThumbWidth = (available: number, matPad: number): number =>
+  Math.max(80, available - 2 * CENTRE_MARGIN - 2 * CENTRE_PAD - 2 * matPad);
 
 /**
  * How wide a thumbnail is, from the width the list has to spend.
@@ -369,10 +386,23 @@ export function CatalogView({
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
   // The distill toggle's own decoded pixel size, read off its `<img>` once it
-  // loads rather than hardcoded - see the `distillRect` comment below. Starts
-  // at {0, 0} so the button has no footprint (but the right corner it anchors
-  // to) until the first load reports real numbers.
+  // loads rather than hardcoded - see the distill fraction comment below.
+  // Starts at {0, 0} so the button has no footprint (but the right corner it
+  // anchors to) until the first load reports real numbers.
   const [distillIconSize, setDistillIconSize] = useState({ w: 0, h: 0 });
+  // Where the center row's cover picture sits on the shelf's own column grid,
+  // when narrow (`.catalog.narrow .catalog-center` in style.css). The picture
+  // is a grid item spanning `picCols` columns and `picRows` rows of the SAME
+  // grid the spine buttons flow through, so the two columns beside it and the
+  // columns beneath it land on one set of grid lines - the alignment the
+  // float could not give. `picNext`/`subStart` are the grid LINES the title
+  // and index-shelf line start on (CSS grid line numbers take a plain custom
+  // property but not a `calc()`, so the addition is done here). Filled by the
+  // effect below from the grid's own resolved track sizes; the defaults are a
+  // sane first paint before it measures.
+  const [centreGrid, setCentreGrid] = useState({
+    picCols: 2, picNext: 3, picRows: 4, subStart: 2, subRows: 1, titleRows: 1,
+  });
   // The center row's real height. It is the ONE row allowed to size itself -
   // it holds the whole shelf, forty titles that wrap to as many lines as the
   // width needs, and clipping them to a tile's height would hide the newest
@@ -409,17 +439,6 @@ export function CatalogView({
   }, []);
 
   const perPage = config.catalog.perPage;
-  const thumbPx = thumbWidth(geom.width);
-  // The distill toggle's screen rect within the center row's fixed-size
-  // thumbnail - the same corner-anchor math the map's own canvas overlay
-  // uses (`distillIconScreenRect`), against this thumbnail's own pixel size
-  // rather than a moving camera's `cellPx`. `distillIconSize` starts at
-  // {0, 0} (the button renders with no footprint, at the exact corner it
-  // will grow from) and is set once the `<img>` below actually reports its
-  // decoded size - same "read the real art, don't hardcode it" reasoning as
-  // `render.ts`'s canvas draw, just on a `load` event instead of a cache hit,
-  // since a DOM `<img>` has no synchronous decode signal to read before then.
-  const distillRect = distillIconScreenRect({ x: thumbPx, y: tileHeight(thumbPx) }, 0, 0, distillIconSize);
   // Narrow rows drop the map link and let the name wrap instead of clipping
   // it - see `NARROW_PX`. Both halves of that trade are priced below.
   const narrow = geom.width < NARROW_PX;
@@ -428,11 +447,78 @@ export function CatalogView({
   // (`ULTRA_NARROW_PX < NARROW_PX`), so the map-link/wrapped-title trade
   // above applies underneath it too.
   const ultraNarrow = geom.width < ULTRA_NARROW_PX;
+  // The center row's own thumbnail - `thumbWidth`'s fixed two-column
+  // fraction ordinarily, but full-bleed under ultra-narrow exactly like
+  // `ultraThumbWidth` gives every other row, just trimmed by the sheet's own
+  // padding (`CENTRE_PAD`, both sides - `.catalog.ultra-narrow
+  // .catalog-center.paper-sheet` in style.css) and the mat border instead of
+  // a room row's separate row-plus-card inset.
+  const thumbPx = ultraNarrow ? centreUltraThumbWidth(geom.width, MAT_PAD) : thumbWidth(geom.width);
+  // The distill toggle as FRACTIONS of the thumbnail, not pixels: the map's
+  // canvas overlay (`distillIconScreenRect`) scales the icon by the tile's
+  // pixels-per-cell-width over `BASE_TILE.w`, so as a share of the tile the
+  // icon is a constant `iconSize / BASE_TILE`, independent of how the
+  // thumbnail is sized. Percentages let the picture be sized by the grid
+  // (see the center-row layout below) without a pixel rect to keep in step -
+  // it anchors to the bottom right corner (style.css) at these two sizes.
+  // `distillIconSize` starts at {0, 0} (0% - the button has no footprint
+  // until the `<img>` reports its decoded size on load), same "read the real
+  // art, don't hardcode it" reasoning as `render.ts`'s canvas draw.
+  const distillW = distillIconSize.w ? `${(distillIconSize.w / BASE_TILE.w) * 100}%` : '0';
+  const distillH = distillIconSize.h ? `${(distillIconSize.h / BASE_TILE.h) * 100}%` : '0';
+  // Fit the cover picture to a whole number of the shelf's own grid columns so
+  // the spines above and below it share one set of column lines. Read the
+  // grid's RESOLVED track sizes rather than mirroring the CSS math in JS - the
+  // browser has already stretched `minmax(--shelf-col, 1fr)` to the real
+  // column width, and `-1` handles the last line without JS ever counting
+  // columns. Both wide and narrow use this one grid (a wide display just fits
+  // more columns); only a phone (`ultraNarrow`) stacks into a single column
+  // and ignores these vars. Runs pre-paint (`useLayoutEffect`) so the fitted
+  // spans are in place before the row is ever shown; `centreGrid` is in the
+  // deps so a title or index-line that reflows to a new height (its width
+  // changes with `picCols`) settles in a second pass, and the equality guard
+  // stops there.
+  useLayoutEffect(() => {
+    const el = centreRowRef.current;
+    if (!el || ultraNarrow) return;
+    const cs = getComputedStyle(el);
+    if (cs.display !== 'grid') return;
+    const tracks = cs.gridTemplateColumns.split(' ').map(parseFloat).filter((n) => Number.isFinite(n));
+    const cols = tracks.length;
+    if (cols < 2) return;
+    const colW = tracks[0];
+    const colGap = parseFloat(cs.columnGap) || 0;
+    const rowGap = parseFloat(cs.rowGap) || 0;
+    const rowH = parseFloat(cs.gridAutoRows) || 24;
+    const rowsFor = (h: number) => Math.max(1, Math.ceil((h + rowGap) / (rowH + rowGap)));
+    // Round the span UP, never down: the cover picture is allowed to be larger
+    // than the spines beneath it, but snapping it smaller than its natural
+    // width is not.
+    const picCols = Math.max(1, Math.min(cols - 1, Math.ceil((thumbPx + colGap) / (colW + colGap))));
+    // The picture's row span comes from its own MEASURED height (its width is
+    // now `picCols` columns), not from aspect-and-border arithmetic that would
+    // have to track the mat border and box-sizing by hand. It may be a pass
+    // behind when `picCols` just changed - `centreGrid` in the deps settles it.
+    const wrapEl = el.querySelector('.catalog-tile-wrap');
+    const nameEl = el.querySelector('.catalog-name');
+    const subEl = el.querySelector('.catalog-sub');
+    const picRows = wrapEl ? rowsFor(wrapEl.getBoundingClientRect().height) : 4;
+    const titleRows = nameEl ? rowsFor(nameEl.getBoundingClientRect().height) : 1;
+    const subRows = subEl ? rowsFor(subEl.getBoundingClientRect().height) : 1;
+    const next = { picCols, picNext: picCols + 1, picRows, subStart: titleRows + 1, subRows, titleRows };
+    setCentreGrid((prev) =>
+      prev.picCols === next.picCols && prev.picNext === next.picNext && prev.picRows === next.picRows &&
+      prev.subStart === next.subStart && prev.subRows === next.subRows && prev.titleRows === next.titleRows
+        ? prev
+        : next,
+    );
+  }, [ultraNarrow, thumbPx, centreSlots, geom.width, centreGrid]);
   const titleReserve = narrow ? TITLE_LINE_PX : 0;
   const cardPad = narrow ? CARD_PAD_NARROW : CARD_PAD;
-  // A row's own thumbnail - full-bleed under ultra-narrow, a fraction of the
-  // width otherwise. Distinct from `thumbPx` above, which sizes only the
-  // center room's fixed two-column thumbnail and never changes shape.
+  // A room row's own thumbnail - full-bleed under ultra-narrow, a fraction of
+  // the width otherwise. Distinct from the center row's `thumbPx` above,
+  // which is trimmed by the center sheet's own padding rather than a room
+  // row's row-plus-card inset.
   const rowThumbPx = ultraNarrow ? ultraThumbWidth(geom.width, MAT_PAD) : thumbWidth(geom.width);
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
@@ -712,7 +798,18 @@ export function CatalogView({
             the same `onBook` a painted spine runs, so there is no second idea
             of what a book does.
           */}
-          <li className="catalog-row catalog-center" ref={centreRowRef}>
+          <li
+            className="catalog-row catalog-center paper-sheet"
+            ref={centreRowRef}
+            style={{
+              '--pic-cols': centreGrid.picCols,
+              '--pic-next': centreGrid.picNext,
+              '--pic-rows': centreGrid.picRows,
+              '--sub-start': centreGrid.subStart,
+              '--sub-rows': centreGrid.subRows,
+              '--title-rows': centreGrid.titleRows,
+            } as CSSProperties}
+          >
             <div className="catalog-tile-wrap">
               <img
                 ref={firstTileRef}
@@ -752,7 +849,7 @@ export function CatalogView({
               <button
                 type="button"
                 className="catalog-distill-toggle"
-                style={{ left: distillRect.x, top: distillRect.y, width: distillRect.w, height: distillRect.h }}
+                style={{ width: distillW, height: distillH }}
                 aria-pressed={distillMode}
                 aria-label={distillMode ? 'disable distillation' : 'enable distillation'}
                 onClick={onToggleDistill}
@@ -769,7 +866,7 @@ export function CatalogView({
                 />
               </button>
             </div>
-            <div className="catalog-body paper-sheet">
+            <div className="catalog-body">
               <h2 className="catalog-name">the center of the library</h2>
               <p className="catalog-sub">
                 the index shelf, where searches are recorded
@@ -1081,10 +1178,13 @@ function CatalogRow({
               The height a row does not spend on the picture is the story's,
               rather than dark background under a small thumbnail - which is
               what a phone's row is mostly made of otherwise. The center room
-              keeps the old two-column shape (see `catalog-center` in
-              `CatalogView`): its art carries addressable hotspots positioned
-              against the image's own box, and a float would move the box out
-              from under them.
+              gets the same effect a different way: its picture is a grid item
+              spanning several columns and rows of the shelf's own column grid,
+              so the spines flow beside it and then beneath it, aligned to one
+              set of columns (see `.catalog-center` in style.css). It uses a
+              grid rather than this float because the spines have to LINE UP
+              above and below the picture, which a float's two independent runs
+              cannot promise.
             */}
             {tile}
 
