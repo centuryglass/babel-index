@@ -35,30 +35,6 @@ code and the git log are the record of what was.
 - **Nothing builds the `Dockerfile`.** It exists so hosting can move without a
   rewrite, and it will drift out of step with `package.json` unnoticed until
   the day that matters. A build-only job is enough — no push, no registry.
-- **Two `map-gestures.e2e.ts` tests fail in a cloud agent container (2026-09-12).**
-  "right-clicking a room opens its card, and a chip searches for it" and "a long
-  press opens the card, and a drag cancels it" both fail the same way:
-  `locator('.overlay')` times out after 5s, i.e. the room card never opens. The
-  other 13 tests in the file pass, as do `catalog`, `accessibility`, `favorites`,
-  `shelf`, `artist-statement`, `keyboard-cursor` and `webgl-map` in full.
-
-  Reproduce: `BABEL_E2E_CHROMIUM=/opt/pw-browsers/chromium node --import
-  ./build/register.mjs --test --test-concurrency=1
-  packages/web/e2e/map-gestures.e2e.ts`.
-
-  Already ruled out — it is NOT a regression from any recent branch. Reproduced
-  identically at three commits: `97dcca6` (the catalog chip/float work),
-  `85d7555` (the merge of #160 `overlay-header-chrome`, whose name made it the
-  obvious suspect — it is not), and `4df7e20` (the merge of #159, before that).
-  So it predates both PRs rather than being introduced by either.
-
-  Not yet checked, and the cheapest next step: whether these two are green on
-  `main` in GitHub Actions. e2e is a merge gate, so if CI is green the fault is
-  environmental — this container runs whatever Chromium sits at
-  `/opt/pw-browsers/chromium` rather than the suite's pinned build, and both
-  failing tests are exactly the gesture-to-overlay path AGENTS.md already flags
-  as a CDP blind spot (right-click via CDP, and a synthesised long press). If CI
-  is red too, bisect further back than `4df7e20` instead.
 
 ## The public face:
 - **Nothing tells a visitor what the site stores.** Favoriting mints a token in
@@ -144,6 +120,39 @@ code and the git log are the record of what was.
     clicked target. `landed()` still reports "settled" because it only
     checks for two consecutive stable reads, which a still-controlled camera
     also produces.
+
+  **[2026-09-12] A cloud agent container reproduces this DETERMINISTICALLY,
+  which is the instrumented repro this entry asks for below.** Both tests fail
+  on every run there, not intermittently, and both fail the same way:
+  `locator('.overlay')` times out after 5s because the room card never opens -
+  the click lands at a fixed screen point that no longer holds a room, exactly
+  what a swallowed `flyTo` would cause. The other 13 tests in the file pass, as
+  do `catalog`, `accessibility`, `favorites`, `shelf`, `artist-statement`,
+  `keyboard-cursor` and `webgl-map` in full.
+
+  ```sh
+  BABEL_E2E_CHROMIUM=/opt/pw-browsers/chromium node --import \
+    ./build/register.mjs --test --test-concurrency=1 \
+    packages/web/e2e/map-gestures.e2e.ts
+  ```
+
+  What that pins down:
+  - It is NOT a regression from any recent branch. Reproduced identically at
+    `4df7e20` (merge of #159), `85d7555` (merge of #160 `overlay-header-chrome`,
+    whose name made it the obvious suspect - it is not) and `f8493a7`.
+  - It is NOT environmental in the "different browser build" sense: the whole
+    suite including these two is GREEN in GitHub Actions on `f8493a7`
+    (`browser smoke test`, run 34705031196). A slower machine turning a latent
+    race into a 100% failure is the simplest story that fits both readings.
+  - `recentre()` is already in place in the right-click test and is still not
+    enough here, so whatever it works around is not fully worked around.
+  - The long-press test is a CASCADE, not a second instance: it never
+    recentres, it inherits the camera the right-click test left behind. Fixing
+    the first should fix the second, and a fix must be judged on both.
+
+  So the cheap path for whoever picks this up is a container rather than a
+  bisect: the failure is already sitting there every run, with no flake-hunting
+  needed.
 
   Not yet root-caused. Candidates not yet ruled out: something downstream of
   `setResult` (e.g. `sortResult`/`layout`'s `useMemo` in `main.tsx`, or

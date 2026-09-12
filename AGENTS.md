@@ -1224,6 +1224,15 @@ step - see "Testing and CI".
   any other `requestAnimation` trigger. Camera coordinates from `flyTo(x, y,
   ...)` land on the cell's CENTER (`cameraAtCell`'s `+ 0.5`), so `recentre()`
   (which calls `flyTo(0, 0, ...)`) checks for `(0.5, 0.5)`, not `(0, 0)`.
+- **In a cloud agent container, two `map-gestures.e2e.ts` tests fail every
+  run, and it is not your change.** "right-clicking a room opens its card"
+  and "a long press opens the card" both time out waiting for `.overlay`;
+  the second is a cascade from the first, which leaves the camera somewhere
+  the second's fixed screen point holds no room. They are green in CI, and
+  they fail identically with the catalog work reverted - the swallowed-`flyTo`
+  bug above is the live suspect, and `docs/pending_task_list.md` carries the
+  evidence. Don't spend a run concluding you broke them; do check the rest of
+  the file (the other 13) still passes.
 
 ## Working with GitHub
 
