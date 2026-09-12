@@ -150,7 +150,9 @@ export function createApp({
    * than imply the order means something.
    */
   app.get('/api/search', async (req, res) => {
-    const q = String(req.query.q ?? '').trim();
+    const q = String(req.query.q ?? '')
+      .trim()
+      .slice(0, clientConfig.search.maxQueryLength);
     if (!q) return res.json({ query: q, order: null });
 
     if (!manifest.embeddings)

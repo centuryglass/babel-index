@@ -229,7 +229,9 @@ same token list feeds both.
 **A pasted wall of text can't be used to lock up the search.** A query is
 capped at `maxQueryLength` (256) characters, enforced in `search()` itself so
 a keyword chip, a history entry, or a shelf-book search - not only what's typed
-into the box - all go through the same limit.
+into the box - all go through the same limit. `/api/search` enforces the same
+cap server-side, since a direct request to the endpoint never goes through
+`search()` at all.
 
 ### Tag matching
 
