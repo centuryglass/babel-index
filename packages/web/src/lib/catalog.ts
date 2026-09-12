@@ -319,6 +319,27 @@ export function flipCss(t: FlipTransform): string {
 }
 
 /**
+ * How many lines of something fit in whatever is left of a row, at least one.
+ *
+ * Shared by `storyLines` and `chipLines` below - both ask the same question
+ * ("how much is actually left, divided by a line") of a different reserve and
+ * a different line height, and the zero-line-height/negative-space edge cases
+ * are the same for either.
+ *
+ * At least one line, because a clamp of zero hides the content completely
+ * rather than shortening it - and on a display narrow enough to leave no
+ * room, one clipped line is still the honest answer.
+ */
+function linesThatFit(rowPx: number, reservedPx: number, lineHeightPx: number): number {
+  // A line height of zero means nothing has been measured yet, and dividing by
+  // the 1px floor a `Math.max` would give returns a clamp of a hundred lines -
+  // which is not "unclamped", it is a wrong number that happens to look
+  // harmless. One line is the honest answer to "I cannot tell yet".
+  if (!(lineHeightPx > 0)) return 1;
+  return Math.max(1, Math.floor((rowPx - reservedPx) / lineHeightPx));
+}
+
+/**
  * How many lines of story a row has room for.
  *
  * The clamp was two lines flat, which on a wide display cut a story off with
@@ -327,18 +348,27 @@ export function flipCss(t: FlipTransform): string {
  * left: the row's height, less everything above and below the story, divided
  * by a line.
  *
- * At least one line, because a clamp of zero hides the story completely rather
- * than shortening it - and on a display narrow enough to leave no room, one
- * clipped line is still the honest answer.
- *
  * @param rowPx        the row's height
  * @param reservedPx   the name row, chips, score strip and padding
  */
 export function storyLines(rowPx: number, reservedPx: number, lineHeightPx: number): number {
-  // A line height of zero means nothing has been measured yet, and dividing by
-  // the 1px floor a `Math.max` would give returns a clamp of a hundred lines -
-  // which is not "unclamped", it is a wrong number that happens to look
-  // harmless. One line is the honest answer to "I cannot tell yet".
-  if (!(lineHeightPx > 0)) return 1;
-  return Math.max(1, Math.floor((rowPx - reservedPx) / lineHeightPx));
+  return linesThatFit(rowPx, reservedPx, lineHeightPx);
+}
+
+/**
+ * How many lines of keyword chips a row has room for.
+ *
+ * Same reasoning as `storyLines`, and it has to be: the two share one row's
+ * worth of vertical space, and if either were a flat constant instead of
+ * derived from the row's real height, the other's derivation would be
+ * accounted against a number that does not match what is actually left. A
+ * narrow row, where the thumbnail is small and each chip wraps to its own
+ * line, is exactly the case a flat cap silently swallowed a keyword with no
+ * indication - see `CatalogView.tsx`'s `CHIP_LINE_PX`.
+ *
+ * @param rowPx        the row's height
+ * @param reservedPx   the name row, story minimum, score strip and padding
+ */
+export function chipLines(rowPx: number, reservedPx: number, lineHeightPx: number): number {
+  return linesThatFit(rowPx, reservedPx, lineHeightPx);
 }

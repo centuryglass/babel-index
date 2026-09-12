@@ -735,6 +735,13 @@ mark {
 */
 .catalog-row .catalog-body.paper-sheet { padding: 12px 16px; }
 /*
+  A narrow row is already tight on height - a small tile, a wrapped title,
+  the same fixed chrome as a wide row - so its vertical inset is trimmed to
+  match `CatalogView.tsx`'s `CARD_PAD_NARROW` (16px, both halves), giving the
+  chip/story clamps real room instead of leaving it as unused padding.
+*/
+.catalog.narrow .catalog-row .catalog-body.paper-sheet { padding: 8px 16px; }
+/*
   The gold accents (`--accent`) read on dark chrome but wash out on cream,
   so the rank and "read the rest" drop to the paper's inked rust, the same
   move the overlays' sheets make. The mismatch reading keeps its own colour.
@@ -1235,12 +1242,17 @@ mark {
   overflow: hidden; margin-bottom: 5px;
 }
 /*
-  Two lines at most, matching what STORY_RESERVED_PX sets aside. A room
-  with six keywords on a narrow display would otherwise push the story out
-  of a row that cannot grow.
+  The cap is a variable, not a literal - `--catalog-chips-max`
+  (`CatalogView.tsx`'s `chipLines`/`CHIP_LINE_PX`), derived the same way
+  `--catalog-lines` derives the story clamp: from what the row's actual
+  height leaves over, not a flat two-line guess. A room with more keywords
+  than fit still clips rather than growing the row (the fixed-height
+  invariant every spacer is computed from), but the cap itself now tracks
+  the row instead of silently swallowing a keyword that had room to show.
 */
 .catalog-row .chips {
-  margin-bottom: 5px; max-height: 48px; overflow: hidden; align-content: flex-start;
+  margin-bottom: 5px; max-height: var(--catalog-chips-max, 48px);
+  overflow: hidden; align-content: flex-start;
 }
 /*
   The score, as up to four SHORT lines (composite, tag, story, clip) -

@@ -56,6 +56,7 @@ import {
   pageAtScroll,
   windowFor,
   storyLines,
+  chipLines,
   focusScrollTop,
 } from '../lib/catalog.ts';
 import { CENTER, DISTILL_OFF, DISTILL_ON } from '../lib/tiles.ts';
@@ -67,15 +68,39 @@ type Slot = CentreSlot | null;
 type Highlight = { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
 
 /**
+ * Where the row stops having width to spend on anything but the room itself.
+ *
+ * Measured from the list, not from a media query, because the two layouts do
+ * not differ only in CSS: the narrow one gives the title a second line, and
+ * that line has to be paid for in `TEXT_MIN` and the chip/story reserves or
+ * the spacer arithmetic every unmounted page rests on is wrong for every row.
+ * One flag, read by the class name and by the constants together, is what
+ * keeps them from disagreeing - a media query could only move the CSS half.
+ *
+ * A width rather than an orientation: a phone in portrait is the case that
+ * prompted this, but a split-screen landscape phone and a narrow desktop
+ * window are the same row with the same problem.
+ */
+const NARROW_PX = 560;
+
+/**
  * How wide a thumbnail is, from the width the list has to spend.
  *
  * Bounded at both ends rather than a fraction outright: below about 120px a
  * wall of books is an unreadable smudge, and above 240 the story beside it gets
  * squeezed into a column too narrow to read. Between those it tracks the
  * display, so a phone gets a smaller tile and more words.
+ *
+ * The fraction itself is bigger under `NARROW_PX`: a narrow row's text column
+ * needs a fixed amount of vertical space regardless of the tile (the name row,
+ * a line of story, the button), so a tile sized off the same fraction as a
+ * wide row sits far short of that and leaves the row's own dark background
+ * showing beneath it. Giving the tile more of a narrow row's width is half of
+ * closing that gap - trimming the fixed text reserves for narrow is the other
+ * half, in `CatalogRow`'s `chips`/`storyLines` accounting below.
  */
 const thumbWidth = (available: number): number =>
-  Math.round(Math.min(240, Math.max(120, available * 0.26)));
+  Math.round(Math.min(240, Math.max(120, available * (available < NARROW_PX ? 0.34 : 0.26))));
 
 /** A row's vertical padding, both halves - the one number CSS and JS must agree on. */
 const ROW_PAD = 14;
@@ -89,6 +114,15 @@ const ROW_PAD = 14;
  * fixed-height invariant the spacer arithmetic rests on. Must match the CSS.
  */
 const CARD_PAD = 24;
+/**
+ * The same inset, trimmed for narrow rows - `.catalog.narrow .catalog-row
+ * .catalog-body.paper-sheet` in style.css. A narrow row is already tight on
+ * height (a small tile, a wrapped title, the same fixed chrome as a wide
+ * row), so giving back a few pixels of padding here is real room for the
+ * chips/story clamps below rather than wasted whitespace, unlike `CARD_PAD`
+ * on a wide row where the tile usually sets the height anyway.
+ */
+const CARD_PAD_NARROW = 16;
 
 /**
  * The thumbnail's paper mat - a thin cream border around every tile image,
@@ -103,57 +137,61 @@ const CARD_PAD = 24;
 const MAT_PAD = 6;
 
 /**
- * What the text column needs when the tile is too small to set the row's height.
+ * What sits above and below the story and the chips inside a row, and how
+ * tall one line of story is - the numbers `storyLines`/`chipLines` need to
+ * work out their clamps.
  *
- * The room's name, its chips, two clamped lines of story and the "show on the
- * map" button, plus the score strip when a search is running. By-feel numbers
- * that exist so a narrow display does not clip the story - `rowHeight` takes
- * whichever of the two columns is taller.
+ * `TEXT_CHROME_PX` covers the name row and the "read the rest" button -
+ * INCLUDING on rows that do not show one. Reserving only where the button
+ * appears would need the clamp to vary per row, and it is uniform by design;
+ * reserving nowhere is what made the button invisible on a phone, which is
+ * the display it matters most on. A row without one carries a little slack
+ * instead, which is the cheaper mistake. Chips are no longer folded into this
+ * as a flat "two lines" - see `CHIP_LINE_PX` below, which is what replaced
+ * that guess with the row's actual leftover space.
  */
-const TEXT_MIN = 132;
+const TEXT_CHROME_PX = 50;
+const STORY_LINE_PX = 19;
+
+/**
+ * The chips' own line height, CSS gap included - the pixel cost `chipLines`
+ * charges per line, and what `--catalog-chips-max` below hands to
+ * `.catalog-row .chips`'s `max-height` so the two never disagree. Measured
+ * against the real rendered chip (24.5px tall) plus `.chips`'s own 5px wrap
+ * gap, rounded up rather than down - a budget that undercounts the real
+ * pitch clips the last allowed line instead of showing it whole, which is
+ * the same bug this whole change exists to fix.
+ *
+ * Bounded at `CHIP_LINES_MAX`/`_NARROW` rather than left to grow with
+ * whatever a tall row leaves over: a corpus room can carry many keywords, and
+ * nothing stops the wall of chips from being the tallest thing in the row if
+ * the cap were the only budget. Narrow gets one more line than wide because a
+ * narrow text column is where a chip is most likely to already be alone on
+ * its own line - the case a flat two-line cap silently clipped a third
+ * keyword in, with headroom to spare elsewhere in the very same row.
+ */
+const CHIP_LINE_PX = 30;
+const CHIP_LINES_MAX = 2;
+const CHIP_LINES_MAX_NARROW = 3;
+
+/**
+ * What the text column needs when the tile is too small to set the row's
+ * height: the name row and button (`TEXT_CHROME_PX`), the most chip lines a
+ * narrow row is ever allowed (`CHIP_LINES_MAX_NARROW`), and one line of
+ * story - derived from those rather than a separate guess, so a row is never
+ * sized too short for the chip budget `chipLines` is about to compute against
+ * it. `rowHeight` takes whichever of the two columns is taller.
+ */
+const TEXT_MIN = TEXT_CHROME_PX + CHIP_LINES_MAX_NARROW * CHIP_LINE_PX + STORY_LINE_PX;
 /**
  * Reserves room for the score strip's full four lines (composite, tag, story,
  * clip) on EVERY row while a search is running, whether or not this room's own
- * ranking found that many - same reasoning as `STORY_RESERVED_PX` reserving
+ * ranking found that many - same reasoning as `TEXT_CHROME_PX` reserving
  * the "read the rest" button on rows that don't show one: a height that
  * varied with how much a room matched would make the sliding window's spacer
  * arithmetic wrong for that row.
  */
 const SCORE_STRIP_PX = 70;
-
-/**
- * What sits above and below the story inside a row, and how tall one line of it
- * is - the two numbers `storyLines` needs to work out the clamp.
- *
- * By-feel, and kept next to `TEXT_MIN` because they describe the same layout
- * from the other direction: that one says what the text column needs at
- * minimum, these say what is left for the story once it has it.
- *
- * The reserve covers the name row, up to two lines of chips, and the "read the
- * rest" button - INCLUDING on rows that do not show one. Reserving only where
- * the button appears would need the clamp to vary per row, and it is uniform by
- * design; reserving nowhere is what made the button invisible on a phone, which
- * is the display it matters most on. A row without one carries a little slack
- * instead, which is the cheaper mistake.
- */
-const STORY_RESERVED_PX = 98;
-const STORY_LINE_PX = 19;
-
-/**
- * Where the row stops having width to spend on anything but the room itself.
- *
- * Measured from the list, not from a media query, because the two layouts do
- * not differ only in CSS: the narrow one gives the title a second line, and
- * that line has to be paid for in `TEXT_MIN` and `STORY_RESERVED_PX` or the
- * spacer arithmetic every unmounted page rests on is wrong for every row. One
- * flag, read by the class name and by the two constants together, is what
- * keeps them from disagreeing - a media query could only move the CSS half.
- *
- * A width rather than an orientation: a phone in portrait is the case that
- * prompted this, but a split-screen landscape phone and a narrow desktop
- * window are the same row with the same problem.
- */
-const NARROW_PX = 560;
 
 /**
  * One line of the room's name, and what a second one costs.
@@ -333,13 +371,14 @@ export function CatalogView({
   // it - see `NARROW_PX`. Both halves of that trade are priced below.
   const narrow = geom.width < NARROW_PX;
   const titleReserve = narrow ? TITLE_LINE_PX : 0;
+  const cardPad = narrow ? CARD_PAD_NARROW : CARD_PAD;
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
   // exact, which is the property the sliding window rests on.
   const rowPx = rowHeight(
     thumbPx,
     ROW_PAD,
-    TEXT_MIN + CARD_PAD + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
+    TEXT_MIN + cardPad + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
     MAT_PAD
   );
   const level = thumbLevel(thumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
@@ -357,14 +396,23 @@ export function CatalogView({
   });
   const { first, last } = mountedPages(active, pages, window_);
 
-  // How much of each story fits, derived rather than fixed at two lines. The
-  // score strip takes a line's worth when a search is running, so this shrinks
-  // with it rather than leaving the story to be cut by `overflow: hidden`.
-  const lines = storyLines(
-    rowPx,
-    STORY_RESERVED_PX + CARD_PAD + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
-    STORY_LINE_PX
+  // How many lines of chips a row can show, derived from what is actually
+  // left rather than a flat two-line guess - see `chipLines`/`CHIP_LINE_PX`.
+  // Reserving one story line up front (rather than letting chips claim the
+  // whole leftover) is what keeps a room with many keywords from squeezing
+  // the story out entirely; the cap (`CHIP_LINES_MAX`/`_NARROW`) is what
+  // keeps a very tall row's chip wall from growing without bound.
+  const chromePx = TEXT_CHROME_PX + cardPad + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0);
+  const chips = Math.min(
+    narrow ? CHIP_LINES_MAX_NARROW : CHIP_LINES_MAX,
+    chipLines(rowPx, chromePx + STORY_LINE_PX, CHIP_LINE_PX)
   );
+
+  // How much of each story fits, derived rather than fixed at two lines. The
+  // chips above and the score strip (when a search is running) each take
+  // their own real share first, so this shrinks with them rather than
+  // leaving the story to be cut by `overflow: hidden`.
+  const lines = storyLines(rowPx, chromePx + chips * CHIP_LINE_PX, STORY_LINE_PX);
 
   const onScroll = useCallback(
     (e: { currentTarget: { scrollTop: number } }) => {
@@ -459,6 +507,7 @@ export function CatalogView({
         '--catalog-mat': `${MAT_PAD}px`,
         '--catalog-row': `${rowPx}px`,
         '--catalog-lines': lines,
+        '--catalog-chips-max': `${chips * CHIP_LINE_PX}px`,
         '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
         '--catalog-line': `${STORY_LINE_PX}px`,
         '--catalog-title-line': `${TITLE_LINE_PX}px`,

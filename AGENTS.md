@@ -774,7 +774,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   catalog row is a fixed height, so the row's favorite control sits beside
   "show on the map" rather
   than inside `RoomDetails` where the card and the overlay put it; in the text
-  column it would have to be reserved for in `TEXT_MIN`/`STORY_RESERVED_PX` and
+  column it would have to be reserved for in `TEXT_MIN`/`TEXT_CHROME_PX` and
   would cost two lines of story on every row.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` sit in `--shared-dir`
@@ -1053,9 +1053,11 @@ code, not a standing invariant.
   the rest" a clipped story ends with. Expanding a story IN PLACE was the
   alternative and it breaks the windowing: row heights would vary, and then the
   spacers are estimates. The clamp itself is derived (`storyLines`), not a flat
-  two lines - and `STORY_RESERVED_PX` must account for the expand button on
+  two lines - and `TEXT_CHROME_PX` must account for the expand button on
   EVERY row, including the ones that do not show one, or the button is clipped
-  out of existence on exactly the narrow displays that need it.
+  out of existence on exactly the narrow displays that need it. The chip
+  clamp is derived the same way (`chipLines`, `CHIP_LINE_PX`), so a room's
+  keywords no longer silently disappear past a flat two-line guess either.
 - **The query has a length cap and `search()` is where it is enforced.** The
   input's `maxLength` only covers typing; a keyword chip, a book on the shelf
   and a restored history entry all reach `search()` without passing through a

@@ -14,6 +14,7 @@ import {
   flipTransform,
   rectOf,
   storyLines,
+  chipLines,
   alphabeticalOrder,
 } from './catalog.ts';
 import type { Rect } from './catalog.ts';
@@ -274,6 +275,22 @@ test('the story clamp is derived from the room the row actually has', () => {
 
   // More reserved space (the score strip appearing) means fewer lines.
   assert.ok(storyLines(232, 126, 19) <= storyLines(232, 96, 19));
+});
+
+test('the chip clamp is derived the same way the story clamp is', () => {
+  // A tall row (a narrow display's small tile against a fixed text minimum)
+  // has room for more than the old flat two lines of chips.
+  assert.equal(chipLines(160, 50, 24), 4);
+  assert.equal(chipLines(74, 50, 24), 1);
+
+  // Never zero: a room's keywords should clip rather than vanish outright.
+  assert.equal(chipLines(50, 50, 24), 1);
+  assert.equal(chipLines(30, 50, 24), 1);
+  assert.equal(chipLines(160, 50, 0), 1);
+
+  // More reserved space (a taller title, the score strip) leaves fewer lines
+  // for chips, exactly as it does for the story.
+  assert.ok(chipLines(160, 90, 24) <= chipLines(160, 50, 24));
 });
 
 test('the catalog\'s idle order is every room by filename, not by id', () => {
