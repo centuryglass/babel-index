@@ -940,10 +940,15 @@ mark {
   Sized to its own native resolution by default: `width: auto` with
   `max-width: 100%` never blows it up past that, only shrinking it to
   fit a narrower dialog - the same rule the map's opening view follows.
+  The three-layer `box-shadow` reads as a plate tipped onto the page - a
+  thin paper mat, a hairline rule, then a soft drop shadow - rather than a
+  flat UI border; `box-shadow` rather than `border`/`padding` so it adds
+  no layout space `decideColumns`/`measureScale` would have to account for.
 */
 .overlay-tile {
   display: block; width: auto; max-width: 100%; height: auto;
-  margin: 4px auto 14px; border-radius: 3px; background: #14110d;
+  margin: 4px auto 14px; border-radius: 2px; background: #14110d;
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
 }
 /*
   Nothing clipped here: this is where the whole story lives. Redundant
