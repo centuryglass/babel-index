@@ -69,17 +69,9 @@ are. Notes that will bite: `.paper-sheet` locally rebinds `--dim`/`--ink`/
   server-side.
 
 ## CI:
-- **`npm run typecheck` is not a gate**, so it sits red between the times
-  someone runs it by hand. TypeScript is the default for every new file; the
-  check that makes that mean anything belongs beside `lint` in `ci.yml`.
 - **Nothing builds the `Dockerfile`.** It exists so hosting can move without a
   rewrite, and it will drift out of step with `package.json` unnoticed until
   the day that matters. A build-only job is enough — no push, no registry.
-- **No dependency automation, and `npm audit` runs nowhere.** Dependabot or
-  Renovate, plus an audit step. Today `qs` carries a moderate advisory inside
-  Express's request path, fixable by a lockfile bump; `sharp` and
-  `onnxruntime-node` carry high-severity ones with no fix available, on paths
-  no request ever touches.
 
 ## The public face:
 - **Nothing tells a visitor what the site stores.** Favoriting mints a token in
