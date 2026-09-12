@@ -91,6 +91,18 @@ const ROW_PAD = 14;
 const CARD_PAD = 24;
 
 /**
+ * The thumbnail's paper mat - a thin cream border around every tile image,
+ * one side's worth. It is a CSS `border` (`--catalog-mat` below), not
+ * padding, so the absolutely-positioned overlays on the center row's
+ * thumbnail (the open-book hotspot, the distill toggle) keep landing on the
+ * image itself rather than needing their own offset - see the mat's own
+ * comment in style.css. Priced into `rowHeight`/`storyLines` exactly like
+ * `CARD_PAD`, so the text card still matches the mat's full height and the
+ * black gap between rows never widens.
+ */
+const MAT_PAD = 6;
+
+/**
  * What the text column needs when the tile is too small to set the row's height.
  *
  * The room's name, its chips, two clamped lines of story and the "show on the
@@ -324,7 +336,12 @@ export function CatalogView({
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
   // exact, which is the property the sliding window rests on.
-  const rowPx = rowHeight(thumbPx, ROW_PAD, TEXT_MIN + CARD_PAD + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0));
+  const rowPx = rowHeight(
+    thumbPx,
+    ROW_PAD,
+    TEXT_MIN + CARD_PAD + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
+    MAT_PAD
+  );
   const level = thumbLevel(thumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
   const total = order.length;
@@ -439,6 +456,7 @@ export function CatalogView({
       ref={hostRef}
       style={{
         '--catalog-thumb': `${thumbPx}px`,
+        '--catalog-mat': `${MAT_PAD}px`,
         '--catalog-row': `${rowPx}px`,
         '--catalog-lines': lines,
         '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
@@ -519,7 +537,7 @@ export function CatalogView({
                 would take the name with it and leave a select announcing only
                 its own value.
               */}
-              <span className={narrow ? 'sr-only' : undefined}>sort</span>
+              <span className={narrow ? 'sr-only' : 'catalog-sort-label'}>sort</span>
               <select value={sortMode} onChange={(e) => onSortMode(e.target.value as SortMode)}>
                 <option value="relevance">{result?.term ? 'by ranking' : 'alphabetically'}</option>
                 <option value="mine">my favorites first</option>
@@ -680,7 +698,7 @@ export function CatalogView({
             <button disabled={active === 0} onClick={() => setActive((p) => Math.max(0, p - 1))}>
               ← previous
             </button>
-            <span>
+            <span className="pager-count">
               page <b>{active + 1}</b> of {pages}
             </span>
             <button

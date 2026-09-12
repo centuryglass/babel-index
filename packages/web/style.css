@@ -28,6 +28,7 @@
     a full light theme later without unpicking it from the book markup.
   */
   --paper: #ece2cb;
+  --paper-rgb: 236, 226, 203;
   --paper-hi: #f4ecd9;
   --paper-ink: #2c2620;
   --paper-dim: #5a4f3b;
@@ -89,14 +90,23 @@ body:has(.overlay-scrim, .catalog),
  * opens the field back up so a reader can click inside it to place a
  * cursor once they are actually typing.
  */
-.center-search { position: absolute; display: none; margin: 0; padding: 0; border: none; background: none; pointer-events: none; }
+.center-search {
+  position: absolute; display: none; margin: 0; padding: 0; border: none;
+  background: none; pointer-events: none;
+}
 .center-search:focus-within { pointer-events: auto; }
+/*
+  Paper, not dark chrome - the field sits over a brass panel traced into the
+  tile art, and a cream plate reads as something set into that panel rather
+  than a UI overlay floating on top of it. `--paper-rgb` at less than full
+  opacity lets a hint of the brass show through at the edges.
+*/
 .center-search input[type="search"] {
   width: 100%; height: 100%; padding: 0 26px 0 10px; text-align: center;
-  background: rgba(10,8,6,0.55); color: var(--ink);
-  border: 1px solid rgba(var(--accent-rgb),0.45); border-radius: 4px; font: inherit;
+  background: rgba(var(--paper-rgb), 0.9); color: var(--paper-ink);
+  border: 1px solid var(--paper-edge); border-radius: 4px; font: inherit;
 }
-.center-search input[type="search"]:focus { border-color: var(--accent); background: rgba(10,8,6,0.75); }
+.center-search input[type="search"]:focus { border-color: var(--paper-accent); background: rgba(var(--paper-rgb), 0.97); }
 
 /*
  * The clear-x, shared markup between both search homes (SearchForm.tsx)
@@ -297,13 +307,24 @@ input[type="search"]:focus { border-color: var(--accent); }
   max-height: 220px; overflow-y: auto;
 }
 .results-list li + li { margin-top: 3px; }
+/*
+  Paper chrome for the panel: buttons and the ranked results both read as
+  cream chips on the dark panel rather than the gold-on-dark wash the rest
+  of the app used to use everywhere - see AGENTS.md's "Paper-chrome pass".
+  Scoped to `.panel` so nothing outside the map-mode debug panel is touched
+  here; the catalog's own controls get the same look independently below.
+*/
+.panel button {
+  color: var(--paper-ink); background: var(--paper); border: 1px solid var(--paper-edge);
+}
+.panel button:hover { background: var(--paper-hi); }
 .result {
   display: block; width: 100%; text-align: left; padding: 5px 8px;
-  background: rgba(var(--accent-rgb),0.08); color: var(--ink);
-  border: 1px solid var(--edge); border-radius: 4px; font: inherit; font-size: 11px;
+  background: var(--paper); color: var(--paper-ink);
+  border: 1px solid var(--paper-edge); border-radius: 4px; font: inherit; font-size: 11px;
   line-height: 1.4; cursor: pointer;
 }
-.result:hover { background: rgba(var(--accent-rgb),0.2); }
+.result:hover { background: var(--paper-hi); }
 
 .buttons { display: flex; gap: 7px; }
 /*
@@ -376,13 +397,24 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
   flex: none;
 }
-.card-id { color: var(--dim); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
-.card-id b { font-weight: 700; color: var(--ink); }
+/*
+  The card head sits on the dialog's dark cover, same as the catalog bar
+  sits on the dark backdrop - so its own text label and buttons take the
+  same paper chrome, not the light-on-dark chrome the rest of the app
+  used to use everywhere (AGENTS.md's "Paper-chrome pass").
+*/
+.card-id {
+  padding: 2px 6px; color: var(--paper-dim); font-size: 10px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 2px;
+}
+.card-id b { font-weight: 700; color: var(--paper-ink); }
 .card-close {
   flex: none; width: 20px; height: 20px; padding: 0; line-height: 1;
-  font-size: 15px; color: var(--dim); background: none; border: none; cursor: pointer;
+  font-size: 15px; color: var(--paper-ink); background: var(--paper);
+  border: 1px solid var(--paper-edge); border-radius: 3px; cursor: pointer;
 }
-.card-close:hover { color: var(--ink); background: none; }
+.card-close:hover { background: var(--paper-hi); }
 /*
   The favorite control, in the overlay and in a catalog row's head - one
   appearance in both, since the thing it reports (this room's global
@@ -421,19 +453,48 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 .favorite-toggle.on { color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
 .favorite-count { font-variant-numeric: tabular-nums; }
 /*
+  In the room overlay's head, the favorite toggle and the "show in the
+  catalog" link sit directly on the dark cover, not on a `.paper-sheet`
+  card - unlike the same two classes in a catalog row, which already read
+  as a gold wash over cream for free (the row's card remaps --dim/--ink/
+  --edge to paper tones under them). These need a real paper fill instead.
+*/
+.card-head .favorite-toggle {
+  color: var(--paper-ink); background: var(--paper); border-color: var(--paper-edge);
+}
+.card-head .favorite-toggle:hover { background: var(--paper-hi); border-color: var(--paper-accent); }
+.card-head .favorite-toggle.on { color: var(--paper-accent); background: var(--paper-hi); border-color: var(--paper-accent); }
+.card-head .catalog-show { color: var(--paper-ink); background: var(--paper); border-color: var(--paper-edge); }
+.card-head .catalog-show:hover { background: var(--paper-hi); }
+/*
   Sized to its own text, like every other catalog-bar control - the
   panel's `button { flex: 1 }` would otherwise stretch the select across
-  the row.
+  the row. The label and the select share ONE paper pill rather than each
+  getting its own - two adjacent boxes of the same weight read as two
+  separate buttons and broke the "this text names that control" pairing;
+  a control (something with a real interactive element inside) gets the
+  rounded button-style chrome, same radius as the buttons beside it.
 */
 .catalog-sort {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
-  color: var(--dim); font-size: 11px;
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; font-size: 11px;
+  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 4px;
 }
+.catalog-sort-label { color: var(--paper-dim); }
 .catalog-sort select {
-  font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
-  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
-  border-radius: 4px; padding: 3px 6px;
+  font: inherit; font-size: 11px; color: var(--paper-ink); cursor: pointer;
+  background: none; border: none; padding: 0; margin: 0;
 }
+/*
+  The pager's "page N of M" - a short text label, same squared/lightly-
+  padded treatment as `.catalog-count` rather than the roomier rounded
+  chrome a control gets: nothing inside it is interactive.
+*/
+.pager-count {
+  padding: 2px 6px; color: var(--paper-dim); font-size: 11px;
+  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 2px;
+}
+.pager-count b { color: var(--paper-ink); font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .chip {
   flex: 0 0 auto; padding: 3px 8px; font-size: 11px;
@@ -544,34 +605,49 @@ mark {
   actually searched for. Bounded by `search.maxQueryLength`, and allowed
   to wrap rather than to push the paging control off the edge.
 */
-.catalog-bar-row.sub { flex-wrap: wrap; align-items: flex-start; }
+.catalog-bar-row.sub { flex-wrap: wrap; align-items: center; }
 .catalog-count { overflow-wrap: anywhere; }
 .catalog-bar-row.sub { margin-top: 8px; }
 .catalog-search { position: relative; flex: 1; margin: 0; }
 .catalog-search input[type="search"] {
-  width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--ink);
-  background: rgba(10,8,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
+  width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--paper-ink);
+  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 4px;
 }
-.catalog-search input[type="search"]:focus { border-color: var(--accent); outline: none; }
+.catalog-search input[type="search"]:focus { border-color: var(--paper-accent); outline: none; }
 .catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
-.catalog-count { margin: 0; flex: 1 1 16em; color: var(--dim); font-size: 11px; }
+/*
+  A short text label, not a button: fit to its own text rather than
+  claiming a 16em basis, squared and lightly padded (not the buttons'
+  rounder, roomier chrome) so it reads as a caption set on the dark bar
+  rather than something pressable. `margin-right: auto` is what actually
+  pushes the sort/paging group to the right of the row - the previous
+  16em flex-grow basis did that as a side effect, and losing it without
+  this took the alignment with it.
+*/
+.catalog-count {
+  flex: 0 1 auto; margin: 0 auto 0 0; padding: 2px 6px; overflow-wrap: anywhere;
+  color: var(--paper-dim); font-size: 11px;
+  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 2px;
+}
 /*
   The count, the sort and the paging control fit on one line at this
   width only because none of them insists on its own: the count gives up
-  its 16em basis and ellipsises (its text is trimmed to match - see
-  `narrow` in CatalogView), the sort keeps only its select, and the
+  its fit-to-text sizing and ellipsises (its text is trimmed to match -
+  see `narrow` in CatalogView), the sort keeps only its select, and the
   paging buttons tighten. Wrapped instead, the three of them cost two
   lines of a bar that is already a sixth of a phone's screen before the
   first room.
 */
 .catalog.narrow .catalog-bar-row.sub { flex-wrap: nowrap; align-items: center; }
 .catalog.narrow .catalog-count {
-  flex: 1 1 4em; min-width: 0; overflow-wrap: normal;
+  /* Narrow fills by flex-grow instead of the wide layout's auto margin -
+     the two together would leave nothing for `flex-grow` to expand into. */
+  flex: 1 1 4em; margin-right: 0; min-width: 0; overflow-wrap: normal;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .catalog.narrow .paging button { padding: 4px 7px; }
-.catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.catalog-note { color: var(--dim); }
+.catalog-count b { color: var(--paper-ink); font-variant-numeric: tabular-nums; }
+.catalog-note { color: var(--paper-dim); }
 
 .paging { display: flex; gap: 4px; }
 /*
@@ -580,13 +656,28 @@ mark {
   the top bar's toggle across everything the search box left.
 */
 .catalog .mode-toggle, .paging button, .pager button { flex: 0 0 auto; }
-.paging button, .mode-toggle, .catalog-show, .pager button {
+/*
+  Paper chrome: these three sit directly on the dark bar/backdrop rather
+  than on a `.paper-sheet` card, so they need a real paper fill to read as
+  paper, not the gold wash a card would tint. `.catalog-show` is excluded -
+  it lives inside a room row's `.paper-sheet` card already and keeps the
+  gold-wash-over-cream look that gets it for free (see the rule below it).
+*/
+.paging button, .mode-toggle, .pager button {
+  font: inherit; font-size: 11px; color: var(--paper-ink); cursor: pointer;
+  background: var(--paper); border: 1px solid var(--paper-edge);
+  border-radius: 4px; padding: 4px 9px;
+}
+.paging button:hover, .mode-toggle:hover, .pager button:hover { background: var(--paper-hi); }
+.paging button.on {
+  background: var(--paper-hi); border-color: var(--paper-accent);
+  box-shadow: inset 0 0 0 1px var(--paper-accent);
+}
+.catalog-show {
   font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
   background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 4px 9px;
 }
-.paging button.on { color: var(--ink); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
-.mode-toggle { color: var(--ink); }
 /*
   The panel's `.forget { width: 100% }` is sized for its own block-layout
   `.buttons` row; the catalog bar is flex, so it needs the same
@@ -594,10 +685,11 @@ mark {
   across the row and shoves the toggle onto the next line.
 */
 .catalog .forget {
-  width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--dim);
-  cursor: pointer; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--paper-ink);
+  cursor: pointer; background: var(--paper); border: 1px solid var(--paper-edge);
   border-radius: 4px; padding: 4px 9px;
 }
+.catalog .forget:hover { background: var(--paper-hi); }
 
 .catalog-scroll { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
 .catalog-list { list-style: none; margin: 0; padding: 0; }
@@ -660,9 +752,21 @@ mark {
   click handler is unreachable by keyboard and announces as an image
   rather than as a control.
 */
+/*
+  A thin cream mat around every thumbnail - a border rather than padding, so
+  it sits OUTSIDE the containing block absolutely-positioned overlays (the
+  center row's open-book hotspot, the distill toggle) measure against; both
+  keep working unmoved because their coordinate origin is still the image's
+  own edge, not the mat's outer one. `--catalog-mat` (`MAT_PAD`,
+  CatalogView.tsx) is priced into `rowHeight` exactly like `CARD_PAD` is for
+  the text card, so the card still matches the mat's full height rather than
+  just the image inside it, and the black gap between rows never widens -
+  the mat lives inside the row's existing height, not added to it.
+*/
 .catalog-tile-button {
-  flex: 0 0 auto; padding: 0; border: none; background: none;
-  cursor: zoom-in; line-height: 0; border-radius: 2px;
+  flex: 0 0 auto; padding: 0; background: var(--paper);
+  border: var(--catalog-mat, 0px) solid var(--paper);
+  cursor: zoom-in; line-height: 0; border-radius: 3px;
 }
 .catalog-tile-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-tile {
@@ -674,7 +778,11 @@ mark {
   whose art carries an addressable hotspot (the open book), so it is the
   one thumbnail that needs a positioning parent at all.
 */
-.catalog-tile-wrap { position: relative; flex: 0 0 auto; line-height: 0; }
+.catalog-tile-wrap {
+  position: relative; flex: 0 0 auto; line-height: 0;
+  background: var(--paper); border: var(--catalog-mat, 0px) solid var(--paper);
+  border-radius: 3px;
+}
 /*
   The open book's hotspot on the catalog's small thumbnail, filling the
   whole thumbnail - the traced SVG path inside it is the actual
@@ -682,7 +790,9 @@ mark {
   `.center-book`. A real `:hover`/`:focus-visible` works here (unlike
   the map) because this sits in an ordinary scrolling list, not over the
   gesture-owning canvas - there is no pan to protect from a stray
-  pointerdown.
+  pointerdown. `inset: 0` is against the WRAP's padding edge, which sits
+  right at the image's own border - the mat above adds no padding, only a
+  border, so this hotspot lands exactly on the image regardless of `--catalog-mat`.
 */
 .catalog-center-book {
   position: absolute; inset: 0; margin: 0; padding: 0; border: none;
@@ -873,7 +983,7 @@ mark {
   overlay rather than changed at the source: `.card-id` still needs to
   read as secondary next to a room's title in `RoomOverlay`.
 */
-.help-overlay .card-id { color: var(--ink); }
+.help-overlay .card-id { color: var(--paper-ink); }
 .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
 .help-body p:last-child { margin-bottom: 0; }
 .help-keys {
@@ -978,9 +1088,14 @@ mark {
 /* The artist's statement: wider than the help dialog because it carries
    two reading columns, not one. */
 .statement-overlay { width: min(1100px, 100%); }
-/* No title bar - the open book names itself. The lone close button keeps
-   to the corner without the divider a titled head draws. */
-.statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+/*
+  No title bar - the open book names itself. The lone close button keeps
+  to the corner without the divider a titled head draws, but still needs
+  clearance below it: `.card-close` is a real paper square now (the
+  paper-chrome pass), not a bare glyph, so a zero margin here used to be
+  invisible and now would sit its border flush against the book.
+*/
+.statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 12px; }
 .statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--paper-ink); }
 .statement-page p:last-child { margin-bottom: 0; }
 /* Running head, printed-book style: small italic line set well above the
@@ -1209,9 +1324,8 @@ mark {
 .catalog-spacer { padding: 0; border: none; }
 .pager {
   display: flex; gap: 12px; align-items: center; justify-content: center;
-  padding: 14px; color: var(--dim); font-size: 11px;
+  padding: 14px; font-size: 11px;
 }
-.pager b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .pager button[disabled] { opacity: 0.35; cursor: default; }
 .story.dim { color: var(--dim); font-style: italic; }
 /*
