@@ -149,10 +149,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
   const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(() => Date.now());
-  // Which of the three readings of the same ranking is in force. Session-only,
+  // Which of the four readings of the same ranking is in force. Session-only,
   // unlike the favorites themselves: the list is a standing choice about the
   // library, "show me it sorted by favorites right now" is not.
   const [sortMode, setSortMode] = useState<SortMode>('relevance');
+  // The permutation `'random'` sorts by - see `favorites.ts`'s `'random'`
+  // section. Only rerolled when `changeSort` switches INTO `'random'` from
+  // something else, so a mode-agnostic re-render (a favorite toggle, a
+  // map/catalog switch) never reshuffles a random order already in force.
+  const [randomSortSeed, setRandomSortSeed] = useState(() => Date.now());
 
   const [status, setStatus] = useState('');
   // Search history, newest first, one book per entry - and one of the two
@@ -252,6 +257,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
+  // A running search already has its own order; reshuffling on top of it
+  // would bury the match ranking a reader just asked for, so 'random' reads
+  // as 'relevance' - plain match order - for as long as a search stays
+  // active. `changeSort` clears the search when picking 'random' fresh, but
+  // this also covers running a new search while 'random' was already chosen.
+  const effectiveSortMode: SortMode = sortMode === 'random' && result ? 'relevance' : sortMode;
+
   // The map's order AND its density profile, from one sort: an active favorite
   // sort is a placement input exactly as a search is, so the certainty a room
   // lands with has to be derived from the same sort that placed it rather
@@ -269,10 +281,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     const base = result ? result.order : shuffledOrder(total, orderSeed);
     return favoriteSort(
       filterBlockedIds(base, metadata, blockedTagSet),
-      { mode: sortMode, ...favorites.sortInput },
+      { mode: effectiveSortMode, randomSeed: randomSortSeed, ...favorites.sortInput },
       result?.certainty ? { order: result.order, certainty: result.certainty } : null
     );
-  }, [total, orderSeed, result, metadata, blockedTagSet, sortMode, favorites.sortInput]);
+  }, [total, orderSeed, result, metadata, blockedTagSet, effectiveSortMode, randomSortSeed, favorites.sortInput]);
 
   const order = sortResult.order;
 
@@ -311,8 +323,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   }, [manifest, result, metadata, blockedTagSet]);
 
   const catalogOrder = useMemo(
-    () => favoriteOrder(catalogBase, { mode: sortMode, ...favorites.sortInput }),
-    [catalogBase, sortMode, favorites.sortInput]
+    () =>
+      favoriteOrder(catalogBase, {
+        mode: effectiveSortMode,
+        randomSeed: randomSortSeed,
+        ...favorites.sortInput,
+      }),
+    [catalogBase, effectiveSortMode, randomSortSeed, favorites.sortInput]
   );
 
   // Which cell a room id sits in on the map right now, keyed by id rather
@@ -935,7 +952,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             on: favorites.isFavorite(id),
             count: favorites.countOf(id),
             toggle: () => {
-              if (mode === 'map' && sortMode !== 'relevance') {
+              // Only 'mine'/'count' read favorites.sortInput for placement -
+              // 'random' sorts by seed alone, so a toggle under it changes
+              // nothing about `order` and must not ask for an animation.
+              if (mode === 'map' && (sortMode === 'mine' || sortMode === 'count')) {
                 requestAnimation('', { onSettled: () => onFavoriteRearrangedRef.current(id) });
               }
               void favorites.toggle(id);
@@ -1034,10 +1054,19 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;
+      // Switching INTO 'random' draws a fresh shuffle - re-picking it later
+      // (without leaving it first) must not reroll an order already on
+      // screen. And a running search would otherwise make the reshuffle look
+      // like a no-op (`favoriteOrder` falls back to match order while a
+      // search is active - see the `result` check below), so clear it too.
+      if (next === 'random') {
+        setRandomSortSeed(Date.now());
+        if (result) clearSearch();
+      }
       requestAnimation(describeSort(next, favoriteCount(manifest.rooms, favorites.mine)));
       setSortMode(next);
     },
-    [sortMode, requestAnimation, manifest, favorites.mine]
+    [sortMode, requestAnimation, manifest, favorites.mine, result, clearSearch]
   );
 
   // The center tile's favorites-sort switch reads as a physical switch, not a
