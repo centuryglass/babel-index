@@ -947,7 +947,7 @@ mark {
 */
 .overlay-tile {
   display: block; width: auto; max-width: 100%; height: auto;
-  margin: 4px auto 14px; border-radius: 2px; background: #14110d;
+  margin: 4px auto 14px; border-radius: 1px; background: #14110d;
   box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
 }
 /*
