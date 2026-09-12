@@ -6,6 +6,7 @@ import {
   mountedPages,
   spacerHeight,
   rowHeight,
+  stackedRowHeight,
   tileHeight,
   thumbLevel,
   pageAtScroll,
@@ -119,6 +120,15 @@ test('the thumbnail mat counts toward the row, on both sides', () => {
   assert.equal(rowHeight(320, 0, 0, 6), tileHeight(320) + 12);
   // Still capped by the text column when the text needs more than tile+mat.
   assert.equal(rowHeight(120, 0, tileHeight(120) + 100, 6), tileHeight(120) + 100);
+});
+
+test('an ultra-narrow row stacks the tile under the head and details, rather than beside them', () => {
+  // Sum, not max - the picture runs the full width beneath the name row
+  // rather than sharing it, so the two never compete for the same height.
+  assert.equal(stackedRowHeight(320, 30, 20), tileHeight(320) + 30 + 20);
+  assert.equal(stackedRowHeight(320, 30, 20, 24), tileHeight(320) + 30 + 20 + 24);
+  // The mat costs both sides, exactly like `rowHeight`'s.
+  assert.equal(stackedRowHeight(320, 30, 20, 0, 6), tileHeight(320) + 12 + 30 + 20);
 });
 
 test('a thumbnail asks for a level that can actually cover it', () => {
