@@ -1338,6 +1338,67 @@ mark {
 .score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
 .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
+/*
+  Below ULTRA_NARROW_PX (CatalogView.tsx) a row has no width left to show a
+  thumbnail beside any text at all - not even the wrapped-title, no-map-link
+  shape `.narrow` already falls back to. So it stops being a smaller version
+  of the floated row and becomes a stack instead: the name row first, full
+  width; the picture beneath it, full width; and no chips or story at all -
+  `CatalogRow` does not render `RoomDetails` in this shape, and
+  `.catalog-details-link` stands in for both, opening the same room overlay
+  every other "read more" affordance here already opens.
+
+  `.catalog-row:not(.catalog-center)`'s own `.catalog-tile` width comes from
+  `--catalog-row-thumb` (`CatalogView.tsx`'s `rowThumbPx`) rather than the
+  center room's `--catalog-thumb` - the two diverge exactly here, since an
+  ultra-narrow row's tile is sized to the row's own full width
+  (`ultraThumbWidth`) while the center room's fixed two-column thumbnail
+  never changes shape.
+*/
+.catalog-row:not(.catalog-center) .catalog-tile { width: var(--catalog-row-thumb); }
+.catalog.ultra-narrow .catalog-row .catalog-tile-button { float: none; display: block; margin: 0; }
+/*
+  Fixed to `--catalog-ultra-head` (`ULTRA_HEAD_PX`) rather than left to its
+  content, same reason every other fixed piece of a catalog row is: the row's
+  own height is arithmetic (`stackedRowHeight`), so what this actually
+  renders at and what JS reserved for it cannot be allowed to drift.
+  Centering the content in the box is what turns unused reserve into
+  breathing room instead of an empty gap at the bottom.
+*/
+.catalog.ultra-narrow .catalog-row .catalog-head {
+  height: var(--catalog-ultra-head); margin-bottom: 0;
+  align-items: center; overflow: hidden;
+}
+/*
+  `.narrow`'s two-line title clamp (above) exists because a narrow row's
+  head shares its line with the floated tile and has little width to spare.
+  An ultra-narrow head is the row's own full width, so it reverts to one
+  ellipsised line - overriding back rather than never clamping in the first
+  place, since `.ultra-narrow` rows are always also `.narrow` ones
+  (`ULTRA_NARROW_PX < NARROW_PX`).
+*/
+.catalog.ultra-narrow .catalog-row .catalog-name { white-space: nowrap; }
+.catalog.ultra-narrow .catalog-row .catalog-title {
+  display: block; -webkit-line-clamp: unset; text-overflow: ellipsis; white-space: nowrap;
+}
+/*
+  Widthed to the PICTURE, not the card - `--catalog-row-thumb` is the same
+  variable `.catalog-tile` draws at, so this lines up with the image's own
+  edges rather than the card's, which sit `--catalog-mat` further out on
+  either side. `margin: 0 auto` is what centers it into that gap symmetrically
+  - the tile-button's mat is invisible against the paper card, so a
+  full-width link here reads as wider than the picture above it, and this is
+  where the two elements are made to agree.
+*/
+.catalog-details-link {
+  display: flex; align-items: center; justify-content: center;
+  height: var(--catalog-ultra-details); width: var(--catalog-row-thumb);
+  margin: 0 auto; box-sizing: border-box;
+  border: 1px solid var(--paper-edge); border-radius: 4px; background: none;
+  color: var(--paper-accent); font: inherit; font-size: 11px; cursor: pointer;
+}
+.catalog-details-link:hover { background: rgba(var(--accent-rgb),0.12); }
+
 /* The center room's row: the shelf, as links. */
 /*
   The one row that sizes itself. Forty shelf titles wrap to as many lines

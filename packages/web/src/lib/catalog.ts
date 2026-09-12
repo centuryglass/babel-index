@@ -163,6 +163,28 @@ export function rowHeight(thumbWidth: number, padding = 0, textMin = 0, matPad =
 }
 
 /**
+ * A row's height in the ultra-narrow layout, where the picture runs full
+ * width BENEATH the name row rather than beside it - see `CatalogView.tsx`'s
+ * `ULTRA_NARROW_PX`. `rowHeight` takes the max of two side-by-side columns;
+ * this is a stack, so it is their sum instead. `headPx`/`detailsPx` are the
+ * rank/title/favorite line and the "keywords & story" link that replaces the
+ * chips and story text an ultra-narrow row has no room to show.
+ *
+ * @param thumbWidth css pixels, the full-bleed width - see `ultraThumbWidth`
+ * @param padding the row's vertical padding, both halves
+ * @param matPad the thumbnail's paper mat, one side
+ */
+export function stackedRowHeight(
+  thumbWidth: number,
+  headPx: number,
+  detailsPx: number,
+  padding = 0,
+  matPad = 0,
+): number {
+  return tileHeight(thumbWidth) + 2 * matPad + headPx + detailsPx + padding;
+}
+
+/**
  * Which pyramid level a thumbnail of this width should ask for.
  *
  * Delegates to the pyramid's own policy rather than restating a ladder here -

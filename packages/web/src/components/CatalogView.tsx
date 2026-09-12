@@ -51,6 +51,7 @@ import {
   mountedPages,
   spacerHeight,
   rowHeight,
+  stackedRowHeight,
   tileHeight,
   thumbLevel,
   pageAtScroll,
@@ -81,6 +82,41 @@ type Highlight = { keyword: (text: string) => MatchRange[]; story: (text: string
  * window are the same row with the same problem.
  */
 const NARROW_PX = 560;
+
+/**
+ * Where a row loses the width to show a thumbnail BESIDE any text at all.
+ *
+ * `NARROW_PX` already drops the map link and lets the title wrap rather than
+ * shrink the two columns forever - but a text column a couple dozen
+ * characters wide is unreadable rubble, not a smaller version of the wide
+ * row. Below this, a row is a different SHAPE rather than a smaller one:
+ * rank/title/favorite get their own full-width line, the picture runs full
+ * width beneath it, and the keywords and story move behind a "keywords &
+ * story" link into the room overlay (`onExpand`) that already exists for
+ * this, rather than being crushed into a sliver beside the tile.
+ *
+ * A width below `NARROW_PX`, same reasoning as that constant - measured from
+ * the list, not a media query, because the ultra-narrow shape changes what
+ * `rowHeight`'s spacer arithmetic has to account for (`stackedRowHeight`
+ * instead of `rowHeight`), not just how the row looks.
+ */
+const ULTRA_NARROW_PX = 400;
+
+/**
+ * How wide an ultra-narrow row's thumbnail is - the row's own width, not a
+ * fraction of it like `thumbWidth`, since the picture runs full-bleed
+ * beneath the name row rather than sharing the row with a text column.
+ * Trimmed by the two nested horizontal insets around it (the row's own
+ * padding and the card's, 16px a side each - see `.catalog-row`/
+ * `.catalog-row .catalog-body.paper-sheet` in style.css) and by the mat
+ * border on both sides, so the image (plus its mat) lands flush with the
+ * card's edges instead of overflowing them - `matPad` is `CatalogView`'s
+ * `MAT_PAD`, passed in rather than read as a module constant here so this
+ * stays a pure function of its arguments.
+ */
+const ULTRA_ROW_HPAD = 64;
+const ultraThumbWidth = (available: number, matPad: number): number =>
+  Math.max(80, available - ULTRA_ROW_HPAD - 2 * matPad);
 
 /**
  * How wide a thumbnail is, from the width the list has to spend.
@@ -151,6 +187,24 @@ const MAT_PAD = 6;
  */
 const TEXT_CHROME_PX = 50;
 const STORY_LINE_PX = 19;
+
+/**
+ * What an ultra-narrow row reserves above and below its full-width picture -
+ * see `ULTRA_NARROW_PX`. Both are fixed heights handed to CSS through
+ * `--catalog-ultra-head`/`--catalog-ultra-details` rather than left to the
+ * content's own size, for the same reason `TEXT_CHROME_PX` is flat: the row
+ * is fixed-height (`stackedRowHeight`), so what CSS renders and what JS
+ * reserved for it cannot be allowed to drift.
+ *
+ * The head stays one line even though `ULTRA_NARROW_PX < NARROW_PX` means
+ * `.narrow`'s two-line title clamp is also in force - style.css overrides it
+ * back to a single ellipsised line for `.ultra-narrow` specifically, because
+ * the head is now the row's own full width rather than a text column beside
+ * a floated tile, and has room for the title on one line that the narrow
+ * shape never did.
+ */
+const ULTRA_HEAD_PX = 32;
+const ULTRA_DETAILS_PX = 30;
 
 /**
  * The chips' own line height, CSS gap included - the pixel cost `chipLines`
@@ -369,8 +423,17 @@ export function CatalogView({
   // Narrow rows drop the map link and let the name wrap instead of clipping
   // it - see `NARROW_PX`. Both halves of that trade are priced below.
   const narrow = geom.width < NARROW_PX;
+  // Below `ULTRA_NARROW_PX`, a row is a different shape rather than a
+  // smaller one - see that constant's own comment. `narrow` still holds
+  // (`ULTRA_NARROW_PX < NARROW_PX`), so the map-link/wrapped-title trade
+  // above applies underneath it too.
+  const ultraNarrow = geom.width < ULTRA_NARROW_PX;
   const titleReserve = narrow ? TITLE_LINE_PX : 0;
   const cardPad = narrow ? CARD_PAD_NARROW : CARD_PAD;
+  // A row's own thumbnail - full-bleed under ultra-narrow, a fraction of the
+  // width otherwise. Distinct from `thumbPx` above, which sizes only the
+  // center room's fixed two-column thumbnail and never changes shape.
+  const rowThumbPx = ultraNarrow ? ultraThumbWidth(geom.width, MAT_PAD) : thumbWidth(geom.width);
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
   // exact, which is the property the sliding window rests on.
@@ -378,13 +441,15 @@ export function CatalogView({
   // The card's own inset is charged to the row rather than to the text column,
   // because the thumbnail floats INSIDE the card: the padding wraps the image
   // and the text alike, so both of `rowHeight`'s two columns pay it once.
-  const rowPx = rowHeight(
-    thumbPx,
-    ROW_PAD + cardPad,
-    TEXT_MIN + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
-    MAT_PAD
-  );
-  const level = thumbLevel(thumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
+  const rowPx = ultraNarrow
+    ? stackedRowHeight(rowThumbPx, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, MAT_PAD)
+    : rowHeight(
+        rowThumbPx,
+        ROW_PAD + cardPad,
+        TEXT_MIN + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
+        MAT_PAD
+      );
+  const level = thumbLevel(rowThumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
   const total = order.length;
   const pages = pageCount(total, perPage);
@@ -504,13 +569,16 @@ export function CatalogView({
 
   return (
     <div
-      className={`catalog${narrow ? ' narrow' : ''}${leaving ? ' leaving' : ''}`}
+      className={`catalog${narrow ? ' narrow' : ''}${ultraNarrow ? ' ultra-narrow' : ''}${leaving ? ' leaving' : ''}`}
       ref={hostRef}
       style={{
         '--catalog-thumb': `${thumbPx}px`,
+        '--catalog-row-thumb': `${rowThumbPx}px`,
         '--catalog-mat': `${MAT_PAD}px`,
         '--catalog-row': `${rowPx}px`,
         '--catalog-chips-max': `${chips * CHIP_LINE_PX}px`,
+        '--catalog-ultra-head': `${ULTRA_HEAD_PX}px`,
+        '--catalog-ultra-details': `${ULTRA_DETAILS_PX}px`,
         '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
         '--catalog-line': `${STORY_LINE_PX}px`,
         '--catalog-title-line': `${TITLE_LINE_PX}px`,
@@ -727,7 +795,7 @@ export function CatalogView({
               total={total}
               entry={metadata?.[id] ?? null}
               src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
-              thumbPx={thumbPx}
+              thumbPx={rowThumbPx}
               cell={cellOfId(id)}
               onShowOnMap={onShowOnMap}
               onKeyword={onKeyword}
@@ -738,6 +806,7 @@ export function CatalogView({
               weights={config.search.weights}
               favorite={favoriteFor(id)}
               narrow={narrow}
+              ultraNarrow={ultraNarrow}
               spotlit={id === highlightId}
             />
           ))}
@@ -783,7 +852,7 @@ export function CatalogView({
 function CatalogRow({
   id, rank, total, entry, src, thumbPx, cell,
   onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights, favorite,
-  narrow = false, spotlit = false,
+  narrow = false, ultraNarrow = false, spotlit = false,
 }: {
   id: number;
   rank: number;
@@ -802,6 +871,13 @@ function CatalogRow({
   favorite: FavoriteControl | null;
   /** whether the list is too narrow to carry the map link beside the name - see `NARROW_PX` */
   narrow?: boolean;
+  /**
+   * Whether the list has no width left to show keywords or story beside the
+   * tile at all - see `ULTRA_NARROW_PX`. The row becomes a stack (name row,
+   * full-width picture, a "keywords & story" link into the overlay) instead
+   * of the usual floated-tile card, and `RoomDetails` is not rendered at all.
+   */
+  ultraNarrow?: boolean;
   /** whether "show in the catalog" just landed here - see `CatalogView`'s `highlightId` */
   spotlit?: boolean;
 }) {
@@ -819,7 +895,20 @@ function CatalogRow({
   // Both affordances this drives are absolutely positioned, which is what keeps
   // this from feeding back into itself - a "read the rest" or a "+2" that took
   // part in the flow would change the very heights being measured here.
+  //
+  // Ultra-narrow renders neither the story nor the chips at all - see
+  // `RoomDetails` below - so there is nothing here to measure. Both flags
+  // still have to be reset rather than just skipped: a row that was clipped
+  // in the floated shape and then resizes into this one keeps whatever
+  // state that last measurement left behind otherwise, and the fade this
+  // drives (`.catalog-body.clipped::after`) would go on covering a button
+  // that has nothing to do with a story that no longer renders here.
   useLayoutEffect(() => {
+    if (ultraNarrow) {
+      setClipped(false);
+      setHiddenChips(0);
+      return;
+    }
     const card = cardRef.current;
     if (!card) return;
     const measure = () => {
@@ -868,7 +957,73 @@ function CatalogRow({
     const chips = card.querySelector('.chips');
     if (chips) ro.observe(chips);
     return () => ro.disconnect();
-  }, [desc.description, entry, result, thumbPx, narrow]);
+  }, [desc.description, entry, result, thumbPx, narrow, ultraNarrow]);
+
+  const tile = (
+    <button
+      className="catalog-tile-button"
+      onClick={() => onExpand(id, rank)}
+      aria-label={`enlarge room ${id}`}
+    >
+      {/*
+        `alt` is the sidecar's optional caption (`desc.picture`), empty when
+        the corpus does not carry one. It is redundant for a screen reader
+        here - the wrapping button's `aria-label` wins the accessible name -
+        but the attribute is still correct: this is the room's real caption,
+        not decoration, for anything else that reads `alt` (view source, an
+        image-only crawler, a broken-image fallback).
+      */}
+      <img
+        className="catalog-tile"
+        src={src}
+        alt={desc.picture ?? ''}
+        width={thumbPx}
+        height={tileHeight(thumbPx)}
+        loading="lazy"
+        decoding="async"
+      />
+    </button>
+  );
+
+  const head = (
+    <div className="catalog-head">
+      <h2 className="catalog-name">
+        <span className="catalog-rank">{rank + 1}</span>
+        <span className="catalog-title">{roomTitle(entry, id)}</span>
+      </h2>
+      {/*
+        The map link is the first thing a narrow row gives up. It is the
+        widest fixed item on the line the room's own name has to share, and
+        a name clipped to "Room" to make space for it loses the thing the
+        row exists to show - while `RoomOverlay`, one tap away on the
+        thumbnail, carries the same link. Wide rows keep it: there the
+        width costs nothing and it saves the tap.
+
+        A room past the "rooms on the map" slider has no cell to fly to, and
+        saying so is more honest than a dead control - it is also the only
+        place that slider's effect is visible as something other than a
+        thinner map.
+      */}
+      {!narrow &&
+        (cell ? (
+          <button className="catalog-show" onClick={() => onShowOnMap(cell.x, cell.y)}>
+            show on the map
+          </button>
+        ) : (
+          <span className="catalog-show dim">not on the map</span>
+        ))}
+      {/*
+        In the head, NOT inside `RoomDetails` where the card and the
+        overlay put it. A row is a fixed height - that is what lets the
+        spacers standing in for unmounted pages be arithmetic - so a
+        control added to the text column would have to be reserved for in
+        `TEXT_MIN`/`TEXT_CHROME_PX` and would eat two lines of story on
+        every row to do it. In the head it costs width on a line that
+        already exists.
+      */}
+      {favorite && <FavoriteToggle favorite={favorite} />}
+    </div>
+  );
 
   return (
     <li
@@ -878,108 +1033,74 @@ function CatalogRow({
       aria-posinset={rank + 1}
     >
       <div className={clipped ? 'catalog-body paper-sheet clipped' : 'catalog-body paper-sheet'} ref={cardRef}>
-        {/*
-          The tile is a button, because pressing it does something - it opens the
-          room at whatever size the display allows. A bare `<img>` with a click
-          handler is not reachable by keyboard and announces as an image, not as a
-          control.
+        {ultraNarrow ? (
+          /*
+            No width left to show the tile beside anything - see
+            `ULTRA_NARROW_PX`. The name row comes FIRST and full width (unlike
+            the floated-tile shape below, where the head sits beside the
+            picture), the picture runs the row's own width beneath it, and the
+            keywords/story that `RoomDetails` would otherwise show are not
+            rendered at all - a link into the same room overlay every other
+            "read more" affordance here already opens (`onExpand`) stands in
+            for them, since there is nothing left to fit them beside.
+          */
+          <>
+            {head}
+            {tile}
+            <button type="button" className="catalog-details-link" onClick={() => onExpand(id, rank)}>
+              keywords &amp; story →
+            </button>
+          </>
+        ) : (
+          <>
+            {/*
+              The tile is a button, because pressing it does something - it
+              opens the room at whatever size the display allows. A bare
+              `<img>` with a click handler is not reachable by keyboard and
+              announces as an image, not as a control.
 
-          It sits INSIDE the card and floats, so the story wraps beside it and
-          then runs the card's full width once past its bottom edge. The height
-          a row does not spend on the picture is the story's, rather than dark
-          background under a small thumbnail - which is what a phone's row is
-          mostly made of otherwise. The center room keeps the old two-column
-          shape (see `catalog-center` in `CatalogView`): its art carries
-          addressable hotspots positioned against the image's own box, and a
-          float would move the box out from under them.
-        */}
-        <button
-          className="catalog-tile-button"
-          onClick={() => onExpand(id, rank)}
-          aria-label={`enlarge room ${id}`}
-        >
-          {/*
-            `alt` is the sidecar's optional caption (`desc.picture`), empty when
-            the corpus does not carry one. It is redundant for a screen reader
-            here - the wrapping button's `aria-label` wins the accessible name -
-            but the attribute is still correct: this is the room's real caption,
-            not decoration, for anything else that reads `alt` (view source, an
-            image-only crawler, a broken-image fallback).
-          */}
-          <img
-            className="catalog-tile"
-            src={src}
-            alt={desc.picture ?? ''}
-            width={thumbPx}
-            height={tileHeight(thumbPx)}
-            loading="lazy"
-            decoding="async"
-          />
-        </button>
+              It sits INSIDE the card and floats, so the story wraps beside it
+              and then runs the card's full width once past its bottom edge.
+              The height a row does not spend on the picture is the story's,
+              rather than dark background under a small thumbnail - which is
+              what a phone's row is mostly made of otherwise. The center room
+              keeps the old two-column shape (see `catalog-center` in
+              `CatalogView`): its art carries addressable hotspots positioned
+              against the image's own box, and a float would move the box out
+              from under them.
+            */}
+            {tile}
 
-        {/*
-          The room's identity on the left, the way out to the map on the right of
-          the SAME row. It used to sit under the chips, which put a link and a
-          row of tags within a thumb's width of each other - on a phone that is a
-          coin toss between running a search and flying the camera.
-        */}
-        <div className="catalog-head">
-          <h2 className="catalog-name">
-            <span className="catalog-rank">{rank + 1}</span>
-            <span className="catalog-title">{roomTitle(entry, id)}</span>
-          </h2>
-          {/*
-            The map link is the first thing a narrow row gives up. It is the
-            widest fixed item on the line the room's own name has to share, and
-            a name clipped to "Room" to make space for it loses the thing the
-            row exists to show - while `RoomOverlay`, one tap away on the
-            thumbnail, carries the same link. Wide rows keep it: there the
-            width costs nothing and it saves the tap.
+            {/*
+              The room's identity on the left, the way out to the map on the
+              right of the SAME row. It used to sit under the chips, which put
+              a link and a row of tags within a thumb's width of each other -
+              on a phone that is a coin toss between running a search and
+              flying the camera.
+            */}
+            {head}
 
-            A room past the "rooms on the map" slider has no cell to fly to, and
-            saying so is more honest than a dead control - it is also the only
-            place that slider's effect is visible as something other than a
-            thinner map.
-          */}
-          {!narrow &&
-            (cell ? (
-              <button className="catalog-show" onClick={() => onShowOnMap(cell.x, cell.y)}>
-                show on the map
+            <RoomDetails
+              entry={entry}
+              desc={desc}
+              onKeyword={onKeyword}
+              highlight={highlight}
+              tagLinks={tagLinks}
+              rank={rank}
+              result={result}
+              weights={weights}
+              scoreLayout="strip"
+              chipOverflow={
+                hiddenChips > 0 ? { count: hiddenChips, onClick: () => onExpand(id, rank) } : null
+              }
+            />
+
+            {clipped && (
+              <button className="catalog-more" onClick={() => onExpand(id, rank)}>
+                read the rest →
               </button>
-            ) : (
-              <span className="catalog-show dim">not on the map</span>
-            ))}
-          {/*
-            In the head, NOT inside `RoomDetails` where the card and the
-            overlay put it. A row is a fixed height - that is what lets the
-            spacers standing in for unmounted pages be arithmetic - so a
-            control added to the text column would have to be reserved for in
-            `TEXT_MIN`/`TEXT_CHROME_PX` and would eat two lines of story on
-            every row to do it. In the head it costs width on a line that
-            already exists.
-          */}
-          {favorite && <FavoriteToggle favorite={favorite} />}
-        </div>
-
-        <RoomDetails
-          entry={entry}
-          desc={desc}
-          onKeyword={onKeyword}
-          highlight={highlight}
-          tagLinks={tagLinks}
-          rank={rank}
-          result={result}
-          weights={weights}
-          scoreLayout="strip"
-          chipOverflow={
-            hiddenChips > 0 ? { count: hiddenChips, onClick: () => onExpand(id, rank) } : null
-          }
-        />
-
-        {clipped && (
-          <button className="catalog-more" onClick={() => onExpand(id, rank)}>
-            read the rest →
-          </button>
+            )}
+          </>
         )}
       </div>
     </li>
