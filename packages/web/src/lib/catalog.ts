@@ -23,11 +23,14 @@
  * hands, mid-scroll. Measuring instead would mean a real virtualiser and a
  * measurement cache.
  *
- * So the row is a fixed height derived from the tile: the image is the tall
- * thing in it, the story beside it is clamped to fit, and the full story is one
- * click away in the room card that already exists. `spacerHeight` is then
- * arithmetic rather than an estimate, which is the property the whole approach
- * rests on.
+ * So the row is a fixed height derived from whichever of its two columns needs
+ * more, and the content is cut to it: the story by the card's own height (it
+ * flows around the floated thumbnail, so it cannot be clamped by a line count),
+ * the keywords by `chipLines`. Everything a row cuts is one click away in the
+ * room card that already exists, and the row says what it cut rather than
+ * leaving a reader to wonder - see `CatalogView`'s `chipOverflow` and
+ * `catalog-more`. `spacerHeight` is then arithmetic rather than an estimate,
+ * which is the property the whole approach rests on.
  */
 import { BASE_TILE, idealLevel } from './pyramid.ts';
 
@@ -319,26 +322,31 @@ export function flipCss(t: FlipTransform): string {
 }
 
 /**
- * How many lines of story a row has room for.
+ * How many lines of keyword chips a row has room for.
  *
- * The clamp was two lines flat, which on a wide display cut a story off with
- * forty visible pixels of nothing under it - the tile is the tall column and
- * the text rarely fills it. So the clamp is derived from what is actually
- * left: the row's height, less everything above and below the story, divided
- * by a line.
+ * Derived from what the row actually leaves over rather than stated flat: on a
+ * narrow display the thumbnail shrinks while the name row, the score strip and
+ * the story minimum beside it do not, and a fixed two-line cap there swallowed
+ * a room's third keyword with no indication at all - while the same row had
+ * unspent height in it. See `CatalogView.tsx`'s `CHIP_LINE_PX` for the pixel
+ * cost of a line, and its `chipOverflow` for what happens to the keywords that
+ * still do not fit: they are counted and reported, never silently dropped.
  *
- * At least one line, because a clamp of zero hides the story completely rather
- * than shortening it - and on a display narrow enough to leave no room, one
- * clipped line is still the honest answer.
+ * The story is NOT clamped against this. It flows around the floated
+ * thumbnail and is cut by the card's own height, which is the only way its
+ * lines can be narrow beside the picture and full width beneath it.
  *
- * @param rowPx        the row's height
- * @param reservedPx   the name row, chips, score strip and padding
+ * At least one line, because a clamp of zero hides the keywords completely
+ * rather than shortening them.
+ *
+ * @param contentPx    the card's content box height
+ * @param reservedPx   the name row, story minimum and score strip
  */
-export function storyLines(rowPx: number, reservedPx: number, lineHeightPx: number): number {
+export function chipLines(contentPx: number, reservedPx: number, lineHeightPx: number): number {
   // A line height of zero means nothing has been measured yet, and dividing by
   // the 1px floor a `Math.max` would give returns a clamp of a hundred lines -
   // which is not "unclamped", it is a wrong number that happens to look
   // harmless. One line is the honest answer to "I cannot tell yet".
   if (!(lineHeightPx > 0)) return 1;
-  return Math.max(1, Math.floor((rowPx - reservedPx) / lineHeightPx));
+  return Math.max(1, Math.floor((contentPx - reservedPx) / lineHeightPx));
 }

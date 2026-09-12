@@ -121,6 +121,39 @@ code and the git log are the record of what was.
     checks for two consecutive stable reads, which a still-controlled camera
     also produces.
 
+  **[2026-09-12] A cloud agent container reproduces this DETERMINISTICALLY,
+  which is the instrumented repro this entry asks for below.** Both tests fail
+  on every run there, not intermittently, and both fail the same way:
+  `locator('.overlay')` times out after 5s because the room card never opens -
+  the click lands at a fixed screen point that no longer holds a room, exactly
+  what a swallowed `flyTo` would cause. The other 13 tests in the file pass, as
+  do `catalog`, `accessibility`, `favorites`, `shelf`, `artist-statement`,
+  `keyboard-cursor` and `webgl-map` in full.
+
+  ```sh
+  BABEL_E2E_CHROMIUM=/opt/pw-browsers/chromium node --import \
+    ./build/register.mjs --test --test-concurrency=1 \
+    packages/web/e2e/map-gestures.e2e.ts
+  ```
+
+  What that pins down:
+  - It is NOT a regression from any recent branch. Reproduced identically at
+    `4df7e20` (merge of #159), `85d7555` (merge of #160 `overlay-header-chrome`,
+    whose name made it the obvious suspect - it is not) and `f8493a7`.
+  - It is NOT environmental in the "different browser build" sense: the whole
+    suite including these two is GREEN in GitHub Actions on `f8493a7`
+    (`browser smoke test`, run 34705031196). A slower machine turning a latent
+    race into a 100% failure is the simplest story that fits both readings.
+  - `recentre()` is already in place in the right-click test and is still not
+    enough here, so whatever it works around is not fully worked around.
+  - The long-press test is a CASCADE, not a second instance: it never
+    recentres, it inherits the camera the right-click test left behind. Fixing
+    the first should fix the second, and a fix must be judged on both.
+
+  So the cheap path for whoever picks this up is a container rather than a
+  bisect: the failure is already sitting there every run, with no flake-hunting
+  needed.
+
   Not yet root-caused. Candidates not yet ruled out: something downstream of
   `setResult` (e.g. `sortResult`/`layout`'s `useMemo` in `main.tsx`, or
   `pushHistory`) causing `useRearrangement.ts`'s effect to see `layout`/
