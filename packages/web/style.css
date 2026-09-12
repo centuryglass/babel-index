@@ -978,24 +978,39 @@ mark {
   container, not stretch: only the body stretches, or the tile image, which has
   no set height, would stretch too and lose its aspect ratio.
 */
-.overlay-columns.columns { display: flex; align-items: flex-start; gap: 24px; }
+/*
+  The paper is one sheet under both the tile and the text, not a card
+  floating beside a picture on the dark cover - `.overlay-body` below still
+  carries `.paper-sheet` for its ink color variables, but its own
+  background/border/shadow are switched off here so the two don't draw as
+  two stacked cards. Padding moves to this container so the tile sits
+  inset from the paper's edge the same way the text does.
+*/
+.overlay-columns.columns {
+  display: flex; align-items: flex-start; gap: 0; padding: 22px 24px;
+  background: linear-gradient(158deg, var(--paper-hi), var(--paper));
+  border: 1px solid var(--paper-edge); border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+}
 /*
   The tile keeps its own natural size (`flex-basis: auto` reads that
   from the image itself) rather than stretching to fill whatever the
   text column leaves behind - `max-width: 100%` above still applies,
   so it only ever shrinks from there, never grows past it.
 */
-.overlay-columns.columns .overlay-tile { flex: 0 1 auto; min-width: 0; margin: 4px 0 0; }
+.overlay-columns.columns .overlay-tile { flex: 0 1 auto; min-width: 0; margin: 0 24px 0 0; }
 /*
   A comfortable reading width, not a stretch to fill the leftover row -
   capped so a short story doesn't get stranded in a column sized for a
   much longer one, and the dialog's own `fit-content` means there's no
-  leftover space to fill anyway. The rule against the left edge marks
-  the split as deliberate rather than an accidental gap.
+  leftover space to fill anyway. The border-left is the one divider
+  between the tile and the text, drawn on the shared paper rather than as
+  a second card's own edge.
 */
 .overlay-columns.columns .overlay-body {
   flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
-  padding-left: 24px; border-left: 1px solid var(--edge);
+  padding: 0 0 0 24px; margin: 0; background: none; box-shadow: none;
+  border: none; border-left: 1px solid var(--edge); border-radius: 0;
 }
 /*
   Split view only: the tile is usually taller than the text needs to be, so
