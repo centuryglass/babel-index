@@ -13,7 +13,6 @@ import {
   focusScrollTop,
   flipTransform,
   rectOf,
-  storyLines,
   chipLines,
   alphabeticalOrder,
 } from './catalog.ts';
@@ -261,35 +260,20 @@ test('a zero-sized destination does not produce a divide by zero', () => {
   assert.equal(t.scaleY, 1);
 });
 
-test('the story clamp is derived from the room the row actually has', () => {
-  // A tall row fits more of the story; the old flat two-line clamp cut a story
-  // off with visible empty space under it.
-  assert.equal(storyLines(202, 96, 19), 5);
-  assert.equal(storyLines(120, 96, 19), 1);
-
-  // Never zero: a clamp of 0 hides the story rather than shortening it, so a
-  // display too narrow to fit a line still shows one, clipped.
-  assert.equal(storyLines(96, 96, 19), 1);
-  assert.equal(storyLines(40, 96, 19), 1);
-  assert.equal(storyLines(202, 96, 0), 1);
-
-  // More reserved space (the score strip appearing) means fewer lines.
-  assert.ok(storyLines(232, 126, 19) <= storyLines(232, 96, 19));
-});
-
-test('the chip clamp is derived the same way the story clamp is', () => {
-  // A tall row (a narrow display's small tile against a fixed text minimum)
-  // has room for more than the old flat two lines of chips.
+test('the chip clamp is derived from the room the row actually has', () => {
+  // A tall card (a narrow display's small tile against a fixed text minimum)
+  // has room for more than the flat two lines of chips a `max-height` gave it.
   assert.equal(chipLines(160, 50, 24), 4);
   assert.equal(chipLines(74, 50, 24), 1);
 
-  // Never zero: a room's keywords should clip rather than vanish outright.
+  // Never zero: a room's keywords should clip - and be counted by the row's
+  // own "+N" - rather than vanish outright.
   assert.equal(chipLines(50, 50, 24), 1);
   assert.equal(chipLines(30, 50, 24), 1);
   assert.equal(chipLines(160, 50, 0), 1);
 
-  // More reserved space (a taller title, the score strip) leaves fewer lines
-  // for chips, exactly as it does for the story.
+  // More reserved space (a taller title, the score strip appearing) leaves
+  // fewer lines for chips.
   assert.ok(chipLines(160, 90, 24) <= chipLines(160, 50, 24));
 });
 

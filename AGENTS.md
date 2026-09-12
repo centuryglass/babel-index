@@ -1011,13 +1011,52 @@ code, not a standing invariant.
 - **Rows are a FIXED height and the spacers are arithmetic, not estimates.**
   `spacerHeight` stands in for unmounted pages exactly, so a recycled page
   cannot move the scroll position under a reader's hands. That is why the story
-  is line-clamped, why the score breakdown in a row is the one-line `strip`
-  layout rather than the card's `table` (the table was 108px in a 202px row and
-  clipped itself), and why `rowHeight` takes the max of the tile and the text
-  column - on a narrow display the thumbnail shrinks and the story does not. The
-  center room's row is the one exception, allowed to size itself because it sits
-  outside the paging arithmetic; its measured height is the scroll conversion's
-  `leadPx`.
+  is cut to the card rather than allowed to grow it, why the score breakdown in
+  a row is the one-line `strip` layout rather than the card's `table` (the table
+  was 108px in a 202px row and clipped itself), and why `rowHeight` takes the
+  max of the tile and the text column - on a narrow display the thumbnail
+  shrinks and the story does not. The center room's row is the one exception,
+  allowed to size itself because it sits outside the paging arithmetic; its
+  measured height is the scroll conversion's `leadPx`.
+- **A room row's thumbnail FLOATS inside the card, and the story wraps around
+  it.** `.catalog-row .catalog-tile-button` is `float: left` inside
+  `.catalog-body`, so the story's line boxes are narrow beside the picture and
+  full width beneath it - the height a row does not spend on the picture is the
+  story's rather than dark background under a small tile, which is what a
+  phone's row was mostly made of when the two were rigid columns. Two things
+  follow, and both bit once already:
+  - **The story cannot be line-clamped.** `-webkit-line-clamp` needs
+    `display: -webkit-box`, which establishes its own formatting context and so
+    refuses to flow around the float. The card's fixed height does the cutting
+    and `.catalog-body.clipped::after` fades the cut, which is why there is no
+    `storyLines`/`--catalog-lines` any more. `.catalog-head` and `.chips` stay
+    flex on purpose: each is its own formatting context, so they sit BESIDE the
+    float and keep the narrow column while only the prose wraps.
+  - **`scrollHeight > clientHeight` is NOT how you ask whether a row cut
+    something.** A float and its margin count toward `scrollHeight` even when
+    they sit comfortably inside the card, which offered "read the rest" on
+    every wide row whose story had already finished. `CatalogRow` compares the
+    bottom of the card's in-flow children against the edge the card clips at,
+    skipping the float and the absolutely positioned affordances.
+  The center room keeps the old two-column shape: its art carries addressable
+  hotspots (`CENTER_BOOK_PATH`, the distill toggle) positioned against the
+  image's own box, and a float moves that box out from under them.
+- **What a row cannot show, it counts - it never just stops.** A fixed-height
+  row cannot promise a room's keywords fit: no reserve can, at an arbitrary
+  width with arbitrary keyword lengths. So `chipLines` sizes the chip box from
+  the row's real leftover height, and whatever still does not fit is COUNTED
+  and offered as a `+N` chip (`RoomDetails`'s `chipOverflow`) that opens the
+  room. A flat `max-height` that silently swallowed a third keyword is the bug
+  this replaced. The counter is absolutely positioned, and must be: it is
+  rendered from a measurement of the very box it sits in, so an in-flow one
+  would change the height that decided its own number - and it is skipped when
+  counting, or it adds one to itself on every pass.
+- **A chip ellipsises; it does not get sliced.** `.chip` is `flex: 0 1 auto`
+  with `max-width: 100%` and `text-overflow: ellipsis`, so a keyword wider than
+  its column shrinks rather than overflowing and being cut mid-glyph by the
+  card's `overflow: hidden`. `flex-wrap` still decides the line breaks first,
+  so this only ever shrinks a chip already alone on its line. Nothing is lost:
+  the full keyword is in the chip's `title` and the link's accessible name.
 - **Pagination and infinite scroll are one primitive with a different window.**
   Both slice `pageOf`; pagination passes `windowPages: 0`. Writing them as two
   features would let a room sit at a different position depending on how the
@@ -1052,12 +1091,13 @@ code, not a standing invariant.
   without going back to the map, reached from the thumbnail and from the "read
   the rest" a clipped story ends with. Expanding a story IN PLACE was the
   alternative and it breaks the windowing: row heights would vary, and then the
-  spacers are estimates. The clamp itself is derived (`storyLines`), not a flat
-  two lines - and `TEXT_CHROME_PX` must account for the expand button on
-  EVERY row, including the ones that do not show one, or the button is clipped
-  out of existence on exactly the narrow displays that need it. The chip
-  clamp is derived the same way (`chipLines`, `CHIP_LINE_PX`), so a room's
-  keywords no longer silently disappear past a flat two-line guess either.
+  spacers are estimates. The story is cut by the card and faded rather than
+  clamped to a line count (see the float invariant above) - and
+  `TEXT_CHROME_PX` must account for the expand button on EVERY row, including
+  the ones that do not show one, or the button is clipped out of existence on
+  exactly the narrow displays that need it. The chip clamp is derived
+  (`chipLines`, `CHIP_LINE_PX`) and whatever it cannot fit is counted, so a
+  room's keywords never silently disappear.
 - **The query has a length cap and `search()` is where it is enforced.** The
   input's `maxLength` only covers typing; a keyword chip, a book on the shelf
   and a restored history entry all reach `search()` without passing through a

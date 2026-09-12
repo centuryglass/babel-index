@@ -230,6 +230,7 @@ export function RoomDetails({
   weights = null,
   scoreLayout = 'table',
   showPicture = false,
+  chipOverflow = null,
 }: {
   /** the room's metadata, from `joinMetadata()` */
   entry: RoomMeta | null;
@@ -264,6 +265,17 @@ export function RoomDetails({
    * this paragraph regardless of the flag.
    */
   showPicture?: boolean;
+  /**
+   * How many keywords this consumer could not show, and what to do about it.
+   *
+   * Only the catalog's rows pass it: a row is a fixed height, so a room with
+   * more keywords than fit has to lose some, and no reserve can promise
+   * otherwise at an arbitrary width with arbitrary keyword lengths (see
+   * `CatalogView`'s `chipLines`). Saying "+2" and opening the room is the
+   * honest version of that; cutting them silently is not. The card and the
+   * overlay pass nothing, because neither has to cut anything.
+   */
+  chipOverflow?: { count: number; onClick: () => void } | null;
 }) {
   return (
     <>
@@ -301,6 +313,21 @@ export function RoomDetails({
               </span>
             );
           })}
+          {chipOverflow && (
+            <button
+              type="button"
+              className="chip chip-more"
+              tabIndex={chipTabIndex}
+              title="open the room to see every keyword"
+              aria-label={`${chipOverflow.count} more ${chipOverflow.count === 1 ? 'keyword' : 'keywords'}, open the room`}
+              onClick={(e) => {
+                e.stopPropagation();
+                chipOverflow.onClick();
+              }}
+            >
+              +{chipOverflow.count}
+            </button>
+          )}
         </div>
       )}
 

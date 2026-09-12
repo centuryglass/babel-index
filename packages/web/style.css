@@ -505,8 +505,18 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 }
 .pager-count b { color: var(--paper-ink); font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+/*
+  A keyword too long for its column ellipsises rather than being sliced.
+  `flex-wrap` still decides the line breaks, so this only shrinks a chip that
+  is already alone on its line and still too wide - which without the shrink
+  overflows the text column and is cut mid-glyph by the card's own
+  `overflow: hidden`. Nothing is lost to the ellipsis: the full keyword is in
+  the chip's `title` and in the link's accessible name.
+*/
 .chip {
-  flex: 0 0 auto; padding: 3px 8px; font-size: 11px;
+  flex: 0 1 auto; min-width: 0; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 3px 8px; font-size: 11px;
   background: rgba(var(--accent-rgb),0.14); border: 1px solid var(--edge); border-radius: 999px;
   color: var(--ink); cursor: pointer;
 }
@@ -517,7 +527,7 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   separate controls (one is a button, one is a link that leaves the
   page) rather than one guessing which the reader meant.
 */
-.chip-group { display: inline-flex; }
+.chip-group { display: inline-flex; min-width: 0; max-width: 100%; }
 .chip-group .chip { border-radius: 999px 0 0 999px; border-right: none; }
 .chip-link {
   flex: 0 0 auto; display: flex; align-items: center; padding: 3px 6px;
@@ -724,14 +734,27 @@ mark {
   overflow: hidden;
 }
 /*
-  Each room's text column rides on a cream sheet (`.paper-sheet`), so the
-  list reads as a stack of cards floating on the dark gaps between rows
-  rather than one continuous scroll - the divider that used to separate
-  rows is gone, the row's own vertical padding is the gap. The image stays
-  OFF the paper, on the row's dark background. `.paper-sheet`'s reading-
-  dialog padding is trimmed to a row's scale here, and that inset is priced
-  into `CatalogView`'s `CARD_PAD` so the fixed row height still holds - the
-  card cannot clip its own score strip or "read the rest" button.
+  A room's thumbnail floats INSIDE its card, so the story's line boxes shrink
+  beside the picture and then run the card's full width once past its bottom
+  edge. Sized as two rigid columns they cannot do that, and a phone's row is
+  then mostly dark background under a small tile: the text column's fixed
+  needs set the height and the picture has no way to grow into it.
+
+  `.catalog-head` and `.chips` are flex containers, so each establishes its own
+  formatting context and sits beside the float rather than running under it -
+  the title and the tags keep the narrow column, and only the prose wraps.
+*/
+.catalog-row .catalog-tile-button { float: left; margin: 0 12px 8px 0; }
+/*
+  Each room rides on a cream sheet (`.paper-sheet`), so the list reads as a
+  stack of cards floating on the dark gaps between rows rather than one
+  continuous scroll - the divider that used to separate rows is gone, the
+  row's own vertical padding is the gap. The picture sits ON the sheet, like a
+  plate on a printed page, because it floats inside it for the text to wrap
+  around. `.paper-sheet`'s reading-dialog padding is trimmed to a row's scale
+  here, and that inset is priced into `CatalogView`'s `CARD_PAD` so the fixed
+  row height still holds - the card cannot clip its own score strip or "read
+  the rest" button.
 */
 .catalog-row .catalog-body.paper-sheet { padding: 12px 16px; }
 /*
@@ -1191,7 +1214,7 @@ mark {
   changes what fills it. The self-sizing center row (`.catalog-center`) is
   unaffected - its body is already its tallest child, so stretch is a no-op there.
 */
-.catalog-body { flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
+.catalog-body { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
 /*
   The room's identity and the way out to the map share one row, with real
   space under it. They used to be at opposite ends of the row with the
@@ -1231,26 +1254,68 @@ mark {
 }
 .catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
 /*
-  The clamp is a variable, not a literal: how many lines fit depends on
-  the row's height, which depends on the thumbnail's width, which depends
-  on the display. Two lines flat cut stories off with visible empty space
-  under them on anything wide. See `storyLines`.
+  Deliberately NOT line-clamped. `-webkit-line-clamp` needs
+  `display: -webkit-box`, which establishes its own formatting context and so
+  refuses to flow around the floated thumbnail - the clamp and the wrap cannot
+  both be had. The card's own fixed height does the cutting instead, and the
+  fade below says so.
 */
 .catalog-row .story {
-  display: -webkit-box; -webkit-line-clamp: var(--catalog-lines, 2);
-  -webkit-box-orient: vertical; line-height: var(--catalog-line, 19px);
-  overflow: hidden; margin-bottom: 5px;
+  display: block; line-height: var(--catalog-line, 19px); margin-bottom: 5px;
+}
+/*
+  What the card cut, said out loud. A story that simply stopped mid-line at
+  the card's edge reads as a rendering fault; the same cut under a fade reads
+  as "there is more", which is true - `.catalog-more` beside it opens the room
+  that has all of it. Only on rows that actually cut something (`clipped`,
+  measured in `CatalogRow`), and `pointer-events: none` so it never eats a tap
+  meant for a chip beneath it.
+*/
+.catalog-row .catalog-body.clipped::after {
+  content: ''; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 44px;
+  /*
+    Reaching full paper well before the bottom edge, rather than easing all
+    the way down: the card cuts wherever the fixed height falls, which is
+    routinely mid-line, and a gradient still translucent at the edge leaves a
+    sliver of the next line legible under it - which looks like a fault rather
+    than an ending.
+  */
+  background: linear-gradient(to bottom, transparent, var(--paper) 72%, var(--paper));
+  pointer-events: none; border-radius: 0 0 4px 4px;
+}
+/*
+  Both of a row's "there is more" affordances are absolutely positioned, and
+  that is load-bearing rather than cosmetic: each is rendered from a
+  measurement of the very box it would otherwise sit inside, so an in-flow
+  button would change the height that decided whether to show it - a
+  ResizeObserver feeding itself.
+*/
+.catalog-row .catalog-more {
+  position: absolute; right: 12px; bottom: 3px; z-index: 1;
+  padding: 1px 6px; border-radius: 4px; background: var(--paper);
+}
+/*
+  The keywords a fixed-height row could not fit, as a count rather than a
+  silent cut. Pinned to the chips box's own bottom right, over a short wash of
+  the card's paper, so adding it never pushes another chip out of view - the
+  usual way a "+N" lies about its own number.
+*/
+.catalog-row .chip-more {
+  position: absolute; right: 0; bottom: 0;
+  background: var(--paper); border-color: var(--paper-edge);
+  box-shadow: -7px 0 7px 2px var(--paper);
 }
 /*
   The cap is a variable, not a literal - `--catalog-chips-max`
   (`CatalogView.tsx`'s `chipLines`/`CHIP_LINE_PX`), derived the same way
-  `--catalog-lines` derives the story clamp: from what the row's actual
-  height leaves over, not a flat two-line guess. A room with more keywords
-  than fit still clips rather than growing the row (the fixed-height
-  invariant every spacer is computed from), but the cap itself now tracks
-  the row instead of silently swallowing a keyword that had room to show.
+  the row's own height derives everything else: from what the row actually
+  leaves over, rather than a flat guess that is wrong at most widths. A room
+  with more keywords than fit still clips rather than growing the row (the
+  fixed-height invariant every spacer is computed from), and the `+N` pinned
+  to this box is what says how many it had to hold back.
 */
 .catalog-row .chips {
+  position: relative;
   margin-bottom: 5px; max-height: var(--catalog-chips-max, 48px);
   overflow: hidden; align-content: flex-start;
 }
