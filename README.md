@@ -3,62 +3,120 @@
 https://centuryglass.us/babel-index/
 
 This project is a love letter to the art of exploring and curating the
-infinite variation found in generative imagery. The search is instantiated
+infinite variation found in generative imagery. The search is depicted
 as a vast library, where you can explore thousands of hand-picked variant
 shelves, each with its own story. To help in the hunt, you can rearrange the
 shelves, searching based on image content, tags used for image generation, and
 story text. You can tag your favorites, and view the ones that other people
 liked the most.
 
+Content warning: horror, body-horror, death, insects/arthropods, gore, and
+trypophobia. Most examples are fairly mild and only present in occasional
+rooms. Any of these tags can be blocked using URL parameters, e.g. 
+https://centuryglass.us/babel-index/?blockTags=horror,death or through the
+content settings controls at the bottom of the help dialog opened through
+the "READ ME" book.
+
 ## The Library
-[The Library of Babel](https://sites.evergreen.edu/politicalshakespeares/wp-content/uploads/sites/226/2015/12/Borges-The-Library-of-Babel.pdf)
-is a short story by Jorge Luis Borges, published in 1941. It imagines a
-near-infinite library, containing every possible combination of letters, and
-therefore every possible book. It is a fascinating exercise in philosophy and
-set theory, and serves as a useful metaphor for exploring chaos. In a
-mathematical sense it's very real: you can explore it yourself at (https://libraryofbabel.info/).
-
-TODO:
-- Tie it back to the concept of divination: all the ways humanity has 
-  searched the noise for meaning.
-- Connection: No one put meaning in that noise, but it often exists there
-  entirely by chance. The odds aren't great, but sometimes the infinite monkeys
-  really do give you Shakespeare.
-  
-Claims:
-- The search is *not* futile, we have the technology. Through information and
-  computer science we can filter the noise and force it into meaningful shapes.
-- The search is still a grind: even when filtered, the vast majority of results
-  are insignificant. It is a struggle, but one worth pursuing by those who
-  care to try.
-
-Other possible things to tie in:
-- My own curation process: These rooms are perhaps the best 5% of the total
-  volume I searched. Many of them were individually retouched to correct minor errors
-  spoiling an otherwise fascinating result. Stories were similarly filtered and edited.
-- Viewing the piece is similar to the process of creating it.
-
-Lingering questions:
-- Chaos vs. recombination: The images were seeded with concept-tags, randomly
-  recombined, many of which are tied to statistical reconstructions of
-  patterns real artists invented deliberately. Is it somehow unfair to the
-  legacies it builds on? I would answer no, but should I defend it pre-emptively?
-- How much does the filtering actually "spoil" the noise? Am I cutting myself
-  off from real revelation by using AI tools that force me into statistical grooves?
-  Temperature variation helps, but I'm not sure it helps enough.
-- How does aesthetics fit in? I'm not discovering deep truths here, I'm finding patterns
-  I think are interesting. Is searching the noise actually practical, or am
-  I just entertaining myself with shapes and colors? Does it matter?
+[The Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)
+is a short story by Jorge Luis Borges, published in 1941. This project uses
+the library as a metaphor for the exploration of randomness, imagining the
+creation of an index that pulls in books from other, more meaningful
+hypothetical libraries.
 
 ## What it is
 
-> TODO: project description. A pannable, zoomable map of AI-generated Library of
-> Babel rooms; one tile is one shelved wall (5 shelves × 32 books = 160 books).
-> Search re-ranks the whole corpus and the map rearranges around the query.
-> The image/inpainting pipeline is out of scope for this repo — what lives here
-> is the map, the tile geometry, and an offline demo.
+The main interface is a gigantic map of the Library of Babel. Most shelves are
+still the same meaningless shelves from the Borges story, but scattered among
+them are 2048 unique shelves, each an AI-generated art piece with its own
+story. I've exhaustively curated and refined both the images and stories,
+ensuring all of them are at least somewhat interesting.
 
-TODO: screenshot of the map zoomed out, showing the density cluster after a search
+### The Index Shelf
+This center shelf lets you search the library and rearrange its shelves.
+
+./docs/images/center_index.jpg
+1. Enter anything into the search bar and the library will rearrange, moving
+   rooms so that the closest matches are nearest to the center. Searches will
+   match rooms by titles, style tags, story text, and image content.
+   
+   docs/images/search_plants.jpg
+   fig. 1: A search for "plants" finds many close matches and pulls them
+           close to the center.
+           
+   docs/images/search_sociology.jpg
+   fig. 2: A search for "sociology" finds few close matches, so only a few
+           unique rooms are drawn towards the center.
+2. The "READ ME" book opens the help window. The help window describes the
+   controls and provides access to content settings controls you can use
+   to block rooms that might bother some people.
+3. "The Catalog" opens an alternate list interface for viewing library
+   shelves, for anyone who'd rather explore this project as a data set
+   instead of a fictional space.
+4. The remaining books on the shelves hold your search history. If your
+   search history doesn't fill the shelf, the remaining books hold a random
+   set of tags present within the library. Click any book to repeat the
+   search.
+5. Clicking the open book in the center will open the project's story and
+   my artists' statement. (link to docs/images/story_and_statement.jpg)
+6. The bottom-right book will clear your search history.
+7. This switch rearranges the library to bring rooms you've marked as
+   favorites closest to the center.
+8. This switch sorts the library by global favorite counts, bringing the rooms
+   that the most people have favorited closest to the center.
+9. The shuffle button clears active searches and rearranges the library in a
+   new random order.
+10. The search button is visible anywhere on the map, and the arrow orbiting
+    it always points to the index room. Click it to zoom back to the search
+    bar from anywhere on the map.
+11. This star is the favorite toggle for the next room to the left. Clicking
+    it marks that room as one of your favorites, making it easier for you to
+    find again, and adding to the global favorite count. Global favorite data
+    is tied to individual browser sessions and is fully anonymized.
+12. The distill mode switch banishes all of the near-identical Library of
+    Babel shelves from the map, leaving only the unique rooms pulled in by
+    the index.
+    
+### The Map
+The map contains every room in the library as a space you can explore.
+
+./docs/images/map.jpg.
+(TODO: copy over mouse/touch/keyboard controls from the help window)
+
+### The Catalog
+The catalog contains every unique room in the library as a dataset you can
+browse.
+
+./docs/images/catalog.jpg
+(TODO: do I need to explain any of this? It's all fairly conventional.)
+    
+### An Example Room
+Right clicking a room or long-clicking on mobile will open up a library room's
+story and details.
+
+./docs/images/room_details.jpg.
+1. Each unique room has its own title.
+2. The star icon lets you see how many people have favorited this room, and
+   lets you add or remove it from your own list of favorite rooms.
+3. The room image, as you'd see it on the map. Rooms were generated using
+   Stable Diffusion, using ControlNet to anchor them to the same structure as
+   an initial room I modeled and rendered in Blender. (link: reference/blender/base_render.png).
+   Feel free to right-click and save rooms and do whatever you'd like with
+   them, they're all public domain images.
+4. Each room was generated using three style tags. Style tags include artists,
+   art styles, materials, LoRA models, and all kinds of other things used to
+   affect the style of the generated rooms. Click any tag to search the
+   library for other rooms matching that tag. Click the arrow on the right
+   side of the tag to open an external site where you can learn more about it.
+5. Each library room contains a very short story telling you something about
+   the fictional world that particular shelf came from. Stories were written
+   by various LLMs based on the image and tags.
+6. When a search is active, this block will tell you how closely this room
+   matches the search term, breaking down exactly what elements are matched.
+7. Click this button to find this room within the catalog mode. If you're
+   already in catalog mode, it's replaced by a "show on the map" button. 
+8. Clicking here, clicking outside of the frame, or pressing escape closes the
+   overlay.
 
 ## Project structure
 
