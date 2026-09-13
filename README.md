@@ -35,18 +35,15 @@ ensuring all of them are at least somewhat interesting.
 ### The Index Shelf
 This center shelf lets you search the library and rearrange its shelves.
 
-./docs/images/center_index.jpg
+![The index shelf, with its controls numbered 1 through 12](docs/images/center_index.jpg)
+
 1. Enter anything into the search bar and the library will rearrange, moving
    rooms so that the closest matches are nearest to the center. Searches will
    match rooms by titles, style tags, story text, and image content.
-   
-   docs/images/search_plants.jpg
-   fig. 1: A search for "plants" finds many close matches and pulls them
-           close to the center.
-           
-   docs/images/search_sociology.jpg
-   fig. 2: A search for "sociology" finds few close matches, so only a few
-           unique rooms are drawn towards the center.
+
+   | ![A search for "plants" pulls many close matches toward the center](docs/images/search_plants.jpg) | ![A search for "sociology" pulls only a few unique rooms toward the center](docs/images/search_sociology.jpg) |
+   | --- | --- |
+   | fig. 1: A search for "plants" finds many close matches and pulls them close to the center. | fig. 2: A search for "sociology" finds few close matches, so only a few unique rooms are drawn towards the center. |
 2. The "READ ME" book opens the help window. The help window describes the
    controls and provides access to content settings controls you can use
    to block rooms that might bother some people.
@@ -58,7 +55,9 @@ This center shelf lets you search the library and rearrange its shelves.
    set of tags present within the library. Click any book to repeat the
    search.
 5. Clicking the open book in the center will open the project's story and
-   my artists' statement. (link to docs/images/story_and_statement.jpg)
+   my artist's statement:
+
+   ![The project's story on the left page, the artist's statement on the right](docs/images/story_and_statement.jpg)
 6. The bottom-right book will clear your search history.
 7. This switch rearranges the library to bring rooms you've marked as
    favorites closest to the center.
@@ -76,33 +75,35 @@ This center shelf lets you search the library and rearrange its shelves.
 12. The distill mode switch banishes all of the near-identical Library of
     Babel shelves from the map, leaving only the unique rooms pulled in by
     the index.
-    
+
 ### The Map
 The map contains every room in the library as a space you can explore.
 
-./docs/images/map.jpg.
-(TODO: copy over mouse/touch/keyboard controls from the help window)
+> TODO: screenshot of the map, plus a copy of the mouse/touch/keyboard
+> controls from the help window.
 
 ### The Catalog
 The catalog contains every unique room in the library as a dataset you can
 browse.
 
-./docs/images/catalog.jpg
-(TODO: do I need to explain any of this? It's all fairly conventional.)
-    
+![The catalog view: a search bar, the index shelf's contents as a row of
+tag/history chips, and a paged, ranked list of rooms](docs/images/catalog.jpg)
+
 ### An Example Room
 Right clicking a room or long-clicking on mobile will open up a library room's
 story and details.
 
-./docs/images/room_details.jpg.
+![A room's detail overlay, with its controls numbered 1 through 8](docs/images/room_details.jpg)
+
 1. Each unique room has its own title.
 2. The star icon lets you see how many people have favorited this room, and
    lets you add or remove it from your own list of favorite rooms.
 3. The room image, as you'd see it on the map. Rooms were generated using
    Stable Diffusion, using ControlNet to anchor them to the same structure as
-   an initial room I modeled and rendered in Blender. (link: reference/blender/base_render.png).
-   Feel free to right-click and save rooms and do whatever you'd like with
-   them, they're all public domain images.
+   an initial room I modeled and rendered in Blender
+   ([reference render](reference/blender/base_render.png)). Feel free to
+   right-click and save rooms and do whatever you'd like with them, they're
+   all public domain images.
 4. Each room was generated using three style tags. Style tags include artists,
    art styles, materials, LoRA models, and all kinds of other things used to
    affect the style of the generated rooms. Click any tag to search the
@@ -114,7 +115,7 @@ story and details.
 6. When a search is active, this block will tell you how closely this room
    matches the search term, breaking down exactly what elements are matched.
 7. Click this button to find this room within the catalog mode. If you're
-   already in catalog mode, it's replaced by a "show on the map" button. 
+   already in catalog mode, it's replaced by a "show on the map" button.
 8. Clicking here, clicking outside of the frame, or pressing escape closes the
    overlay.
 
@@ -197,9 +198,6 @@ address for rate-limiting purposes, and one visitor hammering the favorite
 endpoint can throttle it for everyone behind that proxy. The proxy has to be
 sending `X-Forwarded-For` for it to help.
 
-TODO: screenshot of the center room with the search box and book spines
-
-
 ### Configuration
 Values that can be adjusted to taste (zoom range, opening camera, slider defaults,
 search weights, etc.) are in [`packages/config/config.ts`](packages/config/config.ts),
@@ -216,15 +214,9 @@ npm test              # node --test, ~1s, no browser and no network
 npm run test:e2e      # browser smoke test (npx playwright install chromium once)
 ```
 
-CI runs `npm test` and the e2e smoke test on Node 20/22/24.
-
-## Screenshots
-
-> TODO: pick the interesting ones.
-
-- TODO: screenshot of a room card (keywords + story)
-- TODO: screenshot of the reorder animation mid-slide
-- TODO: screenshot of the density gradient after a hazy vs. exact search
+CI runs `npm test` and the e2e smoke test on Node 20/22/24. `npm run
+test:parity` is a separate, manual Canvas2D-vs-WebGL render comparison that
+needs a real GPU; it isn't part of CI.
 
 ## Documentation
 
@@ -233,6 +225,7 @@ CI runs `npm test` and the e2e smoke test on Node 20/22/24.
 - [`docs/accessibility-plan.md`](docs/accessibility-plan.md) — the keyboard / screen-reader plan
 - [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
 - [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
+- [`docs/performance-research.md`](docs/performance-research.md) — survey of rendering performance work, and what's shipped so far
 - [`CLAUDE.md`](CLAUDE.md) — notes for coding agents, and the full file-by-file layout
 
 ## License
