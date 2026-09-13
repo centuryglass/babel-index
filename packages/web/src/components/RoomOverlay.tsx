@@ -59,7 +59,7 @@
  * comment for why the ordering matters.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
+import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
@@ -94,7 +94,11 @@ export function RoomOverlay({
   src?: string | null;
   onClose: () => void;
   onKeyword: (keyword: string) => void;
-  highlight?: { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+  highlight?: {
+    keyword: (text: string) => MatchRange[];
+    title: (text: string) => MatchRange[];
+    story: (text: string) => MatchRange[];
+  } | null;
   tagLinks?: Record<string, string> | null;
   result?: SearchResult | null;
   weights?: Config['search']['weights'] | null;
@@ -302,7 +306,19 @@ export function RoomOverlay({
         <div className="card-head room-head">
           <div className="room-id">
             <span className="card-id">
-              {'generic' in room ? 'a Babel shelf' : <b>{roomTitle(entry, room.id)}</b>}
+              {'generic' in room ? (
+                'a Babel shelf'
+              ) : (
+                // Highlighted like the catalog row's title - only the corpus's
+                // real title, never the "Room N" fallback, which scored no
+                // title match to mark. See CatalogView's own note.
+                <b>
+                  <Highlight
+                    text={roomTitle(entry, room.id)}
+                    ranges={entry?.title ? highlight?.title(entry.title) : null}
+                  />
+                </b>
+              )}
             </span>
             {favorite && <FavoriteToggle favorite={favorite} />}
           </div>

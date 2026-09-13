@@ -43,14 +43,13 @@ import type { SortMode } from '../../../map/favorites.ts';
 import type { Config } from '../../../config/config.ts';
 import type { UrlFor } from '../lib/rooms.ts';
 import { describeBook, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
-import { RoomDetails, FavoriteToggle, type FavoriteControl } from './RoomDetails.tsx';
+import { RoomDetails, FavoriteToggle, Highlight, ScoreBreakdown, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
 import {
   pageOf,
   pageCount,
   mountedPages,
   spacerHeight,
-  rowHeight,
   stackedRowHeight,
   tileHeight,
   thumbLevel,
@@ -65,7 +64,11 @@ import { BASE_TILE } from '../lib/pyramid.ts';
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
 
-type Highlight = { keyword: (text: string) => MatchRange[]; story: (text: string) => MatchRange[] } | null;
+type Highlight = {
+  keyword: (text: string) => MatchRange[];
+  title: (text: string) => MatchRange[];
+  story: (text: string) => MatchRange[];
+} | null;
 
 /**
  * Where the row stops having width to spend on anything but the room itself.
@@ -156,6 +159,10 @@ const thumbWidth = (available: number): number =>
 
 /** A row's vertical padding, both halves - the one number CSS and JS must agree on. */
 const ROW_PAD = 14;
+/** A row's horizontal padding, ONE side - `.catalog-row`'s `padding: 7px 16px` in style.css. Used to work out the score strip's real width. */
+const ROW_H_PAD = 16;
+/** The card's horizontal padding, ONE side - `.catalog-row .catalog-body.paper-sheet`'s `padding: … 16px`. Same purpose as `ROW_H_PAD`. */
+const CARD_H_PAD = 16;
 
 /**
  * The paper card's own vertical padding, both halves - a room sits on a cream
@@ -262,14 +269,68 @@ const CHIP_LINES_MAX_NARROW = 3;
  */
 const TEXT_MIN = TEXT_CHROME_PX + CHIP_LINES_MAX_NARROW * CHIP_LINE_PX + STORY_LINE_PX;
 /**
- * Reserves room for the score strip's full four lines (composite, tag, story,
- * clip) on EVERY row while a search is running, whether or not this room's own
- * ranking found that many - same reasoning as `TEXT_CHROME_PX` reserving
- * the "read the rest" button on rows that don't show one: a height that
- * varied with how much a room matched would make the sliding window's spacer
- * arithmetic wrong for that row.
+ * The score strip's arithmetic, while a search is running.
+ *
+ * The strip sits in normal flow BELOW the fixed-height flow area that carries
+ * the tile, name, chips and story, so its top rule always lands under the
+ * image rather than crossing it (the layout notes' "make the horiz rule stop
+ * being full-width unless it lands beneath the image"), and it always gets the
+ * card's full width - no inset stealing room from the columns.
+ *
+ * It is a full-width "match certainty" composite line plus up to
+ * `SCORE_DETAIL_LINES` per-axis detail lines (tag, title, story, clip). Those
+ * flow into columns that are content-sized and left-aligned (not stretched to
+ * fill), and once the row is wide enough to give every detail its OWN column
+ * the composite joins them as one more column (`oneRow`) instead of taking a
+ * line to itself. `scoreLayoutFor` derives the column count and the resulting
+ * line count purely from the width the strip has, so the reserved height is
+ * uniform across every row - reserving the worst case (all four details) the
+ * same way `TEXT_CHROME_PX` reserves the "read the rest" button on rows that
+ * don't show one, since a height that varied per room would make the sliding
+ * window's spacer arithmetic wrong for that row.
+ *
+ * `SCORE_LINE_PX`/`SCORE_PAD_PX` are the rendered line pitch and the strip's own
+ * border+padding (`.score-strip` in style.css) - the numbers CSS and this
+ * reserve must agree on, same contract as `CHIP_LINE_PX`.
  */
-const SCORE_STRIP_PX = 70;
+const SCORE_DETAIL_LINES = 4;
+const SCORE_LINE_PX = 15;
+const SCORE_PAD_PX = 8;
+/** The gap between score columns - must match `.score-details`'s `column-gap` in style.css. */
+const SCORE_GAP_PX = 22;
+/**
+ * The most a detail column is allowed to be, in px. The shortened lines render
+ * around 135-150px, so this both caps the rare long one (`.score-line`'s
+ * `max-width` in style.css, ellipsised past it) and is the width the fit math
+ * budgets per column - a real ceiling rather than a guess at the widest
+ * possible line, which is what lets more columns fit than the old 250 estimate.
+ */
+const SCORE_DETAIL_COL_PX = 200;
+/** About how wide the composite "match certainty" line is - its own column in the one-row layout. */
+const SCORE_COMPOSITE_PX = 225;
+/**
+ * The score strip's column layout for a given strip width: how many columns the
+ * details take, whether the composite line joins them as one more column on a
+ * single row, and the total line count that follows (what the reserved height
+ * is built from). `columnsFor` is the exact "how many W-wide columns fit with a
+ * gap between each" - N columns need N·W + (N-1)·gap, so it credits back the
+ * last column's missing gap instead of charging a full column+gap to every one.
+ */
+function columnsFor(availPx: number, colPx: number): number {
+  return Math.max(0, Math.floor((availPx + SCORE_GAP_PX) / (colPx + SCORE_GAP_PX)));
+}
+function scoreLayoutFor(stripWidthPx: number): { oneRow: boolean; cols: number; lines: number } {
+  // One row when the four detail columns AND the composite column all fit side
+  // by side (five items, four gaps between them).
+  const oneRowPx = SCORE_DETAIL_LINES * SCORE_DETAIL_COL_PX + SCORE_COMPOSITE_PX + SCORE_DETAIL_LINES * SCORE_GAP_PX;
+  if (stripWidthPx >= oneRowPx) return { oneRow: true, cols: SCORE_DETAIL_LINES, lines: 1 };
+  // Otherwise the composite keeps its own full-width line and the details flow
+  // into as many columns as fit, floored at two so there is always more than a
+  // single stacked list.
+  const cols = Math.min(SCORE_DETAIL_LINES, Math.max(2, columnsFor(stripWidthPx, SCORE_DETAIL_COL_PX)));
+  return { oneRow: false, cols, lines: 1 + Math.ceil(SCORE_DETAIL_LINES / cols) };
+}
+const scoreStripHeight = (lines: number): number => SCORE_PAD_PX + SCORE_LINE_PX * lines;
 
 /**
  * One line of the room's name, and what a second one costs.
@@ -534,21 +595,27 @@ export function CatalogView({
   // which is trimmed by the center sheet's own padding rather than a room
   // row's row-plus-card inset.
   const rowThumbPx = ultraNarrow ? ultraThumbWidth(geom.width, matPad) : thumbWidth(geom.width);
-  // Every row grows together when a search starts, because every row gains the
-  // same one-line score strip - so the rows stay uniform and the spacers stay
-  // exact, which is the property the sliding window rests on.
-  //
-  // The card's own inset is charged to the row rather than to the text column,
-  // because the thumbnail floats INSIDE the card: the padding wraps the image
-  // and the text alike, so both of `rowHeight`'s two columns pay it once.
+  // The score strip's column layout and reserved height, while a search is
+  // running - a pure function of the width the strip has (the card's content
+  // width, both horizontal insets removed), so every row reserves the same
+  // band and the spacer arithmetic stays exact. Zero with no search: the strip
+  // is absent and the flow area reclaims its whole height.
+  const scoring = Boolean(result?.breakdown);
+  const stripWidth = Math.max(0, geom.width - 2 * ROW_H_PAD - 2 * CARD_H_PAD);
+  const scoreLayout = scoreLayoutFor(stripWidth);
+  const scoreH = scoring ? scoreStripHeight(scoreLayout.lines) : 0;
+  // The flow area carries the tile, name, chips and story at a FIXED height; the
+  // score strip sits in normal flow beneath it. Every row grows together when a
+  // search starts, because every row gains the same score band under the same
+  // flow - so the rows stay uniform and the spacers stay exact, which is the
+  // property the sliding window rests on. `flowH` is what the tile (or the text
+  // minimum, whichever is taller) needs; the score is added on top rather than
+  // competing with the tile for one shared band, so its rule never has to sit
+  // beside the image.
+  const flowH = ultraNarrow ? 0 : Math.max(tileHeight(rowThumbPx) + 2 * matPad, TEXT_MIN + titleReserve);
   const rowPx = ultraNarrow
     ? stackedRowHeight(rowThumbPx, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, matPad, ULTRA_STACK_GAP)
-    : rowHeight(
-        rowThumbPx,
-        ROW_PAD + cardPad,
-        TEXT_MIN + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
-        matPad
-      );
+    : flowH + scoreH + ROW_PAD + cardPad;
   const level = thumbLevel(rowThumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
   const total = order.length;
@@ -573,14 +640,17 @@ export function CatalogView({
   // does not fit is counted and reported by the row itself (`chipOverflow`
   // in `CatalogRow`) rather than disappearing - no reserve can promise that
   // a room's keywords fit at a given width, so the row says so instead.
-  const contentPx = rowPx - ROW_PAD - cardPad;
+  // How many lines of chips a row can show, derived from the FLOW area's height
+  // (the score sits below it now, not inside it) rather than a flat two-line
+  // guess - see `chipLines`/`CHIP_LINE_PX`. Reserving one story line up front
+  // (rather than letting chips claim the whole leftover) is what keeps a room
+  // with many keywords from squeezing the story out entirely; the cap
+  // (`CHIP_LINES_MAX`/`_NARROW`) is what keeps a very tall row's chip wall from
+  // growing without bound. Whatever does not fit is counted and reported by the
+  // row itself (`chipOverflow` in `CatalogRow`) rather than disappearing.
   const chips = Math.min(
     narrow ? CHIP_LINES_MAX_NARROW : CHIP_LINES_MAX,
-    chipLines(
-      contentPx,
-      TEXT_CHROME_PX + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0) + STORY_LINE_PX,
-      CHIP_LINE_PX
-    )
+    chipLines(flowH, TEXT_CHROME_PX + titleReserve + STORY_LINE_PX, CHIP_LINE_PX)
   );
 
   const onScroll = useCallback(
@@ -669,7 +739,7 @@ export function CatalogView({
 
   return (
     <div
-      className={`catalog${narrow ? ' narrow' : ''}${ultraNarrow ? ' ultra-narrow' : ''}${leaving ? ' leaving' : ''}`}
+      className={`catalog${narrow ? ' narrow' : ''}${ultraNarrow ? ' ultra-narrow' : ''}${scoring && scoreLayout.oneRow ? ' score-one-row' : ''}${leaving ? ' leaving' : ''}`}
       ref={hostRef}
       style={{
         '--catalog-thumb': `${thumbPx}px`,
@@ -677,6 +747,10 @@ export function CatalogView({
         '--catalog-mat': `${matPad}px`,
         '--catalog-row': `${rowPx}px`,
         '--catalog-chips-max': `${chips * CHIP_LINE_PX}px`,
+        '--catalog-flow-h': `${flowH}px`,
+        '--catalog-score-h': `${scoreH}px`,
+        '--score-cols': scoreLayout.cols,
+        '--score-col': `${SCORE_DETAIL_COL_PX}px`,
         '--catalog-ultra-head': `${ULTRA_HEAD_PX}px`,
         '--catalog-ultra-details': `${ULTRA_DETAILS_PX}px`,
         '--catalog-ultra-gap': `${ULTRA_STACK_GAP}px`,
@@ -1016,22 +1090,23 @@ function CatalogRow({
   const desc: Description = describeRoom(id, rank, total, entry);
 
   // What the row could not show, measured after layout and again whenever the
-  // row changes shape. Two answers from one pass, because they are the same
-  // question asked of two boxes: the CARD is what cuts the story (which is
-  // unclamped, so that it can flow around the floated tile), and the chips box
-  // is what cuts the keywords.
+  // row changes shape. The story is fitted to the FLOW area's remaining height
+  // and cut there, and whatever keywords the chip box can't hold are counted.
   //
-  // Both affordances this drives are absolutely positioned, which is what keeps
-  // this from feeding back into itself - a "read the rest" or a "+2" that took
-  // part in the flow would change the very heights being measured here.
+  // The story's ceiling is measured, not reserved: the flow area is a fixed
+  // height (`--catalog-flow-h`), so the story gets exactly what is left under
+  // the name and chips, down to the flow's bottom edge - which is why it can
+  // fill several more lines than a worst-case reserve would have allowed, and
+  // why its fade (a mask keyed to `.clipped`) lands exactly on its own cut
+  // rather than a guessed offset. Setting the story's `max-height` cannot feed
+  // back into this: the story sits below the name and chips, so its own height
+  // never moves its top, and the flow (and card) heights are fixed regardless.
   //
   // Ultra-narrow renders neither the story nor the chips at all - see
   // `RoomDetails` below - so there is nothing here to measure. Both flags
   // still have to be reset rather than just skipped: a row that was clipped
   // in the floated shape and then resizes into this one keeps whatever
-  // state that last measurement left behind otherwise, and the fade this
-  // drives (`.catalog-body.clipped::after`) would go on covering a button
-  // that has nothing to do with a story that no longer renders here.
+  // state that last measurement left behind otherwise.
   useLayoutEffect(() => {
     if (ultraNarrow) {
       setClipped(false);
@@ -1041,22 +1116,18 @@ function CatalogRow({
     const card = cardRef.current;
     if (!card) return;
     const measure = () => {
-      // NOT `scrollHeight > clientHeight`: the card contains the floated tile,
-      // and a float plus its margin counts toward `scrollHeight` even when it
-      // sits comfortably inside the card - which offered "read the rest" on
-      // rows whose story had already finished, on every wide row. What is
-      // asked instead is the real question: does any of the text run past the
-      // edge the card clips at? The float itself and the absolutely
-      // positioned affordances are skipped - neither is text that can be cut.
-      const cardBox = card.getBoundingClientRect();
-      const visibleBottom = cardBox.bottom - (parseFloat(getComputedStyle(card).borderBottomWidth) || 0);
-      let contentBottom = 0;
-      for (const child of card.children) {
-        if (child.classList.contains('catalog-tile-button')) continue;
-        if (child.classList.contains('catalog-more')) continue;
-        contentBottom = Math.max(contentBottom, child.getBoundingClientRect().bottom);
+      // Fit the story to the flow's leftover height and ask whether it had to
+      // cut. `offsetTop` is within `.catalog-flow` (it is `position: relative`),
+      // so this is the space between the story's top and the flow's bottom edge.
+      const flow = card.querySelector<HTMLElement>('.catalog-flow');
+      const story = card.querySelector<HTMLElement>('.story');
+      if (flow && story) {
+        const maxH = Math.max(STORY_LINE_PX, flow.clientHeight - story.offsetTop);
+        story.style.maxHeight = `${maxH}px`;
+        setClipped(story.scrollHeight > maxH + 1);
+      } else {
+        setClipped(false);
       }
-      setClipped(contentBottom > visibleBottom + 1);
 
       const chips = card.querySelector<HTMLElement>('.chips');
       if (!chips) {
@@ -1118,7 +1189,17 @@ function CatalogRow({
     <div className="catalog-head">
       <h2 className="catalog-name">
         <span className="catalog-rank">{rank + 1}</span>
-        <span className="catalog-title">{roomTitle(entry, id)}</span>
+        {/*
+          The title carries search highlighting exactly as the chips and story
+          do - a title match is one of the axes the ranking scores (see
+          `titleLine`), so a reader should see where in the name it landed.
+          Only the corpus's real title is marked; the "Room N" fallback never
+          scored a title match, so highlighting it would claim one that did not
+          happen.
+        */}
+        <span className="catalog-title">
+          <Highlight text={roomTitle(entry, id)} ranges={entry?.title ? highlight?.title(entry.title) : null} />
+        </span>
       </h2>
       {/*
         The map link is the first thing a narrow row gives up. It is the
@@ -1183,55 +1264,46 @@ function CatalogRow({
         ) : (
           <>
             {/*
+              The tile, name, chips and story live in a FIXED-HEIGHT flow area;
+              the score strip sits in normal flow beneath it (see below). That
+              keeps the strip's top rule below the tile rather than beside it,
+              and gives the strip the card's full width for its columns.
+
               The tile is a button, because pressing it does something - it
-              opens the room at whatever size the display allows. A bare
-              `<img>` with a click handler is not reachable by keyboard and
-              announces as an image, not as a control.
-
-              It sits INSIDE the card and floats, so the story wraps beside it
-              and then runs the card's full width once past its bottom edge.
-              The height a row does not spend on the picture is the story's,
-              rather than dark background under a small thumbnail - which is
-              what a phone's row is mostly made of otherwise. The center room
-              gets the same effect a different way: its picture is a grid item
-              spanning several columns and rows of the shelf's own column grid,
-              so the spines flow beside it and then beneath it, aligned to one
-              set of columns (see `.catalog-center` in style.css). It uses a
-              grid rather than this float because the spines have to LINE UP
-              above and below the picture, which a float's two independent runs
-              cannot promise.
+              opens the room at whatever size the display allows. It floats
+              INSIDE the flow, so the story wraps beside it and then runs the
+              flow's full width once past its bottom edge. The height a row does
+              not spend on the picture is the story's, rather than dark
+              background under a small thumbnail. `RoomDetails` is called with
+              `weights={null}` here so it renders no score of its own - the row
+              places `ScoreBreakdown` below the flow instead, and "read the
+              rest" is absolutely positioned at the flow's bottom edge, over the
+              story's own cut.
             */}
-            {tile}
+            <div className="catalog-flow">
+              {tile}
+              {head}
+              <RoomDetails
+                entry={entry}
+                desc={desc}
+                onKeyword={onKeyword}
+                highlight={highlight}
+                tagLinks={tagLinks}
+                rank={rank}
+                result={result}
+                weights={null}
+                chipOverflow={
+                  hiddenChips > 0 ? { count: hiddenChips, onClick: () => onExpand(id, rank) } : null
+                }
+              />
+              {clipped && (
+                <button className="catalog-more" onClick={() => onExpand(id, rank)}>
+                  read the rest →
+                </button>
+              )}
+            </div>
 
-            {/*
-              The room's identity on the left, the way out to the map on the
-              right of the SAME row. It used to sit under the chips, which put
-              a link and a row of tags within a thumb's width of each other -
-              on a phone that is a coin toss between running a search and
-              flying the camera.
-            */}
-            {head}
-
-            <RoomDetails
-              entry={entry}
-              desc={desc}
-              onKeyword={onKeyword}
-              highlight={highlight}
-              tagLinks={tagLinks}
-              rank={rank}
-              result={result}
-              weights={weights}
-              scoreLayout="strip"
-              chipOverflow={
-                hiddenChips > 0 ? { count: hiddenChips, onClick: () => onExpand(id, rank) } : null
-              }
-            />
-
-            {clipped && (
-              <button className="catalog-more" onClick={() => onExpand(id, rank)}>
-                read the rest →
-              </button>
-            )}
+            <ScoreBreakdown rank={rank} result={result} weights={weights} layout="strip" />
           </>
         )}
       </div>

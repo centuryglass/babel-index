@@ -1101,6 +1101,15 @@ mark {
 .overlay-columns.columns { --split-text-scale: 1; }
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
 .overlay-columns.columns .overlay-body .score { font-size: calc(11px * var(--split-text-scale)); }
+/*
+  The score's detail lines go multi-column only in the STACKED overlay, where
+  the text sits below the image and has the full dialog width - it auto-flows
+  into as many ~200px columns as fit. The side-by-side split keeps one column:
+  its text page is a narrow reading column with no room for a second (see the
+  layout notes). The composite certainty line stays full width in both.
+*/
+.overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
+.overlay-columns.columns .overlay-body .score-details { grid-template-columns: max-content; }
 
 /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
 .help-overlay { width: min(520px, 100%); }
@@ -1352,36 +1361,50 @@ mark {
 */
 .catalog-row .story {
   display: block; line-height: var(--catalog-line, 19px); margin-bottom: 5px;
-}
-/*
-  What the card cut, said out loud. A story that simply stopped mid-line at
-  the card's edge reads as a rendering fault; the same cut under a fade reads
-  as "there is more", which is true - `.catalog-more` beside it opens the room
-  that has all of it. Only on rows that actually cut something (`clipped`,
-  measured in `CatalogRow`), and `pointer-events: none` so it never eats a tap
-  meant for a chip beneath it.
-*/
-.catalog-row .catalog-body.clipped::after {
-  content: ''; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 44px;
   /*
-    Reaching full paper well before the bottom edge, rather than easing all
-    the way down: the card cuts wherever the fixed height falls, which is
-    routinely mid-line, and a gradient still translucent at the edge leaves a
-    sliver of the next line legible under it - which looks like a fault rather
-    than an ending.
+    `max-height` is set inline by `CatalogRow` (measured to fill the flow
+    area's leftover height exactly), so the story yields BEFORE the score strip
+    beneath the flow rather than pushing it off the card.
+
+    `overflow: clip`, NOT `hidden`: both clip the story to that measured height,
+    but `hidden` establishes a block formatting context, and a BFC sits BESIDE
+    the floated tile as a rectangle instead of wrapping around it - which left
+    a narrow display's story stuck in the thin column beside the tile with the
+    space beneath it empty. `clip` does not establish a BFC, so the story's
+    line boxes flow around the tile (narrow beside it, full width beneath) and
+    still cut at the ceiling.
   */
-  background: linear-gradient(to bottom, transparent, var(--paper) 72%, var(--paper));
-  pointer-events: none; border-radius: 0 0 4px 4px;
+  overflow: clip;
 }
 /*
-  Both of a row's "there is more" affordances are absolutely positioned, and
-  that is load-bearing rather than cosmetic: each is rendered from a
-  measurement of the very box it would otherwise sit inside, so an in-flow
-  button would change the height that decided whether to show it - a
-  ResizeObserver feeding itself.
+  A story the flow area cut ends in a fade - a mask on the story itself, so it
+  lands exactly on the story's own bottom edge (its measured `max-height`)
+  rather than a guessed offset, and only ever fades the story's own pixels,
+  never the floated tile beside it. Only on rows that actually cut something
+  (`.clipped`, measured in `CatalogRow`); to transparent, which reveals the
+  cream card behind it.
+*/
+.catalog-row .catalog-body.clipped .story {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+}
+/*
+  The fixed-height area that carries the tile, name, chips and story. Its
+  height (`--catalog-flow-h`, CatalogView) is the tile's or the text minimum's,
+  whichever is taller; the score strip sits in normal flow BELOW it, so the
+  strip's top rule always lands under the tile rather than beside it and the
+  strip gets the card's full width. `overflow: hidden` both clips the story to
+  this height and contains the floated tile (a block formatting context), and
+  `position: relative` is what "read the rest" anchors to.
+*/
+.catalog-flow { position: relative; height: var(--catalog-flow-h); overflow: hidden; }
+/*
+  "read the rest" is absolutely positioned so measuring whether to show it does
+  not feed back into the height it is measured against, and it sits at the flow
+  area's bottom edge - the story's own cut - which is where the fade lands too.
 */
 .catalog-row .catalog-more {
-  position: absolute; right: 12px; bottom: 3px; z-index: 1;
+  position: absolute; right: 12px; bottom: 0; z-index: 1;
   padding: 1px 6px; border-radius: 4px; background: var(--paper);
 }
 /*
@@ -1410,8 +1433,9 @@ mark {
   overflow: hidden; align-content: flex-start;
 }
 /*
-  The score, as up to four SHORT lines (composite, tag, story, clip) -
-  `CatalogView.tsx`'s `SCORE_STRIP_PX` reserves room for all four on
+  The score, as a full-width composite certainty line plus up to four SHORT
+  per-axis lines (tag, title, story, clip) flowed into columns -
+  `CatalogView.tsx`'s `scoreStripHeight` reserves room for the worst case on
   every row, whether or not this room's own search found that many, so
   every row stays exactly as tall as every other - what the sliding
   window's spacers are computed from. Each line never wraps and clips
@@ -1426,6 +1450,35 @@ mark {
 .score-strip .score-composite { color: var(--ink); font-weight: 500; }
 .score-strip .clip-certainty { color: #6a5f4c; }
 .score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
+/*
+  The detail lines are laid out in a grid whose columns are CONTENT-sized and
+  LEFT-aligned (`justify-content: start`), not stretched to fill the row - just
+  enough gap between them to read as distinct. `grid-auto-flow: row` fills the
+  first row of `--score-cols` columns, then the next, so a fixed row count
+  (from CatalogView's `scoreLayoutFor`) gives a fixed height. The composite
+  "match certainty" line spans all columns on its own line above them...
+*/
+.score-details {
+  display: grid; grid-template-columns: repeat(var(--score-cols, 2), max-content);
+  justify-content: start; column-gap: 22px; row-gap: 0;
+}
+/*
+  A detail column is capped at `--score-col` (CatalogView's `SCORE_DETAIL_COL_PX`,
+  the same width the fit math budgets per column), so a rare long line
+  ellipsises there instead of widening its column past what was reserved and
+  spilling out of the card. The common lines are well under the cap and take
+  only their own width, left-aligned.
+*/
+.score-details .score-line { min-width: 0; max-width: var(--score-col, 200px); }
+/*
+  ...unless the row is wide enough to give every detail its own column, in
+  which case the composite joins them as one more column on a single line
+  (`.score-one-row`) instead of taking a line to itself. The whole strip
+  becomes one flex row: the composite, then the details grid beside it.
+*/
+.catalog.score-one-row .score-strip { display: flex; align-items: baseline; column-gap: 22px; }
+.catalog.score-one-row .score-strip .score-composite { flex: 0 0 auto; }
+.catalog.score-one-row .score-details { grid-template-columns: repeat(4, max-content); }
 .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
 /*
