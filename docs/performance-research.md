@@ -505,6 +505,14 @@ per-call, so no caller may mutate them (freeze them in development, or document
 it); and the cache must be rebuilt when the manifest changes, which
 `useMemo`'s existing `[manifest]` dependency already expresses.
 
+**Implemented.** `createTileLocator` (`rooms.ts`) now memoizes its returned
+function per level then id, so a repeat `(id, level)` answer is the same
+object rather than a fresh allocation - documented there as shared, read-only.
+`createTileCache`'s `servableLevel` (`tiles.ts`) memoizes the same way, keyed
+per cache instance so a manifest change (a fresh `locateTile`, and therefore a
+fresh cache via `main.tsx`'s existing `[manifest]`-keyed `useMemo`s) starts
+clean rather than needing its own invalidation.
+
 ### 4.2 `roomAt` builds a string key and allocates a result object per cell
 
 **What it is.** The map's cell lookup allocates twice per cell per frame, once

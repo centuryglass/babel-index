@@ -404,6 +404,14 @@ export function createTileCache({
   const bucket = (level: number) => levels.get(level);
   const entry = (id: RoomId, level: number) => bucket(level)?.get(id);
 
+  // servableLevel's answer is immutable for a given (id, want): a shared id
+  // resolves at level 0 only, so a generic cell walks the whole ladder (up to
+  // eleven `locateTile` calls) to rediscover that same constant on every frame
+  // (see performance-research.md §4.1). Memoized per want then id, valid for
+  // the life of this cache - a manifest change gets a fresh `locateTile` and
+  // therefore a fresh cache via the caller's own memoization of both.
+  const servableLevelCache = new Map<number, Map<RoomId, number | null>>();
+
   const sheetReady = (url: string) => sheetImages.get(url)?.state === 'ready';
   const entryReady = (e: Entry) => (isSheetBacked(e) ? sheetReady(e.sheetUrl) : e.state === 'ready');
   const entryImg = (e: Entry): Drawable | null | undefined =>
@@ -513,6 +521,19 @@ export function createTileCache({
    * gets fetched and what gets drawn agree about which substitute is best.
    */
   function servableLevel(id: RoomId, want: number): number | null {
+    let byId = servableLevelCache.get(want);
+    if (!byId) {
+      byId = new Map();
+      servableLevelCache.set(want, byId);
+    }
+    if (byId.has(id)) return byId.get(id)!;
+
+    const found = computeServableLevel(id, want);
+    byId.set(id, found);
+    return found;
+  }
+
+  function computeServableLevel(id: RoomId, want: number): number | null {
     if (locateTile(id, want) != null) return want;
     for (const { level } of pyramid.levels)
       if (level > want && locateTile(id, level) != null) return level;
