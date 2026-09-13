@@ -1,40 +1,32 @@
 /**
- * Native pinch-zoom is only reachable while style.css's
- * `html:has(.overlay-scrim, .catalog)` rule relaxes touch-action back to
- * `auto` - for a room overlay, the help/artist-statement dialogs, or the
- * catalog view - see that rule's own comment for why it exists. The moment
- * the last such element unmounts, touch-action snaps back to `none` on the
- * map's ancestors, so a page left pinch-zoomed in has no gesture left to
- * zoom back out with over the map - only another `.overlay-scrim`/`.catalog`
- * offers the pinch again. `watchZoomUnlock` resets the page's zoom exactly
- * at that transition, which is what keeps the map reachable at 1x once a
- * reader is done with whatever they zoomed into.
+ * Keeps `<html>`'s `zoomed` class in sync with whether the page is actually
+ * pinch-zoomed in, for style.css's `html.zoomed` rule - see that rule's own
+ * comment. `.overlay-scrim`/`.catalog` being mounted is what LETS a reader
+ * start a native pinch (the CSS's `:has()` half), but closing the overlay
+ * mid-zoom used to strand the page zoomed in with touch-action already back
+ * to `none` over the map - no gesture left to zoom back out with, only
+ * opening another overlay/catalog offered the pinch again. Resetting the
+ * zoom itself from script was the first attempt (toggling `maximum-scale` on
+ * the viewport `<meta>` tag, the usual cross-browser trick) - it does
+ * nothing on Chrome for Android, which ignores a runtime edit to the
+ * viewport meta after the initial layout. Tracking the live zoom level
+ * directly and keeping touch-action relaxed for as long as it lasts sidesteps
+ * that entirely: the reader's own pinch-out gesture reaches the browser
+ * regardless of whether the dialog that let them zoom in is still open.
  */
 
-const LOCK_SELECTOR = '.overlay-scrim, .catalog';
+const ZOOMED_CLASS = 'zoomed';
+// Pinch zoom rarely lands on exactly 1 - a hair of slack against float noise
+// so a "fully unzoomed" reading isn't missed by a fraction of a percent.
+const EPSILON = 0.01;
 
-/** Observes `root`'s direct children (where every `.overlay-scrim`/`.catalog`
- * element mounts) and resets page zoom the instant none of them remain. */
-export function watchZoomUnlock(root: HTMLElement): () => void {
-  let wasLocked = root.querySelector(LOCK_SELECTOR) !== null;
-  const observer = new MutationObserver(() => {
-    const isLocked = root.querySelector(LOCK_SELECTOR) !== null;
-    if (wasLocked && !isLocked) resetPageZoom();
-    wasLocked = isLocked;
-  });
-  observer.observe(root, { childList: true });
-  return () => observer.disconnect();
-}
-
-function resetPageZoom() {
-  if ((window.visualViewport?.scale ?? 1) <= 1.001) return;
-  const meta = document.querySelector('meta[name="viewport"]');
-  const original = meta?.getAttribute('content');
-  if (!meta || !original) return;
-  // Briefly capping maximum-scale forces mobile browsers to snap the visual
-  // viewport back to 1x; reverting it right after keeps page zoom available
-  // again next time a dialog opens - the attribute is never left in place,
-  // exactly as index.html's own comment on WCAG 1.4.4 requires.
-  meta.setAttribute('content', `${original}, maximum-scale=1`);
-  requestAnimationFrame(() => meta.setAttribute('content', original));
+export function watchNativeZoom(): () => void {
+  const viewport = window.visualViewport;
+  if (!viewport) return () => {};
+  const onResize = () => {
+    document.documentElement.classList.toggle(ZOOMED_CLASS, viewport.scale > 1 + EPSILON);
+  };
+  onResize();
+  viewport.addEventListener('resize', onResize);
+  return () => viewport.removeEventListener('resize', onResize);
 }

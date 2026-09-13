@@ -66,10 +66,21 @@ canvas.dragging { cursor: grabbing; }
   RoomOverlay/HelpDialog/BookOverlay, so this one rule covers every dialog),
   leaving the map's own gesture handling - the reason for `none` up here -
   untouched at every other time.
+
+  `html.zoomed` (driven by `lib/nativeZoom.ts`, tracking `visualViewport.scale`)
+  extends that same relaxation to any time the page is ACTUALLY pinch-zoomed
+  in, not just while a dialog is mounted. A reader who zooms into a room
+  overlay's tile and then closes it is left with the whole page still
+  zoomed - there is no reliable, cross-browser way to force that back to 1x
+  from script (Chrome for Android ignores a runtime edit to the viewport
+  meta tag, which is the usual trick), so instead touch-action stays relaxed
+  for as long as the zoom itself persists, keeping the reader's own
+  pinch-out gesture reachable over the map. It reverts to `none` the moment
+  `visualViewport.scale` reports back to 1.
 */
-html:has(.overlay-scrim, .catalog),
-body:has(.overlay-scrim, .catalog),
-#root:has(.overlay-scrim, .catalog) {
+html:has(.overlay-scrim, .catalog), html.zoomed,
+body:has(.overlay-scrim, .catalog), html.zoomed body,
+#root:has(.overlay-scrim, .catalog), html.zoomed #root {
   touch-action: auto;
 }
 
