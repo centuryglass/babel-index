@@ -7,11 +7,16 @@
  * disk beyond the images directory under test.
  */
 import { availableParallelism } from 'node:os';
-import express, { type Express, type Request, type Response } from 'express';
+import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
+import { loadRoomContent } from './roomContent.ts';
+import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
+import { robotsTxt, renderSitemap } from './seo.ts';
+import { alphabeticalOrder, pageCount } from '../web/src/lib/catalog.ts';
+import { createUrlFor } from '../web/src/lib/rooms.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
 import type { FavoriteStore } from './favorites.ts';
@@ -46,6 +51,25 @@ const LIVE_RELOAD_CLIENT = `(function () {
 })();
 `;
 
+/**
+ * This request's own origin, with `base` (the `--base-path`-normalized
+ * prefix, always leading+trailing slash) appended - e.g.
+ * `https://centuryglass.us/babel-index/`. `req.protocol`/`req.get('host')`
+ * follow the same `trust proxy` setting favorites' `req.ip` does - correct
+ * behind a reverse proxy only once `--trust-proxy` is passed. Used for
+ * anything a link unfurler or crawler reads directly (og:url/og:image,
+ * robots.txt's Sitemap line, every sitemap.xml url) since those never see
+ * `<base href>`.
+ */
+export function requestOrigin(req: Request, base: string): string {
+  return `${req.protocol}://${req.get('host')}${base}`;
+}
+
+/** `path` made absolute against `origin`, unless it already is one (remote-mode urls already are). */
+function absoluteAsset(origin: string, path: string): string {
+  return /^https?:\/\//.test(path) ? path : `${origin}${path}`;
+}
+
 export interface CreateAppOptions {
   /** the initial scan (see scan.ts or remote.ts) */
   manifest: Manifest;
@@ -71,6 +95,13 @@ export interface CreateAppOptions {
   /** dev convenience: serve the live-reload client and expose
    *  `app.locals.broadcastReload` for a rebuild to call */
   watch?: boolean;
+  /** directory of app-level static assets (favicon, touch icon, manifest,
+   *  OG/Twitter card image) - see packages/web/public. Not corpus content, so
+   *  it is unrelated to imagesDir/sharedDir; served at the same root paths
+   *  index.html's icon/manifest links use. Absent (the default in most
+   *  tests) means none of those files exist and only the bare /favicon.ico
+   *  204 below answers - same "no store, no feature" shape as `favorites`. */
+  publicDir?: string | null;
   /** where the app is reverse-proxied to, e.g. '/babel-index/' (default '/').
    *  Every route below stays mounted at its own unprefixed path - see
    *  base-path.ts - this only sets the `<base href>` the served HTML carries,
@@ -103,6 +134,7 @@ export function createApp({
   basePath = '/',
   favorites = null,
   trustProxy = false,
+  publicDir = null,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
@@ -252,7 +284,14 @@ export function createApp({
     app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
   }
 
-  // The tab icon would otherwise be a 404 on every load.
+  // App-level static assets (favicon, touch icon, manifest, OG/Twitter card
+  // image) - see packages/web/public. `express.static` 404s through to the
+  // fallback below rather than intercepting anything else mounted here, since
+  // none of app.ts's other routes share a name with a file in that directory.
+  if (publicDir) app.use(express.static(publicDir, { maxAge: '1h' }));
+
+  // Without a publicDir there is no favicon.ico to serve - answer 204 rather
+  // than let it 404 log on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
   app.get('/bundle.js', (_req, res) => {
@@ -270,20 +309,184 @@ export function createApp({
       }
     });
 
-  if (readIndexHtml)
-    app.get('/', async (_req, res, next) => {
+  /**
+   * Renders `index.html` for any of this app's HTML routes - `/` plain, and
+   * the SSR catalog/room pages below. One implementation so `<base href>`
+   * injection, the og:/twitter: absolute-url fill-in, and live-reload stay in
+   * exactly one place regardless of which route is being served.
+   *
+   * `canonicalPath` is the relative-to-base suffix of the page actually
+   * being served (`''` for `/`, `'catalog'`, `'catalog/<file>'`, ...) -
+   * callers already know it, so this doesn't re-derive it from `req`.
+   * `bodyHtml`/`initialRoute` are what makes a route more than `/`: real
+   * content inside `#root` for crawlers/no-JS, and a hint for `main.tsx` to
+   * boot straight into the matching interactive view once JS runs (see
+   * index.html's own comment on `%%SSR_BODY%%`/`%%INITIAL_ROUTE_SCRIPT%%`).
+   */
+  const renderPage = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    {
+      title,
+      description,
+      ogImagePath,
+      canonicalPath,
+      bodyHtml = '',
+      initialRoute = null,
+      status = 200,
+    }: {
+      title: string;
+      description: string;
+      ogImagePath: string;
+      canonicalPath: string;
+      bodyHtml?: string;
+      initialRoute?: { mode: 'catalog'; room?: string } | null;
+      status?: number;
+    }
+  ) => {
+    if (!readIndexHtml) return res.status(404).end();
+    try {
+      let html = await readIndexHtml();
+      // Must land before any relative url the page itself contains
+      // (bundle.js's script tag, any future stylesheet/icon link) - `<base
+      // href>` only affects resolution for markup that follows it.
+      html = html.replace('<head>', `<head>\n    <base href="${base}">`);
+      const origin = requestOrigin(req, base);
+      // A route's script tag containing a literal `</script>` (an unlikely
+      // but not impossible room filename) would otherwise close the tag
+      // early - JSON.stringify never produces one, but `<` is escaped anyway
+      // since it's the one character that can reopen a tag.
+      const routeScript = initialRoute
+        ? `<script>window.__INITIAL_ROUTE__ = ${JSON.stringify(initialRoute).replace(/</g, '\\u003c')};</script>`
+        : '';
+      // All five substitutions are global: index.html's own comments explain
+      // these placeholders by NAME (see its <head> comment), and a single,
+      // first-occurrence `.replace` would consume that mention in the
+      // comment instead of the real tag further down - global makes the
+      // substitution correct regardless of where else a placeholder's name
+      // happens to appear in the document.
+      html = html
+        .replace(/%%TITLE%%/g, escapeHtml(title))
+        .replace(/%%DESCRIPTION%%/g, escapeHtml(description))
+        .replace(/%%CANONICAL_URL%%/g, `${origin}${canonicalPath}`)
+        .replace(/%%OG_IMAGE_URL%%/g, absoluteAsset(origin, ogImagePath))
+        .replace(/%%SSR_BODY%%/g, bodyHtml)
+        .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript);
+      if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
+      res.status(status).type('html').send(html);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  const DEFAULT_TITLE = 'The Index of Babel';
+  const DEFAULT_DESCRIPTION =
+    'A pannable, zoomable map of AI-generated library rooms, loosely based on the Library of Babel.';
+
+  if (readIndexHtml) {
+    app.get('/', (req, res, next) =>
+      renderPage(req, res, next, {
+        title: DEFAULT_TITLE,
+        description: DEFAULT_DESCRIPTION,
+        ogImagePath: 'og-image.jpg',
+        canonicalPath: '',
+      })
+    );
+
+    /**
+     * The SSR catalog list: real, crawlable per-room links and content in
+     * `order` (packages/web/src/lib/catalog.ts's own alphabetical idle
+     * order - no server-side search, see AGENTS.md/pending_task_list.md),
+     * paginated with the same `config.catalog.perPage` the client uses.
+     * `?page=` is 1-based on this public url; `pageOf`'s own contract is
+     * 0-based, so the conversion happens right here rather than leaking a
+     * public url convention into that pure module.
+     */
+    app.get('/catalog', async (req, res, next) => {
       try {
-        let html = await readIndexHtml();
-        // Must land before any relative url the page itself contains
-        // (bundle.js's script tag, any future stylesheet/icon link) - `<base
-        // href>` only affects resolution for markup that follows it.
-        html = html.replace('<head>', `<head>\n    <base href="${base}">`);
-        if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
-        res.type('html').send(html);
+        const pageNum = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+        const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
+        const order = alphabeticalOrder(manifest.rooms, metadata);
+        const urlFor = createUrlFor(manifest);
+        const perPage = clientConfig.catalog.perPage;
+        const { title, description, bodyHtml } = renderCatalogList({
+          rooms: manifest.rooms,
+          metadata,
+          tagLinks,
+          order,
+          page: pageNum - 1,
+          perPage,
+          urlFor,
+          base,
+        });
+        await renderPage(req, res, next, {
+          title,
+          description,
+          ogImagePath: 'og-image.jpg',
+          canonicalPath: pageNum > 1 ? `catalog?page=${pageNum}` : 'catalog',
+          bodyHtml,
+          initialRoute: { mode: 'catalog' },
+        });
       } catch (err) {
         next(err);
       }
     });
+
+    /**
+     * One room's permalink, keyed by FILENAME rather than id - ids are
+     * positional (see AGENTS.md's favorites invariant) and renumber when the
+     * corpus changes, which would silently repoint an indexed/shared url at
+     * a different room.
+     */
+    app.get('/catalog/:file', async (req, res, next) => {
+      try {
+        const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
+        const urlFor = createUrlFor(manifest);
+        const result = renderRoomPage({
+          rooms: manifest.rooms,
+          metadata,
+          tagLinks,
+          file: req.params.file,
+          urlFor,
+          base,
+        });
+        const canonicalPath = `catalog/${encodeURIComponent(req.params.file)}`;
+        if (!result) {
+          await renderPage(req, res, next, {
+            title: `Room not found · ${DEFAULT_TITLE}`,
+            description: 'No such room in this library.',
+            ogImagePath: 'og-image.jpg',
+            canonicalPath,
+            bodyHtml: `<div class="ssr-page"><h1>No such room</h1><p><a href="${base}catalog">Back to the catalog</a></p></div>`,
+            status: 404,
+          });
+          return;
+        }
+        await renderPage(req, res, next, {
+          title: result.title,
+          description: result.description,
+          ogImagePath: result.ogImagePath,
+          canonicalPath,
+          bodyHtml: result.bodyHtml,
+          initialRoute: { mode: 'catalog', room: req.params.file },
+        });
+      } catch (err) {
+        next(err);
+      }
+    });
+  }
+
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(robotsTxt(requestOrigin(req, base)));
+  });
+
+  app.get('/sitemap.xml', (req, res) => {
+    // Every room's url is listed regardless of title, so - unlike /catalog -
+    // this needs no metadata join, only the room count and page size.
+    const pages = pageCount(manifest.rooms.length, clientConfig.catalog.perPage);
+    res.type('application/xml').send(renderSitemap(requestOrigin(req, base), manifest.rooms, pages));
+  });
 
   if (watch) {
     app.get('/__live-reload.js', (_req, res) => {

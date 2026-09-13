@@ -41,13 +41,6 @@ code and the git log are the record of what was.
   `localStorage` and sends it to the server, and the whole shape of
   `favorites.ts` is an argument about refusing to spy on people — an argument
   no reader can currently see. A short paragraph in `HelpDialog` would say it.
-- **The library cannot be found from outside itself.** No `<meta
-  name="description">`, no Open Graph or Twitter card, no `robots.txt`, no
-  sitemap, and `/favicon.ico` answers 204 while `index.html` links one. Nothing
-  is server-rendered either, so a crawler or a link unfurler sees an empty
-  `<div id="root">` and a shared URL previews as bare text. A server-rendered
-  catalog page closes both without touching the map — and discoverability is
-  the reason the catalog exists (concept.md, 8/22/26).
 - **`README.md` describes a center tile that no longer exists** — "5 shelves ×
   32 books = 160 books", abandoned in concept.md's 8/18/26 entry — and its
   "What it is" section is still a TODO while the site is live at the URL

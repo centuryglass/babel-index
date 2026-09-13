@@ -487,7 +487,19 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // The catalog's expanded room: the tile at full size and the whole story.
   // A row is a fixed height and its thumbnail is a thumbnail, so this is how a
   // reader sees either without going back to the map - see `RoomOverlay`.
-  const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(null);
+  // Seeded from `INITIAL_ROUTE.room` (a filename, from a `/catalog/<file>`
+  // permalink) on first render only - the same one-time seed `blockedTags`
+  // above uses - so following such a link opens straight to that room's
+  // overlay instead of a blank catalog. `order` is already computed above,
+  // so the initial `rank` this room opens with matches the catalog's real
+  // idle order rather than a placeholder.
+  const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(() => {
+    if (!INITIAL_ROUTE?.room) return null;
+    const room = manifest.rooms.find((r) => r.file === INITIAL_ROUTE.room);
+    if (!room) return null;
+    const rank = order.indexOf(room.id);
+    return { id: room.id, rank: rank === -1 ? 0 : rank };
+  });
   const expandRoom = useCallback((id: number, rank: number) => setOverlay({ id, rank }), []);
 
   // "Show in the catalog", the map card's own reciprocal of a catalog row's
@@ -1459,16 +1471,35 @@ const RESULTS_WINDOW = 50;
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
+ * `window.__INITIAL_ROUTE__` - set by `app.ts`'s `renderPage` only on the
+ * SSR `/catalog`/`/catalog/:file` routes (see index.html's
+ * `%%INITIAL_ROUTE_SCRIPT%%`), absent everywhere else including plain `/`.
+ * Read once at module scope, the same as `INITIAL_MODE`/`URL_BLOCKED_TAGS`
+ * below - it exists so a JS-capable visitor who landed on one of those urls
+ * (a search result, a shared link) boots straight into the matching
+ * interactive view instead of the map, rather than the real content those
+ * routes render server-side simply vanishing once `bundle.js` takes over.
+ */
+declare global {
+  interface Window {
+    __INITIAL_ROUTE__?: { mode: 'catalog'; room?: string };
+  }
+}
+const INITIAL_ROUTE = typeof window !== 'undefined' ? (window.__INITIAL_ROUTE__ ?? null) : null;
+
+/**
  * Which reading the page opens on.
  *
  * `?catalog` in the url opens straight into the list, read once at module scope
  * exactly as `?touchdebug` is. Read-only on purpose: the toggle does not write
  * the url back, so there is no history-entry behaviour to design and no way for
  * the address bar and the page to disagree. It makes the mode linkable, and it
- * lets a test land in the catalog without a click.
+ * lets a test land in the catalog without a click. `INITIAL_ROUTE`'s `mode` is
+ * the same signal from a server-rendered url rather than a query param.
  */
 const INITIAL_MODE =
-  typeof location !== 'undefined' && new URLSearchParams(location.search).has('catalog')
+  INITIAL_ROUTE?.mode === 'catalog' ||
+  (typeof location !== 'undefined' && new URLSearchParams(location.search).has('catalog'))
     ? 'catalog'
     : 'map';
 
