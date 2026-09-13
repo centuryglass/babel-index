@@ -129,6 +129,8 @@ test('an ultra-narrow row stacks the tile under the head and details, rather tha
   assert.equal(stackedRowHeight(320, 30, 20, 24), tileHeight(320) + 30 + 20 + 24);
   // The mat costs both sides, exactly like `rowHeight`'s.
   assert.equal(stackedRowHeight(320, 30, 20, 0, 6), tileHeight(320) + 12 + 30 + 20);
+  // The picture-to-link gap is reserved on top of the rest of the stack.
+  assert.equal(stackedRowHeight(320, 30, 20, 0, 6, 8), tileHeight(320) + 12 + 30 + 20 + 8);
 });
 
 test('a thumbnail asks for a level that can actually cover it', () => {

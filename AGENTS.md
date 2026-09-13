@@ -1064,32 +1064,52 @@ code, not a standing invariant.
   `spacerHeight` stands in for unmounted pages exactly, so a recycled page
   cannot move the scroll position under a reader's hands. That is why the story
   is cut to the card rather than allowed to grow it, why the score breakdown in
-  a row is the one-line `strip` layout rather than the card's `table` (the table
-  was 108px in a 202px row and clipped itself), and why `rowHeight` takes the
-  max of the tile and the text column - on a narrow display the thumbnail
-  shrinks and the story does not. The center room's row is the one exception,
-  allowed to size itself because it sits outside the paging arithmetic; its
-  measured height is the scroll conversion's `leadPx`.
-- **A room row's thumbnail FLOATS inside the card, and the story wraps around
-  it.** `.catalog-row .catalog-tile-button` is `float: left` inside
-  `.catalog-body`, so the story's line boxes are narrow beside the picture and
+  a row is the `strip` layout rather than the card's `table` (the table was
+  108px in a 202px row and clipped itself), and why the row height is the max of
+  the tile and the text minimum - on a narrow display the thumbnail shrinks and
+  the story does not. A row is two stacked pieces: a FIXED-HEIGHT flow area
+  (`.catalog-flow`, `--catalog-flow-h` = the taller of tile or text minimum)
+  holding tile/name/chips/story, and the score strip in normal flow BELOW it
+  (height reserved via `scoreStripHeight` -> `--catalog-score-h`). Splitting
+  them this way is what keeps match certainty from being pushed off the card
+  and the story is what yields: `CatalogRow` measures the story's leftover space
+  in the flow area and sets its `max-height` so it cuts there, and the strip's
+  top rule always lands under the tile (never beside it) because the strip is a
+  separate block below the flow. The per-axis detail lines flow into a
+  content-sized, LEFT-aligned grid (`--score-cols`, not stretched to fill)
+  beneath the full-width composite line; once the row is wide enough to give
+  every detail its own column the composite joins them as one more column
+  (`score-one-row`) instead of taking a line to itself. The story's cut fade is
+  a MASK on `.catalog-row .catalog-body.clipped .story`, so it lands on the
+  story's own measured edge and never touches the floated tile. The center
+  room's row is the one exception, allowed to size itself because it sits
+  outside the paging arithmetic; its measured height is the scroll conversion's
+  `leadPx`.
+- **A room row's thumbnail FLOATS inside the flow area, and the story wraps
+  around it.** `.catalog-row .catalog-tile-button` is `float: left` inside
+  `.catalog-flow`, so the story's line boxes are narrow beside the picture and
   full width beneath it - the height a row does not spend on the picture is the
   story's rather than dark background under a small tile, which is what a
   phone's row was mostly made of when the two were rigid columns. Two things
   follow, and both bit once already:
-  - **The story cannot be line-clamped.** `-webkit-line-clamp` needs
-    `display: -webkit-box`, which establishes its own formatting context and so
-    refuses to flow around the float. The card's fixed height does the cutting
-    and `.catalog-body.clipped::after` fades the cut, which is why there is no
-    `storyLines`/`--catalog-lines` any more. `.catalog-head` and `.chips` stay
-    flex on purpose: each is its own formatting context, so they sit BESIDE the
-    float and keep the narrow column while only the prose wraps.
-  - **`scrollHeight > clientHeight` is NOT how you ask whether a row cut
-    something.** A float and its margin count toward `scrollHeight` even when
-    they sit comfortably inside the card, which offered "read the rest" on
-    every wide row whose story had already finished. `CatalogRow` compares the
-    bottom of the card's in-flow children against the edge the card clips at,
-    skipping the float and the absolutely positioned affordances.
+  - **The story cannot be line-clamped, and it must not become a block
+    formatting context.** `-webkit-line-clamp` needs `display: -webkit-box`,
+    which establishes a BFC, and a BFC sits BESIDE a float as a rectangle
+    instead of wrapping around it - so the story would be stuck in the thin
+    column beside the tile with the space beneath it empty. For the SAME reason
+    the story's own cut uses `overflow: clip`, never `hidden`: both clip it to
+    the measured `max-height` (`CatalogRow` fills the flow area's leftover
+    height), but `hidden` establishes a BFC and `clip` does not, so only `clip`
+    keeps the wrap. The fade is a `mask-image` on the clipped story, landing on
+    its measured edge. `.catalog-head` and `.chips` stay flex on purpose: each
+    IS its own formatting context, so they sit beside the float and keep the
+    narrow column while only the prose wraps.
+  - **Whether a row cut something is asked of the STORY, not the card.** The
+    story carries its own `max-height`, so `story.scrollHeight >
+    story.clientHeight` is the honest question and the float (a sibling outside
+    `.story`) no longer pollutes it - unlike the old full-card measure, where a
+    float and its margin counted toward `scrollHeight` even when the story had
+    already finished and offered "read the rest" on every wide row.
   The center room has its own layout (`.catalog-center` in style.css): ONE
   shared column grid at every width above a phone, and a single stacked column
   on a phone (`.ultra-narrow`, which also carries `.narrow`, so its rules
@@ -1135,12 +1155,17 @@ code, not a standing invariant.
   features would let a room sit at a different position depending on how the
   reader pages. `windowFor` widens the window when a screenful spans more pages
   than the budget mounts, so a tall display cannot scroll into a spacer.
-- **Highlighting mirrors the two match rules, including their asymmetry.** A
+- **Highlighting mirrors the match rules, including their asymmetry.** A
   keyword matches by SUBSTRING and a story word by PREFIX, so there are two
-  range finders in `scoring.ts` beside the two scorers, taking the same folded
+  range finders in `scoring.ts` beside the scorers, taking the same folded
   query and tokens the ranking used - a token dropped as a stopword or for being
-  too short cannot mark, because it did not score. Do not re-derive "what
-  matched" in a component; the drift would be silent.
+  too short cannot mark, because it did not score. A room's TITLE matches by the
+  same substring rule a keyword does (`classifyTagTerm`), so `useSearch`'s
+  `highlight.title` reuses `keywordMatchRanges` rather than a third finder;
+  `CatalogView`'s row head and `RoomOverlay`'s head both mark the title through
+  it, and only the corpus's real title, never the "Room N" fallback, which
+  scored no title match. Do not re-derive "what matched" in a component; the
+  drift would be silent.
 - **`foldWithMap` exists because folded offsets are not source offsets.** NFD,
   mark-stripping and lowercasing each change length, so a folded index used
   against the original text misplaces every mark on any corpus with an accent in

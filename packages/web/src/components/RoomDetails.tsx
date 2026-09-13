@@ -61,29 +61,35 @@ function signedCertaintyText(percent: number, subject: string): { mismatch: bool
   return { mismatch, text: `${magnitude}% certain ${subject} ${mismatch ? 'does not match' : 'matches'}` };
 }
 
-/** "#4 by tag, 2 matched, 1 partially matched, tied with 3 others" - `null` when nothing on this axis matched. */
+/**
+ * The trailing "also tied on this axis" clause, shared by every detail line -
+ * "tied with 3" for three other rooms at this exact rank, empty for none. Kept
+ * terse ("tied with N", not "tied with N others"): the score strip's columns
+ * are tight and the meaning survives the cut.
+ */
+function tieClause(ties: number): string {
+  return ties > 0 ? `, tied with ${ties}` : '';
+}
+
+/** "#4 by tag: 2 exact, 1 partial, tied with 3" - `null` when nothing on this axis matched. */
 function tagLine(tag: RankingExplanation['tag']): string | null {
   if (!tag) return null;
   const parts: string[] = [];
-  if (tag.exact > 0) parts.push(`${tag.exact} matched`);
-  if (tag.partial > 0) parts.push(`${tag.partial} partially matched`);
-  const tie = tag.ties > 0 ? `, tied with ${tag.ties} others` : '';
-  return `#${tag.rank} by tag, ${parts.join(', ')}${tie}`;
+  if (tag.exact > 0) parts.push(`${tag.exact} exact`);
+  if (tag.partial > 0) parts.push(`${tag.partial} partial`);
+  return `#${tag.rank} by tag: ${parts.join(', ')}${tieClause(tag.ties)}`;
 }
 
-/** "#3 by title, matched, tied with 1 other" or "...partially matched..." - `null` when the title didn't match. */
+/** "#3 by title: exact, tied with 1" or "...partial..." - `null` when the title didn't match. */
 function titleLine(title: RankingExplanation['title']): string | null {
   if (!title) return null;
-  const what = title.exact ? 'matched' : 'partially matched';
-  const tie = title.ties > 0 ? `, tied with ${title.ties} others` : '';
-  return `#${title.rank} by title, ${what}${tie}`;
+  return `#${title.rank} by title: ${title.exact ? 'exact' : 'partial'}${tieClause(title.ties)}`;
 }
 
-/** "#2 by story, match length 41, tied with 1 other" - `null` when nothing matched the story. */
+/** "#2 by story: length 41, tied with 1" - `null` when nothing matched the story. */
 function storyLine(story: RankingExplanation['story']): string | null {
   if (!story) return null;
-  const tie = story.ties > 0 ? `, tied with ${story.ties} others` : '';
-  return `#${story.rank} by story, match length ${story.length}${tie}`;
+  return `#${story.rank} by story: length ${story.length}${tieClause(story.ties)}`;
 }
 
 /**
@@ -95,10 +101,14 @@ function storyLine(story: RankingExplanation['story']): string | null {
  * wants to check that calibration, not the main read.
  */
 function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
-  const { mismatch, text } = signedCertaintyText(clip.percent, 'image');
+  const mismatch = clip.percent < 0;
+  const pct = Math.abs(clip.percent).toFixed(2);
   return (
     <p className="score-line" title={`${clip.cosine.toFixed(3)} cosine between CLIP text and image vectors`}>
-      #{clip.rank} by image content, <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>{text}</span>
+      #{clip.rank} by image:{' '}
+      <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>
+        {pct}% {mismatch ? 'mismatch' : 'match'}
+      </span>
     </p>
   );
 }
@@ -133,16 +143,35 @@ function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
       <p className="score-composite" title={compositeTooltip}>
         {compositeText}
       </p>
-      {tagText && <p className="score-line">{tagText}</p>}
-      {titleText && <p className="score-line">{titleText}</p>}
-      {storyText && <p className="score-line">{storyText}</p>}
-      {clip && <ClipLine clip={clip} />}
+      {/*
+        The per-axis lines are wrapped so they can flow into columns
+        (`.score-details` in style.css) while the composite "match certainty"
+        line above stays full width - the "stack some of these lines over to the
+        right in a second column when we have room" the layout notes asked for.
+        The catalog row picks a column count from its width; the room overlay's
+        stacked layout auto-fills by `column-width`; the overlay's side-by-side
+        split keeps one column, where there is no room for more.
+      */}
+      <div className="score-details">
+        {tagText && <p className="score-line">{tagText}</p>}
+        {titleText && <p className="score-line">{titleText}</p>}
+        {storyText && <p className="score-line">{storyText}</p>}
+        {clip && <ClipLine clip={clip} />}
+      </div>
     </>
   );
 }
 
-/** Why this room ranked where it did - see `ScoreLines`, `explainRanking`. */
-function ScoreBreakdown({
+/**
+ * Why this room ranked where it did - see `ScoreLines`, `explainRanking`.
+ *
+ * Exported because the catalog row renders it OUTSIDE `RoomDetails` (which it
+ * calls with `weights={null}` so it renders no score): the row's score strip
+ * sits in normal flow beneath a fixed-height flow area, not inside it, so its
+ * top rule lands below the tile rather than beside it. The card and the overlay
+ * still let `RoomDetails` render it inline, since neither has that split.
+ */
+export function ScoreBreakdown({
   rank,
   result,
   weights,
