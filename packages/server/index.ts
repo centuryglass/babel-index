@@ -221,6 +221,7 @@ app = createApp({
   getBundleJs: () => bundleJs,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
   readStyleCss: () => readFile(join(webDir, 'style.css'), 'utf8'),
+  publicDir: join(webDir, 'public'),
   watch,
   basePath,
   favorites,

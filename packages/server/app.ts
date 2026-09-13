@@ -71,6 +71,13 @@ export interface CreateAppOptions {
   /** dev convenience: serve the live-reload client and expose
    *  `app.locals.broadcastReload` for a rebuild to call */
   watch?: boolean;
+  /** directory of app-level static assets (favicon, touch icon, manifest,
+   *  OG/Twitter card image) - see packages/web/public. Not corpus content, so
+   *  it is unrelated to imagesDir/sharedDir; served at the same root paths
+   *  index.html's icon/manifest links use. Absent (the default in most
+   *  tests) means none of those files exist and only the bare /favicon.ico
+   *  204 below answers - same "no store, no feature" shape as `favorites`. */
+  publicDir?: string | null;
   /** where the app is reverse-proxied to, e.g. '/babel-index/' (default '/').
    *  Every route below stays mounted at its own unprefixed path - see
    *  base-path.ts - this only sets the `<base href>` the served HTML carries,
@@ -103,6 +110,7 @@ export function createApp({
   basePath = '/',
   favorites = null,
   trustProxy = false,
+  publicDir = null,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
@@ -252,7 +260,14 @@ export function createApp({
     app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
   }
 
-  // The tab icon would otherwise be a 404 on every load.
+  // App-level static assets (favicon, touch icon, manifest, OG/Twitter card
+  // image) - see packages/web/public. `express.static` 404s through to the
+  // fallback below rather than intercepting anything else mounted here, since
+  // none of app.ts's other routes share a name with a file in that directory.
+  if (publicDir) app.use(express.static(publicDir, { maxAge: '1h' }));
+
+  // Without a publicDir there is no favicon.ico to serve - answer 204 rather
+  // than let it 404 log on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
   app.get('/bundle.js', (_req, res) => {
@@ -271,13 +286,23 @@ export function createApp({
     });
 
   if (readIndexHtml)
-    app.get('/', async (_req, res, next) => {
+    app.get('/', async (req, res, next) => {
       try {
         let html = await readIndexHtml();
         // Must land before any relative url the page itself contains
         // (bundle.js's script tag, any future stylesheet/icon link) - `<base
         // href>` only affects resolution for markup that follows it.
         html = html.replace('<head>', `<head>\n    <base href="${base}">`);
+        // og:url/og:image (and their twitter: equivalents) are read by link
+        // unfurlers that fetch and parse this HTML directly - they never see
+        // <base href>, so unlike every other url in this file these two are
+        // filled in absolute. `req.protocol`/`req.get('host')` follow the
+        // same `trust proxy` setting as favorites' req.ip - correct behind a
+        // reverse proxy only once --trust-proxy is passed.
+        const origin = `${req.protocol}://${req.get('host')}${base}`;
+        html = html
+          .replace('%%ORIGIN_URL%%', origin)
+          .replace(/%%OG_IMAGE_URL%%/g, `${origin}og-image.jpg`);
         if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
         res.type('html').send(html);
       } catch (err) {

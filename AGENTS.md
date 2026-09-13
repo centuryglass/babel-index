@@ -108,12 +108,31 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   rather than by feature area; a hook and the `lib/` module it wraps often
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
   `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
-    * `index.html`: HTML entry point, static page structure
+    * `index.html`: HTML entry point, static page structure. Its `<head>`
+                    carries the favicon/manifest links and the OG/Twitter card
+                    meta tags; `app.ts`'s `/` route fills in the two absolute
+                    `%%ORIGIN_URL%%`/`%%OG_IMAGE_URL%%` placeholders per
+                    request; a link unfurler parses this HTML directly and
+                    never sees `<base href>`, unlike every other relative url
+                    on the page.
     * `style.css`: All of the app's CSS - one file, no CSS-in-JS, no
                    per-component styles. Linked from `index.html` rather than
                    inlined, and served by `app.ts`'s `/style.css` route the same
                    way `index.html` itself is - re-read on each request, so a
                    margin or color tweak needs no restart.
+    * `public/`: App-level static assets unrelated to any corpus - favicon.ico
+                (16/32/48, hand-assembled since Pillow's `sizes=` resamples
+                rather than embedding exact per-size art), `favicon-32.png`,
+                `apple-touch-icon.png` (180x180, composited onto the app's own
+                background color since iOS renders a transparent one on
+                black), `icon-192.png`/`icon-512.png` (referenced from
+                `site.webmanifest`), and `og-image.jpg` (the OG/Twitter card
+                image - JPEG rather than the source PNG, since the art has no
+                transparency and a card image is fetched on every share).
+                Served at the same root paths `index.html` links, via
+                `app.ts`'s `publicDir` static mount. Without it (most tests,
+                and any deployment that omits the option) `app.ts` still
+                answers `/favicon.ico` with a bare 204 rather than a 404.
     * `src/main.tsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.

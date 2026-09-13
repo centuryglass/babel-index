@@ -438,6 +438,49 @@ test('the favicon is answered rather than logged as a 404 on every load', async 
   });
 });
 
+test('publicDir serves the favicon and OG image instead of the bare 204', async () => {
+  const publicDir = await mkdtemp(join(tmpdir(), 'babel-public-'));
+  try {
+    await writeFile(join(publicDir, 'favicon.ico'), Buffer.from([0, 1, 2]));
+    await writeFile(join(publicDir, 'og-image.jpg'), Buffer.from([3, 4, 5]));
+    await serving(
+      async ({ get }) => {
+        const favicon = await get('/favicon.ico');
+        assert.equal(favicon.status, 200);
+        assert.deepEqual([...new Uint8Array(await favicon.arrayBuffer())], [0, 1, 2]);
+        assert.equal((await get('/og-image.jpg')).status, 200);
+        // A file the directory doesn't have still falls through cleanly
+        // rather than the static mount swallowing the request.
+        assert.equal((await get('/site.webmanifest')).status, 404);
+      },
+      { publicDir }
+    );
+  } finally {
+    await rm(publicDir, { recursive: true, force: true });
+  }
+});
+
+test('the served index.html fills in an absolute og:image/og:url, since link unfurlers never see <base href>', async () => {
+  await serving(
+    async ({ get, port }) => {
+      const html = await (await get('/')).text();
+      assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/"`));
+      assert.match(
+        html,
+        new RegExp(`<meta property="og:image" content="http://127\\.0\\.0\\.1:${port}/og-image\\.jpg"`)
+      );
+      assert.match(
+        html,
+        new RegExp(`<meta name="twitter:image" content="http://127\\.0\\.0\\.1:${port}/og-image\\.jpg"`)
+      );
+    },
+    {
+      readIndexHtml: async () =>
+        '<head><meta property="og:url" content="%%ORIGIN_URL%%" /><meta property="og:image" content="%%OG_IMAGE_URL%%" /><meta name="twitter:image" content="%%OG_IMAGE_URL%%" /></head>',
+    }
+  );
+});
+
 test('the optional CLIP model is reported, not assumed', () => {
   // `@huggingface/transformers` is an OPTIONAL dependency: `onnxruntime-node`
   // publishes for win32/darwin/linux only, and as a required dependency it
