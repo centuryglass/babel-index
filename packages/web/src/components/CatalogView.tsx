@@ -224,6 +224,14 @@ const ULTRA_HEAD_PX = 32;
 const ULTRA_DETAILS_PX = 30;
 
 /**
+ * The gap between the full-bleed picture and the "keywords & story" link
+ * beneath it in an ultra-narrow row. Priced into `stackedRowHeight` like every
+ * other piece of that stack, so the fixed row height still matches what CSS
+ * renders (`--catalog-ultra-gap`, `.catalog-details-link` in style.css).
+ */
+const ULTRA_STACK_GAP = 8;
+
+/**
  * The chips' own line height, CSS gap included - the pixel cost `chipLines`
  * charges per line, and what `--catalog-chips-max` below hands to
  * `.catalog-row .chips`'s `max-height` so the two never disagree. Measured
@@ -447,13 +455,19 @@ export function CatalogView({
   // (`ULTRA_NARROW_PX < NARROW_PX`), so the map-link/wrapped-title trade
   // above applies underneath it too.
   const ultraNarrow = geom.width < ULTRA_NARROW_PX;
+  // The mat is halved on a widescreen row, where the larger thumbnail no longer
+  // needs the full cream frame to read as a plate on the sheet; a narrow row's
+  // smaller tile keeps it. Everything the mat is priced into below reads this
+  // rather than `MAT_PAD` directly so the row height stays exact at either
+  // width (`ultraNarrow` implies `narrow`, so a phone row keeps the full mat).
+  const matPad = narrow ? MAT_PAD : MAT_PAD / 2;
   // The center row's own thumbnail - `thumbWidth`'s fixed two-column
   // fraction ordinarily, but full-bleed under ultra-narrow exactly like
   // `ultraThumbWidth` gives every other row, just trimmed by the sheet's own
   // padding (`CENTRE_PAD`, both sides - `.catalog.ultra-narrow
   // .catalog-center.paper-sheet` in style.css) and the mat border instead of
   // a room row's separate row-plus-card inset.
-  const thumbPx = ultraNarrow ? centreUltraThumbWidth(geom.width, MAT_PAD) : thumbWidth(geom.width);
+  const thumbPx = ultraNarrow ? centreUltraThumbWidth(geom.width, matPad) : thumbWidth(geom.width);
   // The distill toggle as FRACTIONS of the thumbnail, not pixels: the map's
   // canvas overlay (`distillIconScreenRect`) scales the icon by the tile's
   // pixels-per-cell-width over `BASE_TILE.w`, so as a share of the tile the
@@ -519,7 +533,7 @@ export function CatalogView({
   // the width otherwise. Distinct from the center row's `thumbPx` above,
   // which is trimmed by the center sheet's own padding rather than a room
   // row's row-plus-card inset.
-  const rowThumbPx = ultraNarrow ? ultraThumbWidth(geom.width, MAT_PAD) : thumbWidth(geom.width);
+  const rowThumbPx = ultraNarrow ? ultraThumbWidth(geom.width, matPad) : thumbWidth(geom.width);
   // Every row grows together when a search starts, because every row gains the
   // same one-line score strip - so the rows stay uniform and the spacers stay
   // exact, which is the property the sliding window rests on.
@@ -528,12 +542,12 @@ export function CatalogView({
   // because the thumbnail floats INSIDE the card: the padding wraps the image
   // and the text alike, so both of `rowHeight`'s two columns pay it once.
   const rowPx = ultraNarrow
-    ? stackedRowHeight(rowThumbPx, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, MAT_PAD)
+    ? stackedRowHeight(rowThumbPx, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, matPad, ULTRA_STACK_GAP)
     : rowHeight(
         rowThumbPx,
         ROW_PAD + cardPad,
         TEXT_MIN + titleReserve + (result?.breakdown ? SCORE_STRIP_PX : 0),
-        MAT_PAD
+        matPad
       );
   const level = thumbLevel(rowThumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
@@ -660,11 +674,12 @@ export function CatalogView({
       style={{
         '--catalog-thumb': `${thumbPx}px`,
         '--catalog-row-thumb': `${rowThumbPx}px`,
-        '--catalog-mat': `${MAT_PAD}px`,
+        '--catalog-mat': `${matPad}px`,
         '--catalog-row': `${rowPx}px`,
         '--catalog-chips-max': `${chips * CHIP_LINE_PX}px`,
         '--catalog-ultra-head': `${ULTRA_HEAD_PX}px`,
         '--catalog-ultra-details': `${ULTRA_DETAILS_PX}px`,
+        '--catalog-ultra-gap': `${ULTRA_STACK_GAP}px`,
         '--shelf-col': `${shelfColumnCh(centreSlots)}ch`,
         '--catalog-line': `${STORY_LINE_PX}px`,
         '--catalog-title-line': `${TITLE_LINE_PX}px`,

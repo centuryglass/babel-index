@@ -173,6 +173,7 @@ export function rowHeight(thumbWidth: number, padding = 0, textMin = 0, matPad =
  * @param thumbWidth css pixels, the full-bleed width - see `ultraThumbWidth`
  * @param padding the row's vertical padding, both halves
  * @param matPad the thumbnail's paper mat, one side
+ * @param gap the space between the picture and the "keywords & story" link
  */
 export function stackedRowHeight(
   thumbWidth: number,
@@ -180,8 +181,9 @@ export function stackedRowHeight(
   detailsPx: number,
   padding = 0,
   matPad = 0,
+  gap = 0,
 ): number {
-  return tileHeight(thumbWidth) + 2 * matPad + headPx + detailsPx + padding;
+  return tileHeight(thumbWidth) + 2 * matPad + headPx + detailsPx + padding + gap;
 }
 
 /**

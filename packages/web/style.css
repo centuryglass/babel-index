@@ -383,12 +383,13 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   disabled below.
 */
 .search-icon-spinner {
-  position: absolute; inset: -4px; border-radius: 50%; pointer-events: none;
-  border: 2px dashed transparent; opacity: 0;
+  position: absolute; inset: -6px; border-radius: 50%; pointer-events: none;
+  border: 3px dashed transparent; opacity: 0;
 }
 .search-icon-button.preparing .search-icon-spinner {
   opacity: 1; border-color: var(--accent);
-  animation: search-icon-spin 900ms linear infinite;
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.65);
+  animation: search-icon-spin 750ms linear infinite;
 }
 @keyframes search-icon-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
@@ -769,7 +770,7 @@ mark {
   formatting context and sits beside the float rather than running under it -
   the title and the tags keep the narrow column, and only the prose wraps.
 */
-.catalog-row .catalog-tile-button { float: left; margin: 0 12px 8px 0; }
+.catalog-row .catalog-tile-button { float: left; margin: 0 16px 8px 0; }
 /*
   Each room rides on a cream sheet (`.paper-sheet`), so the list reads as a
   stack of cards floating on the dark gaps between rows rather than one
@@ -831,6 +832,33 @@ mark {
   flex: 0 0 auto; padding: 0; background: var(--paper);
   border: var(--catalog-mat, 0px) solid var(--paper);
   cursor: zoom-in; line-height: 0; border-radius: 3px;
+}
+/*
+  The same plate-on-a-page framing the room overlay's tile gets
+  (`.overlay-tile`): the cream mat above, then a hairline edge and a soft drop
+  shadow. Drawn with `box-shadow` rather than more border/padding so it adds no
+  layout space - `rowHeight` and the hotspot insets still measure against the
+  mat's own edge, unchanged.
+*/
+.catalog-tile-button, .catalog-tile-wrap {
+  box-shadow: 0 0 0 1px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
+}
+/*
+  The one divider between the picture and the wrapping story, mirroring the
+  room overlay's split-column rule (`.overlay-columns.columns .overlay-body`'s
+  `border-left`). The thumbnail floats, so this is a vertical line in the gap
+  the float's right margin opens - drawn on a pseudo-element so it spans the
+  picture's own height without taking part in the wrap. Skipped on the center
+  row (its picture sits in a grid, not a float) and under ultra-narrow (the
+  tile goes full width with no text beside it). `--edge` resolves to
+  `--paper-edge` inside the card's `.paper-sheet`, the same ink the overlay's
+  divider takes.
+*/
+.catalog-row:not(.catalog-center) .catalog-tile-button { position: relative; }
+.catalog:not(.ultra-narrow) .catalog-row:not(.catalog-center) .catalog-tile-button::after {
+  content: ''; position: absolute; top: 0; bottom: 0;
+  right: calc(-1 * (var(--catalog-mat, 0px) + 8px));
+  border-right: 1px solid var(--edge);
 }
 .catalog-tile-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-tile {
@@ -1455,7 +1483,7 @@ mark {
 .catalog-details-link {
   display: flex; align-items: center; justify-content: center;
   height: var(--catalog-ultra-details); width: var(--catalog-row-thumb);
-  margin: 0 auto; box-sizing: border-box;
+  margin: var(--catalog-ultra-gap, 0) auto 0; box-sizing: border-box;
   border: 1px solid var(--paper-edge); border-radius: 4px; background: none;
   color: var(--paper-accent); font: inherit; font-size: 11px; cursor: pointer;
 }
