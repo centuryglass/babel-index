@@ -79,7 +79,7 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // The "forget searches" book's black spine overlay - same fixed-app-art treatment.
   sharedUrls.set(CLEAR_HISTORY_BOOK, `${manifest.sharedBase}/${encodeURIComponent('clear_history_book.png')}`);
 
-  return (id, level) => {
+  const resolve = (id: number | string, level: number): TileLocation | null => {
     if (sharedUrls.has(id)) return level === 0 ? { url: sharedUrls.get(id)!, rect: null } : null;
 
     const info = levels.get(level);
@@ -103,6 +103,25 @@ export function createTileLocator(manifest: Manifest): LocateTile {
     // Level 0 is flat, so its url is exactly the `url` the manifest already
     // carries for each room - the two must not drift apart.
     return { url: `${imagesBase}/${info.dir ? `${info.dir}/` : ''}${encodeURIComponent(file)}`, rect: null };
+  };
+
+  // The answer for a given (id, level) never changes for this manifest, but
+  // computing it allocates a fresh TileLocation/rect every call - and the
+  // cache asks on every visible cell every frame, cache hits included (see
+  // performance-research.md §4.1). Memoized per level then id: the returned
+  // object is now SHARED across every caller for that (id, level), so nobody
+  // may mutate a TileLocation or its rect - callers only ever read them today.
+  const cache = new Map<number, Map<number | string, TileLocation | null>>();
+  return (id, level) => {
+    let byId = cache.get(level);
+    if (!byId) {
+      byId = new Map();
+      cache.set(level, byId);
+    }
+    if (byId.has(id)) return byId.get(id)!;
+    const loc = resolve(id, level);
+    byId.set(id, loc);
+    return loc;
   };
 }
 
