@@ -97,6 +97,17 @@ interface UseRearrangementOpts {
    * render hooks (`useMapRenderer.ts`'s onDown) as well as here.
    */
   loadingAnim?: { current: LoadingAnimation | null };
+  /**
+   * `(preparing) => void` - toggled around the same preload window as the
+   * center-tile indicator (`prepareRearrangement` through the loading
+   * indicator's cycle-boundary wait), but unconditionally rather than
+   * gated on the center book being on screen - see `SearchOrbitSpinner` in
+   * `SearchIcon.tsx`, the search badge's own affordance for exactly the
+   * far-field case `docs/pending_task_list.md`'s "Loading indicator" entry
+   * asked for. Optional, and doing nothing when omitted, exactly like
+   * `announce`.
+   */
+  onPreparingChange?: (preparing: boolean) => void;
 }
 
 export function useRearrangement({
@@ -115,6 +126,7 @@ export function useRearrangement({
   cache,
   onPreparing,
   loadingAnim,
+  onPreparingChange,
 }: UseRearrangementOpts) {
   // Set by `requestAnimation` and consumed by the effect below. A slider drag
   // changes the layout too, and must not animate - so a caller has to ask.
@@ -322,11 +334,12 @@ export function useRearrangement({
         overviewZoom(canvas, config.camera.minVisibleCells, cam.current)
       );
 
-      // The loading indicator plays over the center book's page while the
+      // The center-tile indicator plays over the book's page while the
       // preload runs - but only when that page is actually on screen and large
       // enough to read (the same legibility gate the shelf's own titles use).
-      // When it is not, the indicator is skipped entirely; a different one for
-      // the far-field case is still to come.
+      // The search badge's own spinner (`onPreparingChange`, below) is not
+      // gated on that - it is the far-field affordance for exactly the case
+      // where the center book isn't visible to show anything.
       const cellRect = centerCellRect(cam.current, {
         width: canvas.clientWidth,
         height: canvas.clientHeight,
@@ -335,6 +348,7 @@ export function useRearrangement({
         overlapsViewport(cellRect, canvas.clientWidth, canvas.clientHeight) &&
         areSpinesLegible(cellRect);
       const playingLoad = showLoading ? loadingAnim?.current?.play(requestDraw) ?? false : false;
+      onPreparingChange?.(true);
 
       // Everything the animation will need - the plan and every tile it will
       // show - computed and fetched now, before the camera moves at all. See
@@ -342,12 +356,14 @@ export function useRearrangement({
       const prepared = await prepareRearrangement(before, after, canvas, target);
       if (anim.current?.before !== before) {
         if (playingLoad) loadingAnim?.current?.cancel();
+        onPreparingChange?.(false);
         return true; // superseded during prepare; not ours to undo
       }
       if (!prepared) {
         // Not animatable - discovered before ever starting a flight for it,
         // unlike the old post-landing check.
         if (playingLoad) loadingAnim?.current?.cancel();
+        onPreparingChange?.(false);
         anim.current = null;
         perfSetPhase('idle');
         return false;
@@ -361,8 +377,12 @@ export function useRearrangement({
       // rearrangement - re-checked below before the camera moves.
       if (playingLoad) {
         await loadingAnim?.current?.finish();
-        if (anim.current?.before !== before) return true;
+        if (anim.current?.before !== before) {
+          onPreparingChange?.(false);
+          return true;
+        }
       }
+      onPreparingChange?.(false);
 
       // A reader mid-search keeps their place in the field: the zoom flight
       // and the slide both move focus-stealing content under the browser, and
@@ -428,7 +448,7 @@ export function useRearrangement({
       requestAnimationFrame(tick);
       return true;
     },
-    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement, loadingAnim]
+    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement, loadingAnim, onPreparingChange]
   );
 
   // Every change to what is on the map arrives here. Only the ones a control

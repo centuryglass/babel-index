@@ -175,7 +175,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                         Enter, a ranked result) or by expanding a catalog row
     * `RoomDetails.tsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
     * `SearchForm.tsx`: Shared search box component
-    * `SearchIcon.tsx`: The search badge's glyph and orbiting arrow
+    * `SearchIcon.tsx`: The search badge's glyph, orbiting arrow, and the
+                        preload spinner ring
     * `HelpDialog.tsx`: The "READ ME" book's dialog
     * `BookOverlay.tsx`: The open-book overlay shell both reading dialogs are
                          built from - scrim, focus-trapped dialog (`useDialog`),
@@ -899,11 +900,15 @@ code, not a standing invariant.
   cycle played (`loadingAnimation.ts`'s `finish()`). So even a warm-cache
   rearrangement pauses for one whole cycle - that is deliberate, not a bug to
   optimize away. A cold cache has it playing the whole fetch instead.
-- **It only plays when the center book is on screen to show it.** The gate is
-  `overlapsViewport(cellRect, ...) && areSpinesLegible(cellRect)` - the same
-  legibility bar the shelf's own titles use. Off that gate, no indicator plays
-  and no cycle-wait is imposed; the far-field case is left for a different
-  indicator (not built yet). Nothing else about the rearrangement changes.
+- **The center-tile indicator only plays when the center book is on screen to
+  show it.** The gate is `overlapsViewport(cellRect, ...) &&
+  areSpinesLegible(cellRect)` - the same legibility bar the shelf's own titles
+  use. Off that gate, no indicator plays and no cycle-wait is imposed. The
+  search badge's ring (`SearchOrbitSpinner`, `SearchIcon.tsx`) is the far-field
+  counterpart - it spins over the same preload window regardless of this gate,
+  driven by `useRearrangement.ts`'s `onPreparingChange` rather than
+  `loadingAnim`, so it is what a reader browsing away from the center actually
+  sees during a preload. Nothing else about the rearrangement changes.
 - **The controller owns its own rAF loop.** The map's render loop is on-demand
   (`useMapRenderer.ts`'s `draw.current`) and does not repaint during the preload
   wait; the controller calls the `requestDraw` it was handed each tick, and the

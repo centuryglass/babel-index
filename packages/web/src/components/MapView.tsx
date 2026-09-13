@@ -32,7 +32,7 @@ import {
 } from '../lib/center.ts';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
-import { SearchGlyph, SearchOrbitArrow } from './SearchIcon.tsx';
+import { SearchGlyph, SearchOrbitArrow, SearchOrbitSpinner } from './SearchIcon.tsx';
 import type { Description } from '../../../map/describe.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
@@ -124,6 +124,7 @@ export function MapView({
   onEnterCatalog,
   hasLoadingAnimation,
   onAnimationPreviewChange,
+  preparingRearrangement,
 }: {
   mode: 'map' | 'catalog';
   canvasRef: Ref<HTMLCanvasElement>;
@@ -189,6 +190,8 @@ export function MapView({
   hasLoadingAnimation: boolean;
   /** Toggle the dev-panel's continuous loading-animation preview loop. */
   onAnimationPreviewChange: (on: boolean) => void;
+  /** A rearrangement's preload is running - spins the search badge's ring. */
+  preparingRearrangement: boolean;
 }) {
   return (
     <>
@@ -458,13 +461,14 @@ export function MapView({
       */}
       <button
         type="button"
-        className="search-trigger search-icon-button"
+        className={preparingRearrangement ? 'search-trigger search-icon-button preparing' : 'search-trigger search-icon-button'}
         onClick={onGoToSearch}
         onKeyDown={onControlKeyDown}
         aria-label="search the library"
       >
         <SearchGlyph className="search-icon-glyph" />
         <SearchOrbitArrow ref={searchArrowRef} className="search-icon-arrow" />
+        <SearchOrbitSpinner className="search-icon-spinner" />
       </button>
       {DEBUG && (
       <div className="panel">

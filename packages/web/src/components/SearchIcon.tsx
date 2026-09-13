@@ -41,3 +41,15 @@ export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithou
     />
   );
 });
+
+/**
+ * A ring spinning around the badge, shown while a rearrangement's preload is
+ * running - the far-field loading affordance (`docs/pending_task_list.md`)
+ * for when the center-tile indicator isn't on screen to play. Unlike
+ * `SearchOrbitArrow` it carries no per-frame state (`style.css`'s
+ * `.search-icon-button.preparing` gates a plain CSS animation), so it needs
+ * no ref and is plain markup rather than injected SVG.
+ */
+export function SearchOrbitSpinner(props: ComponentPropsWithoutRef<'span'>) {
+  return <span aria-hidden="true" {...props} />;
+}
