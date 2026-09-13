@@ -1072,7 +1072,17 @@ mark {
 .overlay-columns.columns .overlay-body {
   flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
   padding: 0 0 0 24px; border-left: 1px solid var(--edge);
+  display: flex; flex-direction: column;
 }
+/*
+  The body stretches to the tile's height, so a short story (or one already
+  grown to the 2x scale cap) leaves slack below it. Pin the score and its top
+  rule to the bottom of that column rather than letting them sit right under
+  the story with the blank space beneath - `margin-top: auto` in the flex
+  column eats whatever slack is left. When the story does fill the height, the
+  auto margin collapses to zero and the score follows it as before.
+*/
+.overlay-columns.columns .overlay-body .score { margin-top: auto; }
 /*
   Strips `.paper-sheet`'s own background/border/shadow/padding - the
   shared sheet above (`.overlay-columns`) already draws the card, so this
@@ -1093,14 +1103,14 @@ mark {
   `calc()` off the ordinary size rather than a second set of sizes, so raising
   `--split-text-scale` is the only thing that ever moves these; the stacked
   layout, the card and the catalog row never set the variable and read their
-  usual px value. The keyword chips are held at their base size and left OUT of
-  the scale: growing the pills widens every one and pushes a set that fit on one
-  line onto two, and a single row of tags reads better - so only the story and
-  score grow to fill.
+  usual px value. The keyword chips and the score breakdown are held at their
+  base size and left OUT of the scale, for the same reason: growing them widens
+  each line until a set that fit on one line spills onto two, and the score's
+  per-axis detail lines read worse once forced to wrap. So only the story grows
+  to fill.
 */
 .overlay-columns.columns { --split-text-scale: 1; }
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
-.overlay-columns.columns .overlay-body .score { font-size: calc(11px * var(--split-text-scale)); }
 /*
   The score's detail lines go multi-column only in the STACKED overlay, where
   the text sits below the image and has the full dialog width - it auto-flows
