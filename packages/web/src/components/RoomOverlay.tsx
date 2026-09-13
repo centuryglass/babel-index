@@ -61,6 +61,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
+import { BASE_TILE } from '../lib/pyramid.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 import type { Config } from '../../../config/config.ts';
@@ -369,6 +370,16 @@ export function RoomOverlay({
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
+              // Intrinsic size from BASE_TILE (every tile shares its aspect),
+              // so the picture reserves its correctly-proportioned box before
+              // its bytes arrive - the CSS still scales it (`width`/`height:
+              // auto`, `max-width: 100%`). Without this the tile has zero
+              // height when `decideColumns` first measures pre-paint, the pair
+              // looks short enough to stack, and the layout only flips to
+              // columns once `onLoad` fires after the first paint - a visible
+              // flash of the stacked layout on every uncached open.
+              width={BASE_TILE.w}
+              height={BASE_TILE.h}
               onLoad={() => {
                 decideColumns.current();
                 measureScale.current();
