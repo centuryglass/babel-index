@@ -234,6 +234,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       the one beneath it does not. Adopted by
                       `ArtistStatementOverlay`/`BabelBookOverlay`;
                       `HelpDialog`/`RoomOverlay` still inline their own copies.
+    * `useImageZoom.ts`: Two-finger pinch-to-zoom and one-finger pan, scoped
+                         to `RoomOverlay`'s tile image - see its own comment
+                         for why this exists instead of native browser page
+                         zoom (two real-device reports ruled that out)
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
@@ -265,11 +269,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     settings, blocked tags, the reader's own favorites)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
-    * `nativeZoom.ts`: Resets native page zoom the instant the last
-                       `.overlay-scrim`/`.catalog` element unmounts, since
-                       that is exactly when style.css's `html:has(...)` rule
-                       locks touch-action back to `none` on the map - see the
-                       module's own comment
+    * `imageZoom.ts`: Pure zoom/pan-bounds math for `useImageZoom.ts` - the
+                      room overlay tile's own scoped pinch-to-zoom, kept
+                      DOM-free the same way `camera.ts` is
     * `perfProbe.ts`: Rearrangement performance instrumentation behind
                       `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
                       store) - `docs/performance-research.md` §2's "measure

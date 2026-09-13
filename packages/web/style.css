@@ -57,20 +57,33 @@ canvas.dragging { cursor: grabbing; }
 /*
   touch-action only ever restricts, never re-enables: the used value at a
   touch point is the intersection of every element's value from the hit
-  target up to html, so a descendant's `auto` (`.overlay-scrim`/`.catalog`
-  below) cannot undo the `none` above it - a pinch over an open room overlay,
-  or a finger drag down the catalog list, still crosses `#root`/`body`/
-  `html`'s `none` on its way up and gets eaten as a two-finger map gesture
-  with nothing under it to pan. `:has()` relaxes the whole chain back to
-  `auto` exactly while one of those is mounted (`.overlay-scrim` is shared by
-  RoomOverlay/HelpDialog/BookOverlay, so this one rule covers every dialog),
-  leaving the map's own gesture handling - the reason for `none` up here -
-  untouched at every other time.
+  target up to html, so a descendant's relaxed value (`.overlay-scrim`/
+  `.catalog` below) cannot undo the `none` above it - a finger drag down the
+  catalog list, or over a long dialog's own content, still crosses
+  `#root`/`body`/`html`'s `none` on its way up and gets eaten as a
+  two-finger map gesture with nothing under it to pan. `:has()` relaxes the
+  whole chain to `pan-y` exactly while one of those is mounted
+  (`.overlay-scrim` is shared by RoomOverlay/HelpDialog/BookOverlay, so this
+  one rule covers every dialog's own vertical scrolling), leaving the map's
+  own gesture handling - the reason for `none` up here - untouched at every
+  other time.
+
+  `pan-y`, not `auto`: neither a dialog nor the catalog needs the BROWSER's
+  own pinch-zoom or horizontal pan, only their own vertical scroll region.
+  Two real-device reports (docs/pending_task_list.md) found that letting
+  native page zoom happen at all - even just for the room overlay's tile,
+  the one place zooming in was actually wanted - leaves the rest of the
+  document (the map canvas, its search badge, all fixed-size and absolutely
+  positioned) visibly detached the moment the reader also pans, not just
+  zooms; the fix was to stop granting native zoom permission at the
+  document level entirely and give the room overlay's own tile a SCOPED
+  zoom instead (`.overlay-tile` below, `useImageZoom.ts`) that never leaves
+  its own element.
 */
 html:has(.overlay-scrim, .catalog),
 body:has(.overlay-scrim, .catalog),
 #root:has(.overlay-scrim, .catalog) {
-  touch-action: auto;
+  touch-action: pan-y;
 }
 
 /*
@@ -1002,12 +1015,22 @@ mark {
   thin paper mat, a hairline rule, then a soft drop shadow - rather than a
   flat UI border; `box-shadow` rather than `border`/`padding` so it adds
   no layout space `decideColumns`/`measureScale` would have to account for.
+
+  `touch-action: pan-y` at rest lets a single-finger drag over the tile
+  scroll the dialog beneath it (`.overlay`'s own vertical scroll), same as
+  dragging anywhere else in it - `useImageZoom.ts` only claims the gesture
+  for itself once actually zoomed in (`.zoomed`, `touch-action: none`),
+  where the same drag instead pans the zoomed image. `transform-origin:
+  center` matches the math in `imageZoom.ts`, which clamps `tx`/`ty` around
+  the element's own center.
 */
 .overlay-tile {
   display: block; width: auto; max-width: 100%; height: auto;
   margin: 4px auto 14px; border-radius: 1px; background: #14110d;
   box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
+  touch-action: pan-y; transform-origin: center;
 }
+.overlay-tile.zoomed { touch-action: none; }
 /*
   Nothing clipped here: this is where the whole story lives. Redundant
   today, because the clamp is scoped to `.catalog-row` - and kept because
