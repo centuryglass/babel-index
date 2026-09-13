@@ -59,6 +59,7 @@
  * comment for why the ordering matters.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useImageZoom } from '../hooks/useImageZoom.ts';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import { BASE_TILE } from '../lib/pyramid.ts';
@@ -173,6 +174,12 @@ export function RoomOverlay({
   const scrimRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(false);
+
+  // See useImageZoom.ts: a room overlay's tile gets its own scoped
+  // pinch-to-zoom rather than leaning on the browser's page zoom, so
+  // `src` (a new tile) is what resets it, not the dialog closing - the
+  // same overlay instance can show a different room without unmounting.
+  const imageZoom = useImageZoom(src);
 
   // Whether the tile and text sit in two columns instead of one - see the
   // file doc comment. `columns` on `.overlay-columns` is what actually
@@ -366,7 +373,9 @@ export function RoomOverlay({
           */}
           {src && (
             <img
-              className="overlay-tile"
+              className={imageZoom.zoomed ? 'overlay-tile zoomed' : 'overlay-tile'}
+              style={imageZoom.style}
+              ref={imageZoom.ref}
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
