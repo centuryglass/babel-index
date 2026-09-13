@@ -372,6 +372,28 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   currently is on screen; no default rotation here to fight that.
 */
 .search-icon-arrow { transform-origin: 50% 50%; }
+/*
+  The far-field loading affordance - a ring around the badge, shown while a
+  rearrangement's preload is running regardless of whether the center-tile
+  indicator is also visible (`main.tsx`'s `preparingRearrangement`, unlike
+  `hasLoadingAnimation`/`showLoading`, is never gated on the center book
+  being on screen - see `docs/pending_task_list.md`'s "Loading indicator"
+  entry). A dashed border rather than a solid one with a gap cut into it, so
+  the ring reads as motion rather than as a broken circle when the spin is
+  disabled below.
+*/
+.search-icon-spinner {
+  position: absolute; inset: -4px; border-radius: 50%; pointer-events: none;
+  border: 2px dashed transparent; opacity: 0;
+}
+.search-icon-button.preparing .search-icon-spinner {
+  opacity: 1; border-color: var(--accent);
+  animation: search-icon-spin 900ms linear infinite;
+}
+@keyframes search-icon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .search-icon-button.preparing .search-icon-spinner { animation: none; }
+}
 .note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--edge); color: var(--dim); font-size: 11px; }
 .hud {
   position: absolute; bottom: 14px; left: 16px; color: var(--dim); font-size: 11px;

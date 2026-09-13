@@ -482,6 +482,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [requestDraw]
   );
 
+  // The search badge's own spinner - the far-field loading affordance
+  // `docs/pending_task_list.md` asked for, played unconditionally over the
+  // same preload window as the center-tile indicator above rather than
+  // gated on the center book being on screen. See `useRearrangement.ts`'s
+  // `onPreparingChange`.
+  const [preparingRearrangement, setPreparingRearrangement] = useState(false);
+
   const resistanceAt = useCallback((x: number, y: number) => layout.resistanceAt(x, y), [layout]);
 
   // The catalog's expanded room: the tile at full size and the whole story.
@@ -891,6 +898,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     cache,
     onPreparing: WEBGL ? onPreparingGL : undefined,
     loadingAnim,
+    onPreparingChange: setPreparingRearrangement,
   });
   requestAnimationRef.current = requestAnimation;
 
@@ -1317,6 +1325,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         onEnterCatalog={enterCatalog}
         hasLoadingAnimation={hasLoadingAnim}
         onAnimationPreviewChange={setAnimationPreview}
+        preparingRearrangement={preparingRearrangement}
       />
 
       {(mode === 'catalog' || leaving) && (
