@@ -14,43 +14,54 @@
       simulator does not settle iOS gesture arbitration.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The Index of Babel</title>
-    <meta
-      name="description"
-      content="A pannable, zoomable map of AI-generated library rooms, loosely based on the Library of Babel."
-    />
+    <title>%%TITLE%%</title>
+    <meta name="description" content="%%DESCRIPTION%%" />
     <!-- Every href below is relative so a subpath deployment resolves it
          under <base href> instead of the browser's own-origin guess, which
-         the reverse-proxied prefix never sees - see base-path.ts. The og:*
-         and twitter:* content urls are the one exception: link unfurlers
-         parse this HTML without ever seeing <base href>, so app.ts fills
-         those two placeholders in with an absolute url per request. -->
+         the reverse-proxied prefix never sees - see base-path.ts. The og:*/
+         twitter:* content urls are the one exception: link unfurlers parse
+         this HTML without ever seeing <base href>, so app.ts's renderPage
+         fills the canonical-url and og-image placeholders in below with an
+         absolute url per request, naming the PAGE BEING SERVED rather than
+         always the site root - a /catalog/<file> permalink gets its own
+         canonical url and its own og:image (the room's own picture).
+         NOTE: don't spell either placeholder's own name inside this comment
+         (the way the two tags below do) - renderPage's substitution is a
+         global replace and would rewrite this prose too. -->
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
     <link rel="manifest" href="site.webmanifest" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="The Index of Babel" />
-    <meta property="og:title" content="The Index of Babel" />
-    <meta
-      property="og:description"
-      content="A pannable, zoomable map of AI-generated library rooms, loosely based on the Library of Babel."
-    />
-    <meta property="og:url" content="%%ORIGIN_URL%%" />
+    <meta property="og:title" content="%%TITLE%%" />
+    <meta property="og:description" content="%%DESCRIPTION%%" />
+    <meta property="og:url" content="%%CANONICAL_URL%%" />
     <meta property="og:image" content="%%OG_IMAGE_URL%%" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="The Index of Babel" />
-    <meta
-      name="twitter:description"
-      content="A pannable, zoomable map of AI-generated library rooms, loosely based on the Library of Babel."
-    />
+    <meta name="twitter:title" content="%%TITLE%%" />
+    <meta name="twitter:description" content="%%DESCRIPTION%%" />
     <meta name="twitter:image" content="%%OG_IMAGE_URL%%" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The body placeholder below is real, crawlable content for the
+         catalog/room routes (app.ts's renderPage) - empty on every other
+         route, unchanged from before this existed. It lives INSIDE #root
+         because bundle.js's `createRoot(rootEl).render(<App />)` (main.tsx)
+         takes ownership of this container on its first commit either way;
+         putting the SSR markup here means a visitor sees real content
+         immediately, then the interactive app in its place once JS runs,
+         rather than a blank frame first. This is not hydration - there's no
+         attempt to reuse this markup's DOM nodes, only to not leave the
+         container empty until JS replaces it. -->
+    <div id="root">%%SSR_BODY%%</div>
+    <!-- The route-script placeholder below is empty except on the
+         catalog/room routes - tells main.tsx which mode/room to open on
+         first render, read once at module scope exactly as
+         `?catalog`/`?blockTags` already are. Must land before bundle.js
+         reads it. -->
+    %%INITIAL_ROUTE_SCRIPT%%
     <script type="module" src="bundle.js"></script>
   </body>
 </html>

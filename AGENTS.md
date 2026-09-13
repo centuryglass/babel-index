@@ -103,6 +103,20 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
   * `base-path.ts`: Normalizes `--base-path`, for a subpath deployment behind
                     a prefix-stripping reverse proxy (`server-nginx.conf`)
+  * `roomContent.ts`: Mode-aware, memoized loader for `metadata.json`/
+                      `tagLinks.json`'s real content - `readFile` in local
+                      mode, `fetch` in remote mode - for the SSR catalog/room
+                      routes below. `scan.ts`/`remote.ts` deliberately don't
+                      do this themselves; `/api/manifest` only ever ships
+                      `{url, ...counts}` for either file.
+  * `catalogPage.ts`: Pure HTML-fragment builders for the SSR `/catalog` list
+                      and `/catalog/:file` room permalink (`app.ts`'s
+                      `renderPage` embeds the result in `index.html`'s
+                      `#root`) - reuses `packages/web/src/lib/catalog.ts`'s
+                      own `alphabeticalOrder`/`pageOf`/`pageCount` rather than
+                      a second paging implementation.
+  * `seo.ts`: Pure builders for `robots.txt` and `sitemap.xml` - every room
+             permalink, every catalog page, and `/`.
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
@@ -110,11 +124,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
     * `index.html`: HTML entry point, static page structure. Its `<head>`
                     carries the favicon/manifest links and the OG/Twitter card
-                    meta tags; `app.ts`'s `/` route fills in the two absolute
-                    `%%ORIGIN_URL%%`/`%%OG_IMAGE_URL%%` placeholders per
-                    request; a link unfurler parses this HTML directly and
-                    never sees `<base href>`, unlike every other relative url
-                    on the page.
+                    meta tags; `app.ts`'s `renderPage` (shared by `/`,
+                    `/catalog`, and `/catalog/:file`) fills in
+                    `%%TITLE%%`/`%%DESCRIPTION%%`/`%%CANONICAL_URL%%`/
+                    `%%OG_IMAGE_URL%%` per request - the last two absolute,
+                    since a link unfurler parses this HTML directly and never
+                    sees `<base href>`, unlike every other relative url on the
+                    page. `%%SSR_BODY%%` (inside `#root`) and
+                    `%%INITIAL_ROUTE_SCRIPT%%` (before `bundle.js`) are empty
+                    on `/` and carry the SSR catalog/room markup and a
+                    `window.__INITIAL_ROUTE__` hint on the other two - see
+                    `main.tsx`'s own note on that global.
     * `style.css`: All of the app's CSS - one file, no CSS-in-JS, no
                    per-component styles. Linked from `index.html` rather than
                    inlined, and served by `app.ts`'s `/style.css` route the same
@@ -136,6 +156,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `src/main.tsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.
+                      Reads `window.__INITIAL_ROUTE__` once at module scope
+                      (set only by the SSR `/catalog`/`/catalog/:file` routes,
+                      see `index.html`) alongside `?catalog`/`?blockTags`, so
+                      a JS-capable visitor who lands on one of those urls
+                      boots straight into the interactive catalog - with that
+                      room's overlay already open, for a permalink - instead
+                      of the map. No router: this is a one-time seed exactly
+                      like the others, absent (and therefore inert) on `/`.
     * `src/assets.d.ts`: Declares the `.svg` import shape esbuild's
                          `loader: { '.svg': 'text' }` produces, for `.ts`/`.tsx`
                          files that import one as raw markup

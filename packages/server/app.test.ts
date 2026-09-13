@@ -476,9 +476,89 @@ test('the served index.html fills in an absolute og:image/og:url, since link unf
     },
     {
       readIndexHtml: async () =>
-        '<head><meta property="og:url" content="%%ORIGIN_URL%%" /><meta property="og:image" content="%%OG_IMAGE_URL%%" /><meta name="twitter:image" content="%%OG_IMAGE_URL%%" /></head>',
+        '<head><meta property="og:url" content="%%CANONICAL_URL%%" /><meta property="og:image" content="%%OG_IMAGE_URL%%" /><meta name="twitter:image" content="%%OG_IMAGE_URL%%" /></head>',
     }
   );
+});
+
+// A minimal stand-in for the real index.html, carrying every placeholder
+// app.ts's renderPage fills in - not the real file, since these tests care
+// about the server-side substitution, not the real page's markup.
+const SSR_INDEX_HTML =
+  '<head><title>%%TITLE%%</title><meta name="description" content="%%DESCRIPTION%%" />' +
+  '<meta property="og:url" content="%%CANONICAL_URL%%" /><meta property="og:image" content="%%OG_IMAGE_URL%%" />' +
+  '</head><body><div id="root">%%SSR_BODY%%</div>%%INITIAL_ROUTE_SCRIPT%%</body>';
+
+test('GET /catalog lists real room links and titles, alphabetically, with correct per-page canonical/og tags', async () => {
+  await serving(
+    async ({ get, port }) => {
+      const res = await get('/catalog');
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.match(html, /href="\/catalog\/001\.jpg"/);
+      assert.match(html, /href="\/catalog\/002\.jpg"/);
+      assert.match(html, /href="\/catalog\/003\.jpg"/);
+      assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/catalog"`));
+      assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"catalog"\}/);
+
+      const page2 = await (await get('/catalog?page=2')).text();
+      assert.match(page2, new RegExp(`content="http://127\\.0\\.0\\.1:${port}/catalog\\?page=2"`));
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        '002.jpg': fixture.jpeg(512, 512),
+        '003.jpg': fixture.jpeg(512, 512),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('GET /catalog/:file shows that room\'s story/keywords and its own og:image; an unknown file 404s', async () => {
+  await serving(
+    async ({ get, port }) => {
+      const res = await get('/catalog/001.jpg');
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.match(html, /A quiet reading room\./);
+      assert.match(html, /gothic/);
+      assert.match(html, new RegExp(`content="http://127\\.0\\.0\\.1:${port}/images/001\\.jpg"`));
+      assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"catalog","room":"001\.jpg"\}/);
+
+      const missing = await get('/catalog/nope.jpg');
+      assert.equal(missing.status, 404);
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        '002.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({
+          '001.jpg': { title: 'Reading Room', keywords: [{ text: 'gothic', type: null }], story: 'A quiet reading room.' },
+        }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('GET /robots.txt and /sitemap.xml reference every room, and work even without readIndexHtml', async () => {
+  await serving(async ({ get, port }) => {
+    const robots = await get('/robots.txt');
+    assert.equal(robots.status, 200);
+    assert.match(robots.headers.get('content-type'), /text\/plain/);
+    assert.match(await robots.text(), new RegExp(`Sitemap: http://127\\.0\\.0\\.1:${port}/sitemap\\.xml`));
+
+    const sitemap = await get('/sitemap.xml');
+    assert.equal(sitemap.status, 200);
+    assert.match(sitemap.headers.get('content-type'), /application\/xml/);
+    const xml = await sitemap.text();
+    assert.match(xml, /catalog\/001\.jpg/);
+    assert.match(xml, /catalog\/002\.jpg/);
+    assert.match(xml, /catalog\/003\.png/);
+  });
 });
 
 test('the optional CLIP model is reported, not assumed', () => {

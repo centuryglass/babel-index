@@ -41,16 +41,6 @@ code and the git log are the record of what was.
   `localStorage` and sends it to the server, and the whole shape of
   `favorites.ts` is an argument about refusing to spy on people — an argument
   no reader can currently see. A short paragraph in `HelpDialog` would say it.
-- **The library cannot be found from outside itself.** `<meta
-  name="description">`, an Open Graph/Twitter card, and real favicons now
-  exist (`index.html`, `packages/web/public/`, `app.ts`'s `publicDir`) - a
-  shared link now previews with a title, description and image instead of
-  bare text. Still missing: `robots.txt` and a sitemap, and - the bigger
-  piece - nothing is server-rendered, so a crawler still sees an empty
-  `<div id="root">` and indexes nothing about any individual room. A
-  server-rendered catalog page closes that and gives crawlers real content to
-  follow — and discoverability is the reason the catalog exists (concept.md,
-  8/22/26).
 - **`README.md` describes a center tile that no longer exists** — "5 shelves ×
   32 books = 160 books", abandoned in concept.md's 8/18/26 entry — and its
   "What it is" section is still a TODO while the site is live at the URL
