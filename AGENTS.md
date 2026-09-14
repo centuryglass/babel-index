@@ -692,6 +692,26 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   should stop. `areSpinesLegible` is the single zoom gate: the buttons exist
   exactly while `composeSpines` draws a title, so a reader never tabs to a book
   nobody can see named.
+- **Every one of those DOM overlays is sized to the WHOLE cell, and the clip on
+  `#root` is what keeps that off the page.** `.center-search`, `.center-books`,
+  `.center-book` and `.center-controls` are absolutely positioned against
+  `#root` at the center cell's screen rect, which at reading zoom is several
+  screens wide - real content hanging outside the viewport, and `html`/`body`'s
+  `overflow: hidden` never reaches it (neither is in the containing-block chain
+  of an absolutely positioned descendant of a positioned `#root`). A desktop
+  shows no sign of it. A phone reads the same overflow as a page wider than the
+  screen: it drops the page scale to fit and grows the LAYOUT viewport to match,
+  and `position: fixed` resolves against THAT - so every dialog's
+  `.overlay-scrim` covers several screens (the dialog lands mostly off the
+  display, its close button has to be panned to) and the map paints at a
+  fraction of its size once the dialog closes. On a Pixel 5 the opening view
+  alone measured 407px of document in a 393px screen, and the fully zoomed-in
+  map 1194x2209. `#root { overflow: clip }` (style.css) is what holds it in -
+  `clip`, not `hidden`, or `#root` becomes a scroll container and focusing an
+  off-screen book slides the whole app, canvas included, sideways.
+  `map-gestures.e2e.ts`'s "zooming in never grows the page past the viewport"
+  is the guard; it reads the document's own size, which says the same thing on
+  a desktop viewport as on the phone that showed the symptom.
 - **`onTap` must lose to a pan and to a flight.** It fires only on a pointer-up
   that stayed within the slop and did not stop a flight, and a completed
   long-press clears the tap candidate so a press is never also a tap. History is

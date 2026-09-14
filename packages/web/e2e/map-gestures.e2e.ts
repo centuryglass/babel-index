@@ -123,6 +123,41 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     assert.ok(back.cells < out.cells, 'zooming in must leave fewer cells in view');
   });
 
+  test('zooming in never grows the page past the viewport', async () => {
+    const { page, flightMs } = session;
+    // The center tile's DOM overlays (`.center-search`, `.center-books`,
+    // `.center-book`, `.center-controls`) are positioned over the WHOLE
+    // center cell, which at reading zoom is several screens wide. On a
+    // desktop that is invisible - content sticking out of a viewport that
+    // cannot scroll, and nothing more. A phone reads the same overflow as a
+    // page wider than the screen: it drops the page scale to fit and grows
+    // the LAYOUT viewport to match, and `position: fixed` resolves against
+    // that, so every dialog's scrim covers several screens (the dialog lands
+    // mostly off the display, its close button has to be panned to) and the
+    // map paints at a fraction of its size once the dialog closes. Both were
+    // reported from a real phone. What prevents it is a clip
+    // (`#root { overflow: clip }`) that shows no sign of being there until it
+    // is gone, so what this asserts is the document's own size - the one
+    // reading that says the same thing here as on the phone.
+    await page.mouse.move(640, 400);
+    try {
+      for (let i = 0; i < 12; i++) await page.mouse.wheel(0, -600);
+      await settled(page);
+      const doc = await page.evaluate(() => ({
+        w: document.documentElement.scrollWidth,
+        h: document.documentElement.scrollHeight,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+      }));
+      assert.ok(doc.w <= doc.vw, `zoomed in, the page is ${doc.w}px wide in a ${doc.vw}px viewport`);
+      assert.ok(doc.h <= doc.vh, `zoomed in, the page is ${doc.h}px tall in a ${doc.vh}px viewport`);
+    } finally {
+      for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 600);
+      await settled(page);
+      await recentre(page, flightMs);
+    }
+  });
+
   test('the pyramid engages: zooming out drops to a coarser level', async () => {
     const { page } = session;
     // The unit tests prove the policy; this proves it is wired to the real

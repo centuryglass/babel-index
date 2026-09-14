@@ -134,6 +134,13 @@ code and the git log are the record of what was.
   bisect: the failure is already sitting there every run, with no flake-hunting
   needed.
 
+  **[2026-09-14] It is no longer deterministic there.** Across five runs of the
+  file in one cloud container, both tests passed together once and failed
+  together four times - so a green run proves nothing and the repro still needs
+  a repeat count. The runs were split either side of an unrelated fix to the
+  page's own overflow (`#root { overflow: clip }`, which the pass and two of
+  the failures share), so the difference is not that fix.
+
   Not yet root-caused. Candidates not yet ruled out: something downstream of
   `setResult` (e.g. `sortResult`/`layout`'s `useMemo` in `main.tsx`, or
   `pushHistory`) causing `useRearrangement.ts`'s effect to see `layout`/
