@@ -5,6 +5,7 @@ build/register.mjs.log
 
 docs/
 infra/
+deploy/
 reference/
 tools/
 !tools/center-placement/lib/

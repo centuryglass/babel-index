@@ -1,0 +1,174 @@
+name: deploy
+
+# Ship main to the VPS, and prove it actually shipped.
+#
+# This runs AFTER `ci`, not alongside it: `workflow_run` fires on the ci
+# workflow's completion and carries the sha ci ran against, so what gets
+# deployed is exactly the revision that went green rather than whatever the
+# tip of main happens to be by the time this starts. A merge, two minutes,
+# and it is live.
+#
+# The deploy itself is one ssh call. Everything it does on the far side lives
+# in `deploy/deploy.sh` - reviewed like any other code in this repo, rather
+# than as a heredoc buried in a yaml file - and the key it authenticates with
+# is pinned to that script as an SSH forced command, so a leaked key can ask
+# for a revision of main to be deployed and nothing else. `deploy/README.md`
+# is the one-time setup; the secrets it lists have to exist or the first run
+# stops on the check below and says which are missing.
+#
+# Redeploy or roll back by hand from the Actions tab ("Run workflow"), passing
+# a sha - anything that has been on main is accepted, which is what makes the
+# rollback path a button rather than an ssh session.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit to deploy (default: the tip of main)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# Never two deploys at once, and never cancel one in flight: the second half
+# of a deploy is a service restart, and a cancelled run leaves the box
+# somewhere nobody chose. A superseded run waits its turn and then deploys the
+# newer revision over the top.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy to production
+    # A dispatch is a person choosing; everything else has to be a successful
+    # PUSH to main. `workflow_run`'s branch filter matches the HEAD branch of
+    # the run that triggered it, which for a pull request is the PR's own
+    # branch - a fork branch named `main` would otherwise satisfy it. The
+    # event and branch checks here, and deploy.sh's own "must be an ancestor
+    # of origin/main" check on the far side, are the same rule stated on both
+    # sides of the ssh connection.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.PUBLIC_URL }}
+
+    steps:
+      - name: which commit
+        id: target
+        env:
+          # Three sources, one winner: an explicitly dispatched sha, else the
+          # revision ci just passed on, else the sha this workflow was
+          # dispatched from (the tip of main, for a dispatch with no input).
+          REQUESTED: ${{ inputs.sha }}
+          TESTED: ${{ github.event.workflow_run.head_sha }}
+          FALLBACK: ${{ github.sha }}
+        run: |
+          sha="${REQUESTED:-${TESTED:-$FALLBACK}}"
+          # Full shas only. deploy.sh refuses anything else anyway, but
+          # failing here costs no ssh connection and says so more clearly.
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::not a full 40-character commit sha: '$sha'"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "deploying $sha"
+
+      # For `deploy/health-check.mjs`, at the revision being deployed - so the
+      # runner checks health the same way the box does, by the same rules.
+      # Nothing here is installed or built: that script is dependency-free
+      # plain Node on purpose (see its header).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+
+      - name: authorize the runner
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_PORT: ${{ secrets.DEPLOY_PORT }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: |
+          missing=()
+          [[ -n "$KEY" ]] || missing+=(DEPLOY_SSH_KEY)
+          [[ -n "$KNOWN_HOSTS" ]] || missing+=(DEPLOY_KNOWN_HOSTS)
+          [[ -n "$SSH_HOST" ]] || missing+=(DEPLOY_HOST)
+          [[ -n "$SSH_PORT" ]] || missing+=(DEPLOY_PORT)
+          [[ -n "$SSH_USER" ]] || missing+=(DEPLOY_USER)
+          [[ -n "$PUBLIC_URL" ]] || missing+=('PUBLIC_URL (a variable, not a secret)')
+          if (( ${#missing[@]} )); then
+            echo "::error::not configured yet - missing: ${missing[*]}. See deploy/README.md."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/babel_deploy
+          chmod 600 ~/.ssh/babel_deploy
+          # Pinned host keys, never TOFU: this connection hands a machine the
+          # authority to run a deploy, and accepting whatever key answers
+          # would hand it to whatever answers. `ssh-keyscan` output, see
+          # deploy/README.md.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: deploy
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_PORT: ${{ secrets.DEPLOY_PORT }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          # The far side ignores this command string as a command - the forced
+          # command in authorized_keys runs deploy.sh regardless - and reads it
+          # from SSH_ORIGINAL_COMMAND instead. IdentitiesOnly so the agent
+          # cannot quietly offer some other key and change who is connecting.
+          ssh -i ~/.ssh/babel_deploy \
+              -p "$SSH_PORT" \
+              -o BatchMode=yes \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=20 \
+              "$SSH_USER@$SSH_HOST" "deploy $SHA"
+
+      # deploy.sh already checked this against 127.0.0.1 before returning
+      # success. This is the other half of the question: the box is serving
+      # the new revision, but can anyone REACH it - through nginx, through the
+      # subpath's prefix-stripping proxy_pass, from outside the machine? A
+      # deploy that only ever checks localhost cannot tell a working site from
+      # a broken reverse proxy in front of a working server.
+      - name: verify it from outside
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: node deploy/health-check.mjs "${PUBLIC_URL%/}/api/health" "$SHA" --timeout=60
+
+      - name: summary
+        if: always()
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "### deploy: $RESULT"
+            echo
+            echo "- commit: \`$SHA\`"
+            echo "- url: $PUBLIC_URL"
+            if [[ "$RESULT" != "success" ]]; then
+              echo
+              echo "The service was **not** rolled back. Pick the last good sha and"
+              echo "re-run this workflow with it, or see \`deploy/README.md\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

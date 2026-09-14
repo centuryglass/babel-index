@@ -103,6 +103,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
   * `base-path.ts`: Normalizes `--base-path`, for a subpath deployment behind
                     a prefix-stripping reverse proxy (`server-nginx.conf`)
+  * `version.ts`: Which commit this process is running - `BABEL_COMMIT`, else
+                  the checkout's own `.git`, read once at startup. What
+                  `/api/health` reports and what `deploy/` verifies a release
+                  against; null rather than a throw when it cannot be
+                  established.
   * `roomContent.ts`: Mode-aware, memoized loader for `metadata.json`/
                       `tagLinks.json`'s real content - `readFile` in local
                       mode, `fetch` in remote mode - for the SSR catalog/room
@@ -419,6 +424,27 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                    (except `center-placement/lib`, re-included), and anything
                    dev/local-only (`docs`, `infra`, `reference`, `*.env`,
                    `favorites.json`, `config.json`).
+- `deploy`: shipping main to the VPS. Unlike `infra/` (applied by hand, no
+            credentials in CI), this one does run from Actions - see
+            "Deploying to the VPS" below for what makes the key it uses
+            narrow enough to store.
+  * `deploy.sh`: the deploy itself, run ON THE VPS - fetch, refuse a sha that
+                 is not an ancestor of `origin/main`, check out, reinstall
+                 only if the lockfile moved, restart the unit, confirm it came
+                 back on the new revision. Also the SSH forced command, which
+                 is what stops the deploy key being a shell.
+  * `health-check.mjs`: poll a server's `/api/health` until it reports an
+                        expected commit. Dependency-free plain Node, run by
+                        both `deploy.sh` (against `127.0.0.1`) and the
+                        workflow (against the public url) so there is one
+                        definition of "the deploy worked".
+  * `README.md`: the one-time VPS and repository-settings setup, and the
+                 rollback path.
+- `.github/workflows/deploy.yml`: waits for `ci` to go green on a push to
+                                  main, ships that exact sha over one ssh
+                                  call, then re-checks health from outside.
+                                  Manually dispatchable with a sha, which is
+                                  the rollback button.
 
 ### Assets:
 - `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
@@ -1057,6 +1083,44 @@ code, not a standing invariant.
   serves a page whose `<base href>` points at a prefix Express never mounted,
   so every relative fetch 404s — that is expected, not a regression to chase;
   the flag is meaningless without the reverse proxy that strips it.
+
+### Deploying to the VPS
+
+Full setup and the rollback path are in `deploy/README.md`. The invariants:
+
+- **A 200 is not a successful deploy, and that is the whole reason
+  `/api/health` reports a commit.** The old process surviving a failed
+  restart, a unit file pointing at a second checkout, `--images` aimed at a
+  directory that moved — every one of those answers 200 with a perfectly
+  healthy-looking library. So `health-check.mjs` compares the reported commit
+  against the sha being deployed, and a release that comes up on the right
+  commit with **zero rooms** fails immediately rather than waiting out the
+  timeout: it answered, so retrying cannot change the answer.
+- **`version.ts` is read once at startup, never per request.** A running
+  process cannot change which revision it is; re-reading `.git` per request
+  would report the checkout rather than the code in memory, which is the exact
+  lie the health check exists to catch.
+- **The deploy key is pinned to `deploy/deploy.sh` as an SSH forced command,
+  and the ancestor check is what makes that worth anything.** The requested
+  sha arrives in `$SSH_ORIGINAL_COMMAND`, is matched against 40 hex characters
+  before it is used at all, and is refused unless it is already an ancestor of
+  `origin/main`. Anyone holding the key can redeploy main or roll back to
+  something that was main — not a branch, not a fork's commit, not a shell.
+  Loosening either check turns a narrow credential back into a login.
+- **Both halves of the check run, and they ask different questions.**
+  `deploy.sh` checks `127.0.0.1` (did the unit come back on the new code?) and
+  the workflow re-checks the public url (can anyone reach it?). A localhost-only
+  check cannot tell a working site from a broken reverse proxy in front of a
+  working server — which, given everything in the section above, is a failure
+  worth being able to see.
+- **A failed deploy is not rolled back.** It stops with the previous sha
+  printed, and the workflow's dispatch input takes a sha, so a rollback is a
+  button. Rolling back automatically would pair a working-looking site with a
+  red workflow, which is the combination most likely to be misread as flaky CI.
+- **`deploy.sh` runs as the version of itself that was already on the box**,
+  since it checks out the new revision partway through its own run. A change
+  to it lands on the deploy *after* the one introducing it — the same
+  one-release lag any self-updating deploy script has, and not a bug to chase.
 
 ### The catalog, and the two modes
 

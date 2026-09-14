@@ -18,6 +18,25 @@ code and the git log are the record of what was.
   origin. Add a second ruleset (rate limit + short-TTL cache keyed on the
   query string) scoped to the app's hostname for that endpoint specifically.
 
+- **`server-nginx.conf` does not exist in this repo** (noticed 9/14/26 while
+  wiring up `deploy/`). `AGENTS.md`'s "Deployment and the base path" section
+  and `packages/server/index.ts`'s header both name it as the file that makes
+  a subpath deployment work, quoting two specific `location` blocks from it,
+  but there is no such file tracked here and it is not in `.gitignore` — it
+  only ever lived on the VPS. Either commit the real thing (it is the one
+  piece of the deployment still managed entirely by hand, and the one the
+  workflow's public health check fails on when it is wrong) or stop pointing
+  at it by name from two files. Do not reconstruct it from the AGENTS.md
+  description without diffing against the live file first.
+- **The CLIP weights cache inside `node_modules`.** transformers.js defaults
+  `env.cacheDir` to `node_modules/@huggingface/transformers/.cache`, so any
+  `npm ci` throws away a few hundred MB of downloaded model.
+  `deploy/deploy.sh` moves it aside and back across the install, which works
+  but means a deploy script knows where a dependency keeps its cache. Setting
+  `env.cacheDir` to a path outside the tree where `app.ts` imports the model
+  would delete that coupling, and would also let the Docker image mount the
+  cache as a volume instead of re-downloading on every container start.
+
 ## CI:
 - **Nothing builds the `Dockerfile`.** It exists so hosting can move without a
   rewrite, and it will drift out of step with `package.json` unnoticed until

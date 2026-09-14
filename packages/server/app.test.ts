@@ -71,6 +71,41 @@ function rawGet(port: number, path: string): Promise<{ status: number; text: str
   });
 }
 
+// --- health -----------------------------------------------------------------
+
+test('/api/health reports the revision it was given, and the corpus it found', async () => {
+  await serving(
+    async ({ get }) => {
+      const res = await get('/api/health');
+      assert.equal(res.status, 200);
+      // A cached answer would let the deploy check pass on the revision that
+      // was running a minute ago - the one failure this endpoint exists to
+      // catch. See app.ts.
+      assert.match(res.headers.get('cache-control'), /no-store/);
+
+      const health = await res.json();
+      assert.equal(health.ok, true);
+      assert.equal(health.commit, 'f'.repeat(40));
+      // The deploy script refuses a release that came up serving nothing, so
+      // this has to be the real count rather than a fixed truthy value.
+      assert.equal(health.rooms, 3);
+      assert.equal(typeof health.uptimeSeconds, 'number');
+    },
+    { commit: 'f'.repeat(40) }
+  );
+});
+
+test('/api/health says so honestly when the revision is unknown', async () => {
+  await serving(async ({ get }) => {
+    const health = await (await get('/api/health')).json();
+    // Null, not absent: the deploy workflow distinguishes "this server cannot
+    // name its revision" from "this server is older than the field".
+    assert.equal(health.ok, true);
+    assert.equal(health.commit, null);
+    assert.ok('commit' in health);
+  });
+});
+
 // --- manifest ---------------------------------------------------------------
 
 test('/api/manifest serves the scan', async () => {
