@@ -1034,23 +1034,18 @@ mark {
   flat UI border; `box-shadow` rather than `border`/`padding` so it adds
   no layout space `decideColumns`/`measureScale` would have to account for.
 
-  `touch-action` is left at `auto` here rather than switching to `none`
-  once `.zoomed` (`useImageZoom.ts`'s own scoped pinch-zoom claiming the
-  gesture): a real native pinch and `useImageZoom`'s own pointer handling
-  (which isn't gated by `touch-action`) both react to the same gesture, and
-  rather than fight that contention with CSS, the leftover native zoom/pan
-  it can produce is cleaned up at the room overlay's own close boundary
+  `touch-action` is left at `auto` here, same as everywhere else (see the
+  html/body comment near the top of this file) - a reader pinch-zooms the
+  tile with the browser's own native gesture, and any leftover zoom/pan
+  that produces is cleaned up at the room overlay's own close boundary
   (`RoomOverlay.tsx`'s `resetNativeZoom` call, `lib/visualViewport.ts`) -
   see docs/pinch-zoom-native-fix-plan.md and
   packages/web/e2e/pinch-zoom-native.e2e.ts.
-  `transform-origin: center` matches the math in `imageZoom.ts`, which
-  clamps `tx`/`ty` around the element's own center.
 */
 .overlay-tile {
   display: block; width: auto; max-width: 100%; height: auto;
   margin: 4px auto 14px; border-radius: 1px; background: #14110d;
   box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
-  transform-origin: center;
 }
 /*
   Nothing clipped here: this is where the whole story lives. Redundant

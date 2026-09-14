@@ -15,7 +15,7 @@
  * fix.
  *
  * How the gesture actually reaches the browser's own zoom (not just this
- * app's `useMapCamera`/`useImageZoom` pointer handlers): a spike confirmed
+ * app's `useMapCamera` pointer handlers): a spike confirmed
  * that `support.ts`'s existing `pinch()`/`touchDrag()` helpers, UNCHANGED,
  * already move `window.visualViewport.scale` once nothing's `touch-action`
  * blocks it - CDP's `Input.dispatchTouchEvent` drives Chromium's real touch
@@ -201,9 +201,8 @@ describe('the library, in a browser: native pinch-zoom (mobile)', { concurrency:
     await card.waitFor({ timeout: 5000 });
 
     // The room overlay's own tile is "the one place zooming in was actually
-    // wanted" (style.css's own note on why `useImageZoom.ts` exists) - pinch
-    // there specifically, matching the original report's "zooming within an
-    // overlay" rather than the map behind it.
+    // wanted" - pinch there specifically, matching the original report's
+    // "zooming within an overlay" rather than the map behind it.
     const tile = page.locator('.overlay-tile');
     const box = await tile.boundingBox();
     await pinch(page, {

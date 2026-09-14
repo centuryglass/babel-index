@@ -6,7 +6,6 @@
  * reach some earlier, unrelated control (a small map button, an overlay
  * tile) into what happens next - see docs/pinch-zoom-native-fix-plan.md.
  *
- * There is no direct API to set `visualViewport.scale`/offset -
  * `resetNativeZoom` below is a one-shot reset at a boundary, never a
  * standing restriction, and restores the reader's own permissive viewport
  * `content` on the same tick so they can freely pinch-zoom again on the
@@ -22,42 +21,62 @@
 
 const RESET_ATTEMPTS = 5;
 
-function toggleViewportContent(meta: Element, original: string): void {
-  // Setting `content` back to a value IDENTICAL to what's already applied is
-  // a no-op - Chromium (confirmed directly, see
-  // packages/web/e2e/pinch-zoom-native.e2e.ts) only recomputes zoom when the
-  // parsed viewport description actually changes. Toggling through a
-  // `content` whose `initial-scale` genuinely differs, then back to the
-  // page's real one, is what forces that recompute: the interim value snaps
-  // scale (and any pan offset) to itself, and landing back on this page's
-  // own `initial-scale=1` leaves it there rather than re-zooming out again.
+/**
+ * Force a genuinely NEW `<meta name="viewport">` element into the document
+ * carrying `content`, rather than mutating the existing one's attribute.
+ * Confirmed directly in Chromium that mutating `content` to a value
+ * IDENTICAL to what's already applied is a no-op - it only recomputes zoom
+ * when the parsed viewport description actually changes - so toggling
+ * through a distinct `initial-scale` and back (see `resetNativeZoom` below)
+ * already covers that engine. Firefox's own viewport meta handling has a
+ * separate, longstanding gap where a dynamic `content` update does not
+ * always discard the previously-parsed values (mozilla bug 1498729) - a
+ * full element swap is the least ambiguous way to say "this really changed"
+ * to an engine that might otherwise coalesce or ignore an attribute mutation.
+ */
+function replaceViewportMeta(meta: HTMLMetaElement, content: string): HTMLMetaElement {
+  const next = document.createElement('meta');
+  next.setAttribute('name', 'viewport');
+  next.setAttribute('content', content);
+  meta.replaceWith(next);
+  return next;
+}
+
+function toggleViewportContent(meta: HTMLMetaElement, original: string): HTMLMetaElement {
   const distinct = /initial-scale\s*=\s*[\d.]+/i.test(original)
     ? original.replace(/initial-scale\s*=\s*[\d.]+/i, 'initial-scale=1.0001')
     : `${original}, initial-scale=1.0001`;
-  meta.setAttribute('content', distinct);
-  meta.setAttribute('content', original);
+  return replaceViewportMeta(replaceViewportMeta(meta, distinct), original);
 }
 
 export function resetNativeZoom(): void {
-  const meta = document.querySelector('meta[name="viewport"]');
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
   const original = meta?.getAttribute('content');
   if (!meta || !original) return;
 
-  toggleViewportContent(meta, original);
+  // The real fix for this, once browsers ship it: a direct, purpose-built
+  // reset the CSS Working Group resolved to add (w3c/csswg-drafts#9787),
+  // not yet in TypeScript's own DOM lib - call it when present rather than
+  // only ever reaching for the viewport meta workaround below.
+  const vv = window.visualViewport as (VisualViewport & { resetScale?: () => void }) | null;
+  if (typeof vv?.resetScale === 'function') {
+    vv.resetScale();
+    return;
+  }
 
-  // A pinch immediately followed by a pan can still be settling (Chromium's
-  // own fling/rubber-band physics after the touch lifts) at the exact
-  // instant this runs, which the single toggle above alone does not
-  // reliably win. A few follow-up toggles a frame apart catch whatever the
-  // first one lost the race against, without this ever becoming a standing
-  // per-frame loop.
-  const vv = window.visualViewport;
+  let current = toggleViewportContent(meta, original);
+
+  // A pinch immediately followed by a pan can still be settling (a native
+  // fling/rubber-band physics after the touch lifts) at the exact instant
+  // this runs, which the single toggle above alone does not reliably win. A
+  // few follow-up toggles a frame apart catch whatever the first one lost
+  // the race against, without this ever becoming a standing per-frame loop.
   let attempts = 0;
   const retry = () => {
     attempts += 1;
     const settled = !vv || (vv.scale < 1.05 && Math.abs(vv.offsetLeft) < 1 && Math.abs(vv.offsetTop) < 1);
     if (settled || attempts >= RESET_ATTEMPTS) return;
-    toggleViewportContent(meta, original);
+    current = toggleViewportContent(current, original);
     requestAnimationFrame(retry);
   };
   requestAnimationFrame(retry);

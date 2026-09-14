@@ -10,6 +10,23 @@ per that direction's own caveat that it was unvalidated. `style.css`'s
 on mobile" section is the current, accurate account of the design. This doc
 stays as the historical brief and investigation notes below remain useful
 background, but treat AGENTS.md as authoritative on the actual mechanism.
+`useImageZoom.ts`/`imageZoom.ts` (the room tile's own scoped, non-native
+pinch-to-zoom - "Revisit whether `useImageZoom.ts`... stays, goes, or
+coexists" below) were removed once native zoom on the tile was confirmed
+working end to end: `RoomOverlay.tsx`'s tile is a plain `<img>` again.
+
+Real-device follow-up (Android Chrome: confirmed fixed; Android Firefox:
+opening a dialog reads correctly, but zooming/panning inside an overlay
+still leaks past its close, fixable only by opening another overlay and
+zooming back out) found `resetNativeZoom`'s viewport-meta trick does not
+reliably reset scale/pan in Firefox - a real element swap now replaces the
+attribute-mutation form (Firefox's viewport handling has a known gap around
+discarding old parsed values on a dynamic `content` update, mozilla bug
+1498729) and a feature-detected call to the CSSWG's proposed
+`VisualViewport.resetScale()` (w3c/csswg-drafts#9787, not yet confirmed
+shipped anywhere) is tried first. Not yet re-verified on a real Firefox
+Mobile device - there is no Firefox available in this container to test
+against, only the confirmed Chromium e2e coverage.
 
 This was originally a pointer for a future session, not a design doc kept in
 sync with the code as it evolves. It exists because the session that built

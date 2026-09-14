@@ -59,7 +59,6 @@
  * comment for why the ordering matters.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useImageZoom } from '../hooks/useImageZoom.ts';
 import { resetNativeZoom } from '../lib/visualViewport.ts';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
@@ -123,12 +122,10 @@ export function RoomOverlay({
 
   // Never let a native zoom/pan applied to reach the map control that opened
   // this leak into the dialog, and never let one applied while zoomed into
-  // the tile (`useImageZoom` is scoped, but the browser's own gesture
-  // recognizer still sees the same fingers) leak back out onto the map once
-  // it closes - see visualViewport.ts. A `useLayoutEffect` of its own: the
-  // reset has to run synchronously with this dialog's own DOM node leaving
-  // on close, and a plain `useEffect`'s cleanup is scheduled after that
-  // already happened.
+  // the tile leak back out onto the map once it closes - see
+  // visualViewport.ts. A `useLayoutEffect` of its own: the reset has to run
+  // synchronously with this dialog's own DOM node leaving on close, and a
+  // plain `useEffect`'s cleanup is scheduled after that already happened.
   useLayoutEffect(() => {
     resetNativeZoom();
     return () => resetNativeZoom();
@@ -188,12 +185,6 @@ export function RoomOverlay({
   const scrimRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(false);
-
-  // See useImageZoom.ts: a room overlay's tile gets its own scoped
-  // pinch-to-zoom rather than leaning on the browser's page zoom, so
-  // `src` (a new tile) is what resets it, not the dialog closing - the
-  // same overlay instance can show a different room without unmounting.
-  const imageZoom = useImageZoom(src);
 
   // Whether the tile and text sit in two columns instead of one - see the
   // file doc comment. `columns` on `.overlay-columns` is what actually
@@ -387,9 +378,7 @@ export function RoomOverlay({
           */}
           {src && (
             <img
-              className={imageZoom.zoomed ? 'overlay-tile zoomed' : 'overlay-tile'}
-              style={imageZoom.style}
-              ref={imageZoom.ref}
+              className="overlay-tile"
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"

@@ -234,10 +234,6 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       the one beneath it does not. Adopted by
                       `ArtistStatementOverlay`/`BabelBookOverlay`;
                       `HelpDialog`/`RoomOverlay` still inline their own copies.
-    * `useImageZoom.ts`: Two-finger pinch-to-zoom and one-finger pan, scoped
-                         to `RoomOverlay`'s tile image - see its own comment
-                         for why this exists instead of native browser page
-                         zoom (two real-device reports ruled that out)
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
@@ -269,9 +265,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     settings, blocked tags, the reader's own favorites)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
-    * `imageZoom.ts`: Pure zoom/pan-bounds math for `useImageZoom.ts` - the
-                      room overlay tile's own scoped pinch-to-zoom, kept
-                      DOM-free the same way `camera.ts` is
+    * `visualViewport.ts`: `resetNativeZoom` - snaps a leftover native pinch-
+                           zoom/pan back to baseline at a dialog's own open/
+                           close boundary (`useDialog.ts`, `HelpDialog`,
+                           `RoomOverlay`) - see "Native pinch-zoom on mobile" below
     * `perfProbe.ts`: Rearrangement performance instrumentation behind
                       `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
                       store) - `docs/performance-research.md` §2's "measure
@@ -1248,10 +1245,26 @@ code, not a standing invariant.
   (`useDialog.ts`, and `HelpDialog`/`RoomOverlay`, which still inline their
   own copy of that machinery) and forces native zoom/pan back to baseline
   there, a boundary reset rather than a standing CSS restriction - see that
-  function's own comment for the mechanism (there is no direct API to set
-  `visualViewport.scale`, so it works by toggling the viewport meta's
-  `content` through a genuinely different `initial-scale` and back) and why
-  it must run from a `useLayoutEffect`, not a plain `useEffect`.
+  function's own comment for the mechanism, and why it must run from a
+  `useLayoutEffect`, not a plain `useEffect`. There is no standard API to
+  reset `visualViewport.scale` shipped anywhere yet (`resetNativeZoom` calls
+  a feature-detected `VisualViewport.resetScale()` first regardless, since
+  the CSS Working Group has resolved to add exactly that - w3c/csswg-drafts
+  #9787), so the fallback swaps in a genuinely new `<meta name="viewport">`
+  element carrying a `content` whose `initial-scale` differs, then another
+  carrying the original - a real element replacement rather than an
+  attribute mutation, which Chromium treats identically but which stands a
+  better chance under engines with their own gaps around discarding a
+  dynamically-updated viewport meta's old parsed values (e.g. Firefox,
+  mozilla bug 1498729 - see the real-device note in
+  docs/pinch-zoom-native-fix-plan.md).
+- **The room overlay's tile has no scoped pinch-zoom of its own anymore -
+  it is a plain `<img>`.** `useImageZoom.ts`/`lib/imageZoom.ts` used to give
+  `RoomOverlay`'s tile its own pointer-driven zoom/pan specifically because
+  native page zoom was unsafe to allow (the three bugs this section
+  documents); once `resetNativeZoom` made native zoom safe end to end, the
+  parallel non-native implementation was removed rather than kept
+  coexisting with it.
 - **`canvas` is the one element that keeps its own `touch-action: none`.**
   Native zoom competing for the same two-finger gesture the map's own
   pinch-to-zoom (`useMapCamera.ts`) already owns breaks that existing
