@@ -677,7 +677,7 @@ export function composeSpines(
   const { minPx, maxPx } = fontLimits;
 
   ctx.save();
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < rects.length; i++) {
     const slot = slots[i];
@@ -702,6 +702,7 @@ export function composeSpines(
     ctx.rotate(Math.PI / 2);
     const inset = Math.min(4, r.h * 0.1);
     const available = r.h - inset * 2;
+    const mid = r.h / 2;
     const fontPx = fitFontSize(ctx, slot.text, available, minPx, ceilingPx);
     ctx.font = `${fontPx}px ${SPINE_FONT_FAMILY}`;
     const text = fitText(ctx, slot.text, available);
@@ -712,16 +713,16 @@ export function composeSpines(
       const width = ctx.measureText(text).width;
       ctx.fillStyle = HOVER_BACKDROP;
       ctx.beginPath();
-      ctx.roundRect(inset - padX, -fontPx / 2 - padY, width + padX * 2, fontPx + padY * 2, Math.min(3, fontPx * 0.28));
+      ctx.roundRect(mid - width / 2 - padX, -fontPx / 2 - padY, width + padX * 2, fontPx + padY * 2, Math.min(3, fontPx * 0.28));
       ctx.fill();
     } else {
       ctx.lineWidth = Math.max(SPINE_HALO_FLOOR, fontPx * SPINE_HALO_SCALE);
       ctx.strokeStyle = HALO;
       ctx.lineJoin = 'round';
-      ctx.strokeText(text, inset, 0);
+      ctx.strokeText(text, mid, 0);
     }
     ctx.fillStyle = INK;
-    ctx.fillText(text, inset, 0);
+    ctx.fillText(text, mid, 0);
 
     // Ensure override books have a unique appearance:
     if (slot.kind === 'override') {
@@ -730,14 +731,14 @@ export function composeSpines(
       ctx.lineWidth = Math.max(1, fontPx / 11);
       ctx.strokeStyle = HALO;
       ctx.beginPath();
-      ctx.moveTo(inset, drop);
-      ctx.lineTo(inset + width, drop);
+      ctx.moveTo(mid - width / 2, drop);
+      ctx.lineTo(mid + width / 2, drop);
       ctx.stroke();
       ctx.strokeStyle = INK;
       ctx.lineWidth = Math.max(0.75, fontPx / 16);
       ctx.beginPath();
-      ctx.moveTo(inset, drop);
-      ctx.lineTo(inset + width, drop);
+      ctx.moveTo(mid - width / 2, drop);
+      ctx.lineTo(mid + width / 2, drop);
       ctx.stroke();
     }
     ctx.restore();
