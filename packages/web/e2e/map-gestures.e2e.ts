@@ -328,6 +328,24 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     await page.locator('input[type=search]').fill('clockwork');
     await page.locator('input[type=search]').press('Enter');
 
+    // The fetch this triggers can take a while (a cold CLIP text tower load
+    // pays for itself here) - `requestAnimation` and the rearrangement it
+    // drives do not necessarily start before the FIRST poll below runs. Until
+    // they do, the camera is still sitting at `atField` exactly as it would
+    // be once a rearrangement finished and eased back - so the `waitFor`
+    // after this would otherwise report success having never watched a
+    // rearrangement happen at all, and this test's own trailing assertions
+    // would then be checking state a still-in-flight fetch can rewrite out
+    // from under a LATER test (confirmed directly: the search here has
+    // finished the camera back to `atField` while the very next test was
+    // already mid-gesture, its own flight overridden by this one's). Wait for
+    // the rearrangement to actually begin first.
+    await page.waitForFunction(
+      () => document.getElementById('hud')?.textContent?.replace(/^\[gl\] /, '').startsWith('rearranging'),
+      null,
+      { timeout: SEARCH_TIMEOUT }
+    );
+
     // A search no longer recenters the camera - it zooms out IN PLACE to show
     // off the rearrangement, then eases back to the zoom the reader was
     // actually at, at the SAME x/y throughout. So

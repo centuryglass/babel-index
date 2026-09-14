@@ -72,93 +72,50 @@ code and the git log are the record of what was.
   only once WebGL has real production mileage and nothing has needed the hatch.
 
 ## Rearrangement / camera:
-- **[2026-09-10] A `flyTo` issued while a rearrangement is animating has no
-  effect, and a search can sometimes trigger what looks like a SECOND full
-  rearrangement cycle with no further user action.** Found while chasing
-  flakiness in `map-gestures.e2e.ts`'s `right-clicking a room opens its
-  card`/`a long press opens the card` tests (both click the 'center' button,
-  then `landed()`, then act on a fixed screen point - see AGENTS.md's
-  Testing-and-CI note on `recentre()`, added as the practical fix for the
-  test suite).
+- **[2026-09-14] Root-caused and fixed: the "second rearrangement cycle" was
+  never real - it was `map-gestures.e2e.ts`'s own `a search reorders the
+  library around wherever the camera already is` test reporting success
+  before the search it triggered had even started.** That test presses Enter,
+  then polls (`waitFor`) until the camera reads back exactly `atField` (where
+  the search was triggered from) as proof the rearrangement finished. But
+  `/api/search`'s fetch (slower still on a loaded/cold-cache container) had
+  not resolved yet on the FIRST poll - so the camera was still just sitting,
+  untouched, at `atField`, which is indistinguishable from "the rearrangement
+  ran and eased back here." The check passed immediately, the test moved on,
+  and the search's real rearrangement then ran to completion during the NEXT
+  test (`right-clicking a room opens its card…`), its zoom-out flight and its
+  post-slide fly-back both calling `flyTo` at moments that raced and
+  sometimes beat that next test's own `recentre()`/right-click, landing the
+  camera somewhere the fixed test coordinates no longer held a room. Confirmed
+  by direct instrumentation (timestamped console logging of every
+  `beginFlightTo`/`requestAnimation`/`startRearrangement` call plus explicit
+  per-test markers, `page.on('console')`-captured): `requestAnimation`
+  ("ranked by keywords") for the prior test's search fired to `t=10474`, which
+  was already 90ms into the NEXT test (its `TESTMARK` at `t=10387`) - proof
+  the search's own rearrangement had not even begun when the search test
+  reported "ok". Fixed by making the search test wait for the HUD to actually
+  report `rearranging` before waiting for it to settle back
+  (`packages/web/e2e/map-gestures.e2e.ts`) - 5/5 clean runs of the whole file
+  afterward in the same container that previously failed 3/4.
 
-  Confirmed by direct instrumentation (a page-injected HUD-transition
-  recorder plus a `page.on('request')` listener during a run of `a search
-  reorders the library around wherever the camera already is` followed by
-  `right-clicking a room…`):
-  - Exactly ONE `/api/search` request fires for the one Enter press (ruled
-    out a duplicate submit).
-  - `useSearch.ts`'s `search()` only calls `requestAnimationRef.current(...)`
-    once per resolved fetch for a non-empty term (read the source; only one
-    branch executes).
-  - Despite that, the HUD shows a full `rearranging · preparing…` → `100%`
-    cycle landing back at the search field's camera position, and then -
-    with ZERO clicks or other interaction - a SECOND full `preparing…` →
-    `100%` cycle starts within ~150ms and runs for ~1.5-3s more.
-  - A plain `button[hasText=center].click()` issued during (or just before)
-    that second cycle has NO effect on the final camera position - it lands
-    exactly where the rearrangement itself was already headed, not at the
-    clicked target. `landed()` still reports "settled" because it only
-    checks for two consecutive stable reads, which a still-controlled camera
-    also produces.
+  Earlier investigation (now superseded, kept for context on what was ruled
+  out): the two search requests, single `requestAnimationRef.current(...)`
+  call, and 13-of-16 tests passing were all real observations - it was the
+  interpretation ("a phantom second rearrangement") that was wrong; there was
+  only ever one `startRearrangement` call per search, and its own perfectly
+  ordinary zoom-out-then-fly-back was simply landing in the wrong test's
+  timeline.
 
-  **[2026-09-12] A cloud agent container reproduces this DETERMINISTICALLY,
-  which is the instrumented repro this entry asks for below.** Both tests fail
-  on every run there, not intermittently, and both fail the same way:
-  `locator('.overlay')` times out after 5s because the room card never opens -
-  the click lands at a fixed screen point that no longer holds a room, exactly
-  what a swallowed `flyTo` would cause. The other 13 tests in the file pass, as
-  do `catalog`, `accessibility`, `favorites`, `shelf`, `artist-statement`,
-  `keyboard-cursor` and `webgl-map` in full.
-
-  ```sh
-  BABEL_E2E_CHROMIUM=/opt/pw-browsers/chromium node --import \
-    ./build/register.mjs --test --test-concurrency=1 \
-    packages/web/e2e/map-gestures.e2e.ts
-  ```
-
-  What that pins down:
-  - It is NOT a regression from any recent branch. Reproduced identically at
-    `4df7e20` (merge of #159), `85d7555` (merge of #160 `overlay-header-chrome`,
-    whose name made it the obvious suspect - it is not) and `f8493a7`.
-  - It is NOT environmental in the "different browser build" sense: the whole
-    suite including these two is GREEN in GitHub Actions on `f8493a7`
-    (`browser smoke test`, run 34705031196). A slower machine turning a latent
-    race into a 100% failure is the simplest story that fits both readings.
-  - `recentre()` is already in place in the right-click test and is still not
-    enough here, so whatever it works around is not fully worked around.
-  - The long-press test is a CASCADE, not a second instance: it never
-    recentres, it inherits the camera the right-click test left behind. Fixing
-    the first should fix the second, and a fix must be judged on both.
-
-  So the cheap path for whoever picks this up is a container rather than a
-  bisect: the failure is already sitting there every run, with no flake-hunting
-  needed.
-
-  **[2026-09-14] It is no longer deterministic there.** Across five runs of the
-  file in one cloud container, both tests passed together once and failed
-  together four times - so a green run proves nothing and the repro still needs
-  a repeat count. The runs were split either side of an unrelated fix to the
-  page's own overflow (`#root { overflow: clip }`, which the pass and two of
-  the failures share), so the difference is not that fix.
-
-  Not yet root-caused. Candidates not yet ruled out: something downstream of
-  `setResult` (e.g. `sortResult`/`layout`'s `useMemo` in `main.tsx`, or
-  `pushHistory`) causing `useRearrangement.ts`'s effect to see `layout`/
-  `order` change twice for one `requestAnimation()` call; a legitimate
-  second animated pass that isn't a bug at all (e.g. a graded/clustered
-  density recompute) but should then update the "rearranging" HUD text or
-  `AGENTS.md`'s invariants to say so explicitly; or `startRearrangement`
-  itself re-triggering under some condition on a small/cold-cache corpus.
-  Worth an instrumented repro (the recorder script used above, not
-  committed) as the starting point rather than re-discovering this from
-  scratch.
-
-  Separately, whether this is a bug or not, `useMapCamera.ts`'s `flyTo`
-  currently has no way to interrupt an active rearrangement - AGENTS.md's
-  "Camera and gestures" section documents `pointerdown`/`wheel` each
-  dropping an in-flight flight, and the rearrangement section documents
-  "Anything that moves the camera mid-rearrangement (pan, zoom, `flyTo`)
-  must end the animation instead" - but a `flyTo` from a control (not a
-  gesture) does not currently do this. Confirm whether that's the intended
-  reading of the invariant and, if so, wire `flyTo` to end an active
-  rearrangement the same way a pointer grab does.
+  Separately, still true and NOT itself a cause of this flakiness:
+  `useMapCamera.ts`'s `flyTo` has no way to interrupt an active
+  rearrangement's own camera control - a `flyTo` issued from a control (the
+  'center' button, a keyboard nudge) while a rearrangement is mid-flight or
+  mid-fly-back can be overridden by that rearrangement's next `flyTo` call,
+  same as the race above but triggerable for real by a fast-clicking reader,
+  not just an under-synchronized test. AGENTS.md's "Camera and gestures"
+  section documents `pointerdown`/`wheel` each dropping an in-flight flight,
+  and the rearrangement section documents "Anything that moves the camera
+  mid-rearrangement (pan, zoom, `flyTo`) must end the animation instead" - but
+  a `flyTo` from a control does not currently do this. Confirm whether that's
+  the intended reading of the invariant and, if so, wire `flyTo` to end an
+  active rearrangement the same way a pointer grab does.
