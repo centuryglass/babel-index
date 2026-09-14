@@ -202,6 +202,13 @@ left. Read which step failed:
   transformers.js caches the CLIP weights *inside* it, so the script moves that
   cache aside and back. Without that, every dependency bump silently
   re-downloads a few hundred MB on the first search after deploying.
+- **The install carries two flags that are about the box, not the project.**
+  `--maxsockets=1` keeps a from-scratch install inside a small VPS's memory
+  and bandwidth instead of failing partway through with `node_modules` half
+  written, and `--onnxruntime-node-install-cuda=skip` stops it fetching CUDA
+  binaries a CPU-only host has no use for. Both make the install slower and
+  neither is needed on a larger machine — if this deployment ever moves
+  somewhere with room, they are the first thing to drop.
 - **Nothing here runs `git clean`,** and it must not start: `config.json` and
   `favorites.json` are untracked, live in the checkout, and are the only
   state this deployment owns.

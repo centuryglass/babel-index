@@ -127,7 +127,16 @@ install_dependencies() {
     mv "$cache" "$stash/cache"
   fi
 
-  npm ci --omit=dev
+  # Two flags this box needs, and a bigger machine would not:
+  #   --maxsockets=1 holds the install to one connection at a time, so a
+  #     from-scratch install cannot exhaust a small VPS's memory or its
+  #     bandwidth allowance partway through and leave node_modules half
+  #     written. Slower on purpose.
+  #   --onnxruntime-node-install-cuda=skip stops onnxruntime-node's install
+  #     script fetching the CUDA binaries. The corpus is served by a CPU-only
+  #     box with no GPU to use them, and they are large enough to be the thing
+  #     that fails.
+  npm ci --omit=dev --maxsockets=1 --onnxruntime-node-install-cuda=skip
 
   # An install that pulled a new transformers.js may have written a cache of
   # its own; the stashed copy is content-addressed by url, so either one is
