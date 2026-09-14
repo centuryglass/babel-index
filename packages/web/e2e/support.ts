@@ -88,8 +88,16 @@ export async function waitFor(predicate, timeoutMs, message) {
  *
  * `extraParams` are appended to the page's query string alongside `?debug` for
  * anything else a spec needs to set before `main.tsx` mounts.
+ *
+ * `mobileViewport` swaps the fixed 1280×800 desktop context for a narrow,
+ * `isMobile` one (393×851, `deviceScaleFactor: 2.75` - roughly a Pixel 5,
+ * matching the real-device reports this option exists to reproduce) so a
+ * CDP-dispatched touch gesture (`pinch`/`touchDrag` below) can trigger the
+ * browser's own native pinch-zoom rather than only the app's pointer-event
+ * handlers - see `nativeZoomState` below and `pinch-zoom-native.e2e.ts`.
+ * Every other spec leaves it off and keeps the desktop context unchanged.
  */
-export async function openLibrary({ favorites = false, webgl = false, extraParams = [] } = {}) {
+export async function openLibrary({ favorites = false, webgl = false, extraParams = [], mobileViewport = false } = {}) {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
 
@@ -147,10 +155,11 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
     // implicitly: axe refuses to run against a page whose context it did not
     // see created, and the accessibility sweeps in this suite are the whole
     // reason it can claim anything about the parts of the app nobody looks at.
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
-      hasTouch: true,
-    });
+    const context = await browser.newContext(
+      mobileViewport
+        ? { viewport: { width: 393, height: 851 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2.75 }
+        : { viewport: { width: 1280, height: 800 }, hasTouch: true }
+    );
     const page = await context.newPage();
 
     // Anything the page complains about is a failure; the map is not supposed
@@ -338,12 +347,17 @@ export async function landed(page, flightMs, timeoutMs = 5000) {
  * out any rearrangement before clicking narrows the race but does not close
  * it, so this also checks the outcome and retries the click if it didn't
  * land at (0.5, 0.5), rather than trusting one `landed()` read.
+ *
+ * `force` skips Playwright's own occlusion check on the click - needed at a
+ * narrow mobile viewport (`openLibrary({ mobileViewport: true })`), where
+ * the debug panel's fixed 268px width overlaps its own 'center' button and
+ * every other spec's default (wide, desktop) viewport never does.
  */
-export async function recentre(page, flightMs, timeoutMs = SEARCH_TIMEOUT) {
+export async function recentre(page, flightMs, timeoutMs = SEARCH_TIMEOUT, force = false) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     await settled(page); // waits out any rearrangement already in flight
-    await page.locator('button', { hasText: 'center' }).click();
+    await page.locator('button', { hasText: 'center' }).click({ force });
     const after = await landed(page, flightMs);
     if (after.x === 0.5 && after.y === 0.5) return after;
     assert.ok(Date.now() < deadline, 'the map never recentred - stuck mid-rearrangement');
@@ -405,6 +419,27 @@ export async function axNodes(page) {
     // `aria-valuetext` difference got diagnosed.
     value: n.value?.value,
     props: Object.fromEntries((n.properties ?? []).map((x) => [x.name, x.value?.value])),
+  }));
+}
+
+/**
+ * The browser's own notion of zoom/pan, as `window.visualViewport` reports
+ * it - distinct from the app's `camera.zoom`/`x`/`y` the HUD prints. A
+ * confirmed spike (see `pinch-zoom-native.e2e.ts`'s header) found that the
+ * existing `pinch()`/`touchDrag()` helpers below, unchanged, already drive
+ * genuine native pinch-zoom/pan through this once nothing's `touch-action`
+ * blocks it - no new automation dependency needed. Panning a natively
+ * zoomed page moves `offsetLeft`/`offsetTop` (the visual viewport's
+ * position within the layout viewport), not `window.scrollX/scrollY` -
+ * confirmed the same way, worth asserting on directly rather than guessing.
+ */
+export function nativeZoomState(page) {
+  return page.evaluate(() => ({
+    scale: window.visualViewport.scale,
+    width: window.visualViewport.width,
+    height: window.visualViewport.height,
+    offsetLeft: window.visualViewport.offsetLeft,
+    offsetTop: window.visualViewport.offsetTop,
   }));
 }
 

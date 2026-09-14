@@ -5,13 +5,13 @@
     <!--
       No `maximum-scale` and no `user-scalable=no`. Blocking page zoom is a
       WCAG 1.4.4 failure and it locks out exactly the low-vision readers this
-      map is hardest on. Those attributes were here to stop iOS treating a
-      two-finger map pinch as a page zoom, but that job is actually done by
-      `touch-action: none`, set all the way up the tree below - the browser
-      decides at touch-start from the computed touch-action of the hit element
-      AND its ancestors, so nothing is left claimable. Worth re-checking on a
-      real device alongside the in-tile search field (plan §7 item 11); a
-      simulator does not settle iOS gesture arbitration.
+      map is hardest on. `style.css`'s `touch-action` rules used to do the
+      equivalent job at the CSS layer instead - stopping a two-finger map
+      pinch from also becoming a page zoom - but that scoping is temporarily
+      removed to build the regression tests in
+      docs/pinch-zoom-native-fix-plan.md; see that file and
+      packages/web/e2e/pinch-zoom-native.e2e.ts for the bugs this reopens
+      and what replaces the scoping once a fix lands.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>%%TITLE%%</title>

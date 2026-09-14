@@ -461,6 +461,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   real `?perf` capture and reprioritizes them.
                                   Most items remain unimplemented - the shipped
                                   exception is `prepareRearrangement` (§9.7).
+- `docs/pinch-zoom-native-fix-plan.md`: Root-cause notes and a candidate fix
+                                        direction for native pinch-zoom on
+                                        mobile, written for whichever future
+                                        session implements it - see "Native
+                                        pinch-zoom" below for the bugs and
+                                        the `touch-action` state this doc
+                                        assumes.
 
 ## Conventions
 
@@ -1223,6 +1230,30 @@ code, not a standing invariant.
   and a restored history entry all reach `search()` without passing through a
   box. Scoring is O(tokens x keywords) per room, so a pasted tag list does not
   degrade, it stops.
+
+### Native pinch-zoom (currently, temporarily, restored)
+
+- **`style.css`'s `touch-action` scoping is TEMPORARILY opened up.** Two
+  real-device reports found that letting native pinch-zoom happen at all -
+  document-wide, not just the room overlay's tile - leaves fixed/absolute
+  chrome (the map canvas, its search badge) visibly detached once a reader
+  also pans a natively zoomed page, not just zooms it; the original fix was
+  `touch-action: none` most of the way up the tree. That scoping is
+  currently removed (see the `TEMPORARY` comments in `style.css`/
+  `index.html`) so `packages/web/e2e/pinch-zoom-native.e2e.ts` can reproduce
+  the three resulting bugs against a real Chromium gesture recognizer. Every
+  test in that file is `test.skip`, confirmed failing for the right reason;
+  `docs/pinch-zoom-native-fix-plan.md` is the brief for whoever implements
+  the real fix and un-skips them - read it before touching this area rather
+  than re-deriving the bugs from scratch.
+- **`canvas` is the one element that kept its `touch-action: none`.** Native
+  zoom competing for the same two-finger gesture the map's own
+  pinch-to-zoom (`useMapCamera.ts`) already owns breaks that existing
+  feature outright (confirmed: `map-gestures.e2e.ts`'s pinch/lift-a-finger
+  tests). None of the three bugs above are about the bare map losing its
+  own zoom, so the regression tests target chrome layered on top of it
+  instead (the search badge, the shelf, a dialog), which sit outside
+  `<canvas>` in the DOM and aren't covered by that `none`.
 
 ### The WebGL renderer
 
