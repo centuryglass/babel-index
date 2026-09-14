@@ -7,10 +7,12 @@
  * against a real Chromium gesture recognizer rather than the app's own
  * pointer-event handlers.
  *
- * Every test in this file is expected to FAIL right now - `test.skip` marks
- * them so `ci.yml` stays green - and to start passing once a future session
- * implements the fix design sketched in the doc above. Un-skip them as part
- * of that work, not before.
+ * The three bugs are fixed by `lib/visualViewport.ts`'s `resetNativeZoom` -
+ * called at a dialog's own open/close boundary (`useDialog.ts`, and the two
+ * dialogs that still inline their own copy of that machinery, `HelpDialog`/
+ * `RoomOverlay`) rather than reacting to `visualViewport` continuously, per
+ * the doc above's own note on why a boundary reset beats a naive standing
+ * fix.
  *
  * How the gesture actually reaches the browser's own zoom (not just this
  * app's `useMapCamera`/`useImageZoom` pointer handlers): a spike confirmed
@@ -36,8 +38,6 @@ import assert from 'node:assert/strict';
 import {
   closeLibrary, landed, nativeZoomState, openLibrary, pinch, recentre, settled, touchDrag,
 } from './support.ts';
-
-const SKIP = 'reproduces a known, not-yet-fixed native-zoom bug - see docs/pinch-zoom-native-fix-plan.md';
 
 /**
  * There is no direct API to set `visualViewport.scale` - the only way to
@@ -81,7 +81,7 @@ describe('the library, in a browser: native pinch-zoom (mobile)', { concurrency:
     await resetNativeZoom(session.page);
   });
 
-  test('native zoom on the map does not leak into a dialog opened afterward', { skip: SKIP }, async () => {
+  test('native zoom on the map does not leak into a dialog opened afterward', async () => {
     const { page, flightMs } = session;
 
     // The opening view frames the center room's shelf - exactly what the
@@ -131,7 +131,7 @@ describe('the library, in a browser: native pinch-zoom (mobile)', { concurrency:
     );
   });
 
-  test('closing an overlay after a native pan inside it leaves chrome where it was', { skip: SKIP }, async () => {
+  test('closing an overlay after a native pan inside it leaves chrome where it was', async () => {
     const { page, flightMs } = session;
     const viewport = page.viewportSize();
     // Clear of the debug panel's fixed 268x328 footprint at this viewport
@@ -181,7 +181,7 @@ describe('the library, in a browser: native pinch-zoom (mobile)', { concurrency:
     );
   });
 
-  test('closing an overlay after a native zoom inside it leaves the map at its own zoom', { skip: SKIP }, async () => {
+  test('closing an overlay after a native zoom inside it leaves the map at its own zoom', async () => {
     const { page, flightMs } = session;
     const viewport = page.viewportSize();
     // Clear of the debug panel's fixed 268x328 footprint at this viewport

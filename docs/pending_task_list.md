@@ -162,3 +162,56 @@ code and the git log are the record of what was.
   gesture) does not currently do this. Confirm whether that's the intended
   reading of the invariant and, if so, wire `flyTo` to end an active
   rearrangement the same way a pointer grab does.
+
+- **[2026-09-14] A different, root-caused failure mode for the same
+  "right-click opens a card" family: in a cloud agent container's Chromium,
+  a mobile-emulated `page.mouse.click(px, py, { button: 'right' })` opens
+  the card and then closes it again ~40ms later, on its own.** Found while
+  building `pinch-zoom-native.e2e.ts`'s fix (docs/pinch-zoom-native-fix-plan.md)
+  - its "closing an overlay after a native pan" case reuses this exact
+    right-click pattern (`recentre()` then a fixed-point right-click), and
+  failed even with the native-zoom fix correctly in place and even with the
+  test reduced to running in complete isolation (the other two tests
+  `skip: true`, no prior gesture in the session at all).
+
+  Instrumented directly (temporary `console.log`s in `onPick`, the
+  `cardDescription` memo, `RoomOverlay`'s mount/unmount, and its scrim's
+  `onPointerDown`): `onPick` fires exactly once and picks a real room;
+  `RoomOverlay` mounts; then, ~40ms later, `RoomOverlay`'s own
+  `.overlay-scrim` receives TWO `pointerdown` events with `pointerType:
+  'touch'` (not `'mouse'`) at the click's own coordinates - the second has
+  `e.target === e.currentTarget`, so the scrim's own dismiss-on-backdrop-
+  click handler (`RoomOverlay.tsx`) fires `onClose()` and the card closes
+  itself. Nothing in `main.tsx`'s own five `setCard(null)` call sites (mode
+  change, `searchKeyword`, the debug panel's `closeCard`, either `view`
+  button) ever fires - the close is entirely explained by that scrim event.
+
+  The touch pointer type is the tell: `openLibrary({ mobileViewport: true })`
+  uses an `isMobile`/`hasTouch` Playwright context (see `pinch-zoom-
+  native.e2e.ts`'s own header on why), and Chromium's mobile-device
+  emulation is known to translate synthetic mouse input into touch events
+  under that mode - a translated tap has no "right button", so it lands as
+  an ordinary touch tap at the same point the real right-click already
+  used to open the card. Since the card is centered and only as tall as its
+  content (`.overlay-scrim`'s `align-items: center`, `.overlay`'s own
+  height), a click point chosen to land on the pre-overlay MAP (deep in the
+  lower part of the viewport, clear of the debug panel) can fall on exposed
+  SCRIM once the dialog has opened, and the translated tap dismisses it.
+
+  Not yet fixed - `pinch-zoom-native.e2e.ts`'s "closing an overlay after a
+  native pan" test is left un-skipped despite this (its own native-zoom fix
+  is confirmed correct: the sibling zoom-only case in the same file passes
+  cleanly, and this failure reproduces identically with that fix's code
+  entirely reverted), on the same reasoning AGENTS.md's Testing-and-CI note
+  already gives for the two `map-gestures.e2e.ts` right-click tests: this
+  container's Chromium build appears to reproduce a right-click/touch-
+  emulation race real CI's pinned Chromium does not (unconfirmed here - no
+  way to run against CI's own binary from this container). Whoever next
+  touches right-click-opens-a-card reliability should read this alongside
+  the `flyTo` entry above; they may turn out to share a root cause (both
+  are about a right-click's aftermath racing the render it triggered) or
+  may not. A durable fix likely wants the scrim's dismiss check to also
+  verify enough time or a real pointer LIFT has passed since the dialog's
+  own opening gesture, rather than trusting `e.target === e.currentTarget`
+  alone - but this was not chased further within the zoom-fix session that
+  found it.

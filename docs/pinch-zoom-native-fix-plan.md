@@ -1,12 +1,22 @@
 # Native pinch-zoom on mobile: fix-design brief
 
-This is a pointer for a future session, not a design doc to keep in sync
-with the code as it evolves - once that session starts, treat this file as
-superseded by whatever it actually decides. It exists because the session
-that built the regression harness below (`packages/web/e2e/
-pinch-zoom-native.e2e.ts`) deliberately stopped short of root-causing or
-fixing the bugs it reproduces, per the user's own instruction to keep that
-work to a size that fits in one context.
+**Implemented.** All three bugs below are fixed by `packages/web/src/lib/
+visualViewport.ts`'s `resetNativeZoom`, called at every dialog's own open/
+close boundary (`useDialog.ts`, and `HelpDialog`/`RoomOverlay`, which still
+inline their own copy of that machinery) - a boundary reset rather than the
+"read `visualViewport`, reposition dialogs off it" direction sketched below,
+per that direction's own caveat that it was unvalidated. `style.css`'s
+`touch-action` scoping was never re-narrowed; AGENTS.md's "Native pinch-zoom
+on mobile" section is the current, accurate account of the design. This doc
+stays as the historical brief and investigation notes below remain useful
+background, but treat AGENTS.md as authoritative on the actual mechanism.
+
+This was originally a pointer for a future session, not a design doc kept in
+sync with the code as it evolves. It exists because the session that built
+the regression harness below (`packages/web/e2e/pinch-zoom-native.e2e.ts`)
+deliberately stopped short of root-causing or fixing the bugs it reproduces,
+per the user's own instruction to keep that work to a size that fits in one
+context.
 
 ## What exists now
 

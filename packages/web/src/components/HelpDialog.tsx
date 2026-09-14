@@ -19,7 +19,8 @@
  * tags to block - most corpora - so the majority never see it, collapsed or
  * not.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { resetNativeZoom } from '../lib/visualViewport.ts';
 
 export function HelpDialog({
   onClose,
@@ -35,6 +36,17 @@ export function HelpDialog({
   blockedCount?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+
+  // Never let a native zoom/pan applied to reach the shelf book that opened
+  // this leak into the dialog, and never let one applied while reading it
+  // leak back out once it closes - see visualViewport.ts. A `useLayoutEffect`
+  // of its own: the reset has to run synchronously with this dialog's own DOM
+  // node leaving on close, and a plain `useEffect`'s cleanup is scheduled
+  // after that already happened.
+  useLayoutEffect(() => {
+    resetNativeZoom();
+    return () => resetNativeZoom();
+  }, []);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;

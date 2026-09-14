@@ -1231,29 +1231,47 @@ code, not a standing invariant.
   box. Scoring is O(tokens x keywords) per room, so a pasted tag list does not
   degrade, it stops.
 
-### Native pinch-zoom (currently, temporarily, restored)
+### Native pinch-zoom on mobile
 
-- **`style.css`'s `touch-action` scoping is TEMPORARILY opened up.** Two
+- **`style.css` leaves `touch-action` open almost everywhere on purpose,
+  and the leak that openness used to cause is fixed at the JS layer.** Two
   real-device reports found that letting native pinch-zoom happen at all -
-  document-wide, not just the room overlay's tile - leaves fixed/absolute
-  chrome (the map canvas, its search badge) visibly detached once a reader
-  also pans a natively zoomed page, not just zooms it; the original fix was
-  `touch-action: none` most of the way up the tree. That scoping is
-  currently removed (see the `TEMPORARY` comments in `style.css`/
-  `index.html`) so `packages/web/e2e/pinch-zoom-native.e2e.ts` can reproduce
-  the three resulting bugs against a real Chromium gesture recognizer. Every
-  test in that file is `test.skip`, confirmed failing for the right reason;
-  `docs/pinch-zoom-native-fix-plan.md` is the brief for whoever implements
-  the real fix and un-skips them - read it before touching this area rather
-  than re-deriving the bugs from scratch.
-- **`canvas` is the one element that kept its `touch-action: none`.** Native
-  zoom competing for the same two-finger gesture the map's own
+  document-wide, not just the room overlay's tile - could leave fixed/
+  absolute chrome (the map canvas, its search badge) visibly detached once
+  a reader also panned a natively zoomed page, or leave a dialog inheriting
+  an unrelated prior zoom. The original fix was `touch-action: none` most
+  of the way up the tree, which `packages/web/e2e/pinch-zoom-native.e2e.ts`
+  was built to regression-test against a real Chromium gesture recognizer -
+  see docs/pinch-zoom-native-fix-plan.md for the bugs and the investigation.
+  The actual fix does not re-narrow `touch-action`: `lib/visualViewport.ts`'s
+  `resetNativeZoom` runs at every dialog's own open/close boundary
+  (`useDialog.ts`, and `HelpDialog`/`RoomOverlay`, which still inline their
+  own copy of that machinery) and forces native zoom/pan back to baseline
+  there, a boundary reset rather than a standing CSS restriction - see that
+  function's own comment for the mechanism (there is no direct API to set
+  `visualViewport.scale`, so it works by toggling the viewport meta's
+  `content` through a genuinely different `initial-scale` and back) and why
+  it must run from a `useLayoutEffect`, not a plain `useEffect`.
+- **`canvas` is the one element that keeps its own `touch-action: none`.**
+  Native zoom competing for the same two-finger gesture the map's own
   pinch-to-zoom (`useMapCamera.ts`) already owns breaks that existing
   feature outright (confirmed: `map-gestures.e2e.ts`'s pinch/lift-a-finger
   tests). None of the three bugs above are about the bare map losing its
   own zoom, so the regression tests target chrome layered on top of it
   instead (the search badge, the shelf, a dialog), which sit outside
   `<canvas>` in the DOM and aren't covered by that `none`.
+- **One of the three regression tests fails in this repo's cloud agent
+  container, and it is not this fix.** `pinch-zoom-native.e2e.ts`'s
+  "closing an overlay after a native pan" right-clicks at a fixed screen
+  point to open the room card, same as `map-gestures.e2e.ts`'s own two
+  known-flaky right-click tests (see "Testing and CI" below) - and in this
+  container specifically, that right-click gets translated into a TOUCH tap
+  by Chromium's mobile-device emulation, which lands on the overlay's own
+  scrim once the card has rendered and dismisses it before the test's own
+  gesture runs. Root-caused and written up in `docs/pending_task_list.md`
+  (2026-09-14 entry, "Rearrangement / camera"); the other two tests in the
+  file pass, as does everything else in the suite this change touches
+  (`shelf.e2e.ts`, `artist-statement.e2e.ts`, `catalog.e2e.ts`).
 
 ### The WebGL renderer
 

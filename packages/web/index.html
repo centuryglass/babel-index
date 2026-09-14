@@ -5,13 +5,17 @@
     <!--
       No `maximum-scale` and no `user-scalable=no`. Blocking page zoom is a
       WCAG 1.4.4 failure and it locks out exactly the low-vision readers this
-      map is hardest on. `style.css`'s `touch-action` rules used to do the
-      equivalent job at the CSS layer instead - stopping a two-finger map
-      pinch from also becoming a page zoom - but that scoping is temporarily
-      removed to build the regression tests in
-      docs/pinch-zoom-native-fix-plan.md; see that file and
-      packages/web/e2e/pinch-zoom-native.e2e.ts for the bugs this reopens
-      and what replaces the scoping once a fix lands.
+      map is hardest on. Native pinch-zoom stays available almost everywhere
+      (see `style.css`'s `touch-action` notes, and the bare map canvas's own
+      `touch-action: none`, kept only so it doesn't fight the map's own
+      pinch-to-zoom); what that openness could otherwise leak - a dialog
+      inheriting an unrelated prior zoom, a leftover pan/zoom surviving past
+      an overlay's close - is cleaned up at each dialog's own open/close
+      boundary instead (`packages/web/src/lib/visualViewport.ts`'s
+      `resetNativeZoom`), which is also the only place this page's own
+      `content` attribute is ever touched at runtime. See
+      docs/pinch-zoom-native-fix-plan.md and
+      packages/web/e2e/pinch-zoom-native.e2e.ts for the bugs this covers.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>%%TITLE%%</title>

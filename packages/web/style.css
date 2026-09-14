@@ -38,16 +38,18 @@
 }
 * { box-sizing: border-box; }
 /*
- * TEMPORARY: touch-action is left at its `auto` default on html/body,
- * #root, and `.overlay-tile` (below) rather than the `none`/`pan-y` scoping
- * this block used to carry, so native pinch-zoom is genuinely restored over
- * everything EXCEPT the bare map canvas itself, which keeps its own
- * `touch-action: none` (see canvas's own rule below for why) - see
- * docs/pinch-zoom-native-fix-plan.md and
- * packages/web/e2e/pinch-zoom-native.e2e.ts. This is the unfixed baseline
- * those regression tests are written against, not a design decision -
- * whatever CSS this ends up needing is Phase 3's call, informed by what
- * those tests find, not a revert of this comment block alone.
+ * touch-action is left at its `auto` default on html/body, #root, and
+ * `.overlay-tile` (below) rather than a `none`/`pan-y` scoping, so native
+ * pinch-zoom stays available everywhere EXCEPT the bare map canvas itself,
+ * which keeps its own `touch-action: none` (see canvas's own rule below for
+ * why) - a deliberate WCAG 1.4.4 trade (`index.html`'s own note), not an
+ * oversight. What used to leak from that openness - a dialog inheriting an
+ * unrelated prior zoom, a leftover pan/zoom surviving past an overlay's own
+ * close - is fixed at the JS layer instead (`lib/visualViewport.ts`'s
+ * `resetNativeZoom`, called at each dialog's own open/close boundary), not
+ * by re-narrowing this CSS - see docs/pinch-zoom-native-fix-plan.md and
+ * packages/web/e2e/pinch-zoom-native.e2e.ts for the bugs this once
+ * reproduced and how they're covered now.
  */
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #110302;
@@ -79,32 +81,27 @@ body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
  */
 #root { overflow: clip; }
 /*
- * `canvas` keeps `touch-action: none`, unlike everything else this revert
- * opens back up (see the html/body comment above) - confirmed directly
- * (map-gestures.e2e.ts's pinch/lift-a-finger tests) that letting native
- * zoom compete for the SAME two-finger gesture the map's own pinch-to-zoom
- * already owns breaks that existing, working feature: the browser's native
- * gesture recognizer wins the arbitration and the app's pointer stream gets
- * cut off mid-gesture. None of the three bugs this revert is reproducing
- * are about the bare map surface losing its own zoom - they're about
- * chrome layered ON TOP of it (the center shelf's buttons, the search
- * badge, a dialog) - so the regression tests in `pinch-zoom-native.e2e.ts`
- * target THOSE elements instead, which sit outside canvas in the DOM and
- * so aren't covered by this `none`.
+ * `canvas` keeps `touch-action: none`, unlike everything else (see the
+ * html/body comment above) - confirmed directly (map-gestures.e2e.ts's
+ * pinch/lift-a-finger tests) that letting native zoom compete for the SAME
+ * two-finger gesture the map's own pinch-to-zoom already owns breaks that
+ * existing, working feature: the browser's native gesture recognizer wins
+ * the arbitration and the app's pointer stream gets cut off mid-gesture.
+ * None of the three bugs `pinch-zoom-native.e2e.ts` covers are about the
+ * bare map surface losing its own zoom - they're about chrome layered ON
+ * TOP of it (the center shelf's buttons, the search badge, a dialog),
+ * which sit outside canvas in the DOM and so aren't covered by this `none`.
  */
 canvas { display: block; cursor: grab; touch-action: none; }
 canvas.dragging { cursor: grabbing; }
 /*
-  TEMPORARY: this rule used to relax the document-wide `touch-action: none`
-  above to `pan-y` while a dialog/catalog was mounted, so a drag over dialog
-  content could scroll it without the map's own gesture handling eating the
-  touch. With that blanket `none` gone (see the html/body comment above),
-  there is nothing left to relax here - removed rather than left as a no-op,
-  since `pan-y` would otherwise be MORE restrictive than the `auto` now in
-  effect everywhere else and silently reintroduce exactly the scoping this
-  revert is testing the absence of. Two real-device reports (this file's
-  git history) are why this scoping existed at all - see
-  docs/pinch-zoom-native-fix-plan.md for what replaces it.
+  There is no rule here relaxing `touch-action` to `pan-y` while a dialog/
+  catalog is mounted, on purpose: the html/body default is already `auto`
+  (see that comment above), and `pan-y` would be MORE restrictive than
+  that, silently narrowing a dialog's own scroll gesture back down for no
+  reason. Two real-device reports (this file's git history) are why a
+  `touch-action` scoping existed here at all before the fix in
+  `lib/visualViewport.ts` replaced it - see docs/pinch-zoom-native-fix-plan.md.
 */
 
 /*
@@ -1037,14 +1034,15 @@ mark {
   flat UI border; `box-shadow` rather than `border`/`padding` so it adds
   no layout space `decideColumns`/`measureScale` would have to account for.
 
-  TEMPORARY: `touch-action` used to switch between `pan-y` at rest and
-  `none` once `.zoomed` (`useImageZoom.ts`'s own scoped pinch-zoom claiming
-  the gesture), which is what kept native browser pinch-zoom off this
-  element entirely. That's removed for the native-zoom regression tests
-  (docs/pinch-zoom-native-fix-plan.md) - `useImageZoom`'s pointer handling
-  still runs (it isn't gated by `touch-action`), so at `auto` both it and a
-  real native pinch react to the same gesture, which is exactly the
-  contended, unfixed state those tests are written against.
+  `touch-action` is left at `auto` here rather than switching to `none`
+  once `.zoomed` (`useImageZoom.ts`'s own scoped pinch-zoom claiming the
+  gesture): a real native pinch and `useImageZoom`'s own pointer handling
+  (which isn't gated by `touch-action`) both react to the same gesture, and
+  rather than fight that contention with CSS, the leftover native zoom/pan
+  it can produce is cleaned up at the room overlay's own close boundary
+  (`RoomOverlay.tsx`'s `resetNativeZoom` call, `lib/visualViewport.ts`) -
+  see docs/pinch-zoom-native-fix-plan.md and
+  packages/web/e2e/pinch-zoom-native.e2e.ts.
   `transform-origin: center` matches the math in `imageZoom.ts`, which
   clamps `tx`/`ty` around the element's own center.
 */

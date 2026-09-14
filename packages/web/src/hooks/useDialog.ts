@@ -12,8 +12,9 @@
  * It is a plain module-level array rather than context because the ordering it
  * tracks is mount order, which is exactly what a shared array already records.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
+import { resetNativeZoom } from '../lib/visualViewport.ts';
 
 // Distinct object per open dialog; identity is all the stack compares on.
 type DialogToken = { id: symbol };
@@ -52,6 +53,17 @@ const FOCUSABLE =
  * traps Tab within it.
  */
 export function useDialog(ref: RefObject<HTMLElement | null>, onClose: () => void): void {
+  // Never let a native zoom/pan applied to reach some earlier control leak
+  // into this dialog's opening, and never let one applied while reading it
+  // leak back out once it closes - see visualViewport.ts. A `useLayoutEffect`
+  // of its own, not folded into the focus effect below: the reset has to run
+  // synchronously with this dialog's own DOM node leaving on close, and a
+  // plain `useEffect`'s cleanup is scheduled after that already happened.
+  useLayoutEffect(() => {
+    resetNativeZoom();
+    return () => resetNativeZoom();
+  }, []);
+
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();

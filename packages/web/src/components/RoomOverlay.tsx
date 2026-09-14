@@ -60,6 +60,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useImageZoom } from '../hooks/useImageZoom.ts';
+import { resetNativeZoom } from '../lib/visualViewport.ts';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import { BASE_TILE } from '../lib/pyramid.ts';
@@ -119,6 +120,19 @@ export function RoomOverlay({
   view?: { label: string; shortLabel: string; onClick: () => void } | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+
+  // Never let a native zoom/pan applied to reach the map control that opened
+  // this leak into the dialog, and never let one applied while zoomed into
+  // the tile (`useImageZoom` is scoped, but the browser's own gesture
+  // recognizer still sees the same fingers) leak back out onto the map once
+  // it closes - see visualViewport.ts. A `useLayoutEffect` of its own: the
+  // reset has to run synchronously with this dialog's own DOM node leaving
+  // on close, and a plain `useEffect`'s cleanup is scheduled after that
+  // already happened.
+  useLayoutEffect(() => {
+    resetNativeZoom();
+    return () => resetNativeZoom();
+  }, []);
 
   // Focus moves in on open and goes back where it came from on close.
   //
