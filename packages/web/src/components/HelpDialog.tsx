@@ -20,6 +20,8 @@
  * not.
  */
 import { useEffect, useRef } from 'react';
+import { useContentZoom } from '../hooks/useContentZoom.ts';
+import { ZoomControls } from './ZoomControls.tsx';
 
 export function HelpDialog({
   onClose,
@@ -35,6 +37,9 @@ export function HelpDialog({
   blockedCount?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Viewport = `.overlay` (`ref`) itself - see useContentZoom.ts. No
+  // resetKey: this dialog's content never changes under a given instance.
+  const contentZoom = useContentZoom(ref);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -86,12 +91,23 @@ export function HelpDialog({
       >
         <div className="card-head">
           <span className="card-id">help</span>
+          <ZoomControls
+            zoomIn={contentZoom.zoomIn}
+            zoomOut={contentZoom.zoomOut}
+            resetZoom={contentZoom.resetZoom}
+            canZoomIn={contentZoom.canZoomIn}
+            canZoomOut={contentZoom.canZoomOut}
+          />
           <button className="card-close" onClick={onClose} aria-label="close">
             ×
           </button>
         </div>
 
-        <div className="paper-sheet">
+        <div
+          className={contentZoom.zoomed ? 'paper-sheet zoom-scope zoomed' : 'paper-sheet zoom-scope'}
+          ref={contentZoom.ref}
+          style={contentZoom.style}
+        >
         <div className="help-body">
           <p>
             <strong>What this is:</strong> a zoomable, pannable map of library

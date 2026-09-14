@@ -89,6 +89,7 @@ export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBook
       scrimClassName="stacked"
       overlayClassName="babel-overlay"
       onWideChange={setIsWide}
+      zoomResetKey={page}
       head={<span className="card-id">{counter}</span>}
       footer={
         <div className="book-nav">

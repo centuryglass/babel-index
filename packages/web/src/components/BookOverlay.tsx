@@ -17,6 +17,8 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useDialog } from '../hooks/useDialog.ts';
+import { useContentZoom } from '../hooks/useContentZoom.ts';
+import { ZoomControls } from './ZoomControls.tsx';
 
 // Must match `@container book (min-width: ...)` in index.html - the width below
 // which the spread collapses to a single column.
@@ -35,6 +37,14 @@ interface BookOverlayProps {
   footer?: ReactNode;
   /** Called with whether the dialog is wide enough to show two pages. */
   onWideChange?: (isWide: boolean) => void;
+  /**
+   * Resets the book's content zoom (see `useContentZoom.ts`) when it
+   * changes - e.g. `BabelBookOverlay` passes its current page index, so
+   * turning a page doesn't leave the zoom panned into a corner of the
+   * page that's no longer showing. Omit when the book's content never
+   * changes under a given overlay instance (the artist's statement).
+   */
+  zoomResetKey?: unknown;
   /** The `.book-page` element(s) - one or two. */
   children: ReactNode;
 }
@@ -47,10 +57,14 @@ export function BookOverlay({
   head,
   footer,
   onWideChange,
+  zoomResetKey,
   children,
 }: BookOverlayProps) {
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, onClose);
+  // Viewport = the dialog itself (`ref`, `.overlay.book-overlay` - the
+  // scroll region), content = `.book` below - see useContentZoom.ts.
+  const contentZoom = useContentZoom(ref, zoomResetKey);
 
   // Keep the latest callback without rebinding the observer each render.
   const onWideRef = useRef(onWideChange);
@@ -88,11 +102,24 @@ export function BookOverlay({
       >
         <div className="card-head">
           {head}
+          <ZoomControls
+            zoomIn={contentZoom.zoomIn}
+            zoomOut={contentZoom.zoomOut}
+            resetZoom={contentZoom.resetZoom}
+            canZoomIn={contentZoom.canZoomIn}
+            canZoomOut={contentZoom.canZoomOut}
+          />
           <button className="card-close" onClick={onClose} aria-label="close">
             ×
           </button>
         </div>
-        <div className="book">{children}</div>
+        <div
+          className={contentZoom.zoomed ? 'book zoom-scope zoomed' : 'book zoom-scope'}
+          ref={contentZoom.ref}
+          style={contentZoom.style}
+        >
+          {children}
+        </div>
         {footer}
       </div>
     </div>

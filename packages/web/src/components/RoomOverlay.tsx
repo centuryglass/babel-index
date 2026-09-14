@@ -58,8 +58,9 @@
  * `columns` rather than folded into `decideColumns` - see that effect's own
  * comment for why the ordering matters.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useImageZoom } from '../hooks/useImageZoom.ts';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useContentZoom } from '../hooks/useContentZoom.ts';
+import { ZoomControls } from './ZoomControls.tsx';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import { BASE_TILE } from '../lib/pyramid.ts';
@@ -175,11 +176,28 @@ export function RoomOverlay({
   const colsRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(false);
 
-  // See useImageZoom.ts: a room overlay's tile gets its own scoped
-  // pinch-to-zoom rather than leaning on the browser's page zoom, so
-  // `src` (a new tile) is what resets it, not the dialog closing - the
+  // See useContentZoom.ts: the whole tile-and-story pair gets its own
+  // scoped pinch-to-zoom rather than leaning on the browser's page zoom,
+  // so `src` (a new tile) is what resets it, not the dialog closing - the
   // same overlay instance can show a different room without unmounting.
-  const imageZoom = useImageZoom(src);
+  // Viewport = `.overlay` itself (`ref`, already the scroll region for
+  // this dialog); content = `.overlay-columns` below, so a pinch magnifies
+  // the tile and the text together.
+  const contentZoom = useContentZoom(ref, src);
+  // A fresh inline arrow function every render would make React tear down
+  // and rebuild `contentZoom.ref` (and, with it, useContentZoom.ts's
+  // pointer-tracking effect and its local gesture state) on every
+  // re-render - including the ones a drag itself triggers via `setCamera`,
+  // which would silently reset mid-gesture. Memoized so its identity only
+  // changes if `contentZoom.ref` itself ever does (it doesn't, in practice
+  // - the hook's own `ref` is stable across renders).
+  const colsAndZoomRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      colsRef.current = el;
+      contentZoom.ref(el);
+    },
+    [contentZoom.ref]
+  );
 
   // Whether the tile and text sit in two columns instead of one - see the
   // file doc comment. `columns` on `.overlay-columns` is what actually
@@ -337,6 +355,13 @@ export function RoomOverlay({
                 <span className="catalog-show-short" aria-hidden="true">{view.shortLabel}</span>
               </button>
             )}
+            <ZoomControls
+              zoomIn={contentZoom.zoomIn}
+              zoomOut={contentZoom.zoomOut}
+              resetZoom={contentZoom.resetZoom}
+              canZoomIn={contentZoom.canZoomIn}
+              canZoomOut={contentZoom.canZoomOut}
+            />
             <button className="card-close" onClick={onClose} aria-label="close">
               ×
             </button>
@@ -349,7 +374,17 @@ export function RoomOverlay({
           only a story tall enough to force scrolling moves beside it, and
           only when the dialog is wide enough for that to be worth doing.
         */}
-        <div className={columns ? 'overlay-columns columns' : 'overlay-columns'} ref={colsRef}>
+        <div
+          className={[
+            columns ? 'overlay-columns columns' : 'overlay-columns',
+            'zoom-scope',
+            contentZoom.zoomed ? 'zoomed' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          ref={colsAndZoomRef}
+          style={contentZoom.style}
+        >
           {/*
             The tile at its own native resolution by default, never upscaled
             past it - the same rule the map's opening view follows - and a
@@ -373,9 +408,7 @@ export function RoomOverlay({
           */}
           {src && (
             <img
-              className={imageZoom.zoomed ? 'overlay-tile zoomed' : 'overlay-tile'}
-              style={imageZoom.style}
-              ref={imageZoom.ref}
+              className="overlay-tile"
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
