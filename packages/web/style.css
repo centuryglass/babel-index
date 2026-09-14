@@ -51,7 +51,29 @@ html, body {
 }
 body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
 #root, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-#root { touch-action: none; }
+/*
+ * The clip is load-bearing on a phone, not tidiness. The center tile's DOM
+ * overlays (`.center-search`, `.center-books`, `.center-book`,
+ * `.center-controls`) are absolutely positioned over the WHOLE center cell,
+ * which at reading zoom is several screens wide, and #root is their
+ * containing block - so without a clip here that box is document content
+ * sticking out past the viewport. `html`/`body`'s `overflow: hidden` never
+ * reaches it: neither is in the containing-block chain of an absolutely
+ * positioned descendant of a positioned #root. A mobile browser then reads
+ * the page as wider and taller than the screen and responds by dropping the
+ * page scale to fit and growing the LAYOUT viewport to match - which is what
+ * `position: fixed` resolves against, so every dialog's `.overlay-scrim`
+ * starts covering a box several times the screen (the dialog lands mostly
+ * off it, and its close button has to be panned to) and the map paints at a
+ * fraction of its size once the dialog closes.
+ *
+ * `clip`, not `hidden`: `hidden` would make #root a scroll container, and
+ * then focusing a shelf book that is off screen (the shelf's roving
+ * tabindex) scrolls the whole app - canvas included - sideways under the
+ * reader. A browser too old to know `clip` drops the declaration and is left
+ * exactly where it was, which is the right way to fail here.
+ */
+#root { touch-action: none; overflow: clip; }
 canvas { display: block; cursor: grab; touch-action: none; }
 canvas.dragging { cursor: grabbing; }
 /*
