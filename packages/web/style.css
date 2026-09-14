@@ -537,6 +537,16 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 @media (max-width: 600px) {
   .room-head .catalog-show-full { display: none; }
   .room-head .catalog-show-short { display: inline; }
+  /*
+    `.card-head` is shared by RoomOverlay, HelpDialog and BookOverlay (the
+    artist's statement, the Babel book), so this one rule drops the zoom
+    buttons everywhere a narrow display has no room for them beside the
+    title/counter and the close button. Pinch-to-zoom itself
+    (useContentZoom.ts) still works regardless - only the button path a
+    mouse/keyboard reader would use is gone, and a narrow viewport is
+    overwhelmingly a touch one anyway.
+  */
+  .card-head .zoom-controls { display: none; }
 }
 .favorite-toggle {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
@@ -754,6 +764,13 @@ mark {
   first room.
 */
 .catalog.narrow .catalog-bar-row.sub { flex-wrap: nowrap; align-items: center; }
+/*
+  The first bar row is already tight under `narrow` - "the map", the search
+  field and "forget searches" - so the zoom buttons drop entirely rather
+  than force a wrap. Pinch-to-zoom itself (useContentZoom.ts) still works;
+  only the button path is gone, and `narrow` correlates heavily with touch.
+*/
+.catalog.narrow .zoom-controls { display: none; }
 .catalog.narrow .catalog-count {
   /* Narrow fills by flex-grow instead of the wide layout's auto margin -
      the two together would leave nothing for `flex-grow` to expand into. */
