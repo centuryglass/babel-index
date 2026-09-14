@@ -121,7 +121,7 @@ Under **Settings → Secrets and variables → Actions**, as *secrets*:
 | Secret | What goes in it |
 | --- | --- |
 | `DEPLOY_SSH_KEY` | the whole of `~/.ssh/babel_deploy` (the **private** half), including the BEGIN/END lines |
-| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -p <your port> <your host>` run from a machine you trust |
+| `DEPLOY_KNOWN_HOSTS` | your VPS's host public keys — `ssh-keyscan -p <your port> <your host>`, fingerprint-checked against the box itself (below) |
 | `DEPLOY_HOST` | the VPS hostname |
 | `DEPLOY_PORT` | the non-standard ssh port |
 | `DEPLOY_USER` | the user that owns the checkout |
@@ -133,9 +133,36 @@ job summary):
 | --- | --- |
 | `PUBLIC_URL` | `https://centuryglass.us/babel-index/` |
 
-`DEPLOY_KNOWN_HOSTS` is what keeps this from being trust-on-first-use. The
-workflow will not accept an unknown host key, so a rotated or spoofed one
-fails the deploy rather than handing a deploy to whatever answered.
+`DEPLOY_KNOWN_HOSTS` is the other direction of the same connection:
+`DEPLOY_SSH_KEY` proves to the VPS that the runner may ask for a deploy, and
+this proves to the runner that it is talking to your VPS. A runner is a fresh
+VM with an empty `known_hosts` every time, so without it the connection is
+trust-on-first-use — it would accept whatever key answered. SSH would still
+keep an impostor from stealing or replaying the deploy key (pubkey auth signs
+a challenge bound to the session), but an impostor does not need the key to
+read the requested sha and answer "deployed" — the deploy step would report
+success having deployed nothing, anywhere. The public health check would
+still catch that, since the real site would be serving the old commit, but
+one clear ssh failure beats a confusing health failure two steps later.
+
+Scanning over the network is itself trust-on-first-use, so check the
+fingerprints against the box rather than trusting the scan. From your existing
+ssh session on the VPS:
+
+```sh
+for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done
+```
+
+Then run the `ssh-keyscan` above, pipe it through `ssh-keygen -lf -`, and
+confirm every fingerprint appears in that list before pasting the scan's raw
+output into the secret.
+
+Two consequences worth expecting. Entries are keyed by host **and** port
+(`ssh-keyscan -p` writes the `[host]:port` form for you), so changing the ssh
+port invalidates this secret even though the machine has not changed. And the
+pin is to whatever holds `/etc/ssh/ssh_host_*_key`, so rebuilding the box
+fails the deploy until you re-scan — which is the point, and the one event you
+would want to be told about rather than deployed through.
 
 The workflow names a `production` environment, which gives you the deployment
 record on the repo's front page and somewhere to hang a required reviewer if
