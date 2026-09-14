@@ -1030,9 +1030,29 @@ mark {
 .paper-sheet :focus-visible { outline-color: var(--paper-accent); }
 .paper-sheet .favorite-toggle.on { color: var(--paper-accent); border-color: var(--paper-accent); }
 /*
-  Sized to its own native resolution by default: `width: auto` with
-  `max-width: 100%` never blows it up past that, only shrinking it to
-  fit a narrower dialog - the same rule the map's opening view follows.
+  Sized to its own native resolution by default: `max-width: 100%` with
+  `height: auto` never blows it up past that, only shrinking it to fit a
+  narrower dialog - the same rule the map's opening view follows. No
+  `width` rule here, deliberately - `width` is left unset rather than
+  stated as `auto`, so the `width`/`height` HTML attributes' own
+  presentational hint (the browser's built-in equivalent of `width:
+  1024px`) stays live in the cascade and `max-width` caps it. Writing
+  `width: auto` here instead - even though `auto` is `width`'s own initial
+  value, so it looks like a no-op - measurably is not one: an unloaded
+  `<img>` (no bytes yet, any duration - a network request genuinely
+  pending, not just mid-flight for a frame or two) renders at 0x0 for as
+  long as it stays unloaded once `width: auto` is explicitly written
+  alongside `height: auto`, in every version of Chromium this was checked
+  against, confirmed against a bare test page outside this app entirely.
+  Left unset, the same pending `<img>` sizes correctly from the very first
+  paint - what actually fixes the flash the alt-text box could show, more
+  reliably than anything sized on a wrapper element around the `<img>`
+  could be (a `<div>` with `width: min(<native>px, 100%)` was tried instead
+  of this: it sizes correctly on its own, but as a flex item inside
+  `.overlay-columns.columns` - `.overlay.columns` is `width: fit-content` -
+  a percentage width can't participate in that shrink-to-fit computation
+  the way a replaced element's own intrinsic size can, and the columns-mode
+  dialog settled small and stayed there, the tile squeezed toward nothing).
   The three-layer `box-shadow` reads as a plate tipped onto the page - a
   thin paper mat, a hairline rule, then a soft drop shadow - rather than a
   flat UI border; `box-shadow` rather than `border`/`padding` so it adds
@@ -1047,7 +1067,7 @@ mark {
   the element's own center.
 */
 .overlay-tile {
-  display: block; width: auto; max-width: 100%; height: auto;
+  display: block; max-width: 100%; height: auto;
   margin: 4px auto 14px; border-radius: 1px; background: #14110d;
   box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
   touch-action: pan-y; transform-origin: center;
