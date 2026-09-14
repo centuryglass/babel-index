@@ -88,12 +88,21 @@ export function RoomOverlay({
   weights,
   favorite = null,
   view = null,
+  naturalSize = null,
 }: {
   room: RoomSubject;
   desc: Description;
   entry: RoomMeta | null;
   /** this room's (or generic cell's) tile - null while the manifest can't resolve one */
   src?: string | null;
+  /**
+   * The tile's own real pixel dimensions, read at scan time (`scan.ts`'s
+   * `imageSize`) - null when the manifest never got a reading (a corpus with
+   * an unrecognized image format) or the caller hasn't looked it up, in
+   * which case the placeholder falls back to `BASE_TILE`'s shared aspect
+   * (see the `<img>` below).
+   */
+  naturalSize?: { w: number; h: number } | null;
   onClose: () => void;
   onKeyword: (keyword: string) => void;
   highlight?: {
@@ -379,16 +388,18 @@ export function RoomOverlay({
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
-              // Intrinsic size from BASE_TILE (every tile shares its aspect),
-              // so the picture reserves its correctly-proportioned box before
-              // its bytes arrive - the CSS still scales it (`width`/`height:
-              // auto`, `max-width: 100%`). Without this the tile has zero
-              // height when `decideColumns` first measures pre-paint, the pair
-              // looks short enough to stack, and the layout only flips to
-              // columns once `onLoad` fires after the first paint - a visible
-              // flash of the stacked layout on every uncached open.
-              width={BASE_TILE.w}
-              height={BASE_TILE.h}
+              // Intrinsic size from the tile's own reading if the manifest has
+              // one, else BASE_TILE's shared aspect as a fallback - so the
+              // picture reserves a box matching what will actually load rather
+              // than just its proportions, and the overlay's bounds don't have
+              // to change once it does. The CSS still scales it down to fit a
+              // narrower dialog (`width`/`height: auto`, `max-width: 100%`).
+              // This also keeps `decideColumns` from measuring the tile at zero
+              // height pre-paint, which used to read the pair as short enough
+              // to stack and only flip to columns once `onLoad` fired - a
+              // visible flash of the stacked layout on every uncached open.
+              width={naturalSize?.w ?? BASE_TILE.w}
+              height={naturalSize?.h ?? BASE_TILE.h}
               onLoad={() => {
                 decideColumns.current();
                 measureScale.current();
