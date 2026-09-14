@@ -39,6 +39,12 @@ COPY assets ./assets
 # at bundle time (AGENTS.md: "no second copy to drift") - the client build
 # fails without it even though nothing else here runs the tools/ CLIs.
 COPY tools/center-placement/lib ./tools/center-placement/lib
+# /api/health reports which revision is running, and this image carries no
+# .git for packages/server/version.ts to read one out of (see .dockerignore),
+# so pass it in: `docker build --build-arg` is the wrong tool (it would bust
+# every layer's cache), `-e BABEL_COMMIT=$(git rev-parse HEAD)` at run time is
+# the right one. Without it health reports a null commit, which is honest and
+# simply means a deploy of this image cannot be verified by revision.
 EXPOSE 5173
 # CMD (not baked into ENTRYPOINT) so `docker run babel-index --images /data
 # --port 8080` overrides it entirely, same as any other npm run demo flag

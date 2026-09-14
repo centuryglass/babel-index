@@ -55,10 +55,12 @@ import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
+import { resolveCommit } from './version.ts';
 import type { Express } from 'express';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, '../web');
+const repoRoot = resolve(here, '../..');
 
 const argv = parseArgs(process.argv.slice(2));
 const port = Number(argv.port ?? 5173);
@@ -213,6 +215,12 @@ await ctx.rebuild();
 if (watch) await ctx.watch();
 else await ctx.dispose();
 
+// Resolved once at startup rather than per request: a running process cannot
+// change which revision it is, and re-reading .git on every health check would
+// report a checkout the code in memory is no longer from. That is the exact
+// lie the deploy workflow uses this to catch - see version.ts.
+const commit = resolveCommit(repoRoot);
+
 app = createApp({
   manifest,
   imagesDir,
@@ -226,6 +234,7 @@ app = createApp({
   basePath,
   favorites,
   trustProxy,
+  commit,
 });
 
 const server = app.listen(port, () => {
@@ -237,7 +246,7 @@ const server = app.listen(port, () => {
   // Express binds every interface, so the demo is already reachable from a
   // phone on the same network - but only if you know which address to type.
   // Listing them is the difference between "it is exposed" and "it is usable".
-  logger.info({ port, addresses: lanAddresses(), watch }, 'the library is open');
+  logger.info({ port, addresses: lanAddresses(), watch, commit }, 'the library is open');
   if (basePath !== '/')
     logger.info({ basePath }, '<base href> is set for a reverse proxy that strips it - see server-nginx.conf');
   if (favorites) {

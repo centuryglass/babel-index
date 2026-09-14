@@ -118,6 +118,11 @@ export interface CreateAppOptions {
    *  one. Default false: correct for a direct connection, which is what the
    *  demo is. See index.ts's `--trust-proxy`. */
   trustProxy?: string | number | boolean;
+  /** the revision this process is running, reported by /api/health (see
+   *  version.ts). Null - the default, and every test - means the server
+   *  cannot name its own revision, which /api/health reports honestly rather
+   *  than omitting. */
+  commit?: string | null;
 }
 
 /** Build the app. */
@@ -135,6 +140,7 @@ export function createApp({
   favorites = null,
   trustProxy = false,
   publicDir = null,
+  commit = null,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
@@ -161,6 +167,32 @@ export function createApp({
   app.get('/api/manifest', (_req, res) =>
     res.json({ ...manifest, favorites: favoritesInfo, config: clientConfig })
   );
+
+  /**
+   * Liveness, for the deploy workflow to check a release against.
+   *
+   * `commit` is the reason this exists at all: a 200 from the old process is
+   * indistinguishable from a 200 from the new one, so a deploy that checks
+   * only for an answer verifies nothing (see version.ts). `rooms` is the
+   * second half of that - a corpus the scan came up empty on serves a
+   * perfectly healthy library with nothing in it, which is what a wrong
+   * --images path on a restarted unit looks like from outside.
+   *
+   * Cheap and constant on purpose: everything here is already in memory, so
+   * a health check costs nothing and cannot itself be the thing that falls
+   * over under load. `no-store` because the whole point is the CURRENT
+   * process's answer - a cache between here and the deploy workflow would
+   * happily report the revision that was running a minute ago.
+   */
+  app.get('/api/health', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ok: true,
+      commit,
+      rooms: manifest.rooms.length,
+      uptimeSeconds: Math.round(process.uptime()),
+    });
+  });
 
   // Which room files exist, for the favorite routes to validate against. Fixed
   // for the process's lifetime, like the manifest it reads: the corpus is
