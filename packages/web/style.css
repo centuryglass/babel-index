@@ -92,21 +92,36 @@ canvas.dragging { cursor: grabbing; }
 
   `pan-y`, not `auto`: neither a dialog nor the catalog needs the BROWSER's
   own pinch-zoom or horizontal pan, only their own vertical scroll region.
-  Two real-device reports (docs/pending_task_list.md) found that letting
-  native page zoom happen at all - even just for the room overlay's tile,
-  the one place zooming in was actually wanted - leaves the rest of the
-  document (the map canvas, its search badge, all fixed-size and absolutely
-  positioned) visibly detached the moment the reader also pans, not just
-  zooms; the fix was to stop granting native zoom permission at the
-  document level entirely and give the room overlay's own tile a SCOPED
-  zoom instead (`.overlay-tile` below, `useImageZoom.ts`) that never leaves
-  its own element.
+  Two real-device reports found that letting native page zoom happen at all -
+  even just for the room overlay's tile, the one place zooming in was
+  actually wanted - leaves the rest of the document (the map canvas, its
+  search badge, all fixed-size and absolutely positioned) visibly detached
+  the moment the reader also pans, not just zooms; a later attempt to
+  toggle native zoom back on per-dialog and reset it at each boundary
+  (`origin/claude/mobile-pinch-zoom-bugs-n7ec23`, abandoned) found Firefox
+  Mobile doesn't reliably discard a native zoom/pan left over once a
+  dialog closes even when the reset mutates the viewport meta directly.
+  The fix in both cases is the same: never grant native zoom permission at
+  the document level at all, and give any content that needs magnifying a
+  SCOPED zoom instead (`.zoom-scope` below, `useContentZoom.ts`) that
+  never leaves its own element - nothing to leak, nothing to reset.
 */
 html:has(.overlay-scrim, .catalog),
 body:has(.overlay-scrim, .catalog),
 #root:has(.overlay-scrim, .catalog) {
   touch-action: pan-y;
 }
+/*
+  Shared scoped pinch-zoom surface - a room overlay's tile-and-story
+  together, a help/book dialog's page, the catalog list. `transform-origin:
+  0 0` is load-bearing, not a style choice: the anchor-preserving zoom math
+  in `contentZoomCamera.ts` assumes it. `pan-y` at rest lets a single-finger
+  drag scroll the region beneath it exactly as it always could, right up
+  until the reader actually zooms in (`.zoomed`, `touch-action: none`),
+  where the same drag instead pans the zoomed content.
+*/
+.zoom-scope { transform-origin: 0 0; touch-action: pan-y; }
+.zoom-scope.zoomed { touch-action: none; }
 
 /*
  * The live search field, anchored to the center tile's traced search
@@ -454,6 +469,15 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
   flex: none;
+  /*
+    A zoomed `.zoom-scope` sibling further down in the same `.overlay` (its
+    scale grows the element visually without reserving extra layout space)
+    can otherwise paint over the head and swallow clicks meant for its own
+    buttons - `.overlay`'s own `overflow-y: auto` only clips at ITS
+    boundary, not between siblings inside it. Kept above every zoom-scope
+    sibling regardless of DOM order.
+  */
+  position: relative; z-index: 1;
 }
 /*
   The card head sits on the dialog's dark cover, same as the catalog bar
@@ -474,6 +498,20 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   border: 1px solid var(--edge); border-radius: 4px; cursor: pointer;
 }
 .card-close:hover { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+/*
+  The non-pinch path to the same `useContentZoom` scope a dialog or the
+  catalog carries - native browser zoom is deliberately not offered as a
+  fallback (see the touch-action doc comment above), so a mouse-and-
+  keyboard reader needs a real control here, not just a gesture.
+*/
+.zoom-controls { display: inline-flex; flex: none; gap: 4px; }
+.zoom-controls button {
+  flex: none; font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; padding: 3px 8px; line-height: 1.3;
+}
+.zoom-controls button:hover:not(:disabled) { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+.zoom-controls button:disabled { opacity: 0.4; cursor: default; }
 /*
   The favorite control, in the overlay and in a catalog row's head - one
   appearance in both, since the thing it reports (this room's global
@@ -499,6 +537,16 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 @media (max-width: 600px) {
   .room-head .catalog-show-full { display: none; }
   .room-head .catalog-show-short { display: inline; }
+  /*
+    `.card-head` is shared by RoomOverlay, HelpDialog and BookOverlay (the
+    artist's statement, the Babel book), so this one rule drops the zoom
+    buttons everywhere a narrow display has no room for them beside the
+    title/counter and the close button. Pinch-to-zoom itself
+    (useContentZoom.ts) still works regardless - only the button path a
+    mouse/keyboard reader would use is gone, and a narrow viewport is
+    overwhelmingly a touch one anyway.
+  */
+  .card-head .zoom-controls { display: none; }
 }
 .favorite-toggle {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
@@ -716,6 +764,13 @@ mark {
   first room.
 */
 .catalog.narrow .catalog-bar-row.sub { flex-wrap: nowrap; align-items: center; }
+/*
+  The first bar row is already tight under `narrow` - "the map", the search
+  field and "forget searches" - so the zoom buttons drop entirely rather
+  than force a wrap. Pinch-to-zoom itself (useContentZoom.ts) still works;
+  only the button path is gone, and `narrow` correlates heavily with touch.
+*/
+.catalog.narrow .zoom-controls { display: none; }
 .catalog.narrow .catalog-count {
   /* Narrow fills by flex-grow instead of the wide layout's auto margin -
      the two together would leave nothing for `flex-grow` to expand into. */
@@ -1038,21 +1093,15 @@ mark {
   flat UI border; `box-shadow` rather than `border`/`padding` so it adds
   no layout space `decideColumns`/`measureScale` would have to account for.
 
-  `touch-action: pan-y` at rest lets a single-finger drag over the tile
-  scroll the dialog beneath it (`.overlay`'s own vertical scroll), same as
-  dragging anywhere else in it - `useImageZoom.ts` only claims the gesture
-  for itself once actually zoomed in (`.zoomed`, `touch-action: none`),
-  where the same drag instead pans the zoomed image. `transform-origin:
-  center` matches the math in `imageZoom.ts`, which clamps `tx`/`ty` around
-  the element's own center.
+  The tile no longer carries its own zoom (see `.zoom-scope` above) -
+  `RoomOverlay` scopes one content zoom to the whole `.overlay-columns`
+  pair, tile and story together, so this rule is purely visual now.
 */
 .overlay-tile {
   display: block; width: auto; max-width: 100%; height: auto;
   margin: 4px auto 14px; border-radius: 1px; background: #14110d;
   box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
-  touch-action: pan-y; transform-origin: center;
 }
-.overlay-tile.zoomed { touch-action: none; }
 /*
   Nothing clipped here: this is where the whole story lives. Redundant
   today, because the clamp is scoped to `.catalog-row` - and kept because

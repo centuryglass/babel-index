@@ -45,6 +45,8 @@ import type { UrlFor } from '../lib/rooms.ts';
 import { describeBook, CENTER_BOOK_PATH, type Slot as CentreSlot } from '../lib/center.ts';
 import { RoomDetails, FavoriteToggle, Highlight, ScoreBreakdown, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
+import { useContentZoom } from '../hooks/useContentZoom.ts';
+import { ZoomControls } from './ZoomControls.tsx';
 import {
   pageOf,
   pageCount,
@@ -452,6 +454,11 @@ export function CatalogView({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const centreRowRef = useRef<HTMLLIElement>(null);
+  // Viewport = `.catalog-scroll` (`scrollRef`) - stays the real native
+  // scroll container, so the virtualized window (`onScroll`/`pageAtScroll`
+  // below) keeps reading its actual `scrollTop`, untouched by the zoom
+  // transform on the list itself. See useContentZoom.ts.
+  const contentZoom = useContentZoom(scrollRef);
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
   // The distill toggle's own decoded pixel size, read off its `<img>` once it
@@ -773,6 +780,13 @@ export function CatalogView({
           <button className="mode-toggle" onClick={onExit}>
             ← the map
           </button>
+          <ZoomControls
+            zoomIn={contentZoom.zoomIn}
+            zoomOut={contentZoom.zoomOut}
+            resetZoom={contentZoom.resetZoom}
+            canZoomIn={contentZoom.canZoomIn}
+            canZoomOut={contentZoom.canZoomOut}
+          />
           {/*
             The same "forget searches" act the bottom-right book on the shelf
             runs (main.jsx's `CENTER_OVERRIDES`/`onOverride`)
@@ -879,7 +893,11 @@ export function CatalogView({
       </div>
 
       <div className="catalog-scroll" ref={scrollRef} onScroll={onScroll}>
-        <ul className="catalog-list">
+        <ul
+          className={contentZoom.zoomed ? 'catalog-list zoom-scope zoomed' : 'catalog-list zoom-scope'}
+          ref={contentZoom.ref}
+          style={contentZoom.style}
+        >
           {/*
             Row 0 is the center room, and its right-hand column is the shelf -
             the same forty slots `assignTitles` returns, as ordinary links. This

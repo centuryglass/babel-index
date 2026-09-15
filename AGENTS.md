@@ -206,6 +206,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              step by two or one to match. An easter egg opened
                              from the artist's statement ("Click here to run
                              some equivalent code") and stacked over it.
+    * `ZoomControls.tsx`: Zoom in/reset/zoom out for a `useContentZoom`
+                          scope - the non-pinch path a mouse-and-keyboard
+                          reader needs, since native browser zoom is
+                          deliberately not offered as a fallback. Shared by
+                          `RoomOverlay`, `HelpDialog`, `BookOverlay` and
+                          `CatalogView` rather than four copies of the same
+                          three buttons.
   - `src/hooks/`: the subsystems `main.tsx` wires together, each hiding state
                  nobody outside it needs to see
     * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
@@ -239,10 +246,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       the one beneath it does not. Adopted by
                       `ArtistStatementOverlay`/`BabelBookOverlay`;
                       `HelpDialog`/`RoomOverlay` still inline their own copies.
-    * `useImageZoom.ts`: Two-finger pinch-to-zoom and one-finger pan, scoped
-                         to `RoomOverlay`'s tile image - see its own comment
-                         for why this exists instead of native browser page
-                         zoom (two real-device reports ruled that out)
+    * `useContentZoom.ts`: Two-finger pinch-to-zoom and one-finger pan,
+                           scoped to one DOM subtree at a time - a room
+                           overlay's tile-and-story, a help/book dialog's
+                           page, the catalog list. Native browser zoom is
+                           never used instead (see its own comment: it
+                           drags this app's fixed/absolutely-positioned
+                           chrome out of place while panning, and Firefox
+                           Mobile doesn't reliably discard a native
+                           zoom/pan left over once a dialog closes even
+                           when a reset tries to force it). Reads its own
+                           gesture math from `contentZoomCamera.ts`.
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
@@ -274,9 +288,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     settings, blocked tags, the reader's own favorites)
     * `touchDebug.js`: View touch event stream if `?touchdebug` set
     * `debug.js`: Gates the dev panel behind `?debug`
-    * `imageZoom.ts`: Pure zoom/pan-bounds math for `useImageZoom.ts` - the
-                      room overlay tile's own scoped pinch-to-zoom, kept
-                      DOM-free the same way `camera.ts` is
+    * `contentZoomCamera.ts`: Pure anchor-preserving zoom/pan-bounds math
+                              for `useContentZoom.ts` - viewport-relative,
+                              so it holds for content taller/wider than the
+                              region showing it (a long story, a tall
+                              virtualized list), not just a tile roughly
+                              the size of its own viewport. Kept DOM-free
+                              the same way `camera.ts` is.
     * `perfProbe.ts`: Rearrangement performance instrumentation behind
                       `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
                       store) - `docs/performance-research.md` §2's "measure
