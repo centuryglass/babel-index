@@ -16,7 +16,7 @@
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useDialog } from '../hooks/useDialog.ts';
+import { useDialog, useScrimDismiss } from '../hooks/useDialog.ts';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
 import { ZoomControls } from './ZoomControls.tsx';
 
@@ -62,6 +62,7 @@ export function BookOverlay({
 }: BookOverlayProps) {
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, onClose);
+  const scrimDismiss = useScrimDismiss(onClose);
   // Viewport = the dialog itself (`ref`, `.overlay.book-overlay` - the
   // scroll region), content = `.book` below - see useContentZoom.ts.
   const contentZoom = useContentZoom(ref, zoomResetKey);
@@ -90,7 +91,7 @@ export function BookOverlay({
   return (
     <div
       className={scrimClassName ? `overlay-scrim ${scrimClassName}` : 'overlay-scrim'}
-      onPointerDown={(e) => e.target === e.currentTarget && onClose()}
+      {...scrimDismiss}
     >
       <div
         className={overlayClassName ? `overlay book-overlay ${overlayClassName}` : 'overlay book-overlay'}
