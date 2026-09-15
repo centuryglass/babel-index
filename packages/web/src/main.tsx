@@ -554,6 +554,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [card, layout, order, metadata]
   );
 
+  // The catalog overlay's own room, by real pixel size read at scan time -
+  // see `cardNaturalSize` below and RoomOverlay's `naturalSize` doc.
+  const overlayNaturalSize = useMemo(() => {
+    if (!overlay) return null;
+    const room = manifest.rooms[overlay.id];
+    return room?.w && room?.h ? { w: room.w, h: room.h } : null;
+  }, [overlay, manifest]);
+
   // The map-opened card's own tile image, resolved the same way the
   // catalog's overlay is - a real room by id, a generic cell by the same
   // positional face `render.ts` draws for that cell (`layout.genericIndexAt`,
@@ -563,6 +571,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     if (!card) return null;
     return urlFor('id' in card ? card.id : genericId(layout.genericIndexAt(card.x, card.y)), 0);
   }, [card, layout, urlFor]);
+
+  // The same tile's own real pixel size, read at scan time - see
+  // RoomOverlay's `naturalSize` doc for why this beats a shared aspect ratio
+  // for the pre-load placeholder. Resolved the same two ways `cardSrc` is:
+  // a real room by id, a generic cell by its positional face.
+  const cardNaturalSize = useMemo(() => {
+    if (!card) return null;
+    const asset = 'id' in card ? manifest.rooms[card.id] : manifest.shared?.generic?.[layout.genericIndexAt(card.x, card.y)];
+    return asset?.w && asset?.h ? { w: asset.w, h: asset.h } : null;
+  }, [card, layout, manifest]);
 
   // The ranked listbox: every rank the search's gradient actually lifted above
   // the baseline (`gradedCount` - "the size of the cluster", 0 for a uniform
@@ -1391,6 +1409,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           )}
           entry={metadata?.[overlay.id] ?? null}
           src={urlFor(overlay.id, 0)}
+          naturalSize={overlayNaturalSize}
           onClose={() => setOverlay(null)}
           onKeyword={searchKeyword}
           highlight={highlight}
@@ -1427,6 +1446,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           desc={cardDescription}
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
           src={cardSrc}
+          naturalSize={cardNaturalSize}
           onClose={() => setCard(null)}
           onKeyword={searchKeyword}
           highlight={highlight}

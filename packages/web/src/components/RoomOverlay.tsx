@@ -24,7 +24,7 @@
  * away rather than zero.
  *
  * The tile is sized to its own native resolution by default - `max-width:
- * 100%; width: auto` on `.overlay-tile` never blows it up past that, only
+ * 100%; height: auto` on `.overlay-tile` never blows it up past that, only
  * shrinking it to fit a narrower dialog - and a right-click on it reaches the
  * browser's own "save image", which a canvas-painted map tile could never
  * offer. It scrolls as part of the same region as the text below it
@@ -89,12 +89,21 @@ export function RoomOverlay({
   weights,
   favorite = null,
   view = null,
+  naturalSize = null,
 }: {
   room: RoomSubject;
   desc: Description;
   entry: RoomMeta | null;
   /** this room's (or generic cell's) tile - null while the manifest can't resolve one */
   src?: string | null;
+  /**
+   * The tile's own real pixel dimensions, read at scan time (`scan.ts`'s
+   * `imageSize`) - null when the manifest never got a reading (a corpus with
+   * an unrecognized image format) or the caller hasn't looked it up, in
+   * which case the placeholder falls back to `BASE_TILE`'s shared aspect
+   * (see the `<img>` below).
+   */
+  naturalSize?: { w: number; h: number } | null;
   onClose: () => void;
   onKeyword: (keyword: string) => void;
   highlight?: {
@@ -294,6 +303,8 @@ export function RoomOverlay({
     return () => window.removeEventListener('resize', onResize);
   }, [columns, desc, entry, src]);
 
+  const tileSize = naturalSize ?? BASE_TILE;
+
   // Named by `desc.name` - the same string a listbox option and the map's own
   // cursor say for this cell. The rank and the keywords are the reason to
   // have opened it.
@@ -396,6 +407,14 @@ export function RoomOverlay({
             branch) - the only case where this file invents a caption rather
             than reading one.
 
+            Intrinsic size from the tile's own reading if the manifest has
+            one, else BASE_TILE's shared aspect as a fallback (`tileSize`) -
+            so the picture reserves a box matching what will actually load
+            rather than just its proportions. The CSS still scales it down
+            to fit a narrower dialog (`height: auto`, `max-width: 100%`;
+            see `.overlay-tile`'s own comment for why there is deliberately
+            no `width` rule alongside them).
+
             `onLoad` re-measures once the browser knows the tile's real
             height - before that, an unloaded `<img>` has none, and a
             measurement taken against zero would never decide to overflow.
@@ -412,16 +431,8 @@ export function RoomOverlay({
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
-              // Intrinsic size from BASE_TILE (every tile shares its aspect),
-              // so the picture reserves its correctly-proportioned box before
-              // its bytes arrive - the CSS still scales it (`width`/`height:
-              // auto`, `max-width: 100%`). Without this the tile has zero
-              // height when `decideColumns` first measures pre-paint, the pair
-              // looks short enough to stack, and the layout only flips to
-              // columns once `onLoad` fires after the first paint - a visible
-              // flash of the stacked layout on every uncached open.
-              width={BASE_TILE.w}
-              height={BASE_TILE.h}
+              width={tileSize.w}
+              height={tileSize.h}
               onLoad={() => {
                 decideColumns.current();
                 measureScale.current();
