@@ -12,8 +12,8 @@
  * It is a plain module-level array rather than context because the ordering it
  * tracks is mount order, which is exactly what a shared array already records.
  */
-import { useEffect, useRef } from 'react';
-import type { RefObject } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react';
 
 // Distinct object per open dialog; identity is all the stack compares on.
 type DialogToken = { id: symbol };
@@ -92,4 +92,45 @@ export function useDialog(ref: RefObject<HTMLElement | null>, onClose: () => voi
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, ref]);
+}
+
+/**
+ * Props for a scrim div that closes its dialog on an outside click, without
+ * also reaching whatever is behind it.
+ *
+ * Closing straight from `onPointerDown` (every scrim's old behaviour) can
+ * unmount the scrim before the browser gets to dispatch the `click` that
+ * follows - pointerdown, pointerup and click are three separate native
+ * events, and React re-renders after the first of them. The `click` then
+ * hits whatever the pointer is over once the scrim is gone: on the map that
+ * lands nowhere clickable, but a catalog row sits exactly where the scrim
+ * just was, so the same gesture that closed one room's overlay opens the row
+ * underneath it. Waiting for `click` itself - the last event in the
+ * sequence - keeps the scrim mounted through the whole gesture, so it is
+ * still what the browser hit-tests.
+ *
+ * Requiring `pointerdown` to have also started on the scrim (not just the
+ * `click`) rules out the other direction: a click event's target is the
+ * common ancestor of its pointerdown and pointerup targets, so a drag that
+ * starts inside the dialog and is released outside it can otherwise retarget
+ * the click onto the scrim and close a dialog the reader was merely
+ * selecting text in.
+ */
+export function useScrimDismiss(onClose: () => void): {
+  onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
+  onClick: (e: ReactMouseEvent<HTMLElement>) => void;
+} {
+  const downOnScrim = useRef(false);
+  const onPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
+    downOnScrim.current = e.target === e.currentTarget;
+  }, []);
+  const onClick = useCallback(
+    (e: ReactMouseEvent<HTMLElement>) => {
+      const shouldClose = downOnScrim.current && e.target === e.currentTarget;
+      downOnScrim.current = false;
+      if (shouldClose) onClose();
+    },
+    [onClose]
+  );
+  return { onPointerDown, onClick };
 }

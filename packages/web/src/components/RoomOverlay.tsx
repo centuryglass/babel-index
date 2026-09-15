@@ -60,6 +60,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
+import { useScrimDismiss } from '../hooks/useDialog.ts';
 import { ZoomControls } from './ZoomControls.tsx';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
@@ -173,6 +174,7 @@ export function RoomOverlay({
   }, [onClose]);
 
   const scrimRef = useRef<HTMLDivElement>(null);
+  const scrimDismiss = useScrimDismiss(onClose);
   const colsRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(false);
 
@@ -307,7 +309,7 @@ export function RoomOverlay({
     <div
       className="overlay-scrim"
       ref={scrimRef}
-      onPointerDown={(e) => e.target === e.currentTarget && onClose()}
+      {...scrimDismiss}
     >
       <div
         className={columns ? 'overlay columns' : 'overlay'}

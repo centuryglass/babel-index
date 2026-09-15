@@ -21,6 +21,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
+import { useScrimDismiss } from '../hooks/useDialog.ts';
 import { ZoomControls } from './ZoomControls.tsx';
 
 export function HelpDialog({
@@ -40,6 +41,7 @@ export function HelpDialog({
   // Viewport = `.overlay` (`ref`) itself - see useContentZoom.ts. No
   // resetKey: this dialog's content never changes under a given instance.
   const contentZoom = useContentZoom(ref);
+  const scrimDismiss = useScrimDismiss(onClose);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -80,7 +82,7 @@ export function HelpDialog({
   }, [onClose]);
 
   return (
-    <div className="overlay-scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay-scrim" {...scrimDismiss}>
       <div
         className="overlay help-overlay"
         ref={ref}
