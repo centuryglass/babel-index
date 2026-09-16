@@ -108,17 +108,15 @@ code and the git log are the record of what was.
   only once WebGL has real production mileage and nothing has needed the hatch.
 
 ## Shareable permalinks:
-- **[2026-09-16] Room permalinks already exist and are unused.**
-  `packages/server/app.ts`'s `/catalog/:file` route (`catalogPage.ts`'s
-  `renderRoomPage`) already SSRs a stable, filename-keyed permalink with a
-  real title/description/OG image, and `main.tsx`'s `window.__INITIAL_ROUTE__`
-  already boots a JS-capable visitor straight into the catalog with that
-  room's overlay open. Nothing in the map UI surfaces this URL: a reader who
-  right-clicks/long-presses a room to open `RoomOverlay` has no way to copy a
-  link to it. Add a copy-link/share affordance to `RoomOverlay`/`RoomDetails`
-  that builds `{origin}{base}catalog/{encodeURIComponent(file)}` (mirroring
-  `canonicalPath` in `app.ts`'s `/catalog/:file` handler) and copies it - no
-  server change needed, the permalink infrastructure is already live.
+- **[2026-09-16, done] Room permalinks already existed and were unused -**
+  `packages/server/app.ts`'s `/catalog/:file` route SSRs a stable,
+  filename-keyed permalink, and `main.tsx`'s `window.__INITIAL_ROUTE__`
+  already booted a JS-capable visitor into it, but `RoomOverlay` had no way
+  to reach the link. Fixed: a `.share-button` pinned to the paper page's own
+  bottom-right corner (`RoomOverlay.tsx`'s `ShareButton`, `style.css`'s
+  `.share-button`), building the same url `app.ts`'s `canonicalPath` does and
+  copying it to the clipboard. Collapses to icon-only under 600px, same
+  breakpoint the head's "view" link already used.
 - **[2026-09-16] Add `/help` and `/about` as one-shot SSR-linkable routes,
   same pattern as `/catalog`.** Two more `app.get` routes in `app.ts`,
   each calling `renderPage` with a minimal `bodyHtml` (not full SSR content
