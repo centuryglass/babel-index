@@ -107,6 +107,38 @@ code and the git log are the record of what was.
   `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
   only once WebGL has real production mileage and nothing has needed the hatch.
 
+## Shareable permalinks:
+- **[2026-09-16] Room permalinks already exist and are unused.**
+  `packages/server/app.ts`'s `/catalog/:file` route (`catalogPage.ts`'s
+  `renderRoomPage`) already SSRs a stable, filename-keyed permalink with a
+  real title/description/OG image, and `main.tsx`'s `window.__INITIAL_ROUTE__`
+  already boots a JS-capable visitor straight into the catalog with that
+  room's overlay open. Nothing in the map UI surfaces this URL: a reader who
+  right-clicks/long-presses a room to open `RoomOverlay` has no way to copy a
+  link to it. Add a copy-link/share affordance to `RoomOverlay`/`RoomDetails`
+  that builds `{origin}{base}catalog/{encodeURIComponent(file)}` (mirroring
+  `canonicalPath` in `app.ts`'s `/catalog/:file` handler) and copies it - no
+  server change needed, the permalink infrastructure is already live.
+- **[2026-09-16] Add `/help` and `/about` as one-shot SSR-linkable routes,
+  same pattern as `/catalog`.** Two more `app.get` routes in `app.ts`,
+  each calling `renderPage` with a minimal `bodyHtml` (not full SSR content
+  like the catalog list - just enough for a no-JS visitor/crawler) and an
+  `initialRoute` value (`{ mode: 'help' }` / `{ mode: 'about' }`). Extend
+  `window.__INITIAL_ROUTE__`'s type in `main.tsx` and open `HelpDialog` /
+  `ArtistStatementOverlay` on mount when present, the same one-shot read
+  `INITIAL_ROUTE` already does for catalog - no live path sync while the
+  dialog is open, no back/forward handling, no router library. Motivation:
+  sharing a link straight to the help page or the artist's statement without
+  having to explain how to find them from `/`.
+  - `/about`'s `ArtistStatementOverlay` links onward to `BabelBookOverlay`
+    (a randomly generated "equivalent code" easter egg, stacked over the
+    statement). Decided: add a small `/babel-book` (or similar) endpoint that
+    serves the generated text directly rather than dropping the link, and add
+    it to `robots.txt` (`packages/server/seo.ts`) as disallowed - it's
+    infinite/generated content, not worth a crawler's time or an index entry.
+    Bundle this with the `/about` work above since it's the one piece of that
+    route with a real decision to make; the rest is mechanical.
+
 ## Rearrangement / camera:
 - **[2026-09-14] Root-caused and fixed: the "second rearrangement cycle" was
   never real - it was `map-gestures.e2e.ts`'s own `a search reorders the
