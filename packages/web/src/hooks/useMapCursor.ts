@@ -407,9 +407,15 @@ export function useMapCursor({
 }
 
 /**
- * `?`'s sentence: where you are, the nearest ranked room each way, and how far
- * the edge is. Module scope and pure, so it is one function of its arguments
- * rather than something that reads the hook's closure.
+ * `?`'s sentence: where you are, the nearest ranked room each way, and how
+ * far the edge is. Module scope and pure, so it is one function of its
+ * arguments rather than something that reads the hook's closure. Built over
+ * already-tested primitives (`nextRoom`, `cellDistance`) rather than a new
+ * pure module, and simplified from accessibility-plan.md §4.2a's example:
+ * four cardinal directions via straight-line walks, not eight - a true
+ * diagonal nearest-room search is more geometry than the key needs. On
+ * request rather than on every move, because "verbose by default" is the
+ * classic live-region mistake.
  */
 function describeSurroundings(
   layout: MapLayout,
