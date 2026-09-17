@@ -1,26 +1,20 @@
 /**
- * Spike: the WebGL counterpart of `slide.ts`'s `createSlideRenderer`.
+ * The WebGL counterpart of `slide.ts`'s `createSlideRenderer`.
  *
- * Mirrors `slide.ts`'s own per-cell paint (still field, then each line in
- * motion extended by its travel, then the prefetch ring) using
- * `gl/context.ts`'s quad primitives instead of `CanvasRenderingContext2D`
- * calls. `packages/map/board.ts`/`moves.ts`'s `Board`/`Motion`/`applyMove`
- * are consumed completely unmodified - `createSlideshow`'s `advanceTo()`
- * output feeds this renderer exactly as it feeds `slide.ts`, only the final
- * paint step differs.
+ * Mirrors `slide.ts`'s paint order - still field, then each line in motion
+ * extended by its travel, then the prefetch ring - with `gl/context.ts`'s
+ * quad primitives. `packages/map`'s `Board`/`Motion`/`applyMove` are shared
+ * unmodified: `createSlideshow`'s `advanceTo()` output feeds this renderer
+ * exactly as it feeds `slide.ts`; only the final paint differs. AGENTS.md's
+ * "The WebGL renderer" carries the lockstep rule; `render-parity.parity.ts`
+ * checks it.
  *
- * `GLSlideDrawOpts` is `slide.ts`'s own `SlideDrawOpts` with `ctx:
- * DrawContext` swapped for `gl: GLContext`, and `GLSlideDrawResult` is
- * literally `SlideDrawResult` - same "derive, don't restate" approach as
- * `glRenderer.ts`.
+ * `GLSlideDrawOpts` is `slide.ts`'s `SlideDrawOpts` with `ctx` swapped for
+ * `gl`, and `GLSlideDrawResult` is `SlideDrawResult` - derived, not
+ * restated, the same way `glRenderer.ts` derives its draw shapes.
  *
- * The center tile's chrome - the favorites-sort switch, distill toggle, and
- * clear-history overlay - rides along across the handoff between renderers
- * exactly as `slide.ts`'s own `chrome` block does, using the same
- * `drawFavoriteSwitchGL`/`drawDistillToggleGL`/`drawClearHistoryBookOverlayGL`
- * `glRenderer.ts` draws them with (the center tile never moves, so its chrome
- * needs no motion handling of its own). Spine text is a non-issue here:
- * `slide.ts` draws none during a rearrangement, so neither does this file.
+ * Spine text is not drawn here, because `slide.ts` draws none during a
+ * rearrangement.
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell } from './camera.ts';
@@ -36,7 +30,7 @@ import {
 import { areSpinesLegible } from './center.ts';
 import type { SlideDrawOpts, SlideDrawResult } from './slide.ts';
 
-/** Same cache-id rule as `slide.ts`'s own (unexported) `idFor` - duplicated rather than imported so this file changes nothing about `slide.ts`. */
+/** Mirror of `slide.ts`'s `idFor` - generic faces resolve at the home board cell; see that function's doc. */
 const idFor = (
   value: BoardValue,
   homeMx: number,
@@ -163,22 +157,19 @@ export function createGLSlideRenderer({
           cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, genericIndexAt), level);
 
     if (chrome) {
-      // The center room, which by construction has not moved.
+      // The center tile's controls, drawn for the whole animation - see
+      // `render.ts`'s `drawFavoriteSwitch` doc for why the handoff needs
+      // them. The gates are `slide.ts`'s chrome block's; the legibility
+      // check takes CSS-pixel `cellPxCss`, not the device-pixel `cellPx`
+      // used to draw, so its threshold stays the Canvas2D one - as in
+      // `glRenderer.ts`.
+      //
+      // The center room itself has not moved, by construction.
       const sx = (0 - cam.x) * cellPx.x + wDev / 2;
       const sy = (0 - cam.y) * cellPx.y + hDev / 2;
-      // The favorites-sort switch rides along with the center room across the
-      // handoff between renderers - same gate as `render.ts`'s/`slide.ts`'s
-      // own draw, using CSS-pixel `cellPxCss` for the legibility check the
-      // same way `glRenderer.ts` does.
       if (favorites && areSpinesLegible({ x: 0, y: 0, w: cellPxCss.x, h: cellPxCss.y }))
         drawFavoriteSwitchGL(gl, cache, textures, sortMode, cellPx, sx, sy);
-      // The distill toggle rides along the same way - independent of
-      // `favorites`, same `undefined` opt-out as `render.ts`'s/`slide.ts`'s
-      // own draw loop.
       if (distillMode !== undefined) drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy, glowTextures);
-      // The "forget searches" book's black spine overlay rides along the same
-      // way - `clearHistoryAvailable` is the caller's reduction, same as
-      // `slide.ts`'s own draw.
       if (clearHistoryAvailable) drawClearHistoryBookOverlayGL(gl, cache, textures, cellPx, sx, sy);
     }
 

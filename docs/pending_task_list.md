@@ -243,6 +243,23 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   task's only previous home was a "plan §8" citation in AGENTS.md - a
   section of the deleted catalog-plan.md - until the 2026-09-17 AGENTS.md
   pass moved it here.
+- **[2026-09-17] `useMapRendererGL.ts` restates the warm-timeout duration
+  locally.** `DEFAULT_WARM_TIMEOUT_MS` (1200) covers a caller that omits
+  `warmTimeoutMs`, but the only production caller always passes
+  `config.slide.prepareTimeoutMs` (default 5000) - so the constant is a second
+  statement of a by-feel number, already diverged from config's own default,
+  against AGENTS.md's "Consuming files state no fallback defaults". Fix
+  either way: require the parameter, or source the fallback from config.
+  Found by the 2026-09-17 renderer-cluster comment pass, which left the code
+  alone and corrected only the comment around it.
+- **[2026-09-17] Two hover golds.** `.center-book.hover` (`style.css`) fills
+  with `--accent-rgb` (196,150,84), while the canvas-side hover glows -
+  `center.ts`'s `HOVER_GLOW_FILL`/`_STROKE`, `render.ts`'s
+  `FAVORITE_HOVER_GLOW_FILL`/`_STROKE`, `gl/glowTexture.ts`'s bake - are
+  rgba(200,169,95). A `center.ts` comment claimed the DOM and canvas
+  treatments were the "same gold"; they are not, and the 2026-09-17
+  renderer-cluster pass corrected the claim. Whether the open book and the
+  shelf/badge/toggle hovers should carry one gold is an art decision.
 
 ## Shareable permalinks:
 - **[2026-09-16, done] Room permalinks already existed and were unused -**

@@ -271,7 +271,8 @@ home early — see §6 for the rationale:
 2. `packages/config` — one file (`config.ts`) is the single densest comment
    block in the repo (480 comment lines); give it its own pass.
 3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
-   `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks.
+   `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks
+   + their paired tests (done 2026-09-17).
    AGENTS.md's WebGL lockstep rule means their comments describe the same
    per-frame decisions twice — dedup across them, don't let one file's wording
    drift from its twin's.
@@ -282,17 +283,20 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **27 / 107 source files** (`main.tsx`, `illusion.ts`,
+Progress so far: **33 / 107 source files** (`main.tsx`, `illusion.ts`,
 `board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, `packages/map`'s search half
-(`ordering.ts`, `scoring.ts`, `searchResult.ts`), plus all 14 of
-`packages/server` and all four of `packages/pipeline` — server and pipeline
-taken out of order on 2026-09-17, in parallel across checkouts, server's
-alongside batches 2–3), plus 19 paired tests (`illusion.test.ts`,
-`board.test.ts`, `nextRoom.test.ts`, `ordering.test.ts`, `scoring.test.ts`,
-server's 12, and the two pipeline tests) — all ticked in the list below. The
-running checklist is the source of truth; tick boxes as you go. Order is a
-deduping aid within a cluster, not a rule between clusters, so a batch can be
-taken from any package no other checkout is in.
+(`ordering.ts`, `scoring.ts`, `searchResult.ts`), all 14 of `packages/server`
+and all four of `packages/pipeline`, and the renderer cluster (`render.ts`,
+`slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`, `useMapRenderer.ts`,
+`useMapRendererGL.ts`) — server, pipeline and the renderer cluster taken out
+of order on 2026-09-17, in parallel across checkouts, server's alongside
+batches 2–3), plus 23 paired tests (`illusion.test.ts`, `board.test.ts`,
+`nextRoom.test.ts`, `ordering.test.ts`, `scoring.test.ts`, server's 12, the
+two pipeline tests, `slide.test.ts`, and the three renderer tests reviewed
+with no edits needed) — all ticked in the list below. The running checklist
+is the source of truth; tick boxes as you go. Order is a deduping aid within
+a cluster, not a rule between clusters, so a batch can be taken from any
+package no other checkout is in.
 
 ### Source files and their tests
 
@@ -383,8 +387,8 @@ taken from any package no other checkout is in.
 - [ ] packages/web/src/hooks/useFavorites.ts  — no unit test
 - [ ] packages/web/src/hooks/useMapCamera.ts  — no unit test
 - [ ] packages/web/src/hooks/useMapCursor.ts  — no unit test (partial: `describeSurroundings` doc was rewritten in the main.tsx pass; rest not yet reviewed)
-- [ ] packages/web/src/hooks/useMapRenderer.ts  — no unit test
-- [ ] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
+- [x] packages/web/src/hooks/useMapRenderer.ts  — no unit test
+- [x] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
 - [ ] packages/web/src/hooks/useModeTransition.ts  — no unit test
 - [ ] packages/web/src/hooks/useRearrangement.ts  — no unit test
 - [ ] packages/web/src/hooks/useSearch.ts  — no unit test
@@ -411,10 +415,10 @@ taken from any package no other checkout is in.
 - [ ] packages/web/src/lib/gl/spineTexture.ts  — no unit test
 - [ ] packages/web/src/lib/gl/textureCache.ts  — no unit test
 - [ ] packages/web/src/lib/gl/warm.ts  — no unit test
-- [ ] packages/web/src/lib/glRenderer.ts
-  - [ ] packages/web/src/lib/glRenderer.test.ts
-- [ ] packages/web/src/lib/glSlideRenderer.ts
-  - [ ] packages/web/src/lib/glSlideRenderer.test.ts
+- [x] packages/web/src/lib/glRenderer.ts
+  - [x] packages/web/src/lib/glRenderer.test.ts  (reviewed; no edits needed)
+- [x] packages/web/src/lib/glSlideRenderer.ts
+  - [x] packages/web/src/lib/glSlideRenderer.test.ts  (reviewed; no edits needed)
 - [ ] packages/web/src/lib/loadingAnimation.ts
   - [ ] packages/web/src/lib/loadingAnimation.test.ts
 - [ ] packages/web/src/lib/perfProbe.ts
@@ -425,12 +429,12 @@ taken from any package no other checkout is in.
   - [ ] packages/web/src/lib/picking.test.ts
 - [ ] packages/web/src/lib/pyramid.ts
   - [ ] packages/web/src/lib/pyramid.test.ts
-- [ ] packages/web/src/lib/render.ts
-  - [ ] packages/web/src/lib/render.test.ts
+- [x] packages/web/src/lib/render.ts
+  - [x] packages/web/src/lib/render.test.ts  (reviewed; no edits needed)
 - [ ] packages/web/src/lib/rooms.ts
   - [ ] packages/web/src/lib/rooms.test.ts
-- [ ] packages/web/src/lib/slide.ts
-  - [ ] packages/web/src/lib/slide.test.ts
+- [x] packages/web/src/lib/slide.ts
+  - [x] packages/web/src/lib/slide.test.ts
 - [ ] packages/web/src/lib/spineFont.ts  — no unit test
 - [ ] packages/web/src/lib/svgPath.ts
   - [ ] packages/web/src/lib/svgPath.test.ts

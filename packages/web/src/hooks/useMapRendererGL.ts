@@ -1,30 +1,27 @@
 /**
  * The WebGL counterpart of `useMapRenderer.ts` - see AGENTS.md's "The WebGL
- * renderer" for the standing invariants this file exists to
- * uphold, in particular: GL setup happens exactly ONCE per canvas element's
- * lifetime, never per-frame or per-prop-change.
+ * renderer" for the standing invariants this file exists to uphold.
  *
- * Two effects, not one, and that split is the whole point:
+ * Two effects, not one:
  *
  *   - The canvas-lifetime effect (deps `[canvasRef, cache]` only) creates the
- *     GL context, the two renderers, and every pointer/resize/context-loss
- *     listener EXACTLY ONCE per real canvas mount (or after a lost context
- *     restores). `cache` is included because a genuinely new `TileCache`
- *     (a reloaded corpus) really does need a fresh GL runtime bound to it -
- *     unlike `layout`/`order`/`favorites`/etc., which change on almost every
- *     search or toggle and must NOT tear this down.
- *   - Everything that legitimately changes often is read through `latestRef`,
- *     assigned during the render body itself (not inside an effect) so it is
- *     always current before any effect runs this render, regardless of
- *     effect declaration order. A second, tiny effect exists only to call
- *     `draw.current()` when one of those values actually changes - the
- *     redraw trigger a full effect-rebuild used to provide for free.
+ *     GL context, the two renderers and every listener once per real canvas
+ *     mount, or again after a lost context restores. `cache` is a dep because
+ *     a genuinely new `TileCache` (a reloaded corpus) does need a fresh GL
+ *     runtime bound to it; `layout`/`order`/`favorites` and the like change
+ *     on almost every search or toggle and must not tear this down.
+ *   - Everything that legitimately changes often is read through
+ *     `latestRef`, assigned during the render body (not inside an effect) so
+ *     it is current before any effect runs, regardless of declaration order.
+ *     The second, tiny effect exists only to call `draw.current()` when one
+ *     of those values changes - the redraw trigger a full effect-rebuild
+ *     used to provide for free.
  *
  * `main.tsx` hands this hook the real `canvasRef` only when `WEBGL` is on
  * and a dummy always-null ref otherwise (see `webglFlag.ts`), the same way
- * `useMapRenderer` gets the dummy ref when `WEBGL` is on - exactly one of
- * the two ever calls `getContext` on the real canvas element, since a
- * canvas can only ever hand out one context type.
+ * `useMapRenderer.ts` gets the dummy when `WEBGL` is on. A canvas hands out
+ * one context type, its first, so exactly one of the two may call
+ * `getContext` on the real element.
  */
 import { useEffect, useRef } from 'react';
 import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
@@ -48,8 +45,10 @@ import type { RunningAnim } from './useMapRenderer.ts';
 import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
 
+/** Coarse-pointer hit padding, same check and reason as `useMapRenderer.ts`'s `COARSE_POINTER`. */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+/** Same shape as `useMapRenderer.ts`'s `CentreOverlay` - `main.tsx` builds one and passes it to both hooks. */
 interface CentreOverlay {
   cellRect: { x: number; y: number; w: number; h: number };
   box: { x: number; y: number; w: number; h: number };
@@ -82,12 +81,11 @@ interface UseMapRendererGLOpts {
   distillMode?: boolean;
   distillTooltipRef?: { current: HTMLElement | null };
   /**
-   * Assigned by this hook (mirroring `draw`'s own "caller owns the ref, hook
-   * fills it in" shape) to a function that uploads the given tiles' textures
-   * ahead of a rearrangement's flight - see `gl/warm.ts`. `main.tsx` wires
-   * this ref into `useRearrangement`'s `onPreparing` callback. A no-op until
-   * the GL runtime exists (or after it's lost), same as `draw` before this
-   * hook's effect has run.
+   * Assigned by this hook (the caller owns the ref, the hook fills it in, as
+   * with `draw`) to a function that uploads the given tiles' textures ahead
+   * of a rearrangement's flight (`gl/warm.ts`); `main.tsx` wires it into
+   * `useRearrangement.ts`'s `onPreparing`. A no-op while the GL runtime does
+   * not exist - before the effect runs, or after a context loss.
    */
   warmTexturesRef?: { current: (ids: ReadonlySet<number>, level: number) => void };
   /** Budget for `gl/warm.ts`'s polling loop - `config.slide.prepareTimeoutMs` in practice, matching `prepareRearrangement`'s own budget. */
@@ -96,7 +94,7 @@ interface UseMapRendererGLOpts {
   loadingAnim?: { current: LoadingAnimation | null };
 }
 
-/** Everything `render()`/the pointer handlers need that legitimately changes on almost every search or toggle - see this file's doc. */
+/** What `render()` and the pointer handlers read that changes on almost every search or toggle - see this file's doc for the `latestRef` arrangement. */
 interface Latest {
   mode: string;
   layout: MapLayout;
@@ -110,7 +108,7 @@ interface Latest {
   distillMode: boolean;
 }
 
-/** Fallback when the caller (a test, or a build predating Phase C) doesn't pass `warmTimeoutMs`. */
+/** Used when the caller omits `warmTimeoutMs`; the app always passes `config.slide.prepareTimeoutMs`. */
 const DEFAULT_WARM_TIMEOUT_MS = 1200;
 
 export function useMapRendererGL({
@@ -120,9 +118,9 @@ export function useMapRendererGL({
   genericFade, distillMode = false, distillTooltipRef, warmTexturesRef,
   warmTimeoutMs = DEFAULT_WARM_TIMEOUT_MS, loadingAnim,
 }: UseMapRendererGLOpts) {
-  // Assigned during the render body, not inside an effect - always correct
-  // before EITHER effect below runs this render, regardless of which is
-  // declared first. See this file's doc.
+  // Assigned during the render body, not inside an effect, so it is current
+  // before either effect runs - whatever their declaration order. See this
+  // file's doc.
   const latestRef = useRef<Latest>({
     mode, layout, order, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites, sortMode, distillMode,
@@ -132,8 +130,8 @@ export function useMapRendererGL({
     favorites, sortMode, distillMode,
   };
 
-  // The redraw trigger a full effect-rebuild used to provide for free -
-  // nothing here touches GL.
+  // Nothing here touches GL, so re-running on frequent values is cheap; this
+  // effect is the redraw trigger described in this file's doc.
   useEffect(() => {
     draw.current();
   }, [
@@ -163,9 +161,9 @@ export function useMapRendererGL({
     let hoveredBook: number | null = null;
     let hoveredFavorite: { x: number; y: number } | null = null;
     let hoveredDistill = false;
-    // Gates the cursor ring (`glRenderer.ts`) - same `:focus-visible` tracking
-    // as `useMapRenderer.ts`'s own, duplicated rather than shared since each
-    // hook owns its own canvas-lifetime effect and listener set.
+    // Gates the cursor ring (`glRenderer.ts`). Same `:focus-visible` tracking
+    // as `useMapRenderer.ts`, duplicated because each hook owns its own
+    // canvas-lifetime effect and listener set.
     let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
     const render = () => {
@@ -326,7 +324,8 @@ export function useMapRendererGL({
     canvas.addEventListener('pointerdown', onDown);
 
     // Same focus/blur handling as `useMapRenderer.ts`'s own cursor-ring gate -
-    // see that file's doc for why `:focus-visible` rather than plain `:focus`.
+    // see its `focusVisible` note for why `:focus-visible` rather than plain
+    // `:focus`.
     const onFocus = () => {
       focusVisible = canvas.matches(':focus-visible');
       draw.current();
@@ -438,12 +437,11 @@ export function useMapRendererGL({
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerleave', onLeave);
 
-    // A lost context invalidates every GL object this runtime owns -
+    // A lost context invalidates every GL object this runtime owns, and
     // `preventDefault()` is required or the browser never attempts recovery.
-    // `restored` just re-runs `setup()`, which builds a fresh GL context,
-    // renderers and texture caches from scratch; the old ones are simply
-    // dropped rather than reused; there is nothing worth salvaging from a
-    // runtime whose every handle is already invalid.
+    // On restore, `setup()` builds a fresh context, renderers and texture
+    // caches; the old handles are dropped, not reused - none of them is still
+    // valid.
     const onContextLost = (e: Event) => {
       e.preventDefault();
       runtime = null;
@@ -485,9 +483,10 @@ export function useMapRendererGL({
         runtime.gl.dispose();
       }
     };
-    // `latestRef`/`anim`/`cam`/`genericFade` are refs read fresh every call -
-    // deliberately excluded so this effect stays canvas-lifetime-only. See
-    // this file's doc and AGENTS.md's "The WebGL renderer".
+    // `latestRef`/`anim`/`cam`/`genericFade` are refs, read fresh on every
+    // call, so they stay out of the deps: this effect must remain
+    // canvas-lifetime-only. See this file's doc and AGENTS.md's "The WebGL
+    // renderer".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasRef, cache]);
 }

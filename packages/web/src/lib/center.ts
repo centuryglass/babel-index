@@ -220,10 +220,11 @@ const INK = 'rgba(238,230,214,0.92)';
 const HALO = 'rgba(12,9,6,0.85)';
 /** The hovered book's plate fill, standing in for the halo (see `composeSpines`). */
 const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
-/** The hovered book's glow - same gold as `.center-book.hover` (index.html), painted
- *  across the whole spine BEHIND the backdrop plate rather than as a DOM overlay: the
- *  DOM sits above the canvas in paint order, so a CSS glow there would wash out over
- *  the composited title instead of sitting behind it. */
+/** The hovered book's glow - same gold as the badge/toggle hover glows
+ *  (`render.ts`'s `FAVORITE_HOVER_GLOW_FILL`/`_STROKE`), painted across the
+ *  whole spine behind the backdrop plate rather than as a DOM overlay: the
+ *  DOM sits above the canvas in paint order, so a CSS glow there would wash
+ *  out over the composited title instead of sitting behind it. */
 const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
 const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
@@ -629,8 +630,9 @@ export interface SpineContext extends DrawContext {
   lineTo(x: number, y: number): void;
   stroke(): void;
   // The hovered book's backdrop plate (see `composeSpines`) - a rounded rect
-  // behind the title instead of a stroked halo, so the CSS hover glow behind
-  // it (`.center-books button.hover`, index.html) never washes out the text.
+  // filled under the title, standing in for the usual stroked halo so the
+  // gilt stays legible while the canvas-side hover glow (`HOVER_GLOW_FILL`)
+  // is lit.
   roundRect(x: number, y: number, w: number, h: number, r: number): void;
   fill(): void;
 }

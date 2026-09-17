@@ -1,39 +1,25 @@
 /**
- * Spike: the WebGL counterpart of `render.ts`'s `createRenderer`.
+ * The WebGL counterpart of `render.ts`'s `createRenderer`.
  *
- * Mirrors `render.ts`'s per-cell loop (blank fallback -> tile draw -> generic
- * fade, then the prefetch ring and coarser-level warm pass) using
- * `gl/context.ts`'s quad primitives instead of `CanvasRenderingContext2D`
- * calls, and the same `TileCache`/`pyramid.ts` this file's Canvas2D twin
- * uses unmodified. One draw call per cell for this first cut - see the
- * plan's "Draw strategy", no instancing yet.
+ * Mirrors `render.ts`'s per-cell loop (blank fallback, tile draw, generic
+ * fade, then the prefetch ring and coarser-level warm pass) with
+ * `gl/context.ts`'s quad primitives in place of `CanvasRenderingContext2D`
+ * calls, and the same `TileCache`/`pyramid.ts` policy: one draw call per
+ * cell, no instancing. AGENTS.md's "The WebGL renderer" carries the lockstep
+ * rule for the two loops; `render-parity.parity.ts` checks the result.
  *
- * `GLDrawOpts` is `render.ts`'s own `DrawOpts` with `ctx: DrawContext`
- * swapped for `gl: GLContext` - imported and derived rather than restated,
- * so a change to `DrawOpts`'s shape is picked up here too. `GLDrawResult` is
- * literally `render.ts`'s `DrawResult` - the two draw loops report the same
- * shape of outcome, so `useMapRendererGL.ts`'s HUD text can read either one
- * the same way `useMapRenderer.ts` already does.
- *
- * The favorite badge is a textured quad via the same texture cache, keyed by
- * `FAV_ON`/`FAV_OFF` exactly as `tiles.ts` already resolves them - see
- * `drawFavoriteBadgeGL` below. Its hover highlight is `render.ts`'s own
- * traced silhouette (`FAVORITE_TOGGLE_PATH`), baked once to a GL texture by
- * `gl/glowTexture.ts` rather than re-traced every frame - see that file's
- * doc for why a bake works regardless of a tile's own pixel size.
- *
- * The center tile's spine text is a separately-cached texture
- * (`gl/spineTexture.ts`, re-rendering `composeSpines` onto an offscreen 2D
- * canvas only when its content/hover/size key changes) drawn as one quad
- * over the center cell.
+ * Hover glows for the favorite badge and the distill toggle are not
+ * re-traced per frame: `gl/glowTexture.ts` bakes the traced silhouette to a
+ * texture, keyed by path string, because the shape never changes. The center
+ * tile's spine text follows the same offscreen-2D-then-texture route
+ * (`gl/spineTexture.ts`), re-rendering `composeSpines` only when its
+ * content/hover/size key changes.
  *
  * The favorites-sort switch, distill toggle, clear-history overlay and
- * keyboard-cursor ring are the same technique: a textured quad per
- * icon (`drawFavoriteSwitchGL`/`drawDistillToggleGL`/
- * `drawClearHistoryBookOverlayGL`, exported so `glSlideRenderer.ts` can draw
- * them on the center tile's ride across the handoff too) or, for the
- * cursor, `gl/context.ts`'s `drawStrokeQuad`. The distill toggle's hover
- * highlight is the same baked-silhouette treatment as the favorite badge's.
+ * keyboard-cursor ring are textured quads of the same corner art
+ * (`drawFavoriteSwitchGL`/`drawDistillToggleGL`/
+ * `drawClearHistoryBookOverlayGL`, exported for `glSlideRenderer.ts`) and,
+ * for the cursor, `gl/context.ts`'s `drawStrokeQuad`.
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
@@ -54,16 +40,16 @@ import type { DrawOpts, DrawResult } from './render.ts';
 import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
-/** Same cache-id rule as `render.ts`'s own (unexported) `idOf` - duplicated rather than imported so this file changes nothing about `render.ts`. */
+/** Same rule as `render.ts`'s `idOf`; the twins mirror each other rather than share an abstraction - see AGENTS.md's "The WebGL renderer". */
 const idOf = (cell: RoomAtResult, layout: MapLayout, gx: number, gy: number): RoomId =>
   cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
 
 export interface CreateGLRendererOpts {
   cache: TileCache;
   pyramid?: Pyramid;
-  /** Shared across `glRenderer.ts`/`glSlideRenderer.ts` so a tile decoded for one is already resident for the other. */
+  /** Shared with `glSlideRenderer.ts` so a tile decoded for one renderer is already resident for the other across the handoff. */
   textures?: GLTextureCache;
-  /** Shared with `glSlideRenderer.ts`, same reason as `textures` - the distill toggle's hover glow rides along across the handoff too. */
+  /** Shared with `glSlideRenderer.ts`, same reason as `textures` - the toggle glows must survive the handoff too. */
   glowTextures?: GlowTextureCache;
 }
 
@@ -77,20 +63,20 @@ const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255
 /** `#15120f`, `render.ts`'s blank-cell fallback fill, as float RGB. */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 /**
- * `render.ts`'s `FAVORITE_HOVER_GLOW_FILL`, as a flat quad - the fallback
- * used only when `gl/glowTexture.ts` has no offscreen canvas to bake with
- * (e.g. `npm test`'s Node environment, which never exercises a hover state
- * anyway); the real hover treatment is `drawGlow` below.
+ * `render.ts`'s `FAVORITE_HOVER_GLOW_FILL`, as a flat quad. Used only when
+ * `gl/glowTexture.ts` has no offscreen canvas to bake with - a headless
+ * environment such as `npm test`, which never exercises a hover state
+ * anyway. The real treatment is `drawGlow`'s textured case.
  */
 const FAVORITE_HOVER_GLOW: [number, number, number, number] = [200 / 255, 169 / 255, 95 / 255, 0.28];
 
 /**
- * Composite a hover-glow silhouette over a tile's full screen rect - `d`'s
- * coordinates are fractions of the WHOLE tile (see `gl/glowTexture.ts`'s
- * doc), so unlike every other textured quad in this file the destination is
- * `{sx, sy, cellPx.x, cellPx.y}`, not an icon's own smaller rect. Falls back
- * to the old flat-rect approximation over `fallbackRect` when no bake is
- * available, so a headless test environment still draws something.
+ * Composite a hover-glow silhouette over a tile's full screen rect. `d`'s
+ * coordinates are fractions of the whole tile (`gl/glowTexture.ts`), so the
+ * destination is the cell rect, not an icon's own smaller rect - the one
+ * exception to this file's usual textured quads. With no bake available it
+ * falls back to the flat `FAVORITE_HOVER_GLOW` quad over `fallbackRect`, so
+ * a headless environment still draws something.
  */
 function drawGlow(
   gl: GLContext,
@@ -113,13 +99,11 @@ function drawGlow(
 const CURSOR_STROKE: [number, number, number, number] = [232 / 255, 224 / 255, 210 / 255, 1];
 
 /**
- * `render.ts`'s `drawGenericFade`, GL twin: the generic tile's paired distill
- * alternate, drawn as a textured quad at `fade` alpha over the base tile
- * already drawn beneath it - a real crossfade, not a flat overlay. Falls back
- * to a flat black quad when the alternate has no resident texture yet (or,
- * per `genericDistillId`'s doc, does not exist for this index), same "rule 1
- * does not apply here" fallback `drawFavoriteBadgeGL` uses. Shared with
- * `glSlideRenderer.ts` so a generic tile mid-slide gets the same treatment.
+ * GL twin of `render.ts`'s `drawGenericFade`: the distill alternate as a
+ * textured quad at `fade` alpha over the base tile, flat black quad when the
+ * alternate has no resident texture yet - see `render.ts`'s `drawGenericFade`
+ * for the full rule, including when no alternate exists at all. Shared with
+ * `glSlideRenderer.ts`.
  */
 export function drawGenericFadeGL(
   gl: GLContext,
@@ -142,11 +126,11 @@ export function drawGenericFadeGL(
 }
 
 /**
- * The favorite badge, if its art has landed - same "rule 1 does not apply
- * here" as `render.ts`'s own `drawFavoriteBadge`: a badge with no resident
- * texture yet simply does not draw.
+ * GL twin of `render.ts`'s `drawFavoriteBadge`: rule 1 does not apply, a
+ * badge with no resident texture yet draws nothing. The hover glow is the
+ * baked silhouette (`gl/glowTexture.ts`). Shared with `glSlideRenderer.ts`
+ * so the badge rides along with sliding tiles.
  */
-/** Shared with `glSlideRenderer.ts` - the badge rides along with a sliding tile exactly as `render.ts`'s `drawFavoriteBadge` does with `slide.ts`. */
 export function drawFavoriteBadgeGL(
   gl: GLContext,
   cache: TileCache,
@@ -171,13 +155,10 @@ export function drawFavoriteBadgeGL(
 }
 
 /**
- * The favorites-sort switch on the center tile: the base plate, always drawn
- * once favorites are enabled, plus whichever "on" face matches the active
- * sort - mirrors `render.ts`'s `drawFavoriteSwitch`, one textured quad per
- * piece rather than a shared rect (see that function's doc for why the three
- * pieces aren't forced into one size). Shared with `glSlideRenderer.ts` -
- * the center tile is the rearrangement's fixed tile, so the switch must keep
- * drawing across the handoff between renderers.
+ * The favorites-sort switch as a textured quad per piece - mirrors
+ * `render.ts`'s `drawFavoriteSwitch`; see that function's doc for why each
+ * piece sizes itself from its own art. Shared with `glSlideRenderer.ts` so
+ * the center tile's controls survive the handoff.
  */
 export function drawFavoriteSwitchGL(
   gl: GLContext,
@@ -206,8 +187,8 @@ export function drawFavoriteSwitchGL(
 
 /**
  * The center tile's distill toggle - mirrors `render.ts`'s
- * `drawDistillToggle`, same flat-rect hover approximation as
- * `drawFavoriteBadgeGL` (see this file's doc). Shared with
+ * `drawDistillToggle`, with the hover glow baked per silhouette
+ * (`gl/glowTexture.ts`) instead of re-traced. Shared with
  * `glSlideRenderer.ts`, same reason as `drawFavoriteSwitchGL`.
  */
 export function drawDistillToggleGL(
@@ -280,10 +261,10 @@ export function createGLRenderer({
     gl.clear(BACKGROUND[0], BACKGROUND[1], BACKGROUND[2], 1);
 
     const { x: cx, y: cy, zoom } = cam;
-    // Device pixels throughout - unlike `render.ts`'s `ctx.setTransform(dpr,
-    // ...)` trick, there is no implicit pixel-ratio scale here, so every rect
-    // handed to a draw call is already in the units `gl.resize()`'s viewport
-    // uses.
+    // Device pixels throughout - unlike `render.ts`, which sets
+    // `ctx.setTransform(dpr, ...)` and works in css pixels, there is no
+    // implicit pixel-ratio scale here, so every rect handed to a draw call is
+    // already in the units `gl.resize()`'s viewport uses.
     const cellPxCss = pxPerCell(cam);
     const cellPx = { x: cellPxCss.x * dpr, y: cellPxCss.y * dpr };
     const wDev = w * dpr;
@@ -299,6 +280,7 @@ export function createGLRenderer({
 
     const toScreen = (wx: number, wy: number): [number, number] =>
       [(wx - cx) * cellPx.x + wDev / 2, (wy - cy) * cellPx.y + hDev / 2];
+    // The hairline-gap pad `render.ts` applies as `+1`, in device pixels.
     const cw = cellPx.x + dpr;
     const ch = cellPx.y + dpr;
 
@@ -405,11 +387,11 @@ export function createGLRenderer({
     for (const coarser of pyramid.warmLevels(level))
       for (const id of visible) cache.prefetch(id, coarser);
 
-    // The keyboard cursor's ring - drawn LAST, over everything, same gate as
-    // `render.ts`'s own draw. `drawStrokeQuad` strokes inside the given rect
-    // rather than centering on its path like `strokeRect` does, so this is a
-    // visual approximation of `render.ts`'s inset+lineWidth combination, not
-    // a pixel-identical stroke.
+    // The keyboard cursor's ring - drawn last, over everything, same gate as
+    // `render.ts`. `drawStrokeQuad` strokes inside the given rect rather than
+    // centering on its path like `strokeRect`, so this approximates
+    // `render.ts`'s inset+lineWidth combination rather than matching it
+    // pixel-for-pixel.
     const cells = (bounds.x1 - bounds.x0 + 1) * (bounds.y1 - bounds.y0 + 1);
     if (cursor && cursor.x >= bounds.x0 && cursor.x <= bounds.x1
       && cursor.y >= bounds.y0 && cursor.y <= bounds.y1) {
