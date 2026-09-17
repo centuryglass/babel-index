@@ -5,29 +5,28 @@
     <!--
       No `maximum-scale` and no `user-scalable=no`. Blocking page zoom is a
       WCAG 1.4.4 failure and it locks out exactly the low-vision readers this
-      map is hardest on. Those attributes were here to stop iOS treating a
-      two-finger map pinch as a page zoom, but that job is actually done by
-      `touch-action: none`, set all the way up the tree below - the browser
-      decides at touch-start from the computed touch-action of the hit element
-      AND its ancestors, so nothing is left claimable. Worth re-checking on a
-      real device alongside the in-tile search field (plan §7 item 11); a
-      simulator does not settle iOS gesture arbitration.
+      map is hardest on. These attributes prevent iOS treating a two-finger
+      map pinch as page zoom, but that job is done by `touch-action: none`,
+      set all the way up the tree below - the browser decides at touch-start
+      from the computed touch-action of the hit element AND its ancestors, so
+      nothing is left claimable. Worth re-checking on a real device alongside
+      the in-tile search field; a simulator does not settle iOS gesture
+      arbitration.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>%%TITLE%%</title>
     <meta name="description" content="%%DESCRIPTION%%" />
     <!-- Every href below is relative so a subpath deployment resolves it
-         under <base href> instead of the browser's own-origin guess, which
-         the reverse-proxied prefix never sees - see base-path.ts. The og:*/
+         under <base href> instead of the browser's origin guess, which the
+         reverse-proxied prefix never sees - see base-path.ts. The og:*/
          twitter:* content urls are the one exception: link unfurlers parse
          this HTML without ever seeing <base href>, so app.ts's renderPage
-         fills the canonical-url and og-image placeholders in below with an
-         absolute url per request, naming the PAGE BEING SERVED rather than
-         always the site root - a /catalog/<file> permalink gets its own
-         canonical url and its own og:image (the room's own picture).
-         NOTE: don't spell either placeholder's own name inside this comment
-         (the way the two tags below do) - renderPage's substitution is a
-         global replace and would rewrite this prose too. -->
+         fills the canonical-url and og-image placeholders below with an
+         absolute url per request, naming the page being served rather than
+         the site root - a /catalog/<file> permalink gets its own canonical
+         url and its own og:image (the room's own picture). Note that
+         renderPage substitutes both placeholder names globally - spelling
+         either inside this comment would rewrite this prose too. -->
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
@@ -46,15 +45,15 @@
   </head>
   <body>
     <!-- The body placeholder below is real, crawlable content for the
-         catalog/room routes (app.ts's renderPage) - empty on every other
-         route, unchanged from before this existed. It lives INSIDE #root
-         because bundle.js's `createRoot(rootEl).render(<App />)` (main.tsx)
-         takes ownership of this container on its first commit either way;
-         putting the SSR markup here means a visitor sees real content
-         immediately, then the interactive app in its place once JS runs,
-         rather than a blank frame first. This is not hydration - there's no
-         attempt to reuse this markup's DOM nodes, only to not leave the
-         container empty until JS replaces it. -->
+         catalog/room routes (app.ts's renderPage) - empty on other routes,
+         unchanged from before this existed. It lives inside #root because
+         bundle.js's `createRoot(rootEl).render(<App />)` (main.tsx) takes
+         ownership of this container on its first commit either way - putting
+         the SSR markup here means a visitor sees real content immediately,
+         then the interactive app in its place once JS runs, rather than a
+         blank frame first. This is not hydration - there's no attempt to
+         reuse this markup's DOM nodes, only to not leave the container empty
+         until JS replaces it. -->
     <div id="root">%%SSR_BODY%%</div>
     <!-- The route-script placeholder below is empty except on the
          catalog/room routes - tells main.tsx which mode/room to open on

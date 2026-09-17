@@ -491,8 +491,8 @@ rewritten from copy-paste history into an AGENTS.md pointer; distill mode's
   - [x] packages/server/version.test.ts
 
 #### packages/web
-- [ ] packages/web/index.html  — no unit test, checked by `stripHtml`
-- [ ] packages/web/style.css  — no unit test, checked by `stripCss`
+- [x] packages/web/index.html  — no unit test, checked by `stripHtml`
+- [x] packages/web/style.css  — no unit test, checked by `stripCss`
 - [ ] packages/web/e2e/support.ts  — no unit test
 - [x] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
 - [x] packages/web/src/components/BabelBookOverlay.tsx
