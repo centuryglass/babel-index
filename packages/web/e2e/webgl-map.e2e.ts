@@ -15,11 +15,8 @@
  * `support.ts`'s `fingerprint` needs; whether the two renderers draw the same
  * picture is `render-parity.parity.ts`'s question.
  *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
+ * Not part of `npm test`; how to run the suite is `map-gestures.e2e.ts`'s
+ * header.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';

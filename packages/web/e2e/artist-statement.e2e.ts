@@ -6,11 +6,9 @@
  * it is exactly the kind of thing only a real browser with two live `window`
  * keydown listeners can prove - so it lives here, not in a unit test.
  *
- * See `support.ts` for the shared harness and `accessibility.e2e.ts` for the
- * focus/Escape-restore pattern these follow. Not part of `npm test`; run with:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
+ * See `support.ts` for the shared harness, `map-gestures.e2e.ts` for the
+ * shared header comment on why and how (including how to run the suite), and
+ * `accessibility.e2e.ts` for the focus/Escape-restore pattern these follow.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';

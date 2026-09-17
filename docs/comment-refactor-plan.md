@@ -359,9 +359,8 @@ number that is wrong the moment two passes run at once. `packages/map`,
 cluster, `tools/center-placement`, `tools/embed`, `tools/upload`,
 `tools/perf-capture`, `tools/font-lab`, `packages/web/src/lib/gl` and
 `packages/web/src/lib` (camera, catalog, center) were taken on 2026-09-17 in
-parallel across checkouts, out of the recommended order. `main.tsx` passed first
-and passed again, and stays unticked because fresh changes from another branch
-went in after the second pass. Order is a deduping aid within a cluster, not a
+parallel across checkouts, out of the recommended order. `main.tsx` passed first, and passed again after fresh changes from another
+branch went in (2026-09-17). Order is a deduping aid within a cluster, not a
 rule between clusters, so a batch can be taken from any package no other checkout
 is in.
 
@@ -385,31 +384,30 @@ priced "five hundred" iterations against a `GLIDE_REST_MAX_STEPS` of 20,000. Two
 `MIN_SPINE_PX` either side of 5. The rest went to
 `docs/pending_task_list.md`.
 
-Order 7's e2e fleet went one file early: `webgl-map.e2e.ts` passed on
-2026-09-17 alongside `webglFlag.ts`, and what the pass found but did not touch
-is what the rest of that order owes:
-
-- The run block ("None of the files in this directory are part of `npm
-  test`...") is verbatim in every spec file in `packages/web/e2e/`, and
-  `map-gestures.e2e.ts` is already the file the others cite for "why and how" —
-  that is its one home.
-- Five files say "One of five files split out of the original
-  `smoke.e2e.mjs`": the split is real (cbaa067 deleted the original), the count
-  has moved since, and the `docs/pending_task_list.md` citation beside it has no
-  matching entry left.
-- Four `.js`/`.jsx` citations the TypeScript conversion left behind:
-  `picking.js` (`map-gestures.e2e.ts`), `center.js` (`shelf.e2e.ts`),
-  `debug.js` and `main.jsx` (`support.ts`).
-- Two comments reason from a default that has since flipped:
-  `render-parity.parity.ts` calls itself "the last thing standing between the
-  GL renderer and flipping `DEFAULT_WEBGL`", and `support.ts`'s `openLibrary`
-  doc says "The default there is now WebGL" — both were true of the change that
-  made them, and read as the present tense a reader has to check.
-- Strays the queue should not lose: `catalog.e2e.ts`'s header cites
-  `docs/catalog-plan.md`, a deleted file already filed in
-  `docs/pending_task_list.md`, and three comments promote a word to capitals —
-  `EXPLICITLY` (`support.ts`), `PRIMARY` (`shelf.e2e.ts`), `MERGE GATE`
-  (`map-gestures.e2e.ts`).
+Order 7's e2e fleet went one file early - `webgl-map.e2e.ts` passed on
+2026-09-17 alongside `webglFlag.ts` - and the rest of the order (`support.ts`
+plus the eight remaining specs) went as one batch the same day. All ten
+report comment-only via check.mjs; all 785 tests pass; lint and typecheck
+clean. What it took, on top of the run-block dedup (`map-gestures.e2e.ts`
+is the one home for "how to run the suite"; the other specs point there):
+the "one of five files split out of `smoke.e2e.mjs`" claim went entirely
+with its dead `pending_task_list.md` citation (split-history prose is what
+git history is for), as did the "used to"/"an earlier fix"/"written after
+shipping" provenance throughout; four `.js`/`.jsx` citations were corrected
+(`picking`, `center`, `debug`, `main`); two comments were re-stated around
+`DEFAULT_WEBGL`'s shipped default instead of its flip (`render-parity`'s
+header, `support.ts`'s `openLibrary` doc); `catalog.e2e.ts` lost its
+citation of the deleted `docs/catalog-plan.md` and two unsourceable quotes;
+a "one of the two things that do" count and a "five times as likely" went;
+and roughly forty single-word caps promotions were demoted across the
+fleet. Two comments stated behaviour the code does not have and were
+corrected in place: `render-parity.parity.ts`'s header counted the shared
+tile cache's occupancy among the HUD fields that "must agree", which
+`PARITY_FIELDS` deliberately excludes, and `map-gestures.e2e.ts` said "a
+search no longer recenters" where the code simply does not recenter. Dead
+`accessibility-plan.md` § pointers came out of five files, and the doc's
+own surviving `§4.3`/`§3.7`/`§5` self-references and `render.js` citation
+were fixed in the same pass.
 
 `packages/web/src/hooks/` went on 2026-09-17, out of order and in parallel:
 ten files (useCenterShelf, useContentZoom, useCorpus, useDialog + test,
@@ -472,8 +470,7 @@ title), a dead "the plan" pointer in `bundle.test.ts`, and a `TileHit.sheetUrl`
 doc citing "perfProbe.ts's §2.3" when the § numbering belongs to
 performance-research.md, not that file. `touchDebug.ts`'s "the whole feature
 compiles out" claim was corrected to what the gate actually does: nothing
-renders, and `useMapCamera` is handed no callback. The remaining unticked
-entries are all e2e/parity specs and `support.ts`, which order 7 holds to last.
+renders, and `useMapCamera` is handed no callback.
 
 ### Source files and their tests
 
@@ -544,7 +541,7 @@ entries are all e2e/parity specs and `support.ts`, which order 7 holds to last.
 #### packages/web
 - [x] packages/web/index.html  — no unit test, checked by `stripHtml`
 - [x] packages/web/style.css  — no unit test, checked by `stripCss`
-- [ ] packages/web/e2e/support.ts  — no unit test
+- [x] packages/web/e2e/support.ts  — no unit test
 - [x] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
 - [x] packages/web/src/components/BabelBookOverlay.tsx
   - [x] packages/web/src/components/BabelBookOverlay.test.ts  (reviewed; no edits needed)
@@ -629,14 +626,14 @@ entries are all e2e/parity specs and `support.ts`, which order 7 holds to last.
 - [x] packages/web/src/assets.d.ts  — no unit test (reviewed; no edits needed)
 _Standalone specs/helpers (no same-name source):_
 - [x] packages/web/bundle.test.ts
-- [ ] packages/web/e2e/accessibility.e2e.ts
-- [ ] packages/web/e2e/artist-statement.e2e.ts
-- [ ] packages/web/e2e/catalog.e2e.ts
-- [ ] packages/web/e2e/favorites.e2e.ts
-- [ ] packages/web/e2e/keyboard-cursor.e2e.ts
-- [ ] packages/web/e2e/map-gestures.e2e.ts
-- [ ] packages/web/e2e/render-parity.parity.ts
-- [ ] packages/web/e2e/shelf.e2e.ts
+- [x] packages/web/e2e/accessibility.e2e.ts
+- [x] packages/web/e2e/artist-statement.e2e.ts
+- [x] packages/web/e2e/catalog.e2e.ts
+- [x] packages/web/e2e/favorites.e2e.ts
+- [x] packages/web/e2e/keyboard-cursor.e2e.ts
+- [x] packages/web/e2e/map-gestures.e2e.ts
+- [x] packages/web/e2e/render-parity.parity.ts
+- [x] packages/web/e2e/shelf.e2e.ts
 - [x] packages/web/e2e/webgl-map.e2e.ts
 
 #### tools/center-placement

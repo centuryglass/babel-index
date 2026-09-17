@@ -40,8 +40,8 @@
    any earlier would name a cell the reader is about to be moved off. Under
    reduced motion — or any change that cannot be animated — nothing moves and
    the cursor's cell really does change occupant underneath them, which is
-   §4.3's case exactly. Both paths read the cursor at the same point and need
-   no branch.
+   exactly the case the announced-occupant requirement describes. Both paths
+   read the cursor at the same point and need no branch.
 
    One consequence worth knowing, because it looks like a bug and is not: the
    cursor now moves without a keypress. Two browser tests had quietly relied on
@@ -58,17 +58,17 @@
    field, too long and one press crosses half the library.
 6. ~~**Does the cursor want a visible twin for sighted keyboard users?**~~
    **Landed in Phase C**, with the suggested resolution: the ring in
-   `render.js` draws only once a keyboard action has actually happened, so a
+   `render.ts` draws only once a keyboard action has actually happened, so a
    reader who never touches a key never sees a reticle appended to a page they
    did not ask to look different.
-7. **Whether the dense view and this plan should share any code.** §3.7 defers
-   the dense/linear view as its own subproject and argues it must not be built
-   as an accessibility feature. The thing to watch when it does get built is
-   `describeCell` — it is the one module both would want, and it is the one
-   module that is safe to share, because it names rooms rather than arranging
-   them.
+7. **Whether the dense view and this plan should share any code.** The
+   dense/linear view is deferred as its own subproject, on the argument that
+   it must not be built as an accessibility feature. The thing to watch when
+   it does get built is `describeCell` — it is the one module both would
+   want, and it is the one module that is safe to share, because it names
+   rooms rather than arranging them.
 8. **Does `role="toolbar"` with roving tabindex read well on the shelf?**
-   Phase D chose it over forty tab stops, and the reasoning (§5) is about the
+   Phase D chose it over forty tab stops, and the reasoning is about the
    tab sequence, which is browser-observable. What is not: whether a reader
    announces "toolbar, 40 items" usefully for what is really a 5×8 wall, and
    whether up/down moving by shelf is discoverable without being told. `grid`
