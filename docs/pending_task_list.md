@@ -48,10 +48,10 @@ code and the git log are the record of what was.
   Update [2026-09-17]: the AGENTS.md comment pass took the first half of
   "stop pointing at it by name" - AGENTS.md now calls it "the VPS's
   hand-managed nginx config" and cites `deploy/README.md`, and still quotes
-  the two `location` blocks as what that config must do. The code-comment
-  namings (`index.ts`, `scan.ts`, `base-path.ts`, `app.test.ts`) remain for
-  the queued `packages/server` comment pass, and the commit-or-not decision
-  is still open.
+  the two `location` blocks as what that config must do. The same day's
+  `packages/server` comment pass cleared the code-comment and startup-log
+  namings (`index.ts`, `scan.ts`, `base-path.ts`, `app.test.ts`); the
+  commit-or-not decision is still open.
 - **The CLIP weights cache inside `node_modules`.** transformers.js defaults
   `env.cacheDir` to `node_modules/@huggingface/transformers/.cache`, so any
   `npm ci` throws away a few hundred MB of downloaded model.

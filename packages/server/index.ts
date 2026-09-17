@@ -242,7 +242,7 @@ const server = app.listen(port, () => {
   // Listing them is the difference between "it is exposed" and "it is usable".
   logger.info({ port, addresses: lanAddresses(), watch, commit }, 'the library is open');
   if (basePath !== '/')
-    logger.info({ basePath }, '<base href> is set for a reverse proxy that strips it - see server-nginx.conf');
+    logger.info({ basePath }, '<base href> is set for a reverse proxy that strips it - see deploy/README.md');
   if (favorites) {
     const rooms = Object.keys(favorites.counts()).length;
     logger.info({ favoritesPath, rooms }, 'favorites store loaded');
