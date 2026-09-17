@@ -236,6 +236,16 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   confidence. `embeddings.json` already records `scale` and nothing reads it
   back — carrying it through the manifest removes the constant from the client
   entirely.
+- **[2026-09-17] `app.ts` restates `search.clipTextDtype`'s default.** Line 158
+  reads `clientConfig.search?.clipTextDtype ?? 'fp32'`, but `clientConfig` is a
+  resolved `Config` (`config ?? resolveConfig()`, and `Config.search` and its
+  `clipTextDtype` are both required), so the `?.` is dead and `'fp32'` is a
+  second home for `DEFAULTS.search.clipTextDtype` — against AGENTS.md's
+  "Consuming files state no fallback defaults". Nothing catches it: `tsc` allows
+  `?.` on a non-optional property, and every `app.test.ts` config comes from
+  `resolveConfig`. Found while passing `packages/config/config.ts`, whose
+  `clipTextDtype` doc names this route; dropping the two fallbacks is a code
+  edit, so a comment pass files it rather than fixing it.
 
 ## Rendering:
 - **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
