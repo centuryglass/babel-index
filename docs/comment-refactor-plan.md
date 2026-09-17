@@ -258,7 +258,8 @@ home early — see §6 for the rationale:
 2. `packages/config` — one file (`config.ts`) is the single densest comment
    block in the repo (480 comment lines); give it its own pass.
 3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
-   `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks.
+   `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks
+   + their paired tests (done 2026-09-17).
    AGENTS.md's WebGL lockstep rule means their comments describe the same
    per-frame decisions twice — dedup across them, don't let one file's wording
    drift from its twin's.
@@ -269,10 +270,13 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **6 / 107 source files** (`main.tsx`, `illusion.ts`,
-`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`), plus 3 paired tests
-(`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`) — all ticked in the
-list below. The running checklist is the source of truth; tick boxes as you go.
+Progress so far: **12 / 107 source files** (`main.tsx`, `illusion.ts`,
+`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, plus the renderer cluster:
+`render.ts`, `slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`,
+`useMapRenderer.ts`, `useMapRendererGL.ts`), plus 4 paired tests
+(`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`,
+`slide.test.ts`) — all ticked in the list below. The running checklist is
+the source of truth; tick boxes as you go.
 
 ### Source files and their tests
 
@@ -363,8 +367,8 @@ list below. The running checklist is the source of truth; tick boxes as you go.
 - [ ] packages/web/src/hooks/useFavorites.ts  — no unit test
 - [ ] packages/web/src/hooks/useMapCamera.ts  — no unit test
 - [ ] packages/web/src/hooks/useMapCursor.ts  — no unit test (partial: `describeSurroundings` doc was rewritten in the main.tsx pass; rest not yet reviewed)
-- [ ] packages/web/src/hooks/useMapRenderer.ts  — no unit test
-- [ ] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
+- [x] packages/web/src/hooks/useMapRenderer.ts  — no unit test
+- [x] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
 - [ ] packages/web/src/hooks/useModeTransition.ts  — no unit test
 - [ ] packages/web/src/hooks/useRearrangement.ts  — no unit test
 - [ ] packages/web/src/hooks/useSearch.ts  — no unit test
@@ -391,10 +395,10 @@ list below. The running checklist is the source of truth; tick boxes as you go.
 - [ ] packages/web/src/lib/gl/spineTexture.ts  — no unit test
 - [ ] packages/web/src/lib/gl/textureCache.ts  — no unit test
 - [ ] packages/web/src/lib/gl/warm.ts  — no unit test
-- [ ] packages/web/src/lib/glRenderer.ts
-  - [ ] packages/web/src/lib/glRenderer.test.ts
-- [ ] packages/web/src/lib/glSlideRenderer.ts
-  - [ ] packages/web/src/lib/glSlideRenderer.test.ts
+- [x] packages/web/src/lib/glRenderer.ts
+  - [x] packages/web/src/lib/glRenderer.test.ts  (reviewed; no edits needed)
+- [x] packages/web/src/lib/glSlideRenderer.ts
+  - [x] packages/web/src/lib/glSlideRenderer.test.ts  (reviewed; no edits needed)
 - [ ] packages/web/src/lib/loadingAnimation.ts
   - [ ] packages/web/src/lib/loadingAnimation.test.ts
 - [ ] packages/web/src/lib/perfProbe.ts
@@ -405,12 +409,12 @@ list below. The running checklist is the source of truth; tick boxes as you go.
   - [ ] packages/web/src/lib/picking.test.ts
 - [ ] packages/web/src/lib/pyramid.ts
   - [ ] packages/web/src/lib/pyramid.test.ts
-- [ ] packages/web/src/lib/render.ts
-  - [ ] packages/web/src/lib/render.test.ts
+- [x] packages/web/src/lib/render.ts
+  - [x] packages/web/src/lib/render.test.ts  (reviewed; no edits needed)
 - [ ] packages/web/src/lib/rooms.ts
   - [ ] packages/web/src/lib/rooms.test.ts
-- [ ] packages/web/src/lib/slide.ts
-  - [ ] packages/web/src/lib/slide.test.ts
+- [x] packages/web/src/lib/slide.ts
+  - [x] packages/web/src/lib/slide.test.ts
 - [ ] packages/web/src/lib/spineFont.ts  — no unit test
 - [ ] packages/web/src/lib/svgPath.ts
   - [ ] packages/web/src/lib/svgPath.test.ts

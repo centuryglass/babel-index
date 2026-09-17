@@ -1,26 +1,25 @@
 /**
  * The map's frame loop: one effect, rebuilt whenever what it draws changes.
  *
- * A hook in its own file for the same reason `useMapCamera.ts` is one - it owns
- * a listener lifetime and a cancellable animation frame, and reading `main.jsx`
- * should not mean reading a hundred and forty lines of canvas plumbing to find
- * the state everything else shares.
+ * A hook in its own file for the same reason `useMapCamera.ts` is one - it
+ * owns a listener lifetime and a cancellable animation frame, so reading
+ * `main.tsx` does not mean reading a hundred and forty lines of canvas
+ * plumbing to find the state everything else shares.
  *
- * It does not own the frame REQUEST. `draw` is passed in as a ref this hook
- * assigns into, because the tile cache is built with `onLoad: requestDraw` and
- * this hook takes that cache as an argument - so a hook that also handed back
- * the request function would have to be created before the thing it depends on.
- * One ref breaks the cycle, and it is the arrangement the code already had.
+ * It does not own the frame request. `draw` is passed in as a ref this hook
+ * assigns into, because the tile cache is built with `onLoad: requestDraw`
+ * and this hook takes that cache as an argument - a hook that also handed
+ * back the request function would have to be created before the thing it
+ * depends on. The `draw` ref breaks the cycle.
  *
- * Three things it is responsible for beyond drawing, all of which have to share
- * the effect's lifetime:
+ * Three things beyond drawing share the effect's lifetime:
  *
- *   - positioning the center tile's two overlays, which move every frame with
- *     the camera and so cannot be React state;
- *   - writing the HUD, which is the app's own account of what it just drew and
- *     is what the e2e suite reads the camera out of;
- *   - ending a rearrangement on `pointerdown`, because a map you cannot
- *     interrupt is not a map.
+ *   - positioning the center tile's DOM overlays, which move every frame
+ *     with the camera and so cannot be React state;
+ *   - writing the HUD, which is the app's own account of what it just drew
+ *     and is what the e2e suite reads the camera out of;
+ *   - ending a rearrangement on `pointerdown`, so a map can always be
+ *     interrupted.
  */
 import { useEffect } from 'react';
 import { cursorCell, pxPerCell, worldToScreen, type Camera } from '../lib/camera.ts';
@@ -47,9 +46,8 @@ import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
- * `RoomRenderer`/`SlideRenderer` read their shape off the real `createRenderer`/
- * `createSlideRenderer` rather than restating it, so a change to either
- * signature is picked up automatically instead of leaving a second, driftable
+ * `RoomRenderer`/`SlideRenderer` are `ReturnType`s of the real factories: a
+ * signature change arrives as a type error here, not as a second, driftable
  * copy.
  */
 type RoomRenderer = ReturnType<typeof createRenderer>;
@@ -67,7 +65,7 @@ export interface RunningAnim {
   t0?: number;
 }
 
-/** `centreOverlay(w, h)`'s return - see `main.jsx`. */
+/** `centreOverlay(w, h)`'s return - the implementation is `main.tsx`'s. */
 interface CentreOverlay {
   cellRect: { x: number; y: number; w: number; h: number };
   box: { x: number; y: number; w: number; h: number };
@@ -116,11 +114,9 @@ interface UseMapRendererOpts {
   /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /**
-   * The floating "add to favorites"/"remove from favorites" tooltip - one
-   * element for the whole map, since a badge is canvas-painted on every
-   * tile and has no DOM element of its own to hang `.control-tooltip` off
-   * of (unlike the center tile's fixed controls). Positioned and shown by
-   * the `pointermove` listener below, alongside `hoveredFavorite`.
+   * The floating "add to favorites"/"remove from favorites" tooltip (declared
+   * in `main.tsx`), positioned and shown by the `pointermove` listener
+   * (`onMove`) alongside `hoveredFavorite`.
    */
   favTooltipRef?: { current: HTMLElement | null };
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
@@ -133,12 +129,7 @@ interface UseMapRendererOpts {
   genericFade?: { current: number };
   /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
   distillMode?: boolean;
-  /**
-   * The distill toggle's own floating tooltip - the same "one element, no
-   * per-tile DOM node" treatment `favTooltipRef` gets, for the same reason:
-   * the toggle is canvas-painted onto the center tile and has no button of
-   * its own to hang a `.control-tooltip` off of.
-   */
+  /** The distill toggle's tooltip - one shared element, the `favTooltipRef` arrangement. */
   distillTooltipRef?: { current: HTMLElement | null };
   /**
    * The center-tile loading indicator, or null when none is deployed. Read
@@ -183,42 +174,37 @@ export function useMapRenderer({
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
-    // The pending frame's id, so it can be cancelled - not just a flag. This
-    // closure captures `layout` and `order`, so a frame scheduled through it
-    // and left to fire after the effect has been rebuilt repaints the state
-    // this render pass replaced. That is a real frame of the old map, arriving
-    // after the new one and winning, which is what a stale draw looks like.
+    // The pending frame's id, so the cleanup can cancel it - a flag is not
+    // enough. This closure captures `layout` and `order`, so a frame left to
+    // fire after the effect rebuilds repaints the superseded state: one real
+    // frame of the old map, arriving after the new one and winning.
     let pending = 0;
-    // The shelf book under the pointer, or null - read by `render()` each
-    // frame and written by the `pointermove` listener below, the same split
-    // `centerBookRef`'s hover class uses (`bookEl`/`onMove` further down).
+    // The shelf book under the pointer, or null. The hover pattern, shared
+    // by all three `hovered*` vars: `render()` reads each one every frame,
+    // the `pointermove` listener writes it, and only the value changing
+    // triggers a redraw.
     let hoveredBook: number | null = null;
-    // The world cell of the tile whose favorite badge is under the pointer,
-    // or null - same split as `hoveredBook` just above: read each frame by
-    // `render()`, written by the `pointermove` listener below.
+    // The world cell whose favorite badge is under the pointer, or null -
+    // hover pattern as `hoveredBook`.
     let hoveredFavorite: { x: number; y: number } | null = null;
-    // Whether the pointer is over the distill toggle's traced silhouette -
-    // same split as `hoveredFavorite`, read each frame by `render()`, written
-    // by the `pointermove` listener below.
+    // Whether the pointer is over the distill toggle's silhouette - hover
+    // pattern as `hoveredBook`.
     let hoveredDistill = false;
-    // Gates the cursor ring (`render.ts`). Tied to the canvas's own focus
-    // rather than to whether a key has ever been pressed: a reader who just
-    // tabbed onto the map has no other way to tell the press landed, since
-    // nothing else about the page changes until the first arrow key moves
-    // something. `:focus-visible` (not plain `:focus`) is what keeps a mouse
-    // click from lighting up a permanent reticle for someone who never
-    // touched a keyboard - the same distinction every other focus ring in
-    // this app already draws (index.html's global `:focus-visible` rule).
+    // Gates the cursor ring (`render.ts`), tied to the canvas's own focus
+    // rather than to whether a key has been pressed: a reader who just
+    // tabbed onto the map has no other sign the press landed. `:focus-visible`
+    // rather than `:focus` keeps a mouse click from lighting a permanent
+    // reticle - the same selector the center tile's DOM controls use for
+    // their outlines (`style.css`).
     let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
     const render = () => {
       pending = 0;
-      // Hidden, so there is nothing to draw and nothing to measure. Not merely
-      // an optimisation: with `display: none` up the tree every clientWidth is
-      // 0, and a frame drawn against that would size the canvas to nothing and
-      // place both center-tile overlays at the origin. The camera, the cache
-      // and the pyramid's LRU are all untouched meanwhile, which is what makes
-      // coming back free.
+      // Hidden draws nothing and measures nothing: under `display: none` every
+      // clientWidth is 0, and a frame drawn against that would size the canvas
+      // to nothing and put the center-tile overlays at the origin. The camera,
+      // the cache and the pyramid's LRU stay untouched meanwhile, which is
+      // what makes coming back free.
       if (mode !== 'map') return;
       const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
@@ -229,10 +215,10 @@ export function useMapRenderer({
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // The center tile's live search field, positioned every frame like the
-      // canvas content it sits over - it is not React state, for the same
-      // reason the camera itself is a ref: it moves on every pan, zoom and
-      // flight, and a re-render per frame is not the architecture here.
+      // The center tile's overlays, positioned every frame like the canvas
+      // content they sit over. None is React state, for the reason the camera
+      // itself is a ref: it moves on every pan, zoom and flight, and a
+      // re-render per frame is not the architecture here.
       const searchEl = searchFormRef.current;
       const booksEl = booksRef.current;
       const arrowEl = searchArrowRef?.current;
@@ -249,10 +235,8 @@ export function useMapRenderer({
             searchEl.style.height = `${box.h}px`;
           }
         }
-        // The whole shelf in ONE style write, not forty: the books are an
-        // affine map of the cell rect, so they sit inside this box in
-        // percentages and need no per-frame work of their own
-        // (accessibility-plan.md §3.3).
+        // The shelf box - one style write; its book buttons are positioned
+        // in percentages of it, so a pan touches no per-button work.
         if (booksEl) {
           booksEl.style.display = books ? 'block' : 'none';
           if (books) {
@@ -262,10 +246,9 @@ export function useMapRenderer({
             booksEl.style.height = `${cellRect.h}px`;
           }
         }
-        // The open book: same visibility gate and same box as the shelf - it
-        // is an SVG path drawn with `viewBox="0 0 1 1"` over the whole cell,
-        // exactly like `booksEl`'s buttons are percentages of it, so it needs
-        // no rect of its own.
+        // The open book: same visibility gate and box as the shelf - its SVG
+        // path is drawn with `viewBox="0 0 1 1"` over the whole cell, so it
+        // needs no rect of its own.
         if (bookEl) {
           bookEl.style.display = books ? 'block' : 'none';
           if (books) {
@@ -276,8 +259,8 @@ export function useMapRenderer({
           }
         }
         // The favorites-sort switch and the reorder button - the same
-        // whole-cell container + percentage-children shape as `booksEl`, so
-        // this costs one style write regardless of how many controls it holds.
+        // whole-cell container with percentage-positioned children as
+        // `booksEl`, so one style write covers all of them.
         if (controlsEl) {
           controlsEl.style.display = books ? 'block' : 'none';
           if (books) {
@@ -287,15 +270,14 @@ export function useMapRenderer({
             controlsEl.style.height = `${cellRect.h}px`;
           }
         }
-        // The arrow, pointed at the center tile's screen position rather
-        // than any fixed direction - `cellRect` is in the same coordinate
-        // space the badge is positioned in (both absolute against #root), so
-        // no separate conversion is needed. It has to work when the center
-        // tile is off screen too (`cellRect` can be arbitrarily far outside
-        // the viewport), since that is when knowing *which way* to fly there
-        // matters most - the badge's own `getBoundingClientRect` is read
-        // fresh each frame rather than assumed, so a CSS change to its
-        // position or size cannot leave this pointing at a stale spot.
+        // The arrow points at the center tile's screen position, not a fixed
+        // direction. `cellRect` is in the badge's own coordinate space (both
+        // absolute against `#root`), so no conversion is needed. The tile may
+        // be entirely off screen - `cellRect` arbitrarily outside the
+        // viewport - and the bearing must still be right; that is when the
+        // direction matters most. The badge's `getBoundingClientRect` is read
+        // fresh each frame so a CSS change to its position or size cannot
+        // leave the bearing stale.
         if (arrowEl) {
           const badge = arrowEl.getBoundingClientRect();
           const root = canvas.getBoundingClientRect();
@@ -303,10 +285,9 @@ export function useMapRenderer({
           const fromY = badge.top - root.top + badge.height / 2;
           const toX = cellRect.x + cellRect.w / 2;
           const toY = cellRect.y + cellRect.h / 2;
-          // The traced arrow points up by default (`assets/search_arrow.svg`
-          // sits at the top of the badge's circle), which is -90° from the
-          // atan2 convention's zero (pointing right) - so the rotation that
-          // lands it on the target's bearing is the bearing plus 90°.
+          // The traced arrow art (`assets/search_arrow.svg`) points up, -90°
+          // from atan2's rightward zero, hence the +90 to land on the
+          // bearing.
           const deg = (Math.atan2(toY - fromY, toX - fromX) * 180) / Math.PI + 90;
           arrowEl.style.transform = `rotate(${deg}deg)`;
         }
@@ -314,20 +295,19 @@ export function useMapRenderer({
 
       // Three states, and the middle one is why this is not an `if`.
       //
-      // While SLIDING, the rearrangement draws itself from its own board at the
-      // camera it was planned for; the live camera is not consulted, because
+      // While sliding, the rearrangement draws itself - from its own board,
+      // at the camera it was planned for. The live camera is not consulted:
       // the board is a finite window and panning off it would show the wrap
-      // that makes the whole illusion affordable.
+      // that makes the illusion affordable.
       //
-      // While FLYING home to start one, the ordinary renderer draws - but the
-      // arrangement it draws is the one being flown away from, not the one just
-      // computed. `layout` and `order` update the moment a search resolves,
-      // which is before the camera has moved, so drawing them here would show
-      // the new library, fly to it, and then slide it in from the old one.
+      // While flying home to start one, the ordinary renderer draws - but the
+      // arrangement being flown away from, not the one just computed.
+      // `layout` and `order` update the moment a search resolves, before the
+      // camera has moved, so drawing them mid-flight would show the new
+      // library, fly to it, then slide it in from the old one.
       const running = anim.current;
       const showing = running?.before ?? { layout, order };
-      // Named consts rather than object literals passed straight to `draw()` -
-      // kept purely for symmetry between the two draw calls below.
+      // Both draw paths get a named const, for symmetry between them.
       const slideDrawOpts = {
         ctx, width: w, height: h, dpr, cam: running?.cam as Camera,
         board: running?.board as Board, origin: running?.origin as Point, motions: running?.motions,
@@ -342,10 +322,11 @@ export function useMapRenderer({
         genericFade: genericFade?.current, distillMode, hoveredDistill,
         loadingFrame: loadingAnim?.current?.frame() ?? null,
       };
-      // §2.1: which of the two rearrangement phases drops frames. Only
-      // recorded while an animation is actually running (`running` set by
-      // `useRearrangement.ts`) - an ordinary browsing frame is neither phase,
-      // and tagging it 'flight' would drown the real flight samples in noise.
+      // The flight-vs-slide split of `docs/performance-research.md` 2.1:
+      // which of the two rearrangement phases drops frames. Recorded only
+      // while an animation runs (`running` is set by `useRearrangement.ts`);
+      // tagging ordinary browsing frames 'flight' would bury the real
+      // samples.
       const t0 = PERF && running ? performance.now() : 0;
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
       if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);
@@ -362,14 +343,13 @@ export function useMapRenderer({
           `level ${slideStats.level} · ${slideStats.blank} blank · ${cache.size()} cached` +
           (blockedCount ? ` · ${blockedCount} blocked` : '');
       } else if (running && hud) {
-        // No board yet - still preparing (fetching the plan's tiles) or
-        // flying to the overview zoom before the slide can start. The HUD
-        // text has to keep saying "rearranging" here, not just once the
-        // board exists: `packages/web/e2e/support.ts`'s `settled()` waits for
-        // it to stop starting with that word, and `prepareRearrangement`
-        // (`useRearrangement.ts`) can now hold this state for seconds on a
-        // cold cache - leaving the ordinary HUD text showing here would read
-        // as "already settled" and return long before the camera even moves.
+        // No board yet: still preparing (fetching the plan's tiles) or flying
+        // to the overview zoom. The HUD keeps saying "rearranging" across all
+        // of it, not just once the board exists - `settled()`
+        // (`packages/web/e2e/support.ts`) waits for the text to stop starting
+        // with that word, and `prepareRearrangement` (`useRearrangement.ts`)
+        // can hold this state for seconds on a cold cache; ordinary HUD text
+        // here would read as settled long before the camera ever moves.
         const anim = loadingAnim?.current?.activeName();
         hud.textContent = 'rearranging · preparing…' + (anim ? ` · anim ${anim}` : '');
       } else if (hud) {
@@ -404,21 +384,19 @@ export function useMapRenderer({
 
     render();
     const onResize = () => draw.current();
-    // Touching the map ends a rearrangement rather than fighting it: the
-    // remaining moves land at once, which is exactly the instant rebuild this
-    // animation replaced. A map you cannot interrupt is not a map.
+    // Touching the map ends a rearrangement rather than fighting it.
     const onDown = () => {
       const running = anim.current;
       if (!running) return;
-      // A grab mid-preload ends the whole rearrangement (below), so the loading
-      // indicator must stop with it rather than keep playing over a map the
-      // reader has taken - its `finish()` await in `useRearrangement.ts`
-      // resolves off this cancel.
+      // A grab mid-preload ends the whole rearrangement, so the loading
+      // indicator stops with it: its `finish()` await in
+      // `useRearrangement.ts` resolves off this cancel.
       loadingAnim?.current?.cancel();
-      // Mid-slide, the remaining moves land at once - which is the instant
-      // rebuild this replaced. Still flying home, there is no slideshow yet and
-      // nothing to finish; dropping the hold is enough, and the next draw shows
-      // the new arrangement. `useMapCamera` cancels the flight itself.
+      // Mid-slide, the remaining moves land at once - the instant rebuild
+      // this animation replaced. Still flying home, there is no slideshow
+      // and nothing to finish; dropping the hold is enough, and the next
+      // draw shows the new arrangement. `useMapCamera` cancels the flight
+      // itself.
       running.show?.advanceTo(running.show.totalMs);
       anim.current = null;
       draw.current();
@@ -426,11 +404,10 @@ export function useMapRenderer({
     window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onDown);
 
-    // Blur always hides the ring outright - there is no reading of `:focus-
-    // visible` to make there, since an element with no focus at all cannot be
-    // focus-visible. Focus re-checks it fresh each time rather than assuming
-    // true, because a programmatic `.focus()` call and a mouse click both
-    // fire this event and only one of them should light the ring.
+    // Blur hides the ring outright - an unfocused element cannot be
+    // focus-visible. Focus re-checks `:focus-visible` rather than assuming
+    // true: a programmatic `.focus()` call and a mouse click both fire the
+    // event, and only one of them should light the ring.
     const onFocus = () => {
       focusVisible = canvas.matches(':focus-visible');
       draw.current();
@@ -442,22 +419,20 @@ export function useMapRenderer({
     canvas.addEventListener('focus', onFocus);
     canvas.addEventListener('blur', onBlur);
 
-    // The open book's hover highlight, and the shelf's. Cosmetic only -
-    // `centerBookRef`'s element and every `.center-books` button are
-    // `pointer-events: none` (see index.html), the same reasoning in both
-    // cases: the canvas keeps every gesture, so a pan whose start happens to
-    // land here must still pan. A real click already reaches `onTap` ->
-    // `centerBookAtPoint`/`bookAtPoint` in main.tsx; this listener only
-    // decides what highlights, so it does not need to distinguish a hover
-    // from the start of a drag the way gesture arbitration does.
+    // This listener only decides what highlights; the canvas keeps every
+    // gesture. The elements it hovers - `centerBookRef` and the `.center-books`
+    // buttons - are `pointer-events: none` (style.css), so a pan that starts
+    // over them still pans and a click still reaches `main.tsx`'s `onTap` ->
+    // `centerBookAtPoint`/`bookAtPoint`. That is also why this path needs no
+    // slop/gesture arbitration: a hover is not a candidate for anything.
     //
-    // The open book's highlight is a DOM `.hover` class because that hotspot
-    // paints no text of its own - a CSS overlay is the whole highlight. A
-    // shelf book's IS text, and the DOM sits above the canvas in paint order,
-    // so a DOM glow there would wash out over the composited title instead of
-    // sitting behind it. `hoveredBook` instead feeds `composeSpines` directly
-    // (via `render()` below), which paints the glow FIRST and the hover
-    // backdrop plate over it, on the same canvas layer as the title.
+    // Two hover treatments. The open book's is a DOM `.hover` class because
+    // the hotspot paints no text - a CSS overlay is the whole highlight. A
+    // shelf book's highlight is painted text: DOM sits above the canvas in
+    // paint order, so a DOM glow would cover the composited title instead of
+    // sitting behind it. `hoveredBook` instead feeds `composeSpines` (via
+    // `render()`), which paints the glow first and the backdrop plate over
+    // it, on the title's own canvas layer.
     const onMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       const viewportRect = { width: canvas.clientWidth, height: canvas.clientHeight };
@@ -468,9 +443,9 @@ export function useMapRenderer({
       const el = centerBookRef?.current;
       if (el) el.classList.toggle('hover', centerBookAtPoint(px, py, cellRect));
 
-      // The favorites-sort switch and reorder button - same DOM `.hover`
-      // class approach as the open book above, for the same reason: neither
-      // paints any text of its own, so a CSS overlay is the whole highlight.
+      // The favorites-sort switch and reorder button - DOM `.hover` classes
+      // like the open book's: neither paints text, so a CSS overlay is the
+      // whole highlight.
       const controls = controlsRef?.current;
       if (controls) {
         controls
@@ -484,10 +459,9 @@ export function useMapRenderer({
           ?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
       }
 
-      // The distill toggle - a DOM `.hover` class doesn't apply here (no
-      // per-tile element, same reason the favorite badge below has none), so
-      // both the highlight and the tooltip are driven from here, the same
-      // shape as the favorite badge's own hover handling just below.
+      // The distill toggle - painted onto the center tile with no element of
+      // its own (the `favTooltipRef` situation), so highlight and tooltip are
+      // both driven from here, same shape as the favorite badge's handling.
       const nextDistill = distillToggleAtPoint(
         px, py, { x: cellRect.w, y: cellRect.h }, cellRect.x, cellRect.y, distillMode
       );
@@ -513,14 +487,12 @@ export function useMapRenderer({
         draw.current();
       }
 
-      // The on-tile favorite badge - there is no per-tile DOM element to
-      // toggle a `.hover` class on (unlike every control above, which is
-      // fixed to the one center cell), so both the highlight (`hoveredFavorite`,
-      // read by `render()` above) and the tooltip are driven from here. The
-      // hover trigger is the badge's traced silhouette (`favoriteToggleAtPoint`)
-      // - already precise on its own, so no padding/gate is applied here the
-      // way the tap hit test pads out for touch (`favoriteHitRect`); a mouse
-      // hover should track the art exactly.
+      // The on-tile favorite badge - same no-element shape: both the
+      // highlight (`hoveredFavorite`, read by `render()`) and the tooltip are
+      // driven from here. The hover trigger is the badge's traced silhouette
+      // (`favoriteToggleAtPoint`) with no padding - the tap hit test pads out
+      // for touch (`favoriteHitRect`), but a mouse hover should track the
+      // art exactly.
       let nextFavorite: { x: number; y: number; id: number } | null = null;
       if (favorites) {
         const hit = roomAtPoint(px, py, cam.current, viewportRect, layout, order);
