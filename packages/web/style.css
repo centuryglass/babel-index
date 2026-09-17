@@ -87,14 +87,17 @@ canvas.dragging { cursor: grabbing; }
 
   `pan-y`, not `auto`: neither a dialog nor the catalog needs the browser's
   own pinch-zoom or horizontal pan, only their own vertical scroll region.
-  Native page zoom was tried per-dialog and left the rest of the document
-  (the map canvas, its search badge, all fixed-size and absolutely positioned)
-  visibly detached the moment the reader also panned - a browser too old for
-  `clip` drops the declaration here and is left exactly where it was, which
-  is the right way to fail. The fix is the same: never grant native zoom
-  permission at the document level, and give any content that needs
-  magnification a scoped zoom instead (`.zoom-scope` below,
-  `useContentZoom.ts`) that never leaves its own element.
+  Letting native page zoom happen at all - even scoped to a single dialog -
+  left the rest of the document (the map canvas, its search badge, all
+  fixed-size and absolutely positioned) visibly detached the moment the
+  reader also panned, and a later attempt to toggle native zoom on
+  per-dialog and reset it at each boundary found Firefox Mobile doesn't
+  reliably discard a leftover native zoom/pan once a dialog closes, even
+  when the reset mutates the viewport meta directly. The fix in both cases
+  is the same: never grant native zoom permission at the document level,
+  and give any content that needs magnifying a scoped zoom instead
+  (`.zoom-scope` below, `useContentZoom.ts`) that never leaves its own
+  element.
 */
 html:has(.overlay-scrim, .catalog),
 body:has(.overlay-scrim, .catalog),
