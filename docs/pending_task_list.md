@@ -150,6 +150,43 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   A live TODO pointer anchored at the line it warns about is fine and gets
   cleaned up with the issue; a citation of finished work is dead text. Remove
   the citation, keep the sentence's own claim about what the component is for.
+  The 2026-09-17 components pass cleared `SearchIcon.tsx`;
+  `useRearrangement.ts` is still queued with the hooks.
+- **[2026-09-17] Three comments still quote the easter-egg button's old
+  label**: commit 2196174 ("adjust phrasing") renamed "Click here to run some
+  equivalent code" to "Run the same thing here", and three citations of the
+  old label survived — `style.css`'s `.statement-link` comment,
+  `packages/web/e2e/artist-statement.e2e.ts`'s inline-button comment, and
+  `AGENTS.md`'s `BabelBookOverlay` entry. (Strings are not comments, and no
+  locator depends on the label — the test clicks `.statement-link`.) The
+  components pass and `AGENTS.md` are fixed; the `style.css` comment belongs
+  to the CSS pass and the e2e comment to the specs batch. Prefer naming the
+  class over quoting a label: the label is art-copy and free to move again.
+- **[2026-09-17] `style.css`'s `.score-details` comment contradicts the rule
+  below it**: it says the stacked room overlay "auto-flows into as many
+  ~200px columns as fit", but the rule is `grid-template-columns:
+  repeat(2, max-content)` — a fixed two columns. The 2026-09-17 components
+  pass corrected `RoomDetails.tsx`'s copy of the claim to match the rule;
+  the CSS comment is the CSS pass's to fix, after checking which of the two
+  is the intent.
+- **[2026-09-17] `packages/web/src/lib/catalog.ts`'s `rowHeight` has no
+  production callers.** CatalogView computes its wide-row height inline
+  (`flowH + scoreH + ROW_PAD + cardPad`) since the score strip moved below
+  the fixed-height flow area, and `stackedRowHeight` covers ultra-narrow, so
+  `rowHeight` is exported and tested while nothing calls it. The 2026-09-17
+  components pass re-pointed CatalogView's comments that claimed pads were
+  "priced into `rowHeight`" at the live arithmetic instead. Deleting the
+  function (and its `catalog.test.ts` block) or re-adopting it is a code
+  edit for the `lib/catalog.ts` pass.
+- **[2026-09-17] A generic cell is named two different things in one
+  dialog's chrome**: `RoomOverlay`'s card shows the visible literal "a Babel
+  shelf", while the same room's accessible name comes from `describe.ts`'s
+  generic `name`, "a library wall" — a screen reader announces one thing and
+  the eye reads another in the same dialog. The 2026-09-17 components pass
+  corrected a `MapView` comment that quoted "a Babel shelf" as the canvas's
+  own label (it says `describeCell`'s generic name); the two strings
+  themselves are code, so this is filed. Reconciling them may be deliberate
+  art-copy layering rather than drift — an art decision for the maintainer.
 - **[2026-09-17] Three comments still call distill mode's transition a fade to
   black**: `useDistillMode.ts`'s `fadeMs` option doc ("how long the black fade
   takes"), `useMapRenderer.ts`'s and `slide.ts`'s `genericFade` docs ("distill

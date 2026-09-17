@@ -337,7 +337,9 @@ home early — see §6 for the rationale:
    parallel; the renderer cluster it is the WebGL counterpart of had passed
    first, so its wording (the lockstep rule, the per-cell loop, the headless
    flat-quad fallback) is the canonical home the gl/ files were deduped
-   toward.
+   toward. The `components/` batch also went on 2026-09-17, out of order and
+   in parallel, ahead of `lib/` and `hooks/`; what it left those two batches
+   to collect is recorded in `docs/pending_task_list.md`.
 6. `packages/pipeline`, then the `tools/*` trees, then `build/`. Pipeline is
    done (2026-09-17, out of order and in parallel), and so are `tools/embed`
    and `tools/upload`.
@@ -431,18 +433,18 @@ of citing it.
 
 #### packages/web
 - [ ] packages/web/e2e/support.ts  — no unit test
-- [ ] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
-- [ ] packages/web/src/components/BabelBookOverlay.tsx
-  - [ ] packages/web/src/components/BabelBookOverlay.test.ts
-- [ ] packages/web/src/components/BookOverlay.tsx  — no unit test
-- [ ] packages/web/src/components/CatalogView.tsx  — no unit test
-- [ ] packages/web/src/components/HelpDialog.tsx  — no unit test
-- [ ] packages/web/src/components/MapView.tsx  — no unit test
-- [ ] packages/web/src/components/RoomDetails.tsx  — no unit test
-- [ ] packages/web/src/components/RoomOverlay.tsx  — no unit test
-- [ ] packages/web/src/components/SearchForm.tsx  — no unit test
-- [ ] packages/web/src/components/SearchIcon.tsx  — no unit test
-- [ ] packages/web/src/components/ZoomControls.tsx  — no unit test
+- [x] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
+- [x] packages/web/src/components/BabelBookOverlay.tsx
+  - [x] packages/web/src/components/BabelBookOverlay.test.ts  (reviewed; no edits needed)
+- [x] packages/web/src/components/BookOverlay.tsx  — no unit test
+- [x] packages/web/src/components/CatalogView.tsx  — no unit test
+- [x] packages/web/src/components/HelpDialog.tsx  — no unit test
+- [x] packages/web/src/components/MapView.tsx  — no unit test
+- [x] packages/web/src/components/RoomDetails.tsx  — no unit test
+- [x] packages/web/src/components/RoomOverlay.tsx  — no unit test
+- [x] packages/web/src/components/SearchForm.tsx  — no unit test
+- [x] packages/web/src/components/SearchIcon.tsx  — no unit test
+- [x] packages/web/src/components/ZoomControls.tsx  — no unit test
 - [ ] packages/web/src/hooks/useCenterShelf.ts  — no unit test
 - [ ] packages/web/src/hooks/useContentZoom.ts  — no unit test
 - [ ] packages/web/src/hooks/useCorpus.ts  — no unit test

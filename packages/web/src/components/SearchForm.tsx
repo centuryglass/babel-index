@@ -4,15 +4,15 @@ import clearSvg from '../../../../assets/clear_search.svg';
 /**
  * The search box, in whichever of its two homes is on screen.
  *
- * On the map it is positioned imperatively over the center tile by the render
- * loop; in the catalog it sits in the pinned bar. Both are the same controlled
- * input over the same submit, because "what does Enter do" is one question and
- * two answers to it would drift the first time one of them changed.
+ * On the map it is positioned imperatively over the center tile by the
+ * render loop; in the catalog it sits in the pinned bar. Both are the same
+ * controlled input over the same submit, so "what does Enter do" has one
+ * handler.
  *
- * Deliberately takes NO style prop. The map's copy is positioned by writing to
- * `.style` from the render loop every frame, and a React re-render - which every
- * keystroke causes, since `query` is controlled - would reapply a declared style
- * and fight that positioning. The class is the only styling hook.
+ * Takes no style prop. The map's copy is positioned by writing to `.style`
+ * from the render loop every frame, and a React re-render - which every
+ * keystroke causes, since `query` is controlled - would reapply a declared
+ * style and fight that positioning. The class is the only styling hook.
  */
 export function SearchForm({
   query,
@@ -52,9 +52,9 @@ export function SearchForm({
         onKeyDown={onKeyDown}
       />
       {/*
-        Only mounted once there is something to clear - unlike the input
-        itself, nothing imperative depends on this node existing before the
-        first keystroke, so there is no reason to hide-via-CSS instead.
+        Mounted only once there is something to clear - nothing imperative
+        depends on this node existing before the first keystroke, unlike
+        the input itself.
       */}
       {query && (
         <button

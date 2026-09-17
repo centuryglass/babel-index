@@ -238,12 +238,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              paged as the same `BookOverlay` - a spread of two
                              pages when wide, one when narrow, so next/previous
                              step by two or one to match. An easter egg opened
-                             from the artist's statement ("Click here to run
-                             some equivalent code") and stacked over it.
+                             from the artist's statement's `.statement-link`
+                             button and stacked over it.
     * `ZoomControls.tsx`: Zoom in/reset/zoom out for a `useContentZoom`
                           scope - the non-pinch path a mouse-and-keyboard
                           reader needs, since native browser zoom is
-                          deliberately not offered as a fallback. Shared by
+                          not offered as a fallback. Shared by
                           `RoomOverlay`, `HelpDialog`, `BookOverlay` and
                           `CatalogView` rather than four copies of the same
                           three buttons.

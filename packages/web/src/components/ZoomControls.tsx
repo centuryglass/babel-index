@@ -1,9 +1,8 @@
 /**
  * Zoom in / reset / zoom out for a `useContentZoom` scope - the non-pinch
  * path a mouse-and-keyboard reader still needs, since native browser zoom
- * is deliberately not offered as a fallback (see `useContentZoom.ts`).
- * Shared by every dialog and the catalog rather than four copies of the
- * same three buttons.
+ * is not offered as a fallback (see `useContentZoom.ts`).
+ * Shared by `RoomOverlay`, `HelpDialog`, `BookOverlay` and `CatalogView`.
  */
 export function ZoomControls({
   zoomIn,

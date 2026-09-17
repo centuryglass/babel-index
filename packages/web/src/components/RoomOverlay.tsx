@@ -2,61 +2,29 @@
  * One room (or generic cell), as large as the display allows: the tile at
  * full size and the whole story, with nothing clipped.
  *
- * A full-page modal - a scrim, a centered dialog, Escape and a backdrop click
+ * A full-page modal - scrim, centered dialog, Escape and a backdrop click
  * both close it, Tab trapped inside while it is open - reached from either
  * side of the app: right-click, long press or Enter on the map, choosing a
- * result from the ranked listbox, or expanding a catalog row. All of those
- * used to reach two different components (`RoomCard` for the map paths, this
- * one for the catalog's), anchored and styled differently, but a comparison
- * once RoomCard also became a modal turned up no remaining reason for the
- * split - same dialog chrome, same focus/Tab/Escape handling, same
- * `RoomDetails` body. The one real difference, that a map pick can name a
- * generic cell and a catalog row never does, is a three-line conditional
- * (`'generic' in room`), not a reason for a second file.
+ * ranked result, or expanding a catalog row. A map pick can name a generic
+ * cell and a catalog row never does; that difference is the one
+ * conditional `'generic' in room`.
  *
- * The catalog row's own reason for a modal at all still holds: its rows are a
- * fixed height (what lets the spacers standing in for unmounted pages be
- * arithmetic rather than estimates), so a row cannot grow to fit a long story
- * and the thumbnail in it is a thumbnail. Pressing the tile opens it, and so
- * does the "read the rest" button a clipped story ends with - the alternative
- * was expanding the story in place, which would make row heights vary. The
- * trade is deliberate: rows stay uniform, and the full thing is one press
- * away rather than zero.
+ * The catalog needs this modal because its rows are a fixed height - a row
+ * cannot grow to fit a long story, and growing it in place would turn the
+ * spacer arithmetic into estimates (AGENTS.md's "A fixed row cannot show
+ * everything, so the overlay is not optional"). The map path needs it
+ * because its tile is canvas-painted: here the tile is a real `<img>` at
+ * its own native resolution, and a right-click on it reaches the browser's
+ * "save image", which the map cannot offer.
  *
- * The tile is sized to its own native resolution by default - `max-width:
- * 100%; height: auto` on `.overlay-tile` never blows it up past that, only
- * shrinking it to fit a narrower dialog - and a right-click on it reaches the
- * browser's own "save image", which a canvas-painted map tile could never
- * offer. It scrolls as part of the same region as the text below it
- * (`.overlay` itself, not a split pane): a long story and a native-resolution
- * picture compete for the same space rather than each getting a fixed share,
- * which is the plain, unsurprising behavior the catalog's own tile-then-text
- * rows already give a reader before anything is expanded.
- *
- * The tile-and-text pair only moves into two columns when stacking them
- * would make the dialog scroll - a short story stays under the tile exactly
- * as it always has, because there's nothing wrong with that layout when it
- * fits. `decideColumns` below answers that by measuring, not guessing: force
- * the pair back to a single block column, read its natural height, and
- * compare against the room the scrim actually has (its own height minus
- * padding, read live off the scrim rather than assumed). Only when that
- * natural height would overflow, and the dialog is wide enough for a second
- * column to be worth it, does `.overlay-columns` get the class that turns it
- * into a row.
- *
- * Once split, the tile keeps its own height and the text page stretches to
- * match it (`.overlay-columns.columns .overlay-body`'s `align-self: stretch`),
- * so the page is always the image's size. `measureScale` then spends that
- * height on the prose rather than whitespace: it binary-searches
- * `--split-text-scale` up from 1 until growing the story any further would
- * force the dialog to scroll, and stops there. The keyword chips are held out
- * of the scale on purpose - widening every pill pushes a set that fit on one
- * line onto two, and a single row of tags reads far better - so only the story
- * and score grow. A generic cell, whose short caption can't fill a tall tile
- * even at the cap, simply leaves a mostly-empty page rather than being blown up
- * to an absurd size. `measureScale` runs as its own effect, keyed off
- * `columns` rather than folded into `decideColumns` - see that effect's own
- * comment for why the ordering matters.
+ * Tile and story scroll as one region (`.overlay` itself, not a split
+ * pane), so a long story and a native-resolution picture share the space -
+ * the same tile-then-text order the catalog's rows show before anything is
+ * expanded. The pair moves into two columns only when stacking them would
+ * make the dialog scroll, and once split, the story is grown to fill the
+ * tile's height. `decideColumns` and `measureScale` are those two
+ * decisions, measured rather than guessed; their own comments carry the
+ * mechanics.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
@@ -191,10 +159,10 @@ export function RoomOverlay({
   src?: string | null;
   /**
    * The tile's own real pixel dimensions, read at scan time (`scan.ts`'s
-   * `imageSize`) - null when the manifest never got a reading (a corpus with
-   * an unrecognized image format) or the caller hasn't looked it up, in
-   * which case the placeholder falls back to `BASE_TILE`'s shared aspect
-   * (see the `<img>` below).
+   * `imageSize`) - null when the manifest never got a reading (a corpus
+   * with an unrecognized image format) or the caller hasn't looked it up,
+   * in which case the placeholder falls back to `BASE_TILE`'s shared
+   * aspect (see `tileSize` below).
    */
   naturalSize?: { w: number; h: number } | null;
   onClose: () => void;
@@ -216,8 +184,9 @@ export function RoomOverlay({
    * or `null` for a room past the map's slider (no cell to fly to) or a
    * generic cell (in neither reading's list). Rendered beside the favorite
    * toggle rather than inside `RoomDetails`, which has no notion of which
-   * reading opened it. `shortLabel` is the abbreviated form CSS swaps in on a
-   * narrow display (see the head's comment); `label` stays the accessible name.
+   * reading opened it. `shortLabel` is the abbreviated form style.css swaps
+   * in on a narrow display (`.room-head .catalog-show-full/short`); `label`
+   * stays the accessible name.
    */
   view?: { label: string; shortLabel: string; onClick: () => void } | null;
   /**
@@ -232,30 +201,30 @@ export function RoomOverlay({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Focus moves in on open and goes back where it came from on close.
+  // Focus moves in on open and back out on close.
   //
-  // The restore is conditional rather than unconditional for two reasons. The
-  // dialog is dismissed by clicking *anywhere else*, and that click has
-  // usually already put focus somewhere the reader chose - stealing it back
-  // would undo their own action. And it may be closed because the map is
-  // about to rearrange under it (`searchKeyword`), by which point the element
-  // that opened it may be gone. So: restore only if focus is still inside the
-  // dialog or has fallen to the body, which are exactly the cases where
-  // nobody else has claimed it.
+  // The restore is conditional: focus is returned only if it is still
+  // inside the dialog or has fallen to the body, because those are the
+  // cases where nobody else has claimed it. Two ways it can be claimed:
+  // the dialog is dismissed by a click elsewhere, and that click has
+  // usually already put focus somewhere the reader chose - stealing it
+  // back would undo their own action. Or it is closed because the map is
+  // about to rearrange under it (`searchKeyword`), by which point the
+  // element that opened it may be gone.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     return () => {
-      // The body is not somewhere focus can be "put back" - it is where focus
-      // already is when nothing holds it, which is the ordinary case for a
+      // The body is not somewhere focus can be "put back" - it is where
+      // focus already is when nothing holds it, the ordinary case for a
       // dialog opened by right-clicking the canvas. Nothing to restore.
       if (!opener || opener === document.body || !opener.isConnected) return;
       const active = document.activeElement;
       if (active && active !== document.body && !ref.current?.contains(active)) return;
       opener.focus();
     };
-    // Mount and unmount only: re-running this on a re-render would drag focus
-    // back to the dialog while someone is reading a chip inside it.
+    // Mount and unmount only: re-running this on a re-render would drag
+    // focus back to the dialog while someone is reading a chip inside it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -288,21 +257,20 @@ export function RoomOverlay({
   const colsRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(false);
 
-  // See useContentZoom.ts: the whole tile-and-story pair gets its own
-  // scoped pinch-to-zoom rather than leaning on the browser's page zoom,
-  // so `src` (a new tile) is what resets it, not the dialog closing - the
-  // same overlay instance can show a different room without unmounting.
+  // See useContentZoom.ts: the tile-and-story pair gets one scoped
+  // pinch-to-zoom rather than the browser's page zoom, so `src` (a new
+  // tile) is what resets it, not the dialog closing - the same overlay
+  // instance can show a different room without unmounting.
   // Viewport = `.overlay` itself (`ref`, already the scroll region for
   // this dialog); content = `.overlay-columns` below, so a pinch magnifies
   // the tile and the text together.
   const contentZoom = useContentZoom(ref, src);
   // A fresh inline arrow function every render would make React tear down
-  // and rebuild `contentZoom.ref` (and, with it, useContentZoom.ts's
-  // pointer-tracking effect and its local gesture state) on every
-  // re-render - including the ones a drag itself triggers via `setCamera`,
-  // which would silently reset mid-gesture. Memoized so its identity only
-  // changes if `contentZoom.ref` itself ever does (it doesn't, in practice
-  // - the hook's own `ref` is stable across renders).
+  // and rebuild `contentZoom.ref` - and with it `useContentZoom`'s
+  // pointer-tracking effect and its gesture state - on every re-render,
+  // including the ones a drag itself triggers via `setCamera`, which would
+  // reset mid-gesture. Memoized so its identity only changes if
+  // `contentZoom.ref` does; the hook's own `ref` is stable across renders.
   const colsAndZoomRef = useCallback(
     (el: HTMLDivElement | null) => {
       colsRef.current = el;
@@ -311,11 +279,11 @@ export function RoomOverlay({
     [contentZoom.ref]
   );
 
-  // Whether the tile and text sit in two columns instead of one - see the
-  // file doc comment. `columns` on `.overlay-columns` is what actually
-  // switches the CSS to a row; toggling it off on the element being measured
-  // is what makes `scrollHeight` answer "how tall would this be stacked",
-  // regardless of which layout is live right now.
+  // Whether the tile and text sit in two columns instead of one -
+  // `decideColumns` measures it. `columns` on `.overlay-columns` is what
+  // actually switches the CSS to a row; toggling it off on the element
+  // being measured is what makes `scrollHeight` answer "how tall would
+  // this be stacked", regardless of which layout is live right now.
   const decideColumns = useRef(() => {});
   decideColumns.current = () => {
     const scrim = scrimRef.current;
@@ -325,23 +293,24 @@ export function RoomOverlay({
 
     const scrimStyle = getComputedStyle(scrim);
     const verticalPadding = parseFloat(scrimStyle.paddingTop) + parseFloat(scrimStyle.paddingBottom);
-    // A couple of pixels of slack against subpixel layout rounding - without
-    // it, a binary-searched scale that lands exactly on the limit can still
-    // trip the scrollbar it was meant to avoid.
+    // A couple of pixels of slack against subpixel layout rounding: without
+    // it, a binary-searched scale that lands on the limit can still trip the
+    // scrollbar it was meant to avoid.
     const availableHeight = scrim.clientHeight - verticalPadding - 2;
 
-    // The comparison is against the WHOLE dialog's height, not just the
-    // tile-and-text pair - the head and the actions row above it take space
-    // too, and a pair that would juuust fit on its own can still leave the
-    // dialog as a whole needing to scroll.
+    // The comparison is against the whole dialog's height, not just the
+    // tile-and-text pair - the card head above it takes space too, and a
+    // pair that would barely fit on its own can still leave the dialog as a
+    // whole needing to scroll.
     const wasColumns = cols.classList.contains('columns');
     cols.classList.remove('columns');
     const neededHeight = overlayEl.scrollHeight;
     if (wasColumns) cols.classList.add('columns');
 
-    // Below this, a second column would be squeezed thinner than the tile
-    // is tall enough to be worth reading beside - not a tuned constant,
-    // just "does a text column plus a gap plausibly fit at all".
+    // Below this, a second column would be squeezed thinner than the tile is
+    // tall enough to be worth reading beside - a feasibility floor, not a
+    // tuned layout threshold: "does a text column plus a gap plausibly fit
+    // at all".
     const MIN_COLUMNS_WIDTH = 900;
     setColumns(neededHeight > availableHeight && scrim.clientWidth >= MIN_COLUMNS_WIDTH);
   };
@@ -350,18 +319,22 @@ export function RoomOverlay({
   // story usually has slack under it. Binary search the largest
   // `--split-text-scale` (read by the font-size rules scoped to
   // `.overlay-columns.columns .overlay-body`) that still keeps the whole dialog
-  // within the room the scrim has - stop scaling exactly where growing the text
-  // any further would force a scroll, never before.
+  // within the room the scrim has - stop scaling where growing the text any
+  // further would force a scroll, never before. The keyword chips are held
+  // out of the scale: widening every pill pushes a set that fit on one line
+  // onto two, and a single row of tags reads better, so only the story and
+  // score grow. A generic cell, whose short caption cannot fill a tall tile
+  // even at `MAX_SCALE`, leaves a mostly-empty page rather than being blown
+  // up to an absurd size.
   //
-  // This has to run as ITS OWN effect, keyed off `columns` rather than
-  // folded into `decideColumns` above - `.overlay`'s own `columns` class
-  // (which is what makes it `width: fit-content` instead of a fixed size)
-  // is set by React from state, not by this function, so reading widths
-  // here immediately after calling `setColumns(true)` can still see the
-  // OLD, narrower width React hasn't repainted yet. Keying this effect on
-  // `columns` guarantees it only ever runs once that class has actually
-  // landed - React re-renders synchronously off a layout effect's own
-  // `setState`, so by the time this effect's turn comes the DOM already
+  // This runs as its own effect, keyed off `columns` rather than folded into
+  // `decideColumns` - `.overlay`'s own `columns` class (which is what makes
+  // it `width: fit-content` instead of a fixed size) is set by React from
+  // state, not by `decideColumns`, so reading widths immediately after a
+  // `setColumns(true)` call can still see the old, narrower width React has
+  // not repainted yet. Keying this effect on `columns` guarantees it only
+  // runs once that class has landed - React re-renders synchronously off a
+  // layout effect's own `setState`, so by this effect's turn the DOM already
   // reflects the true split-view width.
   const measureScale = useRef(() => {});
   measureScale.current = () => {
@@ -408,15 +381,9 @@ export function RoomOverlay({
 
   const tileSize = naturalSize ?? BASE_TILE;
 
-  // Named by `desc.name` - the same string a listbox option and the map's own
-  // cursor say for this cell. The rank and the keywords are the reason to
-  // have opened it.
-  //
-  // The visible id, unlike `desc.name`, leads with the title (`roomTitle`
-  // falls back to "Room {id}" for a room the corpus hasn't retitled). The
-  // filename used to trail it, but a reader who cares about "001.jpg" can
-  // already get to it by right-clicking the tile and saving it - showing it
-  // to everyone else was cosmetic clutter with no upside.
+  // The dialog's accessible name is `desc.name` - the same string the map's
+  // own cursor says for this cell. The rank and the keywords are the reason
+  // to have opened it.
   return (
     <div
       className="overlay-scrim"
@@ -435,13 +402,10 @@ export function RoomOverlay({
           The favorite toggle and the other reading's link sit in the head
           itself rather than each on a row of their own - the head has the
           horizontal room to spare. The star tucks in right after the name;
-          the link and the close button group at the far right (`.room-head-end`
-          takes the row's slack), so the free space falls between the two
-          groups. `RoomDetails` renders neither (see `favorite={null}` below).
-          The view button carries a short relabel (`view.shortLabel`) that CSS
-          swaps in on a narrow display, where its full phrase plus the title
-          and star would crowd the row; the full phrase stays its accessible
-          name regardless.
+          the link and the close button group at the far right
+          (`.room-head-end` takes the row's slack), so the free space falls
+          between the two groups. `RoomDetails` renders neither (see
+          `favorite={null}` below).
         */}
         <div className="card-head room-head">
           <div className="room-id">
@@ -449,9 +413,11 @@ export function RoomOverlay({
               {'generic' in room ? (
                 'a Babel shelf'
               ) : (
-                // Highlighted like the catalog row's title - only the corpus's
-                // real title, never the "Room N" fallback, which scored no
-                // title match to mark. See CatalogView's own note.
+                // The visible id leads with the title (`roomTitle` falls
+                // back to "Room N" for a room the corpus has not
+                // retitled). Highlighted like the catalog row's title -
+                // only the corpus's real title, never that fallback, which
+                // scored no title match to mark.
                 <b>
                   <Highlight
                     text={roomTitle(entry, room.id)}
@@ -483,10 +449,10 @@ export function RoomOverlay({
         </div>
 
         {/*
-          Two columns only when one would overflow - see `decideColumns`
-          above. A short story stays under the tile exactly as it always has;
-          only a story tall enough to force scrolling moves beside it, and
-          only when the dialog is wide enough for that to be worth doing.
+          Two columns only when one would overflow - see `decideColumns`.
+          A short story stays under the tile; only one tall enough to force
+          scrolling moves beside it, and only when the dialog is wide enough
+          for that to be worth doing.
         */}
         <div
           className={[
@@ -500,33 +466,31 @@ export function RoomOverlay({
           style={contentZoom.style}
         >
           {/*
-            The tile at its own native resolution by default, never upscaled
-            past it - the same rule the map's opening view follows - and a
-            right-click here reaches the browser's own "save image", which a
-            canvas-painted map tile could never offer. `alt` is `desc.picture` -
+            The tile at its own native resolution, never upscaled - the
+            same rule the map's opening view follows - and a right-click
+            here reaches the browser's own "save image", which a
+            canvas-painted map tile cannot offer. `alt` is `desc.picture`:
             for a real room, the sidecar's optional caption, empty when the
             corpus does not carry one; for a generic cell, the one fixed
             sentence every generic tile shares (`describe.ts`'s generic
-            branch) - the only case where this file invents a caption rather
-            than reading one.
+            branch).
 
             Intrinsic size from the tile's own reading if the manifest has
-            one, else BASE_TILE's shared aspect as a fallback (`tileSize`) -
-            so the picture reserves a box matching what will actually load
-            rather than just its proportions. The CSS still scales it down
-            to fit a narrower dialog (`height: auto`, `max-width: 100%`;
-            see `.overlay-tile`'s own comment for why there is deliberately
-            no `width` rule alongside them).
+            one, else `BASE_TILE`'s shared aspect (`tileSize`) - so the
+            picture reserves a box matching what will actually load, not
+            just its proportions. The CSS still scales it down to fit a
+            narrower dialog (`height: auto`, `max-width: 100%`; see
+            `.overlay-tile`'s comment in style.css for why there is no
+            `width` rule alongside them).
 
             `onLoad` re-measures once the browser knows the tile's real
-            height - before that, an unloaded `<img>` has none, and a
-            measurement taken against zero would never decide to overflow.
-            Both calls, in this order: `decideColumns` may flip `columns`,
-            in which case its own effect above re-measures the scale once
-            React has actually applied the class; if `columns` was already
-            true, that effect won't fire again on its own, so the direct
-            `measureScale` call here is what picks up the tile's real
-            (rather than zero) height in that case.
+            height: before that an unloaded `<img>` has none, and a
+            measurement against zero would never decide to overflow. Both
+            calls, in this order: `decideColumns` may flip `columns`, in
+            which case its own effect re-measures the scale once React has
+            applied the class; if `columns` was already true, that effect
+            will not fire again on its own, so the direct `measureScale`
+            call here is what picks up the tile's real height.
           */}
           {src && (
             <img
