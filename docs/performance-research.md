@@ -16,11 +16,10 @@ Numbers assume the current corpus (~2048 rooms), `BASE_TILE` 1024x768, and the
 `LEVELS` ladder in `packages/web/src/lib/pyramid.ts`. Most of this was measured
 while `SHEETS` still packed levels 2-5; level 2 has since moved back to
 per-file (§6), so any number below quoting a level-2 sheet is describing a
-mechanism that no longer exists at that level. Two more items have since
-shipped, each resolved by the same change and each in a form stronger than
-originally proposed — §3.1's mid-flight tile warming and §3.7's planner seam —
-see the "Implemented" notes inside those sections and §9.7 for what actually
-landed.
+mechanism that no longer exists at that level. Shipped items carry an
+"Implemented" note in place: §3.1's tile warming and §3.7's planner seam each
+resolved by the same change (`prepareRearrangement`, §9.7), plus §4.1's
+tile-locator memoization and §5.2's WebGL renderer itself.
 
 ---
 
@@ -176,11 +175,14 @@ actually reaches is what narrows it.** Running the real `openingZoom`,
 | 2560x1440 @2x | L0 | L0 (zoom 384) | **0 only** |
 | 390x844 phone @2x | L0 (zoom 421) | L2 (zoom 78) | 0, 1, 2 |
 
-Levels 0 and 1 are **per-file, not sheet-packed** (`SHEETS.fromLevel` is 2). So
-on a retina desktop the rearrangement never leaves level 0 — there is no level
-transition at all, and no sheet is touched at any point. On a non-retina desktop
-it crosses only into level 1, also per-file. **A sheet is reached only on a
-phone.**
+Levels 0-2 are **per-file, not sheet-packed** (`SHEETS.fromLevel` is 3; level
+2 moved back when §6 landed, after the table above was measured). So on a
+retina desktop the rearrangement never leaves level 0 — there is no level
+transition at all, and no sheet is touched at any point. On a non-retina
+desktop it crosses only into level 1, also per-file — and the phone's flight
+ends at level 2, per-file as well, so **no sheet is reached during the flight
+at all any more**; the sheet-sized numbers above describe the pre-§6
+mechanism the header flags.
 
 This kills the sheet hypothesis for desktop outright, and it points at a
 different and better one. At overview zoom on a desktop, every visible cell is
@@ -555,15 +557,11 @@ reader can see.
 Worth flagging separately, since it turned up while checking this: the tap test
 is **not** size-gated either. `favoriteHitRect` (`favoriteBadge.ts:132-150`)
 returns null only when the trace has no bbox at all; otherwise it hands back the
-scaled bounds, padded for touch. `main.tsx:1012-1013` hit-tests against that
-directly with no minimum. So at coarse zoom the badge is a sub-pixel target that
+scaled bounds, padded for touch (`MIN_FAVORITE_HIT_TOUCH`, capped by
+`TOUCH_HIT_AREA_CAP`). `main.tsx` hit-tests against that directly with no
+minimum. So at coarse zoom the badge is a sub-pixel target that
 still toggles a favorite when hit — invisible and live, rather than invisible and
-inert. (`AGENTS.md`'s "the tap hit-test only enables once the scaled hit bounds
-clear `MIN_FAVORITE_HIT` (24px desktop, 48px `(pointer: coarse)` mobile)"
-describes something the code does not currently do; the only related constant is
-`MIN_FAVORITE_HIT_TOUCH = 20`, which pads rather than gates. Either the doc or
-the code is stale — worth resolving on its own merits, not as part of a
-performance pass.)
+inert.
 
 **Significance.** High at coarse zoom, and it is close to a free fix: roughly
 doubles the draw calls and cache lookups of a zoomed-out frame for no visible
@@ -587,7 +585,7 @@ full-resolution 1024x768 source image scaled into a few pixels.
 **How it works.** `rooms.ts:78` resolves a shared id at level 0 only, so
 `servableLevel` always falls back there, and `main.tsx:355-358` pins the generics
 at level 0 accordingly. `AGENTS.md` already flags this ("The shared tiles are
-served flat (level 0) for now", plan §8). Memory is fine — the cache keys on id,
+served flat (level 0) for now"). Memory is fine — the cache keys on id,
 so a screenful of thousands of generic cells holds a handful of images — but
 *drawing* is not: a filtered downscale from a 1024x768 source into a 10x8
 destination is far more expensive per destination pixel than drawing the 32x24
@@ -677,10 +675,23 @@ absorption, a fade change, a hover, a badge toggle, a newly arrived tile
 getting that wrong produces stale pixels, which is a far worse failure than a
 dropped frame. It costs a second full-size backing store at dpr 2. And it
 complicates the `DrawContext` abstraction that makes these renderers testable
-without a browser — `render.test.mjs`'s recording fake would need to model a
+without a browser — `render.test.ts`'s recording fake would need to model a
 second surface.
 
 ### 5.2 A WebGL renderer
+
+**Implemented — as a second renderer, not as this design.** WebGL shipped and
+is the default (`packages/web/src/lib/glRenderer.ts`/`glSlideRenderer.ts`,
+gated by `webglFlag.ts`'s `DEFAULT_WEBGL`, `?webgl=0` to fall back), but it
+mirrors `render.ts`/`slide.ts`'s per-cell draw loop through `gl/context.ts`'s
+quad primitives rather than replacing it with one instanced draw call, so the
+two renderers stay in lockstep and `render.test.ts`/`slide.test.ts` keep
+their browser-free story (Canvas2D is still fully supported, and
+`render-parity.parity.ts` checks the two agree). Texture lifetime is managed
+by `gl/textureCache.ts`'s own frame-aware budget. See AGENTS.md, "The WebGL
+renderer". The reasoning below is kept as written: what shipped answers its
+testing and spine-text objections by keeping Canvas2D and compositing spines
+through an offscreen 2D canvas (`gl/spineTexture.ts`), not by refuting them.
 
 **What it is.** Upload the sheets as textures once and draw the whole field as
 one instanced draw call.
@@ -691,7 +702,7 @@ under our control (which incidentally solves §3.1 outright), and fill rate stop
 being a per-cell JS concern.
 
 **Trade-offs.** A rewrite of the two renderers, and it takes the whole
-browser-free testing story with it: `render.test.mjs` and `slide.test.ts`
+browser-free testing story with it: `render.test.ts` and `slide.test.ts`
 currently assert real drawing decisions against a recording fake context, which
 has no WebGL equivalent that is anywhere near as cheap. It also adds
 context-loss handling, shader/precision portability, and a text-rendering
@@ -1093,7 +1104,8 @@ it on the next rearrangement. The cost when it fires:
 | desktop Firefox | ~110-530ms | 1.5-7.1s |
 | **Android Firefox** | **~1.5-1.8s** | 1.0-1.4s, then **10.3-10.5s for three of eight sheets** |
 
-This is the strongest evidence for §6 (retire level-2 sheet packing): it explains
+This was the strongest evidence for §6 (retire level-2 sheet packing; since
+done): it explains
 the worst stall measured and is reachable from a normal desktop session, not only
 from a phone. Android Firefox's fetch+decode alone matches the ~1.5s main-thread
 decode `tiles.ts` warns about — see §9.6.

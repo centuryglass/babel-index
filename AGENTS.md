@@ -271,6 +271,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              a layout/order change animates, and what gets said
                              once it lands. The prepare-then-fly-then-slide
                              pipeline is under "The reorder animation"
+    * `useDistillMode.ts`: The distill toggle's state and its asymmetric
+                           sequence (fade the generic tiles out, then slide the
+                           corpus rooms inward; reversed on the way back). The
+                           `genericFade` scalar its rAF loop drives is read by
+                           both renderers; `drawGenericFade` in `render.ts`
+                           owns what the faded end looks like.
     * `useDialog.ts`: The modal-dialog machinery every overlay shares - focus
                       in on open and back out on close, Escape, Tab-trap - plus
                       a topmost-only dialog stack so a stacked overlay (the
@@ -536,7 +542,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   hypotheses ranked by reasoning; §9 is the first
                                   real `?perf` capture and reprioritizes them.
                                   Most items remain unimplemented - the shipped
-                                  exception is `prepareRearrangement` (§9.7).
+                                  ones are `prepareRearrangement` (§9.7), §6's
+                                  level-2 unpack, §4.1's tile-locator
+                                  memoization, and §5.2's WebGL renderer
+                                  itself.
 - `docs/claude_critique.md`: The diagnosis of the comment style this repo is
                              moving away from (Claude-written prose that reads
                              as advocacy rather than reference), with the eight
@@ -852,7 +861,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The zoom cap is `MAX_ZOOM_FACTOR` × the tile's native width** (2× = 2048 at
   1024w), derived in `ZOOM_LIMITS` so it tracks the tile, not a literal. Past 1×
   the flat center tile is upscaled and softens; the opening view is separately
-  capped at 1× in `main.tsx` so a load is never blurry, while a reader may zoom to
+  capped at 1× (`center.ts`'s `openingZoom`, which `main.tsx` calls) so a load
+  is never blurry, while a reader may zoom to
   2× by hand to read a spine. Raising the cap breaks the "tile too large to reach"
   example in `pyramid.test.ts` (its base scales with `MAX_ZOOM_FACTOR`); that is
   the test working, not a regression. Config's `camera.maxZoom` may only narrow
@@ -960,9 +970,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   a manifest listing, since `scan.ts` never discovers them. Drawn by both
   `render.ts` and `slide.ts` on every non-center, non-generic cell -
   `favoriteBadge.ts` is the pure geometry/hit-test half. The tap hit-test
-  only enables once the scaled hit bounds clear a minimum size (padded out
-  further on a coarse pointer, `main.tsx`) - a badge too small to fairly hit
-  is decoration only, not a dead control.
+  has no minimum-size gate: `favoriteHitRect` returns the badge's scaled
+  traced bounds at any zoom, padded up to `MIN_FAVORITE_HIT_TOUCH` on a
+  coarse pointer (`main.tsx` hit-tests that rect directly) - only a trace
+  with no region at all is decoration rather than a dead control.
 
 ### The reorder animation
 

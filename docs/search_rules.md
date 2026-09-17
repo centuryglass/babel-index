@@ -4,8 +4,7 @@ This is the full specification of what a search does: what a query is parsed int
 what one room's evaluation against that query looks like, how that evaluation
 becomes an order and a set of displayed numbers, and every assertion about
 behavior that the implementation (`packages/map/scoring.ts`, `packages/map/ordering.ts`,
-`packages/config/config.ts`) has to satisfy. It supersedes every earlier draft of
-this file.
+`packages/config/config.ts`) has to satisfy.
 
 This describes the finished behavior, and matches the implementation
 (`packages/map/scoring.ts`, `packages/map/ordering.ts`,
@@ -16,8 +15,8 @@ no longer implements.
 
 ## Overview: one evaluation, two questions
 
-A search asks each room in the corpus the same three questions - does the query
-match your tags, does it match your story, does it match your picture - and folds
+A search asks each room in the corpus the same four questions - does the query
+match your tags, your title, your story, your picture - and folds
 the answers into one number per room. That one number is used for two different
 purposes, and the difference between them is the single most important thing to
 hold onto while reading the rest of this document:
@@ -173,7 +172,7 @@ SearchResult = {
 ```
 
 `ranks`/`ties` are independent per-signal sorts of the same `breakdown` arrays
-already computed - no new scoring, just three more sorts of numbers the pass
+already computed - no new scoring, just four more sorts of numbers the pass
 already produced, kept out of the main `order` so re-sorting for a display
 column never touches placement.
 
@@ -441,10 +440,10 @@ It is one signed number in `[-1, 1]`: positive is confidence the room matches,
 same evaluation ranking uses, but from each signal's *absolute* reading, never
 the query-normalised one.
 
-**Certainty is a signed soft-OR of the three absolute readings.** Any one signal
+**Certainty is a signed soft-OR of the absolute readings.** Any one signal
 can carry it alone - an exact tag is certain whatever CLIP thinks of the picture -
 and two weak agreeing signals count for more than either alone.
-*Enforcement:* three inputs, each in `[0, 1]`, plus CLIP's negative half:
+*Enforcement:* four inputs, each in `[0, 1]`, plus CLIP's negative half:
 - `K` (tags), **coverage-scaled**: each query term contributes `1` if it exactly
   equals a keyword, its substring fraction if it only partially matches, or `0`,
   and `K` is the mean of those over the query's terms. So a query wholly covered
@@ -532,7 +531,8 @@ by sorting `breakdown.tagExact`/`tagPartialSum`, `breakdown.titleExact`/
 sorts of already-computed numbers, not four extra scoring passes.
 
 **The composite view shows one ranking and explains itself on demand.** The
-main display is just the overall rank (`x / unique_tile_count`); a tooltip
+main display is just the overall rank (`x / N` rooms, `explainRanking`'s
+`total`); a tooltip
 breaks down what earned it, as a percentage of the total score contributed by
 each signal that actually contributed something.
 *Enforcement:* `explainRanking` already omits a signal entirely when it

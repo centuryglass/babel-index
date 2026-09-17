@@ -35,23 +35,17 @@ code and the git log are the record of what was.
   origin. Add a second ruleset (rate limit + short-TTL cache keyed on the
   query string) scoped to the app's hostname for that endpoint specifically.
 
-- **`server-nginx.conf` does not exist in this repo** (noticed 9/14/26 while
-  wiring up `deploy/`). `AGENTS.md`'s "Deployment and the base path" section
-  and `packages/server/index.ts`'s header both name it as the file that makes
-  a subpath deployment work, quoting two specific `location` blocks from it,
-  but there is no such file tracked here and it is not in `.gitignore` — it
-  only ever lived on the VPS. Either commit the real thing (it is the one
+- **The subpath deployment's nginx config is still untracked** (noticed
+  9/14/26 while wiring up `deploy/`). Nothing in the repo names
+  `server-nginx.conf` any more - the 2026-09-17 AGENTS.md and
+  `packages/server` comment passes cleared those pointers; AGENTS.md now says
+  "the VPS's hand-managed nginx config" and cites `deploy/README.md` - and no
+  such file is tracked here or in `.gitignore`: it only ever lived on the
+  VPS. The open decision is whether to commit the real thing: it is the one
   piece of the deployment still managed entirely by hand, and the one the
-  workflow's public health check fails on when it is wrong) or stop pointing
-  at it by name from two files. Do not reconstruct it from the AGENTS.md
-  description without diffing against the live file first.
-  Update [2026-09-17]: the AGENTS.md comment pass took the first half of
-  "stop pointing at it by name" - AGENTS.md now calls it "the VPS's
-  hand-managed nginx config" and cites `deploy/README.md`, and still quotes
-  the two `location` blocks as what that config must do. The same day's
-  `packages/server` comment pass cleared the code-comment and startup-log
-  namings (`index.ts`, `scan.ts`, `base-path.ts`, `app.test.ts`); the
-  commit-or-not decision is still open.
+  workflow's public health check fails on when it is wrong. Do not
+  reconstruct it from the AGENTS.md description without diffing against the
+  live file first.
 - **The CLIP weights cache inside `node_modules`.** transformers.js defaults
   `env.cacheDir` to `node_modules/@huggingface/transformers/.cache`, so any
   `npm ci` throws away a few hundred MB of downloaded model.
@@ -83,13 +77,9 @@ code and the git log are the record of what was.
   `localStorage` and sends it to the server, and the whole shape of
   `favorites.ts` is an argument about refusing to spy on people — an argument
   no reader can currently see. A short paragraph in `HelpDialog` would say it.
-- **`README.md` describes a center tile that no longer exists** — "5 shelves ×
-  32 books = 160 books", abandoned in concept.md's 8/18/26 entry — and its
-  "What it is" section is still a TODO while the site is live at the URL
-  printed above it.
 
 ## Portfolio signal (2026-09-16):
-This repo is also a software engineering portfolio piece (see AGENTS.md's new
+This repo is also a software engineering portfolio piece (see AGENTS.md's
 section on this), and a reviewer skimming it fast is a different audience
 than a visitor to the site. These are process/documentation gaps that matter
 for that audience specifically, not things the art itself needs:
@@ -124,100 +114,58 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
 `npm audit` job — agreed as worth doing, but not yet planned or started.
 
 ## Comments and doc pointers:
-- **[2026-09-17] Twenty code comments cite `accessibility-plan.md` sections that
-  no longer exist** (13 files), and four more cite `docs/catalog-plan.md` §2/§7 —
-  a file that does not exist at all. Both were caused by a4eb2ae ("AI
-  documentation cull"), which deleted catalog-plan.md and rebuilt
-  accessibility-plan.md as a "Still open" list, so `§3.2`, `§4.2a`, `§8 item 5`
-  and friends resolve to nothing a reader can find. Not a code bug; a
-  confident-looking lie. Fix: drop the pointer and keep the claim its sentence
-  was citing — do not renumber it, since a section number into an ephemeral doc
-  rots again at the next cull (see `docs/comment-refactor-plan.md` §2b's "Doc
-  pointers rot fastest of all"). Reproduce with
-  `grep -rn '§[0-9]\|catalog-plan' packages/ --include='*.ts*'`. The 2026-09-17
-  comment pass cleared `packages/map/nextRoom.ts`, `packages/map/ordering.ts`,
-  and four of the hooks batch (`useCenterShelf.ts`, `useMapCamera.ts`,
-  `useMapCursor.ts`, `useRearrangement.ts`); the rest are still-queued files
-  the pass reaches anyway, so this entry is for the one that a queue position
-  would not catch: `packages/web/src/main.tsx`'s pass is already ticked done
-  and shipped holding `§3.2` and `§4.2b`. Same class, already-passed.
-- **[2026-09-17] One comment still cites a `pending_task_list.md` entry that
-   has already shipped**: `SearchIcon.tsx`'s `SearchOrbitSpinner` points at
-   "the far-field case `docs/pending_task_list.md`'s 'Loading indicator' entry
-   asked for", and this file has no such entry — AGENTS.md documents the
-   far-field spinner as built. A live TODO pointer anchored at the line it
-   warns about is fine and gets cleaned up with the issue; a citation of
-   finished work is dead text. Remove the citation, keep the sentence's own
-   claim about what the component is for. The 2026-09-17 components pass
-   cleared `SearchIcon.tsx`; `useRearrangement.ts` was fixed in this batch.
-- **[2026-09-17] Three comments still quote the easter-egg button's old
+- **[2026-09-17] Two comments still quote the easter-egg button's old
   label**: commit 2196174 ("adjust phrasing") renamed "Click here to run some
-  equivalent code" to "Run the same thing here", and three citations of the
-  old label survived — `style.css`'s `.statement-link` comment,
-  `packages/web/e2e/artist-statement.e2e.ts`'s inline-button comment, and
-  `AGENTS.md`'s `BabelBookOverlay` entry. (Strings are not comments, and no
-  locator depends on the label — the test clicks `.statement-link`.) The
-  components pass and `AGENTS.md` are fixed; the `style.css` comment belongs
-  to the CSS pass and the e2e comment to the specs batch. Prefer naming the
-  class over quoting a label: the label is art-copy and free to move again.
+  equivalent code" to "Run the same thing here", and
+  `style.css`'s `.statement-link` comment and
+  `packages/web/e2e/artist-statement.e2e.ts`'s inline-button comment still
+  quote the old one. (Strings are not comments, and no locator depends on the
+  label — the test clicks `.statement-link`.) Prefer naming the class over
+  quoting a label: the label is art-copy and free to move again.
 - **[2026-09-17] `style.css`'s `.score-details` comment contradicts the rule
   below it**: it says the stacked room overlay "auto-flows into as many
   ~200px columns as fit", but the rule is `grid-template-columns:
-  repeat(2, max-content)` — a fixed two columns. The 2026-09-17 components
-  pass corrected `RoomDetails.tsx`'s copy of the claim to match the rule;
-  the CSS comment is the CSS pass's to fix, after checking which of the two
-  is the intent.
+  repeat(2, max-content)` — a fixed two columns. `RoomDetails.tsx`'s copy of
+  the claim was corrected to match the rule; before fixing the CSS comment,
+  check which of the two is the intent.
 - **[2026-09-17] `packages/web/src/lib/catalog.ts`'s `rowHeight` has no
   production callers.** CatalogView computes its wide-row height inline
   (`flowH + scoreH + ROW_PAD + cardPad`) since the score strip moved below
   the fixed-height flow area, and `stackedRowHeight` covers ultra-narrow, so
-  `rowHeight` is exported and tested while nothing calls it. The 2026-09-17
-  components pass re-pointed CatalogView's comments that claimed pads were
-  "priced into `rowHeight`" at the live arithmetic instead. Deleting the
-  function (and its `catalog.test.ts` block) or re-adopting it is a code
-  edit for the `lib/catalog.ts` pass.
+  `rowHeight` is exported and tested while nothing calls it. Deleting the
+  function (and its `catalog.test.ts` block) or re-adopting it is the open
+  code edit.
 - **[2026-09-17] A generic cell is named two different things in one
   dialog's chrome**: `RoomOverlay`'s card shows the visible literal "a Babel
   shelf", while the same room's accessible name comes from `describe.ts`'s
   generic `name`, "a library wall" — a screen reader announces one thing and
-  the eye reads another in the same dialog. The 2026-09-17 components pass
-  corrected a `MapView` comment that quoted "a Babel shelf" as the canvas's
-  own label (it says `describeCell`'s generic name); the two strings
-  themselves are code, so this is filed. Reconciling them may be deliberate
-  art-copy layering rather than drift — an art decision for the maintainer.
-- **[2026-09-17] Three comments still call distill mode's transition a fade to
-  black**: `useDistillMode.ts`'s `fadeMs` option doc ("how long the black fade
-  takes"), `useMapRenderer.ts`'s and `slide.ts`'s `genericFade` docs ("distill
+  the eye reads another in the same dialog. Reconciling them may be
+  deliberate art-copy layering rather than drift — an art decision for the
+  maintainer.
+- **[2026-09-17] Two comments still call distill mode's transition a fade to
+  black**: `useMapRenderer.ts`'s and `slide.ts`'s `genericFade` docs ("distill
   mode's black fade over generic tiles"). Generic tiles now crossfade to their
   paired `assets/generic_distill` alternate — `drawGenericFade` in `render.ts`
-  and AGENTS.md's "The center tile and its generic tiles" both describe it, and
-  `render.ts`'s own copy of the claim was corrected in the 2026-09-17
-  renderer-cluster pass — so "black" names an implementation the crossfade
-  replaced. Found while passing `packages/config/config.ts`, whose own copy this
-  merge fixes. `slide.ts` and `useMapRenderer.ts` were in that cluster and kept
-  it, so the wording survives a pass that should have caught it;
-  `useDistillMode.ts` is still queued with the hooks.
+  and AGENTS.md's "The center tile and its generic tiles" both describe it —
+  so "black" names an implementation the crossfade replaced. The copies in
+  `useDistillMode.ts` and `render.ts` are fixed; these two survived a pass
+  that reached their own file.
 
-- **[2026-09-17] Two comments cite pipeline symbols at `sheets.ts`, which only
-  re-exports them.** `packages/web/src/lib/pyramid.ts`'s `SHEETS` docblock says
-  "`packages/pipeline/sheets.ts` and `packages/server/scan.ts` both assert" the
-  `cols * rows === roomsPerSheet` rule - the assertion is `sheetPlan`'s, in
-  `packages/pipeline/layout.ts`, which both of those call - and
-  `packages/map/manifest.ts` names "`packages/pipeline/sheets.ts`'s
-  `sheetPosition()`", also defined in `layout.ts`. Neither pointer dangles, but
-  each lands on a file whose own line for that symbol is an `export ... from`.
-  Each owning pass (`packages/web`, `packages/map`) reaches them; recorded here
-  because a comment pass must not edit files another checkout is in.
+- **[2026-09-17] `packages/web/src/lib/pyramid.ts`'s `SHEETS` docblock cites
+  a file that only re-exports the symbol it names.** It says
+  "`packages/pipeline/sheets.ts` and `packages/server/scan.ts` both assert"
+  the `cols * rows === roomsPerSheet` rule - the assertion is `sheetPlan`'s,
+  in `packages/pipeline/layout.ts`, which both of those call. Neither pointer
+  dangles, but the first lands on a file whose own line for that symbol is an
+  `export ... from`. (The same entry for `packages/map/manifest.ts` was
+  fixed; it now names `layout.ts`.)
 - **[2026-09-17] Two assertion messages in `tools/center-placement/geometry.test.ts`
   name files that no longer exist**: the aspect-mismatch message ends "re-run
   `import-shelf-svg.mjs`" and the traced-shape message says "`measured.js` must
   carry its traced dimensions". Both files are `.ts` since the migration, so a
   reader who follows either instruction runs a command that fails. They are
-  strings, not comments, and a comment pass's verifier reports any change to
-  them as a code change, so they are filed rather than fixed. One more of the
-  same class, from the 2026-09-17 `packages/web/src/lib` pass: the
-  `catalog.test.ts` title "the alphabetical order is plain string comparison,
-  matching scan.mjs" — the comment under it now reads `scan.ts`.
+  strings, not comments, so they are filed here rather than fixed in a comment
+  pass.
 
 - **[2026-09-17] A `remote.ts` preamble names a fetcher that has moved.** Its
   CORS warning says "`embeddings.bin` and `metadata.json` are read via
@@ -225,35 +173,27 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   `packages/web/src/hooks/useCorpus.ts`, which also `fetch()`es
   `tagLinks.json` the same way; `main.tsx` fetches only `api/manifest`. The
   sentence is a hazard note — a reader wiring CORS who opens `main.tsx` finds
-  nothing — so only the attribution is wrong. `tools/upload`'s comment pass
-  (2026-09-17) standardized on `useCorpus.ts` for the same fact, in
-  `crossOriginFetchedKeys`. Fix there: name `useCorpus.ts`. Recorded here
-  because `packages/server` is already ticked done and a pass must not edit a
-  file another checkout owns.
+  nothing — so only the attribution is wrong. Fix: name `useCorpus.ts`, the
+  same spelling `tools/upload`'s `crossOriginFetchedKeys` standardized on.
 
-- **[2026-09-17] Two places say the page-load zoom cap is applied in `main.tsx`;
-  it is applied in `center.ts`.** AGENTS.md's "The zoom cap is `MAX_ZOOM_FACTOR`"
-  bullet says "the opening view is separately capped at 1× in `main.tsx`", and
-  `main.tsx`'s own `opening` memo repeats "Capped at the tile's native width".
-  The `Math.min(BASE_TILE.w, …)` is inside `openingZoom` (`center.ts`) —
-  `main.tsx` only calls it, so a reader who goes to `main.tsx` to find the cap
-  finds a call instead. The 2026-09-17 `packages/web/src/lib` pass corrected
-  `camera.ts`'s copy of the claim to name `openingZoom`; AGENTS.md and `main.tsx`
-  are outside what that pass may edit. Reproduce with
-  `grep -rn 'native width\|capped at 1' AGENTS.md packages/web/src`.
 - **[2026-09-17] `center.test.ts` pins an art number** —
   `assert.equal(BOOK_COUNT, 40)` — against AGENTS.md's "Don't pin art choices in
   tests", which names book count as free to move. The test's own point ("every
   book on the wall is a slot, and the whole wall is the history queue") needs
   only `HISTORY_SLOT_COUNT === BOOK_COUNT`, which the next line already asserts,
-  so dropping the literal loses nothing. Found by the 2026-09-17
-  `packages/web/src/lib` comment pass, which could not fix it: the verifier
-  reports any change to an assertion as a code change.
+  so dropping the literal loses nothing.
+- **[2026-09-17] `packages/map/scoring.ts`'s header says "the three signals"**,
+  and "`matchCertainty`"'s bulleted list omits the title, where the blend now
+  weights four signals (keyword, title, story, CLIP - `searchResult.ts`'s
+  `RankSignals` says "the four signals", and the weights shape carries
+  `titleExact`/`titlePartial`). The normalisation argument itself still holds;
+  only the count and "the other two" are behind. Found while checking
+  `docs/search_rules.md`'s matching "three questions" in the overview, which
+  this pass fixed.
 
 ## Corpus generation:
 - **[2026-09-17] The pipeline assumes one source size, and checks only that it
-  is not mixed in shape** (found during the `packages/pipeline` comment pass,
-  which could record the limitation on `checkAspects` and nothing more).
+  is not mixed in shape.**
   `checkAspects` compares aspect ratios with a 1% tolerance, so a corpus of
   differing pixel dimensions passes, and `index.ts` takes `sizes[0]` as the
   corpus's size for the level plan it prints and for every sheet's `tileSize`;
@@ -280,14 +220,13 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   `packages/pipeline/layout.ts`'s `sheetDirName` returns `<width>-sheets`, the
   name `scan.ts` discovers a packed level by and the manifest then carries to
   `tools/upload`; `packages/pipeline/sheets.ts` builds that same name from its
-  own `SHEETS_SUFFIX`, while importing `sheetDirName` only to re-export it. The
-  pass pinned the coupling with a warning comment on the constant rather than
-  touching code: `writeSheets` can derive its output directory from
-  `sheetDirName`, which deletes the second spelling.
+  own `SHEETS_SUFFIX`, while importing `sheetDirName` only to re-export it.
+  `writeSheets` can derive its output directory from `sheetDirName`, which
+  deletes the second spelling.
 
 ## Tools:
 - **[2026-09-17] `import-shelf-svg.ts`'s `attr()` matches attribute names
-  without an anchor** (found passing that file's comments). Its direct lookup
+  without an anchor.** Its direct lookup
   builds the pattern `\b<name>\s*=\s*"..."`, and `-` is a word boundary, so
   `attr(tag, 'width')` matches the tail of `stroke-width="0.75"` and returns it
   as the rect's width whenever that presentation attribute appears earlier in
@@ -304,7 +243,7 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   exactly what the search box needs`, for a reason that does not name the
   cause.
 - **[2026-09-17] `import-shelf-svg.ts` does not refuse an unsupported path
-  command**, though its own comment claimed it did (found passing that comment).
+  command.**
   `normalizePath`'s token regex is `/[MmLlHhVvCcZzAa]|-?\d*\.?\d+.../g`, which
   matches no `S`/`Q`/`T`, so a smooth-curve letter - what Inkscape leaves behind
   when it simplifies a Bezier, an easy accident for whoever re-traces - is
@@ -324,8 +263,7 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   non-canonical letters and their numbers drop silently there too - so the
   remaining ask here is the importer-side fix only.
 - **[2026-09-17] `tools/embed/cosine-range.ts` prints the conclusions of a
-  calibration method it no longer uses** (found during the `tools/embed` comment
-  pass, which could state the method in comments and nothing more). Two places,
+  calibration method it no longer uses.** Two places,
   both in `printSummary`:
   - The `--irrelevant` block warns `! ceiling ... sits BELOW the overall centre -
     unexpected, expected low-positive`. That is the shipped measurement:
@@ -380,9 +318,7 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   second home for `DEFAULTS.search.clipTextDtype` — against AGENTS.md's
   "Consuming files state no fallback defaults". Nothing catches it: `tsc` allows
   `?.` on a non-optional property, and every `app.test.ts` config comes from
-  `resolveConfig`. Found while passing `packages/config/config.ts`, whose
-  `clipTextDtype` doc names this route; dropping the two fallbacks is a code
-  edit, so a comment pass files it rather than fixing it.
+  `resolveConfig`. Dropping the two fallbacks is the fix.
 
 ## Rendering:
 - **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
@@ -398,10 +334,7 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   `main.tsx` must pin each shared id at level 0 - full resolution - and a
   zoomed-out view pays a full-res download per generic tile on screen
   (AGENTS.md, "The center tile and its generic tiles"). Generating pyramid
-  levels for the shared dir through `packages/pipeline` would close it. This
-  task's only previous home was a "plan §8" citation in AGENTS.md - a
-  section of the deleted catalog-plan.md - until the 2026-09-17 AGENTS.md
-  pass moved it here.
+  levels for the shared dir through `packages/pipeline` would close it.
 - **[2026-09-17] `useMapRendererGL.ts` restates the warm-timeout duration
   locally.** `DEFAULT_WARM_TIMEOUT_MS` (1200) covers a caller that omits
   `warmTimeoutMs`, but the only production caller always passes
@@ -409,25 +342,20 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   statement of a by-feel number, already diverged from config's own default,
   against AGENTS.md's "Consuming files state no fallback defaults". Fix
   either way: require the parameter, or source the fallback from config.
-  Found by the 2026-09-17 renderer-cluster comment pass, which left the code
-  alone and corrected only the comment around it.
 - **[2026-09-17] Two hover golds.** `.center-book.hover` (`style.css`) fills
   with `--accent-rgb` (196,150,84), while the canvas-side hover glows -
   `center.ts`'s `HOVER_GLOW_FILL`/`_STROKE`, `render.ts`'s
   `FAVORITE_HOVER_GLOW_FILL`/`_STROKE`, `gl/glowTexture.ts`'s bake - are
-  rgba(200,169,95). A `center.ts` comment claimed the DOM and canvas
-  treatments were the "same gold"; they are not, and the 2026-09-17
-  renderer-cluster pass corrected the claim. Whether the open book and the
+  rgba(200,169,95). Whether the open book and the
   shelf/badge/toggle hovers should carry one gold is an art decision.
 - **[2026-09-17] WebGL's two `reset()` methods have no caller.**
   `GLTextureCache.reset` and `SpineTextureCache.reset` are documented "for a
   lost context", but nothing reaches them: `useMapRendererGL.ts`'s
   `webglcontextlost` handler drops the whole runtime and `setup()` rebuilds
   fresh renderers and caches on restore, and the unmount cleanup calls
-  `dispose()` on every cache. Their comments now say so plainly. Either wire
-  the path they were designed for (a rebuild that reuses the renderer and
-  its caches rather than replacing them) or delete the methods. Found by the
-  2026-09-17 `lib/gl` comment pass, which left the code alone.
+  `dispose()` on every cache. Either wire the path they were designed for (a
+  rebuild that reuses the renderer and its caches rather than replacing them)
+  or delete the methods.
 - **[2026-09-17] The canvas-side hover gold is written three times.** Separate
   from the "Two hover golds" entry above, which is about the DOM's different
   gold: `rgba(200,169,95, …)` appears as `center.ts`'s
@@ -435,9 +363,7 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   `FAVORITE_HOVER_GLOW_FILL`/`_STROKE`, and `gl/glowTexture.ts`'s
   `FILL`/`STROKE`, with no constant tying the three. They agree today, and
   AGENTS.md's "The WebGL renderer" lockstep rule means a reader changing the gold
-  can change one and leave two, which the parity suite catches only by eye. Found
-  by the 2026-09-17 `packages/web/src/lib` pass, whose comment on these constants
-  now names all three.
+  can change one and leave two, which the parity suite catches only by eye.
 - **[2026-09-17] The `dpr` cap of 2 is stated five times.** Both render hooks
   (`useMapRenderer.ts`, `useMapRendererGL.ts`), `useRearrangement.ts`'s
   `landingRectangle`, `catalog.ts`'s `thumbLevel`, and `catalog.test.ts`'s own
@@ -445,19 +371,9 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   makes the catalog demand a finer rung than the map holds — the agreement
   `thumbLevel`'s `dpr` parameter doc states. AGENTS.md puts every pyramid number
   in `packages/web/src/lib/pyramid.ts`, and this is one, since the cap decides a
-  level. Found by the 2026-09-17 `packages/web/src/lib` pass, which corrected the
-  comment and left the code alone.
+  level.
 
 ## Shareable permalinks:
-- **[2026-09-16, done] Room permalinks already existed and were unused -**
-  `packages/server/app.ts`'s `/catalog/:file` route SSRs a stable,
-  filename-keyed permalink, and `main.tsx`'s `window.__INITIAL_ROUTE__`
-  already booted a JS-capable visitor into it, but `RoomOverlay` had no way
-  to reach the link. Fixed: a `.share-button` pinned to the paper page's own
-  bottom-right corner (`RoomOverlay.tsx`'s `ShareButton`, `style.css`'s
-  `.share-button`), building the same url `app.ts`'s `canonicalPath` does and
-  copying it to the clipboard. Collapses to icon-only under 600px, same
-  breakpoint the head's "view" link already used.
 - **[2026-09-16] Add `/help` and `/about` as one-shot SSR-linkable routes,
   same pattern as `/catalog`.** Two more `app.get` routes in `app.ts`,
   each calling `renderPage` with a minimal `bodyHtml` (not full SSR content
@@ -479,47 +395,12 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
     route with a real decision to make; the rest is mechanical.
 
 ## Rearrangement / camera:
-- **[2026-09-14] Root-caused and fixed: the "second rearrangement cycle" was
-  never real - it was `map-gestures.e2e.ts`'s own `a search reorders the
-  library around wherever the camera already is` test reporting success
-  before the search it triggered had even started.** That test presses Enter,
-  then polls (`waitFor`) until the camera reads back exactly `atField` (where
-  the search was triggered from) as proof the rearrangement finished. But
-  `/api/search`'s fetch (slower still on a loaded/cold-cache container) had
-  not resolved yet on the FIRST poll - so the camera was still just sitting,
-  untouched, at `atField`, which is indistinguishable from "the rearrangement
-  ran and eased back here." The check passed immediately, the test moved on,
-  and the search's real rearrangement then ran to completion during the NEXT
-  test (`right-clicking a room opens its card…`), its zoom-out flight and its
-  post-slide fly-back both calling `flyTo` at moments that raced and
-  sometimes beat that next test's own `recentre()`/right-click, landing the
-  camera somewhere the fixed test coordinates no longer held a room. Confirmed
-  by direct instrumentation (timestamped console logging of every
-  `beginFlightTo`/`requestAnimation`/`startRearrangement` call plus explicit
-  per-test markers, `page.on('console')`-captured): `requestAnimation`
-  ("ranked by keywords") for the prior test's search fired to `t=10474`, which
-  was already 90ms into the NEXT test (its `TESTMARK` at `t=10387`) - proof
-  the search's own rearrangement had not even begun when the search test
-  reported "ok". Fixed by making the search test wait for the HUD to actually
-  report `rearranging` before waiting for it to settle back
-  (`packages/web/e2e/map-gestures.e2e.ts`) - 5/5 clean runs of the whole file
-  afterward in the same container that previously failed 3/4.
-
-  Earlier investigation (now superseded, kept for context on what was ruled
-  out): the two search requests, single `requestAnimationRef.current(...)`
-  call, and 13-of-16 tests passing were all real observations - it was the
-  interpretation ("a phantom second rearrangement") that was wrong; there was
-  only ever one `startRearrangement` call per search, and its own perfectly
-  ordinary zoom-out-then-fly-back was simply landing in the wrong test's
-  timeline.
-
-  Separately, still true and NOT itself a cause of this flakiness:
-  `useMapCamera.ts`'s `flyTo` has no way to interrupt an active
-  rearrangement's own camera control - a `flyTo` issued from a control (the
-  'center' button, a keyboard nudge) while a rearrangement is mid-flight or
-  mid-fly-back can be overridden by that rearrangement's next `flyTo` call,
-  same as the race above but triggerable for real by a fast-clicking reader,
-  not just an under-synchronized test. AGENTS.md's "Camera and gestures"
+- **[2026-09-14] A `flyTo` from a control cannot interrupt an active
+  rearrangement's own camera control.** A `flyTo` issued from the 'center'
+  button or a keyboard nudge while a rearrangement is mid-flight or
+  mid-fly-back can be overridden by that rearrangement's next `flyTo` call -
+  triggerable for real by a fast-clicking reader, not just an
+  under-synchronized test. AGENTS.md's "Camera and gestures"
   section documents `pointerdown`/`wheel` each dropping an in-flight flight,
   and the rearrangement section documents "Anything that moves the camera
   mid-rearrangement (pan, zoom, `flyTo`) must end the animation instead" - but
@@ -529,10 +410,8 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
 - **[2026-09-17] `repairMultiset` takes a `start` board it never reads**
   (`packages/map/board.ts`): the signature is `(start, end, delta, geom)`, the
   body touches only `end`, `delta` and `geom`, and `buildRearrangement` still
-  passes `start` at the call site. Found while passing the file's comments.
-  Dropping the parameter is a code edit, which a comment pass may not make - its
-  whole contract is that the verifier reports `comment-only` - so it is filed
-  rather than fixed. Nothing gates it: eslint's `no-unused-vars` only reports
+  passes `start` at the call site. Dropping the parameter is the fix. Nothing
+  gates it: eslint's `no-unused-vars` only reports
   arguments after the last used one, and `tsc` has no `noUnusedParameters`.
 - **[2026-09-17] `slide.prepareTimeoutMs` cannot be raised above 5000ms.**
   `duration()`'s `DURATION_MAX_MS` ceiling is written for animation durations -
@@ -541,20 +420,19 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   config that *is* a wait, so the default sits exactly at the ceiling and the
   overlay can only shorten it. A slow host that wants a longer prepare (the
   Android Firefox tail in `docs/performance-research.md`'s "Measured findings"
-  runs well past it) has no way to ask. Found while passing
-  `packages/config/config.ts`, whose comment now states the limit rather than
-  implying the budget is tunable; lifting it is a code change and a decision
-  about whether `duration()` should take a separate ceiling for waits. The same
-  number is restated as a fallback elsewhere - see `DEFAULT_WARM_TIMEOUT_MS`
-  under Rendering.
-- **[2026-09-17] `webgl-map.e2e.ts`'s search test has the race the [2026-09-14]
-  `map-gestures.e2e.ts` entry root-caused, unfixed on the GL side.** Its
+  runs well past it) has no way to ask. Lifting it is a code change and a
+  decision about whether `duration()` should take a separate ceiling for waits.
+  The same number is restated as a fallback elsewhere - see
+  `DEFAULT_WARM_TIMEOUT_MS` under Rendering.
+- **[2026-09-17] `webgl-map.e2e.ts`'s search test has the race the Canvas2D
+  search test had, unfixed on the GL side.** Its
   `a search completes and its rearrangement settles, same as the Canvas2D path`
-  presses Enter and polls until the camera reads back `atField` - the check
-  that entry showed can pass before the rearrangement has started. The
-  Canvas2D file now waits for the HUD to report `rearranging` first; the GL
-  one does not, so the ease-back assertion proves nothing on a slow search
-  response and its trailing `gl`/`blank` reads can land on a pre-search frame.
+  presses Enter and polls until the camera reads back `atField` - a check
+  that can pass before the rearrangement has even started, while the search
+  response is still in flight and the camera simply sits where it was.
+  `map-gestures.e2e.ts` now waits for the HUD to report `rearranging` first;
+  the GL one does not, so the ease-back assertion proves nothing on a slow
+  search response and its trailing `gl`/`blank` reads can land on a
+  pre-search frame.
   Fix: port the same `waitForFunction` guard. Found by the 2026-09-17 WebGL
-  comment pass, whose contract is prose-only edits; the test's own comment
-  points here.
+  comment pass; the test's own comment points here.
