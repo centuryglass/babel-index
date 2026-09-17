@@ -182,7 +182,10 @@ export const HYSTERESIS = 0.15;
  * large, and cheap at the zooms where they are not.
  *
  * `marginRatio` is what actually governs the ring at anything but the closest
- * zoom - see `marginFor()`. At coarse zooms a fast pan crosses many more cells, exactly where warming ahead is closest to free (those levels are sheet-packed, see SHEETS, so most of the wider ring resolves to a sheet already resident).
+ * zoom - see `marginFor()`. At coarse zooms a fast pan crosses many more
+ * cells, exactly where warming ahead is closest to free (those levels are
+ * sheet-packed, see SHEETS, so most of the wider ring resolves to a sheet
+ * already resident).
  *
  * `concurrency` caps in-flight prefetches. Browsers allow ~6 connections per
  * host; leaving headroom is deliberate, because a prefetch that queues ahead of

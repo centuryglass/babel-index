@@ -107,10 +107,10 @@ export function createTileLocator(manifest: Manifest): LocateTile {
 
   // The answer for a given (id, level) never changes for this manifest, but
   // computing it allocates a fresh TileLocation/rect every call - and the
-  // cache asks on every visible cell every frame, cache hits included (see
-  // Memoized per level then id: the returned
-  // object is now SHARED across every caller for that (id, level), so nobody
-  // may mutate a TileLocation or its rect - callers only ever read them today.
+  // cache asks on every visible cell every frame, cache hits included.
+  // Memoized per level then id: the returned object is now SHARED across
+  // every caller for that (id, level), so nobody may mutate a TileLocation
+  // or its rect - callers only ever read them today.
   const cache = new Map<number, Map<number | string, TileLocation | null>>();
   return (id, level) => {
     let byId = cache.get(level);
