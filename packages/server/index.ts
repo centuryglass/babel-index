@@ -175,6 +175,7 @@ if (!hasTextModel()) logger.info('no CLIP text model installed - search will ran
 logger.info(watch ? 'bundling client (watch mode)' : 'bundling client');
 // `app` is assigned below, after this closure is built - referenced here only
 // from onEnd, which never fires before then.
+// eslint-disable-next-line prefer-const -- reassigned once below, after the closure that reads it exists
 let app: Express | undefined;
 let bundleJs = '';
 const ctx = await context({

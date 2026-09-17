@@ -22,7 +22,7 @@
  * for the cursor, `gl/context.ts`'s `drawStrokeQuad`.
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
-import { pxPerCell, type Camera } from './camera.ts';
+import { pxPerCell } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,

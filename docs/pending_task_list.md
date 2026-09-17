@@ -56,18 +56,6 @@ code and the git log are the record of what was.
   cache as a volume instead of re-downloading on every container start.
 
 ## CI:
-- **[2026-09-17] `npm run lint` checks almost nothing of the app.** Noticed
-  while verifying AGENTS.md's linting claims: the migration left zero `.js`
-  and `.jsx` files under `packages/` and `tools/`, but eslint's flat-config
-  default file list is `.js`/`.mjs`/`.cjs` - no config here extends it. So
-  `eslint .` checks `eslint.config.js`, `deploy/health-check.mjs`,
-  and `build/*.mjs` - nothing else. No
-  browser-globals or react-hooks checking of `packages/web`, and no
-  rule runs against any `.ts`/`.tsx`. The "Linting is minimal" list in
-  `AGENTS.md` now states this plainly; the fix is deciding whether the flat
-  config should lint `.ts` (a TS-parser dependency decision) or whether
-  lint is Node-side-only by design. Either way the CI `lint` job is
-  currently a green light over an empty room.
 - **Nothing builds the `Dockerfile`.** It exists so hosting can move without a
   rewrite, and it will drift out of step with `package.json` unnoticed until
   the day that matters. A build-only job is enough — no push, no registry.
@@ -83,12 +71,11 @@ This repo is also a software engineering portfolio piece (see AGENTS.md's
 section on this), and a reviewer skimming it fast is a different audience
 than a visitor to the site. These are process/documentation gaps that matter
 for that audience specifically, not things the art itself needs:
-- **No CI/build status badge and no engineering framing in `README.md`.** The
-  README currently reads purely as an art description — nothing signals to a
-  skimming reviewer that CI/lint/typecheck/e2e are all green, or points them
-  at the interesting engineering (the health-check-gated deploy, the
-  rearrangement planner, the favorites set-hashing design) without making them
-  excavate this file.
+- **No engineering framing in `README.md`.** It has a `ci`/`codeql`/`deploy`
+  status badge row now, but otherwise still reads purely as an art
+  description — nothing points a skimming reviewer at the interesting
+  engineering (the health-check-gated deploy, the rearrangement planner, the
+  favorites set-hashing design) without making them excavate this file.
 - **No release discipline.** `package.json` is pinned at `0.0.0`, there are no
   git tags, and no `CHANGELOG.md` — nothing visibly marks what shipped when,
   even though `deploy.yml`/`health-check.mjs` already tie a live deployment to
@@ -108,10 +95,6 @@ for that audience specifically, not things the art itself needs:
   `logger.ts`'s structured logs and the deploy-time health check. Possibly
   legitimate overkill for a single-VPS art site, but "how do you know when
   it's broken" is a fair question from this audience.
-
-Deliberately not listed here: adding a SAST/security-scanning workflow
-(CodeQL, Dependency Review Action) alongside the existing informational
-`npm audit` job — agreed as worth doing, but not yet planned or started.
 
 ## Comments and doc pointers:
 - **[2026-09-17] A generic cell is named two different things in one

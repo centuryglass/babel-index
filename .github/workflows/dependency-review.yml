@@ -1,0 +1,24 @@
+name: dependency-review
+
+# Blocks a PR that introduces a new dependency (direct or transitive) with a
+# known vulnerability or a disallowed license - checked against the PR's
+# diff, not the whole tree. That's why this can be a real gate where
+# `ci.yml`'s `audit` job is informational-only: `audit` reports every
+# advisory already in the lockfile, including the unfixable dev/optional-only
+# ones noted there, and failing on those would stay red forever for reasons
+# unrelated to any given PR. This only ever fires on what a PR actually adds.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: dependency review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/dependency-review-action@v4
