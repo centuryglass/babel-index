@@ -33,9 +33,9 @@ test('the probe does not leave the port held behind it', async () => {
   // to release would make the demo refuse to start on a port that is fine - or
   // worse, take the port the server was about to want.
   //
-  // A leak fails this test by name and ALSO hangs the runner, since the open
-  // handle keeps the process alive. Both at once is the expected symptom; the
-  // hang is not a separate problem to go looking for.
+  // A leak fails this test by name, and hangs the runner too: the open
+  // handle keeps the process alive. Both at once is the expected symptom -
+  // the hang is not a separate problem to go looking for.
   const port = await holding(async (p) => p);
   assert.equal(await portInUse(port), false);
   assert.equal(await portInUse(port), false, 'a second check must agree with the first');

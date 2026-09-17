@@ -1,45 +1,29 @@
 /**
- * Global favorite counts: the first piece of state this server has ever owned.
+ * Global favorite counts - the only state this server persists. The store
+ * keeps, per room, a set of HMAC(salt, file + NUL + clientId) hashes: no
+ * addresses, no sessions, no timestamps. AGENTS.md's "Favorites" section is
+ * the canonical statement of the invariants this module implements - a count
+ * is a set's size rather than a counter, the hash is keyed per room, identity
+ * is a browser-generated token (see `useFavorites.ts`) rather than an
+ * address, and everything keys on filename.
  *
- * A room's count is the SIZE OF A SET, not a number anyone increments. That is
- * the whole design (docs/concept.md, 8/30/26): `add` and `remove` are set operations
- * keyed on who is asking, so hammering either endpoint moves a count by at most
- * one, and nothing an endpoint accepts can zero a room out or run it up.
- *
- * ### What is stored, and what deliberately is not
- *
- * Per room, a set of hashes - never an address, never a session, never a
- * timestamp. The hash is HMAC(salt, file + NUL + clientId), and it is keyed PER
- * ROOM on purpose: the same visitor hashes differently in every room's set, so
- * two sets cannot be joined to reconstruct one person's favorites. The cost is
- * that this store cannot count distinct visitors, which is a thing we do not
- * want to be able to do. Hashing is not a security control here and is not
- * claimed as one - it is the shape that makes the per-visitor data useless
- * while still letting a set de-duplicate.
- *
- * `clientId` is an opaque token the browser generates and keeps in
- * `localStorage` (see `useFavorites.ts`), not an IP address - an address
- * collides real visitors behind shared NAT/CGNAT together and reassigns
- * itself out from under one visitor on a rotating connection, either of which
- * reads here as a favorite that silently didn't register or one that silently
- * came back. A generated token fixes both, at the cost of being exactly as
- * easy to regenerate as clearing site data already was - which only ever
- * reverts a visitor to "not yet favorited," never lets one push a count past
- * one or pull it below zero, since that guarantee lives in the set semantics
- * above, not in how hard the identity is to obtain.
+ * Hashing is not a security control and is not claimed as one: it is the
+ * shape that makes the stored data useless while still letting a set
+ * de-duplicate. A regenerated client id is as easy to obtain as clearing
+ * site data always was, and only ever reverts a visitor to "not yet
+ * favorited" - the bound on counts lives in the set semantics, not in how
+ * hard identity is to forge.
  *
  * The salt is random per store and lives in the file, so counts survive a
  * restart. Delete the file and every count is gone: there is no second copy,
  * and a salt rotation is indistinguishable from a reset.
  *
- * ### Why a JSON file rather than a database
- *
- * The data is one small map of string sets, written by one process, read on
- * page load. A file it is - held in memory, snapshotted with an atomic
- * tmp+rename on a debounce, so a burst of favorites costs one write rather than
- * one per click. `FavoriteStore` is an interface rather than this module's
- * shape directly, so a Postgres-backed implementation can replace it without
- * `app.ts` or the client learning anything new.
+ * Storage is one JSON file: the data is one small map of string sets,
+ * written by one process, read on page load, held in memory and snapshotted
+ * with an atomic tmp+rename on a debounce so a burst of favorites costs one
+ * write. `FavoriteStore` is an interface rather than this file's shape, so
+ * another backend can replace it without `app.ts` or the client learning
+ * anything new.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
@@ -56,10 +40,10 @@ interface Snapshot {
 }
 
 /**
- * What `app.ts` is handed. Everything is by room FILE, never by room id - ids
- * are positional (scan.ts sorts filenames and indexes them), so adding one
- * image to a corpus would silently renumber every favorite recorded against
- * an id.
+ * What `app.ts` is handed. Everything is by room file, never by room id:
+ * ids are positional (scan.ts sorts filenames and indexes them), so adding
+ * one image to a corpus would silently renumber every favorite recorded
+ * against an id.
  */
 export interface FavoriteStore {
   /** Every room with at least one favorite. Rooms with none are absent, not zero. */
@@ -82,8 +66,8 @@ export interface JsonStoreOptions {
 /**
  * A store backed by one JSON file.
  *
- * A missing file is an empty store with a fresh salt, which is the ordinary
- * first-run case. An unreadable or malformed one is NOT: it throws, because
+ * A missing file is an empty store with a fresh salt - the ordinary
+ * first-run case. An unreadable or malformed one is not: it throws, because
  * silently starting empty over a file that exists would replace real counts
  * with nothing on the next write.
  */

@@ -78,9 +78,8 @@ test('/api/health reports the revision it was given, and the corpus it found', a
     async ({ get }) => {
       const res = await get('/api/health');
       assert.equal(res.status, 200);
-      // A cached answer would let the deploy check pass on the revision that
-      // was running a minute ago - the one failure this endpoint exists to
-      // catch. See app.ts.
+      // no-store is what makes the deploy check meaningful: a cached answer
+      // could report the previous revision (see app.ts's /api/health).
       assert.match(res.headers.get('cache-control'), /no-store/);
 
       const health = await res.json();
@@ -145,7 +144,7 @@ test('/api/manifest carries the config, and never the operator notes', async () 
 });
 
 test('/api/manifest serves the defaults when the app was given no config', async () => {
-  // index.mjs always passes one, but app.mjs is built to be usable without the
+  // index.ts always passes one, but app.ts is built to be usable without the
   // CLI, and a manifest with no config block would crash the client.
   await serving(async ({ get }) => {
     const m = await (await get('/api/manifest')).json();
@@ -445,7 +444,7 @@ test('--base-path lands as <base href>, ahead of anything that resolves against 
   await serving(
     async ({ get }) => {
       const html = await (await get('/')).text();
-      // Express itself is still unprefixed (server-nginx.conf strips the
+      // Express itself is still unprefixed (the VPS's nginx config strips the
       // prefix before this request arrives) - '/' is still the route that
       // answers. Only the tag changes.
       const headIndex = html.indexOf('<head>');
@@ -597,14 +596,11 @@ test('GET /robots.txt and /sitemap.xml reference every room, and work even witho
 });
 
 test('the optional CLIP model is reported, not assumed', () => {
-  // `@huggingface/transformers` is an OPTIONAL dependency: `onnxruntime-node`
-  // publishes for win32/darwin/linux only, and as a required dependency it
-  // fails the whole `npm install` on anything else (Android under Termux was
-  // the case that found this). Optional, it is skipped and everything else
-  // installs - so the server has to be able to say whether it is there.
+  // `@huggingface/transformers` is optional, so the server has to be able to
+  // say whether it is there; app.ts's `hasTextModel` carries the why.
   //
-  // Resolution only: this must not LOAD the package, or the check costs as much
-  // as the thing it is checking for.
+  // Resolution only: this must not load the package, or the check costs as
+  // much as the thing it checks for.
   assert.equal(typeof hasTextModel(), 'boolean');
 
   // And it must agree with reality on whichever machine is running the suite,
@@ -619,10 +615,9 @@ test('the optional CLIP model is reported, not assumed', () => {
 });
 
 test('a search still ranks when the text model cannot be loaded', async () => {
-  // The degradation the optional dependency rests on. With no model the server
-  // returns a stub order rather than a 500, and the browser still ranks by
-  // keywords and story - so the mechanic (type a term, watch the library
-  // rearrange) survives on a platform onnxruntime does not publish for.
+  // The degradation the optional dependency rests on: with no model the
+  // server returns a stub order rather than a 500, and the browser still
+  // ranks by keywords and story (see the /api/search doc in app.ts).
   await serving(async ({ get }) => {
     const res = await (await get('/api/search?q=gilt')).json();
     assert.equal(res.stub, true);

@@ -269,9 +269,11 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **6 / 107 source files** (`main.tsx`, `illusion.ts`,
-`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`), plus 3 paired tests
-(`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`) — all ticked in the
+Progress so far: **20 / 107 source files** (`main.tsx`, `illusion.ts`,
+`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, plus all 14 of
+`packages/server` — that batch ran out of order, in parallel with batches 2–3
+in a different checkout), plus 15 paired tests (`illusion.test.ts`,
+`board.test.ts`, `nextRoom.test.ts`, and server's 12) — all ticked in the
 list below. The running checklist is the source of truth; tick boxes as you go.
 
 ### Source files and their tests
@@ -313,32 +315,32 @@ list below. The running checklist is the source of truth; tick boxes as you go.
   - [ ] packages/pipeline/sheets.test.ts
 
 #### packages/server
-- [ ] packages/server/app.ts
-  - [ ] packages/server/app.test.ts
-- [ ] packages/server/base-path.ts
-  - [ ] packages/server/base-path.test.ts
-- [ ] packages/server/catalogPage.ts
-  - [ ] packages/server/catalogPage.test.ts
-- [ ] packages/server/favorites.ts
-  - [ ] packages/server/favorites.test.ts
-- [ ] packages/server/image-fixtures.ts  — no unit test
-- [ ] packages/server/index.ts  — no unit test
-- [ ] packages/server/logger.ts
-  - [ ] packages/server/logger.test.ts
-- [ ] packages/server/port.ts
-  - [ ] packages/server/port.test.ts
-- [ ] packages/server/remote.ts
-  - [ ] packages/server/remote.test.ts
-- [ ] packages/server/roomContent.ts
-  - [ ] packages/server/roomContent.test.ts
-- [ ] packages/server/scan.ts
-  - [ ] packages/server/scan.test.ts
-- [ ] packages/server/search-cache.ts
-  - [ ] packages/server/search-cache.test.ts
-- [ ] packages/server/seo.ts
-  - [ ] packages/server/seo.test.ts
-- [ ] packages/server/version.ts
-  - [ ] packages/server/version.test.ts
+- [x] packages/server/app.ts
+  - [x] packages/server/app.test.ts
+- [x] packages/server/base-path.ts
+  - [x] packages/server/base-path.test.ts
+- [x] packages/server/catalogPage.ts
+  - [x] packages/server/catalogPage.test.ts
+- [x] packages/server/favorites.ts
+  - [x] packages/server/favorites.test.ts
+- [x] packages/server/image-fixtures.ts  — no unit test
+- [x] packages/server/index.ts  — no unit test
+- [x] packages/server/logger.ts
+  - [x] packages/server/logger.test.ts
+- [x] packages/server/port.ts
+  - [x] packages/server/port.test.ts
+- [x] packages/server/remote.ts
+  - [x] packages/server/remote.test.ts
+- [x] packages/server/roomContent.ts
+  - [x] packages/server/roomContent.test.ts
+- [x] packages/server/scan.ts
+  - [x] packages/server/scan.test.ts
+- [x] packages/server/search-cache.ts
+  - [x] packages/server/search-cache.test.ts
+- [x] packages/server/seo.ts
+  - [x] packages/server/seo.test.ts
+- [x] packages/server/version.ts
+  - [x] packages/server/version.test.ts
 
 #### packages/web
 - [ ] packages/web/e2e/support.ts  — no unit test

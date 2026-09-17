@@ -8,21 +8,19 @@ import type { ImageSize, Manifest, Room, SharedAsset, SharedAssets, LevelInfo } 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 /**
- * Where a local scan's urls are rooted. `remote.ts` rewrites both the
+ * Where a local scan's urls are rooted - the one place "what does a
+ * room/shared/blob url look like" is decided. `remote.ts` rewrites both the
  * manifest's `imagesBase`/`sharedBase` fields and every url built from these
- * constants when serving a corpus from R2/Cloudflare instead of disk, so this
- * is the one place "what does a room/shared/blob url look like" is decided -
- * rooms.js's per-level url construction reads `imagesBase` off the manifest
- * rather than restating the string.
+ * constants when serving a corpus from R2/Cloudflare instead of disk;
+ * `createUrlFor` (packages/web/src/lib/rooms.ts) reads `imagesBase` off the
+ * manifest rather than restating the string.
  *
- * Deliberately RELATIVE, not `/images`/`/shared` - a subpath deployment
- * (`server-nginx.conf`, `--base-path`) needs every url the browser resolves
- * to go through `<base href>`, and a leading slash opts a url out of that
- * resolution entirely (it always means "from the origin root", subpath or
- * not). Express's own routes are unaffected either way - `app.use('/images',
- * ...)` matches on the path Express receives, which `server-nginx.conf`'s
- * prefix-stripping proxy_pass has already reduced to this same relative
- * shape by the time it arrives.
+ * Relative, not `/images`/`/shared`: a leading slash opts a url out of
+ * `<base href>` resolution entirely, and a subpath deployment needs every
+ * browser-resolved url to go through the base (AGENTS.md, "Deployment and
+ * the base path"). Express's own routes are unaffected either way -
+ * `app.use('/images', ...)` matches on the path Express receives, which the
+ * VPS's prefix-stripping proxy has already reduced to this same shape.
  */
 export const IMAGES_BASE = 'images';
 export const SHARED_BASE = 'shared';
@@ -46,12 +44,12 @@ export const TAG_LINKS_FILE = 'tagLinks.json';
 export const GENERIC_DIR = 'generic';
 
 /**
- * The subdirectory holding distill mode's paired alternates for the generic
- * tiles - the art a generic tile fades to instead of flat black once distill
- * mode hides the library's filler. Matched to `GENERIC_DIR`'s files by
- * filename stem (extension may differ, e.g. `generic1.webp` <-> `generic1.jpg`),
- * not by directory sort order, since the two directories need not use the
- * same image format or agree on sort order for that to hold.
+ * The subdirectory holding distill mode's paired alternates for the
+ * `GENERIC_DIR` tiles - AGENTS.md's `assets/generic_distill` entry says what
+ * they are for. Matched to generic tiles by filename stem (extension may
+ * differ, e.g. `generic1.webp` <-> `generic1.jpg`), never by directory sort
+ * order: the two folders need not use the same image format, nor agree on
+ * how their files sort.
  */
 export const GENERIC_DISTILL_DIR = 'generic_distill';
 
@@ -104,28 +102,28 @@ export async function imageSize(path: string): Promise<ImageSize | null> {
 /**
  * Which of the pyramid's levels have actually been generated for this corpus.
  *
- * The generator writes `<dir>/<width>/<file>` for every level below the source
- * and leaves level 0 flat, so discovery is: work out what the ladder *would*
- * produce at this source size, then keep the rungs whose directory is really
- * there. Level 0 is always present - it is the flat files themselves - which is
- * what keeps "point it at a directory of images" true for a corpus that has
- * never been near the pipeline.
+ * The generator writes `<dir>/<width>/<file>` for every level below the
+ * source and leaves level 0 flat, so discovery is: work out what the ladder
+ * *would* produce at this source size, then keep the rungs whose directory
+ * is really there. Level 0 is always present - it is the flat files
+ * themselves - which is what keeps "point it at a directory of images" true
+ * for a corpus that has never been near the pipeline.
  *
- * A level at or above `SHEETS.fromLevel` is checked as a sheet-packed level
- * first - `<dir>/<width>-sheets/` holding every `sheet-NNNN.jpg` the corpus's
- * room count requires (`sheetPlan`, from `packages/pipeline/layout.ts`, the
- * same formula the pipeline used to write them). A level is one or the
- * other, never both: an incomplete or missing sheets directory falls back to
- * looking for the old per-file `<width>/` directory instead, which is what
- * lets a corpus mid-rollout (mips written, sheets not yet packed) still serve
- * that level per-file rather than not at all.
+ * A level at or above `SHEETS.fromLevel` is checked as sheet-packed first:
+ * `<dir>/<width>-sheets/` holding every `sheet-NNNN.jpg` the corpus's room
+ * count requires (`sheetPlan`, from `packages/pipeline/layout.ts` - the same
+ * formula the pipeline used to write them). A level is one or the other,
+ * never both: an incomplete or missing sheets directory falls back to the
+ * per-file `<width>/` check, which is what lets a corpus mid-rollout (mips
+ * written, sheets not yet packed) still serve that level per-file rather
+ * than not at all.
  *
- * Deliberately not checked for a per-file level: whether every room has every
- * level. A room missing one 404s, and the client already remembers a 404 and
- * falls back to another level, so per-file probing would be thousands of stat
- * calls to learn something the fallback handles anyway. A sheet-packed level
- * has no such fallback (a missing sheet is a hole for every room in it), which
- * is why sheets ARE checked for completeness here.
+ * Whether every room has every level is not checked for a per-file level: a
+ * room missing one 404s, and the client already remembers a 404 and falls
+ * back to another level - per-file probing would be thousands of stat calls
+ * to learn something the fallback handles anyway. A sheet-packed level has
+ * no such fallback (a missing sheet is a hole for every room in it), so
+ * sheets are checked for completeness.
  *
  * @param source level-0 dimensions
  * @param roomCount how many rooms the corpus has, to know how many sheets a
@@ -198,20 +196,19 @@ async function describeShared(sharedDir: string, sub: string, file: string): Pro
  * Discover the shared tiles: the blank center and the generic tiles.
  *
  * The center is served at cell (0, 0) and reserved for the search box and
- * controls, so it is always the plain center render - `--center`, else
- * `center_tile.*`, else `center.*`. `allowFirst` keeps the old single-directory
- * behaviour working: when the shared assets live in the corpus directory
- * itself and nothing named center is present, the first image stands in as
- * the center.
+ * controls, so it is always the plain center render: `--center`, else
+ * `center_tile.*`, else `center.*`. `allowFirst` covers the case where the
+ * shared assets live in the corpus directory itself: with nothing named
+ * center present, the first image stands in.
  *
  * The generic tiles are every image in the `generic/` subdirectory, sorted.
  * There may be none (an empty or absent folder), which is the "only the
  * center tile" case the renderers fall back to.
  *
- * Distill mode's paired alternates come from `generic_distill/`, matched to
- * `generic`'s files by filename stem - `genericDistill[i]` is `generic[i]`'s
- * match, or null where the stem has none, so the two arrays always run
- * parallel even if `generic_distill/` is missing entries or absent entirely.
+ * Distill mode's paired alternates come from `generic_distill/`, matched by
+ * filename stem: `genericDistill[i]` is `generic[i]`'s match, or null where
+ * the stem has none, so the arrays run parallel even if the folder is
+ * missing entries or absent entirely.
  */
 async function scanShared(
   sharedDir: string,
@@ -248,16 +245,15 @@ async function scanShared(
 /**
  * Scan a directory into a corpus manifest.
  *
- * Offline mode is just this: point at a folder of images. No database, no
- * bucket, no upload step. Ids are assigned by sorted filename so they are
- * stable across restarts, which matters because the map's slot assignment is
- * keyed on them.
+ * Ids are the positions in the sorted filename list - stable across
+ * restarts, which is what the map's slot assignment keys on, and they
+ * renumber when the corpus changes (AGENTS.md, "Favorites").
  *
  * The shared tiles - the blank center and the generic tiles - live in
- * `sharedDir`, which defaults to the corpus directory (the old behaviour,
- * where a `center.*` in the images folder is the generic wallpaper) but is
- * usually pointed at the repo's `assets/` so the center render can be shared
- * across corpora and reached from outside `--images`.
+ * `sharedDir`, which defaults to the corpus directory itself: there, a
+ * `center.*` in the images folder doubles as the generic wallpaper. Usually
+ * it points at the repo's `assets/`, so the center render is shared across
+ * corpora and reached from outside `--images`.
  *
  * @param opts.center names the center tile; opts.sharedDir is where the
  *   shared tiles live (default: the corpus directory)
@@ -275,9 +271,9 @@ export async function scanDirectory(
   const sameDir = resolve(sharedDir) === resolve(dir);
   const sharedAssets = await scanShared(sharedDir, { center, allowFirst: sameDir });
 
-  // A center living in the corpus directory is not also a ranked room - being
-  // both the generic wallpaper and a search result would put it everywhere and
-  // in the ranking too. A center living elsewhere excludes nothing.
+  // A center living in the corpus directory is not also a ranked room: being
+  // wallpaper and a search result at once would put it everywhere and in the
+  // ranking too. A center living elsewhere excludes nothing.
   const excluded = sameDir && sharedAssets.center ? sharedAssets.center.file : null;
   const corpus = files.filter((f) => f !== excluded);
 
@@ -302,11 +298,12 @@ export async function scanDirectory(
     rooms.length
   );
 
-  // If tools/embed has left a blob alongside the images, surface its metadata so
-  // the client can fetch it and rank in the browser. A stale blob - one whose
-  // count no longer matches the corpus - is ignored rather than trusted: its
-  // rows are keyed on room ids that have since moved, so it would rank the wrong
-  // rooms. Missing or unreadable, search simply falls back to the stub.
+  // If tools/embed has left a blob alongside the images, surface its metadata
+  // so the client can fetch it and rank in the browser. A stale blob - one
+  // whose count no longer matches the corpus - is ignored rather than
+  // trusted: its rows are keyed on room ids that have since moved, so it
+  // would rank the wrong rooms. Missing or unreadable, search falls back to
+  // the stub.
   let embeddings: Manifest['embeddings'] = null;
   try {
     const meta = JSON.parse(await readFile(join(dir, 'embeddings.json'), 'utf8'));
@@ -316,11 +313,13 @@ export async function scanDirectory(
     // no blob, unreadable, or malformed - leave embeddings null
   }
 
-  // The keyword/story sidecar. Unlike the blob above this is keyed on filename,
-  // so a corpus that has grown or been renamed does not invalidate it wholesale
-  // - it is joined per file and a miss is just a room without keywords. What is
-  // worth surfacing is the pair (matched, entries): a sidecar describing files
-  // this corpus does not have looks exactly like no sidecar at all from the map.
+  // The keyword/story sidecar, joined per filename: a miss is just a room
+  // without keywords, so a corpus that has grown or been renamed does not
+  // invalidate it wholesale. Only {url, matched, entries} rides in the
+  // manifest - the client blocks on that fetch before its first frame, and
+  // the sidecar itself can be megabytes. The coverage pair is what keeps
+  // drift visible from here: matched 0 against non-zero entries means the
+  // keys have moved, and on the map that looks exactly like no sidecar.
   let metadata: Manifest['metadata'] = null;
   try {
     const sidecar = JSON.parse(await readFile(join(dir, METADATA_FILE), 'utf8'));
@@ -345,11 +344,10 @@ export async function scanDirectory(
     mode: 'offline',
     directory: dir,
     /**
-     * Where every url in this manifest is rooted - `rooms.js`'s `createUrlFor`
-     * reads these instead of hardcoding the paths, so `remote.ts` can point a
-     * remotely-served corpus's urls (and every url already baked into this
-     * manifest) at R2/Cloudflare directly without the client needing a second
-     * "how do I build a url" implementation.
+     * Where every url in this manifest is rooted; `createUrlFor` reads these
+     * instead of hardcoding paths, so `remote.ts` can repoint a remotely
+     * served corpus at R2/Cloudflare without the client needing a second url
+     * builder - see `IMAGES_BASE`.
      */
     imagesBase: IMAGES_BASE,
     sharedBase: SHARED_BASE,
@@ -364,14 +362,13 @@ export async function scanDirectory(
     /** The image-embedding blob, if one has been generated; else null. */
     embeddings,
     /**
-     * The keyword/story sidecar, if there is one; else null. The client fetches
-     * it separately - at a full corpus it is megabytes, and this manifest is on
-     * the path to the first frame.
+     * The keyword/story sidecar, if there is one; else null. Fetched
+     * separately by the client.
      */
     metadata,
     /**
      * The keyword -> external link map, if `TAG_LINKS_FILE` was found; else
-     * null. Fetched separately by the client, same as `metadata` above.
+     * null. Fetched separately by the client, like `metadata`.
      */
     tagLinks,
     /**

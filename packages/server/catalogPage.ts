@@ -1,13 +1,11 @@
 /**
  * The SSR catalog/room page bodies: plain HTML fragments meant to sit inside
  * `index.html`'s `<div id="root">` (see `app.ts`'s `renderPage`) until
- * `bundle.js` boots the real interactive app over them.
+ * `bundle.js` boots the interactive app over them.
  *
- * Pure string builders, no Express types, no DOM - the same "assertable
- * without a browser" split `packages/web/src/lib/catalog.ts` itself is built
- * on, and this module leans on that file's `alphabeticalOrder`/`pageOf`/
- * `pageCount` directly rather than re-deriving the catalog's own idle order
- * and paging arithmetic.
+ * Pure string builders - no Express types, no DOM - and the catalog's own
+ * idle order and paging arithmetic come from `packages/web/src/lib/catalog.ts`
+ * (`alphabeticalOrder`/`pageOf`/`pageCount`) rather than a second copy here.
  */
 import { roomTitle } from '../map/metadata.ts';
 import { pageOf, pageCount } from '../web/src/lib/catalog.ts';

@@ -1,16 +1,15 @@
 /**
  * Is a port already taken?
  *
- * Its own module so it can be tested without starting the demo server, which
- * `index.mjs` does at import time.
+ * Its own module so it can be tested without starting the demo server,
+ * which `index.ts` does at import time.
  *
  * This exists because the failure it prevents is silent and expensive. Node
- * fires `listen`'s callback and only THEN emits `EADDRINUSE`, so a second
- * `npm run demo` prints "the library is open at http://localhost:5173", tears
- * the handle down, empties the event loop and exits 0. Nothing is being served
- * by that process, and the older one still holding the port answers every
- * request - including for the code you just changed. A whole round of "the
- * gesture is broken on my phone" came out of exactly that.
+ * fires `listen`'s callback and only then emits `EADDRINUSE`, so a second
+ * `npm run demo` prints "the library is open at http://localhost:5173",
+ * tears the handle down, empties the event loop and exits 0. Nothing is
+ * being served by that process, and the older one still holding the port
+ * answers every request - including for the code you just changed.
  */
 import { createServer } from 'node:net';
 

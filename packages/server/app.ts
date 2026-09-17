@@ -1,10 +1,10 @@
 /**
  * The demo server's routes, separated from the CLI that starts it.
  *
- * `index.ts` owns argv, the esbuild bundle and the listening socket; this file
- * owns the four endpoints. Split so the API can be exercised with a plain
- * `fetch` against an ephemeral port - no browser, no bundler, no fixtures on
- * disk beyond the images directory under test.
+ * `index.ts` owns argv, the esbuild bundle and the listening socket; this
+ * file owns the endpoints. The split is so the API can be exercised with a
+ * plain `fetch` against an ephemeral port - no browser, no bundler, no
+ * fixtures on disk beyond the images directory under test.
  */
 import { availableParallelism } from 'node:os';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
@@ -31,16 +31,14 @@ type ResolvedConfig = Config & { source?: string | null };
 // is the matching text side.
 const TEXT_MODEL = 'Xenova/clip-vit-base-patch32';
 
-// Dev-only live reload (see the `watch` option below). One mechanism covers
-// two different restart shapes: a client-only rebuild broadcasts 'reload' on
-// the still-open connection, while a full process restart (`node --watch` on
-// the server itself) kills the connection outright - EventSource's own
-// auto-reconnect then re-opens it, and `onopen` after a prior error is
-// indistinguishable from "the server just came back", which is exactly the
-// signal we want.
-// Relative, like every other url this file hands the browser (see
-// base-path.ts) - resolved against the `<base href>` injected into
-// index.html below, so watch mode works the same under a subpath as at root.
+// Dev-only live reload, behind the `watch` option below. One EventSource
+// covers both restart shapes: a client-only rebuild broadcasts 'reload' on
+// the still-open connection; a full process restart (`node --watch` on the
+// server itself) kills the connection outright, and EventSource's
+// auto-reconnect after an error re-opens it - which reads to the client the
+// same as "the server just came back", the signal wanted either way.
+// Relative, resolved against the `<base href>` injected into index.html
+// below, so watch mode works under a subpath as at root (see base-path.ts).
 const LIVE_RELOAD_TAG = '<script src="__live-reload.js"></script>';
 const LIVE_RELOAD_CLIENT = `(function () {
   let sawError = false;
@@ -52,14 +50,14 @@ const LIVE_RELOAD_CLIENT = `(function () {
 `;
 
 /**
- * This request's own origin, with `base` (the `--base-path`-normalized
- * prefix, always leading+trailing slash) appended - e.g.
- * `https://centuryglass.us/babel-index/`. `req.protocol`/`req.get('host')`
- * follow the same `trust proxy` setting favorites' `req.ip` does - correct
- * behind a reverse proxy only once `--trust-proxy` is passed. Used for
- * anything a link unfurler or crawler reads directly (og:url/og:image,
- * robots.txt's Sitemap line, every sitemap.xml url) since those never see
- * `<base href>`.
+ * This request's own origin with the `--base-path`-normalized prefix
+ * appended - e.g. `https://centuryglass.us/babel-index/`. Used for anything
+ * a link unfurler or crawler reads directly (og:url/og:image, robots.txt's
+ * Sitemap line, every sitemap.xml url), since those never see `<base href>`.
+ *
+ * `req.protocol`/`req.get('host')` follow the same `trust proxy` setting
+ * favorites' `req.ip` does: correct behind a reverse proxy only once
+ * `--trust-proxy` is passed.
  */
 export function requestOrigin(req: Request, base: string): string {
   return `${req.protocol}://${req.get('host')}${base}`;
@@ -108,9 +106,9 @@ export interface CreateAppOptions {
    *  so the browser resolves this file's relative urls under the subpath. */
   basePath?: string;
   /** where global favorite counts live (see favorites.ts). Absent - the
-   *  default, and every test that does not ask for it - means the three
-   *  favorite routes are not mounted at all and the client renders no favorite
-   *  UI, rather than a count nothing can record. */
+   *  default, and every test that does not ask for it - means the favorite
+   *  routes are not mounted at all and the client renders no favorite UI,
+   *  rather than a count nothing can record. */
   favorites?: FavoriteStore | null;
   /** passed straight to Express's `trust proxy` setting. It has to be set for
    *  a deployment behind a reverse proxy, or `req.ip` is the proxy's own
@@ -160,8 +158,9 @@ export function createApp({
   const clipTextDtype = clientConfig.search?.clipTextDtype ?? 'fp32';
 
   // Whether the client should offer favoriting at all. A flag rather than the
-  // counts themselves: the manifest is on the path to the first frame, and the
-  // counts are a second, cacheable thing that changes on its own schedule.
+  // counts themselves: the manifest stays small (see the `metadata` note in
+  // scanDirectory), and the counts are a second, cacheable thing that changes
+  // on its own schedule.
   const favoritesInfo = favorites ? { enabled: true } : null;
 
   app.get('/api/manifest', (_req, res) =>
@@ -169,20 +168,19 @@ export function createApp({
   );
 
   /**
-   * Liveness, for the deploy workflow to check a release against.
+   * Liveness, for the deploy workflow to check a release against
+   * (AGENTS.md, "Deploying to the VPS").
    *
-   * `commit` is the reason this exists at all: a 200 from the old process is
-   * indistinguishable from a 200 from the new one, so a deploy that checks
-   * only for an answer verifies nothing (see version.ts). `rooms` is the
-   * second half of that - a corpus the scan came up empty on serves a
-   * perfectly healthy library with nothing in it, which is what a wrong
+   * `commit` is the reason this exists at all: a 200 from the old process
+   * is indistinguishable from a 200 from the new one (see version.ts).
+   * `rooms` is the second half - a corpus the scan came up empty on serves
+   * a perfectly healthy library with nothing in it, which is what a wrong
    * --images path on a restarted unit looks like from outside.
    *
-   * Cheap and constant on purpose: everything here is already in memory, so
-   * a health check costs nothing and cannot itself be the thing that falls
-   * over under load. `no-store` because the whole point is the CURRENT
-   * process's answer - a cache between here and the deploy workflow would
-   * happily report the revision that was running a minute ago.
+   * Everything here is already in memory, so the check cannot itself be
+   * the thing that falls over under load. `no-store` because the point is
+   * the current process's answer: a cache between here and the workflow
+   * would report the revision that was running a minute ago.
    */
   app.get('/api/health', (_req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -202,16 +200,18 @@ export function createApp({
   /**
    * Search.
    *
-   * The server runs only the *text* tower: string -> 512-dim query vector. The
-   * browser owns ranking (rankByEmbedding against embeddings.bin), so a re-rank
-   * or a search-history restore costs no round trip and the endpoint stays a
-   * tiny stateless thing that could sit in front of a static bundle.
+   * The server runs only the text tower: string -> 512-dim query vector.
+   * Ranking lives in the browser (rankByEmbedding against embeddings.bin),
+   * so a re-rank or a search-history restore costs no round trip and the
+   * endpoint stays a stateless thing that could sit in front of a static
+   * bundle.
    *
-   * Two fallbacks keep the mechanic - type a term, watch the library rearrange
-   * around the center - alive without a model: no blob for this corpus, or the
-   * model failing to load (offline with nothing cached). Both return a
-   * deterministic pseudo-ranking, labelled `stub` so the UI can say so rather
-   * than imply the order means something.
+   * Two fallbacks return a deterministic pseudo-ranking instead, so the
+   * mechanic - type a term, watch the library rearrange around the center -
+   * survives without a model: no blob for this corpus, or the text tower
+   * failing to load (offline with nothing cached). Both are labelled
+   * `stub`, so the UI can say so rather than imply the order means
+   * something.
    */
   app.get('/api/search', async (req, res) => {
     const q = String(req.query.q ?? '')
@@ -231,15 +231,11 @@ export function createApp({
       }
       res.json({ stub: false, query: q, vector });
     } catch (err) {
-      // The note reaching the browser deliberately omits local paths and stack
-      // traces - the operator's copy, with those, goes to the logger instead.
-      // Previously this failure had NO server-side trace at all: a broken
-      // install (present but failing to load, not simply absent) surfaced only
-      // as a client-facing note nobody was watching for.
+      // The note reaching the browser omits local paths and stack traces;
+      // the operator's copy, with those, goes to the logger.
       logger.error({ err, query: q }, 'CLIP text-tower inference failed');
-      // The two cases are worth telling apart: no model installed at all is a
-      // permanent fact about this machine, and anything else is a load that
-      // may yet succeed.
+      // No model installed at all is a permanent fact about this machine;
+      // anything else is a load that may yet succeed.
       const note = hasTextModel()
         ? `the CLIP text model failed to load: ${err?.message ?? err}`
         : 'no CLIP text model installed - ranking by keywords and story only';
@@ -250,27 +246,25 @@ export function createApp({
   /**
    * Favorites.
    *
-   * Three routes, mounted only when a store exists (see favorites.ts for what
-   * is actually recorded and why it is a set rather than a counter):
+   * Three routes, mounted only when a store exists (what is recorded, and
+   * why it is a set rather than a counter, is favorites.ts and AGENTS.md's
+   * "Favorites"):
    *
    *   GET    /api/favorites        every room with at least one, by file
-   *   POST   /api/favorites/:file  this address favorites the room
-   *   DELETE /api/favorites/:file  it stops
+   *   POST   /api/favorites/:file  this visitor favorites the room
+   *   DELETE /api/favorites/:file  they stop
    *
-   * There is deliberately NO route that answers "have I favorited this" - a
-   * reader's own list lives in their browser (`persist.ts`) and the server
-   * never assembles a per-visitor view of it. The two writes carry no body, so
-   * no body parser is mounted; the room is named in the path and validated
-   * against the corpus, which is also what keeps an arbitrary string out of the
-   * store.
+   * No route answers "have I favorited this": a reader's own list lives in
+   * their browser (`persist.ts`) and the server never assembles a
+   * per-visitor view. The writes carry no body, so no body parser is
+   * mounted; the room is named in the path and validated against the
+   * corpus, which is also what keeps an arbitrary string out of the store.
    *
-   * Identity and throttling are two different axes, kept on two different
-   * keys. `X-Favorite-Client` (a token the browser generates once and keeps in
-   * `localStorage`, see `useFavorites.ts`) is who a favorite is recorded
-   * against - see `favorites.ts` for why that moved off `req.ip`. The rate
-   * bucket below stays keyed on `req.ip` regardless: a script cannot spend a
-   * fresh burst by minting a new client token per request, because the token
-   * is never what's rationed - the connection making the requests is.
+   * Identity and throttling sit on different keys (AGENTS.md,
+   * "Favorite writes are rate-limited by `req.ip`"):
+   * `X-Favorite-Client` - a token the browser generates once, see
+   * `useFavorites.ts` - decides whose favorite a write records; the rate
+   * bucket below, keyed on the address, decides how fast a write can come.
    */
   if (favorites) {
     const favoriteBuckets = createRateBuckets();
@@ -344,8 +338,8 @@ export function createApp({
   /**
    * Renders `index.html` for any of this app's HTML routes - `/` plain, and
    * the SSR catalog/room pages below. One implementation so `<base href>`
-   * injection, the og:/twitter: absolute-url fill-in, and live-reload stay in
-   * exactly one place regardless of which route is being served.
+   * injection, the og:/twitter: absolute-url fill-in, and live-reload stay
+   * in one place regardless of which route is served.
    *
    * `canonicalPath` is the relative-to-base suffix of the page actually
    * being served (`''` for `/`, `'catalog'`, `'catalog/<file>'`, ...) -
@@ -385,19 +379,17 @@ export function createApp({
       // href>` only affects resolution for markup that follows it.
       html = html.replace('<head>', `<head>\n    <base href="${base}">`);
       const origin = requestOrigin(req, base);
-      // A route's script tag containing a literal `</script>` (an unlikely
-      // but not impossible room filename) would otherwise close the tag
-      // early - JSON.stringify never produces one, but `<` is escaped anyway
-      // since it's the one character that can reopen a tag.
+      // A room filename containing `</script>` (unlikely but not impossible)
+      // would close this tag early. JSON.stringify escapes quotes and
+      // backslashes but leaves `<` alone, so `<` is written as `<` -
+      // the only character here that can affect HTML parsing.
       const routeScript = initialRoute
         ? `<script>window.__INITIAL_ROUTE__ = ${JSON.stringify(initialRoute).replace(/</g, '\\u003c')};</script>`
         : '';
-      // All five substitutions are global: index.html's own comments explain
-      // these placeholders by NAME (see its <head> comment), and a single,
-      // first-occurrence `.replace` would consume that mention in the
-      // comment instead of the real tag further down - global makes the
-      // substitution correct regardless of where else a placeholder's name
-      // happens to appear in the document.
+      // Global replaces: every occurrence of a placeholder name is
+      // substituted, wherever it sits - a mention inside one of index.html's
+      // comments would be rewritten just like a real tag, which is why those
+      // comments avoid spelling the names out.
       html = html
         .replace(/%%TITLE%%/g, escapeHtml(title))
         .replace(/%%DESCRIPTION%%/g, escapeHtml(description))
@@ -428,9 +420,10 @@ export function createApp({
 
     /**
      * The SSR catalog list: real, crawlable per-room links and content in
-     * `order` (packages/web/src/lib/catalog.ts's own alphabetical idle
-     * order - no server-side search, see AGENTS.md/pending_task_list.md),
-     * paginated with the same `config.catalog.perPage` the client uses.
+     * `order` - packages/web/src/lib/catalog.ts's own alphabetical idle
+     * order; nothing here searches server-side. Paginated with the same
+     * `config.catalog.perPage` the client uses.
+     *
      * `?page=` is 1-based on this public url; `pageOf`'s own contract is
      * 0-based, so the conversion happens right here rather than leaking a
      * public url convention into that pure module.
@@ -466,10 +459,10 @@ export function createApp({
     });
 
     /**
-     * One room's permalink, keyed by FILENAME rather than id - ids are
-     * positional (see AGENTS.md's favorites invariant) and renumber when the
-     * corpus changes, which would silently repoint an indexed/shared url at
-     * a different room.
+     * One room's permalink, keyed by filename rather than id: ids are
+     * positional (AGENTS.md, "Favorites") and renumber when the corpus
+     * changes, which would silently repoint an indexed/shared url at a
+     * different room.
      */
     app.get('/catalog/:file', async (req, res, next) => {
       try {
@@ -545,27 +538,20 @@ export function createApp({
 }
 
 /**
- * Load the CLIP text tower once, lazily.
+ * Whether the CLIP text tower can be loaded at all.
  *
- * Dynamic `import` so the heavy dependency is pulled only when a real search
- * actually runs - the stub path, and every test that never sets up a blob,
- * stays free of it. The promise is memoised, so concurrent first requests share
- * one load rather than racing two model downloads.
+ * `import.meta.resolve` asks the resolver where the package is without
+ * executing a byte of it, so this is answerable at startup - which the lazy
+ * `textTower()` is not, since loading the model is the expensive thing it
+ * exists to defer.
  *
- * Whether the CLIP text tower could be loaded at all.
- *
- * `import.meta.resolve` asks the resolver where the package IS without
- * executing a byte of it, so this costs nothing and can be answered at startup
- * - which the lazy `textTower()` below deliberately cannot, since loading the
- * model is the expensive thing it exists to defer.
- *
- * It matters because the package is OPTIONAL. `onnxruntime-node`, which
+ * It matters because the package is optional. `onnxruntime-node`, which
  * transformers.js needs, publishes for win32/darwin/linux only; on anything
- * else (Android under Termux, say) npm refuses it, and as a required dependency
- * that takes the whole install down with it. As an optional one it is skipped,
- * everything else installs, and the demo runs - ranking by keywords and story
- * instead of by CLIP. This is how the server says so out loud rather than
- * leaving it to be discovered on the first search.
+ * else (Android under Termux, say) npm refuses it. As a required dependency
+ * that takes the whole install down with it; as an optional one it is
+ * skipped, everything else installs, and the demo runs - ranking by
+ * keywords and story instead of by CLIP. This is how the server says so at
+ * startup rather than leaving it to be discovered on the first search.
  */
 export function hasTextModel(): boolean {
   try {
@@ -576,29 +562,24 @@ export function hasTextModel(): boolean {
   }
 }
 
-// Module-level for the same reason as `textTowerPromises` below: CPU cores and
-// a warm cache are resources of the process, not of one `createApp()` call, and
-// tests build more than one app per process. The cache key folds in dtype (see
-// the route above) so a config that loads a different precision never reads a
-// vector computed at another one back out. Capacity is a guess, not a
-// measurement - repeat searches (history, re-searching the same term) are
-// common enough that even a small cache earns its keep, and 512 floats per
-// entry keeps 200 of them cheap to hold.
+// Module-level like `textTowerPromises` below: a warm cache is a resource of
+// the process, not of one `createApp()` call, and tests build more than one
+// app. The cache key folds in dtype (see the route above) so a config that
+// loads a different precision never reads back vectors computed at another
+// one. Capacity is a guess, not a measurement: repeat searches (history,
+// re-searching the same term) are common enough for a small cache to pay for
+// itself, and 512 floats per entry keeps 200 of them cheap to hold.
 const EMBED_CACHE_SIZE = 200;
 const embedCache = createLruCache(EMBED_CACHE_SIZE);
 
-// Bounds how many CLIP text-tower inferences run at once. Sized to the CPU,
-// like the concurrency any other CPU-bound worker pool would use - past that
-// many threads are fighting for the same cores rather than doing useful work,
-// so a burst of distinct queries degrades to queueing latency instead of
-// thrashing the machine.
+// Bounds how many CLIP text-tower inferences run at once. Sized to the CPU
+// like any other CPU-bound worker pool: past that many threads are fighting
+// for the same cores rather than doing useful work, so a burst of distinct
+// queries degrades to queueing latency instead of thrashing the machine.
 //
-// A load test against the live deploy showed exactly that degradation
-// (throughput pinned at the limiter's cap, latency climbing with the queue)
-// with no visible signal server-side - the only way to know it was happening
-// was to be the one running the test. Logging it here, throttled, means a
-// real traffic spike leaves a trace instead of just "the site felt slow that
-// one time."
+// Queueing is otherwise invisible server-side - throughput pins at the cap
+// and only latency shows it. Logging here, throttled, means a real traffic
+// spike leaves a trace in the journal.
 const SATURATION_LOG_INTERVAL_MS = 5_000;
 let lastSaturationLog = 0;
 const embedLimiter = createLimiter(Math.max(1, availableParallelism()), {
@@ -615,6 +596,15 @@ const embedLimiter = createLimiter(Math.max(1, availableParallelism()), {
 // a model loaded at the wrong precision would be silently wrong rather than
 // slow.
 const textTowerPromises = new Map<string, Promise<{ tokenizer: any; model: any }>>();
+
+/**
+ * Load the CLIP text tower once, lazily.
+ *
+ * A dynamic `import` so the heavy dependency is pulled only when a real
+ * search actually runs - the stub path, and every test that never sets up a
+ * blob, stay free of it. The promise is memoised, so concurrent first
+ * requests share one load rather than racing two model downloads.
+ */
 function textTower(dtype: string): Promise<{ tokenizer: any; model: any }> {
   if (!textTowerPromises.has(dtype))
     textTowerPromises.set(
@@ -675,23 +665,22 @@ export function stubRanking(rooms: { id: number }[], query: string): number[] {
 
 /**
  * What a `X-Favorite-Client` header must look like to be trusted as a
- * favorites identity - long enough to carry real randomness (a UUID is 36
- * chars), short enough that a header full of garbage can't bloat the hash
- * input `favorites.ts` stores a slice of.
+ * favorites identity: long enough to carry real randomness (a UUID is 36
+ * chars), short enough that a header full of garbage cannot bloat the HMAC
+ * input `favorites.ts` builds.
  */
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 
 /**
- * A token bucket per address for the favorite writes.
+ * Token buckets for the favorite writes, one per address.
  *
- * Keyed on `req.ip`, not on `X-Favorite-Client` - a client id is free to mint,
- * so bucketing on it would let a script spend a fresh burst on every request
- * just by sending a new one. The address is what actually costs something to
- * change. Not a durability or a correctness measure either way - the set
- * semantics already cap what one client id can do to a count - just a bound
- * on how fast a script can make this process hash things. In memory and never
- * persisted, so it forgets everyone on restart and holds no record of who
- * asked for what: the same reason favorites.ts stores no addresses.
+ * Keyed on `req.ip` by its caller, not on `X-Favorite-Client`: a client id is
+ * free to mint, so bucketing on it would let a script spend a fresh burst on
+ * every request by sending a new one (AGENTS.md, "Favorites"). This bounds
+ * how fast one connection makes the process hash things - the set semantics
+ * in favorites.ts, not this, cap what any client can do to a count. In memory
+ * and never persisted: a restart forgets everyone, and no record of who
+ * asked for what is kept.
  */
 const RATE_BURST = 20;
 const RATE_REFILL_MS = 1000;

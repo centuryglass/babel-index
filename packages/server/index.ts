@@ -13,12 +13,12 @@
  *
  * `--base-path` is for serving this under a subpath of a shared domain
  * (`https://centuryglass.us/babel-index/`) instead of its own subdomain -
- * paired with a reverse proxy that strips the prefix before forwarding (see
- * `server-nginx.conf`), so this process's own routes are untouched by it.
- * What it changes is every url this server hands the browser: `<base href>`
- * in the served HTML, and `images`/`shared` in the manifest (`scan.ts`'s
- * `IMAGES_BASE`/`SHARED_BASE`) - see `packages/server/base-path.ts`. Defaults
- * to `/`, the plain own-origin case this app has always run as.
+ * paired with the VPS's hand-managed nginx config, which strips the prefix
+ * before forwarding (see `deploy/README.md`), so this process's own routes
+ * are untouched by it. What it changes is every url this server hands the
+ * browser: `<base href>` in the served HTML, and `images`/`shared` in the
+ * manifest (`scan.ts`'s `IMAGES_BASE`/`SHARED_BASE`) - see
+ * `packages/server/base-path.ts`. Defaults to `/`, the plain own-origin case.
  *
  * Or point it at a corpus already uploaded with tools/upload/upload-r2.ts:
  *
@@ -30,11 +30,11 @@
  * serving or proxying anything under `/images`/`/shared`.
  *
  * `--favorites <path>` turns on global favorite counts, stored in that one
- * JSON file (see favorites.ts). Without it the favorite routes are not mounted
- * and the client offers no favorite control - the demo stays the stateless
- * thing it has always been. Behind a reverse proxy it must be paired with
- * `--trust-proxy 1` (and an nginx that sets X-Forwarded-For), or every visitor
- * shares the proxy's address and every count stops at one.
+ * JSON file (see favorites.ts). Without it the favorite routes are not
+ * mounted and the client offers no favorite control. Behind a reverse proxy
+ * it must be paired with `--trust-proxy 1` (and an nginx that sets
+ * X-Forwarded-For), or every visitor shares the proxy's address and every
+ * count stops at one.
  *
  * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
@@ -87,21 +87,16 @@ if (!remoteBase && !existsSync(imagesDir)) {
 // repo's assets by default, so the center render can be shared across corpora
 // and changed without touching --images. See scan.ts.
 const sharedDir = remoteBase ? null : resolve(process.cwd(), (argv['shared-dir'] as string | undefined) ?? 'assets');
-// Optional debugging convenience, off by default: `npm run demo:watch` runs
+// Optional debugging convenience, off by default. `npm run demo:watch` runs
 // this under `node --watch` (restarts the whole process on a server-side
-// edit) AND passes --watch through to us here, which switches the esbuild
-// call below from a one-shot build to a watching one (rebuilds on a
-// client-side edit without a restart). Either kind of change reaches the
-// browser through the same live-reload connection - see app.ts.
+// edit) AND passes --watch through, which switches the esbuild call below
+// from a one-shot build to a watching one (rebuilds on a client-side edit
+// without a restart). Either kind of change reaches the browser through the
+// same live-reload connection - see app.ts.
 const watch = Boolean(argv.watch);
 
-// Checked before anything is scanned or bundled, because the failure mode
-// without it is silent and expensive: Node fires the `listening` callback and
-// only THEN emits EADDRINUSE, so the banner prints, the handle is torn down,
-// the event loop empties and the process exits 0. A second `npm run demo`
-// against a server left running in another window says "the library is open at
-// http://localhost:5173", exits successfully, and serves nothing - every page
-// you then load is the old process, including the code you just changed.
+// Checked before anything is scanned or bundled; port.ts's header is why the
+// failure this prevents is silent and expensive.
 if (await portInUse(port)) {
   logger.error(
     { port },
@@ -116,9 +111,9 @@ const config = await loadConfig({ path: argv.config as string | undefined });
 if (config.source) logger.info({ source: config.source }, 'config loaded');
 for (const note of config.notes) logger.warn({ note }, 'config note');
 
-// Off unless asked for. The counts are the only state this process owns, and
-// a demo that silently started recording them somewhere would be the wrong
-// default in both directions - nothing to clean up, nothing to explain.
+// Off unless asked for. The counts are the only state this process persists,
+// and a demo that silently started recording them somewhere would be the
+// wrong default: nothing to clean up, nothing to explain.
 const favoritesPath = argv.favorites as string | undefined;
 let favorites: FavoriteStore | null = null;
 if (favoritesPath) {
@@ -132,7 +127,7 @@ if (favoritesPath) {
 
 // Express's `trust proxy`, verbatim - '1' and 'loopback' both mean something
 // to it, so this is not parsed into a boolean here. Unset is a direct
-// connection, where the socket address IS the visitor's.
+// connection, where the socket address is the visitor's.
 const trustProxyArg = argv['trust-proxy'];
 const trustProxy =
   trustProxyArg === undefined ? false : typeof trustProxyArg === 'string' && /^\d+$/.test(trustProxyArg) ? Number(trustProxyArg) : trustProxyArg;
@@ -165,16 +160,16 @@ if (!manifest.shared.center && !remoteBase)
 if (manifest.metadata) {
   const { matched, entries } = manifest.metadata;
   logger.info({ matched, entries }, 'rooms with keywords or story');
-  // Metadata that matches nothing is indistinguishable from no metadata once the
-  // map is running, so it is the one case worth saying out loud.
+  // Matched 0 against non-zero entries is the keys-drifted signal, and the
+  // map reads it the same as having no sidecar - the one case worth saying
+  // out loud (see scanDirectory's `metadata` note).
   if (matched === 0) logger.warn('none of the sidecar entries matched a room - are the keys the image filenames?');
 }
 
-// The CLIP text tower is an OPTIONAL dependency, because `onnxruntime-node`
-// publishes for win32/darwin/linux only and as a required one it takes the
-// whole install down on anything else. Without it a search still ranks - by
-// keywords and story - so this is a note, not a warning, and it is said at
-// startup rather than left to be discovered on the first query.
+// The text tower is optional - app.ts's `hasTextModel` says why. Without it
+// a search still ranks by keywords and story, so this is a note, not a
+// warning, said at startup rather than left to be discovered on the first
+// query.
 if (!hasTextModel()) logger.info('no CLIP text model installed - search will rank by keywords and story only');
 
 logger.info(watch ? 'bundling client (watch mode)' : 'bundling client');
@@ -215,10 +210,8 @@ await ctx.rebuild();
 if (watch) await ctx.watch();
 else await ctx.dispose();
 
-// Resolved once at startup rather than per request: a running process cannot
-// change which revision it is, and re-reading .git on every health check would
-// report a checkout the code in memory is no longer from. That is the exact
-// lie the deploy workflow uses this to catch - see version.ts.
+// Once per process, not per request: a running process cannot change which
+// revision it is (AGENTS.md, "Deploying to the VPS"; see version.ts).
 const commit = resolveCommit(repoRoot);
 
 app = createApp({
@@ -238,11 +231,12 @@ app = createApp({
 });
 
 const server = app.listen(port, () => {
-  // Express itself always serves from root - server-nginx.conf's
-  // prefix-stripping proxy_pass is what makes basePath true for anyone
+  // Express itself always serves from root - the VPS's prefix-stripping
+  // proxy_pass (see deploy/README.md) is what makes basePath true for anyone
   // arriving through it - so this box's own address is unprefixed even when
   // --base-path is set. Hitting it directly here would 404 against
   // <base href>'s prefix; that's expected, not a bug to chase.
+  //
   // Express binds every interface, so the demo is already reachable from a
   // phone on the same network - but only if you know which address to type.
   // Listing them is the difference between "it is exposed" and "it is usable".
@@ -267,8 +261,9 @@ server.on('error', (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
-// The debounced snapshot is deliberately unref'd, so nothing but this writes
-// out the last few favorites when the process is asked to stop.
+// The store's debounced snapshot timer is unref'd (see favorites.ts), so
+// these handlers are what flush pending favorites when the process is asked
+// to stop.
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {
     void (favorites?.flush() ?? Promise.resolve()).finally(() => process.exit(0));

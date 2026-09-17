@@ -1,18 +1,17 @@
 /**
- * Loading a corpus's keyword/story sidecar and tag-link map for the SSR
- * catalog routes - the one thing `scan.ts`/`remote.ts` deliberately don't do.
+ * Loading a corpus's keyword/story sidecar and tag-link map, in real parsed
+ * form, for the SSR catalog routes - `scan.ts` and `remote.ts` ship only
+ * `{url, ...counts}` for both, keeping the manifest small (see the
+ * `metadata` note in `scanDirectory`).
  *
- * `/api/manifest` only ever ships `metadata`/`tagLinks` as `{url, ...counts}`,
- * because the parsed sidecar can be megabytes and the manifest is on the path
- * to the first frame. The catalog/room routes need the real content, so this
- * is a second reader - mode-aware, since local mode has a directory to
- * `readFile` off (the same flat files `scan.ts` itself reads, by the same
- * `METADATA_FILE`/`TAG_LINKS_FILE` names) while remote mode only has the
- * already-rebased absolute urls `remote.ts` put on the manifest.
+ * Mode-aware, because the two modes have different things to read: local
+ * mode has the same flat files `scan.ts` reads (`METADATA_FILE`/
+ * `TAG_LINKS_FILE` names in the images directory), while remote mode only
+ * has the already-rebased absolute urls `remote.ts` put on the manifest.
  *
- * Loaded once and memoized per manifest, not per request: the server scans a
- * corpus once at startup and never rescans it, and re-parsing a multi-
- * megabyte sidecar on every catalog request would be pure waste.
+ * Loaded once and memoized per manifest: the server scans a corpus once at
+ * startup and never rescans it, and re-parsing a multi-megabyte sidecar on
+ * every catalog request would be waste, not freshness.
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -29,8 +28,8 @@ export interface RoomContent {
 }
 
 /**
- * Local mode reads the flat file directly (same as `scan.ts`); remote mode
- * fetches the manifest's already-rebased absolute url for it.
+ * Local mode reads the flat file from the images directory; remote mode
+ * fetches the manifest's already-rebased absolute url.
  */
 async function readSidecar(localFile: string, remoteUrl: string, imagesDir: string | null): Promise<unknown> {
   if (imagesDir) return JSON.parse(await readFile(join(imagesDir, localFile), 'utf8'));
