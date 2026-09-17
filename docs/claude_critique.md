@@ -208,3 +208,94 @@ and no fact of substance, is changed. The revision targets each mechanism above:
   lost.
 - `AGENTS.md`'s comment-hygiene note could cite mechanisms 1, 3, and 5 — it
   currently only warns about mechanism 3's past-tense variant.
+
+---
+
+# A second file: `packages/map/illusion.ts`
+
+Source: `packages/map/illusion.ts` as of db67cbe — ~577 lines. Same style
+family, but the pass here goes differently, and the difference is the point.
+
+## Why this file is not main.tsx
+
+`main.tsx`'s failure was *inverted cost* (mechanism 8): long advocacy on
+three-line `useState`s, thin notes on genuinely subtle gating. `illusion.ts`
+inverts that profile — the commentary is heavy almost everywhere, but
+**mostly where it is earned**. This is a non-obvious algorithm (a toroidal
+sliding-puzzle solver whose whole thesis is that repeated values make it a
+supply problem, not a permutation problem), and the reader who does not grasp
+that will casually break it. So:
+
+- **Mechanism 1 (buried lede) is largely absent.** Almost every function leads
+  with a standalone rule: `normaliseDistance` ("Reduce a cyclic distance to the
+  shorter signed direction"), `makeAvailable` ("An unlocked off-camera cell
+  holding `v`…"), `validate` ("The preconditions the algorithm leans on, checked
+  once and loudly"), `applyMove`, `batched`, `find`. The file-level header is
+  split into named subsections ("### The move set is the guarantee", "### Values
+  repeat…", "### Board, not map") that are good indexical signage. Little to fix
+  on this axis.
+- **Mechanism 8 is largely satisfied.** The phase-2 `k`-step derivation, the
+  "never needs the column emptied first, because a legal region may be taller
+  than half the board" hazard, the `lockedInRow`/`lockedInCol` O(1) insight —
+  these carry their length. The right move was to *leave them*, and resisting
+  the urge to trim prose that looks bloated but is load-bearing was most of the
+  discipline here.
+
+The mechanisms that *do* bite are narrower, and 5 leads them.
+
+## What actually needed editing
+
+**Mechanism 5 (one fact, many homes) — the real problem.** The independence
+rule — "park a whole batch before feeding any of it, which makes the batch's
+lines independent, which is what lets the animation play them as one wave" —
+was re-derived in five places: the primitives block, `batched`, phase 1's park
+step, phase 1's sort note, and phase 2's batch paragraph. Each paraphrase added
+one local wrinkle on top of an identical core, so a reader met the same
+argument four times before finding the fifth. Fix: the primitives block (where
+`stage`/`line`/`wave` are defined) becomes the single canonical statement;
+`batched`, the phase-1 park, and the phase-2 paragraph now say their local fact
+and point back.
+
+**Mechanism 2 (shouting caps).** `OFF-CAMERA`, `UNLOCKED`, `INDEPENDENT`,
+`FEED`, `PARKING`, `NOW`, `BATCH`, `AND`/`ROWS` — eight comments each promoting
+one word to capitals. Mostly demoted to normal prose; where the caps marked a
+real contrast (feed vs. parking stages, "locked now vs. locked at the end") the
+contrast is now carried by sentence structure or a list item instead.
+
+**Mechanism 6 (narrator).** The header's "Rearranging the map without admitting
+that the grid is not a space," "exactly the illusion worth keeping," "robbed,"
+"cannibalized" — phrasings whose job was style. Kept the concepts, dropped the
+performance. The `### Values repeat` / `### Board, not map` subsection titles
+stay — those earn their cleverness by being accurate and locatable.
+
+**Mechanism 3 (ghosts) — light here, one instance.** `AGENTS.md` flags the
+past-tense variant specifically, and there was exactly one: phase 2's "one
+column per batch — which is *the original, strictly sequential behaviour* —"
+argues against a version of the planner that exists only in git. Cut. The other
+counterfactuals in the header (why a whole-line rotation over a tile gliding
+over a backdrop) are standing hazards, not ghosts, so they stay.
+
+**Mechanism 4 (hypotaxis).** A few dash-joined run-ons split — the `makeAvailable`
+"reserved cell" hazard and the pool bullet in particular — but the file's
+dashes mostly do honest parenthetical work and were left alone.
+
+## The judgment this pass required
+
+The main.tsx pass could mostly apply its seven rules mechanically. Here the
+work was knowing which prose that *looks* like the bad style is actually a
+hazard warning wearing the same clothes. Two tests separated them, applied to
+every block I touched:
+
+1. **Would deleting this clause let a competent reader write a real bug?** The
+   phase-2 derivation, the early-locking rationale, the "toroidal only because
+   the wrap is off-camera" gate — yes. All kept.
+2. **Does this sentence tell what the code *does*, or only argue that an
+   alternative lost?** The "original, strictly sequential behaviour" aside and
+   the header's "without admitting" lede only argue; cut or rewritten to
+   declaratives.
+
+So the approach flipped from main.tsx's "compress everything toward a ≤3-line
+default" to "hold the length where risk justifies it, and spend the effort on
+de-duplicating the one fact the whole file leans on." The output is shorter in
+places and about the same length in others — the change is that nothing is now
+said twice, and nothing important is now buried in a paraphrase.
