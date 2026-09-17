@@ -1,21 +1,19 @@
 /**
  * Pure zoom/pan-bounds math for a scoped "content camera" - pinch-to-zoom
- * and pan applied to one DOM subtree via CSS transform, kept DOM-free so
- * the geometry can be asserted without a browser (the same split as
- * `camera.ts`/`useMapCamera.ts`, and the split `imageZoom.ts`/
- * `useImageZoom.ts` used before this replaced them).
+ * and one-finger pan applied to one DOM subtree via CSS transform. Kept
+ * DOM-free so the geometry can be asserted without a browser, the same
+ * split as `camera.ts`/`useMapCamera.ts`.
  *
- * `imageZoom.ts`'s old `clampZoomState` assumed the zoomed element's own
- * box WAS the viewport - true for a tile image sized close to its own
- * visible box, false for content that can be taller/wider than the
- * scrollable region showing it (a long story, a tall virtualized catalog
- * list) and already scrolled to some offset within it when a gesture
- * starts. `useContentZoom.ts` always paints with `transform: translate(tx,
- * ty) scale(scale)` and `transform-origin: 0 0`, so every coordinate here
- * is relative to the content element's own NATURAL (untransformed)
- * top-left corner - `contentOrigin` is where that corner currently sits
- * relative to the viewport, measured once per zoom session before any
- * transform is applied (see useContentZoom.ts's `captureFrame`).
+ * The math is viewport-relative: it must hold for content taller or wider
+ * than the region showing it (a long story, a tall virtualized catalog
+ * list) and already scrolled to an offset within it when a gesture starts,
+ * not just for a tile roughly the size of its own viewport.
+ * `useContentZoom.ts` paints with `transform: translate(tx, ty)
+ * scale(scale)` and `transform-origin: 0 0`, so every coordinate here is in
+ * the content element's own untransformed top-left corner space.
+ * `contentOrigin` is where that corner sits relative to the viewport,
+ * captured once per zoom session while the content is still at identity
+ * scale (`useContentZoom.ts`'s `captureFrame`).
  */
 
 export interface ContentCamera {
@@ -39,18 +37,17 @@ export interface Point {
 }
 
 /**
- * Scales around `anchor` (a point in content-local coordinates - see the
- * file doc comment) so whatever content is currently rendered at that
- * point stays exactly where it is on screen after the scale change - the
- * "pinch keeps content under your fingers" invariant, the same thing
- * `camera.ts`'s `zoomBy` does for the map's own world-cell camera,
- * reworked here in plain content pixels rather than cells.
+ * Scales around `anchor` (a content-local point) so whatever content is at
+ * that point stays where it is on screen across the scale change - the
+ * pinch-keeps-content-under-the-fingers rule, the same invariant
+ * `camera.ts`'s `zoomBy` implements for the map's world-cell camera, in
+ * content pixels rather than cells.
  *
  * Derivation: with `transform-origin: 0 0`, a content-local point `p`
- * paints at screen position `contentOrigin + scale*p + (tx,ty)`. Holding
- * `contentOrigin` fixed (it doesn't change mid-gesture) and requiring
- * `anchor`'s screen position to be the same before and after the scale
- * change gives `tx' = tx + anchor.x * (scale - scale')`.
+ * paints at `contentOrigin + scale*p + (tx,ty)`. Holding `contentOrigin`
+ * fixed (it doesn't change mid-gesture) and keeping `anchor`'s screen
+ * position the same before and after the scale change gives
+ * `tx' = tx + anchor.x * (scale - scale')`.
  */
 export function zoomAtPoint(camera: ContentCamera, anchor: Point, factor: number, maxScale = MAX_SCALE): ContentCamera {
   const scale = Math.min(maxScale, Math.max(1, camera.scale * factor));
@@ -69,15 +66,14 @@ export function panBy(camera: ContentCamera, dx: number, dy: number): ContentCam
 
 /**
  * Keeps `scale` in `[1, MAX_SCALE]` and `tx`/`ty` from showing empty space
- * beyond the content's own edges - the generalized replacement for
- * `imageZoom.ts`'s `clampZoomState`, parameterized by the viewport and
- * content sizes independently (content may already be bigger than the
- * viewport at scale 1) plus `contentOrigin` (see the file doc comment).
+ * beyond the content's own edges. The viewport and content sizes are
+ * parameterized independently - content may already be bigger than the
+ * viewport at scale 1 - along with `contentOrigin` (see the file header).
  *
- * On an axis where the scaled content is smaller than the viewport, it is
- * centered rather than pinned to one edge. At scale 1 the camera is
- * always forced back to the identity - the rest state is exactly what
- * native scroll already shows, never a leftover pan.
+ * On an axis where the scaled content is smaller than the viewport, the
+ * content is centered on that axis. At scale 1 the camera returns to the
+ * identity, so a scope at rest shows what native scroll already showed,
+ * with no leftover pan.
  */
 export function clampToBounds(camera: ContentCamera, viewport: Size, content: Size, contentOrigin: Point): ContentCamera {
   const scale = Math.min(MAX_SCALE, Math.max(1, camera.scale));
@@ -88,9 +84,9 @@ export function clampToBounds(camera: ContentCamera, viewport: Size, content: Si
     if (scaledSize <= viewportSize) return (viewportSize - scaledSize) / 2 - origin;
     const maxTranslate = -origin;
     const minTranslate = viewportSize - origin - scaledSize;
-    // `|| 0` folds a `-0` (from `-origin` when `origin` is exactly `0`) back
-    // to a plain `0` - harmless in a CSS `translate` either way, but not a
-    // distinction worth asserting around (same fold `imageZoom.ts` used to do).
+    // `|| 0` folds a `-0` (what `-origin` yields when `origin` is `0`) into
+    // a plain `0` - CSS `translate` treats the two the same, but one value
+    // keeps assertions clean.
     return Math.min(maxTranslate, Math.max(minTranslate, translate)) || 0;
   };
 

@@ -424,6 +424,21 @@ files (`useMapCursor.ts`, `useRearrangement.ts`) plus perf-research.md pointers
 rewritten from copy-paste history into an AGENTS.md pointer; distill mode's
 "fade to black" language was corrected to match `render.ts`'s crossfade wording.
 
+The next `packages/web/src/lib/` batch went on 2026-09-17, out of order and in
+parallel: clearHistoryBook + test, contentZoomCamera + test, debug,
+debugActions + test. All seven report comment-only via check.mjs; all 785 tests
+pass; lint and typecheck clean. What it found: five dead `imageZoom.ts`
+citations inside `contentZoomCamera.ts` and its test (the file that replaced
+that one still cited its predecessor), a past-tense ghost in
+`clearHistoryBook.ts` ("an earlier version anchored to the book's own bounding
+box") now rewritten as a standing hazard, a dead pointer in `debugActions.ts`
+(`DebugStep.args` named a switch in `runSequence` that lives in `dispatch`),
+and one comment stating behaviour the code does not have: `debug.ts` claimed
+the panel's results list and sliders had moved diegetic and that a session
+without the flag compiles the panel out of the tree, when `MapView.tsx` still
+renders them behind a runtime `DEBUG &&` — the comment now lists the panel's
+actual contents and describes the gate as it is.
+
 ### Source files and their tests
 
 #### packages/map
@@ -526,13 +541,13 @@ rewritten from copy-paste history into an AGENTS.md pointer; distill mode's
   - [x] packages/web/src/lib/catalog.test.ts
 - [x] packages/web/src/lib/center.ts
   - [x] packages/web/src/lib/center.test.ts
-- [ ] packages/web/src/lib/clearHistoryBook.ts
-  - [ ] packages/web/src/lib/clearHistoryBook.test.ts
-- [ ] packages/web/src/lib/contentZoomCamera.ts
-  - [ ] packages/web/src/lib/contentZoomCamera.test.ts
-- [ ] packages/web/src/lib/debug.ts  — no unit test
-- [ ] packages/web/src/lib/debugActions.ts
-  - [ ] packages/web/src/lib/debugActions.test.ts
+- [x] packages/web/src/lib/clearHistoryBook.ts
+  - [x] packages/web/src/lib/clearHistoryBook.test.ts
+- [x] packages/web/src/lib/contentZoomCamera.ts
+  - [x] packages/web/src/lib/contentZoomCamera.test.ts
+- [x] packages/web/src/lib/debug.ts  — no unit test
+- [x] packages/web/src/lib/debugActions.ts
+  - [x] packages/web/src/lib/debugActions.test.ts
 - [ ] packages/web/src/lib/distillToggle.ts
   - [ ] packages/web/src/lib/distillToggle.test.ts
 - [ ] packages/web/src/lib/favoriteBadge.ts

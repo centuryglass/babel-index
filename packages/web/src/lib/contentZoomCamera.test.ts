@@ -50,12 +50,10 @@ test('clampToBounds forces the identity at scale <= 1 - no leftover pan at rest'
 });
 
 test('clampToBounds pans a viewport-filling element across its own full reachable range (the old image-fits-viewport case)', () => {
-  // A 400x300 element exactly filling its own viewport, contentOrigin (0,0) -
-  // this is `imageZoom.ts`'s original scenario. With `transform-origin: 0 0`
-  // (rather than the old `center`) the reachable range at scale 2 is
-  // [viewport - content*scale, 0] per axis instead of a range centered on
-  // 0 - a different reference point for the same total span (400 wide,
-  // 300 tall either way), not a behavior regression.
+  // A 400x300 element filling its own viewport, contentOrigin (0,0). With
+  // `transform-origin: 0 0` the reachable range at scale 2 is
+  // [viewport - content*scale, 0] per axis - the origin, not the center, is
+  // the fixed point, so the range is not centered on 0.
   const clamped = clampToBounds({ scale: 2, tx: 1000, ty: -1000 }, { width: 400, height: 300 }, { width: 400, height: 300 }, { x: 0, y: 0 });
   assert.equal(clamped.tx, 0); // requested +1000 clamps down to the max reachable, 0
   assert.equal(clamped.ty, -300); // requested -1000 clamps up to the min reachable, 300-600
@@ -64,7 +62,7 @@ test('clampToBounds pans a viewport-filling element across its own full reachabl
 test('clampToBounds centers content that stays smaller than the viewport even zoomed in', () => {
   // A 100x50 element in a 400x300 viewport, still smaller than the viewport
   // even at MAX_SCALE (100*4=400, 50*4=200) - centered on the height axis,
-  // exactly filling the width axis, regardless of any requested pan.
+  // filling the width axis, regardless of any requested pan.
   const clamped = clampToBounds({ scale: 4, tx: 999, ty: 999 }, { width: 400, height: 300 }, { width: 100, height: 50 }, { x: 0, y: 0 });
   assert.equal(clamped.tx, 0);
   assert.equal(clamped.ty, 50);

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { buildSequence, runSequence, DEFAULT_DURATION_MS, type DebugActions, type DebugActionName } from './debugActions.ts';
 
 // A sample much longer than the real default - long enough that even the
-// lowest-weighted action is virtually certain to turn up at least once, for
-// the coverage test below. Not a claim about how long a real run should be.
+// lowest-weighted action is virtually certain to appear at least once, for
+// the every-action coverage test in this file. Not a claim about real run
+// length.
 const LONG_SAMPLE_MS = 5 * 60 * 1000;
 
 test('buildSequence is deterministic for a given seed', () => {

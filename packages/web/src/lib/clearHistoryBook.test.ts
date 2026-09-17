@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { BASE_TILE } from './pyramid.ts';
 
-// An arbitrary stand-in for the art's decoded pixel size - drawing reads the
-// real decoded size at runtime, not a constant, so this exercises the
-// scaling math independent of whatever the real asset happens to be.
+// A stand-in for the art's decoded pixel size - the real size is read from
+// the decoded image at runtime, so the math is exercised against a fixed
+// value, independent of the actual asset.
 const ICON_SIZE = { w: 345, h: 241 };
 
 test("the icon is anchored to the TILE's lower right corner, not any book's", () => {
@@ -13,9 +13,9 @@ test("the icon is anchored to the TILE's lower right corner, not any book's", ()
   const rect = clearHistoryBookScreenRect(cellPx, 100, 200, ICON_SIZE);
   assert.equal(rect.w, ICON_SIZE.w);
   assert.equal(rect.h, ICON_SIZE.h);
-  // Right/bottom edges of the icon meet the right/bottom edges of the tile -
-  // an earlier version anchored to the "forget searches" book's own bounding
-  // box instead, landing this deep inside the shelf rather than at the edge.
+  // The icon's right/bottom edges meet the tile's right/bottom edges - the
+  // anchor is the tile corner, not the book's own rect (see the source
+  // header for why that would land inside the shelf).
   assert.equal(rect.x + rect.w, 100 + cellPx.x);
   assert.equal(rect.y + rect.h, 200 + cellPx.y);
 });
