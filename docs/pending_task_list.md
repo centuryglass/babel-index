@@ -469,3 +469,14 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   about whether `duration()` should take a separate ceiling for waits. The same
   number is restated as a fallback elsewhere - see `DEFAULT_WARM_TIMEOUT_MS`
   under Rendering.
+- **[2026-09-17] `webgl-map.e2e.ts`'s search test has the race the [2026-09-14]
+  `map-gestures.e2e.ts` entry root-caused, unfixed on the GL side.** Its
+  `a search completes and its rearrangement settles, same as the Canvas2D path`
+  presses Enter and polls until the camera reads back `atField` - the check
+  that entry showed can pass before the rearrangement has started. The
+  Canvas2D file now waits for the HUD to report `rearranging` first; the GL
+  one does not, so the ease-back assertion proves nothing on a slow search
+  response and its trailing `gl`/`blank` reads can land on a pre-search frame.
+  Fix: port the same `waitForFunction` guard. Found by the 2026-09-17 WebGL
+  comment pass, whose contract is prose-only edits; the test's own comment
+  points here.

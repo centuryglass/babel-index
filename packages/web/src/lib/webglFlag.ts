@@ -1,22 +1,21 @@
 /**
- * Which map renderer draws: the WebGL one
- * (`glRenderer.ts`/`glSlideRenderer.ts`/`useMapRendererGL.ts`) or the Canvas2D
- * one (`render.ts`/`slide.ts`). Read once at module scope, same as `debug.ts`'s
- * `DEBUG` and `perfProbe.ts`'s `PERF`.
- *
- * `DEFAULT_WEBGL` is which one a plain visit gets. It is now WebGL: the
- * validation in `docs/pending_task_list.md`'s Rendering section (cross-device
- * Safari/BrowserStack, glow outlines, the parity suite) came back clean.
- * `?webgl=0` (also `off`/`false`/`no`) is the escape hatch back to Canvas2D -
- * kept because the render-parity suite needs a Canvas2D control session and a
- * reader hitting a GL-specific glitch has somewhere to go. A bare `?webgl` (or
- * any other value) forces WebGL on. `supportsWebGL2()` is a capability probe so
- * a device without WebGL2 falls back to Canvas2D automatically regardless of
- * the flag or the default, instead of `createGLContext` failing later and
- * leaving a blank canvas.
+ * The map renderer switch: the WebGL one (`glRenderer.ts` and
+ * `glSlideRenderer.ts`, wired up by `useMapRendererGL.ts`) or the Canvas2D one
+ * (`render.ts` and `slide.ts`). AGENTS.md's "The WebGL renderer" carries the
+ * standing rule, including why the Canvas2D hatch stays while both renderers
+ * exist; this module turns a url into that choice.
  */
+
+/** Which renderer a visit with no `webgl` parameter gets. */
 export const DEFAULT_WEBGL = true;
 
+/**
+ * False where no WebGL2 context can be made: no DOM to ask, or a `getContext`
+ * that returns null or throws. A device with no WebGL2 therefore gets
+ * Canvas2D whatever the flag says; without the probe it would reach
+ * `createGLContext`, get null, and be left with an undrawn canvas -
+ * `useMapRendererGL.ts`'s setup returns without building a renderer.
+ */
 function supportsWebGL2(): boolean {
   if (typeof document === 'undefined') return false;
   try {
@@ -27,6 +26,11 @@ function supportsWebGL2(): boolean {
   }
 }
 
+/**
+ * A present `webgl` parameter overrides the default; an absent one leaves
+ * `DEFAULT_WEBGL` the answer. The regex is what decides an override: only the
+ * values it matches mean Canvas2D, so a bare `?webgl` forces WebGL on.
+ */
 function wantsWebGL(): boolean {
   const params = new URLSearchParams(location.search);
   if (!params.has('webgl')) return DEFAULT_WEBGL;
@@ -34,5 +38,10 @@ function wantsWebGL(): boolean {
   return !/^(0|off|false|no)$/i.test(value);
 }
 
+/**
+ * The flag and the probe folded together, read once at module scope like
+ * `debug.ts`'s `DEBUG` and `perfProbe.ts`'s `PERF`. `main.tsx` is its only
+ * reader.
+ */
 export const WEBGL =
   typeof location !== 'undefined' && wantsWebGL() && supportsWebGL2();

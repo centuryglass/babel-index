@@ -337,7 +337,8 @@ home early — see §6 for the rationale:
    parallel; the renderer cluster it is the WebGL counterpart of had passed
    first, so its wording (the lockstep rule, the per-cell loop, the headless
    flat-quad fallback) is the canonical home the gl/ files were deduped
-   toward.
+   toward. `webglFlag.ts` went with `webgl-map.e2e.ts` the same day, which
+   closes the WebGL set that orders 3, 5 and 7 each held a piece of.
 6. `packages/pipeline`, then the `tools/*` trees, then `build/`. Pipeline is
    done (2026-09-17, out of order and in parallel), and so are `tools/embed`
    and `tools/upload`.
@@ -355,6 +356,32 @@ order; `main.tsx` passed first and passed again, and stays unticked because
 fresh changes from another branch went in after the second pass. Order is a
 deduping aid within a cluster, not a rule between clusters, so a batch can be
 taken from any package no other checkout is in.
+
+Order 7's e2e fleet went one file early: `webgl-map.e2e.ts` passed on
+2026-09-17 alongside `webglFlag.ts`, and what the pass found but did not touch
+is what the rest of that order owes:
+
+- The run block ("None of the files in this directory are part of `npm
+  test`...") is verbatim in every spec file in `packages/web/e2e/`, and
+  `map-gestures.e2e.ts` is already the file the others cite for "why and how" —
+  that is its one home.
+- Five files say "One of five files split out of the original
+  `smoke.e2e.mjs`": the split is real (cbaa067 deleted the original), the count
+  has moved since, and the `docs/pending_task_list.md` citation beside it has no
+  matching entry left.
+- Four `.js`/`.jsx` citations the TypeScript conversion left behind:
+  `picking.js` (`map-gestures.e2e.ts`), `center.js` (`shelf.e2e.ts`),
+  `debug.js` and `main.jsx` (`support.ts`).
+- Two comments reason from a default that has since flipped:
+  `render-parity.parity.ts` calls itself "the last thing standing between the
+  GL renderer and flipping `DEFAULT_WEBGL`", and `support.ts`'s `openLibrary`
+  doc says "The default there is now WebGL" — both were true of the change that
+  made them, and read as the present tense a reader has to check.
+- Strays the queue should not lose: `catalog.e2e.ts`'s header cites
+  `docs/catalog-plan.md`, a deleted file already filed in
+  `docs/pending_task_list.md`, and three comments promote a word to capitals —
+  `EXPLICITLY` (`support.ts`), `PRIMARY` (`shelf.e2e.ts`), `MERGE GATE`
+  (`map-gestures.e2e.ts`).
 
 `tools/center-placement` went without `center.ts`, which order 5 pairs it with.
 What that file owes the pass that takes them together: its "see `RUNS` below" is
@@ -506,7 +533,7 @@ of citing it.
 - [ ] packages/web/src/lib/tiles.ts
   - [ ] packages/web/src/lib/tiles.test.ts
 - [ ] packages/web/src/lib/touchDebug.ts  — no unit test
-- [ ] packages/web/src/lib/webglFlag.ts  — no unit test
+- [x] packages/web/src/lib/webglFlag.ts  — no unit test
 - [ ] packages/web/src/main.tsx  — no unit test (partial: almost completely done, but some fresh changes were pulled in from a different branch.)
 - [ ] packages/web/src/assets.d.ts  — no unit test
 _Standalone specs/helpers (no same-name source):_
@@ -519,7 +546,7 @@ _Standalone specs/helpers (no same-name source):_
 - [ ] packages/web/e2e/map-gestures.e2e.ts
 - [ ] packages/web/e2e/render-parity.parity.ts
 - [ ] packages/web/e2e/shelf.e2e.ts
-- [ ] packages/web/e2e/webgl-map.e2e.ts
+- [x] packages/web/e2e/webgl-map.e2e.ts
 
 #### tools/center-placement
 - [x] tools/center-placement/import-shelf-svg.ts  — no unit test
