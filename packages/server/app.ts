@@ -155,7 +155,7 @@ export function createApp({
   // and does not yet know its own zoom range. `notes` is for the operator, not
   // the browser, so it is stripped here - index.ts prints it at startup.
   const { notes: _notes, source: _source, ...clientConfig } = config ?? (resolveConfig() as ResolvedConfig);
-  const clipTextDtype = clientConfig.search?.clipTextDtype ?? 'fp32';
+  const clipTextDtype = clientConfig.search.clipTextDtype;
 
   // Whether the client should offer favoriting at all. A flag rather than the
   // counts themselves: the manifest stays small (see the `metadata` note in

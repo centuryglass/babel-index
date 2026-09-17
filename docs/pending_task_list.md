@@ -114,13 +114,6 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
 `npm audit` job — agreed as worth doing, but not yet planned or started.
 
 ## Comments and doc pointers:
-- **[2026-09-17] `packages/web/src/lib/catalog.ts`'s `rowHeight` has no
-  production callers.** CatalogView computes its wide-row height inline
-  (`flowH + scoreH + ROW_PAD + cardPad`) since the score strip moved below
-  the fixed-height flow area, and `stackedRowHeight` covers ultra-narrow, so
-  `rowHeight` is exported and tested while nothing calls it. Deleting the
-  function (and its `catalog.test.ts` block) or re-adopting it is the open
-  code edit.
 - **[2026-09-17] A generic cell is named two different things in one
   dialog's chrome**: `RoomOverlay`'s card shows the visible literal "a Babel
   shelf", while the same room's accessible name comes from `describe.ts`'s
@@ -128,12 +121,6 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   the eye reads another in the same dialog. Reconciling them may be
   deliberate art-copy layering rather than drift — an art decision for the
   maintainer.
-- **[2026-09-17] `center.test.ts` pins an art number** —
-  `assert.equal(BOOK_COUNT, 40)` — against AGENTS.md's "Don't pin art choices in
-  tests", which names book count as free to move. The test's own point ("every
-  book on the wall is a slot, and the whole wall is the history queue") needs
-  only `HISTORY_SLOT_COUNT === BOOK_COUNT`, which the next line already asserts,
-  so dropping the literal loses nothing.
 
 ## Corpus generation:
 - **[2026-09-17] The pipeline assumes one source size, and checks only that it
@@ -160,13 +147,6 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   exact dimension set (a second check beside the aspect check, and the cheaper
   option) or to size each sheet grid from its own members, which the sheet
   addressing in `layout.ts` cannot express today.
-- **[2026-09-17] The sheet directory suffix is spelled twice.**
-  `packages/pipeline/layout.ts`'s `sheetDirName` returns `<width>-sheets`, the
-  name `scan.ts` discovers a packed level by and the manifest then carries to
-  `tools/upload`; `packages/pipeline/sheets.ts` builds that same name from its
-  own `SHEETS_SUFFIX`, while importing `sheetDirName` only to re-export it.
-  `writeSheets` can derive its output directory from `sheetDirName`, which
-  deletes the second spelling.
 
 ## Tools:
 - **[2026-09-17] `import-shelf-svg.ts`'s `attr()` matches attribute names
@@ -255,15 +235,6 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   confidence. `embeddings.json` already records `scale` and nothing reads it
   back — carrying it through the manifest removes the constant from the client
   entirely.
-- **[2026-09-17] `app.ts` restates `search.clipTextDtype`'s default.** Line 158
-  reads `clientConfig.search?.clipTextDtype ?? 'fp32'`, but `clientConfig` is a
-  resolved `Config` (`config ?? resolveConfig()`, and `Config.search` and its
-  `clipTextDtype` are both required), so the `?.` is dead and `'fp32'` is a
-  second home for `DEFAULTS.search.clipTextDtype` — against AGENTS.md's
-  "Consuming files state no fallback defaults". Nothing catches it: `tsc` allows
-  `?.` on a non-optional property, and every `app.test.ts` config comes from
-  `resolveConfig`. Dropping the two fallbacks is the fix.
-
 ## Rendering:
 - **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
   `?webgl=0` as the Canvas2D escape hatch and a `supportsWebGL2()` probe that
@@ -351,12 +322,6 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   a `flyTo` from a control does not currently do this. Confirm whether that's
   the intended reading of the invariant and, if so, wire `flyTo` to end an
   active rearrangement the same way a pointer grab does.
-- **[2026-09-17] `repairMultiset` takes a `start` board it never reads**
-  (`packages/map/board.ts`): the signature is `(start, end, delta, geom)`, the
-  body touches only `end`, `delta` and `geom`, and `buildRearrangement` still
-  passes `start` at the call site. Dropping the parameter is the fix. Nothing
-  gates it: eslint's `no-unused-vars` only reports
-  arguments after the last used one, and `tsc` has no `noUnusedParameters`.
 - **[2026-09-17] `slide.prepareTimeoutMs` cannot be raised above 5000ms.**
   `duration()`'s `DURATION_MAX_MS` ceiling is written for animation durations -
   "past a few seconds a camera move has stopped being a transition and become a

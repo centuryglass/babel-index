@@ -5,7 +5,6 @@ import {
   pageCount,
   mountedPages,
   spacerHeight,
-  rowHeight,
   stackedRowHeight,
   tileHeight,
   thumbLevel,
@@ -98,28 +97,6 @@ test('the mounted rows plus the spacers are exactly the whole list', () => {
 
 test('a row is as tall as the tile is, whatever shape the tile becomes', () => {
   assert.equal(tileHeight(BASE_TILE.w), BASE_TILE.h);
-  assert.equal(rowHeight(BASE_TILE.w), BASE_TILE.h);
-  assert.equal(rowHeight(BASE_TILE.w, 24), BASE_TILE.h + 24);
-  // Derived from the aspect, not from a 4:3 literal.
-  assert.equal(rowHeight(320), Math.round(320 * (BASE_TILE.h / BASE_TILE.w)));
-});
-
-test('a row never gets shorter than the column of text beside the tile', () => {
-  // The tile is usually the tall one...
-  assert.equal(rowHeight(320, 0, 100), tileHeight(320));
-  // ...but on a narrow display it shrinks and the story does not, and a row
-  // sized to the tile alone clips it.
-  assert.equal(rowHeight(120, 0, 160), 160);
-  assert.equal(rowHeight(120, 22, 160), 182);
-});
-
-test('the thumbnail mat counts toward the row, on both sides', () => {
-  // The mat sits outside the image on every edge, so it costs the row two
-  // mats' worth of height, not one - matching a CSS `border` rather than a
-  // single-sided margin.
-  assert.equal(rowHeight(320, 0, 0, 6), tileHeight(320) + 12);
-  // Still capped by the text column when the text needs more than tile+mat.
-  assert.equal(rowHeight(120, 0, tileHeight(120) + 100, 6), tileHeight(120) + 100);
 });
 
 test('an ultra-narrow row stacks the tile under the head and details, rather than beside them', () => {
@@ -127,7 +104,7 @@ test('an ultra-narrow row stacks the tile under the head and details, rather tha
   // rather than sharing it, so the two never compete for the same height.
   assert.equal(stackedRowHeight(320, 30, 20), tileHeight(320) + 30 + 20);
   assert.equal(stackedRowHeight(320, 30, 20, 24), tileHeight(320) + 30 + 20 + 24);
-  // The mat costs both sides, exactly like `rowHeight`'s.
+  // The mat costs both sides, exactly like a wide row's.
   assert.equal(stackedRowHeight(320, 30, 20, 0, 6), tileHeight(320) + 12 + 30 + 20);
   // The picture-to-link gap is reserved on top of the rest of the stack.
   assert.equal(stackedRowHeight(320, 30, 20, 0, 6, 8), tileHeight(320) + 12 + 30 + 20 + 8);

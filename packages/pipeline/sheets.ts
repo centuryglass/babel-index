@@ -30,14 +30,11 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { SHEETS } from '../web/src/lib/pyramid.ts';
 import { contentHash } from './mips.ts';
-import { sheetPlan, sheetFileName, type Size, type SheetConfig } from './layout.ts';
+import { sheetPlan, sheetDirName, sheetFileName, type Size, type SheetConfig } from './layout.ts';
 
 export { sheetPlan, sheetPosition, sheetDirName, sheetFileName } from './layout.ts';
 export type { SheetConfig, SheetPlan, SheetPosition } from './layout.ts';
 
-// Builds the directory name `layout.ts`'s `sheetDirName` also returns, which is
-// the name `packages/server/scan.ts` looks for. Change one, change the other.
-const SHEETS_SUFFIX = '-sheets';
 const HASHES_FILE = 'hashes.json';
 
 /**
@@ -62,7 +59,7 @@ export async function writeSheets({
   plan?: SheetConfig;
 }): Promise<{ sheetCount: number; written: number; cached: number }> {
   const layout = sheetPlan(files.length, plan ?? SHEETS);
-  const outDir = levelDir + SHEETS_SUFFIX;
+  const outDir = sheetDirName(levelDir);
   await mkdir(outDir, { recursive: true });
 
   const hashesPath = join(outDir, HASHES_FILE);
