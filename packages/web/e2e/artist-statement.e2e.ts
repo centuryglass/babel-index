@@ -90,9 +90,8 @@ describe('the library, in a browser: the artist statement', { concurrency: false
     try {
       await openStatement(page);
 
-      // "Click here to run some equivalent code" is a real inline button (the
-      // one control on the page with pointer events), and it opens the Babel
-      // book on top.
+      // `.statement-link` is a real inline button (the one control on the
+      // page with pointer events), and it opens the Babel book on top.
       await page.locator('.statement-link').click();
       await babel.waitFor({ timeout: 5000 });
 

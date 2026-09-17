@@ -371,7 +371,7 @@ export interface SlideDrawOpts {
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
-  /** distill mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
+  /** distill mode's crossfade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
   genericFade?: number;
   /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
   distillMode?: boolean;

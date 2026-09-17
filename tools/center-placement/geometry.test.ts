@@ -120,7 +120,7 @@ test('the trace and the tile agree on aspect', () => {
     Math.abs(traced - tile) < 0.01,
     `the trace is ${MEASURED.tile.w}x${MEASURED.tile.h} (aspect ${traced}) but BASE_TILE is ` +
       `${BASE_TILE.w}x${BASE_TILE.h} (aspect ${tile}). Re-trace shelf_geometry.svg at the ` +
-      `new shape and re-run import-shelf-svg.mjs, or put BASE_TILE back.`
+      `new shape and re-run import-shelf-svg.ts, or put BASE_TILE back.`
   );
 });
 
@@ -137,7 +137,7 @@ test('a width with no height gives the traced shape, not a square', () => {
 test('the trace records the shape it was made at', () => {
   // Without `tile` the normalisation is lossy in the one way that matters, and
   // "the trace and the tile agree on aspect" has nothing to compare against.
-  assert.ok(MEASURED.tile, 'measured.js must carry its traced dimensions');
+  assert.ok(MEASURED.tile, 'measured.ts must carry its traced dimensions');
   assert.ok(MEASURED.tile.w > 0 && MEASURED.tile.h > 0);
   assert.ok(Math.abs(MEASURED.tile.aspect - MEASURED.tile.h / MEASURED.tile.w) < 1e-4);
 });

@@ -226,10 +226,10 @@ export const PREFETCH: PrefetchConfig = {
  * tools/upload/lib.ts) - another reason to leave the request-cheap, room-
  * sparse end of the ladder unpacked.
  *
- * `cols * rows` must equal `roomsPerSheet` - `packages/pipeline/sheets.ts`
- * and `packages/server/scan.ts` both assert this rather than deriving one
- * from the other, so a bad edit fails loudly instead of packing a partial
- * grid.
+ * `cols * rows` must equal `roomsPerSheet` - `sheetPlan` asserts this
+ * (`packages/pipeline/layout.ts`, called by both `packages/pipeline/sheets.ts`
+ * and `packages/server/scan.ts`) rather than deriving one from the other, so
+ * a bad edit fails loudly instead of packing a partial grid.
  */
 export const SHEETS: SheetsConfig = {
   fromLevel: 3,

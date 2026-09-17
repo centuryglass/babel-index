@@ -19,9 +19,9 @@
  * scoped to the R2 hostname - see that traffic.
  *
  * The R2/Cloudflare host must serve `imagesBase`/`sharedBase` with CORS
- * allowing this app's origin - `embeddings.bin` and `metadata.json` are read
- * via `fetch()` in `main.tsx`, which enforces CORS unlike a plain `<img>`
- * tag.
+ * allowing this app's origin - `useCorpus.ts` reads `embeddings.bin` and
+ * `metadata.json` (and `tagLinks.json`) via `fetch()`, which enforces CORS
+ * unlike a plain `<img>` tag.
  */
 import type { Manifest } from '../map/manifest.ts';
 

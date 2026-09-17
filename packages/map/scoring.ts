@@ -8,11 +8,11 @@
  *
  * ### Why every signal is normalised before it is weighted
  *
- * The three signals are not on the same scale. Keyword and story scores are
- * ratios and land in [0, 1] by construction. A CLIP cosine is nominally
+ * The four signals are not on the same scale. Keyword, title and story scores
+ * are ratios and land in [0, 1] by construction. A CLIP cosine is nominally
  * [-1, 1], but on a corpus of near-identical library walls the scores for one
  * query cluster into a narrow band - the images differ far less than CLIP's
- * range allows - so no single weight balances it against the other two: large
+ * range allows - so no single weight balances it against the other three: large
  * enough to matter and it swamps keyword bonuses, small enough to balance one
  * and it is lost inside its own spread.
  *
@@ -761,6 +761,8 @@ export function signedPercent(signed: number): number {
  *     Computed by the caller (mean of `classifyTagTerm` over the query's
  *     terms), since certainty and ranking read the same per-term
  *     classification.
+ *   - `Kt` (title): the same coverage-scaled mean as K, against the room's one
+ *     title (a one-keyword index) - computed by the caller alongside K.
  *   - `S` (story): from absolute matched length, not the query-relative
  *     ratio the ranking uses. A single matched word sits at the moderate
  *     `STORY_FLOOR`, a full matched clause reaches 1; using the ratio here

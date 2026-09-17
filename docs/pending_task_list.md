@@ -114,20 +114,6 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
 `npm audit` job — agreed as worth doing, but not yet planned or started.
 
 ## Comments and doc pointers:
-- **[2026-09-17] Two comments still quote the easter-egg button's old
-  label**: commit 2196174 ("adjust phrasing") renamed "Click here to run some
-  equivalent code" to "Run the same thing here", and
-  `style.css`'s `.statement-link` comment and
-  `packages/web/e2e/artist-statement.e2e.ts`'s inline-button comment still
-  quote the old one. (Strings are not comments, and no locator depends on the
-  label — the test clicks `.statement-link`.) Prefer naming the class over
-  quoting a label: the label is art-copy and free to move again.
-- **[2026-09-17] `style.css`'s `.score-details` comment contradicts the rule
-  below it**: it says the stacked room overlay "auto-flows into as many
-  ~200px columns as fit", but the rule is `grid-template-columns:
-  repeat(2, max-content)` — a fixed two columns. `RoomDetails.tsx`'s copy of
-  the claim was corrected to match the rule; before fixing the CSS comment,
-  check which of the two is the intent.
 - **[2026-09-17] `packages/web/src/lib/catalog.ts`'s `rowHeight` has no
   production callers.** CatalogView computes its wide-row height inline
   (`flowH + scoreH + ROW_PAD + cardPad`) since the score strip moved below
@@ -142,54 +128,12 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   the eye reads another in the same dialog. Reconciling them may be
   deliberate art-copy layering rather than drift — an art decision for the
   maintainer.
-- **[2026-09-17] Two comments still call distill mode's transition a fade to
-  black**: `useMapRenderer.ts`'s and `slide.ts`'s `genericFade` docs ("distill
-  mode's black fade over generic tiles"). Generic tiles now crossfade to their
-  paired `assets/generic_distill` alternate — `drawGenericFade` in `render.ts`
-  and AGENTS.md's "The center tile and its generic tiles" both describe it —
-  so "black" names an implementation the crossfade replaced. The copies in
-  `useDistillMode.ts` and `render.ts` are fixed; these two survived a pass
-  that reached their own file.
-
-- **[2026-09-17] `packages/web/src/lib/pyramid.ts`'s `SHEETS` docblock cites
-  a file that only re-exports the symbol it names.** It says
-  "`packages/pipeline/sheets.ts` and `packages/server/scan.ts` both assert"
-  the `cols * rows === roomsPerSheet` rule - the assertion is `sheetPlan`'s,
-  in `packages/pipeline/layout.ts`, which both of those call. Neither pointer
-  dangles, but the first lands on a file whose own line for that symbol is an
-  `export ... from`. (The same entry for `packages/map/manifest.ts` was
-  fixed; it now names `layout.ts`.)
-- **[2026-09-17] Two assertion messages in `tools/center-placement/geometry.test.ts`
-  name files that no longer exist**: the aspect-mismatch message ends "re-run
-  `import-shelf-svg.mjs`" and the traced-shape message says "`measured.js` must
-  carry its traced dimensions". Both files are `.ts` since the migration, so a
-  reader who follows either instruction runs a command that fails. They are
-  strings, not comments, so they are filed here rather than fixed in a comment
-  pass.
-
-- **[2026-09-17] A `remote.ts` preamble names a fetcher that has moved.** Its
-  CORS warning says "`embeddings.bin` and `metadata.json` are read via
-  `fetch()` in `main.tsx`", but those fetches now live in
-  `packages/web/src/hooks/useCorpus.ts`, which also `fetch()`es
-  `tagLinks.json` the same way; `main.tsx` fetches only `api/manifest`. The
-  sentence is a hazard note — a reader wiring CORS who opens `main.tsx` finds
-  nothing — so only the attribution is wrong. Fix: name `useCorpus.ts`, the
-  same spelling `tools/upload`'s `crossOriginFetchedKeys` standardized on.
-
 - **[2026-09-17] `center.test.ts` pins an art number** —
   `assert.equal(BOOK_COUNT, 40)` — against AGENTS.md's "Don't pin art choices in
   tests", which names book count as free to move. The test's own point ("every
   book on the wall is a slot, and the whole wall is the history queue") needs
   only `HISTORY_SLOT_COUNT === BOOK_COUNT`, which the next line already asserts,
   so dropping the literal loses nothing.
-- **[2026-09-17] `packages/map/scoring.ts`'s header says "the three signals"**,
-  and "`matchCertainty`"'s bulleted list omits the title, where the blend now
-  weights four signals (keyword, title, story, CLIP - `searchResult.ts`'s
-  `RankSignals` says "the four signals", and the weights shape carries
-  `titleExact`/`titlePartial`). The normalisation argument itself still holds;
-  only the count and "the other two" are behind. Found while checking
-  `docs/search_rules.md`'s matching "three questions" in the overview, which
-  this pass fixed.
 
 ## Corpus generation:
 - **[2026-09-17] The pipeline assumes one source size, and checks only that it

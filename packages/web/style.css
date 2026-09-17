@@ -1221,10 +1221,11 @@ mark {
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
 /*
   The score's detail lines go multi-column only in the STACKED overlay, where
-  the text sits below the image and has the full dialog width - it auto-flows
-  into as many ~200px columns as fit. The side-by-side split keeps one column:
-  its text page is a narrow reading column with no room for a second (see the
-  layout notes). The composite certainty line stays full width in both.
+  the text sits below the image and has the full dialog width - a fixed two
+  content-sized columns, not one per detail line. The side-by-side split
+  keeps one column: its text page is a narrow reading column with no room
+  for a second (see the layout notes). The composite certainty line stays
+  full width in both.
 */
 .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
 .overlay-columns.columns .overlay-body .score-details { grid-template-columns: max-content; }
@@ -1399,7 +1400,7 @@ mark {
   background: rgba(60,44,20,0.07); border: 1px solid var(--paper-edge); border-radius: 4px;
   font-size: 11px; line-height: 1.4; color: var(--paper-ink);
 }
-/* "Click here to run some equivalent code" - a control that reads as link-text inline in the prose. */
+/* The statement's inline control that opens the Babel book - reads as link-text in the prose. */
 .statement-link {
   display: inline; padding: 0; border: none; background: none;
   font: inherit; color: var(--paper-accent); text-decoration: underline; cursor: pointer;

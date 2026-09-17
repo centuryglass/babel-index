@@ -295,7 +295,7 @@ test('the catalog\'s idle order is every room by filename, not by id', () => {
   assert.deepEqual(alphabeticalOrder(rooms), [1, 2, 0]);
 });
 
-test('the alphabetical order is plain string comparison, matching scan.mjs', () => {
+test('the alphabetical order is plain string comparison, matching scan.ts', () => {
   // Not localeCompare: "Z" < "a" under plain comparison, which is what
   // scan.ts's own `.sort()` of the same filenames already produces.
   const rooms = [{ file: 'a.jpg' }, { file: 'Z.jpg' }];
