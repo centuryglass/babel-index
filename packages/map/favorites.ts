@@ -1,9 +1,7 @@
-import { prng, seedFrom } from './prng.ts';
-
 /**
- * The catalog's sort modes, as a re-sort of an order that already exists -
- * and, for the two favorite-based ones, as a placement input alongside a
- * search.
+ * The favorite sort modes, as a stable re-sort of an order that already
+ * exists - and, for the two favorite-based ones, as a placement input
+ * alongside a search.
  *
  * A sort mode moves rooms within whatever ranking is already in force - the
  * search's `order` on the map, alphabetical in the catalog - which is why this
@@ -12,49 +10,46 @@ import { prng, seedFrom } from './prng.ts';
  * term, sort by favorites, and the favorited rooms arrive in the order that
  * search put them in.
  *
- * An active favorite sort is now also a certainty signal, exactly as a search
- * is. `favoriteSort` folds it in: every
- * room the sort lifts to the front gets certainty 1, composed with (not
- * replacing) whatever certainty a running search already gave it. `'mine'` with
- * no search is a tight cluster of the reader's favorites against the center at
- * baseline everywhere else; `'mine'` with a search enriches the search's own
- * cluster rather than discarding it. A relevance re-sort, the shuffle button,
- * and `'random'` are not placement inputs and pass a search's certainty
- * through untouched.
+ * An active favorite sort is also a certainty signal, the way a search is.
+ * `favoriteSort` folds it in: every room the sort lifts to the front gets
+ * certainty 1, composed with (not replacing) whatever certainty a running
+ * search already gave it. `'mine'` with no search is a tight cluster of the
+ * reader's favorites against the center at baseline everywhere else; with a
+ * search it enriches the search's own cluster. A relevance re-sort, the
+ * shuffle button, and `'random'` are not placement inputs and pass a
+ * search's certainty through untouched.
  *
  * ### Sorting to the front, not filtering
  *
- * `'mine'` moves the reader's favorites ahead of everything else and keeps the
- * rest below them. Filtering was the alternative and it reads wrong on the map -
- * a library that empties out to the four rooms someone has starred is not a
- * library - and it would also duplicate what `filterBlockedIds` already does for
- * a different reason. The catalog gets the same treatment for the same reason
- * the two views share one `result.order`: a room must not sit at a different
- * position depending on which view is asking.
+ * `'mine'` moves the reader's favorites ahead of everything else and keeps
+ * the rest below them; removing rooms is `filterBlockedIds`'s job, for a
+ * different reason. The map and the catalog share one `result.order`, so a
+ * room must not sit at a different position depending on which view is
+ * asking.
  *
- * ### Why files, not ids
+ * ### Keys are filenames, not ids
  *
- * Favorites are recorded by filename (see `persist.ts` and
- * `packages/server/favorites.ts`) because room ids are positional and shift
- * when the corpus grows. Ids are the currency inside a session, so this module
- * is handed `files` - the id -> filename lookup, i.e. `manifest.rooms` - and
- * does the crossing itself, in one place.
+ * The reason is AGENTS.md's "Favorites are keyed by filename everywhere":
+ * room ids are positional and renumber when the corpus grows. Ids are the
+ * currency inside a session, so this module is handed `files` - the id ->
+ * filename lookup, i.e. `manifest.rooms` - and does the crossing itself, in
+ * one place.
  *
- * No DOM and no React, so every case below is assertable in the plain test
- * runner.
+ * No DOM and no React, so every case in the file is assertable in the plain
+ * test runner.
  *
  * ### `'random'`
  *
- * A fourth re-sort, on the same stable-sort machinery as `'mine'`/`'count'` -
- * `liftKey` just draws each room's key from `randomSeed` instead of a favorite
- * fact. It is not a placement input (`favoriteSort` treats it like
- * `'relevance'` for certainty): a shuffled catalog is not a claim about
- * confidence, so it must not cluster the map around anything. The seed is the
- * caller's to manage - this module only turns one into a stable permutation,
- * the same seed always producing the same order, so the caller decides when a
- * fresh shuffle is warranted (switching into `'random'`) versus when the
- * existing one should hold (re-rendering, switching views).
+ * A fourth re-sort on the same stable-sort machinery: `liftKey` draws each
+ * room's key from `randomSeed` instead of from a favorite fact. It is not a
+ * placement input - a shuffled catalog is not a claim about confidence, so
+ * it must not cluster the map around anything. The seed is the caller's to
+ * manage: the same seed always produces the same order, so the caller
+ * decides when a fresh shuffle is warranted (switching into `'random'`) and
+ * when the existing one should hold (a re-render, a view switch).
  */
+
+import { prng, seedFrom } from './prng.ts';
 
 /** Which order the reader asked for. `'relevance'` is the base order untouched. */
 export type SortMode = 'relevance' | 'mine' | 'count' | 'random';
@@ -83,10 +78,10 @@ export interface FavoriteSortInput {
 export function favoriteOrder(base: number[], input: FavoriteSortInput): number[] {
   if (input.mode === 'relevance') return base;
 
-  // The base position IS the tiebreak, so it is captured before sorting rather
-  // than relied on: `Array.prototype.sort` is stable in every engine this runs
-  // in, but a comparator that says so out loud survives a future rewrite that
-  // sorts a different array.
+  // The base position is the tiebreak, captured before sorting rather than
+  // assumed: `Array.prototype.sort` is stable in every engine this runs in,
+  // but a comparator that says the tiebreak out loud survives a rewrite
+  // that sorts a different array.
   const at = new Map<number, number>();
   base.forEach((id, i) => at.set(id, i));
 
@@ -95,10 +90,9 @@ export function favoriteOrder(base: number[], input: FavoriteSortInput): number[
 }
 
 /**
- * A search's own ranking and certainty, as `favoriteSort` needs it to fold a
- * favorite boost into a live search rather than replace it - the same shape
- * `useSearch`'s `result` carries (`order`/`certainty`), narrowed to the two
- * fields that matter here.
+ * A search's own ranking and certainty - the `order`/`certainty` pair
+ * `useSearch`'s `result` carries, narrowed to the two fields a favorite
+ * boost folds into.
  */
 export interface SearchCertainty {
   /** room ids, best first - the search's own order, before blocking/favorites */
@@ -114,14 +108,13 @@ export interface FavoriteSortResult {
 }
 
 /**
- * `favoriteOrder` plus the certainty profile an active sort now drives - see
- * the file comment above.
+ * `favoriteOrder` plus the certainty profile an active sort drives - see the
+ * preamble.
  *
- * `search` is the running search's own order/certainty, independent of `base`
- * (which may already be filtered for blocked tags) - passing the search's own
- * pair rather than something aligned to `base` is what lets this module do the
- * id -> certainty crossing itself, the same way it already crosses id ->
- * filename for favorites.
+ * `search` carries the running search's own order/certainty pair, aligned to
+ * each other and not to `base` (which may already be filtered for blocked
+ * tags), so this module does the id -> certainty crossing itself, the way
+ * `liftKey` crosses id -> filename.
  */
 export function favoriteSort(
   base: number[],
@@ -131,10 +124,10 @@ export function favoriteSort(
   const order = favoriteOrder(base, input);
 
   if (input.mode === 'relevance' || input.mode === 'random') {
-    // Same array identity as `result.certainty` when nothing sorted, so a
-    // caller memoising on identity sees no change at all. `'random'` shares
-    // this branch because a shuffle carries no confidence claim either - see
-    // the file comment's `'random'` section.
+    // Certainty passes through with the same array identity `favoriteOrder`
+    // keeps for `'relevance'`, so a caller memoising on identity sees no
+    // change. `'random'` shares the branch because a shuffle carries no
+    // confidence claim - see the preamble.
     return { order, certainty: (search?.certainty as Float32Array | undefined) ?? null };
   }
 
@@ -157,7 +150,7 @@ function liftKey({ mode, files, counts, mine, randomSeed }: FavoriteSortInput): 
   return (id: number) => counts[files[id]?.file ?? ''] ?? 0;
 }
 
-/** How many of `mine` this corpus actually has rooms for - what the sort would move to the front. */
+/** How many of `mine` this corpus has rooms for - what the sort would move to the front. */
 export function favoriteCount(files: { file: string }[], mine: ReadonlySet<string>): number {
   return files.reduce((n, room) => n + (mine.has(room.file) ? 1 : 0), 0);
 }

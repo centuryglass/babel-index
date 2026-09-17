@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { describeCell, describeRoom, describeArrangement, describeCatalog } from './describe.ts';
 import { createLayout } from './ordering.ts';
 
-// `createLayout` requires a real cell shape; the corpus is never square.
+// `createLayout` requires a real cell shape; any non-square aspect will do.
 const ASPECT = 720 / 1280;
 
 const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1, aspect: ASPECT });
@@ -74,7 +74,7 @@ test('a story-only entry names the room without inventing keywords', () => {
 });
 
 test('the name follows the ranking, not the cell', () => {
-  // Same mechanic as `picking.js`: slots stay put, the order pours into them.
+  // Same mechanic as `picking.ts`: slots stay put, the order pours into them.
   const slot = roomAt(4);
   const reversed = [...order].reverse();
   const forward = describeCell(slot.x, slot.y, { layout, order });
@@ -128,7 +128,7 @@ test('an arrangement says how big the map is and whether the search clustered', 
   assert.match(said, /spread evenly/);
 
   // A confident search lifts the leading ranks above the baseline, and that
-  // count IS the cluster the animation is drawing.
+  // count is the cluster the animation is drawing.
   const certainty = Array.from({ length: 40 }, (_, i) => Math.max(0, 1 - i / 8));
   const clustered = createLayout({
     roomCount: 40, contentRatio: 0.3, seed: 1, aspect: ASPECT,

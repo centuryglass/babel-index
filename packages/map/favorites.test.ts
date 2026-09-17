@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { favoriteOrder, favoriteSort, favoriteCount } from './favorites.ts';
 
-/** Four rooms, ids 0..3, named for what they are. */
+/** Four rooms, ids 0..3, files a.jpg..d.jpg - the `files` lookup stands in for `manifest.rooms`. */
 const files = [{ file: 'a.jpg' }, { file: 'b.jpg' }, { file: 'c.jpg' }, { file: 'd.jpg' }];
 
 test('relevance hands back the very same array, so a memo sees no change', () => {
