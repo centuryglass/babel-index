@@ -2,35 +2,32 @@
  * The catalog's arithmetic: which rooms are on a page, which pages are mounted,
  * how tall a row is, and which pyramid level a thumbnail should ask for.
  *
- * The pure half, exactly as `picking.js` and `center.js` are the pure halves of
- * their features - no DOM, no React, so what the list does is assertable without
- * a browser. `CatalogView` is the part that renders; everything it has to be
- * right about is here.
+ * The pure half of the catalog, as `picking.ts` and `center.ts` are the pure
+ * halves of their features: no DOM, no React, so what the list does is
+ * assertable without a browser. `CatalogView.tsx` is the part that renders.
  *
  * ### Why the two paging modes are one primitive
  *
- * Pagination and infinite scroll differ in exactly one thing: how many pages are
- * mounted at once. Both slice `order` with `pageOf`; pagination mounts one page,
- * scrolling mounts a window of them. Writing them as two features would give the
- * catalog two ideas of where a room sits, and the first bug would be a room that
- * appears on page 4 scrolling and page 5 paginated.
+ * Pagination and infinite scroll differ in how many pages are mounted at once,
+ * and nothing else: both slice `order` with `pageOf`, and `mountedPages`'s
+ * `window` is where they part. AGENTS.md's "Pagination and infinite scroll are
+ * one primitive with a different window" is why: two implementations would put
+ * a room at two different positions depending on how the reader pages.
  *
  * ### Why rows are a fixed height
  *
  * A windowed list replaces unmounted pages with spacers, and a spacer's height
- * has to be exactly what the rows it stands in for would have occupied. Guess it
- * and the scroll position jumps every time a page recycles - under the reader's
- * hands, mid-scroll. Measuring instead would mean a real virtualiser and a
+ * has to be the height the rows it stands in for would have occupied. An
+ * estimate moves the scroll position every time a page recycles, under the
+ * reader's hands; measuring instead would mean a real virtualiser and a
  * measurement cache.
  *
- * So the row is a fixed height derived from whichever of its two columns needs
- * more, and the content is cut to it: the story by the card's own height (it
- * flows around the floated thumbnail, so it cannot be clamped by a line count),
- * the keywords by `chipLines`. Everything a row cuts is one click away in the
- * room card that already exists, and the row says what it cut rather than
- * leaving a reader to wonder - see `CatalogView`'s `chipOverflow` and
- * `catalog-more`. `spacerHeight` is then arithmetic rather than an estimate,
- * which is the property the whole approach rests on.
+ * So `rowHeight` derives one height from whichever of a row's two columns needs
+ * more, the content is cut to it, and what a row cannot show is counted rather
+ * than dropped. The mechanics of the cut - a floated thumbnail the story wraps,
+ * chips clamped by `chipLines`, a `+N` chip for the rest - are AGENTS.md's
+ * "Rows are a fixed height and the spacers are arithmetic, not estimates" and
+ * "What a row cannot show, it counts".
  */
 import { BASE_TILE, idealLevel } from './pyramid.ts';
 
@@ -44,6 +41,7 @@ export interface PageRange {
   last: number;
 }
 
+/** A rect in this module's shape: `w`/`h`, not a DOMRect's `width`/`height`. */
 export interface Rect {
   x: number;
   y: number;
@@ -61,10 +59,9 @@ export interface FlipTransform {
 /**
  * The rooms on one page, as `{ id, rank }` pairs.
  *
- * Rank is carried rather than recomputed by the caller because it is what names
- * a room (`describeRoom`) and what indexes the score breakdown - and an
- * off-by-one between "position in this page" and "position in the ranking" is
- * exactly the kind of thing that reads as a plausible number and is wrong.
+ * Rank is carried rather than recomputed by the caller: it is what names a room
+ * (`describeRoom`) and what indexes the score breakdown, and a position in the
+ * page is not a position in the ranking.
  *
  * The last page is short rather than padded, and a page past the end is empty
  * rather than an error - a corpus can shrink under a stored page number.
@@ -86,14 +83,12 @@ export function pageCount(total: number, perPage: number): number {
 }
 
 /**
- * Which pages are mounted, given the one the reader is at.
+ * Which pages are mounted, given the one the reader is at. Inclusive.
  *
- * `window` pages either side, clamped to the ends - so scrolling mounts three
- * pages by default and pagination, at `window: 0`, mounts one. That is the only
- * difference between the two modes, and stating it as a parameter rather than a
- * branch is what stops them drifting apart.
- *
- * Inclusive.
+ * `window` pages either side, clamped to the ends, so scrolling mounts a band
+ * around the active page and pagination mounts one page at `window: 0`. That is
+ * the only difference between the two modes, which is why it is a parameter
+ * rather than a branch.
  */
 export function mountedPages(active: number, pages: number, window = 1): PageRange {
   const at = Math.min(Math.max(0, active), pages - 1);
@@ -104,11 +99,10 @@ export function mountedPages(active: number, pages: number, window = 1): PageRan
 }
 
 /**
- * How tall the spacer standing in for `pages` unmounted pages must be.
- *
- * Exact, not estimated - see the header. The last page is short, so a spacer
- * that reaches the end of the list has to count the rows that are actually
- * there rather than `pages * perPage` of them.
+ * How tall the spacer standing in for `pages` unmounted pages must be:
+ * arithmetic, not an estimate. The last page is short, so a spacer that reaches
+ * the end of the list counts the rows actually there rather than
+ * `pages * perPage` of them.
  *
  * @param from first unmounted page, inclusive
  * @param to last unmounted page, inclusive
@@ -129,11 +123,9 @@ export function spacerHeight(
 }
 
 /**
- * How tall a thumbnail of this width is.
- *
- * Derived from `BASE_TILE`'s aspect rather than stated, for the same reason
- * every other size in this app is: the tile is 1024x768 today and the shape is
- * not settled, and a literal here would silently stop matching the art.
+ * How tall a thumbnail of this width is, derived from `BASE_TILE`'s aspect:
+ * AGENTS.md's "Don't assume the tile aspect ratio". A literal here would silently
+ * stop matching the art.
  */
 export function tileHeight(thumbWidth: number): number {
   return Math.round(thumbWidth * (BASE_TILE.h / BASE_TILE.w));
@@ -142,16 +134,13 @@ export function tileHeight(thumbWidth: number): number {
 /**
  * A row's height: whichever of its two columns needs more, plus padding.
  *
- * The tile is usually the tall one, which is why this looks like it could just
- * be the tile's height - but on a narrow display the thumbnail shrinks while
- * the story, the chips and the score strip beside it do not, and a row sized to
- * the tile alone clips them. Found by measuring a row against its own
- * scrollHeight rather than by looking at it, which is the only way this kind of
- * thing gets found.
+ * The tile is usually the tall one, but on a narrow display the thumbnail
+ * shrinks while the story, the chips and the score strip beside it do not, and a
+ * row sized to the tile alone clips them.
  *
- * Uniform across a page either way, which is all the spacer arithmetic needs -
- * `textMin` changes when a search starts and ends, and every row changes with
- * it together.
+ * One height applies to every row on a page, which is all the spacer arithmetic
+ * needs: `textMin` changes when a search starts and ends, and the rows change
+ * with it together.
  *
  * @param thumbWidth css pixels
  * @param padding the row's vertical padding, both halves
@@ -163,12 +152,12 @@ export function rowHeight(thumbWidth: number, padding = 0, textMin = 0, matPad =
 }
 
 /**
- * A row's height in the ultra-narrow layout, where the picture runs full
- * width BENEATH the name row rather than beside it - see `CatalogView.tsx`'s
- * `ULTRA_NARROW_PX`. `rowHeight` takes the max of two side-by-side columns;
- * this is a stack, so it is their sum instead. `headPx`/`detailsPx` are the
- * rank/title/favorite line and the "keywords & story" link that replaces the
- * chips and story text an ultra-narrow row has no room to show.
+ * A row's height in the ultra-narrow layout, where the picture runs full width
+ * beneath the name row rather than beside it - `CatalogView.tsx`'s
+ * `ULTRA_NARROW_PX`. `rowHeight` takes the max of two side-by-side columns; this
+ * is a stack, so it is their sum. `headPx`/`detailsPx` are the rank/title/favorite
+ * line and the "keywords & story" link that replaces the chips and story text an
+ * ultra-narrow row has no room to show.
  *
  * @param thumbWidth css pixels, the full-bleed width - see `ultraThumbWidth`
  * @param padding the row's vertical padding, both halves
@@ -189,18 +178,17 @@ export function stackedRowHeight(
 /**
  * Which pyramid level a thumbnail of this width should ask for.
  *
- * Delegates to the pyramid's own policy rather than restating a ladder here -
- * `pyramid.js` is the one place any of those numbers live, and a second opinion
- * about which level suits a given width is a second policy to keep in step.
+ * Delegates to `pyramid.ts`'s `idealLevel`, the one place the ladder lives: a
+ * second opinion about which level suits a given width is a second policy to
+ * keep in step.
  *
- * No hysteresis, unlike the map: a thumbnail's width changes when the window is
- * resized, not sixty times a second under a pinch, so there is nothing to
- * damp - and passing a `current` level would make the answer depend on history
- * for no benefit.
+ * No hysteresis, unlike the map. A thumbnail's width changes when the window is
+ * resized, not continuously under a pinch, and passing a `current` level would
+ * make the answer depend on history for no benefit.
  *
  * @param cssWidth the width the image is displayed at
- * @param dpr device pixel ratio, capped as the renderer caps it
- * @returns a level, which `rooms.js` may still resolve to null
+ * @param dpr device pixel ratio, capped at 2 as both map renderers cap it
+ * @returns a level, which `rooms.ts` may still resolve to null
  */
 export function thumbLevel(cssWidth: number, dpr = 1): number {
   const drawn = Math.max(1, cssWidth) * Math.min(2, Math.max(1, dpr));
@@ -231,11 +219,11 @@ export function pageAtScroll(
  * The configured `windowPages` is a DOM budget, not a correctness guarantee: on
  * a tall display with a small `perPage`, a screenful can span more pages than
  * the window keeps live, and the reader would scroll into a spacer. So the view
- * takes whichever is larger. This is the one place that comparison is made, so
- * it cannot be made differently in two paging modes.
+ * takes whichever is larger, and this is the one place the two are compared.
  *
- * Pagination passes `viewportPx: 0`, which leaves its window at 0 - one page,
- * as it must be, whatever the display is doing.
+ * Pagination passes `viewportPx: 0`, which returns its configured window
+ * untouched. That one is 0, so pagination mounts one page whatever the display
+ * is doing.
  */
 export function windowFor(
   configured: number,
@@ -249,16 +237,14 @@ export function windowFor(
 /**
  * Where to scroll so a given rank's row lands centered in the viewport.
  *
- * Arithmetic, like `pageAtScroll`'s inverse - a row's top is exactly `leadPx +
- * rank * rowPx` regardless of which page it falls on, since paging only
- * decides what is MOUNTED, not where anything sits (see the header). Centered
- * rather than flush to the top so a "jump to this room" lands it somewhere a
- * reader is already looking, not pinned against the search bar.
+ * `pageAtScroll`'s inverse, and arithmetic for the same reason: a row's top is
+ * `leadPx + rank * rowPx` whatever page it falls on, since paging decides what
+ * is mounted, not where anything sits. Centered rather than flush to the top so
+ * a "jump to this room" lands where a reader is already looking.
  *
- * Clamped to 0: a rank near the top would otherwise centre into negative
- * scroll, which every browser just clamps anyway, but a negative number fed
- * back into `pageAtScroll` on the resulting scroll event would read as page 0
- * for the wrong reason (rubber-banding) rather than the right one (this jump).
+ * Clamped to 0. A rank near the top would otherwise ask for negative scroll,
+ * which a browser clamps by rubber-banding; that scroll event fed back into
+ * `pageAtScroll` would read as page 0 for the wrong reason.
  */
 export function focusScrollTop(
   rank: number,
@@ -269,17 +255,17 @@ export function focusScrollTop(
 }
 
 /**
- * The catalog's own default order: every room id, by title (or filename,
- * for a room with none).
+ * The catalog's own default order: every room id, by title, or by filename for a
+ * room with none.
  *
- * The map's idle order is a shuffle - there is no "index order" worth reading
- * on a wall of tiles nobody can alphabetize by eye. A LIST is exactly the
- * thing alphabetical order suits, so the two views' idle orders are not the
- * same array read two ways, they are two different orders that happen to
- * agree only while a search is running (`result.order` is both). Plain
- * string comparison, not `localeCompare`, to match `scan.mjs`'s own
- * `.sort()` of the same filenames - two different orderings of one file list
- * would be its own bug.
+ * The map's idle order is a shuffle, because nobody can alphabetize a wall of
+ * tiles by eye; a list is the shape an alphabetical order suits. So the two
+ * views' idle orders are two orders, and agree only while a search is running,
+ * when both use `result.order`.
+ *
+ * Plain string comparison, not `localeCompare`, to match `scan.ts`'s `.sort()` of
+ * the same filenames: room ids are positions in that sorted list, so a second
+ * ordering of one file list is a bug of its own.
  *
  * @param rooms manifest.rooms, indexed by id
  * @param metadata indexed by room id, as `joinMetadata()` returns; a room
@@ -303,14 +289,11 @@ export function alphabeticalOrder(
 /**
  * A DOMRect in the shape the rest of this app uses.
  *
- * `getBoundingClientRect()` returns `width`/`height`; `centerCellRect` and
- * everything else here says `w`/`h`. Converting at the boundary rather than
- * teaching `flipTransform` two shapes is what keeps ONE rect shape inside the
- * module - and this function exists at all because the mismatch does not throw:
- * `to.w` on a DOMRect is `undefined`, `undefined > 0` is false, and the
- * zero-size guard below then returns a scale of 1. The animation still ran, and
- * still translated correctly, so it looked like a working transition that had
- * simply forgotten to scale. Found by logging the numbers, not by watching it.
+ * `getBoundingClientRect()` returns `width`/`height`; `Rect` here says `w`/`h`.
+ * Convert at the boundary, because the mismatch does not throw: `to.w` on a
+ * DOMRect is `undefined`, `undefined > 0` is false, and `flipTransform`'s
+ * zero-size guard then returns a scale of 1 - an animation that translates
+ * correctly and stops scaling without saying so.
  */
 export function rectOf(domRect: { x: number; y: number; width: number; height: number }): Rect {
   return { x: domRect.x, y: domRect.y, w: domRect.width, h: domRect.height };
@@ -324,10 +307,6 @@ export function rectOf(domRect: { x: number; y: number; width: number; height: n
  * where the first row's thumbnail has landed; the row starts transformed onto
  * the tile and animates to nothing, so the map appears to fold into the list.
  * Leaving, the two swap.
- *
- * Pure because the arithmetic is the part worth being sure about: a sign error
- * here throws the animation off screen, and that is not something to discover
- * by watching it.
  *
  * Assumes `transform-origin: 0 0`, so the scale does not also move the corner.
  */
@@ -346,31 +325,28 @@ export function flipCss(t: FlipTransform): string {
 }
 
 /**
- * How many lines of keyword chips a row has room for.
+ * How many lines of keyword chips a row has room for, from the height the row
+ * actually leaves over. A flat cap cannot work at an arbitrary width: on a narrow
+ * display the thumbnail shrinks while the name row, the score strip and the story
+ * minimum do not, so a cap sized for one layout either swallows a keyword in
+ * another or leaves row height unspent.
  *
- * Derived from what the row actually leaves over rather than stated flat: on a
- * narrow display the thumbnail shrinks while the name row, the score strip and
- * the story minimum beside it do not, and a fixed two-line cap there swallowed
- * a room's third keyword with no indication at all - while the same row had
- * unspent height in it. See `CatalogView.tsx`'s `CHIP_LINE_PX` for the pixel
- * cost of a line, and its `chipOverflow` for what happens to the keywords that
- * still do not fit: they are counted and reported, never silently dropped.
+ * At least one line, because a clamp of zero hides a room's keywords outright
+ * rather than shortening them. Whatever still does not fit is counted and offered
+ * as a `+N` chip - see `CatalogView`'s `chipOverflow`, and `CHIP_LINE_PX` there
+ * for the pixel cost of a line.
  *
- * The story is NOT clamped against this. It flows around the floated
- * thumbnail and is cut by the card's own height, which is the only way its
- * lines can be narrow beside the picture and full width beneath it.
- *
- * At least one line, because a clamp of zero hides the keywords completely
- * rather than shortening them.
+ * The story is not clamped against this. It flows around the floated thumbnail
+ * and is cut by the card's own height, which is the only way its lines can be
+ * narrow beside the picture and full width beneath it.
  *
  * @param contentPx    the card's content box height
  * @param reservedPx   the name row, story minimum and score strip
  */
 export function chipLines(contentPx: number, reservedPx: number, lineHeightPx: number): number {
-  // A line height of zero means nothing has been measured yet, and dividing by
-  // the 1px floor a `Math.max` would give returns a clamp of a hundred lines -
-  // which is not "unclamped", it is a wrong number that happens to look
-  // harmless. One line is the honest answer to "I cannot tell yet".
+  // A line height of 0 means nothing has been measured yet. Treating it as 1px
+  // would return a clamp of a hundred lines, which is a wrong number rather than
+  // an unclamped one; one line is what an unmeasured row can claim.
   if (!(lineHeightPx > 0)) return 1;
   return Math.max(1, Math.floor((contentPx - reservedPx) / lineHeightPx));
 }

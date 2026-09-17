@@ -216,7 +216,10 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   carry its traced dimensions". Both files are `.ts` since the migration, so a
   reader who follows either instruction runs a command that fails. They are
   strings, not comments, and a comment pass's verifier reports any change to
-  them as a code change, so they are filed rather than fixed.
+  them as a code change, so they are filed rather than fixed. One more of the
+  same class, from the 2026-09-17 `packages/web/src/lib` pass: the
+  `catalog.test.ts` title "the alphabetical order is plain string comparison,
+  matching scan.mjs" — the comment under it now reads `scan.ts`.
 
 - **[2026-09-17] A `remote.ts` preamble names a fetcher that has moved.** Its
   CORS warning says "`embeddings.bin` and `metadata.json` are read via
@@ -229,6 +232,25 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   `crossOriginFetchedKeys`. Fix there: name `useCorpus.ts`. Recorded here
   because `packages/server` is already ticked done and a pass must not edit a
   file another checkout owns.
+
+- **[2026-09-17] Two places say the page-load zoom cap is applied in `main.tsx`;
+  it is applied in `center.ts`.** AGENTS.md's "The zoom cap is `MAX_ZOOM_FACTOR`"
+  bullet says "the opening view is separately capped at 1× in `main.tsx`", and
+  `main.tsx`'s own `opening` memo repeats "Capped at the tile's native width".
+  The `Math.min(BASE_TILE.w, …)` is inside `openingZoom` (`center.ts`) —
+  `main.tsx` only calls it, so a reader who goes to `main.tsx` to find the cap
+  finds a call instead. The 2026-09-17 `packages/web/src/lib` pass corrected
+  `camera.ts`'s copy of the claim to name `openingZoom`; AGENTS.md and `main.tsx`
+  are outside what that pass may edit. Reproduce with
+  `grep -rn 'native width\|capped at 1' AGENTS.md packages/web/src`.
+- **[2026-09-17] `center.test.ts` pins an art number** —
+  `assert.equal(BOOK_COUNT, 40)` — against AGENTS.md's "Don't pin art choices in
+  tests", which names book count as free to move. The test's own point ("every
+  book on the wall is a slot, and the whole wall is the history queue") needs
+  only `HISTORY_SLOT_COUNT === BOOK_COUNT`, which the next line already asserts,
+  so dropping the literal loses nothing. Found by the 2026-09-17
+  `packages/web/src/lib` comment pass, which could not fix it: the verifier
+  reports any change to an assertion as a code change.
 
 ## Corpus generation:
 - **[2026-09-17] The pipeline assumes one source size, and checks only that it
@@ -406,6 +428,25 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   the path they were designed for (a rebuild that reuses the renderer and
   its caches rather than replacing them) or delete the methods. Found by the
   2026-09-17 `lib/gl` comment pass, which left the code alone.
+- **[2026-09-17] The canvas-side hover gold is written three times.** Separate
+  from the "Two hover golds" entry above, which is about the DOM's different
+  gold: `rgba(200,169,95, …)` appears as `center.ts`'s
+  `HOVER_GLOW_FILL`/`_STROKE`, `render.ts`'s
+  `FAVORITE_HOVER_GLOW_FILL`/`_STROKE`, and `gl/glowTexture.ts`'s
+  `FILL`/`STROKE`, with no constant tying the three. They agree today, and
+  AGENTS.md's "The WebGL renderer" lockstep rule means a reader changing the gold
+  can change one and leave two, which the parity suite catches only by eye. Found
+  by the 2026-09-17 `packages/web/src/lib` pass, whose comment on these constants
+  now names all three.
+- **[2026-09-17] The `dpr` cap of 2 is stated five times.** Both render hooks
+  (`useMapRenderer.ts`, `useMapRendererGL.ts`), `useRearrangement.ts`'s
+  `landingRectangle`, `catalog.ts`'s `thumbLevel`, and `catalog.test.ts`'s own
+  expectation of it. Nothing names it, so raising the cap in one place silently
+  makes the catalog demand a finer rung than the map holds — the agreement
+  `thumbLevel`'s `dpr` parameter doc states. AGENTS.md puts every pyramid number
+  in `packages/web/src/lib/pyramid.ts`, and this is one, since the cap decides a
+  level. Found by the 2026-09-17 `packages/web/src/lib` pass, which corrected the
+  comment and left the code alone.
 
 ## Shareable permalinks:
 - **[2026-09-16, done] Room permalinks already existed and were unused -**

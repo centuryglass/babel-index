@@ -356,12 +356,33 @@ maintain a count here, because a tally that every pass has to re-derive is a
 number that is wrong the moment two passes run at once. `packages/map`,
 `packages/server`, `packages/pipeline`, `packages/config`, the renderer
 cluster, `tools/center-placement`, `tools/embed`, `tools/upload`,
-`tools/perf-capture`, `tools/font-lab` and `packages/web/src/lib/gl` were
-taken on 2026-09-17 in parallel across checkouts, out of the recommended
-order; `main.tsx` passed first and passed again, and stays unticked because
-fresh changes from another branch went in after the second pass. Order is a
-deduping aid within a cluster, not a rule between clusters, so a batch can be
-taken from any package no other checkout is in.
+`tools/perf-capture`, `tools/font-lab`, `packages/web/src/lib/gl` and
+`packages/web/src/lib` (camera, catalog, center) were taken on 2026-09-17 in
+parallel across checkouts, out of the recommended order. `main.tsx` passed first
+and passed again, and stays unticked because fresh changes from another branch
+went in after the second pass. Order is a deduping aid within a cluster, not a
+rule between clusters, so a batch can be taken from any package no other checkout
+is in.
+
+`tools/center-placement` went without `center.ts`, which order 5 pairs it with;
+`center.ts` passed alongside `camera.ts` and `catalog.ts` on 2026-09-17, also in
+parallel. What those three owed, and the pass took: the extension rot
+(`main.jsx`, `geometry.js`, `render.js`, `picking.js`, `center.js`, `rooms.js`,
+`scan.mjs`, `pyramid.js`, `camera.test.mjs`, `pyramid.test.mjs`), two dead
+`accessibility-plan.md` section pointers of which one cited a quoted phrase no
+doc contains, five positional "see `RUNS` below" pointers, and camera.ts's
+"imported into `packages/config` as `camera.x`" rationale, which each of its five
+by-feel constants re-derived and `packages/config` already states once.
+
+Three claims the code does not have were corrected in place: `assignTitles` said
+slots "remain null" for a corpus with no tags (it fills them with
+`kind: 'empty'`), `panByCells` said a scale of 1 "preserves whatever offset it
+picked up" once back inside the region (the snap discards it), and `glideToRest`
+priced "five hundred" iterations against a `GLIDE_REST_MAX_STEPS` of 20,000. Two
+"no test pins this value" claims were simply false: `camera.test.ts` brackets
+`CURSOR_GRANULARITY_PX` at its own default, and `center.test.ts` brackets
+`MIN_SPINE_PX` either side of 5. The rest went to
+`docs/pending_task_list.md`.
 
 Order 7's e2e fleet went one file early: `webgl-map.e2e.ts` passed on
 2026-09-17 alongside `webglFlag.ts`, and what the pass found but did not touch
@@ -388,13 +409,6 @@ is what the rest of that order owes:
   `docs/pending_task_list.md`, and three comments promote a word to capitals —
   `EXPLICITLY` (`support.ts`), `PRIMARY` (`shelf.e2e.ts`), `MERGE GATE`
   (`map-gestures.e2e.ts`).
-
-`tools/center-placement` went without `center.ts`, which order 5 pairs it with.
-What that file owes the pass that takes them together: its "see `RUNS` below" is
-positional, its preamble has a "parsed trom" typo, four comments cite `main.jsx`,
-`geometry.js` and `render.js`, and its "*NOTE*: Because dimensions are relative
-to the cell..." restates AGENTS.md's "The fractions are per-axis" bullet instead
-of citing it.
 
 ### Source files and their tests
 
@@ -492,12 +506,12 @@ of citing it.
 - [ ] packages/web/src/hooks/useModeTransition.ts  — no unit test
 - [ ] packages/web/src/hooks/useRearrangement.ts  — no unit test
 - [ ] packages/web/src/hooks/useSearch.ts  — no unit test
-- [ ] packages/web/src/lib/camera.ts
-  - [ ] packages/web/src/lib/camera.test.ts
-- [ ] packages/web/src/lib/catalog.ts
-  - [ ] packages/web/src/lib/catalog.test.ts
-- [ ] packages/web/src/lib/center.ts
-  - [ ] packages/web/src/lib/center.test.ts
+- [x] packages/web/src/lib/camera.ts
+  - [x] packages/web/src/lib/camera.test.ts
+- [x] packages/web/src/lib/catalog.ts
+  - [x] packages/web/src/lib/catalog.test.ts
+- [x] packages/web/src/lib/center.ts
+  - [x] packages/web/src/lib/center.test.ts
 - [ ] packages/web/src/lib/clearHistoryBook.ts
   - [ ] packages/web/src/lib/clearHistoryBook.test.ts
 - [ ] packages/web/src/lib/contentZoomCamera.ts
