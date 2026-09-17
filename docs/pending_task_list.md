@@ -135,23 +135,21 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   rots again at the next cull (see `docs/comment-refactor-plan.md` §2b's "Doc
   pointers rot fastest of all"). Reproduce with
   `grep -rn '§[0-9]\|catalog-plan' packages/ --include='*.ts*'`. The 2026-09-17
-  comment pass cleared
-  `packages/map/nextRoom.ts`; the rest are still-queued files the pass reaches
-  anyway, so this entry is for the two that a queue position would not catch:
-  `packages/web/src/main.tsx`'s pass is already ticked done and shipped holding
-  `§3.2` and `§4.2b`, and `packages/map/ordering.ts`'s center-room note cites
-  "docs/concept.md steps 5-6", a numbering concept.md has never used (its
-  headings are dated). Same class, already-passed and about-to-be-passed.
-- **[2026-09-17] Two comments cite a `pending_task_list.md` entry that has
-  already shipped**: `useRearrangement.ts`'s `onPreparingChange` and
-  `SearchIcon.tsx`'s `SearchOrbitSpinner` both point at "the far-field case
-  `docs/pending_task_list.md`'s 'Loading indicator' entry asked for", and this
-  file has no such entry — AGENTS.md documents the far-field spinner as built.
-  A live TODO pointer anchored at the line it warns about is fine and gets
-  cleaned up with the issue; a citation of finished work is dead text. Remove
-  the citation, keep the sentence's own claim about what the component is for.
-  The 2026-09-17 components pass cleared `SearchIcon.tsx`;
-  `useRearrangement.ts` is still queued with the hooks.
+  comment pass cleared `packages/map/nextRoom.ts`, `packages/map/ordering.ts`,
+  and four of the hooks batch (`useCenterShelf.ts`, `useMapCamera.ts`,
+  `useMapCursor.ts`, `useRearrangement.ts`); the rest are still-queued files
+  the pass reaches anyway, so this entry is for the one that a queue position
+  would not catch: `packages/web/src/main.tsx`'s pass is already ticked done
+  and shipped holding `§3.2` and `§4.2b`. Same class, already-passed.
+- **[2026-09-17] One comment still cites a `pending_task_list.md` entry that
+   has already shipped**: `SearchIcon.tsx`'s `SearchOrbitSpinner` points at
+   "the far-field case `docs/pending_task_list.md`'s 'Loading indicator' entry
+   asked for", and this file has no such entry — AGENTS.md documents the
+   far-field spinner as built. A live TODO pointer anchored at the line it
+   warns about is fine and gets cleaned up with the issue; a citation of
+   finished work is dead text. Remove the citation, keep the sentence's own
+   claim about what the component is for. The 2026-09-17 components pass
+   cleared `SearchIcon.tsx`; `useRearrangement.ts` was fixed in this batch.
 - **[2026-09-17] Three comments still quote the easter-egg button's old
   label**: commit 2196174 ("adjust phrasing") renamed "Click here to run some
   equivalent code" to "Run the same thing here", and three citations of the

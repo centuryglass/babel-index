@@ -3,24 +3,16 @@
  * reply into one ranking via `rankHybrid`, and the two highlight
  * range-finders bound to whatever term that ranking is for.
  *
- * Split out of `main.jsx`, deliberately last. By the time this ran, `useRearrangement` had already
- * collapsed "the next layout change should animate" and "here is the
- * sentence for it" into one call, `requestAnimation(note)` - so this hook has
- * one way to ask for an animation rather than two. Done first it would have
- * had to reach out and set someone else's `animateNext`/`pendingNote` refs
- * directly, which is the fifteen-parameter failure the plan is trying to
- * avoid.
- *
  * `requestAnimation` arrives through a ref rather than as a plain argument -
- * the one forward reference left in `main.jsx` after the rest were reordered
+ * the one forward reference left in `main.tsx` after the rest were reordered
  * away, because this one is a genuine cycle rather than an ordering accident:
- * `announce` (`main.jsx`) needs this hook's `result` to know what to say,
+ * `announce` (`main.tsx`) needs this hook's `result` to know what to say,
  * `useRearrangement` needs `announce`, and `useRearrangement` is the thing
  * that returns `requestAnimation` - so this hook has to be called before
  * `useRearrangement` exists, and can only get its `requestAnimation` once
- * `main.jsx` fills the ref in afterwards.
+ * `main.tsx` fills the ref in afterwards.
  *
- * `history`/`pushHistory` stay in `main.jsx`: the shelf reads history, the
+ * `history`/`pushHistory` stay in `main.tsx`: the shelf reads history, the
  * panel's forget button writes it, and it survives a reload - a search is a
  * consumer of history, not its owner.
  */
@@ -42,7 +34,7 @@ interface UseSearchOpts {
   searchConfig: Config['search'];
   searchIndex: SearchIndex | null;
   embeddings: { current: { data: Int8Array; dim: number } | null };
-  /** filled in by `main.jsx` once `useRearrangement` exists - see the file
+  /** filled in by `main.tsx` once `useRearrangement` exists - see the file
    * comment above. */
   requestAnimationRef: { current: (note: string) => void };
   pushHistory: (term: string) => void;

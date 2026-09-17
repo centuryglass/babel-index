@@ -3,14 +3,14 @@
  * another, and the state machine that decides whether a layout/order change
  * gets that treatment or is simply drawn.
  *
- * Split out of `main.jsx`. What was implicit before this - "the next layout change should animate" and
+ * Split out of `main.tsx`. What was implicit before this - "the next layout change should animate" and
  * "here is the sentence for it" as two separate ref writes a caller had to
  * remember to make together - is now one call, `requestAnimation(note)`. That
  * also closes the search-error bug the plan names: a flag set before an
  * `await` and stranded when it threw is not expressible once the only way to
  * ask for an animation is to say so, with its note, in one place.
  *
- * `anim` stays a ref owned by `main.jsx` and is passed in rather than created
+ * `anim` stays a ref owned by `main.tsx` and is passed in rather than created
  * here, because `useMapRenderer` reads it every frame and the render loop
  * must not be rebuilt when it changes.
  */
@@ -34,10 +34,10 @@ import type { RunningAnim } from './useMapRenderer.ts';
  * The on-camera rectangle a rearrangement's target zoom implies, and the
  * pyramid level that zoom will actually want there - shared by
  * `prepareRearrangement` (before the flight) and the plan it builds, which
- * previously computed this same geometry again after landing. Correct for
- * exactly the flight `startRearrangement` runs, which only ever changes
+ * previously computed this same geometry again after landing. This holds for
+ * the flight `startRearrangement` runs, which only ever changes
  * zoom - never x/y (see the `-0.5`/`+0.5` cancellation there) - so `cam`'s
- * CURRENT position is already the landing position.
+ * current position is already the landing position.
  */
 function landingRectangle(cam: Camera, canvas: HTMLCanvasElement, targetZoom: number) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -86,7 +86,7 @@ interface UseRearrangementOpts {
    * it doesn't know or care what a caller does with the ids, only that
    * `main.tsx` wires it to the WebGL texture warmer
    * (`gl/warm.ts`) when `?webgl` is active. Optional, and doing nothing
-   * when omitted, exactly like `announce`.
+   * when omitted, the same as `announce`.
    */
   onPreparing?: (ids: ReadonlySet<number>, level: number) => void;
   /**
@@ -101,10 +101,9 @@ interface UseRearrangementOpts {
    * `(preparing) => void` - toggled around the same preload window as the
    * center-tile indicator (`prepareRearrangement` through the loading
    * indicator's cycle-boundary wait), but unconditionally rather than
-   * gated on the center book being on screen - see `SearchOrbitSpinner` in
-   * `SearchIcon.tsx`, the search badge's own affordance for exactly the
-   * far-field case `docs/pending_task_list.md`'s "Loading indicator" entry
-   * asked for. Optional, and doing nothing when omitted, exactly like
+   * gated on the center book being on screen - `SearchIcon.tsx`'s
+   * `SearchOrbitSpinner`, the search badge's own affordance for the same
+   * far-field case. Optional, and doing nothing when omitted, the same as
    * `announce`.
    */
   onPreparingChange?: (preparing: boolean) => void;
@@ -155,40 +154,40 @@ export function useRearrangement({
   /**
    * Prepare a rearrangement completely - the plan AND every tile the
    * animation will show - before the camera moves at all, rather than
-   * fetching mid-flight. The flight is itself the moment of peak contention
-   * on a cold cache (§3.1), so fetches issued during it compete for the same
+   * fetching mid-flight. The flight itself is the moment of peak contention
+   * on a cold cache, so fetches issued during it compete for the same
    * network/decode budget with nothing to fall back on; doing the work up
    * front is what keeps them off that critical path.
    *
-   * Building the plan HERE rather than after landing also closes §3.7's
-   * seam cost for free: the landing rectangle depends only on the camera's
-   * CURRENT x/y (this flight never changes position, only zoom - see the
+   * Building the plan HERE rather than after landing also closes the seam
+   * cost for free: the landing rectangle depends only on the camera's
+   * current x/y (this flight never changes position, only zoom - see the
    * `-0.5`/`+0.5` cancellation in `startRearrangement`) and the target zoom,
    * both already known before the flight starts.
    *
-   * The id set to fetch is NOT just `before`'s and `after`'s static viewport
-   * rectangles. Verified directly against `board.ts`/`illusion.ts`: on a real
-   * 2048-room corpus the rooms actually shown during a rearrangement run
-   * 27-48% ahead of that static union, because `shiftRow`/`shiftCol` rotate a
-   * whole line and the conveyor (`makeParker`/`makeAvailable`) stages a
-   * needed value in from wherever it currently sits - which can be well
-   * outside either rectangle, and is a real, load-bearing part of the
-   * choreography rather than an edge case. So this simulates the actual
-   * planned sequence with the real `applyMove`, snapshotting every on-camera
-   * cell after each non-`swap` move (a `swap`'s both ends are guaranteed off
-   * camera - `moves.ts` - so it can never change what is on-camera, and
-   * skipping it is free correctness, not an approximation). Pure array work,
-   * cheap regardless of corpus size - confirmed on a 2048-room case.
+   * The id set to fetch is more than `before`'s and `after`'s static viewport
+   * rectangles. On a real 2048-room corpus the rooms actually shown during a
+   * rearrangement run 27-48% ahead of that static union, because
+   * `shiftRow`/`shiftCol` rotate a whole line and the conveyor
+   * (`makeParker`/`makeAvailable`) stages a needed value in from wherever it
+   * currently sits - which can be well outside either rectangle, and is a
+   * real, load-bearing part of the choreography rather than an edge case. So
+   * this simulates the actual planned sequence with the real `applyMove`,
+   * snapshotting every on-camera cell after each non-`swap` move (a `swap`'s
+   * both ends are guaranteed off camera - `moves.ts` - so it can never change
+   * what is on-camera, and skipping it is free correctness, not an
+   * approximation). Pure array work, cheap regardless of corpus size -
+   * confirmed on a 2048-room case.
    *
    * Generic and center cells are skipped entirely: a generic's face is
-   * fungible and resolved by POSITION at draw time (`slide.ts`'s "reads the
+   * fungible and resolved by position at draw time (`slide.ts`'s "reads the
    * generic index at each tile's home board cell"), and both it and the
    * center tile are already pinned at corpus-load time (`main.tsx`), so
    * neither ever needs fetching here.
    *
    * Returns `null` when `buildRearrangement` declines (not animatable) -
    * before ever starting a flight for it, unlike the old post-landing check,
-   * which flew out and back for nothing in exactly this case.
+   * which flew out and back for nothing in this case.
    */
   const prepareRearrangement = useCallback(
     async (
@@ -227,7 +226,7 @@ export function useRearrangement({
       // at once. Unthrottled, a cold-cache first rearrangement fires many
       // large fetches at the one moment the cache has nothing to fall back on,
       // and they compete for the same network/decode budget - a measured
-      // regression on Android Chrome (`docs/performance-research.md` §9).
+      // regression on Android Chrome (seen in perf-capture data).
       // `cache.prefetch` itself can't be reused directly to get the cap: its
       // queue is cleared on every `beginFrame()`,
       // which keeps running for the CURRENT (pre-flight) arrangement while
@@ -260,7 +259,7 @@ export function useRearrangement({
       }
 
       // How long that took, and how much of it prepare gave up on - the number
-      // the "delay before motion" side of the tradeoff lives on (§9).
+      // the "delay before motion" side of the tradeoff lives on (perf-capture data).
       let notReady = 0;
       for (const id of ids) if (!cache.isReady(id, level)) notReady++;
       perfRecordPrepare(performance.now() - prepareStart, ids.size, notReady);
@@ -318,8 +317,8 @@ export function useRearrangement({
       // show it, fly to it, and only then slide it in from the arrangement it
       // had already replaced.
       anim.current = { before };
-      // §2.1: tag every frame drawn from here through the flight and the
-      // slide, so `perfDump()` can report all three phases apart.
+      // Tag every frame drawn from here through the flight and the slide,
+      // so `perfDump()` can report all three phases apart.
       perfSetPhase('preparing');
 
       // Remembered so the map can return to it once the slide settles -

@@ -1,30 +1,26 @@
 /**
  * Favorites: the reader's own list, the library's global counts, and the one
- * call that changes both.
+ * call that changes both - a favorite is one act with two consequences. The
+ * personal list is `localStorage` and never leaves the browser; the count is
+ * the server's, and the server holds nothing that could reconstruct a
+ * personal list from it (see `packages/server/favorites.ts`). Nothing here
+ * ever asks "what have I favorited" of the server, because there is no
+ * endpoint that could answer.
  *
- * Two different kinds of state behind one hook, which is the point - a favorite
- * is one act with two consequences. The personal list is `localStorage` and
- * never leaves the browser; the count is the server's, and the server holds
- * nothing that could reconstruct a personal list from it (see
- * `packages/server/favorites.ts`). Nothing here ever asks "what have I
- * favorited" of the server, because there is no endpoint that could answer.
+ * Everything is keyed by room filename rather than id, because ids are
+ * positional and shift when the corpus grows (AGENTS.md, "Favorites"). Ids
+ * are what the rest of the app passes around, so the crossing between the
+ * two happens here, in `fileOf`.
  *
- * Everything is keyed by room FILENAME rather than id: ids are positional and
- * shift when the corpus grows, so a stored id would come back pointing at a
- * different room. Ids are what the rest of the app passes around, so the
- * crossing happens here, against `rooms`.
- *
- * ### Optimistic, and honest when it fails
- *
- * A toggle updates local state immediately and then tells the server. The reply
- * carries the authoritative count, which replaces the guess. A failed request
- * puts the personal list back the way it was and says so in the live region -
- * a favorite that silently did not register is the one outcome worth
- * interrupting someone for, since the whole feature is a count.
+ * A toggle updates local state immediately and then tells the server; the
+ * reply carries the authoritative count, which replaces the guess. A failed
+ * request puts the personal list back the way it was and says so in the live
+ * region - a favorite that silently did not register is the one outcome
+ * worth interrupting someone for, since the whole feature is a count.
  *
  * `enabled` is false when this deployment has no store at all
- * (`manifest.favorites === null`), and every consumer reads that as "render no
- * favorite control" rather than "zero favorites".
+ * (`manifest.favorites === null`), and every consumer reads that as "render
+ * no favorite control" rather than "zero favorites".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { load, save, clear, KEYS, getOrCreateFavoriteClientId } from '../lib/persist.ts';
@@ -39,9 +35,8 @@ interface UseFavoritesOpts {
 export function useFavorites({ manifest, setStatus }: UseFavoritesOpts) {
   const enabled = Boolean(manifest.favorites?.enabled);
 
-  // Mine, by filename. A Set in state rather than an array so membership is a
-  // lookup at every row of the catalog; persisted as an array, since that is
-  // what JSON has.
+  // Mine, by filename. A Set, so membership is a lookup at every row of the
+  // catalog; persisted as an array, since that is what JSON has.
   const [mine, setMine] = useState<Set<string>>(() =>
     enabled
       ? new Set(

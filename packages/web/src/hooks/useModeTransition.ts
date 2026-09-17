@@ -3,7 +3,7 @@
  * the FLIP animation that folds the center tile into the catalog's first row
  * (or back out) rather than cutting between them.
  *
- * Split out of `main.jsx` - the most self-contained block in that file:
+ * Split out of `main.tsx` - the most self-contained block in that file:
  * `flipFrom`, `centreRectNow`, `animatedSwitch` and the FLIP
  * `useLayoutEffect` are read nowhere else.
  *
@@ -33,7 +33,7 @@ interface UseModeTransitionOpts {
    * fired synchronously from `enterCatalog`/`exitCatalog`, before
    * `setMode`/`setLeaving`. */
   onModeChange?: () => void;
-  /** which reading the page opens on - `main.jsx`'s `INITIAL_MODE`, read once
+  /** which reading the page opens on - `main.tsx`'s `INITIAL_MODE`, read once
    * from the url. */
   initialMode?: Mode;
 }
@@ -90,9 +90,9 @@ export function useModeTransition({
    * Run the FLIP, in whichever direction the mode just moved.
    *
    * `useLayoutEffect` because the invert transform has to be applied before
-   * the browser paints the catalog in its resting position - one frame of the
-   * list at full size, then a jump onto the tile, is exactly the flash this
-   * is meant to replace.
+   * the browser paints the catalog in its resting position - otherwise one
+   * frame of the list at full size, then a jump onto the tile, shows the flash
+   * this is meant to replace.
    */
   useLayoutEffect(() => {
     const entering = mode === 'catalog' && !leaving;

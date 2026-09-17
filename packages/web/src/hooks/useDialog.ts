@@ -1,16 +1,16 @@
 /**
- * The modal-dialog machinery every overlay needs: focus in on open and back
+ * The modal-dialog machinery every overlay shares: focus in on open and back
  * out on close, Escape to dismiss, and a Tab-trap that keeps focus inside.
- * Copy-pasted three times before this existed (`RoomOverlay`, `HelpDialog`,
- * `ArtistStatementOverlay`) and missing entirely from `BabelBookOverlay`.
+ * Which dialogs have adopted it and which still inline their own copy is
+ * recorded in AGENTS.md's `useDialog` entry.
  *
- * The one thing the duplicated copies never had is a dialog STACK. Overlays
- * can now sit on top of each other (the artist statement opens the Babel book
- * over itself), and every copy bound Escape and its Tab-trap to `window` - so
- * two open at once meant one Escape closed both and two Tab-traps fought over
- * focus. The stack fixes that: only the topmost open dialog reacts to a key.
- * It is a plain module-level array rather than context because the ordering it
- * tracks is mount order, which is exactly what a shared array already records.
+ * The part a per-dialog copy cannot get right is the dialog stack: overlays
+ * can sit on top of each other (the artist statement opens the Babel book
+ * over itself), and when every open dialog binds Escape and its Tab-trap to
+ * `window`, one Escape closes both and two Tab-traps fight over focus. Here,
+ * only the topmost open dialog reacts to a key. The stack is a plain
+ * module-level array rather than context because the ordering it tracks is
+ * mount order, which is what a shared array already records.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react';
@@ -98,14 +98,14 @@ export function useDialog(ref: RefObject<HTMLElement | null>, onClose: () => voi
  * Props for a scrim div that closes its dialog on an outside click, without
  * also reaching whatever is behind it.
  *
- * Closing straight from `onPointerDown` (every scrim's old behaviour) can
- * unmount the scrim before the browser gets to dispatch the `click` that
- * follows - pointerdown, pointerup and click are three separate native
- * events, and React re-renders after the first of them. The `click` then
- * hits whatever the pointer is over once the scrim is gone: on the map that
+ * The close belongs on `click`, not on `onPointerDown`: pointerdown,
+ * pointerup and click are three separate native events, and React re-renders
+ * after the first of them, so closing on pointerdown can unmount the scrim
+ * before the browser dispatches the `click` that follows. That click then
+ * hits whatever the pointer is over once the scrim is gone: on the map it
  * lands nowhere clickable, but a catalog row sits exactly where the scrim
- * just was, so the same gesture that closed one room's overlay opens the row
- * underneath it. Waiting for `click` itself - the last event in the
+ * just was, so the same gesture that closed one room's overlay would open
+ * the row underneath it. Waiting for `click` - the last event in the
  * sequence - keeps the scrim mounted through the whole gesture, so it is
  * still what the browser hit-tests.
  *
