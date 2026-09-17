@@ -1140,6 +1140,7 @@ mark {
   second, redundant card nested inside this one.
 */
 .overlay-columns {
+  position: relative;
   display: block; padding: 22px 24px;
   background: linear-gradient(158deg, var(--paper-hi), var(--paper));
   border: 1px solid var(--paper-edge); border-radius: 4px;
@@ -1234,6 +1235,33 @@ mark {
 */
 .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
 .overlay-columns.columns .overlay-body .score-details { grid-template-columns: max-content; }
+/*
+  The room permalink (`/catalog/<file>`, already SSR'd and boot-linked - see
+  `app.ts`'s `/catalog/:file`, `main.tsx`'s `INITIAL_ROUTE` - but with no way
+  to reach it from a room opened off the map). Pinned over the cream page's
+  own bottom-right corner rather than a third row in the head, which already
+  carries the favorite toggle, the other reading's link, zoom controls and
+  close. `.overlay-columns` is `position: relative` above specifically so
+  this stays anchored to it rather than escaping to `.overlay`'s padding
+  edge or `.overlay-scrim`'s - true whether the pair is stacked or split,
+  and independent of `useContentZoom`'s own transform on the same element.
+  Deliberately outside `.story`'s `--split-text-scale` (a scale meant for
+  prose, not chrome) so the label stays legible at the smallest size a long
+  story can shrink everything else on the page to.
+*/
+.share-button {
+  position: absolute; right: 10px; bottom: 10px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 11px; color: var(--paper-dim); cursor: pointer;
+  background: rgba(255,255,255,0.4); border: 1px solid var(--paper-edge);
+  border-radius: 4px; padding: 4px 8px; line-height: 1.2;
+}
+.share-button:hover { color: var(--paper-ink); background: rgba(255,255,255,0.6); border-color: var(--paper-accent); }
+.share-button.copied { color: var(--paper-accent); border-color: var(--paper-accent); }
+/* Icon only below this width - same breakpoint the head's own "view" link collapses at. */
+@media (max-width: 600px) {
+  .share-button-full { display: none; }
+}
 
 /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
 .help-overlay { width: min(520px, 100%); }

@@ -69,6 +69,41 @@ code and the git log are the record of what was.
   "What it is" section is still a TODO while the site is live at the URL
   printed above it.
 
+## Portfolio signal (2026-09-16):
+This repo is also a software engineering portfolio piece (see AGENTS.md's new
+section on this), and a reviewer skimming it fast is a different audience
+than a visitor to the site. These are process/documentation gaps that matter
+for that audience specifically, not things the art itself needs:
+- **No CI/build status badge and no engineering framing in `README.md`.** The
+  README currently reads purely as an art description — nothing signals to a
+  skimming reviewer that CI/lint/typecheck/e2e are all green, or points them
+  at the interesting engineering (the health-check-gated deploy, the
+  rearrangement planner, the favorites set-hashing design) without making them
+  excavate this file.
+- **No release discipline.** `package.json` is pinned at `0.0.0`, there are no
+  git tags, and no `CHANGELOG.md` — nothing visibly marks what shipped when,
+  even though `deploy.yml`/`health-check.mjs` already tie a live deployment to
+  an exact commit.
+- **No API contract documentation.** `/api/manifest`, `/api/search`,
+  `/api/favorites`, `/api/health` (see `packages/server/app.ts`) exist only as
+  inline code — no OpenAPI spec, not even a short `docs/api.md` describing
+  request/response shapes.
+- **No standalone architecture overview for humans.** `docs/concept.md` is a
+  dated design log, not a "read this in five minutes" system overview. A
+  concise `ARCHITECTURE.md` — request flow, why esbuild bundles in-process,
+  why the corpus lives in R2, why deploy is gated on `/api/health`'s reported
+  commit — would let a reviewer assess system design without reading
+  AGENTS.md end to end.
+- **No production error/metrics visibility beyond `/api/health`.** There's no
+  error tracking (a Sentry-class tool) or basic request metrics — only
+  `logger.ts`'s structured logs and the deploy-time health check. Possibly
+  legitimate overkill for a single-VPS art site, but "how do you know when
+  it's broken" is a fair question from this audience.
+
+Deliberately not listed here: adding a SAST/security-scanning workflow
+(CodeQL, Dependency Review Action) alongside the existing informational
+`npm audit` job — agreed as worth doing, but not yet planned or started.
+
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in
   `useCorpus.ts` end in `.catch(() => {})`, so a missing `metadata.json` or
@@ -106,6 +141,36 @@ code and the git log are the record of what was.
   eventually retire Canvas2D. Retiring it drops the parity suite, the
   `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
   only once WebGL has real production mileage and nothing has needed the hatch.
+
+## Shareable permalinks:
+- **[2026-09-16, done] Room permalinks already existed and were unused -**
+  `packages/server/app.ts`'s `/catalog/:file` route SSRs a stable,
+  filename-keyed permalink, and `main.tsx`'s `window.__INITIAL_ROUTE__`
+  already booted a JS-capable visitor into it, but `RoomOverlay` had no way
+  to reach the link. Fixed: a `.share-button` pinned to the paper page's own
+  bottom-right corner (`RoomOverlay.tsx`'s `ShareButton`, `style.css`'s
+  `.share-button`), building the same url `app.ts`'s `canonicalPath` does and
+  copying it to the clipboard. Collapses to icon-only under 600px, same
+  breakpoint the head's "view" link already used.
+- **[2026-09-16] Add `/help` and `/about` as one-shot SSR-linkable routes,
+  same pattern as `/catalog`.** Two more `app.get` routes in `app.ts`,
+  each calling `renderPage` with a minimal `bodyHtml` (not full SSR content
+  like the catalog list - just enough for a no-JS visitor/crawler) and an
+  `initialRoute` value (`{ mode: 'help' }` / `{ mode: 'about' }`). Extend
+  `window.__INITIAL_ROUTE__`'s type in `main.tsx` and open `HelpDialog` /
+  `ArtistStatementOverlay` on mount when present, the same one-shot read
+  `INITIAL_ROUTE` already does for catalog - no live path sync while the
+  dialog is open, no back/forward handling, no router library. Motivation:
+  sharing a link straight to the help page or the artist's statement without
+  having to explain how to find them from `/`.
+  - `/about`'s `ArtistStatementOverlay` links onward to `BabelBookOverlay`
+    (a randomly generated "equivalent code" easter egg, stacked over the
+    statement). Decided: add a small `/babel-book` (or similar) endpoint that
+    serves the generated text directly rather than dropping the link, and add
+    it to `robots.txt` (`packages/server/seo.ts`) as disallowed - it's
+    infinite/generated content, not worth a crawler's time or an index entry.
+    Bundle this with the `/about` work above since it's the one piece of that
+    route with a real decision to make; the rest is mechanical.
 
 ## Rearrangement / camera:
 - **[2026-09-14] Root-caused and fixed: the "second rearrangement cycle" was

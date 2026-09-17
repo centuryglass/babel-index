@@ -1268,6 +1268,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={favoriteFor(overlay.id)}
+          shareFile={manifest.rooms[overlay.id]?.file ?? null}
           view={(() => {
             const cell = cellById.get(overlay.id);
             return cell
@@ -1305,6 +1306,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={'id' in card ? favoriteFor(card.id) : null}
+          shareFile={'id' in card ? manifest.rooms[card.id]?.file ?? null : null}
           view={
             'id' in card
               ? {
