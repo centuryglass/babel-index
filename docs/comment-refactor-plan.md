@@ -368,6 +368,20 @@ positional, its preamble has a "parsed trom" typo, four comments cite `main.jsx`
 to the cell..." restates AGENTS.md's "The fractions are per-axis" bullet instead
 of citing it.
 
+`packages/web/src/hooks/` went on 2026-09-17, out of order and in parallel:
+ten files (useCenterShelf, useContentZoom, useCorpus, useDialog + test,
+useDistillMode, useFavorites, useMapCamera, useMapCursor, useModeTransition,
+useRearrangement, useSearch). All ten report comment-only via check.mjs; all
+785 tests pass; lint and typecheck clean. What it found: dead section references
+from deleted accessibility-plan.md (§4.2a, §4.2b, §4.3, §8 item 4) in three
+files (`useMapCursor.ts`, `useRearrangement.ts`) plus perf-research.md pointers
+(§3.1, §3.7, §9) in one file, ghost PR references ("used to provide for free",
+"ghost PR review") in one file, outdated mentions of `imageZoom.ts` /
+`useImageZoom.ts` (now `contentZoomCamera.ts`) in two files, and remaining
+`.jsx` filename citations across several files. The dialog stack header was
+rewritten from copy-paste history into an AGENTS.md pointer; distill mode's
+"fade to black" language was corrected to match `render.ts`'s crossfade wording.
+
 ### Source files and their tests
 
 #### packages/map
@@ -450,20 +464,20 @@ of citing it.
 - [x] packages/web/src/components/SearchForm.tsx  — no unit test
 - [x] packages/web/src/components/SearchIcon.tsx  — no unit test
 - [x] packages/web/src/components/ZoomControls.tsx  — no unit test
-- [ ] packages/web/src/hooks/useCenterShelf.ts  — no unit test
-- [ ] packages/web/src/hooks/useContentZoom.ts  — no unit test
-- [ ] packages/web/src/hooks/useCorpus.ts  — no unit test
-- [ ] packages/web/src/hooks/useDialog.ts
-  - [ ] packages/web/src/hooks/useDialog.test.ts
-- [ ] packages/web/src/hooks/useDistillMode.ts  — no unit test
-- [ ] packages/web/src/hooks/useFavorites.ts  — no unit test
-- [ ] packages/web/src/hooks/useMapCamera.ts  — no unit test
-- [ ] packages/web/src/hooks/useMapCursor.ts  — no unit test (partial: `describeSurroundings` doc was rewritten in the main.tsx pass; rest not yet reviewed)
+- [x] packages/web/src/hooks/useCenterShelf.ts  — no unit test
+- [x] packages/web/src/hooks/useContentZoom.ts  — no unit test
+- [x] packages/web/src/hooks/useCorpus.ts  — no unit test
+- [x] packages/web/src/hooks/useDialog.ts
+  - [x] packages/web/src/hooks/useDialog.test.ts
+- [x] packages/web/src/hooks/useDistillMode.ts  — no unit test
+- [x] packages/web/src/hooks/useFavorites.ts  — no unit test
+- [x] packages/web/src/hooks/useMapCamera.ts  — no unit test
+- [x] packages/web/src/hooks/useMapCursor.ts  — no unit test (partial: `describeSurroundings` doc was rewritten in the main.tsx pass; rest not yet reviewed)
 - [x] packages/web/src/hooks/useMapRenderer.ts  — no unit test
 - [x] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
-- [ ] packages/web/src/hooks/useModeTransition.ts  — no unit test
-- [ ] packages/web/src/hooks/useRearrangement.ts  — no unit test
-- [ ] packages/web/src/hooks/useSearch.ts  — no unit test
+- [x] packages/web/src/hooks/useModeTransition.ts  — no unit test
+- [x] packages/web/src/hooks/useRearrangement.ts  — no unit test
+- [x] packages/web/src/hooks/useSearch.ts  — no unit test
 - [ ] packages/web/src/lib/camera.ts
   - [ ] packages/web/src/lib/camera.test.ts
 - [ ] packages/web/src/lib/catalog.ts
