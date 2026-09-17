@@ -33,6 +33,11 @@ tracks the queue and the method.
 Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests.
 CSS/HTML are handled separately (§6) because they need a different verifier.
 
+Bug-fixing and deep code analysis are outside of the scope of this plan, but
+a pass of this breadth is likely to incidentally find bugs, design oversights,
+code smells, and other problems that will need to be resolved eventually. Any
+such discoveries should be recorded in docs/pending_task_list.md.
+
 ## 2. Common problems and how to fix each
 
 Distilled from `claude_critique.md`'s eight mechanisms, the two committed
@@ -386,7 +391,8 @@ the source of truth; tick boxes as you go.
   - [ ] packages/web/src/lib/tiles.test.ts
 - [ ] packages/web/src/lib/touchDebug.ts  — no unit test
 - [ ] packages/web/src/lib/webglFlag.ts  — no unit test
-- [x] packages/web/src/main.tsx  — no unit test
+- [ ] packages/web/src/main.tsx  — no unit test (partial: almost completely done, but some fresh changes were pulled in from a different branch.)
+- [ ] packages/web/src/assets.d.ts  — no unit test
 _Standalone specs/helpers (no same-name source):_
 - [ ] packages/web/bundle.test.ts
 - [ ] packages/web/e2e/accessibility.e2e.ts
