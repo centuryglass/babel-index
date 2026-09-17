@@ -26,9 +26,9 @@ proportional to risk. Two passes are committed as exemplars:
 - `illusion.ts` (10bf4c8) — the nuance: a file where heavy commentary is
   *mostly earned*, so the pass is narrower (dedup + de-shout, not compress).
 
-167 code files total (107 sources + 60 tests/specs); 2 are done, ~165 remain.
-That is far more than one session, so it proceeds in batches. This document
-tracks the queue and the method.
+167 code files total (107 sources + 60 tests/specs); the running checklist in §4
+is the source of truth for how many are done. That is far more than one session,
+so it proceeds in batches. This document tracks the queue and the method.
 
 Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests.
 CSS/HTML are handled separately (§6) because they need a different verifier.
@@ -156,19 +156,24 @@ declaration in the same breath, and prefer naming the symbol over the count.
 doc, and the same commit deleted `docs/catalog-plan.md` outright while four files
 went on citing its `§2` and `§7`.) Plan docs are *ephemeral* by design —
 `concept.md` is explicitly not kept in sync, and a task list entry leaves by
-being done — so a section number into one is a fact with an expiry date. *Move:*
-when the pointer you are checking no longer resolves, **delete it and keep the
-sentence's claim**, rather than renumbering it; the renumber just rots again at
-the next cull. Two exceptions. A pointer into a doc AGENTS.md calls a *spec* —
-`search_rules.md`, which it says to update alongside a scoring change, and
-`keyboard-controls.md` — is durable, and a named *section title* there
-(`docs/search_rules.md "Story matching"`) survives a renumber where a `§4.2a`
-will not. And a pending-task pointer is fine when it is a live TODO anchored at
-that exact spot, the "see the pending entry for details on this right here"
-shape, because it gets cleaned up as the issue does; a pointer to an entry that
-has already shipped, or to one whose fix will not touch this line, is the same
-dead `§4.2a` in a different costume. Tells to grep for: `§[0-9]`, `docs/`, and
-`\.md` inside a comment.
+being done — so a section number into one is a fact with an expiry date. A
+*quotation* from one rots the same way and reads as more authoritative while it
+does: `config.ts` said `0.2 is the concept's "maybe 80% generic"`, and
+`concept.md` never gave a percentage (it says "A configurable percentage") — the
+phrase was a paraphrase that had hardened into a quote, and the number it quoted
+had since changed to 0.25. *Move:* when the pointer you are checking no longer
+resolves, **delete it and keep the sentence's claim**, rather than renumbering
+it; the renumber just rots again at the next cull. Two exceptions. A pointer into
+a doc AGENTS.md calls a *spec* — `search_rules.md`, which it says to update
+alongside a scoring change, and `keyboard-controls.md` — is durable, and a named
+*section title* there (`docs/search_rules.md "Story matching"`) survives a
+renumber where a `§4.2a` will not. And a pending-task pointer is fine when it is
+a live TODO anchored at that exact spot, the "see the pending entry for details
+on this right here" shape, because it gets cleaned up as the issue does; a
+pointer to an entry that has already shipped, or to one whose fix will not touch
+this line, is the same dead `§4.2a` in a different costume. Tells to grep for:
+`§[0-9]`, `docs/`, `\.md` inside a comment, and a quoted phrase attributed to a
+doc — check the doc still contains it.
 
 **One abstraction level per comment.** (Gemini's "entanglement of abstraction
 levels.") A single sentence that swerves from product metaphor ("the library is
@@ -268,8 +273,10 @@ home early — see §6 for the rationale:
    (`ordering.ts`/`scoring.ts`/`searchResult.ts` and the two paired tests;
    they cross-reference each other heavily, so they went as one batch). What
    remains: `describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts`.
-2. `packages/config` — one file (`config.ts`) is the single densest comment
-   block in the repo (480 comment lines); give it its own pass.
+2. `packages/config` — done (2026-09-17). One file (`config.ts`) is the single
+   densest comment block in the repo (480 comment lines); it took its own pass,
+   and most of that block's bulk was P1 (facts AGENTS.md, `camera.ts`,
+   `ordering.ts` and `search_rules.md` already own) and rotting literals.
 3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
    `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks
    + their paired tests (done 2026-09-17).
@@ -283,20 +290,15 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **33 / 107 source files** (`main.tsx`, `illusion.ts`,
-`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, `packages/map`'s search half
-(`ordering.ts`, `scoring.ts`, `searchResult.ts`), all 14 of `packages/server`
-and all four of `packages/pipeline`, and the renderer cluster (`render.ts`,
-`slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`, `useMapRenderer.ts`,
-`useMapRendererGL.ts`) — server, pipeline and the renderer cluster taken out
-of order on 2026-09-17, in parallel across checkouts, server's alongside
-batches 2–3), plus 23 paired tests (`illusion.test.ts`, `board.test.ts`,
-`nextRoom.test.ts`, `ordering.test.ts`, `scoring.test.ts`, server's 12, the
-two pipeline tests, `slide.test.ts`, and the three renderer tests reviewed
-with no edits needed) — all ticked in the list below. The running checklist
-is the source of truth; tick boxes as you go. Order is a deduping aid within
-a cluster, not a rule between clusters, so a batch can be taken from any
-package no other checkout is in.
+Progress: §4's checklist is the whole record — tick boxes as you go, and do not
+maintain a count here, because a tally that every pass has to re-derive is a
+number that is wrong the moment two passes run at once. `packages/map`,
+`packages/server`, `packages/pipeline`, `packages/config` and the renderer
+cluster were taken on 2026-09-17 in parallel across checkouts, out of the
+recommended order; `main.tsx` passed first and passed again, and stays unticked
+because fresh changes from another branch went in after the second pass. Order
+is a deduping aid within a cluster, not a rule between clusters, so a batch can
+be taken from any package no other checkout is in.
 
 ### Source files and their tests
 
@@ -323,10 +325,10 @@ package no other checkout is in.
 - [x] packages/map/searchResult.ts  — no unit test
 
 #### packages/config
-- [ ] packages/config/config.ts
-  - [ ] packages/config/config.test.ts
-- [ ] packages/config/load.ts
-  - [ ] packages/config/load.test.ts
+- [x] packages/config/config.ts
+  - [x] packages/config/config.test.ts
+- [x] packages/config/load.ts
+  - [x] packages/config/load.test.ts
 
 #### packages/pipeline
 - [x] packages/pipeline/index.ts  — no unit test
