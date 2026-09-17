@@ -17,7 +17,7 @@ import {
   alphabeticalOrder,
 } from './catalog.ts';
 import type { Rect } from './catalog.ts';
-import { BASE_TILE, LEVELS, sizeOf } from './pyramid.ts';
+import { BASE_TILE, LEVELS, sizeOf, DPR_CAP } from './pyramid.ts';
 
 const order = Array.from({ length: 27 }, (_, i) => 100 + i);
 
@@ -118,7 +118,7 @@ test('a thumbnail asks for a level that can actually cover it', () => {
         LEVELS.some((l) => l.level === level),
         `level ${level} is on the ladder for ${cssWidth}@${dpr}`
       );
-      const drawn = cssWidth * Math.min(2, dpr);
+      const drawn = cssWidth * Math.min(DPR_CAP, dpr);
       // Either it covers the drawn width, or it is the finest rung there is -
       // asking for something off the top of the ladder is not an option.
       assert.ok(

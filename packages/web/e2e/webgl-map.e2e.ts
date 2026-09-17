@@ -54,14 +54,19 @@ describe('the library, in a browser: the WebGL renderer', { concurrency: false }
     // A search zooms out in place to give the slide a wall of rooms, then
     // eases back to the x/y/zoom it was called from: the same assertion
     // `map-gestures.e2e.ts`'s `a search reorders the library around wherever
-    // the camera already is` makes against Canvas2D. That file waits for the
-    // HUD to report `rearranging` before waiting for the return, because until
-    // the search response lands the camera is still at `atField` - a position
-    // this wait cannot tell from an eased-back one. The same guard is open for
-    // this file in `docs/pending_task_list.md`'s "Rearrangement / camera".
+    // the camera already is` makes against Canvas2D. Until the search
+    // response lands the camera is still at `atField` - a position the wait
+    // below cannot tell from an eased-back one - so wait for the HUD to
+    // report `rearranging` first, the same guard `map-gestures.e2e.ts` uses.
     // The waits themselves need no GL-specific handling: `useMapRendererGL.ts`
     // prefixes every HUD line with `[gl] `, and `settled()` and `parseHud`
     // strip it before reading the state underneath.
+    await page.waitForFunction(
+      () => document.getElementById('hud')?.textContent?.replace(/^\[gl\] /, '').startsWith('rearranging'),
+      null,
+      { timeout: SEARCH_TIMEOUT }
+    );
+
     await waitFor(
       async () => {
         const c = await settled(page);

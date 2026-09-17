@@ -29,7 +29,7 @@
  * "Rows are a fixed height and the spacers are arithmetic, not estimates" and
  * "What a row cannot show, it counts".
  */
-import { BASE_TILE, idealLevel } from './pyramid.ts';
+import { BASE_TILE, idealLevel, DPR_CAP } from './pyramid.ts';
 
 export interface RankedRoom {
   id: number;
@@ -167,11 +167,11 @@ export function stackedRowHeight(
  * make the answer depend on history for no benefit.
  *
  * @param cssWidth the width the image is displayed at
- * @param dpr device pixel ratio, capped at 2 as both map renderers cap it
+ * @param dpr device pixel ratio, capped at `DPR_CAP` as both map renderers cap it
  * @returns a level, which `rooms.ts` may still resolve to null
  */
 export function thumbLevel(cssWidth: number, dpr = 1): number {
-  const drawn = Math.max(1, cssWidth) * Math.min(2, Math.max(1, dpr));
+  const drawn = Math.max(1, cssWidth) * Math.min(DPR_CAP, Math.max(1, dpr));
   return idealLevel({ w: drawn, h: drawn * (BASE_TILE.h / BASE_TILE.w) });
 }
 

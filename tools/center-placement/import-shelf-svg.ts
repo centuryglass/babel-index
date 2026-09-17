@@ -96,21 +96,24 @@ const PATH_ARG_COUNT: Record<string, number> = {
  * The bbox covers on-curve and control points alike; a cubic stays inside its
  * control-point hull, so that is never smaller than the true bound.
  *
- * S/Q/T are not in the token grammar, and nothing refuses them: the letter is
- * dropped and its numbers read as another repeated pair of the command before
- * it, so a smooth-curve trace - what Inkscape leaves when it simplifies a
- * Bezier - comes out quietly wrong. `shelf_geometry.svg` carries none, which
- * makes the command set handled here a fact about the trace rather than a
- * guarantee of this function (docs/pending_task_list.md, "Tools").
+ * S/Q/T are tokenized but not in `PATH_ARG_COUNT`, so the command-letter
+ * check below throws rather than silently misreading a smooth-curve trace -
+ * what Inkscape leaves when it simplifies a Bezier.
  *
  * `A` is handled, and approximated as a lineto to its own endpoint: the curve
  * is dropped. `distill_off`'s five arcs are its rounded corners, each one a
  * fillet under 3 units of the traced viewBox, a couple of pixels at tile
  * scale. Sampling rather than solving is the tradeoff `svgPath.ts`'s
  * `flattenPath` already makes for the same hit-test.
+ *
+ * S/Q/T are in the token grammar so the command-letter check below rejects
+ * them explicitly - they are not supported, but a smooth-curve trace (what
+ * Inkscape leaves behind when it simplifies a Bezier) must fail loudly rather
+ * than have its letter dropped and its numbers misread as further repeats of
+ * the command before it.
  */
 function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: number) {
-  const tokens = d.match(/[MmLlHhVvCcZzAa]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
+  const tokens = d.match(/[MmLlHhVvCcZzAaSsQqTt]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
   let i = 0;
   let cx = 0;
   let cy = 0;
@@ -301,15 +304,12 @@ function ellipseToPath(
  * Reads an attribute off a tag string, falling back to a `style="..."`
  * declaration of the same name.
  *
- * The direct lookup is `\bname=`, and `-` is a word boundary: a presentation
- * attribute like `stroke-width="..."` earlier in the tag than `width="..."`
- * matches first and is returned for `width`. This trace keeps stroke values
- * inside `style=`, where the fallback's `(?:^|;)` anchor rejects them, so
- * nothing is misread today; anchoring the direct lookup is the durable fix
- * (docs/pending_task_list.md, "Tools").
+ * The direct lookup is anchored with `(?:^|\s)`, since `-` is a word boundary
+ * and an unanchored `\bname=` would let a presentation attribute like
+ * `stroke-width="..."` earlier in the tag match a lookup for `width`.
  */
 function attr(tag: string, name: string): string | null {
-  const direct = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(tag);
+  const direct = new RegExp(`(?:^|\\s)${name}\\s*=\\s*"([^"]*)"`).exec(tag);
   if (direct) return direct[1].trim();
   const style = /\bstyle\s*=\s*"([^"]*)"/.exec(tag);
   if (style) {

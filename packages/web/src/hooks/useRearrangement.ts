@@ -21,7 +21,7 @@ import { CELL_ASPECT, overviewZoom, pxPerCell, type Camera } from '../lib/camera
 import { centerCellRect, areSpinesLegible, overlapsViewport } from '../lib/center.ts';
 import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { createSlideshow } from '../lib/slide.ts';
-import { PYRAMID, PREFETCH } from '../lib/pyramid.ts';
+import { PYRAMID, PREFETCH, DPR_CAP } from '../lib/pyramid.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
 import { perfSetPhase, perfDump, perfRecordPrepare } from '../lib/perfProbe.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
@@ -40,7 +40,7 @@ import type { RunningAnim } from './useMapRenderer.ts';
  * current position is already the landing position.
  */
 function landingRectangle(cam: Camera, canvas: HTMLCanvasElement, targetZoom: number) {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = Math.min(DPR_CAP, window.devicePixelRatio || 1);
   const cellPx = pxPerCell({ ...cam, zoom: targetZoom });
   const level = PYRAMID.idealLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr });
   const halfW = canvas.clientWidth / 2 / cellPx.x;

@@ -97,6 +97,15 @@ export type Demand = number | Size;
 export const BASE_TILE: Size = { w: 1024, h: 768 };
 
 /**
+ * The device pixel ratio both map renderers, `useRearrangement.ts`'s
+ * `landingRectangle`, and `catalog.ts`'s `thumbLevel` cap backing-store
+ * resolution at. Raising it makes the catalog demand a finer pyramid rung
+ * than the map itself ever renders at - `thumbLevel`'s own `dpr` parameter
+ * doc states that agreement, and `catalog.test.ts` pins this value.
+ */
+export const DPR_CAP = 2;
+
+/**
  * The ladder, finest first.
  *
  * `divisor` is what BASE_TILE is divided by, so the ladder is a statement about
