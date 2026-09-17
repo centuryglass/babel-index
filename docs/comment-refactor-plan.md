@@ -31,7 +31,8 @@ is the source of truth for how many are done. That is far more than one session,
 so it proceeds in batches. This document tracks the queue and the method.
 
 Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests.
-CSS/HTML are handled separately (§6) because they need a different verifier.
+CSS/HTML stay out: §5's verifier parses JS/TS, and a CSS or HTML comment pass
+would need a different one.
 
 Bug-fixing and deep code analysis are outside of the scope of this plan, but
 a pass of this breadth is likely to incidentally find bugs, design oversights,
@@ -332,12 +333,12 @@ Progress: §4's checklist is the whole record — tick boxes as you go, and do n
 maintain a count here, because a tally that every pass has to re-derive is a
 number that is wrong the moment two passes run at once. `packages/map`,
 `packages/server`, `packages/pipeline`, `packages/config`, the renderer cluster,
-`tools/embed` and `tools/upload` were taken on 2026-09-17 in parallel across
-checkouts, out of the recommended order; `main.tsx` passed first and passed
-again, and stays unticked because fresh changes from another branch went in
-after the second pass. Order is a deduping aid within a cluster, not a rule
-between clusters, so a batch can be taken from any package no other checkout is
-in.
+`tools/embed`, `tools/upload`, `tools/perf-capture` and `tools/font-lab` were
+taken on 2026-09-17 in parallel across checkouts, out of the recommended order;
+`main.tsx` passed first and passed again, and stays unticked because fresh
+changes from another branch went in after the second pass. Order is a deduping
+aid within a cluster, not a rule between clusters, so a batch can be taken from
+any package no other checkout is in.
 
 `tools/center-placement` went without `center.ts`, which order 5 pairs it with.
 What that file owes the pass that takes them together: its "see `RUNS` below" is
@@ -531,13 +532,13 @@ _Standalone specs/helpers (no same-name source):_
 - [x] tools/upload/upload-r2.ts  — no unit test
 
 #### tools/perf-capture
-- [ ] tools/perf-capture/capture.ts  — no unit test
+- [x] tools/perf-capture/capture.ts  — no unit test
 
 #### tools/font-lab
-- [ ] tools/font-lab/download-fonts.ts  — no unit test
-- [ ] tools/font-lab/fonts.ts  — no unit test
-- [ ] tools/font-lab/render.ts  — no unit test
-- [ ] tools/font-lab/variants.ts  — no unit test
+- [x] tools/font-lab/download-fonts.ts  — no unit test (reviewed; no edits needed)
+- [x] tools/font-lab/fonts.ts  — no unit test
+- [x] tools/font-lab/render.ts  — no unit test
+- [x] tools/font-lab/variants.ts  — no unit test
 
 #### build
 - [ ] build/register.mjs  — no unit test

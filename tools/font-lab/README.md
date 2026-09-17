@@ -1,25 +1,25 @@
 # Spine-title font lab
 
 An offline sweep for choosing the typeface and rendering settings of the center
-room's book-spine titles (`composeSpines` in `packages/web/src/center.js`). It
-renders one labelled composite per option so the choice can be made by eye rather
-than by argument.
+room's book-spine titles (`composeSpines` in `packages/web/src/lib/center.ts`).
+It renders one labelled composite per option so the choice can be made by eye
+rather than by argument.
 
 Spine titles land at roughly **11–20px** on screen (the size clamps in
 `composeSpines`), so this is really a small-size legibility test: what matters is
 how a face rasterises at text size, not how it looks on a specimen poster. The
-wider-book center tile (see the plan's §phase 5 update) doubled the spine width
-and lifted the size crisis the earlier 6–13px sweep chased — so the size cap is
-now itself one of the things under test (the `set-1x-cap-*` variants).
+wider-book center tile doubled the spine width and lifted the size crisis the
+earlier 6–13px sweep chased — so the size cap is itself one of the things
+under test (the `set-10`/`set-11`/`set-12` variants).
 
 ## Run
 
 ```sh
-node tools/font-lab/download-fonts.mjs   # once: pull the OFL woff2s into fonts/
-node tools/font-lab/render.mjs           # write out/**.png + out/index.html
+node --import ./build/register.mjs tools/font-lab/download-fonts.ts   # once: pull the OFL woff2s into fonts/
+node --import ./build/register.mjs tools/font-lab/render.ts           # write out/**.png + out/index.html
 ```
 
-Both are dependency-light: `download-fonts.mjs` uses `fetch`, `render.mjs` uses
+Both are dependency-light: `download-fonts.ts` uses `fetch`, `render.ts` uses
 the `playwright` chromium already installed for the e2e tests. Open
 `tools/font-lab/out/index.html` for the contact sheet.
 
@@ -31,12 +31,12 @@ way. Flagged runs land in `out/variants/<suffix>/` and never clobber the
 baseline sheets.
 
 ```sh
-node tools/font-lab/render.mjs --dpr 2              # panels as a retina screen sees them
-node tools/font-lab/render.mjs --caps              # ALL CAPS titles
-node tools/font-lab/render.mjs --backdrop          # rounded plate per book, no outline
-node tools/font-lab/render.mjs --ink "rgba(255,240,200,1)"
-node tools/font-lab/render.mjs --backdrop-color "rgba(10,10,20,0.7)"   # implies --backdrop
-node tools/font-lab/render.mjs --dpr 2 --caps --backdrop               # combine freely
+node --import ./build/register.mjs tools/font-lab/render.ts --dpr 2             # panels as a retina screen sees them
+node --import ./build/register.mjs tools/font-lab/render.ts --caps              # ALL CAPS titles
+node --import ./build/register.mjs tools/font-lab/render.ts --backdrop          # rounded plate per book, no outline
+node --import ./build/register.mjs tools/font-lab/render.ts --ink "rgba(255,240,200,1)"
+node --import ./build/register.mjs tools/font-lab/render.ts --backdrop-color "rgba(10,10,20,0.7)"   # implies --backdrop
+node --import ./build/register.mjs tools/font-lab/render.ts --dpr 2 --caps --backdrop               # combine freely
 ```
 
 | flag | effect |
@@ -78,7 +78,7 @@ captions give the zoom, spine width and font size.
   weight, halo, tracking, size, **size cap**, ink — each variant a controlled
   A/B off that face's own baseline. Each font gets its own subdirectory (e.g.
   `out/settings/literata/`, `out/settings/eb-garamond/`) so the composites never
-  clobber one another. The `set-1x-cap-*` variants raise `maxPx` so the title
+  clobber one another. The `set-10`/`set-11`/`set-12` variants raise `maxPx` so the title
   fills the wider spine and keeps growing toward the 2× zoom, instead of
   clamping at 13px the way the shipping default still does. The "weight" variants
   (`set-01`, `set-07`) use each face's heaviest downloaded non-400 weight — 600
@@ -87,7 +87,7 @@ captions give the zoom, spine width and font size.
 
 ## Fidelity notes
 
-`render.mjs`'s in-page compositor is a line-for-line copy of `composeSpines`,
+`render.ts`'s in-page compositor is a line-for-line copy of `composeSpines`,
 with the styling lifted into the variant. If `composeSpines` changes, update the
 copy. Rendering is real Chromium because browser small-size text rasterisation is
 the thing under test.
@@ -102,9 +102,9 @@ system-sans baseline is included for reference.
 
 ## Extending
 
-- Add a face: append to `FONTS` in `fonts.mjs`, re-run the downloader.
-- Add a rendering variant: append to `settingsSweep` in `variants.mjs`; each entry
-  overrides one field of `BASE` (which now also carries `caps`, `backdrop` and
-  `backdropColor`).
+- Add a face: append to `FONTS` in `fonts.ts`, re-run the downloader.
+- Add a rendering variant: append an entry to the array in
+  `buildSettingsSweep` in `variants.ts`; each entry
+  overrides a subset of `BASE`, which carries every `SpineStyle` field.
 - The candidate faces and generated `out/` are experiment scratch, not shipped
   assets — nothing in the app imports from here.
