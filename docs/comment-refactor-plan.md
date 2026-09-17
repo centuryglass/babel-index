@@ -35,9 +35,10 @@ CSS/HTML are handled separately (§6) because they need a different verifier.
 
 ## 2. Common problems and how to fix each
 
-Distilled from `claude_critique.md`'s eight mechanisms and what the two
-committed passes had to work through. Each is a **tell** (how to spot it) and a
-**move** (what to do). They are listed in the order that tends to pay off.
+Distilled from `claude_critique.md`'s eight mechanisms, the two committed
+passes, and five other models' independent critiques (folded into §2b). Each is
+a **tell** (how to spot it) and a **move** (what to do), listed in the order that
+tends to pay off.
 
 **P1 — A fact told many times (mechanism 5).** *Tell:* the same rationale, in
 slightly different words, in ≥2 places; you finish a sentence before you start
@@ -98,9 +99,86 @@ careful reader introduce a real bug?" If yes, the length stays. The main.tsx
 pass compressed aggressively; the illusion.ts pass mostly did not — same rules,
 opposite dominant move. Know which file you're in (§3, step 2).
 
+## 2b. Extra patterns from the model bake-off
+
+`docs/comment-revision-tests/` holds five other models' critiques + main.tsx
+revisions plus a meta-analysis. Their diagnoses converge with the eight
+mechanisms above, so nothing replaces P1–P8 — but a few sharpen them, and one
+formatting idea (union-alpha's) is worth adopting because it is *already* a
+house convention. These are folded into the same pass; the source model is named
+where it is the clearest articulation.
+
+**Local completeness — the root of P1 and P5.** (GLM's framing is the sharpest:
+Claude's comments are "sequentially dependent, not locally complete.") A comment
+written as a *delta on the comment above it* ("the same treatment as the two
+overlays above") is unreadable on arrival mid-file, which is how people actually
+read. *Move:* every comment must parse with no other comment open; state the
+shared scheme once (in the section header or the first sibling) and let later
+siblings carry only their own subject; a pointer names a **symbol or section
+label, never a position** ("see `booksRef`" / "see *Primitives* above", never
+"see the one above"). This is also what stops P5 region-paint: positional
+prose rots the moment code moves.
+
+**Prose that rots — literal facts where a symbol reference would stay true.**
+(GLM's "prose that rots"; and union-alpha, otherwise the bake-off's best
+revision, *re-introduced* a reference to the nonexistent `positionSearchBox` —
+the cautionary tale.) Hardcoded counts and claims age badly and many are already
+wrong: "the forty buttons" (that's generated `BOOK_COUNT`), "one of the two
+things that survive a reload" (at least four persist), `persist.js` (it's
+`.ts`). *Move:* reference the symbol, not its current value ("the buttons in
+`BOOK_COUNT`"); drop self-counting claims ("one of the two"); and **every
+cross-reference must resolve to something that exists** — verify a `see X` before
+committing, because a dangling pointer is exactly the confident-looking lie P5
+warns about. Cheap tells to grep for: `the two things`, `the forty`, `\.(js|jsx)\b`
+in a `see`, and any `see \`([a-zA-Z]+)\`` whose name `grep`s to nothing.
+
+**One abstraction level per comment.** (Gemini's "entanglement of abstraction
+levels.") A single sentence that swerves from product metaphor ("the library is
+round") to DOM mechanics (`pointer-events: none`) to React lifecycle to repo
+meta-history ("plan §4.2b") forces a context switch every clause. *Move:* keep
+each comment in one register; the *why* is usually one level, not four stapled
+together.
+
+**What belongs in a code comment at all.** (GPT Luna's "miniature design
+documents.") A local comment answers up to three separable questions — *what is
+this for*, *what invariant holds*, *why is that non-obvious* — and often doesn't
+need all three. Broad, cross-cutting policy belongs in the **owning module or in
+AGENTS.md**, not restated at each use; a test-only caveat belongs **in the test**.
+*Move:* if you're writing the fourth paragraph about a five-line `useState`, one
+of those facts probably wants a different home (this is P1's "one fact one home"
+read outward, to files rather than lines).
+
+**Terse has a floor.** (The meta-analysis rates Gemini's cuts the most aggressive
+and Union Alpha's the best read, precisely because it pruned prose *and kept every
+hazard*.) Compressing is not the goal — skimmable is. Deleting a hard-won
+justification to hit a line count is the one failure worse than a wordy comment.
+When a hazard and a target length collide, keep the hazard (this is the P8 test,
+run the other direction).
+
+## 2c. Formatting toolbox
+
+Two devices from the bake-off that are worth reaching for — and, critically,
+**both are already house convention**, so adopting them is consistency, not
+novelty (`illusion.ts` uses dividers throughout; ~47 files open with a doc block).
+
+- **File-level preamble.** A short `/** */` at the top saying what the module is
+  and how it's organized, for files that lack one — `main.tsx` opens straight on
+  its imports and has none, so a 1,400-line entry point gives a first-time reader
+  no map. Add one when a file is big or has non-obvious internal structure.
+- **`// --- Section name ---------` dividers.** Name the regions of a long file
+  so navigation is scannable (`// --- Settings and persistent reader choices
+  ---`). Use them where a file has more than a handful of unrelated declaration
+  clusters; don't sprinkle them on small files where every declaration is its own
+  section. Keep the style consistent with `illusion.ts`.
+
+Labeled hazard/invariant tags (`Hazard:`/`Invariant:`, from Gemini) are the one
+device *not* adopted: the repo states hazards as the main clause of the sentence,
+and half-adopting a tag vocabulary is worse than none. Revisit only as a
+repo-wide convention if a future pass ever has the appetite.
+
 ## 3. The per-pass workflow (definition of done)
 
-Run this every session. Steps 4-6 are what makes a pass trustworthy.
+Run this every session. Steps 4, 6 and 7 are what make a pass trustworthy.
 
 1. **Pick a batch** from §4 (follow the recommended order; keep
    cross-referencing files in one batch). Announce which files, and check the
@@ -109,19 +187,29 @@ Run this every session. Steps 4-6 are what makes a pass trustworthy.
    repeat, and — critically — which long comments are earned hazards (P8).
    Re-read the relevant `AGENTS.md` "Things that will bite you" bullets; those
    invariants must survive the rewrite verbatim in substance.
-3. **Edit comments only.** Apply P1-P8. Preserve every fact and hazard; never
-   delete information to save space — relocate or condense it.
+3. **Edit comments only.** Apply P1–P8 and the §2b sharpenings; reach for the
+   §2c formatting devices (preamble, section dividers) where a file needs a map.
+   Preserve every fact and hazard; never delete information to save space —
+   relocate or condense it. Never touch a functional comment (an
+   `eslint-disable`, `@ts-*`, `@license`, or a directive the toolchain reads) —
+   those are code, not prose.
 4. **Verify no code changed** — §5's tool, `check.mjs`, on every file touched.
    Must report `OK (comment-only)` or `clean (unchanged)` for all of them.
    This is not optional; it caught a dropped `rows.sort(...)` line during the
-   illusion.ts pass that hand-review had missed.
+   illusion.ts pass that hand-review had missed. It is also what catches a
+   deleted `eslint-disable` pragma, since stripping it changes emitted code.
 5. **Run the gates:** `npm test`, `npm run lint`, `npm run typecheck`. (These
    also catch a comment edit that broke a `@example`-style fenced block or an
    unused-var reference from a removed doc line.)
-6. **Self-check the diff** — read `git diff` for the file once more; confirm
+6. **Check every cross-reference resolves.** Grep the file for `see \``,
+   "see <Name>", and literal claims ("the two things", a raw count), then confirm
+   each named symbol/file still exists (`grep -rn`) and each literal was replaced
+   by a symbol reference. Union-alpha's otherwise-best revision shipped a dead
+   `positionSearchBox` pointer; this step is the net for that.
+7. **Self-check the diff** — read `git diff` for the file once more; confirm
    every changed line is a comment line and the prose follows the house rules
    (ASCII hyphens in comments, single quotes, two-space indent, no "used to").
-7. **Commit** — comments-only in the message, name the dominant moves, cite
+8. **Commit** — comments-only in the message, name the dominant moves, cite
    that the verifier showed byte-identical code. Update §4 boxes in the same
    commit.
 
@@ -443,3 +531,14 @@ the dropped `rows.sort(...)`. They agree.)
 - **The plan itself is not exempt.** If you find a worse pattern than anything in
   §2, add it here (with the file that showed it) rather than only fixing the one
   file. And if a batch reveals the ordering here is wrong, update §4.
+- **Where these ideas came from (§2b).** The bake-off lived in
+  `docs/comment-revision-tests/` (local, untracked): five models each critiqued
+  and revised `main.tsx`, plus a meta-analysis ranking them. Union-alpha's
+  revision won largely on section dividers + file preamble (→ §2c) and
+  facts-first prose; GLM's critique had the sharpest *diagnosis* (local
+  completeness, prose-that-rots); Gemini's the cleanest counterfactual taxonomy
+  ("the ghost PR review"); none caught everything. The meta-analysis's "what none
+  of them caught" list — the `useSearch`↔`useRearrangement` cycle and
+  `usable`/`fullyUsable` still stated twice in most revisions — is exactly the
+  P1 dedup work, so expect to catch it fresh per file. If you re-read that folder,
+  take the *tells*, not their prose: no other model's revision was adopted.
