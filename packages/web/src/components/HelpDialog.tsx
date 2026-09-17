@@ -1,23 +1,20 @@
 /**
  * The one piece of explicit, plain-language help explaining the interface -
- * reached by pressing a reserved book on the center shelf (`onOverride` in
- * `main.jsx`, action `help`). No new UI chrome outside the shelf.
+ * reached by pressing a reserved book on the center shelf (action `help`
+ * in `useCenterShelf.ts`'s `CENTER_OVERRIDES`). No new UI chrome outside
+ * the shelf.
  *
- * Structurally a copy of `RoomOverlay`'s dialog machinery (focus in on open,
- * back out on close; Escape and a scrim click dismiss; Tab is trapped inside)
- * with no room to show - static text instead of `RoomDetails`. Two copies of
- * that machinery rather than a shared wrapper because there is no third
- * dialog yet to justify factoring it out; if one shows up, fold this and
- * `RoomOverlay` into it together.
+ * The focus-in/restore, Escape and Tab-trap machinery below is an inline
+ * copy of what `useDialog` now provides; `RoomOverlay` keeps the same
+ * inline copy. AGENTS.md's `useDialog` entry records which dialogs have
+ * adopted the hook.
  *
- * The content-blocking panel lives at the bottom of this dialog, collapsed by
- * `<details>` rather than mounted open - a reader who has never heard of
- * sensitive-content tags should not see a checklist appear the first time
- * they open "help". `<details>`/`<summary>` costs nothing extra: it is
- * natively focusable and keyboard-operable, so the panel needs no open/closed
- * state of its own. It renders nothing at all when the corpus carries no
- * tags to block - most corpora - so the majority never see it, collapsed or
- * not.
+ * The content-blocking panel sits at the bottom of the dialog, collapsed
+ * in a native `<details>` rather than mounted open: a reader who has never
+ * heard of sensitive-content tags should not see a checklist the first
+ * time they open "help". `<details>`/`<summary>` is natively focusable and
+ * keyboard-operable, so the panel needs no open/closed state of its own.
+ * It renders nothing when the corpus carries no tags to block.
  */
 import { useEffect, useRef } from 'react';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
@@ -59,10 +56,10 @@ export function HelpDialog({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.key !== 'Tab') return;
-      // `summary` is included because the content-blocking panel below is a
-      // native `<details>` - it is focusable and in the real tab order
-      // whether or not it is expanded, and a trap that does not know about it
-      // would let Tab walk past the dialog's actual last stop.
+      // `summary` is in the selector because the content-blocking panel is
+      // a native `<details>`: focusable and in the real tab order whether
+      // or not it is expanded, and a trap that missed it would let Tab
+      // walk past the dialog's actual last stop.
       const focusable = ref.current?.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'
       );

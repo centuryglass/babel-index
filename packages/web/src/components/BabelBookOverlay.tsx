@@ -3,11 +3,11 @@
  * (mostly) meaningless text, paged a screenful at a time, in the spirit of
  * Borges's library where every possible book already exists on some shelf.
  *
- * An easter egg on the artist's statement, opened by "Click here to run some
- * equivalent code" and stacked on top of it. It is the same open book as the
- * statement (`BookOverlay`) - a spread of two pages when the dialog is wide
- * enough, one page when it is not - so `next`/`previous` step by two or by one
- * to match what is on screen.
+ * An easter egg on the artist's statement, opened by its `.statement-link`
+ * button and stacked on top. It is the same open book as the statement
+ * (`BookOverlay`) - a spread of two pages when the dialog is wide enough, one
+ * page when it is not - so `next`/`previous` step by two or by one to match
+ * what is on screen.
  */
 import { useMemo, useState } from 'react';
 import { BookOverlay } from './BookOverlay.tsx';

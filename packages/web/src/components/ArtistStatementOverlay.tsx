@@ -11,10 +11,10 @@
  * that has to open the Babel book), so the words live here as JSX rather than
  * in a doc parsed at build time - there is no other copy to keep in step.
  *
- * "Click here to run some equivalent code" opens `BabelBookOverlay` ON TOP of
- * this one - `bookOpen` is local state, the shared dialog stack in `useDialog`
- * is what makes Escape close the book first and this statement second, and the
- * `behind` class is what dims and sets this one back while the book is up.
+ * The `.statement-link` button opens `BabelBookOverlay` on top of this one -
+ * `bookOpen` is local state, the shared dialog stack in `useDialog` makes
+ * Escape close the book first and this statement second, and the `behind`
+ * class dims and sets this one back while the book is up.
  */
 import { useState } from 'react';
 import { BookOverlay } from './BookOverlay.tsx';
