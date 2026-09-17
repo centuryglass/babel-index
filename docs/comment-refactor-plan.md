@@ -548,10 +548,10 @@ actual contents and describes the gate as it is.
 - [x] packages/web/src/lib/debug.ts  — no unit test
 - [x] packages/web/src/lib/debugActions.ts
   - [x] packages/web/src/lib/debugActions.test.ts
-- [ ] packages/web/src/lib/distillToggle.ts
-  - [ ] packages/web/src/lib/distillToggle.test.ts
-- [ ] packages/web/src/lib/favoriteBadge.ts
-  - [ ] packages/web/src/lib/favoriteBadge.test.ts
+- [x] packages/web/src/lib/distillToggle.ts
+  - [x] packages/web/src/lib/distillToggle.test.ts
+- [x] packages/web/src/lib/favoriteBadge.ts
+  - [x] packages/web/src/lib/favoriteBadge.test.ts
 - [x] packages/web/src/lib/gl/context.ts  — no unit test
 - [x] packages/web/src/lib/gl/glowTexture.ts  — no unit test
 - [x] packages/web/src/lib/gl/shaders.ts  — no unit test

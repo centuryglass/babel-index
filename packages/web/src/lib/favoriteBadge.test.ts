@@ -12,9 +12,9 @@ import {
 import { BASE_TILE } from './pyramid.ts';
 
 const GEO = layout({ width: 1, height: 1 });
-// An arbitrary stand-in for the art's decoded pixel size - drawing no longer
-// reads a hardcoded constant, so these tests supply their own to exercise
-// the scaling math independent of whatever the real asset happens to be.
+// An arbitrary stand-in for the art's decoded pixel size - drawing reads no
+// constant, so these tests supply their own and exercise the scaling math
+// independent of whatever the real asset happens to be.
 const ICON_SIZE = { w: 92, h: 198 };
 
 test('the icon is anchored to the tile\'s upper right corner and scales with cellPx', () => {
