@@ -25,6 +25,30 @@ An alternate catalog interface can be used to maximize discoverability. This
 interface swaps the map and  diegetic interface for a more conventional web
 search UI and linear tile list.
 
+## Why this repo also has to read as engineering, not just art
+
+This project has two audiences at once, and both are real. It is an art piece
+first - the map, the search, the stories are the point, and no engineering
+practice here should crowd that out or become the subject of the site itself.
+But it is also the maintainer's software engineering portfolio: proof, after
+time away from the industry, of being able to build, deploy, and maintain a
+non-trivial web app using a modern AI-assisted workflow. That second audience
+is a person - a reviewer, a hiring manager, another engineer - skimming the
+repo, not a visitor to the site. They will not read this whole file; they will
+look for the same signals they'd want in a work sample: CI actually gating
+merges (it does), a real deploy path with health verification (it does),
+tests that would catch a real regression, and enough surface documentation
+(README, an architecture overview, an API contract) that they don't have to
+read the source to trust the process that produced it.
+
+Practically, this means: when a change is ambiguous between "what the art
+needs" and "what a portfolio needs," default to keeping both in mind rather
+than silently picking one - flag the tension instead of quietly resolving it
+in the art's favor. Process/documentation gaps that exist purely for
+portfolio value (not required by the art itself) belong in
+`docs/pending_task_list.md` like any other open task, not bundled invisibly
+into unrelated work.
+
 ## Commands
 
 ```sh
