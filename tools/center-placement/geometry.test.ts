@@ -1,3 +1,8 @@
+/**
+ * Checks on the traced center tile: that `measured.ts` is internally
+ * consistent, that `layout()` scales it per axis, and that the trace and
+ * `BASE_TILE` still describe the same shape.
+ */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layout, TILE_ASPECT } from './lib/geometry.ts';
@@ -36,9 +41,9 @@ test('books sit inside the opening, in order, without overlapping', () => {
 });
 
 test('every book on a shelf stands on the same line', () => {
-  // No board is traced any more, so all that is asserted is that a shelf has
-  // ONE baseline - every book on it rests at the same depth, whether or not
-  // the shelf's books form one contiguous run.
+  // No board is traced, so the one thing a shelf still has to get right is a
+  // single baseline: every book on it rests at the same depth, whether or not
+  // its books form one contiguous run.
   for (const [i, shelf] of MEASURED.shelves.entries()) {
     const bases = new Set(shelf.books.map((b) => +(b[1] + b[3]).toFixed(5)));
     assert.equal(bases.size, 1, `shelf ${i}: expected one baseline, got ${[...bases]}`);
@@ -102,10 +107,10 @@ test('rects stretch with the tile, on each axis independently', () => {
 });
 
 test('the trace and the tile agree on aspect', () => {
-  // Two independent statements of one fact: the SVG's viewBox and BASE_TILE.
-  // measured.js normalises x against the traced width and y against the traced
-  // height, so if they disagree every measured rect is silently stretched onto
-  // art it no longer matches - the books stop landing on the books.
+  // The SVG's viewBox and BASE_TILE are two independent statements of one
+  // fact. `measured.ts` normalises x by the traced width and y by the traced
+  // height, so if the two disagree every rect is silently stretched onto art
+  // it no longer matches: the books stop landing on the books.
   //
   // The workflow this guards: change the tile's aspect, re-trace in Inkscape,
   // re-run the importer. Do one and forget the other and this is what says so.
@@ -120,9 +125,9 @@ test('the trace and the tile agree on aspect', () => {
 });
 
 test('a width with no height gives the traced shape, not a square', () => {
-  // The bug this pins: `height = width` as a default. It is silent, because
-  // every rect is individually still inside the tile - the books just stop
-  // landing on the books, and a 4:3 trace comes out 1024x1024.
+  // The bug this pins is `height = width` as a default. It is silent: every
+  // rect is individually still inside the tile, so the books just stop landing
+  // on the books, and a 4:3 trace comes out 1024x1024.
   const L = layout({ width: 1024 });
   assert.equal(L.height, Math.round(1024 * TILE_ASPECT));
   assert.notEqual(L.height, L.width, 'the trace is 4:3; a square layout is the old bug');
@@ -130,8 +135,8 @@ test('a width with no height gives the traced shape, not a square', () => {
 });
 
 test('the trace records the shape it was made at', () => {
-  // Without this the normalisation is lossy in the one way that matters, and
-  // the check above has nothing to compare against.
+  // Without `tile` the normalisation is lossy in the one way that matters, and
+  // "the trace and the tile agree on aspect" has nothing to compare against.
   assert.ok(MEASURED.tile, 'measured.js must carry its traced dimensions');
   assert.ok(MEASURED.tile.w > 0 && MEASURED.tile.h > 0);
   assert.ok(Math.abs(MEASURED.tile.aspect - MEASURED.tile.h / MEASURED.tile.w) < 1e-4);

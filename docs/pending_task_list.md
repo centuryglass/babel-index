@@ -151,6 +151,51 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   cleaned up with the issue; a citation of finished work is dead text. Remove
   the citation, keep the sentence's own claim about what the component is for.
 
+- **[2026-09-17] Two assertion messages in `tools/center-placement/geometry.test.ts`
+  name files that no longer exist**: the aspect-mismatch message ends "re-run
+  `import-shelf-svg.mjs`" and the traced-shape message says "`measured.js` must
+  carry its traced dimensions". Both files are `.ts` since the migration, so a
+  reader who follows either instruction runs a command that fails. They are
+  strings, not comments, and a comment pass's verifier reports any change to
+  them as a code change, so they are filed rather than fixed.
+
+## Tools:
+- **[2026-09-17] `import-shelf-svg.ts`'s `attr()` matches attribute names
+  without an anchor** (found passing that file's comments). Its direct lookup
+  builds the pattern `\b<name>\s*=\s*"..."`, and `-` is a word boundary, so
+  `attr(tag, 'width')` matches the tail of `stroke-width="0.75"` and returns it
+  as the rect's width whenever that presentation attribute appears earlier in
+  the tag. `shelf_geometry.svg` is safe only because Inkscape keeps stroke
+  values inside `style=` there: all 44 traced rects carry `stroke-width` in
+  their style and none as an attribute, and the `style=` fallback's `(?:^|;)`
+  anchor does reject `stroke-width:`. Fix: anchor the direct lookup with
+  `(?:^|\s)` and keep the fallback. Reproduce by moving a rect's stroke value
+  into a `stroke-width="0.752466"` attribute before its `width`: the import
+  reports `search_box` as `0.03797, 0.01902, 0.00055, 0.06957` - width 0.00055
+  rather than 0.92541 - with no problem line. `geometry.test.ts` then passes 13
+  of 13, because it only asks that rects stay inside the tile. Of the web-side
+  suites one test fails, `openingZoom floors a narrow portrait viewport at
+  exactly what the search box needs`, for a reason that does not name the
+  cause.
+- **[2026-09-17] `import-shelf-svg.ts` does not refuse an unsupported path
+  command**, though its own comment claimed it did (found passing that comment).
+  `normalizePath`'s token regex is `/[MmLlHhVvCcZzAa]|-?\d*\.?\d+.../g`, which
+  matches no `S`/`Q`/`T`, so a smooth-curve letter - what Inkscape leaves behind
+  when it simplifies a Bezier, an easy accident for whoever re-traces - is
+  dropped and its numbers are read as further repeated pairs of the command
+  before it. The `PATH_ARG_COUNT` check below it can never fire, since every
+  letter that regex matches has an entry. Reproduce by replacing
+  `center_book`'s `d` with `M100,100 L200,100 S300,200 300,300 Q200,400
+  100,300 T50,200 Z`: the import emits
+  `M0.07324,0.09766 L0.14648,0.09766 L0.21973,0.19531 ...` - all linetos, each
+  dropped curve's control point used as a corner - and says nothing. No
+  existing check catches a mis-parse like this: `geometry.test.ts` asserts only
+  that a `d` starts with a moveto and ends closed, both of which the result
+  satisfies. Fix: add `SsQqTt` to the tokenizer so the existing throw sees
+  them. `svgPath.ts`'s `flattenPath` comment repeats the same claim ("the same
+  restriction the importer itself enforces on import"); it wants the same
+  correction if the behaviour is documented rather than fixed.
+
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in
   `useCorpus.ts` end in `.catch(() => {})`, so a missing `metadata.json` or

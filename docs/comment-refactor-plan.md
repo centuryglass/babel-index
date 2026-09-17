@@ -172,6 +172,25 @@ AGENTS.md**, not restated at each use; a test-only caveat belongs **in the test*
 of those facts probably wants a different home (this is P1's "one fact one home"
 read outward, to files rather than lines).
 
+**Comments that state behaviour the code does not have.** Distinct from
+prose-that-rots, which was once true: this class was never true, and it is the
+one a comment pass cannot catch — the verifier proves the code didn't change, so
+a wrong claim survives a green run with extra confidence behind it. Three in
+`tools/center-placement/import-shelf-svg.ts`: "S/Q/T are refused rather than
+silently mishandled" (they are not in the tokenizer's command set at all, so
+their letter is dropped and their numbers read as repeated pairs of the previous
+command — and the `PATH_ARG_COUNT` throw below it is unreachable);
+"`A(rc) is unsupported`" (it is supported, as a lineto); and the
+`attr()` regex's unanchored `\b`, which no comment mentioned but which silently
+returns a `stroke-width` for `width`. *Move:* when a comment says the code
+*refuses*, *requires*, *enforces* or *never* does something, read the branch it
+claims or run it before keeping the sentence — cheap here, since a tools file's
+input is a text file you can edit into a repro. Then decide, per AGENTS.md's
+bug rule: correct the comment to the truth and file the gap if the code is what
+is wrong (`docs/pending_task_list.md`, "Tools" holds these two). The same
+discipline applies downstream: `svgPath.ts`'s `flattenPath` comment repeats the
+importer's false claim, and inherits the entry.
+
 **Terse has a floor.** (The meta-analysis rates Gemini's cuts the most aggressive
 and Union Alpha's the best read, precisely because it pruned prose *and kept every
 hazard*.) Compressing is not the goal — skimmable is. Deleting a hard-won
@@ -269,10 +288,20 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **6 / 107 source files** (`main.tsx`, `illusion.ts`,
-`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`), plus 3 paired tests
-(`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`) — all ticked in the
-list below. The running checklist is the source of truth; tick boxes as you go.
+Progress so far: **10 / 107 source files** (`main.tsx`, `illusion.ts`,
+`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, and `tools/center-placement`'s
+`import-shelf-svg.ts`, `lib/geometry.ts`, `lib/measured.ts`, `lib/svg.ts`), plus
+4 tests/specs (`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`,
+`geometry.test.ts`) — all ticked in the list below. The running checklist is the
+source of truth; tick boxes as you go.
+
+`tools/center-placement` went without `center.ts`, which order 5 pairs with it:
+several parallel sessions hold different `packages/` trees at once, so a batch
+takes one tree and leaves the pointer pointing onward. What `center.ts` owes the
+next pass into it: its "see `RUNS` below" is positional, its preamble has a
+"parsed trom" typo, four comments cite `main.jsx`, `geometry.js` and `render.js`,
+and its "*NOTE*: Because dimensions are relative to the cell..." restates
+AGENTS.md's "The fractions are per-axis" bullet instead of citing it.
 
 ### Source files and their tests
 
@@ -433,12 +462,14 @@ _Standalone specs/helpers (no same-name source):_
 - [ ] packages/web/e2e/webgl-map.e2e.ts
 
 #### tools/center-placement
-- [ ] tools/center-placement/import-shelf-svg.ts  — no unit test
-- [ ] tools/center-placement/lib/geometry.ts  — no unit test
-- [ ] tools/center-placement/lib/measured.ts  — GENERATED, do not edit here (see §6; fix the importer)
-- [ ] tools/center-placement/lib/svg.ts  — no unit test
+- [x] tools/center-placement/import-shelf-svg.ts  — no unit test
+- [x] tools/center-placement/lib/geometry.ts  — no unit test
+- [x] tools/center-placement/lib/measured.ts  — GENERATED: prose fixed in the
+  generator's `body` template and re-run (`npm run generate:shelf-geometry`), so
+  the artifact itself still verifies comment-only
+- [x] tools/center-placement/lib/svg.ts  — no unit test
 _Standalone specs/helpers (no same-name source):_
-- [ ] tools/center-placement/geometry.test.ts
+- [x] tools/center-placement/geometry.test.ts
 
 #### tools/center-animation
 - [ ] tools/center-animation/index.ts  — no unit test
@@ -553,6 +584,12 @@ the dropped `rows.sort(...)`. They agree.)
 - **`tools/center-placement/lib/measured.ts` is generated.** Its header says "Do
   not edit by hand." Comment fixes there belong in the generator
   (`import-shelf-svg.ts`), not the file — either skip it or fix the generator.
+  Fixing the generator means editing prose that sits *inside* a template literal,
+  so `check.mjs` reports the generator itself as code-changed (every line after
+  the literal shifts, and the literal is a string to the parser). Run it on the
+  regenerated artifact, which is where the claim can be proved: `measured.ts`
+  reports comment-only, and a second run of the generator against the unchanged
+  SVG reproduces the file byte for byte, which is what shows no number moved.
 - **Tests get a lighter touch.** Their comments are usually about *why this
   assertion* — that's a hazard note (P3/P8) and mostly worth keeping. Still fix
   buried ledes and repetition, but don't strip a test's rationale to make it
