@@ -3,17 +3,15 @@
  *
  * Two sweeps share one shape so the renderer treats them uniformly:
  *
- *   - FONTS: each candidate face at the settings the app ships today, so the only
- *     thing that changes screen to screen is the typeface. This is the "which
- *     font" question.
- *   - SETTINGS: one face held fixed while a single rendering knob moves - weight,
- *     halo, tracking, size, ink. This is the "having picked a font, how do we set
- *     it" question, and each variant changes exactly one axis off the baseline so
- *     the screenshots read as a controlled A/B.
+ *   - FONTS: each candidate face at the settings the app ships today, so the
+ *     only thing that changes screen to screen is the typeface. This is the
+ *     "which font" question.
+ *   - SETTINGS: one face held fixed while the rendering knobs move - weight,
+ *     halo, tracking, size, ink. This is the "having picked a font, how do we
+ *     set it" question; each variant moves a knob or a natural pair off the
+ *     baseline, so the screenshots read as controlled comparisons.
  *
- * A variant is a complete spec; the renderer never reaches for a default. The
- * fields mirror composeSpines in packages/web/src/center.js one-for-one so a
- * winner can be ported back by copying numbers, not translating them.
+ * A variant is a complete spec; the renderer reaches for no default.
  */
 import { FONTS } from './fonts.ts';
 import type { FontEntry } from './fonts.ts';
@@ -23,7 +21,10 @@ export interface FaceRef {
   weight: number;
 }
 
-/** Mirrors composeSpines' styling options in packages/web/src/lib/center.ts one-for-one. */
+/**
+ * Mirrors `composeSpines`' styling options in `packages/web/src/lib/center.ts`
+ * field for field: a winner ports back by copying numbers, not translating.
+ */
 export interface SpineStyle {
   weight: number;
   style: string;
@@ -50,30 +51,31 @@ export interface Variant extends SpineStyle {
   face: FaceRef | null;
 }
 
-// The app's current spine styling, from center.js. Every variant starts here and
-// overrides a subset, so "baseline" is stated once.
+// The app's current spine styling, from `center.ts`. Every variant starts
+// here and overrides a subset, so "baseline" is stated once. Per-field
+// meanings live in `SpineStyle` above.
 export const BASE: SpineStyle = {
   weight: 400,
   style: 'normal',
-  sizeScale: 0.82, //   fontPx = clamp(minPx, maxPx, floor(spineWidthPx * sizeScale))
+  sizeScale: 0.82,
   minPx: 6,
   maxPx: 13,
-  ink: 'rgba(238,230,214,0.92)', //  warm gilt (font colour; any rgba)
-  halo: 'rgba(12,9,6,0.85)', //      dark outline
-  haloScale: 0.2, //                 lineWidth = max(1.5, fontPx * haloScale)  (= fontPx/5)
-  letterSpacing: 0, //               px, added between glyphs
-  caps: false, //                    ALL CAPS the titles
-  backdrop: false, //                draw a rounded black plate per book instead of the outline
-  backdropColor: 'rgba(0,0,0,0.55)', // the plate's fill (any rgba)
+  ink: 'rgba(238,230,214,0.92)', //  warm gilt
+  halo: 'rgba(12,9,6,0.85)',
+  haloScale: 0.2,
+  letterSpacing: 0,
+  caps: false,
+  backdrop: false,
+  backdropColor: 'rgba(0,0,0,0.55)',
 };
 
-// A readable serif to carry the fallback in every serif variant's font stack.
+// The fallback carried by every downloaded family's font stack.
 export const SERIF = 'Georgia, serif';
 
 /**
- * Looks up a `--font` argument by family name ("DM Sans") or by slug ("dm-sans"),
- * since a reader on the fonts/ directory listing sees the slug but everywhere
- * else in this file (labels, FONTS) uses the family name.
+ * Looks up a `--font` argument by family name ("DM Sans") or by slug
+ * ("dm-sans"): the fonts/ directory listing shows slugs, labels and the
+ * `FONTS` entries use family names.
  */
 export function findFont(name: string): FontEntry | undefined {
   const needle = name.toLowerCase();
@@ -102,12 +104,10 @@ const fontSweep: Variant[] = [
   })),
 ];
 
-// The settings sweep runs for every candidate face (plus the shipping system-sans
-// baseline), each landing in its own out/settings/<slug>/ subdirectory so the
-// per-font composites never clobber one another. "Heavier" variants (set-01,
-// set-07) want a non-400 weight; most faces have 600 downloaded (DEFAULT_WEIGHTS),
-// but a few (Libre Baskerville, PT Serif, Domine) only ship 400/700, so the bold
-// weight is read off the font's own `weights` list rather than assumed.
+// The settings sweep's heavier variants (set-01, set-07) want a non-400
+// weight. Most faces ship `DEFAULT_WEIGHTS`' 600; families that override
+// `weights` to 400/700 do not, so the bold weight is read off the font's own
+// list rather than assumed.
 function boldWeight(weights: number[]): number {
   if (weights.includes(600)) return 600;
   return weights.find((w) => w !== 400) ?? 400;
@@ -120,6 +120,9 @@ interface SweepFont {
   bold: number;
 }
 
+// Every candidate face plus the shipping system-sans baseline, each swept in
+// its own out/settings/<slug>/ group so per-font composites never clobber
+// one another.
 const settingsFonts: SweepFont[] = [
   {
     slug: 'baseline-system-sans',
@@ -135,7 +138,7 @@ const settingsFonts: SweepFont[] = [
   })),
 ];
 
-/** One-axis-at-a-time variations off the baseline, for a single sweep face. */
+/** Variations off `BASE` for a single sweep face. */
 function buildSettingsSweep(sf: SweepFont): Variant[] {
   const face = (weight: number): FaceRef | null => (sf.family ? { family: sf.family, weight } : null);
   const label = sf.family ?? 'System sans';
@@ -213,10 +216,11 @@ function buildSettingsSweep(sf: SweepFont): Variant[] {
       backdrop: true,
       face: face(400),
     },
-    // The size cap is now a live question: the wider-book tile roughly doubled spine
-    // width, so at the baseline maxPx 13 the title stops growing well before the 2x
-    // zoom cap - zooming in enlarges the shelf behind the text but not the text. These
-    // raise the ceiling so the title fills the wider spine and keeps growing with zoom.
+    // The size cap is a live question: the wider-book tile roughly doubled
+    // spine width, so at the baseline maxPx the title stops growing well
+    // before the 2x zoom cap - zooming in enlarges the shelf behind the text
+    // but not the text. These raise the ceiling so the title fills the wider
+    // spine and keeps growing with zoom.
     {
       id: 'set-10-cap-16',
       label: `${label} — cap 16`,

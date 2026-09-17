@@ -1,17 +1,17 @@
 /**
  * Render one labelled composite per variant, three zoom levels to a picture.
  *
- * Fidelity comes from using the real pieces: the actual book geometry from
- * tools/center-placement/lib/geometry.js, the actual served center tile as the backdrop,
- * and a compositing routine that mirrors composeSpines in center.js line for line
- * (only the styling is lifted out into the variant). Rendering happens in real
- * Chromium via Playwright, because the browser's small-size text rasterisation -
- * hinting, subpixel placement, antialiasing - is the whole thing under test, and
- * node-canvas would rasterise differently from what a reader actually sees.
+ * Fidelity comes from using the real pieces: book geometry from
+ * `tools/center-placement/lib/geometry.ts`, the actual served center tile as
+ * the backdrop, and a compositor that copies `composeSpines` line for line -
+ * only the styling is lifted out into the variant. Rendering happens in real
+ * Chromium via Playwright, because the browser's small-size text
+ * rasterisation - hinting, subpixel placement, antialiasing - is the thing
+ * under test.
  *
- * Each composite shows the shelf at three zooms (small / mid / max), every panel
- * at 1:1 so a 6px title is really 6px, and under each a 4x nearest-neighbour
- * magnifier so pixel-level rendering is legible in the screenshot itself.
+ * Each composite shows the shelf at three zooms (small / mid / max), every
+ * panel 1:1, and under each a 4x nearest-neighbour magnifier so pixel-level
+ * rendering is legible in the screenshot itself.
  *
  * Output: tools/font-lab/out/<group>/<id>.png, plus an index.html contact sheet.
  *
@@ -31,18 +31,18 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const OUT = join(HERE, 'out');
 
-// The three zooms (pixels per cell WIDTH), one panel each, at the states a reader
-// actually occupies. The wider-book center tile roughly doubled spine width, so
-// the old [760, 1280, 2048] - picked to step the font 6/10/13px on the 160-book
-// shelf - now lands all three in the 13px clamp and renders identical text. These
-// track the tile's native width instead:
+// The three zooms (pixels per cell width), one panel each, at the states a
+// reader actually occupies. They track the tile's native width so the panels
+// land at different font sizes: steps not tied to it risk every panel
+// landing above the baseline size clamp - identical text at all three zooms.
 //   - 600:  below native, where a spine is still legible but the title has not yet
-//           reached its size cap - the hardest-to-read state the map still draws.
-//   - 1024: the opening view on a typical display (1x native, the opening zoom cap).
-//   - 2048: the app's 2x manual zoom cap, "zoom in to read a spine".
+//           reached its size cap - the hardest-to-read state the map draws.
+//   - 1024: the opening view on a typical display (1x native, the page-load cap).
+//   - 2048: the manual zoom ceiling, MAX_ZOOM_FACTOR x native - "zoom in to read
+//           a spine".
 // Panels render at 1:1 from these.
-const NATIVE_W = 1024; //     BASE tile native width == the opening zoom cap
-const MAX_ZOOM_FACTOR = 2; // app's MAX_ZOOM_FACTOR (manual zoom reaches 2x native)
+const NATIVE_W = 1024; // BASE_TILE's native width; also the page-load zoom cap
+const MAX_ZOOM_FACTOR = 2; // camera.ts's MAX_ZOOM_FACTOR; local copy
 const ZOOMS = [600, NATIVE_W, NATIVE_W * MAX_ZOOM_FACTOR];
 
 // A fixed, varied set of titles so every screenshot carries identical text and
@@ -58,10 +58,10 @@ const SAMPLE_TITLES = [
 ];
 
 /**
- * CLI flags. Each is a GLOBAL override applied on top of every variant, so you
- * run the default sweep once, then re-run with a flag to see the whole set under
- * that condition. Flagged runs land in out/variants/<suffix>/ so they never
- * clobber the baseline sheets.
+ * CLI flags. Each is a global override applied on top of every variant, so
+ * you run the default sweep once, then re-run with a flag to see the whole
+ * set under that condition. Flagged runs land in out/variants/<suffix>/ so
+ * they never clobber the baseline sheets.
  *
  *   --dpr <n>              panel device pixel ratio (1 = a 1080p screen, 2 = retina). Default 1.
  *   --caps                force ALL CAPS titles
@@ -69,7 +69,7 @@ const SAMPLE_TITLES = [
  *   --ink <rgba>          title colour, e.g. "rgba(238,230,214,0.92)"
  *   --backdrop-color <rgba>  plate fill (implies --backdrop), e.g. "rgba(0,0,0,0.6)"
  *
- *   --font <family>        skip the sweep; render ONE composite in this font instead
+ *   --font <family>        skip the sweep; render one composite in this font instead
  *                          (a name from fonts.ts, e.g. "Domine"). Combine with any of
  *                          --scale, --cap, --tracking, --weight, --caps, --backdrop,
  *                          --ink, --backdrop-color to test one settings combination
@@ -180,21 +180,17 @@ async function dataUri(path, mime) {
 }
 
 /**
- * Runs INSIDE the page. Draws the center tile at each zoom, composites the spines
- * with the variant's styling, and stitches a labelled contact strip. Returns a
- * PNG data URL. `env` carries everything precomputed on the Node side.
+ * Runs in the page: draws the center tile at each zoom, composites the spines
+ * with the variant's styling, and stitches a labelled contact strip. Returns
+ * a PNG data URL. `env` carries everything precomputed on the Node side.
  */
 function renderInPage(variant, env) {
   const { centerW, centerH, books, caseFrame, slots, zooms, dpr } = env;
 
-  // A true 1080p sheet: one PNG pixel is one on-screen pixel, so the panels show
-  // the spines at exactly the size a reader sees on a 1920x1080 display. `dpr`
-  // supersamples the panel rasterisation to represent a higher-density (retina)
-  // screen: same on-sheet SIZE, but the glyphs carry `dpr`x the pixel detail,
-  // which the magnifier then reveals. Only the TOP-LEFT PORTION of the shelf is
-  // shown - half the opening box each way, the same region at every zoom - which
-  // keeps even the 2x-native panel inside its third of the sheet while still
-  // showing several books across more than one shelf.
+  // One PNG pixel is one on-screen pixel at dpr 1: the panels show the spines
+  // at the size a reader sees on a 1080p display. `dpr` > 1 supersamples the
+  // panel rasterisation instead - same on-sheet size, `dpr`x the glyph
+  // detail, which the magnifier reveals.
   const OUT_W = 1920;
   const OUT_H = 1080;
 
@@ -212,8 +208,11 @@ function renderInPage(variant, env) {
       w: caseFrame.w * cellW,
       h: caseFrame.h * cellH,
     };
-    // Crop = MARGIN of wall + the top-left quarter of the case. Logical px; the
-    // backing canvas is `dpr`x this so the raster carries retina detail.
+    // Crop = MARGIN of wall + the top-left quarter of the case - the same
+    // region at every zoom. That half-box crop keeps even the 2x-native panel
+    // inside its third of the sheet while still showing several books across
+    // more than one shelf. Logical px; the backing canvas is `dpr`x this so
+    // the raster carries retina detail.
     const cropW = Math.round(MARGIN + cf.w / 2);
     const cropH = Math.round(MARGIN + cf.h / 2);
     // Cell's screen origin so the case sits MARGIN in from the crop's top-left.
@@ -234,19 +233,17 @@ function renderInPage(variant, env) {
     return { cv, cropW, cropH, cellW, anchor };
   }
 
-  // --- the compositor: a faithful copy of center.js composeSpines, styled ------
+  // --- the compositor: a copy of composeSpines, styled by the variant ------
   const MIN_SPINE_PX = 5;
 
   function fontAt(px) {
     return `${variant.style} ${variant.weight} ${px}px ${variant.fontFamily}`;
   }
 
-  // The largest integer size in [minPx, ceilingPx] whose rendered width still
-  // fits maxWidth - so a short title ("biology") grows all the way to the
-  // spine-width ceiling while a long one ("the garden of forking paths")
-  // shrinks toward minPx instead of being drawn at a size chosen for spine
-  // width alone and then truncated. Falls back to minPx (fitText's ellipsis
-  // handles the rest) when even that doesn't fit.
+  // The largest integer size in [minPx, ceilingPx] whose rendered width fits
+  // maxWidth: a short title grows all the way to the spine-width ceiling, a
+  // long one shrinks toward minPx before anything is truncated. Falls back to
+  // minPx when even that does not fit - fitText's ellipsis handles the rest.
   function fitFontSize(ctx, text, maxWidth, minPx, ceilingPx) {
     ctx.font = fontAt(ceilingPx);
     if (ctx.measureText(text).width <= maxWidth) return ceilingPx;
@@ -370,13 +367,14 @@ function renderInPage(variant, env) {
   panels.forEach((p, i) => {
     const cx = colW * i + colW / 2; // column center
 
-    // Panel: the quadrant at its LOGICAL size (the dpr-supersampled canvas
+    // Panel: the quadrant at its logical size (the dpr-supersampled canvas
     // scaled back down), centered in its column, top-aligned.
     const px = Math.round(cx - p.cropW / 2);
     g.drawImage(p.cv, px, PANEL_TOP, p.cropW, p.cropH);
 
-    // Caption: zoom, spine width, resulting font size for book 0's actual title
-    // (per-title fitting means this is no longer spine-width alone).
+    // Caption: zoom, spine width, and the resulting font size for book 0's
+    // actual title - per-title fitting means it is a fitted size, not
+    // spine-width alone.
     const spinePx = books[0].w * p.cellW;
     const cellHi = p.cellW * (centerH / centerW);
     const b0h = books[0].h * cellHi;
@@ -394,17 +392,17 @@ function renderInPage(variant, env) {
       CAPTION_Y
     );
 
-    // Magnifier: a nearest-neighbour blow-up of a fixed LOGICAL region of the
-    // top-left spines, so the sheet itself shows how the glyphs rasterise. The
-    // region is the same physical extent at any dpr; when dpr > 1 the source
-    // carries more device pixels, so the plate reveals the extra retina detail.
+    // Magnifier: a nearest-neighbour blow-up of a fixed logical region of the
+    // top-left spines. The region is the same physical extent at any dpr;
+    // when dpr > 1 the source carries more device pixels, so the blow-up
+    // reveals the extra retina detail.
     const srcW = MAG_OUT_W / MAG; // logical px sampled
     const srcH = MAG_OUT_H / MAG;
     const sx = Math.max(0, Math.min(p.cropW - srcW, p.anchor.x - 3));
     const sy = Math.max(0, Math.min(p.cropH - srcH, p.anchor.y - 3));
     const mx = Math.round(cx - MAG_OUT_W / 2);
     g.imageSmoothingEnabled = false;
-    // Source in DEVICE px (the canvas is dpr x logical).
+    // Source in device px (the canvas is dpr x logical).
     g.drawImage(p.cv, sx * dpr, sy * dpr, srcW * dpr, srcH * dpr, mx, MAG_TOP, MAG_OUT_W, MAG_OUT_H);
     g.imageSmoothingEnabled = true;
     g.strokeStyle = '#3a342a';
@@ -420,7 +418,6 @@ function renderInPage(variant, env) {
 
 async function main() {
   const { dpr, overrides, suffix, custom } = parseCli();
-  // A --font run always lands in out/custom/, ignoring the sweep's variants dir.
   const runDir = custom ? join(OUT, 'custom') : suffix ? join(OUT, 'variants', suffix) : OUT;
   const variants = custom ? [custom] : VARIANTS;
   const requiredFaces = custom ? (custom.face ? [custom.face] : []) : REQUIRED_FACES;
@@ -455,10 +452,9 @@ async function main() {
       im.onerror = rej;
       im.src = centerUri;
     });
-    // `window` here is the Playwright page's DOM, not this process's - tsc only
-    // sees it as the ambient lib.dom Window, which has no `__env`, so stash it
-    // through an untyped alias rather than fight the ambient type for a bridge
-    // variable that only ever exists in the page.
+    // `window` here is the page's DOM, not this process's. tsc sees only the
+    // ambient lib.dom `Window`, which has no `__env`, so the bridge variable
+    // - it exists solely inside the page - goes through an untyped alias.
     const win = window as any;
     win.__env = { _img: img };
   }, { faces, centerUri });
@@ -472,8 +468,9 @@ async function main() {
       ({ variant, shared, renderSrc }) => {
         const win = window as any;
         const env = { ...shared, _img: win.__env._img };
-        // Re-hydrate the render function from its source (functions don't cross
-        // the bridge). It closes over `variant` and `env` as normal args.
+        // Functions don't cross the bridge, so the renderer ships as source
+        // text and is rebuilt here. renderInPage takes everything through its
+        // two arguments - no closures over this scope - so that is enough.
         const fn = new Function('return (' + renderSrc + ')')();
         return fn(variant, env);
       },
@@ -496,12 +493,12 @@ async function main() {
   console.log(`\n${written.length} composites in ${runDir}\nopen ${join(runDir, 'index.html')}`);
 }
 
-/** A single scrollable page linking every composite, grouped by sweep. */
 interface Written {
   variant: Variant;
   rel: string;
 }
 
+/** A single scrollable page linking every composite, grouped by sweep. */
 async function writeContactSheet(runDir: string, written: Written[], banner: string) {
   const groups: Record<string, Written[]> = {};
   for (const w of written) (groups[w.variant.group] ??= []).push(w);
@@ -513,8 +510,8 @@ async function writeContactSheet(runDir: string, written: Written[], banner: str
       )
       .join('\n')}`;
 
-  // The settings sweep now runs once per font, each in its own settings/<slug>/
-  // group - one section per font, in the same order as the fonts sweep.
+  // One section per `settings/<slug>` group, sorted by slug; the family name
+  // in each heading is taken from that group's first variant label.
   const settingsGroups = Object.keys(groups)
     .filter((g) => g.startsWith('settings/'))
     .sort();

@@ -31,7 +31,8 @@ That is far more than one session, so it proceeds in batches. This document
 tracks the queue and the method.
 
 Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests.
-CSS/HTML are handled separately (§6) because they need a different verifier.
+CSS/HTML stay out: §5's verifier parses JS/TS, and a CSS or HTML comment pass
+would need a different one.
 
 Bug-fixing and deep code analysis are outside of the scope of this plan, but
 a pass of this breadth is likely to incidentally find bugs, design oversights,
@@ -283,13 +284,14 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **33 / 107 source files** (`main.tsx`, `illusion.ts`,
+Progress so far: **37 / 107 source files** (`main.tsx`, `illusion.ts`,
 `board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, `packages/map`'s search half
 (`ordering.ts`, `scoring.ts`, `searchResult.ts`), all 14 of `packages/server`
-and all four of `packages/pipeline`, and the renderer cluster (`render.ts`,
+and all four of `packages/pipeline`, the renderer cluster (`render.ts`,
 `slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`, `useMapRenderer.ts`,
-`useMapRendererGL.ts`) — server, pipeline and the renderer cluster taken out
-of order on 2026-09-17, in parallel across checkouts, server's alongside
+`useMapRendererGL.ts`), and the `tools/perf-capture` + `tools/font-lab` trees
+— server, pipeline, the renderer cluster and the tool trees taken out of
+order on 2026-09-17, in parallel across checkouts, server's alongside
 batches 2–3), plus 23 paired tests (`illusion.test.ts`, `board.test.ts`,
 `nextRoom.test.ts`, `ordering.test.ts`, `scoring.test.ts`, server's 12, the
 two pipeline tests, `slide.test.ts`, and the three renderer tests reviewed
@@ -481,13 +483,13 @@ _Standalone specs/helpers (no same-name source):_
 - [ ] tools/upload/upload-r2.ts  — no unit test
 
 #### tools/perf-capture
-- [ ] tools/perf-capture/capture.ts  — no unit test
+- [x] tools/perf-capture/capture.ts  — no unit test
 
 #### tools/font-lab
-- [ ] tools/font-lab/download-fonts.ts  — no unit test
-- [ ] tools/font-lab/fonts.ts  — no unit test
-- [ ] tools/font-lab/render.ts  — no unit test
-- [ ] tools/font-lab/variants.ts  — no unit test
+- [x] tools/font-lab/download-fonts.ts  — no unit test (reviewed; no edits needed)
+- [x] tools/font-lab/fonts.ts  — no unit test
+- [x] tools/font-lab/render.ts  — no unit test
+- [x] tools/font-lab/variants.ts  — no unit test
 
 #### build
 - [ ] build/register.mjs  — no unit test
