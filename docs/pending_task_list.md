@@ -69,6 +69,41 @@ code and the git log are the record of what was.
   "What it is" section is still a TODO while the site is live at the URL
   printed above it.
 
+## Portfolio signal (2026-09-16):
+This repo is also a software engineering portfolio piece (see AGENTS.md's new
+section on this), and a reviewer skimming it fast is a different audience
+than a visitor to the site. These are process/documentation gaps that matter
+for that audience specifically, not things the art itself needs:
+- **No CI/build status badge and no engineering framing in `README.md`.** The
+  README currently reads purely as an art description — nothing signals to a
+  skimming reviewer that CI/lint/typecheck/e2e are all green, or points them
+  at the interesting engineering (the health-check-gated deploy, the
+  rearrangement planner, the favorites set-hashing design) without making them
+  excavate this file.
+- **No release discipline.** `package.json` is pinned at `0.0.0`, there are no
+  git tags, and no `CHANGELOG.md` — nothing visibly marks what shipped when,
+  even though `deploy.yml`/`health-check.mjs` already tie a live deployment to
+  an exact commit.
+- **No API contract documentation.** `/api/manifest`, `/api/search`,
+  `/api/favorites`, `/api/health` (see `packages/server/app.ts`) exist only as
+  inline code — no OpenAPI spec, not even a short `docs/api.md` describing
+  request/response shapes.
+- **No standalone architecture overview for humans.** `docs/concept.md` is a
+  dated design log, not a "read this in five minutes" system overview. A
+  concise `ARCHITECTURE.md` — request flow, why esbuild bundles in-process,
+  why the corpus lives in R2, why deploy is gated on `/api/health`'s reported
+  commit — would let a reviewer assess system design without reading
+  AGENTS.md end to end.
+- **No production error/metrics visibility beyond `/api/health`.** There's no
+  error tracking (a Sentry-class tool) or basic request metrics — only
+  `logger.ts`'s structured logs and the deploy-time health check. Possibly
+  legitimate overkill for a single-VPS art site, but "how do you know when
+  it's broken" is a fair question from this audience.
+
+Deliberately not listed here: adding a SAST/security-scanning workflow
+(CodeQL, Dependency Review Action) alongside the existing informational
+`npm audit` job — agreed as worth doing, but not yet planned or started.
+
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in
   `useCorpus.ts` end in `.catch(() => {})`, so a missing `metadata.json` or
