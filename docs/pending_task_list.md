@@ -360,6 +360,15 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   treatments were the "same gold"; they are not, and the 2026-09-17
   renderer-cluster pass corrected the claim. Whether the open book and the
   shelf/badge/toggle hovers should carry one gold is an art decision.
+- **[2026-09-17] WebGL's two `reset()` methods have no caller.**
+  `GLTextureCache.reset` and `SpineTextureCache.reset` are documented "for a
+  lost context", but nothing reaches them: `useMapRendererGL.ts`'s
+  `webglcontextlost` handler drops the whole runtime and `setup()` rebuilds
+  fresh renderers and caches on restore, and the unmount cleanup calls
+  `dispose()` on every cache. Their comments now say so plainly. Either wire
+  the path they were designed for (a rebuild that reuses the renderer and
+  its caches rather than replacing them) or delete the methods. Found by the
+  2026-09-17 `lib/gl` comment pass, which left the code alone.
 
 ## Shareable permalinks:
 - **[2026-09-16, done] Room permalinks already existed and were unused -**

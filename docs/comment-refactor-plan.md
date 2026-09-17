@@ -332,7 +332,12 @@ home early — see §6 for the rationale:
 5. `packages/web/src/lib` (geometry/DOM-adjacent) → `hooks/` → `components/`.
    `center.ts` + `tools/center-placement` are coupled; batch them. The
    `tools/center-placement` half went alone on 2026-09-17, out of order and in
-   parallel, so that pairing note now applies to `center.ts` by itself.
+   parallel, so that pairing note now applies to `center.ts` by itself. The
+   `lib/gl` cluster also went alone on 2026-09-17, out of order and in
+   parallel; the renderer cluster it is the WebGL counterpart of had passed
+   first, so its wording (the lockstep rule, the per-cell loop, the headless
+   flat-quad fallback) is the canonical home the gl/ files were deduped
+   toward.
 6. `packages/pipeline`, then the `tools/*` trees, then `build/`. Pipeline is
    done (2026-09-17, out of order and in parallel), and so are `tools/embed`
    and `tools/upload`.
@@ -342,13 +347,14 @@ home early — see §6 for the rationale:
 Progress: §4's checklist is the whole record — tick boxes as you go, and do not
 maintain a count here, because a tally that every pass has to re-derive is a
 number that is wrong the moment two passes run at once. `packages/map`,
-`packages/server`, `packages/pipeline`, `packages/config`, the renderer cluster,
-`tools/embed`, `tools/upload`, `tools/perf-capture` and `tools/font-lab` were
-taken on 2026-09-17 in parallel across checkouts, out of the recommended order;
-`main.tsx` passed first and passed again, and stays unticked because fresh
-changes from another branch went in after the second pass. Order is a deduping
-aid within a cluster, not a rule between clusters, so a batch can be taken from
-any package no other checkout is in.
+`packages/server`, `packages/pipeline`, `packages/config`, the renderer
+cluster, `tools/center-placement`, `tools/embed`, `tools/upload`,
+`tools/perf-capture`, `tools/font-lab` and `packages/web/src/lib/gl` were
+taken on 2026-09-17 in parallel across checkouts, out of the recommended
+order; `main.tsx` passed first and passed again, and stays unticked because
+fresh changes from another branch went in after the second pass. Order is a
+deduping aid within a cluster, not a rule between clusters, so a batch can be
+taken from any package no other checkout is in.
 
 `tools/center-placement` went without `center.ts`, which order 5 pairs it with.
 What that file owes the pass that takes them together: its "see `RUNS` below" is
@@ -468,12 +474,12 @@ of citing it.
   - [ ] packages/web/src/lib/distillToggle.test.ts
 - [ ] packages/web/src/lib/favoriteBadge.ts
   - [ ] packages/web/src/lib/favoriteBadge.test.ts
-- [ ] packages/web/src/lib/gl/context.ts  — no unit test
-- [ ] packages/web/src/lib/gl/glowTexture.ts  — no unit test
-- [ ] packages/web/src/lib/gl/shaders.ts  — no unit test
-- [ ] packages/web/src/lib/gl/spineTexture.ts  — no unit test
-- [ ] packages/web/src/lib/gl/textureCache.ts  — no unit test
-- [ ] packages/web/src/lib/gl/warm.ts  — no unit test
+- [x] packages/web/src/lib/gl/context.ts  — no unit test
+- [x] packages/web/src/lib/gl/glowTexture.ts  — no unit test
+- [x] packages/web/src/lib/gl/shaders.ts  — no unit test
+- [x] packages/web/src/lib/gl/spineTexture.ts  — no unit test
+- [x] packages/web/src/lib/gl/textureCache.ts  — no unit test
+- [x] packages/web/src/lib/gl/warm.ts  — no unit test
 - [x] packages/web/src/lib/glRenderer.ts
   - [x] packages/web/src/lib/glRenderer.test.ts  (reviewed; no edits needed)
 - [x] packages/web/src/lib/glSlideRenderer.ts

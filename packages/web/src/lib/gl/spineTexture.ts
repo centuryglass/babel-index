@@ -1,22 +1,24 @@
 /**
- * Spike: the center tile's composited spine text (`center.ts`'s
- * `composeSpines`), rendered once to an offscreen 2D canvas and cached as a
- * GL texture rather than re-run every frame - this is also a live
- * implementation of `docs/performance-research.md` §3.2's spine-memoization
- * idea, which the Canvas2D path has never needed since it never shipped.
+ * The center tile's composited spine text (`center.ts`'s `composeSpines`),
+ * rendered once to an offscreen 2D canvas and cached as a GL texture.
+ * `render.ts` re-runs `composeSpines` on its live context every frame; this
+ * cache implements the spine-memoization idea of
+ * `docs/performance-research.md`'s "The center shelf refits every spine's
+ * font on every frame" for the GL path, and the Canvas2D path still carries
+ * that per-frame cost.
  *
- * `composeSpines` is called UNMODIFIED against the offscreen canvas's own 2D
- * context, which satisfies `SpineContext` natively (it is a real
- * `CanvasRenderingContext2D`) - no port of the spine-drawing logic itself,
- * only of how its output reaches the screen. The offscreen canvas starts
- * transparent and `composeSpines` paints only text/backdrops/halos onto it,
- * so the resulting texture composites correctly over whatever tile quad is
- * already drawn beneath it (see `glRenderer.ts`'s existing alpha blending -
- * no shader changes needed).
+ * `composeSpines` is called unmodified against the offscreen canvas's own 2D
+ * context, which satisfies `SpineContext` natively - it is a real
+ * `CanvasRenderingContext2D`. Only how its output reaches the screen is
+ * ported here. The offscreen canvas starts transparent and `composeSpines`
+ * paints only text/backdrops/halos onto it, so the texture composites over
+ * the tile quad already drawn beneath it through the alpha blending
+ * `gl/context.ts` enables.
  *
- * Re-rendered only when the key (slot content + hover + destination size,
- * rounded) changes - a zoom that doesn't cross an 8px bucket, or a pointer
- * move that stays off every book, costs nothing here.
+ * The cache key is slot content, hover, and the destination size through
+ * `bucket()` - so a zoom that doesn't cross a bucket reuses the previous
+ * texture, drawn into the new-size destination, and a pointer move that
+ * stays off every book costs nothing.
  */
 import { composeSpines, type Slot, type SpineContext, type SpineFontLimits } from '../center.ts';
 
@@ -35,13 +37,13 @@ export interface SpineTextureCache {
     hoveredBook: number | null,
     fontLimits: SpineFontLimits
   ): GLSpineTexture | null;
-  /** Drops the cached texture without freeing GPU state - for a lost context, where it is already invalid. */
+  /** Drops the cached texture without freeing GPU state - the right shape for a lost context, whose handles are already invalid. `useMapRendererGL.ts`'s lost-context handling drops the whole cache instead of calling this. */
   reset(): void;
   /** Frees the resident texture via `gl.deleteTexture`, if any, then drops it. */
   dispose(gl: WebGL2RenderingContext): void;
 }
 
-/** Buckets a size to the nearest 8 device pixels, so a smooth zoom doesn't re-render every frame - see this file's doc. */
+/** Rounds a size to the nearest 8 device pixels; the cache key uses the rounded value, not the canvas's actual one. */
 const bucket = (n: number): number => Math.round(n / 8) * 8;
 
 export function createSpineTextureCache(): SpineTextureCache {

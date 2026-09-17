@@ -1,26 +1,22 @@
 /**
  * The WebGL counterpart of a 2D `CanvasRenderingContext2D` - one quad shader
  * (`shaders.ts`), a static unit-quad VBO, and drawing primitives
- * (`drawFlatQuad`, `drawTexturedQuad`, `drawStrokeQuad`) that `glRenderer.ts`/
- * `glSlideRenderer.ts` build a whole frame out of, one draw call per cell for
- * this first cut (see AGENTS.md's WebGL renderer section - no instancing yet).
+ * (`drawFlatQuad`, `drawTexturedQuad`, `drawStrokeQuad`) that
+ * `glRenderer.ts`/`glSlideRenderer.ts` build a whole frame out of.
  *
- * Everything here works in DEVICE pixels, not CSS pixels - unlike the 2D
- * renderer's `ctx.setTransform(dpr, ...)` trick, a shader has no implicit
- * pixel-ratio scale, so `resize()` takes the CSS size and dpr and the caller
- * is responsible for multiplying every rect it passes to a draw call by the
- * same dpr `resize()` was last called with.
+ * Everything here works in device pixels, not CSS pixels. A shader has no
+ * implicit pixel-ratio scale - no counterpart to the 2D renderer's
+ * `ctx.setTransform(dpr, ...)` - so `resize()` takes the CSS size and dpr,
+ * and the caller multiplies every rect it passes to a draw call by the same
+ * dpr `resize()` was last called with.
  *
- * `createGLContext` must be called exactly ONCE per canvas element's
- * lifetime (see `useMapRendererGL.ts`'s canvas-lifetime effect) - it creates
- * a shader program, VAO and buffer every call, and calling it again on the
- * same canvas (which memoizes and returns the SAME underlying
- * `WebGL2RenderingContext`) would leak the previous call's GL objects, since
- * nothing but `dispose()` ever frees them. `dispose()` must be called before
- * a context is discarded (unmount, or before `webglcontextlost`'s handler
- * tears down the caller's own state) - a lost context invalidates every GL
- * object anyway, but `dispose()` still clears local bookkeeping so a
- * `restored` handler starts clean.
+ * `createGLContext` must be called exactly once per canvas element's
+ * lifetime; AGENTS.md's "GL setup happens exactly once per canvas element's
+ * lifetime" bullet carries the rule and what a second call leaks.
+ * `dispose()` frees the GL objects this context owns, and nothing else
+ * does - the unmount cleanup calls it. A lost context is not discarded this
+ * way: its objects are already invalid, and `useMapRendererGL.ts` builds a
+ * fresh runtime on restore.
  */
 import { VERTEX_SRC, FRAGMENT_SRC } from './shaders.ts';
 
@@ -43,7 +39,7 @@ export interface GLContext {
   /** (cssWidth, cssHeight, dpr) - resizes the backing store and the viewport. */
   resize(w: number, h: number, dpr: number): void;
   clear(r: number, g: number, b: number, a: number): void;
-  /** A solid-color quad, in device pixels - the blank fallback and the generic-fade overlay. */
+  /** A solid-color quad, in device pixels - the blank fallback, the fade's flat-black substitute, and `drawGlow`'s un-baked fallback (`glRenderer.ts`). */
   drawFlatQuad(dst: Rect, color: [number, number, number, number]): void;
   /**
    * A textured quad, in device pixels. `src` is in the TEXTURE's own pixel
@@ -63,8 +59,7 @@ export interface GLContext {
    * A rectangle's outline, `width` device pixels thick, drawn as four flat
    * quads rather than `gl.LINES` - a GL line's width above 1px is not
    * reliably supported across GPUs/browsers (the spec allows implementations
-   * to clamp it to 1), so a shape built from quads is the portable choice
-   * for the keyboard cursor ring's 3px stroke.
+   * to clamp it to 1). Used for the keyboard cursor ring in `glRenderer.ts`.
    */
   drawStrokeQuad(dst: Rect, width: number, color: [number, number, number, number]): void;
   /** Frees every GL object this context owns. Call before discarding it - see this file's doc. */
@@ -99,10 +94,10 @@ function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShade
 }
 
 /**
- * Null on a browser/device with no WebGL2 - `webglFlag.ts`'s capability
- * probe is what keeps a caller from reaching this function at all on such a
- * device (falling back to the Canvas2D renderer instead), so returning null
- * here is a last-resort guard, not the primary fallback path.
+ * Null on a browser/device with no WebGL2. `webglFlag.ts`'s capability
+ * probe is the primary fallback path - such a device never reaches this call
+ * and gets the Canvas2D renderer instead - so null here is a last-resort
+ * guard.
  */
 export function createGLContext(canvas: HTMLCanvasElement): GLContext | null {
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
@@ -135,11 +130,11 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext | null {
 
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  // Set explicitly, not left to the (already-matching) WebGL defaults - a
-  // future texture source added to only one of `textureCache.ts`/
-  // `spineTexture.ts` must not silently disagree with the other about
-  // whether alpha arrives premultiplied or the image arrives flipped. One
-  // fixed decision here, for every `texImage2D` call this renderer ever makes.
+  // Set explicitly, not left to the (already-matching) WebGL defaults, so
+  // every texture uploaded through this context - `textureCache.ts`,
+  // `spineTexture.ts`, `glowTexture.ts` - arrives under the same decision
+  // about premultiplied alpha and orientation. A new upload source inherits
+  // it rather than choosing its own.
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
 
