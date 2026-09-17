@@ -1,27 +1,28 @@
 /**
  * Packing coarse pyramid levels into fixed-grid tilesheets.
  *
- * Levels 2-4 (`SHEETS.fromLevel` in packages/web/src/lib/pyramid.ts) are the
- * ones a zoomed-out scroll session requests the most of at once - packing
- * many rooms into one grid image cuts the request count Cloudflare's WAF and
- * R2's Class B billing see, without changing what gets served or moving any
- * compositing onto the origin server (see infra/README.md). Levels 0/1 stay
- * one file per room; see SHEETS's own docblock for why.
+ * Every level at or above `SHEETS.fromLevel` is composited into grids of
+ * `SHEETS.roomsPerSheet` rooms, one request per grid instead of one per room.
+ * `SHEETS`'s docblock in packages/web/src/lib/pyramid.ts states why that pays
+ * only at the coarse end of the ladder, and infra/README.md the rate limit and
+ * billing shape it works around. Levels below it stay one file per room.
  *
- * The addressing arithmetic (`sheetPlan`, `sheetPosition`, `sheetDirName`,
- * `sheetFileName`) lives in `layout.ts`, not here, so `packages/server/scan.ts`
- * can discover and validate what this file writes without depending on
- * `sharp` - same split as `mipPlan`/`mips.ts`. This module only adds the
- * actual compositing.
+ * The compositing happens at generation time, here: the origin server serves
+ * finished files and never builds an image on request.
  *
- * Incremental rebuilds: a sheet has no single source file to stamp with an
- * EXIF hash the way a per-file mip level does (mips.ts), so each sheet
- * directory instead carries a small `hashes.json` sidecar mapping sheet index
- * -> a combined hash of its member tiles' own content hashes, in order. A
- * rebuild only recomposites a sheet whose combined hash changed - bounded to
- * O(sheet size) per touched room rather than O(corpus size), though still
- * O(sheet size) rather than O(1). See tools/upload/lib.ts's diffing note for
- * the re-upload cost this implies once a sheet is synced to R2.
+ * `layout.ts` holds the addressing (`sheetPlan`, `sheetPosition`,
+ * `sheetDirName`, `sheetFileName`) and is re-exported below; its header states
+ * why the arithmetic is split from this file.
+ *
+ * ### Re-runs are incremental
+ *
+ * A sheet has no single source file to stamp with an EXIF hash the way
+ * `mips.ts` stamps a per-file level, so each sheet directory carries a
+ * `hashes.json` sidecar instead: sheet index -> a hash of its member tiles'
+ * content hashes, in order. A rebuild recomposites only the sheets whose
+ * combined hash moved, so one touched room costs O(sheet size) rather than
+ * O(corpus size). See `diffAgainstManifest` in tools/upload/lib.ts for the
+ * re-upload unit that follows once a sheet is synced to R2.
  */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -34,17 +35,18 @@ import { sheetPlan, sheetFileName, type Size, type SheetConfig } from './layout.
 export { sheetPlan, sheetPosition, sheetDirName, sheetFileName } from './layout.ts';
 export type { SheetConfig, SheetPlan, SheetPosition } from './layout.ts';
 
+// Builds the directory name `layout.ts`'s `sheetDirName` also returns, which is
+// the name `packages/server/scan.ts` looks for. Change one, change the other.
 const SHEETS_SUFFIX = '-sheets';
 const HASHES_FILE = 'hashes.json';
 
 /**
- * Composite one level's already-written per-file tiles into fixed-grid
- * sheets under `<levelDir>-sheets/`.
+ * Composite one level's already-written per-file tiles into fixed-grid sheets
+ * under `<levelDir>-sheets/`.
  *
- * `files` must be in the same order as the room ids the manifest assigns
- * (`packages/pipeline/mips.ts`'s `sourceImages()` order) - sheet addressing
- * is positional, so a reordering here silently mislabels every sheet after
- * the change.
+ * `files` must be in the order `mips.ts`'s `sourceImages` returns, which is the
+ * order room ids are assigned in: sheet addressing is positional, so a
+ * reordering here silently mislabels every sheet after the change.
  */
 export async function writeSheets({
   levelDir,
@@ -89,12 +91,16 @@ export async function writeSheets({
       continue;
     }
 
+    // Row-major, the same order `sheetPosition` reports, so a client asking for
+    // room i lands on the cell this pasted it into.
     const composite = members.map((file, i) => ({
       input: join(levelDir, file),
       left: (i % layout.cols) * tileSize.w,
       top: Math.floor(i / layout.cols) * tileSize.h,
     }));
 
+    // A part-filled final sheet keeps the whole grid, black where it has no
+    // room: every sheet of a level is one size, as `sheetPosition` assumes.
     await sharp({
       create: {
         width: layout.cols * tileSize.w,

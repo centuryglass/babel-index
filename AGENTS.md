@@ -368,9 +368,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `prng.ts`: Seedable RNG (mulberry32) and a string-to-seed hash (FNV-1a) -
               shared by `packages/web/src/lib/center.ts` and anything else that
               needs a deterministic, repeatable random sequence.
-- `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out
+- `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out, packing the coarse levels into shared sheets
   * `index.ts`: CLI
   * `mips.ts`: Generate+fill alternate image size directories
+  * `sheets.ts`: Composite one level's per-file tiles into `<width>-sheets/` grids
   * `layout.ts`: Import resolution steps from pyramid.ts, define expected directory structure
 
 ### Associated tools:
@@ -1111,6 +1112,13 @@ code, not a standing invariant.
   ring) lives in `packages/web/src/lib/pyramid.ts`.** `tiles.ts` and the render
   loop read the policy, they don't restate it. `BASE_TILE` is the only place
   size/shape is stated - don't assume square or compute a size from a literal.
+- **A level is per-file or sheet-packed, and the pipeline leaves only one of
+  the two on disk.** `packages/pipeline` writes every level per-file, composites
+  the levels at or above `SHEETS.fromLevel` into `<width>-sheets/`, then deletes
+  those levels' per-file directories. `scan.ts`'s `discoverLevels` prefers a
+  complete sheets directory and falls back to per-file when the sheets are
+  missing or incomplete, which after a finished run means a corpus packed before
+  sheet packing existed.
 - **Tile eviction is frame-aware.** The renderer walks cells row by row, so a
   plain LRU would evict the top of the screen to make room for its own bottom.
   `tiles.ts` stamps entries with `beginFrame()`'s counter and won't evict

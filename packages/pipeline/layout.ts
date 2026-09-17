@@ -1,17 +1,16 @@
 /**
- * Where the pyramid's levels live on disk.
- *
- * Split out of mips.mjs because it has two consumers with very different
- * dependency budgets: the pipeline, which writes the levels and needs `sharp`,
- * and the demo server, which discovers them and must not. Everything here is
- * arithmetic over the ladder - no filesystem, no imaging, no imports beyond the
- * ladder itself.
+ * Where the pyramid's levels live on disk, and the arithmetic that places a
+ * room within them. No filesystem and no imaging: this has two consumers with
+ * very different dependency budgets - the pipeline, which writes the levels and
+ * needs `sharp`, and the demo server, which discovers them and must not. The
+ * only import is the ladder itself.
  *
  * The convention, stated once:
  *
  *   <dir>/000.jpg          level 0 - the source art, left flat where it is
  *   <dir>/512/000.jpg      level 1
  *   <dir>/256/000.jpg      level 2      ... directory named for the WIDTH
+ *   <dir>/128-sheets/sheet-0000.jpg   packed from `SHEETS.fromLevel` up
  *
  * Width names the directory because width is the axis the client's ladder is
  * expressed in and a corpus shares one aspect, so it identifies the level
@@ -52,18 +51,18 @@ export interface SheetPosition {
   row: number;
 }
 
+// --- levels ------------------------------------------------------------------
+
 /**
- * What levels a source image of these dimensions should produce.
+ * What levels a source image of these dimensions should produce, finest first.
  *
- * Sizes come from the source rather than from BASE_TILE so this works on
- * whatever the render actually is, and the aspect is preserved exactly - each
- * level is the source divided by the ladder's divisor, both axes together.
+ * Sizes come from the source, not from `BASE_TILE`: a corpus rendered at any
+ * size gets the levels it can hold. Each level is the source divided by the
+ * ladder's divisor on both axes together, which keeps the aspect exact.
  *
- * A source too small to support the whole ladder yields fewer levels rather
- * than duplicate ones: two divisors that round to the same width would name the
- * same directory twice, which is a silent corruption of the ladder.
- *
- * Returns the plan finest first.
+ * A source too small for the whole ladder yields fewer levels, never duplicate
+ * ones: two divisors that round to the same width name the same directory, and
+ * the second write lands the wrong size in it silently.
  */
 export function mipPlan({ w, h }: Size, levels: LevelStep[] = LEVELS): MipStep[] {
   const plan: MipStep[] = [];
@@ -80,14 +79,13 @@ export function mipPlan({ w, h }: Size, levels: LevelStep[] = LEVELS): MipStep[]
   return plan;
 }
 
-/**
- * Sheet-packing arithmetic, kept here (rather than in sheets.ts, which
- * imports `sharp`) so the server can discover and validate what the pipeline
- * wrote without paying for an image library it never needs - same split as
- * `mipPlan` above.
- *
- * The sheet directory for a per-file level directory named for its width.
- */
+// --- sheets ------------------------------------------------------------------
+//
+// Where a room sits once its level is sheet-packed: the addressing
+// `sheets.ts` composites with and the server validates against, read the same
+// way from both sides.
+
+/** The sheet directory that sits beside a level's per-file `<width>/` directory. */
 export function sheetDirName(width: number | string): string {
   return `${width}-sheets`;
 }
@@ -99,8 +97,7 @@ export function sheetFileName(sheetIndex: number, ext = 'jpg'): string {
 
 /**
  * How many sheets a corpus of this size needs, and the grid each one holds.
- * Pure arithmetic - the pipeline (which writes sheets) and the server (which
- * discovers them) both call this and agree on the answer.
+ * Throws on a `cols` x `rows` that does not hold `roomsPerSheet`.
  */
 export function sheetPlan(roomCount: number, config: SheetConfig = SHEETS): SheetPlan {
   if (config.cols * config.rows !== config.roomsPerSheet)

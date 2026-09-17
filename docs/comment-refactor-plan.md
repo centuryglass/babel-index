@@ -130,12 +130,18 @@ revision, *re-introduced* a reference to the nonexistent `positionSearchBox` —
 the cautionary tale.) Hardcoded counts and claims age badly and many are already
 wrong: "the forty buttons" (that's generated `BOOK_COUNT`), "one of the two
 things that survive a reload" (at least four persist), `persist.js` (it's
-`.ts`). *Move:* reference the symbol, not its current value ("the buttons in
+`.ts`), and a range restated beside the field that sets it — `sheets.ts` opened
+with "Levels 2-4", where `SHEETS.fromLevel` was 3 and the ladder has six rungs.
+The pipeline batch also carried four `.js`/`.mjs` filenames the TypeScript
+conversion left behind (`pyramid.js`, `mips.mjs`, `metadata.js`, `scan.mjs`), so
+the extension tell is worth grepping in *any* comment, not only after a `see`.
+*Move:* reference the symbol, not its current value ("the buttons in
 `BOOK_COUNT`"); drop self-counting claims ("one of the two"); and **every
 cross-reference must resolve to something that exists** — verify a `see X` before
 committing, because a dangling pointer is exactly the confident-looking lie P5
-warns about. Cheap tells to grep for: `the two things`, `the forty`, `\.(js|jsx)\b`
-in a `see`, and any `see \`([a-zA-Z]+)\`` whose name `grep`s to nothing.
+warns about. Cheap tells to grep for: `the two things`, `the forty`,
+`\.(js|jsx|mjs)\b` anywhere in a comment, and any `see \`([a-zA-Z]+)\`` whose
+name `grep`s to nothing.
 
 **Doc pointers rot fastest of all.** (`nextRoom.ts` said `accessibility-plan.md
 §4.2a`; that section has not existed since a4eb2ae culled and restructured the
@@ -269,12 +275,15 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **20 / 107 source files** (`main.tsx`, `illusion.ts`,
+Progress so far: **24 / 107 source files** (`main.tsx`, `illusion.ts`,
 `board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, plus all 14 of
-`packages/server` — that batch ran out of order, in parallel with batches 2–3
-in a different checkout), plus 15 paired tests (`illusion.test.ts`,
-`board.test.ts`, `nextRoom.test.ts`, and server's 12) — all ticked in the
-list below. The running checklist is the source of truth; tick boxes as you go.
+`packages/server` and all four of `packages/pipeline` — both taken out of order
+on 2026-09-17, in parallel across checkouts, server's alongside batches 2–3),
+plus 17 paired tests (`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`,
+server's 12, and the two pipeline tests) — all ticked in the list below. The
+running checklist is the source of truth; tick boxes as you go. Order is a
+deduping aid within a cluster, not a rule between clusters, so a batch can be
+taken from any package no other checkout is in.
 
 ### Source files and their tests
 
@@ -307,12 +316,12 @@ list below. The running checklist is the source of truth; tick boxes as you go.
   - [ ] packages/config/load.test.ts
 
 #### packages/pipeline
-- [ ] packages/pipeline/index.ts  — no unit test
-- [ ] packages/pipeline/layout.ts  — no unit test
-- [ ] packages/pipeline/mips.ts
-  - [ ] packages/pipeline/mips.test.ts
-- [ ] packages/pipeline/sheets.ts
-  - [ ] packages/pipeline/sheets.test.ts
+- [x] packages/pipeline/index.ts  — no unit test
+- [x] packages/pipeline/layout.ts  — no unit test
+- [x] packages/pipeline/mips.ts
+  - [x] packages/pipeline/mips.test.ts
+- [x] packages/pipeline/sheets.ts
+  - [x] packages/pipeline/sheets.test.ts
 
 #### packages/server
 - [x] packages/server/app.ts
@@ -555,6 +564,12 @@ the dropped `rows.sort(...)`. They agree.)
 - **`tools/center-placement/lib/measured.ts` is generated.** Its header says "Do
   not edit by hand." Comment fixes there belong in the generator
   (`import-shelf-svg.ts`), not the file — either skip it or fix the generator.
+- **A pass adds signage as well as pruning prose.** Two invariants of sheet
+  packing — tiles pasted row-major in the order `sheetPosition` reports, and a
+  part-filled final sheet keeping the whole grid — were asserted only by a test,
+  and nothing in `sheets.ts` said them. Where a contract lives only in a test or
+  in a reader's head, writing it at the declaration is the same work as deduping
+  it, and the verifier is indifferent to which direction a comment moved.
 - **Tests get a lighter touch.** Their comments are usually about *why this
   assertion* — that's a hazard note (P3/P8) and mostly worth keeping. Still fix
   buried ledes and repetition, but don't strip a test's rationale to make it
