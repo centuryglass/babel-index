@@ -1,17 +1,19 @@
 /**
- * The browser smoke test for the WebGL map renderer
- * (`?webgl` - see `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`/
- * `useMapRendererGL.ts` and `AGENTS.md`'s "The WebGL renderer"
- * section). `glRenderer.test.ts`/`glSlideRenderer.test.ts` already cover the
- * draw loop's own decisions against a recording `GLContext` fake - this file
- * is the one thing those cannot see: that a real `WebGL2RenderingContext`
- * actually accepts the calls this renderer makes, on a real GPU, in a real
- * browser.
+ * The browser smoke test for the WebGL renderer: that a real
+ * `WebGL2RenderingContext` accepts the calls `glRenderer.ts` and
+ * `glSlideRenderer.ts` make on a live canvas. `glRenderer.test.ts` and
+ * `glSlideRenderer.test.ts` cover the same draw loop against a
+ * `fakeGLContext()` that records calls rather than running them, so a real
+ * driver rejecting one of them surfaces nowhere in `npm test`. AGENTS.md's
+ * "The WebGL renderer" carries the standing invariants, and "Testing and CI"
+ * explains why every spec here names its renderer rather than inheriting the
+ * production default.
  *
- * `openLibrary({ webgl: true })` boots the same corpus every other file in this
- * suite uses, with `?webgl` pinned on the query string so `webglFlag.ts`'s
- * `WEBGL` is true before `main.tsx` ever mounts. The rest of the suite pins
- * `webgl=0` (Canvas2D) for its 2D-canvas readbacks; this file is the GL smoke.
+ * `openLibrary({ webgl: true })` puts a bare `?webgl` on the url, so
+ * `webglFlag.ts`'s `WEBGL` is true before `main.tsx` mounts. Every assertion
+ * here reads the HUD, so this file never asks the canvas for the 2D context
+ * `support.ts`'s `fingerprint` needs; whether the two renderers draw the same
+ * picture is `render-parity.parity.ts`'s question.
  *
  * None of the files in this directory are part of `npm test`; run them on
  * purpose:
@@ -52,12 +54,17 @@ describe('the library, in a browser: the WebGL renderer', { concurrency: false }
     await page.locator('input[type=search]').fill('clockwork');
     await page.locator('input[type=search]').press('Enter');
 
-    // A search zooms out in place to show the rearrangement, then eases back
-    // to the same x/y/zoom it was called from - see `map-gestures.e2e.ts`'s
-    // identical assertion against the Canvas2D renderer. `settled()` already
-    // waits out `[gl] rearranging …` the same way it waits out the plain
-    // Canvas2D text (`support.ts`'s `parseHud`/`settled` both strip the `[gl] `
-    // prefix before reading the state underneath).
+    // A search zooms out in place to give the slide a wall of rooms, then
+    // eases back to the x/y/zoom it was called from: the same assertion
+    // `map-gestures.e2e.ts`'s `a search reorders the library around wherever
+    // the camera already is` makes against Canvas2D. That file waits for the
+    // HUD to report `rearranging` before waiting for the return, because until
+    // the search response lands the camera is still at `atField` - a position
+    // this wait cannot tell from an eased-back one. The same guard is open for
+    // this file in `docs/pending_task_list.md`'s "Rearrangement / camera".
+    // The waits themselves need no GL-specific handling: `useMapRendererGL.ts`
+    // prefixes every HUD line with `[gl] `, and `settled()` and `parseHud`
+    // strip it before reading the state underneath.
     await waitFor(
       async () => {
         const c = await settled(page);
