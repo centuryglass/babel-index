@@ -141,7 +141,15 @@ cross-reference must resolve to something that exists** — verify a `see X` bef
 committing, because a dangling pointer is exactly the confident-looking lie P5
 warns about. Cheap tells to grep for: `the two things`, `the forty`,
 `\.(js|jsx|mjs)\b` anywhere in a comment, and any `see \`([a-zA-Z]+)\`` whose
-name `grep`s to nothing.
+name `grep`s to nothing. The search-half batch (2026-09, a parallel checkout)
+showed the worst variant: prose that restates an *enumeration or formula*
+computed nearby goes quietly stale when the code grows. `scoring.ts` said
+"five-constant" for a seven-constant weights shape, "three more independent
+sorts" for four axes, listed three axes where `explainRanking` reports four,
+and carried a soft-OR formula missing the `Kt` factor the code multiplies; a
+dead symbol name (`explainScore`) had propagated into three files at once.
+When a comment counts, lists, or restates a formula, check it against the
+declaration in the same breath, and prefer naming the symbol over the count.
 
 **Doc pointers rot fastest of all.** (`nextRoom.ts` said `accessibility-plan.md
 §4.2a`; that section has not existed since a4eb2ae culled and restructured the
@@ -256,11 +264,10 @@ home early — see §6 for the rationale:
 
 1. `packages/map` — the pure spatial/algorithm core. The rearrangement half is
    done (`illusion.ts` and its test, `board.ts` and its test, `moves.ts`, plus
-   the small shared `prng.ts` and `nextRoom.ts`). What remains here is the
-   search half: `ordering.ts`/`scoring.ts` are dense and cross-referenced; do
-   them together, and take `searchResult.ts` with them (it declares the shapes
-   `scoring.ts`'s `rankHybrid` returns, and still cites `useSearch.js`). Then
-   `describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts`.
+   the small shared `prng.ts` and `nextRoom.ts`), and so is the search half
+   (`ordering.ts`/`scoring.ts`/`searchResult.ts` and the two paired tests;
+   they cross-reference each other heavily, so they went as one batch). What
+   remains: `describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts`.
 2. `packages/config` — one file (`config.ts`) is the single densest comment
    block in the repo (480 comment lines); give it its own pass.
 3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
@@ -275,11 +282,13 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **24 / 107 source files** (`main.tsx`, `illusion.ts`,
-`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, plus all 14 of
-`packages/server` and all four of `packages/pipeline` — both taken out of order
-on 2026-09-17, in parallel across checkouts, server's alongside batches 2–3),
-plus 17 paired tests (`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`,
+Progress so far: **27 / 107 source files** (`main.tsx`, `illusion.ts`,
+`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, `packages/map`'s search half
+(`ordering.ts`, `scoring.ts`, `searchResult.ts`), plus all 14 of
+`packages/server` and all four of `packages/pipeline` — server and pipeline
+taken out of order on 2026-09-17, in parallel across checkouts, server's
+alongside batches 2–3), plus 19 paired tests (`illusion.test.ts`,
+`board.test.ts`, `nextRoom.test.ts`, `ordering.test.ts`, `scoring.test.ts`,
 server's 12, and the two pipeline tests) — all ticked in the list below. The
 running checklist is the source of truth; tick boxes as you go. Order is a
 deduping aid within a cluster, not a rule between clusters, so a batch can be
@@ -302,12 +311,12 @@ taken from any package no other checkout is in.
 - [x] packages/map/moves.ts  — no unit test
 - [x] packages/map/nextRoom.ts
   - [x] packages/map/nextRoom.test.ts
-- [ ] packages/map/ordering.ts
-  - [ ] packages/map/ordering.test.ts
+- [x] packages/map/ordering.ts
+  - [x] packages/map/ordering.test.ts
 - [x] packages/map/prng.ts  — no unit test
-- [ ] packages/map/scoring.ts
-  - [ ] packages/map/scoring.test.ts
-- [ ] packages/map/searchResult.ts  — no unit test
+- [x] packages/map/scoring.ts
+  - [x] packages/map/scoring.test.ts
+- [x] packages/map/searchResult.ts  — no unit test
 
 #### packages/config
 - [ ] packages/config/config.ts

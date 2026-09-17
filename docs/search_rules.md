@@ -110,7 +110,7 @@ RoomIndex = {
 
 ### 3. One room's evaluation against one query
 
-This is what the scoring pass computes for every room, and what `explainScore`
+This is what the scoring pass computes for every room, and what `explainRanking`
 reads to build the display. Ranking, certainty, and every reporting number in
 this document all come out of this one structure - nothing downstream
 recomputes any of it independently.
@@ -535,7 +535,7 @@ sorts of already-computed numbers, not four extra scoring passes.
 main display is just the overall rank (`x / unique_tile_count`); a tooltip
 breaks down what earned it, as a percentage of the total score contributed by
 each signal that actually contributed something.
-*Enforcement:* `explainScore` already omits a signal entirely when it
+*Enforcement:* `explainRanking` already omits a signal entirely when it
 contributed zero (a room no text touched shows only a CLIP row) rather than
 printing a false `0%` - the tooltip's percentages are `weighted signal
 contribution / RoomMatch.score`, read off the same `breakdown` structure
