@@ -12,9 +12,9 @@ import {
 } from './ordering.ts';
 import type { CreateLayoutOptions } from './ordering.ts';
 
-// The corpus is never square and `createLayout` no longer defaults `aspect`, so
-// the structural tests below state a real cell shape. The value is arbitrary as
-// long as it is non-1; tests that specifically need square pass `aspect: 1`.
+// The corpus is never square and `createLayout` requires `aspect`, so the
+// structural tests state a real cell shape. The value is arbitrary as long
+// as it is non-1; tests that specifically need square pass `aspect: 1`.
 const ASPECT = 720 / 1280;
 
 test('slot density tracks contentRatio', () => {
@@ -141,8 +141,9 @@ test('the generic seed is independent of the slot seed', () => {
       const slotBand = Math.floor(cellHash(x, y, 5) * 4); // same seed, to contrast
       if (generic === slotBand) sameAsSlotHash++;
     }
-  // Same seed and same bucketing is of course identical; the point of the assert
-  // is the opposite direction - a DIFFERENT generic seed decorrelates.
+  // Same seed and same bucketing are identical by construction; this control
+  // exists so the assert below means the opposite direction - a different
+  // generic seed decorrelates.
   assert.equal(sameAsSlotHash, total, 'same seed and bucketing is identical, as a control');
   let matches = 0;
   for (let y = -span; y <= span; y++)
@@ -152,8 +153,8 @@ test('the generic seed is independent of the slot seed', () => {
       const other = genericIndexAt(x, y, { seed: 6, count: 4 });
       if (generic === other) matches++;
     }
-  // Two independent seeds agree about a quarter of the time by chance, nowhere
-  // near the lockstep above.
+  // Two independent seeds agree about a quarter of the time by chance, not
+  // the total agreement of the same-seed control.
   assert.ok(matches / total < 0.4, `generic seeds are not independent: ${(matches / total).toFixed(2)}`);
 });
 
@@ -202,9 +203,9 @@ test('the edge is the same distance away whichever way you set off', () => {
 });
 
 test('a non-square cell resists differently per axis, in raw cell terms', () => {
-  // The other side of the same coin, and the assertion that fails if the aspect
-  // stops being applied: the same *cell* offset is a different apparent
-  // distance on each axis, so it must not resist the same.
+  // The assertion that fails if the aspect stops being applied: the same
+  // *cell* offset is a different apparent distance on each axis, so it must
+  // not resist the same.
   const L = createLayout({ roomCount: 300, contentRatio: 0.2, seed: 5, aspect: 720 / 1280 });
   const past = L.boundaryRadius + 6;
   assert.notEqual(L.resistanceAt(past, 0), L.resistanceAt(0, past));
@@ -268,8 +269,7 @@ test('no certainty is the uniform map, cell for cell', () => {
   assert.deepEqual(graded(new Float32Array(200)).slots, uniform.slots, 'all-zero clusters nothing');
   assert.equal(uniform.gradedCount, 0);
 
-  // And a query nothing is confident about is the same picture as no query,
-  // which is the only honest thing for it to look like.
+  // And a query nothing is confident about is the same picture as no query.
   const hunch = Float32Array.from({ length: 200 }, (_, i) => 0.04 * Math.exp(-i / 50));
   assert.deepEqual(graded(hunch).slots, uniform.slots, 'a hunch under the floor is not a match');
   assert.equal(graded(hunch).gradedCount, 0);
@@ -295,8 +295,8 @@ test('certain ranks take the cells nearest the center', () => {
 });
 
 test('a hard-edged match clusters, and everything after it does not', () => {
-  // "yuiop": a handful of rooms tagged with it, and nothing else means a thing.
-  // The cluster is dense; past it the map is the baseline scatter it always was.
+  // "yuiop": a handful of rooms tagged with it, and nothing else means a
+  // thing. The cluster is dense; past it the map is the baseline scatter.
   const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0));
   const L = graded(certainty);
   const uniform = graded(null);
@@ -350,8 +350,8 @@ test('the peak is how much wallpaper survives the surest cluster', () => {
 });
 
 test('a sparser map makes the same search more legible, not less', () => {
-  // The point of the feature. The cluster is the same size whatever the ratio,
-  // so the sparser the wallpaper the more it stands out against it.
+  // The cluster is the same size whatever the ratio, so the sparser the
+  // wallpaper, the more the cluster stands out against it.
   const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 10 ? 1 : 0));
   const radii = [0.05, 0.2, 0.6].map((contentRatio) => graded(certainty, { contentRatio }).slots[9].d);
   for (let i = 1; i < radii.length; i++)

@@ -16,8 +16,7 @@
  *     rank 0 lands in the slot nearest the center.
  *   - Re-ranking (after a search, or an active favorite sort - see
  *     `packages/map/favorites.ts`) swaps one array. Slot positions never move,
- *     which is what makes the re-order read as the library rearranging itself
- *     rather than as a page reload.
+ *     which is what makes the reorder read as the library rearranging itself.
  *
  * ### The density gradient
  *
@@ -25,54 +24,49 @@
  * `density.certainty` array - one number per rank, in [0, 1] - and the
  * acceptance threshold for the rank being placed becomes
  * `contentRatio + (peak - contentRatio) * certainty`, so a rank the search is
- * sure about is allowed into nearly every cell it passes and a rank it knows
+ * sure about is admitted into nearly every cell it passes and a rank it knows
  * nothing about is scattered at the baseline. Walking outward with that
  * threshold turns a certainty profile directly into a density profile: certain
  * matches pack tight against the center, and the packing loosens back to the
- * user's chosen sparseness exactly as fast as the search's confidence falls off.
+ * user's chosen sparseness as the search's confidence falls off.
  *
- * The point is that the sliders and the search stop fighting. At an 80% generic
- * map the top matches used to be scattered thinly enough to be invisible, so
- * the only way to *see* a search work was to turn the wallpaper off; now the
- * cluster is denser than its surroundings by construction, and a sparser
- * baseline makes it more legible rather than less.
+ * The cluster is denser than its surroundings by construction, at any
+ * baseline, so the sliders and the search do not fight: a sparser wallpaper
+ * makes a search more legible rather than less.
  *
- * Three properties come out of the one formula rather than being special-cased:
- * a handful of exact matches fill the innermost cells and everything after them
- * falls straight back to the baseline (a hard edge); a signal that decays
- * gradually spreads the packing out gradually; and a query nothing is confident
- * about produces certainty 0 everywhere, which is the uniform layout, cell for
- * cell. Clearing the search drops the profile and restores it exactly.
+ * Three properties come out of the one formula: a handful of exact matches
+ * fill the innermost cells and everything after them falls straight back to
+ * the baseline (a hard edge); a signal that decays gradually spreads the
+ * packing out gradually; and a query nothing is confident about produces
+ * certainty 0 everywhere, which is the uniform layout, cell for cell.
+ * Clearing the search drops the profile and restores it.
  *
- * The cost is that a search now recomputes placement, which the uniform scheme
- * never did. It is the same O(slots) rebuild the ratio slider already triggers
- * on every drag, and the rooms still arrive in rank order from the center out -
- * the map still reads as rearranging itself, with the density as one more thing
- * that rearranges.
+ * A search recomputes placement, at the same O(slots) the ratio slider
+ * already triggers on every drag. Rooms still arrive in rank order from the
+ * center out, so the map still reads as rearranging, with the density as one
+ * more thing that rearranges.
  *
  * ### Distance is measured as it looks, not as it indexes
  *
- * This file is otherwise shape-blind - it deals in cells and has no idea what a
- * cell looks like - with one deliberate exception: `aspect`, the cell's height
- * as a multiple of its width. Every distance here is `hypot(x, y * aspect)`,
- * which is the offset in units of cell WIDTHS, i.e. proportional to what ends
- * up on screen.
+ * This file is otherwise shape-blind - it deals in cells and has no idea what
+ * a cell looks like - with one exception: `aspect`, the cell's height as a
+ * multiple of its width. Every distance here is `hypot(x, y * aspect)`, an
+ * offset in units of cell widths, which is proportional to what ends up on
+ * screen.
  *
- * The reason is that a circle in cell space is an ellipse on screen as soon as
- * the cell stops being square, and the boundary is a navigation affordance: the
- * distance you may travel before the map resists should not depend on which way
- * you set off. Measuring in raw cells would be simpler, but it would make the
- * library taller-or-wider than it is round, and the edge would arrive sooner on
- * one axis than the other.
+ * A circle in cell space is an ellipse on screen as soon as the cell stops
+ * being square, and the boundary is a navigation affordance: the distance you
+ * may travel before the map resists should not depend on which way you set
+ * off.
  *
- * Placement uses the same metric, and has to. A circular boundary drawn around
- * an elliptical spread of rooms would be a circle with nothing in the top and
- * bottom of it - free panning over empty generic space, which is worse than the
- * ellipse. One metric, both jobs.
+ * Placement uses the same metric, and has to. A circular boundary drawn
+ * around an elliptical spread of rooms is a circle with nothing in the top
+ * and bottom of it - free panning over empty generic space. One metric, both
+ * jobs.
  *
  * `aspect` is required at every entry point: there is no square-cell default,
  * so a caller that forgets it gets a loud RangeError rather than a silently
- * square map, and nothing else in this file needs to know why.
+ * square map.
  */
 
 /** 32-bit spatial hash -> [0, 1). Stable across platforms. */
@@ -85,9 +79,9 @@ export function cellHash(x: number, y: number, seed = 0): number {
 }
 
 /**
- * The origin is reserved for the center room - the one with the search box and
- * the hidden controls painted into it (docs/concept.md steps 5-6). It is never a
- * corpus slot, so ranked rooms begin in the ring around it.
+ * The origin is reserved for the center room - the one with the search box
+ * and the controls painted into it. It is never a corpus slot, so ranked
+ * rooms begin in the ring around it.
  */
 export const isCenter = (x: number, y: number): boolean => x === 0 && y === 0;
 
@@ -102,12 +96,12 @@ export const isContentSlot = (
  * Which generic tile a generic cell shows.
  *
  * A stable, storage-free choice over the same `cellHash` machinery as
- * `isContentSlot`, but salted with its OWN seed: sharing `slotSeed` would
- * correlate the pattern of generic tiles with the pattern of content slots, and
- * the two would be visible in each other. The choice depends only on the cell,
- * not on the search order, so a reorder never changes a generic cell's face -
- * which is exactly why the rearrangement animation can leave `board.ts` treating
- * every generic as one interchangeable value.
+ * `isContentSlot`, but salted with its own seed: sharing `map.slotSeed` would
+ * correlate the pattern of generic tiles with the pattern of content slots,
+ * and the two would be visible in each other. The choice depends only on the
+ * cell, not on the search order, so a reorder never changes a generic cell's
+ * face - the property that lets `board.ts` and `illusion.ts` treat every
+ * generic as one interchangeable value.
  *
  * Returns -1 when there are no generic tiles to choose from (an empty
  * `generic/` dir), which the renderers read as "fall back to the center tile"
@@ -125,25 +119,24 @@ export const genericIndexAt = (
 /**
  * Certainty below this is a hunch rather than a match, and clusters nothing.
  *
- * Without a floor, a query the corpus has no answer to still produces a faint
- * ranking - some room has to come first - and the faintest gradient would pull
- * it toward the center, which would say "found it" about noise. The floor is
- * what makes "no match" and "no search" the same picture, which is the only
- * honest thing for them to look like.
+ * A query the corpus has no answer to still produces a faint ranking - some
+ * room has to come first - and without a floor the faintest gradient would
+ * pull it toward the center, claiming a find in noise. The floor is what
+ * makes "no match" and "no search" the same picture.
  */
 export const CERTAINTY_FLOOR = 0.05;
 
 /**
  * Turn a per-rank certainty into a per-rank acceptance threshold.
  *
- * Two adjustments, both of which are about the profile meaning what it claims:
+ * Two adjustments to the profile as it is read:
  *
- *   - certainty is made non-increasing with rank. The ordering is best-first by
- *     definition, so a rank that is *more* certain than the one above it is a
- *     contradiction, and the running minimum is which of the two to believe.
+ *   - certainty is made non-increasing with rank. The ordering is best-first
+ *     by definition, so a rank more certain than the one above it is a
+ *     contradiction; the running minimum is which of the two to believe.
  *     Density then falls monotonically outward whatever shape the blend had.
- *   - anything under `floor` becomes exactly the baseline, not slightly above
- *     it. See CERTAINTY_FLOOR.
+ *   - anything under `floor` becomes the baseline itself, not a value slightly
+ *     above it. See `CERTAINTY_FLOOR`.
  *
  * @param certainty per rank, in [0, 1]
  * @param contentRatio the baseline density
@@ -290,8 +283,8 @@ export function createLayout({
   const boundaryRadius = slots.length ? slots[slots.length - 1].d : 0;
 
   // How many leading ranks the gradient actually lifts above the baseline -
-  // the size of the cluster, and 0 for a uniform map. Certainty is monotone by
-  // then, so counting until it stops is the whole answer.
+  // the size of the cluster, and 0 for a uniform map. The ramp is monotone by
+  // the time it is read here, so counting until it stops is the whole answer.
   let gradedCount = 0;
   while (gradedCount < slots.length && ramp(gradedCount) > contentRatio) gradedCount++;
 
@@ -340,9 +333,8 @@ export function createLayout({
      * Pan resistance. 1 inside the content region, falling smoothly toward 0
      * outside it, so the edge is felt rather than hit.
      *
-     * Both the distance and `softness` are in cell widths, so the edge arrives
-     * at the same apparent distance whichever way you drag - that uniformity is
-     * the whole reason this file knows the aspect at all.
+     * Both the distance and `softness` are in cell widths, so the edge
+     * arrives at the same apparent distance whichever way you drag.
      *
      * @param softness how far the falloff spans, in cell widths
      */
@@ -358,18 +350,17 @@ export function createLayout({
 /**
  * Gather the `count` content slots nearest the origin, ordered by distance.
  * Grows the search radius until enough are found, so it stays correct at any
- * contentRatio without a magic constant.
+ * contentRatio.
  *
  * `radius` is in cell widths, so the region swept is a screen-circle: it
- * reaches `radius` cells across but `radius / aspect` cells up and down. A
- * short cell means more rows to cover the same apparent distance, which is
- * also why the density estimate below carries the aspect.
+ * reaches `radius` cells across but `radius / aspect` cells up and down.
  *
  * The walk is what makes the gradient work: candidates are visited nearest
- * first, and each is offered to the rank currently being placed at *that rank's*
- * threshold, so a certain rank takes the first cell it meets and an uncertain
- * one waits for a cell the baseline hash lets through. With a flat ramp every
- * candidate is accepted and this is the old scan, cell for cell.
+ * first, and each is offered to the rank currently being placed at *that
+ * rank's* threshold, so a certain rank takes the first cell it meets and an
+ * uncertain one waits for a cell the baseline hash lets through. With a flat
+ * ramp every candidate is accepted, and the result is the uniform layout,
+ * cell for cell.
  *
  * @param ramp acceptance threshold per rank
  */
@@ -382,10 +373,9 @@ function collectSlots(
 ): Slot[] {
   if (count === 0) return [];
 
-  // Placing a rank costs about 1/density cells, so the whole run costs the sum
-  // of that over the ranks. With a flat ramp the sum is count / contentRatio
-  // and this is the estimate it always was; with a gradient it shrinks by
-  // however much the middle of the map tightened.
+  // Placing a rank costs about 1/density cells, so the whole run costs the
+  // sum of that over the ranks: count / contentRatio with a flat ramp, less
+  // by however much the middle of the map tightened under a gradient.
   let cells = 0;
   for (let i = 0; i < count; i++) cells += 1 / ramp(i);
   let radius = radiusFor(cells, aspect);
@@ -393,7 +383,7 @@ function collectSlots(
   for (let attempt = 0; attempt < 24; attempt++) {
     // Every cell the baseline admits, and a tally of them per ring. These are
     // the slots the uniform map would have had; a gradient only ever adds to
-    // them, which is what makes the tally a sound bound below.
+    // them, which is what makes the tally a sound lower bound.
     const rings = Math.ceil(radius) + 2;
     const reached = new Int32Array(rings + 1);
     const candidates: { x: number; y: number; d: number; h: number; a: number }[] = [];
@@ -404,11 +394,11 @@ function collectSlots(
       reached[Math.floor(d)]++;
     });
 
-    // Exclusive prefix: `reached[k]` is now a LOWER BOUND on the rank the walk
-    // has got to by the time it reaches ring k, since every cell counted into
-    // it lies strictly nearer and is taken whatever rank is current. The ramp
-    // is non-increasing, so a lower bound on the rank gives an upper bound on
-    // the threshold - which is what the extra sweep below can trust.
+    // Exclusive prefix: `reached[k]` is now a lower bound on the rank the
+    // walk has got to by the time it reaches ring k, since every cell counted
+    // into it lies strictly nearer and is taken whatever rank is current. The
+    // ramp is non-increasing, so a lower bound on the rank gives an upper
+    // bound on the threshold, which is what `gradedRadius` reads.
     for (let k = 0, total = 0; k <= rings; k++) {
       const here = reached[k];
       reached[k] = total;
@@ -417,8 +407,8 @@ function collectSlots(
 
     // The cells only a graded rank could take: above the baseline, below the
     // threshold that rank still has. Past the ring where the bound has caught
-    // up with the gradient there are none, so this sweep covers the cluster
-    // rather than the map - and with no gradient it does not run at all.
+    // up with the gradient there are none, so this sweep covers the cluster;
+    // with no gradient it does not run at all.
     const coreRadius = gradedRadius(reached, ramp, contentRatio, rings);
     if (coreRadius > 0)
       sweep(Math.min(coreRadius, radius), aspect, (x, y, d) => {
@@ -505,19 +495,20 @@ export function shuffledOrder(n: number, seed = 1): number[] {
 }
 
 /**
- * The int8 half-range `tools/embed` quantises rows at. Dequantise as v / 127.
+ * The int8 half-range `tools/embed` quantises rows at; dequantise as v / 127.
+ * Declared here because this is where the blob is read.
  *
- * Stated here because this is where the blob is read. Ranking never cared - a
- * monotone factor cannot reorder anything, and the blend min-maxes the column
- * anyway - but the density gradient asks how sure CLIP is *in absolute terms*,
- * and 0.3 is only a cosine once the quantisation is divided back out.
+ * Ranking never cared about the scale - a monotone factor cannot reorder
+ * anything, and the blend min-maxes the column anyway - but the density
+ * gradient asks how sure CLIP is *in absolute terms*, and 0.3 is only a
+ * cosine once the quantisation is divided back out.
  */
 export const EMBEDDING_SCALE = 127;
 
 /**
- * Score every room against a query vector. Embeddings are int8-quantized and
- * stored contiguously; scoring the whole corpus is a few million multiply-adds,
- * which is well under a frame for corpora of this size.
+ * Score every room against a query vector: one cosine per room, indexed by id.
+ * Embeddings are int8-quantized and stored contiguously; scoring the whole
+ * corpus is a few million multiply-adds, well under a frame at this size.
  *
  * Scores rather than an order, because the hybrid blend in `scoring.ts` needs
  * the numbers to normalise before weighting. `rankByEmbedding` is the CLIP-only
@@ -525,7 +516,6 @@ export const EMBEDDING_SCALE = 127;
  *
  * @param embeddings  roomCount * dim, row-major
  * @param query    length dim, already L2-normalised
- * @returns one cosine per room, indexed by id
  */
 export function embeddingScores(embeddings: Int8Array, dim: number, query: Float32Array): Float32Array {
   const n = Math.floor(embeddings.length / dim);
@@ -535,8 +525,8 @@ export function embeddingScores(embeddings: Int8Array, dim: number, query: Float
     const base = i * dim;
     for (let d = 0; d < dim; d++) dot += embeddings[base + d] * query[d];
     // Both sides are unit vectors, so this is a cosine once the row's
-    // quantisation is undone - and it has to be a real cosine, because
-    // `scoring.ts` compares it against absolute thresholds.
+    // quantisation is undone - and it has to come out as a real cosine,
+    // because `scoring.ts` compares these against absolute thresholds.
     scores[i] = dot / EMBEDDING_SCALE;
   }
   return scores;

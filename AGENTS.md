@@ -1279,7 +1279,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   position-independent, which is what an index wants.
 - **`rankHybrid` returns the components it sorted on, and the CLIP row must show
   its raw cosine.** `breakdown.clip` is min-maxed for the query, so some room
-  scores 1.00 for `cghjj` too. `explainScore` keeps the raw cosine beside it and
+  scores 1.00 for `cghjj` too. `explainRanking` keeps the raw cosine beside it and
   certainty on its own line; printing the relative number alone claims a
   confidence the library does not have. Asserted.
 - **Namespace catalog CSS.** `.row` already belongs to the dev panel, so an
