@@ -42,7 +42,7 @@
  * what keeps it testable against an independent replay.
  *
  * Ported from the reference solver with its phase structure and invariant
- * intact. `illusion.test.mjs` replays the emitted list independently rather than
+ * intact. `illusion.test.ts` replays the emitted list independently rather than
  * trusting this file's bookkeeping.
  */
 

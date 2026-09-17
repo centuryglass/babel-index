@@ -1,18 +1,16 @@
 /**
- * The rearrangement animation's shared vocabulary: the board `board.js` cuts
- * out of the map, and the move list `illusion.js` plans across it and
- * `packages/web/src/lib/slide.js` lays out in time and replays.
+ * The rearrangement animation's shared vocabulary: the board `board.ts` cuts
+ * out of the map, the move list `illusion.ts` plans across it, and
+ * `packages/web/src/lib/slide.ts` lays it out in time and replays it.
  *
- * `Move` is a discriminated union on purpose - `shiftRow`/`shiftCol`/`swap`
- * carry different fields, and every consumer (the animation's `pushMove`, the
- * renderer's `applyMove`, the test's independent replay) switches on `type`
- * and expects the right shape to fall out. A plain `object` JSDoc type let
- * that fall out of sync silently; this is checked by `tsc --noEmit`
- * (`npm run typecheck`) against every `@type`/`@param` that names it.
+ * `Move` is a discriminated union because its three variants carry different
+ * fields: every consumer - `slide.ts`'s `pushMove`, the renderers' `applyMove`,
+ * `illusion.test.ts`'s independent replay - switches on `type` before reading
+ * one. `tsc --noEmit` (`npm run typecheck`) is what checks it at every
+ * `@type`/`@param` that names the type.
  *
- * Type-only, imported through JSDoc (`@type {import('./moves.ts').Move}`),
- * same convention as `manifest.ts` - see AGENTS.md's TypeScript migration
- * note for why this stays a pure type contract rather than a runtime module.
+ * Type-only, imported through JSDoc (`@type {import('./moves.ts').Move}`), the
+ * pure-contract convention AGENTS.md describes for this and `manifest.ts`.
  */
 
 /** A board cell's coordinate, in board-local units (not map coordinates). */
@@ -22,9 +20,9 @@ export interface Point {
 }
 
 /**
- * Which line a move belongs to, for the animation's staging - see
- * `illusion.js`'s `line`/`wave` comment. `null` on a stage where every move
- * is independent of line grouping (an off-camera swap in phase 3).
+ * Which line a move belongs to, for the animation's staging - see the staging
+ * note in `illusion.ts`'s primitives section. `null` on a stage where line
+ * grouping means nothing: phase 3's off-camera swaps.
  */
 export interface LineRef {
   kind: 'row' | 'col';
@@ -32,9 +30,9 @@ export interface LineRef {
 }
 
 /**
- * What a board cell holds: a room id, or one of `board.js`'s two sentinel
- * values (`CENTER`, `GENERIC`) re-declared here as literal types since a type
- * contract can't import runtime constants from a `.js` module.
+ * What a board cell holds: a room id, or one of `board.ts`'s two sentinel
+ * values (`CENTER`, `GENERIC`), re-declared here as literal types because a
+ * type-only file imports nothing at runtime.
  */
 export type BoardValue = number | 'center' | 'generic';
 
@@ -53,7 +51,10 @@ export interface Bounds {
   ymax: number;
 }
 
-/** Fields every move carries, regardless of `type` - see `illusion.js`. */
+/**
+ * Fields every move carries, whatever its `type` - what each one means is in
+ * `illusion.ts`'s primitives section.
+ */
 interface MoveBase {
   stage: number;
   wave: boolean;
@@ -84,21 +85,21 @@ export interface SwapMove extends MoveBase {
 /** One step of a rearrangement plan, as `planMoves` emits it. */
 export type Move = ShiftRowMove | ShiftColMove | SwapMove;
 
-/** `board.js`'s output: the planner's inputs for one rearrangement. */
+/** `board.ts`'s output: everything `planMoves` takes for one rearrangement. */
 export interface Rearrangement {
   width: number;
   height: number;
   start: Board;
   end: Board;
   bounds: Bounds;
-  /** The center room's board cell, held fixed by both `start` and `end`. */
+  /** The center room's board cell. Same value in `start` and `end`, so the planner never moves it. */
   fixed: Point;
-  /** Board index of map cell (0, 0) - what `slide.js` calls `origin`. */
+  /** The board cell that map cell (0, 0) lands in - `slide.ts` draws relative to it. */
   origin: Point;
 }
 
 /**
- * One line currently sliding, as `slide.js`'s `advanceTo` reports it for
+ * One line currently sliding, as `slide.ts`'s `advanceTo` reports it for
  * `createSlideRenderer` to draw - not emitted by the planner itself.
  */
 export interface Motion {

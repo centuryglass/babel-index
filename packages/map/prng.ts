@@ -1,9 +1,11 @@
 /**
- * mulberry32 - small, fast, seedable. Deterministic output matters here: the
- * base room must regenerate byte-identically so the seam mask stays aligned
- * with every asset derived from it.
+ * mulberry32 - small, fast, seedable - plus a string-to-seed hash (FNV-1a).
+ *
+ * For random choices that must come out the same every time: the center shelf's
+ * tag titles, the random favorite sort, the dev panel's scripted runs.
  */
 
+/** A seeded generator; calling it yields [0, 1). `int` includes `hi`; `range` does not. */
 export interface Prng {
   (): number;
   range(lo: number, hi: number): number;

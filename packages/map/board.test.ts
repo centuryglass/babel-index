@@ -1,3 +1,8 @@
+/**
+ * Tests for `board.ts`. Nothing is stubbed: a board is cut from a real
+ * `createLayout` and then run through a real `planMoves`.
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from './ordering.ts';
@@ -19,7 +24,7 @@ const certaintyFor = (n, reach) => Array.from({ length: n }, (_, i) => Math.max(
  * Plan a rearrangement and check the only thing that finally matters: after
  * every move, the cells the viewer can see hold what the new arrangement says
  * they should. Everything else - the legality of each move, the fixed tile - is
- * `illusion.test.mjs`'s business; this is the join between the two halves.
+ * `illusion.test.ts`'s business; this is the join between the two halves.
  */
 function planAndCheck(before, after, view = VIEW) {
   const built = buildRearrangement({ before, after, view, aspect: ASPECT });
@@ -55,7 +60,7 @@ test('a shuffle is animatable, and lands the visible cells exactly', () => {
 test('a search moves the slots themselves, and that is still animatable', () => {
   // The density gradient makes certainty an input to placement, so this is not
   // a permutation over fixed slots: cells that were wallpaper become rooms and
-  // the other way round. That is the case the cross-fade design predates.
+  // the other way round.
   const n = 200;
   const before = arrangement(n, shuffledOrder(n, 1));
   const after = arrangement(n, shuffledOrder(n, 7), {
@@ -72,8 +77,8 @@ test('a search moves the slots themselves, and that is still animatable', () => 
 });
 
 test('the board holds every slot of both layouts', () => {
-  // A room the new order wants on camera has to be findable, and after a search
-  // it may have been at the far edge a moment ago.
+  // Asserted directly: a plan that merely works would not prove the board is
+  // big enough for either layout's slots. See *Two size bounds* in `board.ts`.
   const n = 400;
   const before = arrangement(n, shuffledOrder(n, 1));
   const after = arrangement(n, shuffledOrder(n, 2), {
@@ -93,9 +98,9 @@ test('the board holds every slot of both layouts', () => {
 });
 
 test('the board satisfies the planner preconditions on a tiny corpus', () => {
-  // 26 rooms span barely more than the viewport, so here it is the quarter-board
-  // rule that decides the size, not the slot extent. Both directions matter and
-  // this is the one that a "board = slot extent" shortcut would get wrong.
+  // 26 rooms span barely more than the viewport, so the quarter-board rule
+  // decides the size here, not the slot extent - the bound that a "board = slot
+  // extent" shortcut would miss.
   const n = 26;
   const built = buildRearrangement({
     before: arrangement(n, shuffledOrder(n, 1)),
@@ -120,9 +125,8 @@ test('the region covers more than the viewport, so the entry cell stays hidden',
     view: VIEW,
     aspect: ASPECT,
   });
-  // The planner swaps into the cell just below the region and then slides it in.
-  // If the region only reached the last visible cell, that swap would happen on
-  // screen and the illusion would break along the bottom edge.
+  // The margin is what keeps the planner's entry cells off screen - see
+  // `BuildRearrangementOptions.margin`.
   assert.ok(built.bounds.ymin < VIEW.y0 + built.origin.y, 'no margin above the viewport');
   assert.ok(built.bounds.ymax > VIEW.y1 + built.origin.y, 'no margin below the viewport');
   assert.ok(built.bounds.xmin < VIEW.x0 + built.origin.x, 'no margin left of the viewport');
@@ -138,8 +142,8 @@ test('the region covers more than the viewport, so the entry cell stays hidden',
 });
 
 test('visible work is bounded by the viewport, not by the corpus', () => {
-  // The reason a board big enough for a large corpus costs nothing to animate:
-  // everything outside the region is a swap, and swaps are never seen.
+  // The board grows with the corpus; the slides must not. A shift is the only
+  // visible move - see `illusion.ts`'s move set.
   let bounds;
   const counts = [50, 200, 800].map((n) => {
     const { moves, built } = planAndCheck(
@@ -150,11 +154,12 @@ test('visible work is bounded by the viewport, not by the corpus', () => {
     return moves.filter((m) => m.type !== 'swap').length;
   });
 
-  // The claim is that this does not GROW with the corpus, which is what the
-  // board size rests on. It is not flat: a value with no copy off camera has to
-  // be rotated out of the region first, and a small corpus needs more of those,
-  // because more of its distinct rooms are on screen at once. So the count
-  // drifts mildly the other way, and the biggest corpus is never the dearest.
+  // The claim is that this does not grow with the corpus, which is what the
+  // board size rests on. It is not flat either: a value with no copy off camera
+  // has to be rotated out of the region first, and a small corpus needs more of
+  // those, because more of its distinct rooms are on screen at once. So the
+  // count drifts mildly the other way, and the biggest corpus is never the
+  // costliest.
   assert.ok(
     Math.max(...counts) / Math.min(...counts) < 1.5,
     `slide counts vary too much with corpus size: ${counts}`
@@ -177,9 +182,8 @@ test('visible work is bounded by the viewport, not by the corpus', () => {
 });
 
 test('a corpus smaller than the placed set cannot be animated, and says so', () => {
-  // The "rooms on the map" slider: a reorder then changes WHICH rooms are
-  // placed, so a room the new order wants on camera may never have been on the
-  // board. Sliding it in would mean a tile changing its face off camera.
+  // The rooms-on-the-map-slider case in `board.ts`'s header: the new order wants
+  // a room on camera that was never placed, so no board holds it.
   const total = 300;
   const n = 60;
   const before = arrangement(n, shuffledOrder(total, 1));
@@ -193,9 +197,9 @@ test('a corpus smaller than the placed set cannot be animated, and says so', () 
 });
 
 test('a narrow viewport is a legal region too', () => {
-  // A phone at the default zoom: about 2 cells across and 5 down. The region is
-  // then taller than it is wide, which is the shape that breaks any approach
-  // assuming a region line can be cleared in one rotation.
+  // A phone at the default zoom: about 2 cells across and 5 down. A region
+  // taller than it is wide is the case `illusion.ts`'s phase 2 note covers - the
+  // conveyor never needs to clear a line in one rotation.
   planAndCheck(
     arrangement(120, shuffledOrder(120, 1)),
     arrangement(120, shuffledOrder(120, 2)),

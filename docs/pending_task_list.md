@@ -104,6 +104,34 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
 (CodeQL, Dependency Review Action) alongside the existing informational
 `npm audit` job — agreed as worth doing, but not yet planned or started.
 
+## Comments and doc pointers:
+- **[2026-09-17] Twenty code comments cite `accessibility-plan.md` sections that
+  no longer exist** (13 files), and four more cite `docs/catalog-plan.md` §2/§7 —
+  a file that does not exist at all. Both were caused by a4eb2ae ("AI
+  documentation cull"), which deleted catalog-plan.md and rebuilt
+  accessibility-plan.md as a "Still open" list, so `§3.2`, `§4.2a`, `§8 item 5`
+  and friends resolve to nothing a reader can find. Not a code bug; a
+  confident-looking lie. Fix: drop the pointer and keep the claim its sentence
+  was citing — do not renumber it, since a section number into an ephemeral doc
+  rots again at the next cull (see `docs/comment-refactor-plan.md` §2b's "Doc
+  pointers rot fastest of all"). Reproduce with
+  `grep -rn '§[0-9]\|catalog-plan' packages/ --include='*.ts*'`. The 2026-09-17
+  comment pass cleared
+  `packages/map/nextRoom.ts`; the rest are still-queued files the pass reaches
+  anyway, so this entry is for the two that a queue position would not catch:
+  `packages/web/src/main.tsx`'s pass is already ticked done and shipped holding
+  `§3.2` and `§4.2b`, and `packages/map/ordering.ts`'s center-room note cites
+  "docs/concept.md steps 5-6", a numbering concept.md has never used (its
+  headings are dated). Same class, already-passed and about-to-be-passed.
+- **[2026-09-17] Two comments cite a `pending_task_list.md` entry that has
+  already shipped**: `useRearrangement.ts`'s `onPreparingChange` and
+  `SearchIcon.tsx`'s `SearchOrbitSpinner` both point at "the far-field case
+  `docs/pending_task_list.md`'s 'Loading indicator' entry asked for", and this
+  file has no such entry — AGENTS.md documents the far-field spinner as built.
+  A live TODO pointer anchored at the line it warns about is fine and gets
+  cleaned up with the issue; a citation of finished work is dead text. Remove
+  the citation, keep the sentence's own claim about what the component is for.
+
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in
   `useCorpus.ts` end in `.catch(() => {})`, so a missing `metadata.json` or
@@ -220,3 +248,11 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   a `flyTo` from a control does not currently do this. Confirm whether that's
   the intended reading of the invariant and, if so, wire `flyTo` to end an
   active rearrangement the same way a pointer grab does.
+- **[2026-09-17] `repairMultiset` takes a `start` board it never reads**
+  (`packages/map/board.ts`): the signature is `(start, end, delta, geom)`, the
+  body touches only `end`, `delta` and `geom`, and `buildRearrangement` still
+  passes `start` at the call site. Found while passing the file's comments.
+  Dropping the parameter is a code edit, which a comment pass may not make - its
+  whole contract is that the verifier reports `comment-only` - so it is filed
+  rather than fixed. Nothing gates it: eslint's `no-unused-vars` only reports
+  arguments after the last used one, and `tsc` has no `noUnusedParameters`.

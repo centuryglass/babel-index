@@ -137,6 +137,25 @@ committing, because a dangling pointer is exactly the confident-looking lie P5
 warns about. Cheap tells to grep for: `the two things`, `the forty`, `\.(js|jsx)\b`
 in a `see`, and any `see \`([a-zA-Z]+)\`` whose name `grep`s to nothing.
 
+**Doc pointers rot fastest of all.** (`nextRoom.ts` said `accessibility-plan.md
+§4.2a`; that section has not existed since a4eb2ae culled and restructured the
+doc, and the same commit deleted `docs/catalog-plan.md` outright while four files
+went on citing its `§2` and `§7`.) Plan docs are *ephemeral* by design —
+`concept.md` is explicitly not kept in sync, and a task list entry leaves by
+being done — so a section number into one is a fact with an expiry date. *Move:*
+when the pointer you are checking no longer resolves, **delete it and keep the
+sentence's claim**, rather than renumbering it; the renumber just rots again at
+the next cull. Two exceptions. A pointer into a doc AGENTS.md calls a *spec* —
+`search_rules.md`, which it says to update alongside a scoring change, and
+`keyboard-controls.md` — is durable, and a named *section title* there
+(`docs/search_rules.md "Story matching"`) survives a renumber where a `§4.2a`
+will not. And a pending-task pointer is fine when it is a live TODO anchored at
+that exact spot, the "see the pending entry for details on this right here"
+shape, because it gets cleaned up as the issue does; a pointer to an entry that
+has already shipped, or to one whose fix will not touch this line, is the same
+dead `§4.2a` in a different costume. Tells to grep for: `§[0-9]`, `docs/`, and
+`\.md` inside a comment.
+
 **One abstraction level per comment.** (Gemini's "entanglement of abstraction
 levels.") A single sentence that swerves from product metaphor ("the library is
 round") to DOM mechanics (`pointer-events: none`) to React lifecycle to repo
@@ -207,10 +226,12 @@ Run this every session. Steps 4, 6 and 7 are what make a pass trustworthy.
    also catch a comment edit that broke a `@example`-style fenced block or an
    unused-var reference from a removed doc line.)
 6. **Check every cross-reference resolves.** Grep the file for `see \``,
-   "see <Name>", and literal claims ("the two things", a raw count), then confirm
-   each named symbol/file still exists (`grep -rn`) and each literal was replaced
-   by a symbol reference. Union-alpha's otherwise-best revision shipped a dead
-   `positionSearchBox` pointer; this step is the net for that.
+   "see <Name>", literal claims ("the two things", a raw count), and doc
+   pointers (`§[0-9]`, `\.md`) — then confirm each named symbol/file still exists
+   (`grep -rn`), each literal was replaced by a symbol reference, and each doc
+   still has the section cited. Union-alpha's otherwise-best revision shipped a
+   dead `positionSearchBox` pointer; this step is the net for that, and for the
+   `accessibility-plan.md §4.2a` class of rot that outlives its doc's last cull.
 7. **Self-check the diff** — read `git diff` for the file once more; confirm
    every changed line is a comment line and the prose follows the house rules
    (ASCII hyphens in comments, single quotes, two-space indent, no "used to").
@@ -227,8 +248,13 @@ file's paired test(s), to be passed in the same batch as the source.
 rearrangement/geometry vocabulary that many files share gets a single canonical
 home early — see §6 for the rationale:
 
-1. `packages/map` — the pure spatial/algorithm core (`illusion.ts` done).
-   `ordering.ts`/`scoring.ts` are dense and cross-referenced; do them together.
+1. `packages/map` — the pure spatial/algorithm core. The rearrangement half is
+   done (`illusion.ts` and its test, `board.ts` and its test, `moves.ts`, plus
+   the small shared `prng.ts` and `nextRoom.ts`). What remains here is the
+   search half: `ordering.ts`/`scoring.ts` are dense and cross-referenced; do
+   them together, and take `searchResult.ts` with them (it declares the shapes
+   `scoring.ts`'s `rankHybrid` returns, and still cites `useSearch.js`). Then
+   `describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts`.
 2. `packages/config` — one file (`config.ts`) is the single densest comment
    block in the repo (480 comment lines); give it its own pass.
 3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
@@ -243,30 +269,31 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **2 / 107 source files** (`main.tsx`, `illusion.ts` — both ticked
-in the list below; their paired tests are still open). The running checklist is
-the source of truth; tick boxes as you go.
+Progress so far: **6 / 107 source files** (`main.tsx`, `illusion.ts`,
+`board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`), plus 3 paired tests
+(`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`) — all ticked in the
+list below. The running checklist is the source of truth; tick boxes as you go.
 
 ### Source files and their tests
 
 #### packages/map
-- [ ] packages/map/board.ts
-  - [ ] packages/map/board.test.ts
+- [x] packages/map/board.ts
+  - [x] packages/map/board.test.ts
 - [ ] packages/map/describe.ts
   - [ ] packages/map/describe.test.ts
 - [ ] packages/map/favorites.ts
   - [ ] packages/map/favorites.test.ts
 - [x] packages/map/illusion.ts
-  - [ ] packages/map/illusion.test.ts
+  - [x] packages/map/illusion.test.ts
 - [ ] packages/map/manifest.ts  — no unit test
 - [ ] packages/map/metadata.ts
   - [ ] packages/map/metadata.test.ts
-- [ ] packages/map/moves.ts  — no unit test
-- [ ] packages/map/nextRoom.ts
-  - [ ] packages/map/nextRoom.test.ts
+- [x] packages/map/moves.ts  — no unit test
+- [x] packages/map/nextRoom.ts
+  - [x] packages/map/nextRoom.test.ts
 - [ ] packages/map/ordering.ts
   - [ ] packages/map/ordering.test.ts
-- [ ] packages/map/prng.ts  — no unit test
+- [x] packages/map/prng.ts  — no unit test
 - [ ] packages/map/scoring.ts
   - [ ] packages/map/scoring.test.ts
 - [ ] packages/map/searchResult.ts  — no unit test

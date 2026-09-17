@@ -1,16 +1,24 @@
+/**
+ * Tests for the rearrangement planner.
+ *
+ * Most cases end in `planAndVerify`: plan, replay, and require the planner and
+ * the replay to agree. The two fixture builders are `makeCase` for random
+ * boards and `trappedCase` for the case randomness misses.
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planMoves, applyMove, normaliseDistance } from './illusion.ts';
 import type { BoardValue } from './moves.ts';
 
 /**
- * The verifier is deliberately a second implementation.
+ * A second implementation of the move semantics, deliberately.
  *
- * It re-derives the move semantics from scratch and reads nothing but the
- * emitted list, so a bug in the planner's own bookkeeping - its value index,
- * its lock counters - cannot hide a bug in its output. Everything the illusion
- * depends on is asserted here rather than inside the planner, because the
- * planner asserting its own guarantees only proves it is self-consistent.
+ * It reads nothing but the emitted list, so a bug in the planner's own
+ * bookkeeping - its value index, its lock counters - cannot hide a bug in its
+ * output. The planner grading its own guarantees would only prove it is
+ * self-consistent, which is why the illusion's invariants are asserted here
+ * rather than inside `illusion.ts`.
  */
 function replayAndVerify(start, end, bounds, fixed, moves) {
   const { width: W, height: H } = start;
@@ -83,10 +91,9 @@ const board = (W: number, H: number, cells: BoardValue[]) => ({ width: W, height
  *
  * `end` is a permutation of `start` leaving the fixed cell alone by
  * construction, which satisfies both preconditions - same multiset, fixed tile
- * agreeing - without any repair afterwards. `alphabet` is kept small on
- * purpose: a board dense with duplicates is the case an approach that inverts a
- * permutation would quietly get wrong, and it is also what the real map looks
- * like, where most cells hold the same generic room.
+ * agreeing - without any repair afterwards. `alphabet` is kept small so the
+ * board is dense with duplicates: that is what the real map looks like, most
+ * cells holding the same generic room.
  */
 function makeCase(r, W, H, fixed, alphabet) {
   const cells = Array.from({ length: W * H }, () => Math.floor(r() * alphabet));
@@ -136,8 +143,8 @@ test('randomized boards transform legally and land exactly', () => {
     const moves = planAndVerify(start, end, bounds, fixed);
     worst = Math.max(worst, moves.length / (W * H));
   }
-  // The reference measures ~1.15x the board size; a regression that made this
-  // quadratic would still be correct, and this is what would notice.
+  // A regression to quadratic planning would still be correct, and this bound is
+  // what would notice: these boards plan at up to ~1.15x their size.
   assert.ok(worst < 2, `move count ${worst.toFixed(2)}x board size is too high`);
 });
 
@@ -166,9 +173,9 @@ test('the fixed tile survives every placement relative to the region', () => {
 });
 
 test('regions larger than half the board in one axis still work', () => {
-  // Both are legal under the bounds rule and both defeat any approach that
-  // assumes a region line can be cleared in a single rotation - the conveyor
-  // never needs to, which is why it survives them.
+  // Both are legal under the bounds rule, and neither can have its region line
+  // cleared in one rotation. The conveyor never needs that - see `illusion.ts`'s
+  // phase 2 note.
   const cases = [
     {
       label: 'tall and thin',
@@ -191,8 +198,8 @@ test('regions larger than half the board in one axis still work', () => {
 });
 
 test('a board that is mostly one value is the easy case, not a special one', () => {
-  // The real map: ~80% generic, a handful of distinct rooms. Nothing here is
-  // asked to identify a particular tile, so the duplicates cost nothing.
+  // The real map's shape: ~80% generic, a handful of distinct rooms, so the
+  // planner is asked about supply rather than identity throughout.
   const r = rng(3);
   const W = 30;
   const H = 24;
@@ -210,18 +217,16 @@ test('a board that is mostly one value is the easy case, not a special one', () 
 });
 
 /**
- * A board whose distinct values are all ON camera at the start.
+ * A board whose distinct values are all on camera at the start.
  *
- * This is the case that makes staging load-bearing, and randomized boards do
- * not reach it: with a handful of values spread over a few hundred cells, every
- * value has a copy off camera and `makeAvailable` never has to extract one. Here
- * nothing can be sourced by a swap, so every insertion first rotates a copy out
- * of the region - and rotating a region column is exactly what would undo the
- * conveyor's partial progress if the column's values were gathered one at a
- * time rather than all parked in advance.
+ * Randomized boards never reach this case: a handful of values over a few
+ * hundred cells leaves an off-camera copy of each, so `makeAvailable` never has
+ * to extract one. Here every insertion has to rotate a copy out of the region
+ * first, which is the work that batch parking exists to make safe - see the
+ * staging note in `illusion.ts`'s primitives section.
  *
  * It is also the shape of a real search: the density gradient packs distinct
- * rooms against the center, which is precisely the viewport.
+ * rooms against the center, which is where the viewport is.
  */
 function trappedCase(W, H, bounds, fixed, permuteWithinRegion, r) {
   const cells = new Array(W * H).fill('generic');
