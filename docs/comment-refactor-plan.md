@@ -1,0 +1,445 @@
+# Comment refactor plan
+
+A standing work plan for rewriting this repository's code comments to the
+house style. It is meant to be read at the start of any session that is doing
+a comment pass, so that the work is repeatable and does not have to be
+re-derived each time.
+
+Companion doc: [`claude_critique.md`](claude_critique.md) — the *diagnosis*.
+This file is the *process*: what we're doing, the problems to fix and how, the
+running list of files, the verification tool, and gotchas.
+
+## 1. What we're doing, and why
+
+The bulk of this codebase's comments were written by Claude (the model), and
+the style reads poorly: correct, but written as advocacy — briefs arguing a
+design to a skeptic — when a reader needs reference — signage stating what is
+true, fast. It sabotages skimming in specific, nameable ways (catalogued in
+`claude_critique.md`).
+
+The fix is a second pass over every code file that **rewrites comment text
+only and never touches code**, moving each comment toward: rule first, one
+fact one home, pinned to a declaration, plain declaratives, length
+proportional to risk. Two passes are committed as exemplars:
+
+- `main.tsx` (db67cbe) — the archetype: every failure mode present.
+- `illusion.ts` (10bf4c8) — the nuance: a file where heavy commentary is
+  *mostly earned*, so the pass is narrower (dedup + de-shout, not compress).
+
+167 code files total (107 sources + 60 tests/specs); 2 are done, ~165 remain.
+That is far more than one session, so it proceeds in batches. This document
+tracks the queue and the method.
+
+Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests.
+CSS/HTML are handled separately (§6) because they need a different verifier.
+
+## 2. Common problems and how to fix each
+
+Distilled from `claude_critique.md`'s eight mechanisms and what the two
+committed passes had to work through. Each is a **tell** (how to spot it) and a
+**move** (what to do). They are listed in the order that tends to pay off.
+
+**P1 — A fact told many times (mechanism 5).** *Tell:* the same rationale, in
+slightly different words, in ≥2 places; you finish a sentence before you start
+it. In `illusion.ts` the "park a whole batch before feeding it" argument
+appeared five times. *Move:* pick the one structural home (usually where the
+thing is *defined*), state it fully there, and replace the others with either
+silence or a four-word pointer ("see the staging note above"). This is the
+highest-value move on most files.
+
+**P2 — Lede buried (mechanism 1).** *Tell:* line 1 of a comment is scene-setting
+and the operative rule lands in the last clause. *Move:* make line 1 a
+standalone summary; a reader who stops there must lose no invariant. In `main.tsx`
+this was pervasive; in `illusion.ts` it was mostly already fine — check, don't
+assume.
+
+**P3 — Arguing with ghosts (mechanism 3).** *Tell:* the comment defends against
+an alternative that is not in the file ("rather than X," "would only drift,"
+"the original behaviour"). AGENTS.md names the past-tense variant specifically.
+*Move:* separate the two things hiding here. A **standing hazard** ("must not
+depend on rank," "the wrap is only safe because it's off-camera") is a real
+regression guard — keep it, as the main clause. A **counterfactual about a design
+never built** — delete. `illusion.ts` had exactly one such ghost; a comment
+referencing a prior implementation is almost always this.
+
+**P4 — Uniform emphasis and counterfeit SHOUTING CAPS (mechanism 2).** *Tell:*
+every comment is the same length/volume, so importance is smuggled in as
+`CAPITALS`; when nine comments each promote one word, the capitals carry no
+signal. *Move:* demote caps to normal prose; where the caps marked a genuine
+contrast, carry that contrast with structure instead (a list item, a leading
+clause). Reserve any surviving emphasis for a real hazard.
+
+**P5 — Comments painted on regions (mechanism 7).** *Tell:* a multi-topic
+paragraph describing a *neighborhood* of code, or a doc block for a function
+that moved away from it (the orphaned `?`-key block in `main.tsx`). *Move:* one
+comment, one declaration below it; split any paragraph that describes more than
+one thing and re-attach each piece. A pinned one-line comment moves with its
+code or visibly goes wrong; a region paragraph quietly becomes a confident lie.
+
+**P6 — Hypotaxis / dash run-ons (mechanism 4).** *Tell:* a single sentence doing
+the work of five, with `" - "` as a universal joint. *Move:* one clause per
+sentence/dash; break list-shaped content into an actual list. Don't over-apply —
+dashes doing honest parenthetical work are fine.
+
+**P7 — Narrator voice (mechanism 6).** *Tell:* phrasings whose job is style
+("a bounded handful," "without admitting that…," "robbed," "cannibalized") and
+conviction adverbs (`exactly`, `really`, `precisely`, `never`, `on purpose`).
+*Move:* rewrite as plain declaratives, keeping the concept the flourish was
+decorating. This is the lowest-priority fix — it costs reader trust slowly —
+but it's cheap when you're already in the sentence.
+
+**P8 — Inverted cost (mechanism 8).** *Tell:* comment bulk tracks writer interest,
+not code risk; obvious `useState`s get 15-line justifications. *Move:* compress
+low-risk commentary toward ≤3 lines. **But the inverse trap is real:** in a file
+of genuinely subtle logic (`illusion.ts`, `scoring.ts`, `ordering.ts`), long
+commentary is often *earned* — a competent reader will otherwise write a bug.
+The test is never "is this long?"; it is "would deleting this clause let a
+careful reader introduce a real bug?" If yes, the length stays. The main.tsx
+pass compressed aggressively; the illusion.ts pass mostly did not — same rules,
+opposite dominant move. Know which file you're in (§3, step 2).
+
+## 3. The per-pass workflow (definition of done)
+
+Run this every session. Steps 4-6 are what makes a pass trustworthy.
+
+1. **Pick a batch** from §4 (follow the recommended order; keep
+   cross-referencing files in one batch). Announce which files, and check the
+   box for each when done.
+2. **Read the file end-to-end first.** Note where the ledes are, where facts
+   repeat, and — critically — which long comments are earned hazards (P8).
+   Re-read the relevant `AGENTS.md` "Things that will bite you" bullets; those
+   invariants must survive the rewrite verbatim in substance.
+3. **Edit comments only.** Apply P1-P8. Preserve every fact and hazard; never
+   delete information to save space — relocate or condense it.
+4. **Verify no code changed** — §5's tool, `check.mjs`, on every file touched.
+   Must report `OK (comment-only)` or `clean (unchanged)` for all of them.
+   This is not optional; it caught a dropped `rows.sort(...)` line during the
+   illusion.ts pass that hand-review had missed.
+5. **Run the gates:** `npm test`, `npm run lint`, `npm run typecheck`. (These
+   also catch a comment edit that broke a `@example`-style fenced block or an
+   unused-var reference from a removed doc line.)
+6. **Self-check the diff** — read `git diff` for the file once more; confirm
+   every changed line is a comment line and the prose follows the house rules
+   (ASCII hyphens in comments, single quotes, two-space indent, no "used to").
+7. **Commit** — comments-only in the message, name the dominant moves, cite
+   that the verifier showed byte-identical code. Update §4 boxes in the same
+   commit.
+
+## 4. Running list of files to pass
+
+Legend: `[x]` = comment pass done · `[ ]` = not yet · indentation shows a source
+file's paired test(s), to be passed in the same batch as the source.
+
+**Recommended order** (batches), roughly hardest-clustered-first so the
+rearrangement/geometry vocabulary that many files share gets a single canonical
+home early — see §6 for the rationale:
+
+1. `packages/map` — the pure spatial/algorithm core (`illusion.ts` done).
+   `ordering.ts`/`scoring.ts` are dense and cross-referenced; do them together.
+2. `packages/config` — one file (`config.ts`) is the single densest comment
+   block in the repo (480 comment lines); give it its own pass.
+3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
+   `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks.
+   AGENTS.md's WebGL lockstep rule means their comments describe the same
+   per-frame decisions twice — dedup across them, don't let one file's wording
+   drift from its twin's.
+4. `packages/server` — `app.ts` first (largest, and many other files cite it).
+5. `packages/web/src/lib` (geometry/DOM-adjacent) → `hooks/` → `components/`.
+   `center.ts` + `tools/center-placement` are coupled; batch them.
+6. `packages/pipeline`, then the `tools/*` trees, then `build/`.
+7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
+   most often — doing them late avoids churn).
+
+Progress so far: **2 / 107 source files** (`main.tsx`, `illusion.ts` — both ticked
+in the list below; their paired tests are still open). The running checklist is
+the source of truth; tick boxes as you go.
+
+### Source files and their tests
+
+#### packages/map
+- [ ] packages/map/board.ts
+  - [ ] packages/map/board.test.ts
+- [ ] packages/map/describe.ts
+  - [ ] packages/map/describe.test.ts
+- [ ] packages/map/favorites.ts
+  - [ ] packages/map/favorites.test.ts
+- [x] packages/map/illusion.ts
+  - [ ] packages/map/illusion.test.ts
+- [ ] packages/map/manifest.ts  — no unit test
+- [ ] packages/map/metadata.ts
+  - [ ] packages/map/metadata.test.ts
+- [ ] packages/map/moves.ts  — no unit test
+- [ ] packages/map/nextRoom.ts
+  - [ ] packages/map/nextRoom.test.ts
+- [ ] packages/map/ordering.ts
+  - [ ] packages/map/ordering.test.ts
+- [ ] packages/map/prng.ts  — no unit test
+- [ ] packages/map/scoring.ts
+  - [ ] packages/map/scoring.test.ts
+- [ ] packages/map/searchResult.ts  — no unit test
+
+#### packages/config
+- [ ] packages/config/config.ts
+  - [ ] packages/config/config.test.ts
+- [ ] packages/config/load.ts
+  - [ ] packages/config/load.test.ts
+
+#### packages/pipeline
+- [ ] packages/pipeline/index.ts  — no unit test
+- [ ] packages/pipeline/layout.ts  — no unit test
+- [ ] packages/pipeline/mips.ts
+  - [ ] packages/pipeline/mips.test.ts
+- [ ] packages/pipeline/sheets.ts
+  - [ ] packages/pipeline/sheets.test.ts
+
+#### packages/server
+- [ ] packages/server/app.ts
+  - [ ] packages/server/app.test.ts
+- [ ] packages/server/base-path.ts
+  - [ ] packages/server/base-path.test.ts
+- [ ] packages/server/catalogPage.ts
+  - [ ] packages/server/catalogPage.test.ts
+- [ ] packages/server/favorites.ts
+  - [ ] packages/server/favorites.test.ts
+- [ ] packages/server/image-fixtures.ts  — no unit test
+- [ ] packages/server/index.ts  — no unit test
+- [ ] packages/server/logger.ts
+  - [ ] packages/server/logger.test.ts
+- [ ] packages/server/port.ts
+  - [ ] packages/server/port.test.ts
+- [ ] packages/server/remote.ts
+  - [ ] packages/server/remote.test.ts
+- [ ] packages/server/roomContent.ts
+  - [ ] packages/server/roomContent.test.ts
+- [ ] packages/server/scan.ts
+  - [ ] packages/server/scan.test.ts
+- [ ] packages/server/search-cache.ts
+  - [ ] packages/server/search-cache.test.ts
+- [ ] packages/server/seo.ts
+  - [ ] packages/server/seo.test.ts
+- [ ] packages/server/version.ts
+  - [ ] packages/server/version.test.ts
+
+#### packages/web
+- [ ] packages/web/e2e/support.ts  — no unit test
+- [ ] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
+- [ ] packages/web/src/components/BabelBookOverlay.tsx
+  - [ ] packages/web/src/components/BabelBookOverlay.test.ts
+- [ ] packages/web/src/components/BookOverlay.tsx  — no unit test
+- [ ] packages/web/src/components/CatalogView.tsx  — no unit test
+- [ ] packages/web/src/components/HelpDialog.tsx  — no unit test
+- [ ] packages/web/src/components/MapView.tsx  — no unit test
+- [ ] packages/web/src/components/RoomDetails.tsx  — no unit test
+- [ ] packages/web/src/components/RoomOverlay.tsx  — no unit test
+- [ ] packages/web/src/components/SearchForm.tsx  — no unit test
+- [ ] packages/web/src/components/SearchIcon.tsx  — no unit test
+- [ ] packages/web/src/components/ZoomControls.tsx  — no unit test
+- [ ] packages/web/src/hooks/useCenterShelf.ts  — no unit test
+- [ ] packages/web/src/hooks/useContentZoom.ts  — no unit test
+- [ ] packages/web/src/hooks/useCorpus.ts  — no unit test
+- [ ] packages/web/src/hooks/useDialog.ts
+  - [ ] packages/web/src/hooks/useDialog.test.ts
+- [ ] packages/web/src/hooks/useDistillMode.ts  — no unit test
+- [ ] packages/web/src/hooks/useFavorites.ts  — no unit test
+- [ ] packages/web/src/hooks/useMapCamera.ts  — no unit test
+- [ ] packages/web/src/hooks/useMapCursor.ts  — no unit test (partial: `describeSurroundings` doc was rewritten in the main.tsx pass; rest not yet reviewed)
+- [ ] packages/web/src/hooks/useMapRenderer.ts  — no unit test
+- [ ] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
+- [ ] packages/web/src/hooks/useModeTransition.ts  — no unit test
+- [ ] packages/web/src/hooks/useRearrangement.ts  — no unit test
+- [ ] packages/web/src/hooks/useSearch.ts  — no unit test
+- [ ] packages/web/src/lib/camera.ts
+  - [ ] packages/web/src/lib/camera.test.ts
+- [ ] packages/web/src/lib/catalog.ts
+  - [ ] packages/web/src/lib/catalog.test.ts
+- [ ] packages/web/src/lib/center.ts
+  - [ ] packages/web/src/lib/center.test.ts
+- [ ] packages/web/src/lib/clearHistoryBook.ts
+  - [ ] packages/web/src/lib/clearHistoryBook.test.ts
+- [ ] packages/web/src/lib/contentZoomCamera.ts
+  - [ ] packages/web/src/lib/contentZoomCamera.test.ts
+- [ ] packages/web/src/lib/debug.ts  — no unit test
+- [ ] packages/web/src/lib/debugActions.ts
+  - [ ] packages/web/src/lib/debugActions.test.ts
+- [ ] packages/web/src/lib/distillToggle.ts
+  - [ ] packages/web/src/lib/distillToggle.test.ts
+- [ ] packages/web/src/lib/favoriteBadge.ts
+  - [ ] packages/web/src/lib/favoriteBadge.test.ts
+- [ ] packages/web/src/lib/gl/context.ts  — no unit test
+- [ ] packages/web/src/lib/gl/glowTexture.ts  — no unit test
+- [ ] packages/web/src/lib/gl/shaders.ts  — no unit test
+- [ ] packages/web/src/lib/gl/spineTexture.ts  — no unit test
+- [ ] packages/web/src/lib/gl/textureCache.ts  — no unit test
+- [ ] packages/web/src/lib/gl/warm.ts  — no unit test
+- [ ] packages/web/src/lib/glRenderer.ts
+  - [ ] packages/web/src/lib/glRenderer.test.ts
+- [ ] packages/web/src/lib/glSlideRenderer.ts
+  - [ ] packages/web/src/lib/glSlideRenderer.test.ts
+- [ ] packages/web/src/lib/loadingAnimation.ts
+  - [ ] packages/web/src/lib/loadingAnimation.test.ts
+- [ ] packages/web/src/lib/perfProbe.ts
+  - [ ] packages/web/src/lib/perfProbe.test.ts
+- [ ] packages/web/src/lib/persist.ts
+  - [ ] packages/web/src/lib/persist.test.ts
+- [ ] packages/web/src/lib/picking.ts
+  - [ ] packages/web/src/lib/picking.test.ts
+- [ ] packages/web/src/lib/pyramid.ts
+  - [ ] packages/web/src/lib/pyramid.test.ts
+- [ ] packages/web/src/lib/render.ts
+  - [ ] packages/web/src/lib/render.test.ts
+- [ ] packages/web/src/lib/rooms.ts
+  - [ ] packages/web/src/lib/rooms.test.ts
+- [ ] packages/web/src/lib/slide.ts
+  - [ ] packages/web/src/lib/slide.test.ts
+- [ ] packages/web/src/lib/spineFont.ts  — no unit test
+- [ ] packages/web/src/lib/svgPath.ts
+  - [ ] packages/web/src/lib/svgPath.test.ts
+- [ ] packages/web/src/lib/tiles.ts
+  - [ ] packages/web/src/lib/tiles.test.ts
+- [ ] packages/web/src/lib/touchDebug.ts  — no unit test
+- [ ] packages/web/src/lib/webglFlag.ts  — no unit test
+- [x] packages/web/src/main.tsx  — no unit test
+_Standalone specs/helpers (no same-name source):_
+- [ ] packages/web/bundle.test.ts
+- [ ] packages/web/e2e/accessibility.e2e.ts
+- [ ] packages/web/e2e/artist-statement.e2e.ts
+- [ ] packages/web/e2e/catalog.e2e.ts
+- [ ] packages/web/e2e/favorites.e2e.ts
+- [ ] packages/web/e2e/keyboard-cursor.e2e.ts
+- [ ] packages/web/e2e/map-gestures.e2e.ts
+- [ ] packages/web/e2e/render-parity.parity.ts
+- [ ] packages/web/e2e/shelf.e2e.ts
+- [ ] packages/web/e2e/webgl-map.e2e.ts
+
+#### tools/center-placement
+- [ ] tools/center-placement/import-shelf-svg.ts  — no unit test
+- [ ] tools/center-placement/lib/geometry.ts  — no unit test
+- [ ] tools/center-placement/lib/measured.ts  — GENERATED, do not edit here (see §6; fix the importer)
+- [ ] tools/center-placement/lib/svg.ts  — no unit test
+_Standalone specs/helpers (no same-name source):_
+- [ ] tools/center-placement/geometry.test.ts
+
+#### tools/center-animation
+- [ ] tools/center-animation/index.ts  — no unit test
+- [ ] tools/center-animation/lib.ts
+  - [ ] tools/center-animation/lib.test.ts
+
+#### tools/embed
+- [ ] tools/embed/cosine-range.ts  — no unit test
+- [ ] tools/embed/cosine-stats.ts
+  - [ ] tools/embed/cosine-stats.test.ts
+- [ ] tools/embed/embed.ts  — no unit test
+
+#### tools/upload
+- [ ] tools/upload/lib.ts
+  - [ ] tools/upload/lib.test.ts
+- [ ] tools/upload/upload-r2.ts  — no unit test
+
+#### tools/perf-capture
+- [ ] tools/perf-capture/capture.ts  — no unit test
+
+#### tools/font-lab
+- [ ] tools/font-lab/download-fonts.ts  — no unit test
+- [ ] tools/font-lab/fonts.ts  — no unit test
+- [ ] tools/font-lab/render.ts  — no unit test
+- [ ] tools/font-lab/variants.ts  — no unit test
+
+#### build
+- [ ] build/register.mjs  — no unit test
+- [ ] build/ts-loader.mjs  — no unit test
+
+## 5. Verification: "no code changed"
+
+A comment pass must be provably code-free. Two independent checks, both cheap:
+
+### Primary — `tools/comment-check/check.mjs` (classic-TS5)
+
+```sh
+node tools/comment-check/check.mjs <file>...          # working tree vs HEAD
+node tools/comment-check/check.mjs --base <rev> <file>...   # vs another rev
+```
+
+It parses each file with the real TypeScript 5 parser and **prints it back with
+comments removed** (`ts.createPrinter({ removeComments: true })`), then diffs
+that canonical output between the two versions. Equal ⟹ only comments changed;
+it prints `-/+` of the code lines that actually moved otherwise. It preserves
+**type annotations**, so a slipped `a: number` → `a: string` is caught, and
+parses correctly through regex-vs-division, template `${}` substitutions, and
+JSX text — the cases a hand-rolled lexer (or eyeballing a diff) gets wrong.
+
+Contract self-tests live in `tools/comment-check/strip.test.mjs` (also run by
+`npm test`, which discovers `tools/`).
+
+This is a **local-only tool**: classic TS is installed in a nested
+`tools/comment-check/package.json` so its `tsc` binary can't shadow the
+project's `typescript` v7 (the native tsgo port). Consequences:
+- The nested `node_modules/` is gitignored and is not installed by CI. That is
+  intentional — this is a branch/machine tool. On a fresh clone, run once:
+  `npm --prefix tools/comment-check install`.
+- `npm test` will try to load `strip.test.mjs`; if classic TS isn't installed it
+  errors. Not a merge gate concern (local only), but know why.
+
+### Fallback — esbuild one-liner (faster, one blind spot)
+
+If `check.mjs` isn't available, an esbuild transpile of before/after and a
+byte-compare confirms no *value* code changed — but **esbuild erases TypeScript
+types**, so a type-only edit slips through. Use it as a quick check only; the
+TS5 tool is the real gate.
+
+```sh
+node -e '
+const {readFileSync}=require("fs"), e=require("esbuild");
+const go=f=>e.transformSync(readFileSync(f,"utf8"),{loader:"ts",format:"esm",legalComments:"none"}).code;
+console.log(go("/path/before.ts")===go("/path/after.ts")?"IDENTICAL-CODE":"CODE-DIFFERS");'
+```
+
+(Both were used on the illusion.ts pass; the esbuild check is what first flagged
+the dropped `rows.sort(...)`. They agree.)
+
+## 6. Tips that will save you
+
+- **Never `git add -A`/`git add .` to commit a pass.** This working tree
+  routinely carries untracked scratch that must not be committed
+  (`favorite.json`, `reference/…`, `screen_reader_issues.txt`,
+  `docs/comment-revision-tests/`, the nested `tools/comment-check/node_modules`).
+  `git add -A` swept 30+ such files into the illusion.ts commit; recover with
+  `git reset --soft HEAD^`, `git reset HEAD -- <paths>`, re-commit staging only
+  your files. Stage paths explicitly (`git add packages/map/illusion.ts
+  docs/claude_critique.md docs/comment-refactor-plan.md`).
+- **A dropped code line is the real risk, not a mangled sentence.** The illusion.ts
+  pass accidentally deleted `rows.sort(...)` inside a comment rewrite and
+  hand-review missed it — only the verifier caught it. Run §5 before you trust
+  your own eyes, every time.
+- **Delete any scratch file before committing.** A temp `.mjs` at the repo root
+  or a helper dropped under `tools/` gets picked up by `eslint .` (and any
+  `*.test.*` scratch by `npm test`). Remove scaffolding used to build or test a
+  tool; commit only the tool's real files.
+- **Batch by cross-reference, not by folder size.** When file A's comment points
+  at file B ("see `board.ts`"), deduping (P1) needs you to see both at once, so
+  A and B go in one batch. The renderer cluster and the center/geometry cluster
+  exist for this reason.
+- **Comments use ASCII hyphens; this plan and the critique use em dashes.**
+  AGENTS.md rule: prose comments in `.ts`/`.tsx` use `" - "`, not —. Match the
+  file you're editing, not this document.
+- **Don't rewrite a hazard you don't fully understand.** If a comment warns about
+  something and you can't see the bug it prevents, keep it (you may keep it in
+  tighter words). The failure mode is confidently deleting a load-bearing warning
+  because it read like filler. When unsure, lean to keeping.
+- **Type-only contracts still get passes.** `manifest.ts`, `moves.ts`,
+  `searchResult.ts`, `assets.d.ts` are interfaces with a lot of JSDoc explaining
+  invariants — the style rules apply, and the verifier still proves code-
+  (type-) preservation.
+- **`tools/center-placement/lib/measured.ts` is generated.** Its header says "Do
+  not edit by hand." Comment fixes there belong in the generator
+  (`import-shelf-svg.ts`), not the file — either skip it or fix the generator.
+- **Tests get a lighter touch.** Their comments are usually about *why this
+  assertion* — that's a hazard note (P3/P8) and mostly worth keeping. Still fix
+  buried ledes and repetition, but don't strip a test's rationale to make it
+  skim-friendly.
+- **Use `git diff` at the end, not `git diff --stat`.** Read the real changed
+  lines once as a human after the verifier passes — it's the last net for P4/P7
+  prose slips and for catching a "comment-only" edit that quietly reordered two
+  statements.
+- **The plan itself is not exempt.** If you find a worse pattern than anything in
+  §2, add it here (with the file that showed it) rather than only fixing the one
+  file. And if a batch reveals the ordering here is wrong, update §4.

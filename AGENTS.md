@@ -422,6 +422,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     `CLAUDE.md` and `README.md` with the real detail - you
                     don't need either unless you're actually working in this
                     directory.
+- `tools/comment-check`: A comment pass's code-preservation gate - proves an
+                         edit changed only comments. `strip.mjs` parses with the
+                         real TypeScript 5 printer and reprints with comments
+                         removed (types kept, so a slipped annotation is caught,
+                         unlike an esbuild transpile which erases them);
+                         `check.mjs <file>` diffs the working tree against HEAD
+                         and prints the code lines that moved. A local tool:
+                         classic TS lives in a nested `package.json`/
+                         `node_modules` (gitignored) so its `tsc` can't shadow
+                         the project's v7. Contract tests in `strip.test.mjs`;
+                         used by every pass per `docs/comment-refactor-plan.md`.
 
 ### Infra:
 - `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the
@@ -505,6 +516,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   real `?perf` capture and reprioritizes them.
                                   Most items remain unimplemented - the shipped
                                   exception is `prepareRearrangement` (§9.7).
+- `docs/claude_critique.md`: The diagnosis of the comment style this repo is
+                             moving away from (Claude-written prose that reads
+                             as advocacy rather than reference), with the eight
+                             named failure mechanisms and line-referenced
+                             evidence from the two revised exemplar files
+                             (`main.tsx`, `illusion.ts`).
+- `docs/comment-refactor-plan.md`: The ongoing project to apply that critique
+                                  across the whole tree - the mechanism-to-fix
+                                  table, the per-pass workflow, the running
+                                  file checklist, and the code-preservation
+                                  verification. Read it at the start of any
+                                  comment pass.
 
 ## Conventions
 
