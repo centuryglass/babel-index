@@ -287,12 +287,22 @@ file's paired test(s), to be passed in the same batch as the source.
 rearrangement/geometry vocabulary that many files share gets a single canonical
 home early — see §6 for the rationale:
 
-1. `packages/map` — the pure spatial/algorithm core. The rearrangement half is
-   done (`illusion.ts` and its test, `board.ts` and its test, `moves.ts`, plus
-   the small shared `prng.ts` and `nextRoom.ts`), and so is the search half
-   (`ordering.ts`/`scoring.ts`/`searchResult.ts` and the two paired tests;
-   they cross-reference each other heavily, so they went as one batch). What
-   remains: `describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts`.
+1. `packages/map` — the pure spatial/algorithm core. Done (2026-09-17, across
+   parallel checkouts): the rearrangement half (`illusion.ts` and its test,
+   `board.ts` and its test, `moves.ts`, plus the small shared `prng.ts` and
+   `nextRoom.ts`), then the search half (`ordering.ts`/`scoring.ts`/
+   `searchResult.ts` and the two paired tests; they cross-reference each
+   other heavily, so they went as one batch), then the remainder
+   (`describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts` and the
+   paired tests). The remainder's pass found live instances of the §2b
+   rot classes: five `.js`/`.mjs` filename citations, four dead
+   `accessibility-plan.md` section/phase pointers, a `fetchRemoteManifest`
+   pointer whose real name is `scanRemote`, a quote attributed to the
+   curation prompt that the prompt does not contain, a "1.2 seconds" claim
+   the config's viewport-sized durations make unfalsifiable-by-reading, and
+   two claims the code does not have (`roomTitle` as "the one place the
+   `Room {id}` fallback is written", `/api/manifest` serving the scan
+   "verbatim plus a `config` field").
 2. `packages/config` — done (2026-09-17). One file (`config.ts`) is the single
    densest comment block in the repo (480 comment lines); it took its own pass,
    and most of that block's bulk was P1 (facts AGENTS.md, `camera.ts`,
@@ -336,15 +346,15 @@ of citing it.
 #### packages/map
 - [x] packages/map/board.ts
   - [x] packages/map/board.test.ts
-- [ ] packages/map/describe.ts
-  - [ ] packages/map/describe.test.ts
-- [ ] packages/map/favorites.ts
-  - [ ] packages/map/favorites.test.ts
+- [x] packages/map/describe.ts
+  - [x] packages/map/describe.test.ts
+- [x] packages/map/favorites.ts
+  - [x] packages/map/favorites.test.ts
 - [x] packages/map/illusion.ts
   - [x] packages/map/illusion.test.ts
-- [ ] packages/map/manifest.ts  — no unit test
-- [ ] packages/map/metadata.ts
-  - [ ] packages/map/metadata.test.ts
+- [x] packages/map/manifest.ts  — no unit test
+- [x] packages/map/metadata.ts
+  - [x] packages/map/metadata.test.ts
 - [x] packages/map/moves.ts  — no unit test
 - [x] packages/map/nextRoom.ts
   - [x] packages/map/nextRoom.test.ts
