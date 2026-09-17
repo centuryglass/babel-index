@@ -1,51 +1,34 @@
 #!/usr/bin/env node
 /**
- * Turn the hand-drawn Inkscape tracing of the Blender render into exact tile
- * geometry.
+ * Turns the hand-traced Inkscape SVG of the center tile into the measured
+ * geometry every consumer reads, `tools/center-placement/lib/measured.ts`.
  *
  *   node tools/center-placement/import-shelf-svg.ts <shelf_geometry.svg> [--out <file>]
  *
- * Conventions in that file, per the author:
- *   rect labelled "search_box"   -> where the live search field sits
- *   rects labelled "book0".."bookN" -> book spines, addressed by that label
- *   path labelled "center_book"  -> the open book painted into a shelf gap,
- *                                   a distinct hotspot from the lettered books
- *   path labelled "distill_off"  -> the "enable distillation" icon's outline,
- *                                   traced over the whole tile like center_book
- *   path labelled "distill_on"   -> the "disable distillation" icon's outline,
- *                                   same treatment as distill_off
- *   rect labelled "fav_mine_toggle"  -> hit region for the "my favorites" sort switch
- *   rect labelled "fav_count_toggle" -> hit region for the "most favorited" sort switch
- *   rect labelled "shuffle_button"   -> hit region for the reorder control
- *   ellipse labelled "tile_fav_toggle" -> the on-tile favorite badge's
- *                                         non-transparent silhouette, traced
- *                                         over the whole tile (not just the
- *                                         badge's own icon) so it lands in
- *                                         the same per-axis fraction space as
- *                                         every other traced element
+ * The label on an element is the contract; its fill colour is decorative. An
+ * element the trace does not carry is emitted as null, and the consumer leaves
+ * that control out.
  *
- * That is the whole trace now - no board, upright or lamp is read from the
- * SVG any more. Only the label is authoritative; fill colour is decorative.
- * Spines are grouped into shelves purely by y - the trace gives every book on
- * one shelf the same y, so no board or upright needs to be traced to find the
- * bays. A shelf's books need not be evenly spaced or contiguous across x: a
- * gap wider than a book (art occupying part of the shelf, say) simply means
- * that shelf has more than one addressable run, and it is left to the
- * consumer (center.js) to treat those runs as separate clusters for
- * hit-testing.
+ *   rect    "search_box"       where the live search field sits
+ *   rect    "book0".."bookN"   book spines, grouped into shelves by y
+ *   rect    "fav_mine_toggle"  hit region for the "my favorites" sort switch
+ *   rect    "fav_count_toggle" hit region for the "most favorited" sort switch
+ *   rect    "shuffle_button"   hit region for the reorder control
+ *   path    "center_book"      the open book painted into a shelf gap
+ *   path    "distill_off"      the "enable distillation" icon's outline
+ *   path    "distill_on"       the "disable distillation" icon's outline
+ *   ellipse "tile_fav_toggle"  the on-tile favorite badge's silhouette
  *
- * `center_book` is traced as a `<path>`, not a `<rect>` - it is the silhouette
- * of an open book, not a spine, and the point of tracing it as a path rather
- * than another box is that the hover/hit region and the highlight drawn on
- * screen are the SHAPE, not a rectangle loose enough to lap onto the spines
- * either side of it. The importer re-serialises the traced `d` into one
- * canonical, tile-normalised grammar (see `normalizePath`) rather than
- * reducing it to a box; a bounding box is still reported alongside it for
- * anything that only needs a quick containment check.
+ * No shelf board, case upright or lamp is traced: shelf rows fall out of the
+ * books' shared y, and a row's books need not be contiguous across x - the run
+ * splitting a gap wider than a book implies is `center.ts`'s `RUNS`.
  *
- * Everything is emitted normalised to the tile edge (0-1), so it is resolution
- * independent. Tracing by hand in Inkscape is five minutes of work and avoids
- * parsing the .blend, which would be a lot of machinery for the same numbers.
+ * `center_book`, `distill_off` and `distill_on` are `<path>`s, `tile_fav_toggle`
+ * an `<ellipse>`, and all four are traced over the whole tile rather than over
+ * the shape's own bounds: one coordinate space covers every value emitted. Each
+ * becomes one canonical M/L/C/Z grammar plus a bbox for a caller that only
+ * needs containment - see `normalizePath`, `ellipseToPath` and `measured.ts`'s
+ * `CenterBook`.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, basename } from 'node:path';
@@ -93,31 +76,38 @@ for (const g of svg.matchAll(/<g\b[\s\S]*?>/g)) {
   ty += Number(translate[2]);
 }
 
-/** Argument count per path command letter, uppercased; A(rc) is unsupported. */
+/** Argument count per path command letter, uppercased. */
 const PATH_ARG_COUNT: Record<string, number> = {
   M: 2, L: 2, H: 1, V: 1, C: 6, Z: 0, A: 7,
 };
 
 /**
- * Re-serialise a `<path>`'s `d` into ONE canonical grammar - absolute M/L/C/Z
- * only, every number a tile-normalised (x/vbW, y/vbH) coordinate - and report
- * its bounding box (over on-curve AND control points, which for a cubic
- * Bezier never underestimates the true bound: the curve stays inside the hull
- * of its control points).
+ * Re-serialises a `<path>`'s `d` into one canonical grammar: absolute M/L/C/Z
+ * only, every number a tile-normalised (x/vbW, y/vbH) coordinate. Returns that
+ * string and its bounding box.
  *
- * Collapsing H/V/M-repeat/relative-vs-absolute into this one grammar is what
- * lets the consumer (`center.ts`) hand the string straight to an SVG
- * `<path d>` with no further interpretation, and what lets `geometry.ts`
- * rescale it for an arbitrary tile size with a single regex over `x,y` pairs
- * rather than a second copy of this walk. S/Q/T are refused rather than
- * silently mishandled - the hand traced silhouette this importer exists for
- * has never needed them (see the trace itself, not a claim this file makes).
- * `A` is accepted but APPROXIMATED as a lineto to its own endpoint, dropping
- * the curve - `distill_off`/`distill_on`'s Inkscape-rounded corners are a
- * couple of pixels of fillet on a tile-sized icon, invisible at the sampled
- * precision a hover highlight needs (the same tradeoff `flattenPath` makes
- * sampling a real cubic), and worth it against hand-deriving the elliptical
- * arc-to-Bezier conversion for a curve nobody will ever see the difference on.
+ * Collapsing H/V/M-repeat/relative into that grammar is what lets a consumer
+ * hand the string straight to an SVG `<path d>`, and what lets
+ * `geometry.ts`'s `scalePathData` rescale it with a regex over `x,y` pairs
+ * instead of a second copy of this walk. That regex is only sound because of
+ * the collapse: one leftover single-number command mispairs every coordinate
+ * after it.
+ *
+ * The bbox covers on-curve and control points alike; a cubic stays inside its
+ * control-point hull, so that is never smaller than the true bound.
+ *
+ * S/Q/T are not in the token grammar, and nothing refuses them: the letter is
+ * dropped and its numbers read as another repeated pair of the command before
+ * it, so a smooth-curve trace - what Inkscape leaves when it simplifies a
+ * Bezier - comes out quietly wrong. `shelf_geometry.svg` carries none, which
+ * makes the command set handled here a fact about the trace rather than a
+ * guarantee of this function (docs/pending_task_list.md, "Tools").
+ *
+ * `A` is handled, and approximated as a lineto to its own endpoint: the curve
+ * is dropped. `distill_off`'s five arcs are its rounded corners, each one a
+ * fillet under 3 units of the traced viewBox, a couple of pixels at tile
+ * scale. Sampling rather than solving is the tradeoff `svgPath.ts`'s
+ * `flattenPath` already makes for the same hit-test.
  */
 function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: number) {
   const tokens = d.match(/[MmLlHhVvCcZzAa]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
@@ -140,11 +130,10 @@ function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: numb
     maxY = Math.max(maxY, y + ty);
   };
   let cmd: string | null = null;
-  // Whether the current outer-loop pass is reading the FIRST pair after a
-  // command letter (true) or a REPEATED pair with no new letter in between
-  // (false). Only matters for M: SVG defines a repeated pair after the first
-  // in an 'M'/'m' as an implicit LINETO, not a second moveto - miss that and
-  // every repeat comes out as a stray, disconnected subpath.
+  // True on the first pair after a command letter, false on a repeated pair
+  // with no letter of its own. Only `M` cares: SVG defines a repeated pair
+  // after an 'M'/'m' as an implicit lineto, and reading it as a second moveto
+  // leaves every repeat a stray, disconnected subpath.
   let firstOfRun = false;
   while (i < tokens.length) {
     const t = tokens[i];
@@ -179,19 +168,18 @@ function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: numb
       visit(cx, cy);
       out.push(`L${nx(cx)},${ny(cy)}`);
     } else if (letter === 'A') {
-      // rx, ry, x-axis-rotation and the two flags (nums[0..4]) are dropped -
-      // see this function's doc comment on why the curve is approximated
-      // rather than converted.
+      // rx, ry, x-axis-rotation and the two flags (nums[0..4]) are dropped;
+      // `normalizePath`'s doc covers the approximation.
       cx = relative ? cx + nums[5] : nums[5];
       cy = relative ? cy + nums[6] : nums[6];
       visit(cx, cy);
       out.push(`L${nx(cx)},${ny(cy)}`);
     } else if (letter === 'C') {
-      // A cubic's three pairs (two control points, one endpoint) are ALL
-      // relative to the point BEFORE this curve - never chained pair to pair,
-      // which is the mistake that sent a control point rocketing off toward
-      // wherever the previous control point happened to land. Only the
-      // endpoint (the third pair) becomes the new current point.
+      // A cubic's three pairs (two control points, one endpoint) are all
+      // relative to the point before the curve, never chained pair to pair -
+      // chaining sends a control point off toward wherever the previous
+      // control point landed. Only the third pair becomes the new current
+      // point.
       const rx = cx;
       const ry = cy;
       const points: string[] = [];
@@ -207,9 +195,9 @@ function normalizePath(d: string, tx: number, ty: number, vbW: number, vbH: numb
       }
       out.push(`C${points.join(' ')}`);
     } else {
-      // M and L's args are (x, y) pairs; a repeat (no new letter) is chained
-      // off the point the PREVIOUS pair just landed on, which is what makes
-      // this loop, unlike C's above, walk px/py forward pair by pair.
+      // M and L's args are (x, y) pairs, and a repeat (no new letter) chains
+      // off the point the previous pair landed on - hence px/py, where the
+      // 'C' branch chains every pair off one origin.
       let px = cx;
       let py = cy;
       const points: string[] = [];
@@ -265,14 +253,10 @@ const applyMatrix = (mat: Matrix, x: number, y: number): [number, number] => [
 const ELLIPSE_KAPPA = 0.5522847498;
 
 /**
- * Turn a traced `<ellipse>` (with its own `transform`, if any) into the same
- * canonical absolute M/L/C/Z grammar `normalizePath` emits for a `<path>` -
- * so `tile_fav_toggle` reaches `center.ts`/`favoriteBadge.ts` exactly like
- * `center_book` does, and the two consumers do not need to know one shape
- * started life as an ellipse. Approximated as 4 cubic Beziers (the standard
- * `kappa` construction) rather than solved exactly - close enough that the
- * boundary looks right at screen resolution, same tradeoff `flattenPath` in
- * `center.ts` makes for a hover hit-test.
+ * Turns a traced `<ellipse>` (plus its own `transform`, if any) into the same
+ * canonical absolute M/L/C/Z grammar `normalizePath` emits. `tile_fav_toggle`
+ * therefore reaches `favoriteBadge.ts` the same way `center_book` does, and no
+ * consumer has to know one of them started as an ellipse.
  */
 function ellipseToPath(
   cx: number, cy: number, rx: number, ry: number,
@@ -284,10 +268,9 @@ function ellipseToPath(
     [cx - rx * k, cy + ry], [cx - rx, cy + ry * k], [cx - rx, cy], [cx - rx, cy - ry * k],
     [cx - rx * k, cy - ry], [cx, cy - ry], [cx + rx * k, cy - ry], [cx + rx, cy - ry * k],
   ];
-  // Raw (pre-normalisation) points for the bbox - `nrect` at the template's
-  // output site divides by vbW/vbH itself, same convention `normalizePath`'s
-  // bbox uses, so the two shapes go through one normalisation path rather
-  // than this function guessing which callers already divided.
+  // `d` is normalised here and the bbox is not: `nrect` divides the bbox at the
+  // output site, as it does `normalizePath`'s. Returning a normalised bbox
+  // would have it divided twice.
   const raw = local.map(([x, y]) => {
     const [tx0, ty0] = mat ? applyMatrix(mat, x, y) : [x, y];
     return [tx0 + tx, ty0 + ty] as [number, number];
@@ -314,6 +297,17 @@ function ellipseToPath(
   };
 }
 
+/**
+ * Reads an attribute off a tag string, falling back to a `style="..."`
+ * declaration of the same name.
+ *
+ * The direct lookup is `\bname=`, and `-` is a word boundary: a presentation
+ * attribute like `stroke-width="..."` earlier in the tag than `width="..."`
+ * matches first and is returned for `width`. This trace keeps stroke values
+ * inside `style=`, where the fallback's `(?:^|;)` anchor rejects them, so
+ * nothing is misread today; anchoring the direct lookup is the durable fix
+ * (docs/pending_task_list.md, "Tools").
+ */
 function attr(tag: string, name: string): string | null {
   const direct = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(tag);
   if (direct) return direct[1].trim();
@@ -380,10 +374,9 @@ const other = rects.filter(
   (r) => !NAMED_SINGLETON_LABELS.has(r.label ?? '') && !/^book\d+$/.test(r.label ?? '')
 );
 
-// Every book on one shelf shares its y in the trace - no board or upright is
-// needed to find the bays. A small tolerance absorbs sub-pixel trace noise
-// without merging two genuinely different shelves, which in practice sit tens
-// of units apart.
+// Rows group by matching y. This tolerance absorbs trace noise; the gap between
+// two real shelves is far wider than it, and an epsilon covering that gap is
+// what would merge them.
 const ROW_EPSILON = vbH * 0.01;
 const shelves: ShelfRow[] = [];
 for (const s of spines) {
@@ -394,12 +387,14 @@ for (const s of spines) {
 shelves.sort((a, b) => a.y - b.y);
 for (const row of shelves) row.books.sort((a, b) => a.x - b.x);
 
+// Each axis is divided by its own traced edge, so the output carries no aspect
+// of its own; `tile` in the emitted file records what that edge was.
 const nx = (v: number) => round(v / vbW);
 const ny = (v: number) => round(v / vbH);
 const nrect = (r: { x: number; y: number; w: number; h: number }) => [nx(r.x), ny(r.y), nx(r.w), ny(r.h)];
 
-// No case uprights are traced any more, so the opening is simply the bounding
-// box of every book on the wall - the thing a reader comes to read.
+// No case upright is traced, so the opening is the bounding box of every book
+// on the wall: that box is the case frame.
 const openingRect = {
   x: Math.min(...spines.map((s) => s.x)),
   y: Math.min(...spines.map((s) => s.y)),
@@ -439,6 +434,8 @@ console.log(`\n${shelves.length} shelves, ${spines.length} books total:`);
 for (const [i, row] of shelves.entries())
   console.log(`  shelf ${i}: ${row.books.length} books   y ${round(row.y)}`);
 
+// A bad trace is listed and sets a nonzero exit code; the file below is written
+// either way, so `--out` still shows what the trace parsed into.
 const problems: string[] = [];
 if (other.length) problems.push(`${other.length} rects had no recognised label (book<n> or search_box)`);
 if (searchBoxRects.length > 1) problems.push(`${searchBoxRects.length} rects labelled search_box, expected one`);
@@ -465,22 +462,21 @@ const body = `/**
  *
  * Values are normalised to the tile edge (0-1), x against the traced width and
  * y against the traced height, so they carry no aspect of their own. \`tile\`
- * records the shape they were traced at, because that is the one thing the
- * normalisation throws away and the one thing that has to keep agreeing with
- * BASE_TILE in packages/web/src/lib/pyramid.ts.
- *
- * Rects are [x, y, w, h].
+ * records the shape they were traced at: the one fact the normalisation
+ * throws away, and the one that has to keep agreeing with BASE_TILE in
+ * packages/web/src/lib/pyramid.ts. \`geometry.test.ts\` asserts that it does.
  */
 
+/** A measured rect as [x, y, w, h]. */
 export type RectTuple = [number, number, number, number];
 
 /**
- * The open book's exact outline. \`d\` is an SVG path in the canonical
- * absolute M/L/C/Z grammar \`normalizePath\` emits (see the importer), every
- * coordinate a tile-normalised (x/vbW, y/vbH) fraction - so it can be handed
- * straight to an SVG \`<path d>\` inside a \`viewBox="0 0 1 1"\`. \`bbox\` is the
- * same shape as every other measured rect, for a caller that only needs a
- * quick containment check.
+ * A traced silhouette in the canonical absolute M/L/C/Z grammar
+ * \`normalizePath\` emits, tile-normalised like every other value here and
+ * spanning the whole tile rather than the shape's own bounds. So \`d\` can be
+ * handed straight to an SVG \`<path d>\` inside a \`viewBox="0 0 1 1"\`, or scaled
+ * per axis by a tile's \`cellPx\`. \`bbox\` is the same tuple as every other
+ * measured rect, for a caller that only needs containment.
  */
 export interface CenterBook {
   d: string;
@@ -489,33 +485,28 @@ export interface CenterBook {
 
 export interface MeasuredData {
   source: string;
+  /** The traced viewBox, and the aspect taken from it. */
   tile: { w: number; h: number; aspect: number };
+  /** The bounding box of every traced book, which is the case frame. */
   opening: RectTuple;
+  /**
+   * One per traced element, named for its label in \`shelf_geometry.svg\` -
+   * what each is for is \`import-shelf-svg.ts\`'s label table. Null means the
+   * trace carried no such element.
+   */
   searchBox: RectTuple | null;
-  /** hit region for the "sort by my favorites" switch - null on a trace with none */
   mineToggle: RectTuple | null;
-  /** hit region for the "sort by most favorited" switch - null on a trace with none */
   countToggle: RectTuple | null;
-  /** hit region for the reorder control - null on a trace with none */
   shuffleButton: RectTuple | null;
   centerBook: CenterBook | null;
-  /**
-   * The "enable distillation" icon's outline, traced over the whole tile the
-   * same way \`centerBook\` is - null on a trace with none, in which case the
-   * distill toggle draws no hover highlight.
-   */
   distillOff: CenterBook | null;
-  /** The "disable distillation" icon's outline - see \`distillOff\`. */
   distillOn: CenterBook | null;
   /**
-   * The on-tile favorite badge's non-transparent silhouette - an ellipse in
-   * the trace, converted on import to the same M/L/C/Z grammar \`centerBook\`
-   * uses. Traced over the WHOLE tile, not the badge's own icon, so it is in
-   * the same per-axis fraction space as every other rect here; a consumer
-   * scales it by a tile's \`cellPx\` exactly like \`centerBook\`. Null on a
-   * trace with none, in which case a badge draws no hover highlight.
+   * \`tile_fav_toggle\` is an \`<ellipse>\` in the trace, converted to
+   * \`centerBook\`'s grammar by \`ellipseToPath\`.
    */
   favoriteToggle: CenterBook | null;
+  /** Shelves top to bottom, each one's books left to right. */
   shelves: { books: RectTuple[] }[];
 }
 

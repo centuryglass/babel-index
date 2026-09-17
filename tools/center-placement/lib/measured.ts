@@ -6,22 +6,21 @@
  *
  * Values are normalised to the tile edge (0-1), x against the traced width and
  * y against the traced height, so they carry no aspect of their own. `tile`
- * records the shape they were traced at, because that is the one thing the
- * normalisation throws away and the one thing that has to keep agreeing with
- * BASE_TILE in packages/web/src/lib/pyramid.ts.
- *
- * Rects are [x, y, w, h].
+ * records the shape they were traced at: the one fact the normalisation
+ * throws away, and the one that has to keep agreeing with BASE_TILE in
+ * packages/web/src/lib/pyramid.ts. `geometry.test.ts` asserts that it does.
  */
 
+/** A measured rect as [x, y, w, h]. */
 export type RectTuple = [number, number, number, number];
 
 /**
- * The open book's exact outline. `d` is an SVG path in the canonical
- * absolute M/L/C/Z grammar `normalizePath` emits (see the importer), every
- * coordinate a tile-normalised (x/vbW, y/vbH) fraction - so it can be handed
- * straight to an SVG `<path d>` inside a `viewBox="0 0 1 1"`. `bbox` is the
- * same shape as every other measured rect, for a caller that only needs a
- * quick containment check.
+ * A traced silhouette in the canonical absolute M/L/C/Z grammar
+ * `normalizePath` emits, tile-normalised like every other value here and
+ * spanning the whole tile rather than the shape's own bounds. So `d` can be
+ * handed straight to an SVG `<path d>` inside a `viewBox="0 0 1 1"`, or scaled
+ * per axis by a tile's `cellPx`. `bbox` is the same tuple as every other
+ * measured rect, for a caller that only needs containment.
  */
 export interface CenterBook {
   d: string;
@@ -30,33 +29,28 @@ export interface CenterBook {
 
 export interface MeasuredData {
   source: string;
+  /** The traced viewBox, and the aspect taken from it. */
   tile: { w: number; h: number; aspect: number };
+  /** The bounding box of every traced book, which is the case frame. */
   opening: RectTuple;
+  /**
+   * One per traced element, named for its label in `shelf_geometry.svg` -
+   * what each is for is `import-shelf-svg.ts`'s label table. Null means the
+   * trace carried no such element.
+   */
   searchBox: RectTuple | null;
-  /** hit region for the "sort by my favorites" switch - null on a trace with none */
   mineToggle: RectTuple | null;
-  /** hit region for the "sort by most favorited" switch - null on a trace with none */
   countToggle: RectTuple | null;
-  /** hit region for the reorder control - null on a trace with none */
   shuffleButton: RectTuple | null;
   centerBook: CenterBook | null;
-  /**
-   * The "enable distillation" icon's outline, traced over the whole tile the
-   * same way `centerBook` is - null on a trace with none, in which case the
-   * distill toggle draws no hover highlight.
-   */
   distillOff: CenterBook | null;
-  /** The "disable distillation" icon's outline - see `distillOff`. */
   distillOn: CenterBook | null;
   /**
-   * The on-tile favorite badge's non-transparent silhouette - an ellipse in
-   * the trace, converted on import to the same M/L/C/Z grammar `centerBook`
-   * uses. Traced over the WHOLE tile, not the badge's own icon, so it is in
-   * the same per-axis fraction space as every other rect here; a consumer
-   * scales it by a tile's `cellPx` exactly like `centerBook`. Null on a
-   * trace with none, in which case a badge draws no hover highlight.
+   * `tile_fav_toggle` is an `<ellipse>` in the trace, converted to
+   * `centerBook`'s grammar by `ellipseToPath`.
    */
   favoriteToggle: CenterBook | null;
+  /** Shelves top to bottom, each one's books left to right. */
   shelves: { books: RectTuple[] }[];
 }
 

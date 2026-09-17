@@ -1,3 +1,7 @@
+/**
+ * A minimal SVG element builder: strings in, markup out, no DOM. `el()` is the
+ * primitive; `rect`, `svg` and `clipped` are the shapes built from it.
+ */
 export type AttrValue = string | number | boolean | undefined | null;
 export type Attrs = Record<string, AttrValue>;
 
