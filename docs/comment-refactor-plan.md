@@ -457,6 +457,24 @@ persisted, `KEYS.history`), three `main.jsx` citations in `infra/`
 `touchDebug.ts`'s own `main.jsx` citation - that file still owes its full
 pass.
 
+The last non-e2e batch went the same day: tiles + test, perfProbe + test,
+spineFont, touchDebug, assets.d.ts, bundle.test.ts, and main.tsx's remainder
+after the branch merge. All seven touched files report comment-only via
+check.mjs; all 785 tests pass; lint and typecheck clean; assets.d.ts and
+perfProbe.test.ts reviewed with no edits needed. What it found: two dead
+`accessibility-plan.md` section pointers in `main.tsx` (`§3.2`, `§4.2b` - the
+doc's cull left no numbered sections to resolve to), a wrong count ("five
+resolutions" against pyramid.ts's six-rung ladder) and a ladder-derived literal
+("up to eleven `locateTile` calls") in `tiles.ts`, a stale `pyramid.test.mjs`
+citation, a `perfSetPhase` doc pointer whose target does not discuss phase lag
+(rewritten to performance-research.md's "Instrumentation caveats" section
+title), a dead "the plan" pointer in `bundle.test.ts`, and a `TileHit.sheetUrl`
+doc citing "perfProbe.ts's §2.3" when the § numbering belongs to
+performance-research.md, not that file. `touchDebug.ts`'s "the whole feature
+compiles out" claim was corrected to what the gate actually does: nothing
+renders, and `useMapCamera` is handed no callback. The remaining unticked
+entries are all e2e/parity specs and `support.ts`, which order 7 holds to last.
+
 ### Source files and their tests
 
 #### packages/map
@@ -547,7 +565,7 @@ pass.
 - [x] packages/web/src/hooks/useDistillMode.ts  — no unit test
 - [x] packages/web/src/hooks/useFavorites.ts  — no unit test
 - [x] packages/web/src/hooks/useMapCamera.ts  — no unit test
-- [x] packages/web/src/hooks/useMapCursor.ts  — no unit test (partial: `describeSurroundings` doc was rewritten in the main.tsx pass; rest not yet reviewed)
+- [x] packages/web/src/hooks/useMapCursor.ts  — no unit test
 - [x] packages/web/src/hooks/useMapRenderer.ts  — no unit test
 - [x] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
 - [x] packages/web/src/hooks/useModeTransition.ts  — no unit test
@@ -582,8 +600,8 @@ pass.
   - [x] packages/web/src/lib/glSlideRenderer.test.ts  (reviewed; no edits needed)
 - [x] packages/web/src/lib/loadingAnimation.ts
   - [x] packages/web/src/lib/loadingAnimation.test.ts  (reviewed; no edits needed)
-- [ ] packages/web/src/lib/perfProbe.ts
-  - [ ] packages/web/src/lib/perfProbe.test.ts
+- [x] packages/web/src/lib/perfProbe.ts
+  - [x] packages/web/src/lib/perfProbe.test.ts  (reviewed; no edits needed)
 - [x] packages/web/src/lib/persist.ts
   - [x] packages/web/src/lib/persist.test.ts  (reviewed; no edits needed)
 - [x] packages/web/src/lib/picking.ts
@@ -596,19 +614,21 @@ pass.
   - [x] packages/web/src/lib/rooms.test.ts
 - [x] packages/web/src/lib/slide.ts
   - [x] packages/web/src/lib/slide.test.ts
-- [ ] packages/web/src/lib/spineFont.ts  — no unit test
+- [x] packages/web/src/lib/spineFont.ts  — no unit test
 - [x] packages/web/src/lib/svgPath.ts
   - [x] packages/web/src/lib/svgPath.test.ts  (reviewed; no edits needed)
-- [ ] packages/web/src/lib/tiles.ts
-  - [ ] packages/web/src/lib/tiles.test.ts
-- [ ] packages/web/src/lib/touchDebug.ts  — no unit test (partial: stale
-  `main.jsx` citation fixed 2026-09-17 alongside the persist batch; rest not
-  yet reviewed)
+- [x] packages/web/src/lib/tiles.ts
+  - [x] packages/web/src/lib/tiles.test.ts
+- [x] packages/web/src/lib/touchDebug.ts  — no unit test (stale `main.jsx`
+  citation fixed 2026-09-17 alongside the persist batch; the rest of its pass
+  went with the last non-e2e batch the same day)
 - [x] packages/web/src/lib/webglFlag.ts  — no unit test
-- [ ] packages/web/src/main.tsx  — no unit test (partial: almost completely done, but some fresh changes were pulled in from a different branch.)
-- [ ] packages/web/src/assets.d.ts  — no unit test
+- [x] packages/web/src/main.tsx  — no unit test (re-passed end to end
+  2026-09-17 after the branch merge; what remained was the two dead
+  `accessibility-plan.md` section pointers)
+- [x] packages/web/src/assets.d.ts  — no unit test (reviewed; no edits needed)
 _Standalone specs/helpers (no same-name source):_
-- [ ] packages/web/bundle.test.ts
+- [x] packages/web/bundle.test.ts
 - [ ] packages/web/e2e/accessibility.e2e.ts
 - [ ] packages/web/e2e/artist-statement.e2e.ts
 - [ ] packages/web/e2e/catalog.e2e.ts

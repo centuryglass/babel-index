@@ -7,7 +7,7 @@ import type { LocateTile } from './rooms.ts';
 /**
  * A three-rung ladder with tiny budgets, so eviction is reachable in a test
  * without loading hundreds of tiles. The policy under test is the cache's, not
- * the ladder's - pyramid.test.mjs owns the ladder.
+ * the ladder's - pyramid.test.ts owns the ladder.
  */
 const LADDER = createPyramid({
   levels: [
@@ -394,7 +394,7 @@ test('evicting a sheet-backed room pointer does not refetch the still-resident s
   images.settleAll();
 
   // Level 2's budget is 8 room-pointers; blow well past it with rooms from
-  // OTHER sheets so room 0's pointer entry is evicted, while its sheet stays
+  // other sheets so room 0's pointer entry is evicted, while its sheet stays
   // referenced by nothing here (only the sheet cache's own budget governs it).
   for (let id = 100; id < 140; id += 4) cache.get(id, 2);
   images.settleAll();
@@ -491,7 +491,7 @@ test('an ordinary sheet-packed level (not the coarsest) still evicts under press
   // a middle sheet-packed level must still obey its budget.
   const images = fakeImages();
   const cache = createTileCache({
-    locateTile: sheetLocate(1, 4), // level 1 is NOT LADDER's coarsest level (2 is)
+    locateTile: sheetLocate(1, 4), // level 1 is not LADDER's coarsest level (2 is)
     pyramid: LADDER,
     createImage: images.createImage,
     sheetBudget: 1,

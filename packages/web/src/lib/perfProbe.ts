@@ -95,7 +95,7 @@ function ensureObserver(): void {
           attribution: attributionOf(entry),
         });
     });
-    // No `buffered: true`, deliberately: it would backfill entries the
+    // No `buffered: true`: it would backfill entries the
     // browser recorded before this observer existed - and since it's created
     // lazily on the first `perfSetPhase` call (typically well into the
     // session, at the first rearrangement), a backfilled entry from ordinary
@@ -103,14 +103,13 @@ function ensureObserver(): void {
     // delivery time (almost always 'flight', being the first call) rather
     // than the 'idle' it actually happened during. Caught via a suspiciously
     // early `startTime` on an otherwise-unremarkable entry during testing -
-    // live-only entries are always correctly phase-tagged, so that is the
-    // trade worth taking.
+    // live-only entries are always correctly phase-tagged.
     //
     // Not every browser implements `longtask` - Safari notably doesn't. The
     // `catch` below is what makes that "no observer", not a startup crash.
     observer.observe({ type: 'longtask' });
   } catch {
-    // longtask unsupported - §2.2 simply reports nothing.
+    // longtask unsupported - §2.2 reports nothing.
   }
 }
 
@@ -119,15 +118,14 @@ function ensureObserver(): void {
  * nothing stalls, but because neither has implemented the API (Firefox:
  * https://bugzilla.mozilla.org/show_bug.cgi?id=1348405 - blocked on
  * attributing tasks to a document, which its scheduler doesn't currently do).
- * This is the standard fallback predating Long Tasks and still used for
- * exactly the browsers that lack it: the wall-clock gap between consecutive
- * `requestAnimationFrame` callbacks. A task that blocks the main thread for
- * over `LONG_FRAME_THRESHOLD_MS` necessarily delays whenever the next rAF
- * fires by roughly that much, whatever caused it - so the gap is a faithful
- * proxy for "a long task happened here," with the same two limitations as
- * the native API turned out to have for this app anyway: no attribution, and
- * (per `perfSetPhase`'s own doc) the phase read at report time can lag the
- * phase during which the stall actually happened.
+ * This is the standard fallback predating Long Tasks: the wall-clock gap
+ * between consecutive `requestAnimationFrame` callbacks. A task that blocks
+ * the main thread for over `LONG_FRAME_THRESHOLD_MS` necessarily delays
+ * whenever the next rAF fires by roughly that much, whatever caused it - so
+ * the gap is a faithful proxy for "a long task happened here," with the same
+ * two limitations the native API has here anyway: no attribution, and the
+ * phase read at report time can lag the phase the stall actually happened in
+ * (docs/performance-research.md's "Instrumentation caveats").
  *
  * Runs continuously once started - not gated to a rearrangement - so it also
  * catches stalls during 'idle' periods the native observer would too. The

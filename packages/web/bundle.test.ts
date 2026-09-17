@@ -9,9 +9,9 @@ const webDir = dirname(fileURLToPath(import.meta.url));
 /**
  * The client is bundled at server start, so a broken import or a typo in the
  * JSX is only discovered by running `npm run demo` and reading the stack. This
- * is the cheapest possible check that the thing compiles at all - it is not a
- * substitute for the browser test the plan calls for, but it catches the whole
- * class of "did not even build".
+ * is the cheapest possible check that the thing compiles at all - the e2e
+ * suite in `packages/web/e2e` is the real exercise in a browser, and this
+ * catches the whole class of "did not even build" at `npm test` time.
  */
 test('the client bundles', async () => {
   const result = await build({

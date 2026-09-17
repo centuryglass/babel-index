@@ -523,9 +523,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The ranked listbox: the `gradedCount` ranks the search's gradient
   // lifted above baseline - the cluster's size, and 0 for a uniform map.
-  // This is the lossless channel of accessibility-plan.md §3.2: map
-  // position encodes rank and certainty but not adjacency; the ranking
-  // encodes everything.
+  // This is the lossless channel: map position encodes rank and certainty
+  // but not adjacency; the ranking encodes everything.
   //
   // Bounded twice: by `RESULTS_WINDOW` (a DOM budget) and by `cellOfRank` -
   // a rank that never landed a cell has nowhere to fly to, and with the
@@ -1327,9 +1326,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 }
 
 /**
- * The most options the ranked listbox mounts at once - the DOM budget from
- * accessibility-plan.md §4.2b. `gradedCount` is normally tens of rooms;
- * this exists for the corpus where it is not.
+ * The most options the ranked listbox mounts at once - a DOM budget.
+ * `gradedCount` is normally tens of rooms; this exists for the corpus where
+ * it is not.
  */
 const RESULTS_WINDOW = 50;
 

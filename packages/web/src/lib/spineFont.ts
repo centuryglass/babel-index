@@ -2,13 +2,13 @@
  * The center shelf's spine typeface - Roboto Slab, chosen after the
  * `tools/font-lab` sweep (see that tool's AGENTS.md entry).
  *
- * Split from `center.ts` on purpose: `center.ts` composites titles but touches
+ * Split from `center.ts`: `center.ts` composites titles but touches
  * no DOM (its own doc comment says so, and `center.test.ts` asserts it browser-
  * free), while loading a `FontFace` is a DOM API. `SPINE_FONT_FAMILY` is the
  * pure half - just the CSS family string `composeSpines` puts in `ctx.font` -
  * and `loadSpineFont` is the DOM half, called once from `main.tsx`.
  *
- * The woff2 asset is imported DYNAMICALLY, inside `loadSpineFont`, rather than
+ * The woff2 asset is imported dynamically, inside `loadSpineFont`, rather than
  * at module scope: `center.ts` (and therefore this module) is imported by
  * `center.test.ts`/`render.test.ts`/`slide.test.ts` under plain Node, which
  * has no bundler and no loader for a raw `.woff2` binary - only esbuild's
