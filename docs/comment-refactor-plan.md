@@ -284,9 +284,11 @@ home early — see §6 for the rationale:
    per-frame decisions twice — dedup across them, don't let one file's wording
    drift from its twin's.
 4. `packages/server` — `app.ts` first (largest, and many other files cite it).
+   Done (2026-09-17, out of order and in parallel).
 5. `packages/web/src/lib` (geometry/DOM-adjacent) → `hooks/` → `components/`.
    `center.ts` + `tools/center-placement` are coupled; batch them.
-6. `packages/pipeline`, then the `tools/*` trees, then `build/`.
+6. `packages/pipeline`, then the `tools/*` trees, then `build/`. Pipeline is
+   done (2026-09-17, out of order and in parallel).
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
