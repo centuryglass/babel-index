@@ -1,22 +1,15 @@
 /**
- * Pure geometry for the center-tile loading animation packer (index.ts).
+ * Pure geometry for the center-tile loading animation packer (`index.ts`):
+ * bounding-box union, the sheet grid layout, and the pixel->cell-fraction
+ * conversion. It reads nothing from disk, which is what lets it be
+ * unit-tested without sharp or a real frame; `index.ts` does the sharp
+ * reads and writes and calls in here for the arithmetic.
  *
- * The loading indicator plays a short frame cycle over the illustrated page of
- * the center room's artist-statement book while a rearrangement is preparing
- * (packages/web/src/hooks/useRearrangement.ts). Each cycle ships as one packed
- * sprite sheet plus a crop rectangle saying where, on the center tile, those
- * frames belong.
- *
- * This file is the no-I/O half: bounding-box union, the sheet grid layout, and
- * the pixel->cell-fraction conversion. It reads nothing from disk, which is
- * what lets it be unit-tested without sharp or a real frame. index.ts does the
- * sharp reads/writes and calls in here for the arithmetic.
- *
- * Coordinates follow the same convention as tools/center-placement: a crop is
- * stored as a `Rect` in cell fractions ({x, y, w, h} against the tile's width
- * and height independently), because the center cell is stretched per-axis when
- * drawn - one divisor for both axes would be the silent-stretch bug the tile
- * geometry warns about.
+ * A crop is stored as a `Rect` in cell fractions ({x, y, w, h} against the
+ * tile's width and height independently), the same convention as
+ * `tools/center-placement`'s geometry. The center cell is stretched per-axis
+ * when drawn, so one divisor for both axes is the bug AGENTS.md's
+ * "The fractions are per-axis" warns about.
  */
 
 /** Pixel size of an image or a frame. */
@@ -102,10 +95,7 @@ export function boundsSize(b: Bounds): Size {
   return { w: b.x1 - b.x0, h: b.y1 - b.y0 };
 }
 
-/**
- * Convert pixel bounds to a cell-fraction `Rect` against `tile`. Per-axis
- * divisors on purpose - see the file header.
- */
+/** Convert pixel bounds to a cell-fraction `Rect` against `tile`. */
 export function boundsToRect(b: Bounds, tile: Size): Rect {
   return {
     x: b.x0 / tile.w,
@@ -124,10 +114,10 @@ export interface SheetLayout {
 }
 
 /**
- * Lay `frameCount` frames of size `frame` into a near-square grid (or exactly
- * `columns` wide when given). Near-square keeps the sheet's largest dimension
- * small, which is friendlier to the max-texture-size limits the WebGL renderer
- * uploads through than one long strip would be.
+ * Lay `frameCount` frames of size `frame` into a near-square grid, or exactly
+ * `columns` wide when given. Near-square keeps the sheet's largest dimension
+ * small, friendlier to the WebGL renderer's max-texture-size limit than one
+ * long strip.
  */
 export function packLayout(frameCount: number, frame: Size, columns?: number): SheetLayout {
   if (frameCount < 1) throw new Error('packLayout needs at least one frame');

@@ -526,9 +526,9 @@ _Standalone specs/helpers (no same-name source):_
 - [x] tools/center-placement/geometry.test.ts
 
 #### tools/center-animation
-- [ ] tools/center-animation/index.ts  — no unit test
-- [ ] tools/center-animation/lib.ts
-  - [ ] tools/center-animation/lib.test.ts
+- [x] tools/center-animation/index.ts  — no unit test
+- [x] tools/center-animation/lib.ts
+  - [x] tools/center-animation/lib.test.ts  (reviewed; no edits needed)
 
 #### tools/embed
 - [x] tools/embed/cosine-range.ts  — no unit test
@@ -551,8 +551,8 @@ _Standalone specs/helpers (no same-name source):_
 - [x] tools/font-lab/variants.ts  — no unit test
 
 #### build
-- [ ] build/register.mjs  — no unit test
-- [ ] build/ts-loader.mjs  — no unit test
+- [x] build/register.mjs  — no unit test
+- [x] build/ts-loader.mjs  — no unit test
 
 ## 5. Verification: "no code changed"
 
