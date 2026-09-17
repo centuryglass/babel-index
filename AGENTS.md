@@ -17,12 +17,12 @@ image and keywords.
 Tiles can be searched, with CLIP embeddings, keyword matching, and story
 matching used to calculate ranking and match certainty for all tiles. A set of
 generic "default" tiles are mixed in with the unique ones, with their
-distribution adjusted during searches so they serve as way to visibly gauge
+distribution adjusted during searches so they serve as a way to visibly gauge
 search certainty. Diegetic controls for the search interface are embedded into
 the center tile, placed using geometry calculated from a reference SVG.
 
 An alternate catalog interface can be used to maximize discoverability. This
-interface swaps the map and  diegetic interface for a more conventional web
+interface swaps the map and diegetic interface for a more conventional web
 search UI and linear tile list.
 
 ## Why this repo also has to read as engineering, not just art
@@ -85,10 +85,15 @@ and fails to import any `.ts` file with `ERR_UNKNOWN_FILE_EXTENSION`.
 
 Linting is minimal:
 - The usual recommended JS rules
-- Browser globals scoped to `packages/web/src/**/*.{js,jsx}
+- Browser globals scoped to `packages/web/src/**/*.{js,jsx}`
 - Node globals scoped to `**/*.mjs`
 - From `eslint-plugin-react-hooks`, only `rules-of-hooks`, `exhaustive-deps`,
   as recommended rules bundled in v7 disagree with how we use refs.
+
+That config's file patterns cover `.js`/`.mjs`/`.cjs`, and nothing under
+`packages/web/src` matches them, so the lint pass checks the Node-side
+`.mjs` tooling, not the `.ts`/`.tsx` app sources (dated entry in
+`docs/pending_task_list.md`).
 
 ## Layout
 **This map is part of the change.** A file added, removed or renamed here is
@@ -97,12 +102,13 @@ its way around the tree, and one silently missing entry is how a module gets
 written twice.
 
 Tests and test helpers not listed, assume each appropriate file is paired with
-a corresponding {name}.test.mjs within the same directory. Playwright tests
+a corresponding `{name}.test.ts` (pre-conversion ones are `{name}.test.mjs`)
+within the same directory. Playwright tests
 are in `packages/web/e2e`. Anything under `reference` is only used with the
 inpainting pipeline, and isn't touched anywhere else in the project.
 
 ### Build:
-- `build`: the Node-side TypeScript hook (see Commands above) - not a bundler,
+- `build`: the Node-side TypeScript hook (see *Commands*) - not a bundler,
            nothing here touches `packages/web`'s client bundle
   * `register.mjs`: what every `node`-invoking npm script passes to `--import`
   * `ts-loader.mjs`: the ESM `load` hook that runs `.ts`/`.tsx` through
@@ -126,7 +132,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                         `/api/search`'s CLIP text tower calls
   * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
   * `base-path.ts`: Normalizes `--base-path`, for a subpath deployment behind
-                    a prefix-stripping reverse proxy (`server-nginx.conf`)
+                    a prefix-stripping reverse proxy (the VPS's hand-managed
+                    nginx config; see `deploy/README.md`)
   * `version.ts`: Which commit this process is running - `BABEL_COMMIT`, else
                   the checkout's own `.git`, read once at startup. What
                   `/api/health` reports and what `deploy/` verifies a release
@@ -202,7 +209,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `RoomOverlay.tsx`: Modal showing a room's tile at full size along with its
                         story - reached from the map (right-click, long press,
                         Enter, a ranked result) or by expanding a catalog row
-    * `RoomDetails.tsx`: Show room tile keywords, story text, search ranking info, alt. text(eventually)
+    * `RoomDetails.tsx`: Room tile keywords, story text, search ranking info,
+                         and alt text handling - shared by the card, the
+                         overlay, and catalog rows
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph, orbiting arrow, and the
                         preload spinner ring
@@ -250,7 +259,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `useMapRenderer.ts`: Map frame loop/redraw hook
     * `useMapRendererGL.ts`: The WebGL counterpart of `useMapRenderer.ts`,
                              active when `webglFlag.ts`'s `WEBGL` is true (the
-                             default) - see "The WebGL renderer" below.
+                             default) - see "The WebGL renderer".
     * `useMapCursor.ts`: The keyboard cursor - where it is, what a reader
                          hears about it, and every key over the map
     * `useCenterShelf.ts`: The center room's bookshelf - titles, roving
@@ -259,10 +268,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                               the FLIP animation between them
     * `useRearrangement.ts`: The sliding-tile rearrangement animation - whether
                              a layout/order change animates, and what gets said
-                             once it lands. `prepareRearrangement` builds the
-                             plan and fetches every tile it will show before
-                             the camera moves at all - see "The reorder
-                             animation" above
+                             once it lands. The prepare-then-fly-then-slide
+                             pipeline is under "The reorder animation"
     * `useDialog.ts`: The modal-dialog machinery every overlay shares - focus
                       in on open and back out on close, Escape, Tab-trap - plus
                       a topmost-only dialog stack so a stacked overlay (the
@@ -285,15 +292,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
     * `camera.ts`: Pure-math mapping functions for the map camera
-    * `loadingAnimation.ts`: The center-tile loading indicator - a short frame
-                            cycle played over the artist-statement book's page
-                            while a rearrangement preloads (`useRearrangement.ts`).
-                            Loads the sheets + manifest `tools/center-animation`
-                            wrote, runs the pure playback state machine (cycle
-                            choice, boundary-only stop, always >=1 full cycle),
-                            and exposes `frame()` for both renderers plus the dev
-                            panel's `startDebug`/`stopDebug` preview loop. See
-                            "The loading indicator" below.
+    * `loadingAnimation.ts`: The center-tile loading indicator - sprite-sheet
+                            playback over the artist-statement book's page while
+                            a rearrangement preloads. Loads the sheets + manifest
+                            `tools/center-animation` wrote; exposes `frame()` for
+                            both renderers and `startDebug`/`stopDebug` for the
+                            dev preview. The gating and cycle-wait rules are
+                            under "The loading indicator".
     * `render.ts`: Render a single map frame
     * `slide.ts`: Room rearrangement animation renderer
     * `picking.ts`: Defines the roomAtPoint function
@@ -307,11 +312,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `catalog.ts`: Catalog pagination and geometry helpers
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images
-    * `rooms.js`: Map room data in the manifest to image URLs
-    * `persist.js`: Persistent data management (search history, pagination
+    * `rooms.ts`: Map room data in the manifest to image URLs
+    * `persist.ts`: Persistent data management (search history, pagination
                     settings, blocked tags, the reader's own favorites)
-    * `touchDebug.js`: View touch event stream if `?touchdebug` set
-    * `debug.js`: Gates the dev panel behind `?debug`
+    * `touchDebug.ts`: View touch event stream if `?touchdebug` set
+    * `debug.ts`: Gates the dev panel behind `?debug`
     * `contentZoomCamera.ts`: Pure anchor-preserving zoom/pan-bounds math
                               for `useContentZoom.ts` - viewport-relative,
                               so it holds for content taller/wider than the
@@ -333,7 +338,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       observer as a cross-browser fallback - the same
                       technique RUM tooling used before Long Tasks existed.
     * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl`/`?webgl=0` override and the
-                      WebGL2 capability probe - see "The WebGL renderer" below.
+                      WebGL2 capability probe - see "The WebGL renderer".
     * `glRenderer.ts`: The WebGL counterpart of `render.ts`.
     * `glSlideRenderer.ts`: The WebGL counterpart of `slide.ts`.
     * `gl/context.ts`: One shader program, VAO and quad-drawing primitives
@@ -365,7 +370,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
                ...), type-only, shared by `illusion.ts`, `board.ts` and
                `packages/web/src/lib/slide.ts`
-  * `scoring.ts`: Find room rank and match certainty for a search, searh tokenization
+  * `scoring.ts`: Find room rank and match certainty for a search, search tokenization
   * `favorites.ts`: The favorite sort modes, as a stable re-sort of an order
                     that already exists
   * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
@@ -378,7 +383,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `index.ts`: CLI
   * `mips.ts`: Generate+fill alternate image size directories
   * `layout.ts`: Import resolution steps from pyramid.ts, define expected directory structure
-  
+
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
                             from an svg.
@@ -397,9 +402,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                             cell fractions) and grid shape recorded in
                             `assets/animation/manifest.json`. Adding a cycle is
                             dropping in a folder and re-running
-                            `npm run generate:animation`. The loading indicator
-                            plays one cycle at random over the center book's page
-                            while a rearrangement preloads.
+                            `npm run generate:animation`.
   * `index.ts`: CLI - discover cycles, crop, pack, write sheets + manifest.
   * `lib.ts`: Pure bounds-union, grid layout, and pixel->cell-fraction math,
               plus the manifest type contract; no sharp, unit-tested.
@@ -444,7 +447,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     tagging. Separate ecosystem from the rest of this repo
                     (Python, not Node/TS); has its own nested `AGENTS.md`/
                     `CLAUDE.md` and `README.md` with the real detail - you
-                    don't need either unless you're actually working in this
+                    don't need them unless you're actually working in this
                     directory.
 - `tools/comment-check`: A comment pass's code-preservation gate - proves an
                          edit changed only comments. `strip.mjs` parses with the
@@ -467,9 +470,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `Dockerfile`: containerizes the demo server (`npm run demo`) - a deps stage
                (`npm ci --omit=dev`, optionally `--omit=optional` via the
                `WITH_CLIP` build arg to drop the CLIP text tower) plus a
-               runtime stage. No compiled output to copy (see "No compiled
-               output ever hits disk" above), so it's install-then-run, not a
-               build stage. Pulls in `tools/center-placement/lib` even though
+               runtime stage. There is no compiled output to copy (see
+               *Commands*), so it's install-then-run, not a build stage. Pulls
+               in `tools/center-placement/lib` even though
                nothing else under `tools/` is needed at runtime, because
                `packages/web` imports tile geometry straight out of it at
                bundle time.
@@ -479,8 +482,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                    `favorites.json`, `config.json`).
 - `deploy`: shipping main to the VPS. Unlike `infra/` (applied by hand, no
             credentials in CI), this one does run from Actions - see
-            "Deploying to the VPS" below for what makes the key it uses
-            narrow enough to store.
+            "Deploying to the VPS" for what makes the key it uses narrow
+            enough to store.
   * `deploy.sh`: the deploy itself, run ON THE VPS - fetch, refuse a sha that
                  is not an ancestor of `origin/main`, check out, reinstall
                  only if the lockfile moved, restart the unit, confirm it came
@@ -523,7 +526,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `docs/pending_task_list.md`: What is still to do - open tasks, known bugs
                                not yet chased down, and decisions deferred.
                                Not a design doc: a task leaves by being done.
-- `docs/accessibility-plan.md`: Keyboard/screen reader plan, mostly complete.
+- `docs/accessibility-plan.md`: The still-open accessibility questions - what
+                                needs real screen reader testing, in order of
+                                doubt. The landed key-by-key spec is
+                                `docs/keyboard-controls.md`.
 - `docs/keyboard-controls.md`: The spec for every key the map view handles,
                                state by state - tab order, focus targets, what
                                each key does in each one.
@@ -558,16 +564,16 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **ESM everywhere** (`"type": "module"`). `.mjs` for anything Node runs
   directly, `.js` for modules the browser bundles, `.jsx` for React, `.ts`/
   `.tsx` as the TypeScript equivalent of any of those three (see the
-  TypeScript migration note below for how each runs). Import Node built-ins
+  TypeScript convention for how each runs). Import Node built-ins
   with the `node:` prefix, and always give an internal import its real file
   extension (`./port.ts`, not extensionless) - Node's resolver doesn't guess.
 - **Node 20 is the floor** (`engines`), and CI runs 20/22/24. Get user
   confirmation before adding dependencies, try to keep dependencies minimal.
 - **TypeScript is the default for every new file, full stop.** A new module is
   `.ts`, a new React file is `.tsx`, a new script is a `.ts` run through the
-  loader hook (see Commands above) rather than a bare `.mjs` - the same is true
-  of new tests (`*.test.ts`, not `*.test.mjs`; the `test` script enumerates both,
-  see below). Write `.js`/`.mjs`/`.jsx` only when there is a concrete reason a given
+  loader hook (see *Commands*) rather than a bare `.mjs` - the same is true
+  of new tests (`*.test.ts`; the `test` script enumerates both extensions).
+  Write `.js`/`.mjs`/`.jsx` only when there is a concrete reason a given
   file can't be `.ts`/`.tsx` yet, not out of habit or to match a neighbor that
   hasn't been converted.
 
@@ -581,7 +587,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     `tsc --noEmit` (`npm run typecheck`) is what checks it.
   - **A real module** (`packages/server/port.ts`): runs at runtime like any
     other source file, through the Node loader hook in `build/` (see
-    Commands above) or through esbuild's client bundle in `packages/web`.
+    *Commands*) or through esbuild's client bundle in `packages/web`.
     Prefer converting a file outright over leaving new TSDoc-only types on a
     `.js` file once its neighbors are already `.ts` - two type notations for
     one module is the drift this migration exists to remove.
@@ -598,7 +604,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Tests sit next to the code**, using `node:test` + `node:assert/strict`.
   New tests are `*.test.ts` per the TypeScript-by-default rule above; existing
   `*.test.mjs` files are untouched until something else brings a reason to
-  convert them - and converting the module they test to `.ts` is exactly such
+  convert them - and converting the module they test to `.ts` is such
   a reason: convert its paired `*.test.mjs` to `*.test.ts` in the same commit
   rather than leaving a `.ts` module with a `.mjs` test beside it. The `test`
   script `find`s both extensions under `packages`/`tools`
@@ -617,28 +623,57 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **Fixtures are synthesised, not committed.** `packages/server/image-fixtures.ts`
   builds PNG/JPEG/WebP headers byte by byte. Don't make tests depend on
   `assets/corpus-sample/`.
-- **Comments explain why - and the "why" is for the next reader, not a defense
-  of the change against the version it replaces.** Files open with a block
-  comment saying what the file is for and which decision it embodies. Match the
-  surrounding density rather than adding a comment per line, and don't narrate
-  what the code is doing (a human may have; you should not). Prose comments use
-  ASCII hyphens; markdown uses em dashes.
-
-  The trap this codebase keeps falling into is comments that argue the current
-  structure is right by contrasting it with how it used to be - "not a number
-  restated here that would only drift," "rather than folded into X," "would
-  force it to grow stubs." That reasoning is real and worth doing, but it
-  belongs in your thinking, not the file: once the change lands, the version it
-  argues against exists only in git, and the comment is scaffolding left in the
-  wall. Do the argument-against-the-past while you think; commit a comment only
-  when it earns its place with a future reader. A comment that warns the next
-  editor off a live hazard - "board.ts refuses a margin under 1 because a
-  tighter one lands the swap somewhere visible" - is the durable kind; keep
-  those. The tell for the transient kind is that it references the prior
-  implementation rather than the code as it now stands. If some slips through
-  anyway, a narrow end-of-change sweep over the lines you touched, flagging
-  "used to / instead of / rather than / would only," catches the residue
-  without re-judging every comment's worth.
+- **Comments are reference, not advocacy.** Their job is to tell the next
+  reader what is true, quickly - not to defend a design to a skeptic. That
+  means the "why" is written for the reader of the code as it stands, never
+  as a defense of the change against the version it replaces. The rules
+  below serve that, and they apply to this file and the docs too.
+  - **Lead with the rule.** Line 1 of a comment is a standalone summary; a
+    reader who stops there must lose no invariant.
+  - **One fact, one home.** State a fact fully where the thing is defined;
+    elsewhere, point or stay silent. A pointer names a symbol or a section
+    title, never a position ("see `board.ts`", not "see the comment above"),
+    and it must resolve - check a `see X` before committing, because a
+    dangling pointer is a confident-looking lie.
+  - **Pin to a declaration, not a region.** One comment, one thing below it;
+    split a paragraph that describes more than one thing and re-attach each
+    piece. A pinned comment moves with its code or visibly goes wrong; a
+    region paragraph quietly becomes stale.
+  - **Keep hazards, drop ghosts.** A warning that a change here breaks
+    something there - "board.ts refuses a margin under 1 because a tighter
+    one lands the swap somewhere visible" - is regression armor; keep it, as
+    the main clause. An argument against a design the file never had ("not a
+    number restated here that would only drift," "rather than folded into X")
+    is scaffolding left in the wall: that reasoning is worth doing, but in
+    your thinking, not the file - once the change lands, the version it
+    argues against exists only in git. The tell is prose about a prior
+    implementation rather than the code as it stands. End a change with a
+    narrow sweep over the lines you touched, flagging "used to / instead of /
+    rather than / would only," to catch the residue.
+  - **Length tracks risk, and terse has a floor.** A few lines is the
+    default; more is earned only where deleting a clause would let a careful
+    reader introduce a real bug - in genuinely subtle code (`illusion.ts`,
+    `scoring.ts`) long commentary is often correct. Never delete a hazard to
+    look terse: relocate or condense it. And if a fact keeps recurring
+    across files, it wants a different home - the owning module, or this
+    file - not another copy.
+  - **Plain declaratives.** No SHOUTING CAPS and no conviction adverbs
+    (`exactly`, `really`, `deliberately`, `on purpose`); emphasis comes from
+    position and structure. One clause per sentence; real lists for
+    list-shaped content. Reference symbols rather than their current values
+    ("the buttons `BOOK_COUNT` generates", not "the forty buttons"), and
+    don't cite section numbers into ephemeral docs (plans, task lists) - a
+    pointer into `docs/search_rules.md` or `docs/keyboard-controls.md`, which
+    are kept in sync, is fine.
+  - Files open with a block comment saying what the file is for and which
+    decision it embodies. Match the surrounding density rather than adding a
+    comment per line, and don't narrate what the code is doing (a human may
+    have; you should not). Prose comments and markdown use ASCII hyphens,
+    not em dashes - match the file you're editing.
+  - The failure mechanisms in full, with worked examples and the per-pass
+    workflow, are in `docs/claude_critique.md` and
+    `docs/comment-refactor-plan.md`; read those before any repo-wide
+    comment pass.
 - Two-space indent, semicolons, single quotes, trailing commas in multi-line
   literals. Just follow the file you're in.
 - **An existing, undocumented bug found while doing unrelated work still gets
@@ -662,14 +697,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 ### Tile geometry
 
-- **`tools/center-placement/lib/measured.ts` is generated.** Never hand-edit it.
-  Changes to center-tile geometry are human-managed, parsed with
-  `import-shelf-svg.ts`, validated with `npm test`. If tile aspect ratio
-  ever changes, the change needs to be applied to `BASE_TILE` in `pyramid.ts`
-  and to `shelf_geometry.svg`, then import-shelf-svg should be re-run. 
-- **Don't assume tile aspect ratio,** read it from `BASE_TILE`. Aspect ratio
-  is unlikely to change often, but if it does, only `BASE_TILE` and the SVG
-  should need to be updated.
+- **`tools/center-placement/lib/measured.ts` is generated.** Never hand-edit
+  it; changes to center-tile geometry are human-managed in
+  `shelf_geometry.svg`, parsed with `import-shelf-svg.ts`, validated with
+  `npm test`.
+- **Don't assume the tile aspect ratio; read it from `BASE_TILE`.** If it
+  ever changes: update `BASE_TILE` in `pyramid.ts` and `shelf_geometry.svg`
+  together and re-run `import-shelf-svg.ts`. Nothing else should need
+  updating.
 - **Don't pin art choices in tests.** Shelf spacing, book width, shelf count and
   book count are free to move. Assert only that books stay inside the opening,
   don't overlap, and each shelf has one baseline.
@@ -687,29 +722,29 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   is lost mid-gesture.
 - **`packages/map` measures distance as it looks, not as it indexes.** It is
   shape-blind except for one injected `aspect`, and every distance goes through
-  `cellDistance()` — `hypot(x, y * aspect)`, i.e. cell *widths*. That makes the
+  `cellDistance()` - `hypot(x, y * aspect)`, i.e. cell *widths*. That makes the
   library round on screen. A raw `Math.hypot(x, y)` anywhere in that file is the
   bug. Placement uses the same metric and has to: a circular boundary around an
-  elliptical spread of rooms is a circle empty at top and bottom. 
-- **The center room is cell (0, 0)** and is reserved — `packages/map` never
+  elliptical spread of rooms is a circle empty at top and bottom.
+- **The center room is cell (0, 0)** and is reserved - `packages/map` never
   assigns a corpus room there.
 - **Corpus size and generic ratio are runtime parameters**, arguments to
   `createLayout()`, not build-time settings. Growing the corpus must keep
   existing slots where they are and append further out; that property is what
-  makes the sliders usable and is asserted in `ordering.test.mjs`.
+  makes the sliders usable and is asserted in `ordering.test.ts`.
 - **A relevance re-sort swaps one array; the shuffle button rebuilds the
-  layout too.** A relevance re-sort stays a swap of `order` — the map
+  layout too.** A relevance re-sort stays a swap of `order`: the map
   rearranges, it does not reload. The shuffle button is a full reshuffle: it
   rerolls `seed` (which cells are content slots at all, the same scatter
-  `rescatter` reruns) alongside `order`, and clears any active search or
-  favorite sort first — a reorder that left the current search's certainty
-  profile or an active favorite sort in place would rescatter everything
-  except the one thing already pinning the layout. A search or an active
-  favorite sort (`'mine'`/`'count'`) is the other thing that may rebuild the
-  layout, because each has a certainty profile that is an input to placement —
-  `favoriteSort` (`packages/map/favorites.ts`) composes the two rather than
-  letting one override the other. That rebuild is the same O(slots) the ratio
-  slider does on every drag. Nothing else recomputes placement.
+  `rescatter` reruns) alongside `order`. It clears any active search or
+  favorite sort first - a reorder that left one of them in place would
+  rescatter everything except the thing already pinning the layout.
+  A search, or an active favorite sort (`'mine'`/`'count'`), may also rebuild
+  the layout: both are placement inputs (the certainty claim each makes is
+  under *Favorites*). `favoriteSort` (`packages/map/favorites.ts`) composes
+  the two rather than letting one override the other. That rebuild is the
+  same O(slots) the ratio slider does on every drag. Nothing else recomputes
+  placement.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 
 ### The center tile and its generic tiles
@@ -721,35 +756,36 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `genericId(-1)` is `CENTER`, which is only the fallback for a corpus with no
   generic tiles at all.
 - **Which generic tile a cell shows is positional and order-independent, and
-  that is load-bearing.** `layout.genericIndexAt(x, y)` is a seeded hash of the
-  coordinate alone — a reorder never changes a generic cell's face. That is the
-  whole reason `board.ts` and `illusion.ts` still see one interchangeable
-  `GENERIC` value and the rearrangement planner did not have to learn about
-  individual generic tiles. `roomAt` is unchanged; only the two renderers
-  (`render.ts`, `slide.ts`) resolve a cell to a tile id. `slide.ts` reads the
-  generic index at each tile's *home* board cell so a sliding line carries its
-  own face instead of flipping mid-ride.
-- **The shared tiles live outside `--images`.** `scan.mjs` discovers them in
+  that is load-bearing.** `layout.genericIndexAt(x, y)` is a seeded hash of
+  the coordinate alone: a reorder never changes a generic cell's face.
+  Because of that, `board.ts` and `illusion.ts` see one interchangeable
+  `GENERIC` value (`roomAt`'s `{ generic: true }`), and the rearrangement
+  planner never learns about individual generic tiles. The two renderers
+  (`render.ts`, `slide.ts`) are the only places a cell resolves to a tile id.
+  `slide.ts` reads the generic
+  index at each tile's *home* board cell, so a sliding line carries its own
+  face instead of flipping mid-ride.
+- **The shared tiles live outside `--images`.** `scan.ts` discovers them in
   `--shared-dir` (default `assets/`): the center by name (`center_tile.*`, else
   `center.*`, else `--center`) and the generic tiles as every image in
   `generic/`. They ride in the manifest as `shared: { center, generic }` and
   are served from the `/shared/` mount, not `/images/`. The one case where a
   `center.*` inside the corpus dir counts as a generic tile is `sharedDir ===
   imagesDir`.
-- **The shared tiles are served flat (level 0) for now.** `rooms.js` resolves a
-  shared id to its url at level 0 only; every coarser request falls back
-  through `servableLevel`. Bounded, because the cache keys on id not cell, but
-  it means `main.tsx` pins each shared id at level 0 rather than at the
-  coarsest rung — so the "12 KB pinned generic" is a full-res download until
-  the shared assets get their own pyramid (plan §8). Do not pin a shared id at
-  `FALLBACK_LEVEL`; there is no tile there.
+- **The shared tiles are served flat (level 0) for now.** `rooms.ts` resolves
+  a shared id to its url at level 0 only; every coarser request falls back
+  through `servableLevel`. Bounded, because the cache keys on id not cell,
+  but it means `main.tsx` pins each shared id at level 0 rather than at the
+  coarsest rung - so each pinned generic is a full-res download until the
+  shared assets get their own pyramid (`docs/pending_task_list.md`). Do not
+  pin a shared id at `FALLBACK_LEVEL`; there is no tile there.
 
 ### The center room's controls
 
 - **`center.ts` is the pure half, and the geometry comes from the tools tree.**
   The book layout, `assignTitles`, the hit-test and `pickTags` live in
   `packages/web/src/lib/center.ts` and are asserted browser-free in `center.test.ts`
-  — the same split as `picking.ts`. Every book is lettered; a book is one
+  - the same split as `picking.ts`. Every book is lettered; a book is one
   flat slot id (`BOOK_COUNT` of them), assigned top left to bottom right, so
   there is no (shelf, index) pair to keep in step. A shelf need not be one
   contiguous run - art can break it into more than one, and `center.ts`'s
@@ -759,40 +795,41 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   one module the tile trace feeds, so there is no second copy to drift.
 - **The fractions are per-axis, and that is load-bearing.** `render.ts` stretches
   the center tile width→`cellPx.x` and height→`cellPx.y` independently, so a
-  spine rect is `{x,w}` against the cell width and `{y,h}` against its height —
+  spine rect is `{x,w}` against the cell width and `{y,h}` against its height -
   `layout({width:1,height:1})` returns exactly that. One divisor for both axes is
   the same silent-stretch bug the tile geometry warns about.
 - **Compositing is content, not chrome, and it is zoom-gated.** It draws on the
   center cell whenever `centreSlots` is passed, but `composeSpines` itself draws
-  nothing below a legible spine width — so far out it is free. `render.test.mjs`
+  nothing below a legible spine width - so far out it is free. `render.test.ts`
   never passes `centreSlots`, which is why its recording `fakeCtx` needs no
   `save`/`rotate` and the byte-cost assertions are untouched. Keep it that way.
-- **The books are DOM buttons AND painted spines, and there is one `onBook`
+- **The books are DOM buttons and painted spines, and there is one `onBook`
   for both.** `center-books` is one absolutely-positioned container matching
   the center cell, written once per frame like `.center-search`, with
-  `BOOK_COUNT` buttons inside it in per-axis PERCENTAGES - so a pan costs one
-  style assignment, not forty. Writing each button's geometry per frame from
-  `bookScreenRects()` is the trap the plan names; don't. The container is
+  `BOOK_COUNT` buttons inside it in per-axis percentages - so a pan costs one
+  style assignment, not one per button. Don't write each button's geometry
+  per frame from `bookScreenRects()`. The container is
   `pointer-events: none` with no `:focus-within` escape hatch, so the canvas
   keeps every gesture and a sighted click still routes `onTap` ->
   `bookAtPoint` -> `onBook`; a second copy of "what does book i do" written
-  inline in either path will drift. The shelf is ONE tab stop (roving
+  inline in either path will drift. The shelf is one tab stop (roving
   tabindex, `role="toolbar"`), and where an arrow key goes lives in
-  `bookNeighbour` - rows there are SHELVES, not the hit-test's runs, because a
-  gap between two runs is somewhere a click can land and not somewhere focus
-  should stop. `areSpinesLegible` is the single zoom gate: the buttons exist
-  exactly while `composeSpines` draws a title, so a reader never tabs to a book
-  nobody can see named.
-- **Every one of those DOM overlays is sized to the WHOLE cell, and the clip on
-  `#root` is what keeps that off the page.** `.center-search`, `.center-books`,
+  `bookNeighbour` - rows there are shelves, not the hit-test's runs, because
+  a gap between two runs is somewhere a click can land but not somewhere
+  focus should stop. `areSpinesLegible` is the single zoom gate: the buttons
+  exist while `composeSpines` draws a title, so a reader never tabs to a
+  book nobody can see named.
+- **Every one of those DOM overlays is sized to the whole cell, and the clip
+  on `#root` is what keeps that off the page.** `.center-search`, `.center-books`,
   `.center-book` and `.center-controls` are absolutely positioned against
   `#root` at the center cell's screen rect, which at reading zoom is several
   screens wide - real content hanging outside the viewport, and `html`/`body`'s
   `overflow: hidden` never reaches it (neither is in the containing-block chain
   of an absolutely positioned descendant of a positioned `#root`). A desktop
   shows no sign of it. A phone reads the same overflow as a page wider than the
-  screen: it drops the page scale to fit and grows the LAYOUT viewport to match,
-  and `position: fixed` resolves against THAT - so every dialog's
+  screen: it drops the page scale to fit and grows the layout viewport to
+  match, and `position: fixed` resolves against that layout viewport - so
+  every dialog's
   `.overlay-scrim` covers several screens (the dialog lands mostly off the
   display, its close button has to be panned to) and the map paints at a
   fraction of its size once the dialog closes. On a Pixel 5 the opening view
@@ -808,35 +845,35 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   long-press clears the tap candidate so a press is never also a tap. History is
   session-only React state; it fills the whole wall as one queue, newest search
   first, top left to bottom right, skipping any book an override has claimed.
-  Every book history has not reached is a random keyword tag (the pool is
+  Any book history has not reached is a random keyword tag (the pool is
   cycled to letter the whole wall). Assignment order is
   override → history (newest first) → tags, and override books are reserved
   first. Titles read top-to-bottom, as printed spines do.
-- **Two opening views, and they are not interchangeable.** Both are DERIVED
+- **Two opening views, and they are not interchangeable.** Both are derived
   from the viewport, not configured as a fixed zoom, but from different
   targets. The page-load view: `main.tsx` computes it once at mount with
   `fitZoom` (camera.ts), framing the center room's book-bounding box
   (`GEOMETRY.opening`, exported as `CENTRE_SHELF_RECT` from `center.ts`) on the
   display so the spines are legible, centered on the shelf and capped at the
-  tile's NATIVE width so a page never loads upscaled. It is passed to
-  `useMapCamera` as `opening` — do not restate it as a config number, and do
-  not read the viewport inside the hook. The return-to-center view — used by
+  tile's native width so a page never loads upscaled. It is passed to
+  `useMapCamera` as `opening` - do not restate it as a config number, and do
+  not read the viewport inside the hook. The return-to-center view - used by
   the "center" button, a room double-tap, `Home`/`Ctrl+Home`/`End`, and the
-  rearrangement's park — is `overviewZoom(canvas, config.camera.minVisibleCells,
-  cam)` (camera.ts): the largest zoom that still fits `minVisibleCells` (5,
-  config) whole rows and columns on the viewport's binding axis, computed at
+  rearrangement's park - is `overviewZoom(canvas, config.camera.minVisibleCells,
+  cam)` (camera.ts): the largest zoom that still fits `minVisibleCells` whole
+  rows and columns on the viewport's binding axis, computed at
   each call site from the live canvas size rather than once at mount. The
-  split exists precisely so the reorder animation has a wall of rooms to slide
+  split exists so the reorder animation has a wall of rooms to slide
   across rather than the one shelf the opening shows, and the return-to-center
   view has to be figured per-viewport-shape or a phone's narrow width shows
   almost nothing beyond the center room. Collapsing them silently breaks
   whichever view loses.
 - **The zoom cap is `MAX_ZOOM_FACTOR` × the tile's native width** (2× = 2048 at
   1024w), derived in `ZOOM_LIMITS` so it tracks the tile, not a literal. Past 1×
-  the flat center tile is upscaled and softens; the OPENING view is separately
+  the flat center tile is upscaled and softens; the opening view is separately
   capped at 1× in `main.tsx` so a load is never blurry, while a reader may zoom to
   2× by hand to read a spine. Raising the cap breaks the "tile too large to reach"
-  example in `pyramid.test.mjs` (its base scales with `MAX_ZOOM_FACTOR`); that is
+  example in `pyramid.test.ts` (its base scales with `MAX_ZOOM_FACTOR`); that is
   the test working, not a regression. Config's `camera.maxZoom` may only narrow
   this, never widen it.
 - **`CENTRE_SEARCH_RECT` is traced but not wired up.** The SVG's `search_box`
@@ -849,25 +886,25 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 
 - **Search blends three signals into one sort; it does not tier them.** Every
   signal is normalised to [0, 1] before weighting, and the CLIP term is
-  min-maxed across the corpus for that query — bucketing keyword hits ahead of
+  min-maxed across the corpus for that query - bucketing keyword hits ahead of
   everything would let one weak partial beat a room CLIP is certain about.
 - **Keyword partials divide by the keyword; story matches divide by the query.**
-  Opposite on purpose — `art` matched only 3/11 of `art nouveau`, but a hit in a
+  Opposite on purpose - `art` matched only 3/11 of `art nouveau`, but a hit in a
   long story isn't worth less than the same hit in a short one.
 - **The density gradient is one formula** (`contentRatio + (peak - contentRatio)
   * certainty`, walking outward), not three special cases for cluster/falloff/
   no-match. Certainty must stay non-increasing with rank, and anything under
-  `CERTAINTY_FLOOR` snaps to the baseline exactly — both asserted.
+  `CERTAINTY_FLOOR` snaps to the baseline - both asserted.
 - **Certainty is absolute; ranking is relative. Don't feed one the other's
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
-  for *any* query — driving the gradient off that clusters nonsense as
+  for *any* query - driving the gradient off that clusters nonsense as
   confidently as an exact match. `matchCertainty` reads raw cosines against
   absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.** The
-  blob is positional (`scan.mjs` rejects a drifted count); the sidecar is
+  blob is positional (`scan.ts` rejects a drifted count); the sidecar is
   joined per file, so a partial match is just partial. `matched: 0` against a
-  non-zero `entries` means the keys drifted — from the map that looks exactly
-  like having no sidecar, so both numbers go in the manifest and `index.mjs`
+  non-zero `entries` means the keys drifted - from the map that looks
+  like having no sidecar, so both numbers go in the manifest and `index.ts`
   warns.
 - **A room's optional `alt` is a caption, not a story, and it lives on `<img
   alt>`, not as visible text.** `RoomOverlay` and the catalog thumbnail both
@@ -876,14 +913,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   (`RoomDetails`'s `showPicture` prop), which has no `<img>` to hang it on and
   renders it as a paragraph instead - fallback content is never painted, so
   that isn't a second visible copy. Don't write one into
-  `assets/corpus-sample/` — a placeholder caption is the padded sentence the
-  plan says to omit.
+  `assets/corpus-sample/` - a placeholder caption is a padded sentence,
+  which is worse than none.
 - **`tagLinks.json` is a flat keyword -> url map, not joined to anything.**
-  Unlike `metadata.json` it has no per-room coverage to report — `scan.ts`
+  Unlike `metadata.json` it has no per-room coverage to report - `scan.ts`
   only counts its keys (`TagLinksInfo.count`). It is hand-edited, not
-  generated, and optional exactly like the sidecar: a corpus without one just
+  generated, and optional like the sidecar: a corpus without one just
   renders chips with no "more about this" link. `RoomDetails.tsx` takes it as
-  a `tagLinks` prop rather than importing it — see `useCorpus.ts`.
+  a `tagLinks` prop rather than importing it - see `useCorpus.ts`.
 
 ### Favorites
 
@@ -892,10 +929,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   is one favorite and removing what was never there is nothing, so no endpoint
   can zero a room out or run it up - that property is the whole reason it is a
   set, and a "just increment a number" simplification throws it away.
-- **The hash is per ROOM on purpose.** The same visitor hashes differently in
-  every room's set, so two sets cannot be joined into one person's list. The
-  cost is that the store cannot count distinct visitors, which is not something
-  we want to be able to do. Hashing is not claimed as a security control; it is
+- **The hash is per room.** The same visitor hashes differently in every
+  room's set, so two sets cannot be joined into one person's list. The cost
+  is that the store cannot count distinct visitors, which is not something we
+  want to be able to do. Hashing is not claimed as a security control; it is
   the shape that makes the stored data useless while still de-duplicating.
 - **Identity is a client-generated token, not `req.ip`.** The browser mints a
   random id once (`getOrCreateFavoriteClientId`, `persist.ts`) and sends it as
@@ -907,36 +944,35 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   by regenerating it, same as clearing site data always was, but that only
   ever reverts a visitor to "not yet favorited" - the set semantics above are
   what actually stop a run-up or a zero-out, not how hard the token is to get.
-- **Favorites are keyed by FILENAME everywhere - server, `localStorage`, and
+- **Favorites are keyed by filename everywhere - server, `localStorage`, and
   `packages/map/favorites.ts`.** Room ids are positional (`scan.ts` sorts
   filenames and indexes them), so one image added to a corpus renumbers every
   id after it and a stored id silently comes back pointing at a different room.
-- **The favorite writes are still rate-limited by `req.ip`, deliberately on a
+- **Favorite writes are rate-limited by `req.ip`, deliberately on a
   different key than identity.** `createRateBuckets` (`app.ts`) throttles how
-  fast one connection can spend requests; bucketing on `X-Favorite-Client`
+  fast one connection can spend requests. Bucketing on `X-Favorite-Client`
   instead would do nothing, since a script can mint a fresh token on every
   request for free - the address is what actually costs something to change.
-  `req.ip` behind a reverse proxy is the PROXY, though, so without
+  Behind a reverse proxy `req.ip` is the proxy's address, though, so without
   `--trust-proxy` every visitor behind it shares one bucket and one abusive
-  visitor can throttle everyone else's favoriting - it must stay off by
-  default regardless, since trusting `X-Forwarded-For` where nothing strips it
-  lets a client pick its own address, and here that means its own rate budget,
-  once per request. nginx must send `proxy_set_header X-Forwarded-For
+  visitor can throttle everyone else's favoriting. The flag must stay off by
+  default regardless: trusting `X-Forwarded-For` where nothing strips it lets
+  a client pick its own address, and here that means its own rate budget,
+  once per request. The proxy must send `proxy_set_header X-Forwarded-For
   $proxy_add_x_forwarded_for;` for the flag to mean anything.
 - **No store, no feature.** Without `--favorites` the routes are not mounted and
   `manifest.favorites` is null, which every consumer reads as "render no
-  favorite control" - distinct from a count of zero, and deliberately so.
+  favorite control" - distinct from a count of zero.
 - **A relevance sort is a re-rank, and the catalog row's toggle is in the
-  HEAD.** In `'relevance'` mode sorting swaps `order` (the reorder button's
+  head.** In `'relevance'` mode sorting swaps `order` (the reorder button's
   path, animation included) and must never rebuild the layout. An active
-  favorite sort (`'mine'`/`'count'`) is the exception - it IS a placement
+  favorite sort (`'mine'`/`'count'`) is the exception - it is a placement
   input, exactly as a search is, because "sorted to the front" is itself a
-  certainty claim - see `packages/map/favorites.ts`'s `favoriteSort`. And a
+  certainty claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
   catalog row is a fixed height, so the row's favorite control sits beside
-  "show on the map" rather
-  than inside `RoomDetails` where the card and the overlay put it; in the text
-  column it would have to be reserved for in `TEXT_MIN`/`TEXT_CHROME_PX` and
-  would cost two lines of story on every row.
+  "show on the map" rather than inside `RoomDetails` where the card and the
+  overlay put it; in the text column it would have to be reserved for in
+  `TEXT_MIN`/`TEXT_CHROME_PX` and would cost two lines of story on every row.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` sit in `--shared-dir`
   next to the center tile but outside `manifest.shared` - `rooms.ts`'s
@@ -954,7 +990,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### The reorder animation
 
 - **A rearrangement is a sliding-tile illusion; the wallpaper is not a gap.**
-  Rooms travel only as part of a whole row or column rotating — `illusion.ts`
+  Rooms travel only as part of a whole row or column rotating - `illusion.ts`
   rejects a `swap` (which reads as teleportation) if either end is on camera.
   Don't add a move type that moves one cell.
 - **The illusion bounds are the viewport plus one cell.** The planner swaps a
@@ -962,47 +998,53 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   refuses a margin under 1 because a tighter one lands that swap somewhere
   visible.
 - **The center room is the planner's fixed tile**, holding the same value in
-  both boards by construction — locking it is why the map visibly pivots
-  around it. That is a fact about the board's VALUE, unrelated to where the
+  both boards by construction - locking it is why the map visibly pivots
+  around it. That is a fact about the board's value, unrelated to where the
   camera is parked.
 - **The board is finite only because the camera is parked** for the whole
-  animation, at whatever position it already had — `startRearrangement`
+  animation, at whatever position it already had - `startRearrangement`
   (`useRearrangement.ts`) zooms out in place rather than flying home to the
   center, so "parked" does not imply "at the origin." Anything that moves
   the camera mid-rearrangement (pan, zoom, `flyTo`) must end the animation
   instead.
+- **While zooming out to start a rearrangement, the map still draws the old
+  arrangement** until the camera lands (`anim.current.before` holds it) - skip
+  that hold and the map shows the new library, zooms to it, then slides in
+  from the one it already replaced.
 - **The plan is built and fetched entirely before the flight, not after it
   lands.** `prepareRearrangement` (`useRearrangement.ts`) computes the
-  landing rectangle from the camera's CURRENT x/y — sound only because this
+  landing rectangle from the camera's current x/y - sound only because this
   flight never changes position, only zoom (the `-0.5`/`+0.5` cancellation
-  in `startRearrangement`) — so the rectangle a plan needs is already known
+  in `startRearrangement`) - so the rectangle a plan needs is already known
   before any camera motion starts. It then simulates the planned moves with
   the real `applyMove` to find every room the slide will show (not just
-  `before`'s and `after`'s static viewport content — verified 27-48%
+  `before`'s and `after`'s static viewport content - verified 27-48%
   larger on a real corpus, because a `shiftRow`/`shiftCol` rotates a whole
   line and the conveyor stages a needed value in from wherever it sits, see
   `illusion.ts`), fetches all of it, and waits up to
   `config.slide.prepareTimeoutMs` before proceeding with whatever's ready.
-  Past that budget, or if the reader interacts mid-prepare, it falls back to
-  exactly today's behaviour rather than blocking indefinitely.
+  Past that budget, or if the reader interacts mid-prepare, the
+  rearrangement falls back to the instant rebuild rather than blocking
+  indefinitely.
 - **`board.ts` returning null is a real answer, not a failure.** With the
   rooms-on-the-map slider pulled back, a room the new order wants on camera may
   never have been on the old board; the caller falls back to an instant
-  rebuild rather than sliding in a tile that changes face mid-ride. Discovered
-  during prepare now, before any flight starts for it — not after landing.
-- **A reserved cell is never a source** (`makeAvailable` skips them) — otherwise
+  rebuild rather than sliding in a tile that changes face mid-ride. It is
+  discovered during prepare, before any flight starts for it - not after
+  landing.
+- **A reserved cell is never a source** (`makeAvailable` skips them) - otherwise
   a copy staged for one slot gets handed back for another and the original
   reservation points at a cell holding something else.
 - **A rearrangement announces its outcome after the camera settles, not
   before**, which moves the screen-reader cursor without a keypress. Tests
   asserting the canvas `aria-label` must establish their own camera rather
   than assume the page is still where it loaded.
-- **Visible cost is the viewport's, not the corpus's** — every move outside
+- **Visible cost is the viewport's, not the corpus's** - every move outside
   the region is an invisible swap, so slide count scaling with corpus size is
   the bug, not a tradeoff.
 
-See `illusion.test.mjs` for the staging/batching mechanics (conveyor parking,
-cascade-vs-wave overlap) — that's implementation detail recoverable from the
+See `illusion.test.ts` for the staging/batching mechanics (conveyor parking,
+cascade-vs-wave overlap) - that's implementation detail recoverable from the
 code, not a standing invariant.
 
 ### The loading indicator
@@ -1037,8 +1079,9 @@ code, not a standing invariant.
 - **The frames are a build artifact, served like fixed art.** They ride in the
   shared dir (`assets/animation/`, served at `/shared/animation/`), resolved off
   `sharedBase` the way the favorite badges are - `scan.ts` discovers nothing
-  here. A missing manifest is "no indicator deployed", read as null everywhere,
-  exactly like a missing favorite store. The e2e suite's `--shared-dir` is the
+  here. A missing manifest is "no indicator deployed", read as null
+  everywhere, as with a missing favorite store. The e2e suite's
+  `--shared-dir` is the
   sample corpus, which has no manifest, so the indicator is cleanly absent there
   and adds nothing to e2e timing.
 - **The dev panel's "loop loading animations" checkbox is a standalone preview.**
@@ -1048,14 +1091,12 @@ code, not a standing invariant.
 
 ### Camera and gestures
 
-- **`flyTo` returns a promise for the landing** — `cam.current` is unchanged
+- **`flyTo` returns a promise for the landing** - `cam.current` is unchanged
   when it returns (flights ease), and the promise says whether it landed
-  (false means a hand hit the map mid-flight). An interrupted flight must fall
-  back to the instant rebuild rather than rearranging under someone who just
-  grabbed the map.
+  (false means a hand hit the map mid-flight).
 - **A keyboard handler chaining a second move off the first must read
   `flightTarget()` (`flight.current?.to ?? cam.current`), never `cam.current`.**
-  `cam.current` is the flight's interpolated position, not its target — two
+  `cam.current` is the flight's interpolated position, not its target - two
   key-repeat presses in the same rAF tick both reading it compute the same
   target and cancel each other instead of compounding. The same rule applies
   anywhere else a handler chains off camera state (e.g. the cursor cell).
@@ -1066,25 +1107,21 @@ code, not a standing invariant.
   straight from `damp` with no floor, and inside the content region (`damp ===
   1`) snaps the camera cell-centered rather than adding a raw delta, so a
   boundary trip doesn't leave the grid permanently offset.
-- **The edge glide applies to keyboard input exactly as it does to a pointer —
+- **The edge glide applies to keyboard input as it does to a pointer -
   don't exempt it.** The boundary pushback is an affordance (walk past the
   last ranked room, feel the library pull you back), and it must fire without
   any pointer ever touching the map. `glideToRest` runs the same step function
   to convergence for `prefers-reduced-motion` rather than inventing a closed-
-  form endpoint — there isn't one.
-- **While zooming out to start a rearrangement, the map still draws the OLD
-  arrangement** until the camera lands (`anim.current.before` holds it) — skip
-  that hold and the map shows the new library, zooms to it, then slides in
-  from the one it already replaced.
+  form endpoint - there isn't one.
 - **A flight interpolates zoom geometrically, position linearly**, sharing the
-  glide's rAF loop — don't start a second loop. `pointerdown`/`wheel` each drop
+  glide's rAF loop - don't start a second loop. `pointerdown`/`wheel` each drop
   an in-flight animation.
 - **Pointer capture is best-effort, never load-bearing.** `setPointerCapture`/
   `releasePointerCapture` can throw `NotFoundError` for an uncapturable
-  pointer (ordinary on touch) — do the `pointers` map bookkeeping before the
+  pointer (ordinary on touch) - do the `pointers` map bookkeeping before the
   capture call, not gated by it.
 - **The overlay opens on right-click or long press, never left-click** (left
-  stays "focus this room"), and a long press must lose to a pan — the timer
+  stays "focus this room"), and a long press must lose to a pan - the timer
   lives on the pointer stream so wandering past the slop radius cancels it.
 
 ### Config and the pyramid
@@ -1093,22 +1130,22 @@ code, not a standing invariant.
   spelling out every value would become the real surface; every adjustment
   instead lands in `notes` (printed by the server) because a value silently
   not taking effect is the only failure mode a tuning file has.
-- **Consuming files state no fallback defaults** — `slide.ts`/`useMapCamera.ts`
+- **Consuming files state no fallback defaults** - `slide.ts`/`useMapCamera.ts`
   read durations from config with nothing restated locally, so there's no
   second copy to drift.
 - **Zoom config narrows, never widens.** `ZOOM_LIMITS` in `camera.ts` is the
   only statement of the hard range; config may tighten it but a narrowing that
   leaves the finest rung unreachable is silently fine (just unused code).
-- **The configured range rides on the camera as `limits`**, same as `aspect` —
+- **The configured range rides on the camera as `limits`**, same as `aspect` -
   rebuild a camera instead of spreading it and the range is lost mid-gesture.
 - **Every pyramid number (tile dimensions, ladder, cache budgets, prefetch
   ring) lives in `packages/web/src/lib/pyramid.ts`.** `tiles.ts` and the render
   loop read the policy, they don't restate it. `BASE_TILE` is the only place
-  size/shape is stated — don't assume square or compute a size from a literal.
+  size/shape is stated - don't assume square or compute a size from a literal.
 - **Tile eviction is frame-aware.** The renderer walks cells row by row, so a
   plain LRU would evict the top of the screen to make room for its own bottom.
   `tiles.ts` stamps entries with `beginFrame()`'s counter and won't evict
-  anything from the current or previous frame — the render loop must call
+  anything from the current or previous frame - the render loop must call
   `beginFrame()` once per frame for that to mean anything.
 
 ### Deployment and the base path
@@ -1116,37 +1153,39 @@ code, not a standing invariant.
 - **`--base-path` does not change how Express routes anything.** Every route
   in `app.ts` is mounted at its normal unprefixed path regardless of the
   flag. What makes a subpath deployment (`https://centuryglass.us/babel-index/`)
-  work is `server-nginx.conf`'s `location /babel-index/ { proxy_pass
-  http://localhost:5173/; }` — the trailing slash on both sides strips the
+  work is the VPS's hand-managed nginx config (not in this repo; see
+  `deploy/README.md`):
+  `location /babel-index/ { proxy_pass
+  http://localhost:5173/; }` - the trailing slash on both sides strips the
   prefix before the request reaches this process, so from Express's point of
   view every request already looks like it arrived at `/`. Adding a second,
   Express-side mount at the same prefix would double-strip and 404 everything.
-- **Every url this server hands the browser is RELATIVE, and that is the
-  actual fix.** A root-absolute url (`/bundle.js`, `/api/manifest`,
-  `/images/foo.jpg`) resolves against the true origin root — one level above
-  the subpath — and never reaches the proxy block that would have stripped
+- **Every url this server hands the browser is relative.** A root-absolute
+  url (`/bundle.js`, `/api/manifest`,
+  `/images/foo.jpg`) resolves against the true origin root - one level above
+  the subpath - and never reaches the proxy block that would have stripped
   it. `scan.ts`'s `IMAGES_BASE`/`SHARED_BASE` (`images`, `shared`, no leading
   slash) and the two client-side `fetch()` calls (`main.tsx`, `useSearch.ts`)
-  are relative for exactly this reason; a new one added with a leading slash
+  are relative for this reason; a new one added with a leading slash
   is a subpath regression even though it works fine at the root deployment
   this app has always defaulted to.
 - **`<base href>` is what makes a relative url mean the right thing**, and it
-  has to land before anything that uses one — `app.ts` injects it
+  has to land before anything that uses one - `app.ts` injects it
   immediately after `<head>`. `base-path.ts`'s `normalizeBasePath` is the one
   place the flag's leading/trailing slash gets decided; every consumer reads
   its output rather than re-deriving its own idea of what `--base-path` looks
   like normalized.
 - **A bare visit to the subpath must redirect to add the trailing slash.**
-  `server-nginx.conf`'s `location = /babel-index { return 301
+  The VPS config's `location = /babel-index { return 301
   .../babel-index/; }` exists because a relative url resolves against the
-  last `/`-terminated segment of the CURRENT document location, not against
-  `<base href>`, until the page has actually loaded and set it — the redirect
+  last `/`-terminated segment of the current document location, not against
+  `<base href>`, until the page has actually loaded and set it - the redirect
   is what guarantees the browser is at a trailing-slash URL before that first
   load even starts.
 - **Testing this locally without the proxy in front is testing the wrong
   thing.** Hitting `http://localhost:5173/` directly with `--base-path` set
   serves a page whose `<base href>` points at a prefix Express never mounted,
-  so every relative fetch 404s — that is expected, not a regression to chase;
+  so every relative fetch 404s - that is expected, not a regression to chase;
   the flag is meaningless without the reverse proxy that strips it.
 
 ### Deploying to the VPS
@@ -1156,7 +1195,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
 - **A 200 is not a successful deploy, and that is the whole reason
   `/api/health` reports a commit.** The old process surviving a failed
   restart, a unit file pointing at a second checkout, `--images` aimed at a
-  directory that moved — every one of those answers 200 with a perfectly
+  directory that moved - every one of those answers 200 with a perfectly
   healthy-looking library. So `health-check.mjs` compares the reported commit
   against the sha being deployed, and a release that comes up on the right
   commit with **zero rooms** fails immediately rather than waiting out the
@@ -1170,13 +1209,13 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   sha arrives in `$SSH_ORIGINAL_COMMAND`, is matched against 40 hex characters
   before it is used at all, and is refused unless it is already an ancestor of
   `origin/main`. Anyone holding the key can redeploy main or roll back to
-  something that was main — not a branch, not a fork's commit, not a shell.
+  something that was main - not a branch, not a fork's commit, not a shell.
   Loosening either check turns a narrow credential back into a login.
 - **Both halves of the check run, and they ask different questions.**
   `deploy.sh` checks `127.0.0.1` (did the unit come back on the new code?) and
   the workflow re-checks the public url (can anyone reach it?). A localhost-only
   check cannot tell a working site from a broken reverse proxy in front of a
-  working server — which, given everything in the section above, is a failure
+  working server - which, given *Deployment and the base path*, is a failure
   worth being able to see.
 - **A failed deploy is not rolled back.** It stops with the previous sha
   printed, and the workflow's dispatch input takes a sha, so a rollback is a
@@ -1184,88 +1223,88 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   red workflow, which is the combination most likely to be misread as flaky CI.
 - **`deploy.sh` runs as the version of itself that was already on the box**,
   since it checks out the new revision partway through its own run. A change
-  to it lands on the deploy *after* the one introducing it — the same
+  to it lands on the deploy *after* the one introducing it - the same
   one-release lag any self-updating deploy script has, and not a bug to chase.
 
 ### The catalog, and the two modes
 
-- **The map is HIDDEN, never unmounted, and that is load-bearing twice over.**
+- **The map is hidden, never unmounted, and that is load-bearing.**
   `.map-view` is `display: contents` shown and `display: none` hidden, and the
   render loop returns early when `mode !== 'map'`. Unmounting it instead looks
   like it would work and does not: `useMapCamera`'s listener effect reads
-  `canvasRef.current` once and depends on the ref OBJECT, so a canvas that
+  `canvasRef.current` once and depends on the ref object, so a canvas that
   remounts comes back with no pointer listeners bound at all - the camera still
   holds the right numbers, the HUD still reads correctly, and the map silently
   never pans again. `catalog.e2e.ts`'s "the map is where it was left when the
-  catalog closes" test drags after a mode switch precisely because every
+  catalog closes" test drags after a mode switch because every
   cheaper assertion passes under that bug. Hiding also keeps the tile cache
   and the pyramid's LRU warm, so returning is a repaint, not a rebuild.
-- **The catalog is not the accessibility mode.** `accessibility-plan.md` §3.7
-  rejected a linear list as an accommodation and left it open as a control for
-  everyone. So: nothing detects a screen reader, nothing defaults into it, the
-  panel's ranked listbox stays exactly where it is, and `role="application"`
-  stays scoped to the canvas. The catalog is a `<ul>` - §3.7's argument for a
-  `listbox` is about the panel's bare-name results and does not carry to rows
-  containing keyword chips.
+- **The catalog is not the accessibility mode.** A linear list was rejected
+  as an accommodation and left open as a control for everyone. So: nothing
+  detects a screen reader, nothing defaults into it, the panel's ranked
+  listbox stays where it is, and `role="application"` stays scoped to the
+  canvas. The catalog is a `<ul>`; the listbox reasoning behind the panel's
+  bare-name results does not carry to rows containing keyword chips.
 - **One live region for the whole app, and it lives outside both views.** The
   panel is part of the map, and a region that unmounts on a mode switch is one a
   screen reader loses - keep it out of both. `.note` keeps only the static
   hint, which must never share a node with `role="status"`.
-- **Rows are a FIXED height and the spacers are arithmetic, not estimates.**
+- **Rows are a fixed height and the spacers are arithmetic, not estimates.**
   `spacerHeight` stands in for unmounted pages exactly, so a recycled page
   cannot move the scroll position under a reader's hands. That is why the story
   is cut to the card rather than allowed to grow it, why the score breakdown in
-  a row is the `strip` layout rather than the card's `table` (the table was
-  108px in a 202px row and clipped itself), and why the row height is the max of
-  the tile and the text minimum - on a narrow display the thumbnail shrinks and
-  the story does not. A row is two stacked pieces: a FIXED-HEIGHT flow area
+  a row is the `strip` layout rather than the card's `table` (the table's
+  stacked lines are taller than any fixed row and clip themselves), and why
+  the row height is the max of the tile and the text minimum - on a narrow
+  display the thumbnail shrinks and
+  the story does not. A row is two stacked pieces: a fixed-height flow area
   (`.catalog-flow`, `--catalog-flow-h` = the taller of tile or text minimum)
-  holding tile/name/chips/story, and the score strip in normal flow BELOW it
+  holding tile/name/chips/story, and the score strip in normal flow below it
   (height reserved via `scoreStripHeight` -> `--catalog-score-h`). Splitting
-  them this way is what keeps match certainty from being pushed off the card
-  and the story is what yields: `CatalogRow` measures the story's leftover space
-  in the flow area and sets its `max-height` so it cuts there, and the strip's
-  top rule always lands under the tile (never beside it) because the strip is a
+  them this way is what keeps match certainty from being pushed off the card,
+  and the story is what yields: `CatalogRow` measures the story's leftover
+  space in the flow area and sets its `max-height` so it cuts there, and the
+  strip's top rule always lands under the tile (never beside it) because the
+  strip is a
   separate block below the flow. The per-axis detail lines flow into a
-  content-sized, LEFT-aligned grid (`--score-cols`, not stretched to fill)
+  content-sized, left-aligned grid (`--score-cols`, not stretched to fill)
   beneath the full-width composite line; once the row is wide enough to give
   every detail its own column the composite joins them as one more column
   (`score-one-row`) instead of taking a line to itself. The story's cut fade is
-  a MASK on `.catalog-row .catalog-body.clipped .story`, so it lands on the
+  a mask on `.catalog-row .catalog-body.clipped .story`, so it lands on the
   story's own measured edge and never touches the floated tile. The center
   room's row is the one exception, allowed to size itself because it sits
   outside the paging arithmetic; its measured height is the scroll conversion's
   `leadPx`.
-- **A room row's thumbnail FLOATS inside the flow area, and the story wraps
+- **A room row's thumbnail floats inside the flow area, and the story wraps
   around it.** `.catalog-row .catalog-tile-button` is `float: left` inside
   `.catalog-flow`, so the story's line boxes are narrow beside the picture and
   full width beneath it - the height a row does not spend on the picture is the
-  story's rather than dark background under a small tile, which is what a
-  phone's row was mostly made of when the two were rigid columns. Two things
-  follow, and both bit once already:
+  story's rather than dark background under a small tile. Two things follow,
+  and both have a dead bug behind them:
   - **The story cannot be line-clamped, and it must not become a block
     formatting context.** `-webkit-line-clamp` needs `display: -webkit-box`,
-    which establishes a BFC, and a BFC sits BESIDE a float as a rectangle
-    instead of wrapping around it - so the story would be stuck in the thin
-    column beside the tile with the space beneath it empty. For the SAME reason
+    which establishes a BFC, and a BFC sits beside a float as a rectangle
+    instead of wrapping around it - the story would be stuck in the thin
+    column beside the tile with the space beneath it empty. For the same reason
     the story's own cut uses `overflow: clip`, never `hidden`: both clip it to
     the measured `max-height` (`CatalogRow` fills the flow area's leftover
     height), but `hidden` establishes a BFC and `clip` does not, so only `clip`
     keeps the wrap. The fade is a `mask-image` on the clipped story, landing on
-    its measured edge. `.catalog-head` and `.chips` stay flex on purpose: each
-    IS its own formatting context, so they sit beside the float and keep the
+    its measured edge. `.catalog-head` and `.chips` stay flex: each
+    is its own formatting context, so they sit beside the float and keep the
     narrow column while only the prose wraps.
-  - **Whether a row cut something is asked of the STORY, not the card.** The
+  - **Whether a row cut something is asked of the story, not the card.** The
     story carries its own `max-height`, so `story.scrollHeight >
-    story.clientHeight` is the honest question and the float (a sibling outside
-    `.story`) no longer pollutes it - unlike the old full-card measure, where a
-    float and its margin counted toward `scrollHeight` even when the story had
-    already finished and offered "read the rest" on every wide row.
-  The center room has its own layout (`.catalog-center` in style.css): ONE
+    story.clientHeight` is the honest question, and the float (a sibling
+    outside `.story`) cannot pollute it. Measuring the whole card instead
+    counts the float and its margin toward `scrollHeight` even when the story
+    has already finished, and offers "read the rest" on every wide row.
+  The center room has its own layout (`.catalog-center` in style.css): one
   shared column grid at every width above a phone, and a single stacked column
   on a phone (`.ultra-narrow`, which also carries `.narrow`, so its rules
   reassign every item off the shared grid's span vars via `grid-area`). On the
-  shared grid the spines wrap around the picture AND stay aligned above and
+  shared grid the spines wrap around the picture and stay aligned above and
   below it: the picture is a grid item spanning `--pic-cols` columns and
   `--pic-rows` rows of the shelf's own column grid, the title and index-shelf
   line take the columns to its right, and the spines auto-flow into every
@@ -1274,12 +1313,12 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   beside the picture before any wrap); the layout is identical. A float cannot
   do this: its beside run starts at the picture's edge and its below run at the
   card's left, two grids that do not line up. The spans are fitted in JS
-  (`CatalogView`'s layout effect) from the grid's own RESOLVED track sizes,
-  and `--pic-cols` always rounds UP - the cover picture may be larger than the
+  (`CatalogView`'s layout effect) from the grid's own resolved track sizes,
+  and `--pic-cols` always rounds up - the cover picture may be larger than the
   spines but never snapped smaller than its natural width. The shelf's wrapper
   is dissolved with `display: contents` so each spine is its own grid item
   rather than one rigid box beside the picture. The picture's hotspots
-  (`CENTER_BOOK_PATH`, the distill toggle) are positioned as FRACTIONS of the
+  (`CENTER_BOOK_PATH`, the distill toggle) are positioned as fractions of the
   thumbnail (the book's SVG fills it; the distill toggle is `iconSize /
   BASE_TILE` of it), so being sized by the grid never knocks them off the art.
   The card carries a 7px top margin (its one exterior gap) so it does not butt
@@ -1288,12 +1327,13 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
 - **What a row cannot show, it counts - it never just stops.** A fixed-height
   row cannot promise a room's keywords fit: no reserve can, at an arbitrary
   width with arbitrary keyword lengths. So `chipLines` sizes the chip box from
-  the row's real leftover height, and whatever still does not fit is COUNTED
+  the row's real leftover height, and whatever still does not fit is counted
   and offered as a `+N` chip (`RoomDetails`'s `chipOverflow`) that opens the
-  room. A flat `max-height` that silently swallowed a third keyword is the bug
-  this replaced. The counter is absolutely positioned, and must be: it is
-  rendered from a measurement of the very box it sits in, so an in-flow one
-  would change the height that decided its own number - and it is skipped when
+  room. A flat `max-height` that silently swallows a third keyword is the
+  failure mode this guards. The counter is absolutely positioned, and must
+  be: it is rendered from a measurement of the very box it sits in, so an
+  in-flow one would change the height that decided its own number - and it is
+  skipped when
   counting, or it adds one to itself on every pass.
 - **A chip ellipsises; it does not get sliced.** `.chip` is `flex: 0 1 auto`
   with `max-width: 100%` and `text-overflow: ellipsis`, so a keyword wider than
@@ -1307,11 +1347,11 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   reader pages. `windowFor` widens the window when a screenful spans more pages
   than the budget mounts, so a tall display cannot scroll into a spacer.
 - **Highlighting mirrors the match rules, including their asymmetry.** A
-  keyword matches by SUBSTRING and a story word by PREFIX, so there are two
+  keyword matches by substring and a story word by prefix, so there are two
   range finders in `scoring.ts` beside the scorers, taking the same folded
   query and tokens the ranking used - a token dropped as a stopword or for being
-  too short cannot mark, because it did not score. A room's TITLE matches by the
-  same substring rule a keyword does (`classifyTagTerm`), so `useSearch`'s
+  too short cannot mark, because it did not score. A room's title matches by
+  the same substring rule a keyword does (`classifyTagTerm`), so `useSearch`'s
   `highlight.title` reuses `keywordMatchRanges` rather than a third finder;
   `CatalogView`'s row head and `RoomOverlay`'s head both mark the title through
   it, and only the corpus's real title, never the "Room N" fallback, which
@@ -1327,24 +1367,25 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   scores 1.00 for `cghjj` too. `explainScore` keeps the raw cosine beside it and
   certainty on its own line; printing the relative number alone claims a
   confidence the library does not have. Asserted.
-- **Namespace catalog CSS.** `.row` already belonged to the dev panel, and an
-  unprefixed rule reached in and turned every slider row into a fixed-height
-  flex box. `.chips`, `.story`, `.picture` and `.score` ARE shared on purpose -
-  they come from `RoomDetails` and must look the same in a card and in a row.
+- **Namespace catalog CSS.** `.row` already belongs to the dev panel, so an
+  unprefixed `.row` rule for catalog rows reaches in and turns every slider
+  row into a fixed-height flex box. `.chips`, `.story`, `.picture` and
+  `.score` are shared on purpose - they come from `RoomDetails` and must look
+  the same in a card and in a row.
   The trap runs the other way too: a global `button { flex: 1 }`, written for
-  the panel's button rows, stretched the pager's buttons across half the window
+  the panel's button rows, stretches the pager's buttons across half the window
   each. The catalog's controls opt out explicitly rather than that rule being
   narrowed under the panel it was written for.
 - **A fixed row cannot show everything, so the overlay is not optional.**
   `RoomOverlay` is how a reader sees the tile at full size and the whole story
   without going back to the map, reached from the thumbnail and from the "read
-  the rest" a clipped story ends with. Expanding a story IN PLACE was the
-  alternative and it breaks the windowing: row heights would vary, and then the
-  spacers are estimates. The story is cut by the card and faded rather than
-  clamped to a line count (see the float invariant above) - and
-  `TEXT_CHROME_PX` must account for the expand button on EVERY row, including
+  the rest" a clipped story ends with. Expanding a story in place would break
+  the windowing: row heights would vary, and then the spacers are estimates.
+  The story is cut by the card and faded rather than
+  clamped to a line count (see the float rule in this list) - and
+  `TEXT_CHROME_PX` must account for the expand button on every row, including
   the ones that do not show one, or the button is clipped out of existence on
-  exactly the narrow displays that need it. The chip clamp is derived
+  the narrow displays that need it. The chip clamp is derived
   (`chipLines`, `CHIP_LINE_PX`) and whatever it cannot fit is counted, so a
   room's keywords never silently disappear.
 - **The query has a length cap and `search()` is where it is enforced.** The
@@ -1355,13 +1396,11 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
 
 ### The WebGL renderer
 
-WebGL is the default renderer (`webglFlag.ts`'s `DEFAULT_WEBGL`); Canvas2D
-(`render.ts`/`slide.ts`) is the second renderer, reachable with `?webgl=0` and
-the automatic fallback when `supportsWebGL2()` is false.
-`render-parity.parity.ts` (`npm run test:parity`) is what keeps the two in
-step - see "Testing and CI".
+WebGL is the default renderer; Canvas2D (`render.ts`/`slide.ts`) is the
+second. `render-parity.parity.ts` (`npm run test:parity`) is what keeps the
+two in step - see *Testing and CI*.
 
-- **It mirrors `render.ts`/`slide.ts`'s draw loop, in lockstep, on purpose.**
+- **It mirrors `render.ts`/`slide.ts`'s draw loop, in lockstep.**
   `glRenderer.ts`/`glSlideRenderer.ts` are a second implementation of the
   same per-cell decisions (which pyramid level, which cell resolves to which
   draw, favorite-badge gating, prefetch/warm-level ordering) using
@@ -1382,8 +1421,7 @@ step - see "Testing and CI".
   previous ones. `useMapRendererGL.ts`'s canvas-lifetime effect (dependency
   array `[canvasRef, cache]` only) is what keeps this to once; anything
   routed through it that starts depending on a value that changes often
-  (a search, a favorite toggle) reintroduces the leak this file's history
-  exists to warn about.
+  (a search, a favorite toggle) reintroduces the leak.
 - **The texture cache has its own eviction budget, independent of
   `tiles.ts`'s.** `gl/textureCache.ts` mirrors `tiles.ts`'s frame-aware LRU
   rule (current and previous frame are always protected) rather than
@@ -1394,9 +1432,10 @@ step - see "Testing and CI".
 - **The renderer default lives in `webglFlag.ts`.** `DEFAULT_WEBGL` is `true`;
   a plain visit gets WebGL. `?webgl=0` (also `off`/`false`/`no`) forces
   Canvas2D, a bare `?webgl` or any other value forces WebGL, and `WEBGL` folds
-  in a WebGL2 capability probe so an unsupported device falls back to Canvas2D
-  automatically regardless of the flag. The `?webgl=0` hatch is load-bearing
-  for `render-parity.parity.ts`'s Canvas2D control session and for a reader who
+  in `supportsWebGL2()`'s capability probe so an unsupported device falls
+  back to Canvas2D automatically regardless of the flag. The `?webgl=0` hatch
+  is load-bearing for `render-parity.parity.ts`'s Canvas2D control session
+  and for a reader who
   hits a GL-specific glitch - don't drop it while Canvas2D still exists.
 
 ### Testing and CI
@@ -1406,39 +1445,43 @@ step - see "Testing and CI".
   `webgl-map.e2e.ts` passes `webgl=0` (Canvas2D) because the suite's blank/
   repaint probes (`fingerprint`, the `getImageData` reads) need a 2D context a
   GL canvas doesn't have. GL behaviour is covered by `webgl-map.e2e.ts`
-  (`webgl: true`) and the parity suite below. Leaving a spec unpinned would let
+  (`webgl: true`) and the parity suite. Leaving a spec unpinned would let
   the production default silently switch its renderer and break those reads.
-- **`render-parity.parity.ts` (`npm run test:parity`) is a SEPARATE manual
+- **`render-parity.parity.ts` (`npm run test:parity`) is a separate manual
   suite, not a merge gate.** The `.parity.ts` suffix matches neither `npm test`
-  nor `npm run test:e2e`'s glob on purpose - it needs a real GPU and boots two
+  nor `npm run test:e2e`'s glob - it needs a real GPU and boots two
   sessions (Canvas2D + WebGL) to check the renderers draw the same map. Run it
   by hand when touching either draw loop; it is the check behind the lockstep
   invariant in "The WebGL renderer". See its header for the scene design (why
   there's no far-zoom scene, why the pixel bounds are where they are).
-- **In a cloud agent container, running `npm run test:e2e` yourself is slow**
-  (the pinned Chromium isn't preinstalled the way it is in CI, and each spec
-  launches its own browser). If a change doesn't touch `packages/web/e2e/**`
-  or behavior an existing e2e spec exercises, don't run the suite locally —
-  `npm test` plus lint is the fast local signal, and `e2e.yml` runs as the PR's
-  merge gate regardless. Run it locally anyway when the change is
-  behavior-sensitive enough that you want the read before opening the PR (e.g.
-  refactors touching the rearrangement/camera/search state machines), or when
-  you're editing the e2e specs themselves.
+- **Running `npm run test:e2e` is slow in a cloud agent container** (the
+  pinned Chromium isn't preinstalled the way it is in CI, and each spec
+  launches its own browser). There, if a change doesn't touch
+  `packages/web/e2e/**` or behavior an existing e2e spec exercises, don't run
+  the suite - `npm test` plus lint is the fast local signal, and `e2e.yml`
+  runs as the PR's merge gate regardless. That caveat is container-only: on
+  the maintainer's own machine - identifiable by Arch Linux (`/etc/os-release`)
+  - the pinned Chromium is preinstalled, the suite is cheap, and it runs
+  green. Run e2e locally whenever the change is behavior-sensitive enough
+  that you want the read before opening the PR (e.g.
+  refactors touching the rearrangement/camera/search state machines), when
+  you're editing the e2e specs themselves, or on the maintainer's machine
+  whenever the change touches tested behavior.
 - **e2e is a merge gate.** `ci.yml` runs `npm test` across the Node matrix and
   calls `e2e.yml`; the aggregate `ci` job needs both. A flaky browser test
-  blocks merges for everyone, so wait on a condition, never on a duration —
+  blocks merges for everyone, so wait on a condition, never on a duration -
   `settled()` waits out the camera and animation only, not the network, so
   anything asserting on `blank` tiles or the HUD text must poll (bounded)
   rather than trust the first reading after an interaction. `settled()`
-  itself works by waiting for the HUD to stop starting with `"rearranging"` —
-  `useMapRenderer.ts` sets that text for the WHOLE span from
+  itself works by waiting for the HUD to stop starting with `"rearranging"` -
+  `useMapRenderer.ts` sets that text for the whole span from
   `anim.current` first being set through prepare, the flight, and the slide,
-  not just once the slide's board exists, specifically so this holds even
+  not just once the slide's board exists, so this holds even
   while `prepareRearrangement` (`useRearrangement.ts`) is still fetching.
 - **Two reads of the same UI separated by a slow call can describe two
   different renders** (e.g. ranking still settling after a CDP round trip).
   Where genuine settling is needed, poll for two *agreeing* reads with a real
-  gap between them — two reads taken back to back with nothing elapsed proves
+  gap between them - two reads taken back to back with nothing elapsed proves
   nothing.
 - **Test cleanup belongs in `finally`.** Each `packages/web/e2e/*.e2e.ts`
   file's tests share one `page` across that file; a failed assertion skipping
@@ -1448,40 +1491,35 @@ step - see "Testing and CI".
 - **A green e2e test that cannot fail is worse than none.** If you change one,
   break the app on purpose and confirm it fails.
 - **Assert on the accessible name, not on raw ARIA attributes** (e.g.
-  `aria-valuetext`) — attribute-vs-computed-name behavior differs across
+  `aria-valuetext`) - attribute-vs-computed-name behavior differs across
   Chromium versions and CI vs. local can install different pinned builds
   (`BABEL_E2E_CHROMIUM` points the suite at a specific binary). The accname
   algorithm is consistent everywhere; anything a reader must hear belongs in
   the label.
-- **An accessibility assertion must dump the node it failed on** — "expected
+- **An accessibility assertion must dump the node it failed on** - "expected
   /%/, got 26" can't distinguish a missing attribute from an ignored one, and
   the failing run is usually on a machine you can't open a browser on.
 - **CDP touch injection bypasses real gesture arbitration.** The touch/pinch
   tests in `packages/web/e2e/map-gestures.e2e.ts` can't see `touch-action`,
-  `pointercancel`, or the real capture lifecycle — treat it as a known blind
+  `pointercancel`, or the real capture lifecycle - treat it as a known blind
   spot. Simulate suspected gesture bugs explicitly and confirm on a device
   with `?touchdebug`.
-- **A `flyTo` fired while a rearrangement is still animating is silently
-  swallowed** — confirmed by direct reproduction, not yet root-caused (see
-  `docs/pending_task_list.md`). The rearrangement's own camera control
-  keeps driving x/y/zoom regardless, so a plain click-then-`landed()` on the
-  'center' button can report a "settled" camera that never actually moved.
+- **A `flyTo` issued while a rearrangement is animating is overridden, not
+  honored.** The rearrangement's camera control keeps driving x/y/zoom
+  regardless, and `useMapCamera.ts`'s `flyTo` has no way to interrupt an
+  active rearrangement - a fast-clicking reader triggers this for real, and
+  in a test it shows up as a plain click-then-`landed()` on the 'center'
+  button reporting a "settled" camera that never actually moved.
   `e2e/support.ts`'s `recentre()` is the robust form: it waits out any
   in-flight rearrangement before clicking and retries if the camera didn't
   reach the target, rather than trusting one `landed()` read. Use it instead
   of a bare click whenever a test's `before` state might follow a search or
   any other `requestAnimation` trigger. Camera coordinates from `flyTo(x, y,
-  ...)` land on the cell's CENTER (`cameraAtCell`'s `+ 0.5`), so `recentre()`
+  ...)` land on the cell's center (`cameraAtCell`'s `+ 0.5`), so `recentre()`
   (which calls `flyTo(0, 0, ...)`) checks for `(0.5, 0.5)`, not `(0, 0)`.
-- **In a cloud agent container, two `map-gestures.e2e.ts` tests fail every
-  run, and it is not your change.** "right-clicking a room opens its card"
-  and "a long press opens the card" both time out waiting for `.overlay`;
-  the second is a cascade from the first, which leaves the camera somewhere
-  the second's fixed screen point holds no room. They are green in CI, and
-  they fail identically with the catalog work reverted - the swallowed-`flyTo`
-  bug above is the live suspect, and `docs/pending_task_list.md` carries the
-  evidence. Don't spend a run concluding you broke them; do check the rest of
-  the file (the other 13) still passes.
+  Whether a control-issued `flyTo` should end an active rearrangement the way
+  a pointer grab does is the open question recorded in
+  `docs/pending_task_list.md`.
 
 ## Working with GitHub
 

@@ -564,6 +564,17 @@ the dropped `rows.sort(...)`. They agree.)
 - **The plan itself is not exempt.** If you find a worse pattern than anything in
   §2, add it here (with the file that showed it) rather than only fixing the one
   file. And if a batch reveals the ordering here is wrong, update §4.
+- **AGENTS.md got the same pass (2026-09-17).** Its Conventions section now
+  carries the distilled house rules — lead with the rule, one fact one home,
+  pin to declarations, keep hazards and drop ghosts, length proportional to
+  risk with a hazard floor, plain declaratives, and references that resolve
+  (this §2 stays the long-form catalog with the tells). Its Layout entries are
+  now one-line signage pointing at the "Things that will bite you" bullets,
+  which are the canonical home for subsystem facts — when a code comment or a
+  doc passes through one of those facts, cite the bullet, don't restate it.
+  Also cleared there: the stale `.js`/`.mjs` filename citations, the deleted
+  catalog-plan's "plan §8" (moved to `pending_task_list.md`), the dead
+  `accessibility-plan.md §3.7` pair, and the `server-nginx.conf` namings.
 - **Where these ideas came from (§2b).** The bake-off lived in
   `docs/comment-revision-tests/` (local, untracked): five models each critiqued
   and revised `main.tsx`, plus a meta-analysis ranking them. Union-alpha's

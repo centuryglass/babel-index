@@ -24,8 +24,8 @@ code and the git log are the record of what was.
 - No actual screen reader testing has happened yet. Learn orca and test
   manually. See accessibility-plan.md for more details on what to check, and
   other lingering questions.
-- The ranked results listbox (accessibility-plan.md §3.2) now lives in the
-  dev panel, which is `?debug`-only. Give it a non-debug home before this
+- The ranked results listbox now lives in the dev panel, which is
+  `?debug`-only. Give it a non-debug home before this
   matters for anyone relying on the lossless reading of a search.
 
 ## Hosting:
@@ -45,6 +45,13 @@ code and the git log are the record of what was.
   workflow's public health check fails on when it is wrong) or stop pointing
   at it by name from two files. Do not reconstruct it from the AGENTS.md
   description without diffing against the live file first.
+  Update [2026-09-17]: the AGENTS.md comment pass took the first half of
+  "stop pointing at it by name" - AGENTS.md now calls it "the VPS's
+  hand-managed nginx config" and cites `deploy/README.md`, and still quotes
+  the two `location` blocks as what that config must do. The code-comment
+  namings (`index.ts`, `scan.ts`, `base-path.ts`, `app.test.ts`) remain for
+  the queued `packages/server` comment pass, and the commit-or-not decision
+  is still open.
 - **The CLIP weights cache inside `node_modules`.** transformers.js defaults
   `env.cacheDir` to `node_modules/@huggingface/transformers/.cache`, so any
   `npm ci` throws away a few hundred MB of downloaded model.
@@ -55,6 +62,18 @@ code and the git log are the record of what was.
   cache as a volume instead of re-downloading on every container start.
 
 ## CI:
+- **[2026-09-17] `npm run lint` checks almost nothing of the app.** Noticed
+  while verifying AGENTS.md's linting claims: the migration left zero `.js`
+  and `.jsx` files under `packages/` and `tools/`, but eslint's flat-config
+  default file list is `.js`/`.mjs`/`.cjs` - no config here extends it. So
+  `eslint .` checks `eslint.config.js`, `deploy/health-check.mjs`,
+  `build/*.mjs`, and `tools/comment-check/*.mjs` - nothing else. No
+  browser-globals or react-hooks checking of `packages/web`, and no
+  rule runs against any `.ts`/`.tsx`. The "Linting is minimal" list in
+  `AGENTS.md` now states this plainly; the fix is deciding whether the flat
+  config should lint `.ts` (a TS-parser dependency decision) or whether
+  lint is Node-side-only by design. Either way the CI `lint` job is
+  currently a green light over an empty room.
 - **Nothing builds the `Dockerfile`.** It exists so hosting can move without a
   rewrite, and it will drift out of step with `package.json` unnoticed until
   the day that matters. A build-only job is enough — no push, no registry.
@@ -169,6 +188,15 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   eventually retire Canvas2D. Retiring it drops the parity suite, the
   `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
   only once WebGL has real production mileage and nothing has needed the hatch.
+- **[2026-09-17] The shared tiles have no pyramid.** `center_tile.png`, the
+  generic tiles, and the favorite badges are served flat at level 0, so
+  `main.tsx` must pin each shared id at level 0 - full resolution - and a
+  zoomed-out view pays a full-res download per generic tile on screen
+  (AGENTS.md, "The center tile and its generic tiles"). Generating pyramid
+  levels for the shared dir through `packages/pipeline` would close it. This
+  task's only previous home was a "plan §8" citation in AGENTS.md - a
+  section of the deleted catalog-plan.md - until the 2026-09-17 AGENTS.md
+  pass moved it here.
 
 ## Shareable permalinks:
 - **[2026-09-16, done] Room permalinks already existed and were unused -**
