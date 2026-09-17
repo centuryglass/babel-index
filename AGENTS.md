@@ -281,13 +281,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                            scoped to one DOM subtree at a time - a room
                            overlay's tile-and-story, a help/book dialog's
                            page, the catalog list. Native browser zoom is
-                           never used instead (see its own comment: it
-                           drags this app's fixed/absolutely-positioned
-                           chrome out of place while panning, and Firefox
-                           Mobile doesn't reliably discard a native
-                           zoom/pan left over once a dialog closes even
-                           when a reset tries to force it). Reads its own
-                           gesture math from `contentZoomCamera.ts`.
+                           never used instead (see its own comment). Reads
+                           its own gesture math from `contentZoomCamera.ts`.
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
@@ -328,15 +323,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
                       store) - `docs/performance-research.md` §2's "measure
                       first" step. Records phase-tagged frame timings, sheet
-                      fetch/decode/first-draw gaps, and `longtask` entries into
-                      ring buffers; `perfDump()` prints percentiles to the
-                      console once a rearrangement settles
-                      (`useRearrangement.ts`). Firefox and Safari report no
-                      `longtask` entries at all (neither has implemented the
-                      API), so `ensureFrameGapLoop` runs a continuous
-                      `requestAnimationFrame` gap detector alongside the native
-                      observer as a cross-browser fallback - the same
-                      technique RUM tooling used before Long Tasks existed.
+                      fetch/decode/first-draw gaps, and `longtask` entries;
+                      `perfDump()` prints percentiles to the console once a
+                      rearrangement settles (`useRearrangement.ts`).
     * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl`/`?webgl=0` override and the
                       WebGL2 capability probe - see "The WebGL renderer".
     * `glRenderer.ts`: The WebGL counterpart of `render.ts`.
@@ -692,6 +681,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   several rounds of re-running a browser suite to chase a race), that is a
   sign it belongs in `docs/pending_task_list.md`, not a same-pass fix -
   unless the user has explicitly asked for exactly that investigation.
+- **`CLAUDE.md` is a symlink to this file.** Edit `AGENTS.md`; `CLAUDE.md`
+  exists only so a tool that looks for that filename finds the same content.
+- **This file is for facts that cross files, not single-file trivia.**
+  Before adding one, ask: is it relevant only within one file; would opening
+  that file to make the edit surface it anyway; would a reader be better
+  served finding it there instead of here. A yes to any of those means the
+  fact belongs in that file's own comment (confirm it is already there, or
+  add it) rather than restated here - at most a one-line gist with a pointer,
+  the same length-tracks-risk rule "Comments are reference, not advocacy"
+  states for code comments. "Things that will bite you" below is the
+  legitimate case: a fact that bites someone editing a *different* file than
+  the one the invariant lives in.
 
 ## Things that will bite you
 
@@ -804,42 +805,28 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   never passes `centreSlots`, which is why its recording `fakeCtx` needs no
   `save`/`rotate` and the byte-cost assertions are untouched. Keep it that way.
 - **The books are DOM buttons and painted spines, and there is one `onBook`
-  for both.** `center-books` is one absolutely-positioned container matching
-  the center cell, written once per frame like `.center-search`, with
-  `BOOK_COUNT` buttons inside it in per-axis percentages - so a pan costs one
-  style assignment, not one per button. Don't write each button's geometry
-  per frame from `bookScreenRects()`. The container is
-  `pointer-events: none` with no `:focus-within` escape hatch, so the canvas
-  keeps every gesture and a sighted click still routes `onTap` ->
+  for both.** `center-books` is one absolutely-positioned container written
+  once per frame in per-axis percentages, so a pan costs one style
+  assignment, not one per button - don't write each button's geometry per
+  frame from `bookScreenRects()`. The container is `pointer-events: none`,
+  so a sighted click routes through the canvas's own `onTap` ->
   `bookAtPoint` -> `onBook`; a second copy of "what does book i do" written
   inline in either path will drift. The shelf is one tab stop (roving
-  tabindex, `role="toolbar"`), and where an arrow key goes lives in
-  `bookNeighbour` - rows there are shelves, not the hit-test's runs, because
-  a gap between two runs is somewhere a click can land but not somewhere
-  focus should stop. `areSpinesLegible` is the single zoom gate: the buttons
-  exist while `composeSpines` draws a title, so a reader never tabs to a
-  book nobody can see named.
+  tabindex), arrow-key neighbor logic is `center.ts`'s `bookNeighbour`, and
+  `areSpinesLegible` is the single zoom gate keeping a reader from tabbing to
+  a book nobody can see named.
 - **Every one of those DOM overlays is sized to the whole cell, and the clip
-  on `#root` is what keeps that off the page.** `.center-search`, `.center-books`,
-  `.center-book` and `.center-controls` are absolutely positioned against
-  `#root` at the center cell's screen rect, which at reading zoom is several
-  screens wide - real content hanging outside the viewport, and `html`/`body`'s
-  `overflow: hidden` never reaches it (neither is in the containing-block chain
-  of an absolutely positioned descendant of a positioned `#root`). A desktop
-  shows no sign of it. A phone reads the same overflow as a page wider than the
-  screen: it drops the page scale to fit and grows the layout viewport to
-  match, and `position: fixed` resolves against that layout viewport - so
-  every dialog's
-  `.overlay-scrim` covers several screens (the dialog lands mostly off the
-  display, its close button has to be panned to) and the map paints at a
-  fraction of its size once the dialog closes. On a Pixel 5 the opening view
-  alone measured 407px of document in a 393px screen, and the fully zoomed-in
-  map 1194x2209. `#root { overflow: clip }` (style.css) is what holds it in -
-  `clip`, not `hidden`, or `#root` becomes a scroll container and focusing an
-  off-screen book slides the whole app, canvas included, sideways.
-  `map-gestures.e2e.ts`'s "zooming in never grows the page past the viewport"
-  is the guard; it reads the document's own size, which says the same thing on
-  a desktop viewport as on the phone that showed the symptom.
+  on `#root` is what keeps that off the page.** `.center-search`,
+  `.center-books`, `.center-book` and `.center-controls` are absolutely
+  positioned against `#root` at the center cell's screen rect, several
+  screens wide at reading zoom - invisible on desktop, but a phone responds
+  by shrinking the page scale and growing the layout viewport to fit, which
+  drags every dialog and the map's own paint size with it (measured on a
+  Pixel 5: 407px of document in a 393px screen at load, 1194x2209 fully
+  zoomed in). `#root`'s `overflow: clip` in `style.css` is the fix and its
+  comment there carries the full mechanism, including why `clip` and not
+  `hidden`. `map-gestures.e2e.ts`'s "zooming in never grows the page past
+  the viewport" is the regression guard.
 - **`onTap` must lose to a pan and to a flight.** It fires only on a pointer-up
   that stayed within the slop and did not stop a flight, and a completed
   long-press clears the tap candidate so a press is never also a tap. History is
@@ -849,25 +836,16 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   cycled to letter the whole wall). Assignment order is
   override → history (newest first) → tags, and override books are reserved
   first. Titles read top-to-bottom, as printed spines do.
-- **Two opening views, and they are not interchangeable.** Both are derived
-  from the viewport, not configured as a fixed zoom, but from different
-  targets. The page-load view: `main.tsx` computes it once at mount with
-  `fitZoom` (camera.ts), framing the center room's book-bounding box
-  (`GEOMETRY.opening`, exported as `CENTRE_SHELF_RECT` from `center.ts`) on the
-  display so the spines are legible, centered on the shelf and capped at the
-  tile's native width so a page never loads upscaled. It is passed to
-  `useMapCamera` as `opening` - do not restate it as a config number, and do
-  not read the viewport inside the hook. The return-to-center view - used by
-  the "center" button, a room double-tap, `Home`/`Ctrl+Home`/`End`, and the
-  rearrangement's park - is `overviewZoom(canvas, config.camera.minVisibleCells,
-  cam)` (camera.ts): the largest zoom that still fits `minVisibleCells` whole
-  rows and columns on the viewport's binding axis, computed at
-  each call site from the live canvas size rather than once at mount. The
-  split exists so the reorder animation has a wall of rooms to slide
-  across rather than the one shelf the opening shows, and the return-to-center
-  view has to be figured per-viewport-shape or a phone's narrow width shows
-  almost nothing beyond the center room. Collapsing them silently breaks
-  whichever view loses.
+- **Two opening views, and they are not interchangeable.** Both derive from
+  the live viewport rather than a fixed zoom, but for different targets and
+  at different times: the page-load view (`main.tsx`, computed once at mount
+  with `fitZoom`) frames the center shelf so its spines are legible, while
+  the return-to-center view (`overviewZoom`, recomputed at each call site -
+  the "center" button, a room double-tap, the rearrangement's park) frames
+  `config.camera.minVisibleCells` whole rows/columns so the reorder
+  animation has a wall of rooms to slide across. Collapsing them silently
+  breaks whichever view loses. `camera.ts`'s `fitZoom`/`overviewZoom` doc
+  comments carry the derivation.
 - **The zoom cap is `MAX_ZOOM_FACTOR` × the tile's native width** (2× = 2048 at
   1024w), derived in `ZOOM_LIMITS` so it tracks the tile, not a literal. Past 1×
   the flat center tile is upscaled and softens; the opening view is separately
@@ -974,18 +952,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   overlay put it; in the text column it would have to be reserved for in
   `TEXT_MIN`/`TEXT_CHROME_PX` and would cost two lines of story on every row.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
-  scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` sit in `--shared-dir`
-  next to the center tile but outside `manifest.shared` - `rooms.ts`'s
-  `createTileLocator` resolves `FAV_ON`/`FAV_OFF` (`tiles.ts`) off
-  `manifest.sharedBase` directly rather than off a manifest listing, since
-  there is nothing for `scan.ts` to have discovered. Drawn by both
-  `render.ts` and `slide.ts` (`drawFavoriteBadge`, exported from `render.ts`)
-  on every non-center, non-generic cell - `favoriteBadge.ts` is the pure half,
-  anchoring the badge to a tile's upper right corner and scaling it by the
-  same per-cell factor the tile itself is drawn at. The tap hit-test
-  (`main.tsx`'s `tapRef.current`) only enables once the scaled hit bounds
-  clear `MIN_FAVORITE_HIT` (24px desktop, 48px `(pointer: coarse)` mobile) -
-  a badge too small to fairly hit is decoration only, not a dead control.
+  scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` (`tiles.ts`'s
+  `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase` directly rather than
+  a manifest listing, since `scan.ts` never discovers them. Drawn by both
+  `render.ts` and `slide.ts` on every non-center, non-generic cell -
+  `favoriteBadge.ts` is the pure geometry/hit-test half. The tap hit-test
+  only enables once the scaled hit bounds clear a minimum size (padded out
+  further on a coarse pointer, `main.tsx`) - a badge too small to fairly hit
+  is decoration only, not a dead control.
 
 ### The reorder animation
 
@@ -1012,20 +986,15 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   that hold and the map shows the new library, zooms to it, then slides in
   from the one it already replaced.
 - **The plan is built and fetched entirely before the flight, not after it
-  lands.** `prepareRearrangement` (`useRearrangement.ts`) computes the
-  landing rectangle from the camera's current x/y - sound only because this
-  flight never changes position, only zoom (the `-0.5`/`+0.5` cancellation
-  in `startRearrangement`) - so the rectangle a plan needs is already known
-  before any camera motion starts. It then simulates the planned moves with
-  the real `applyMove` to find every room the slide will show (not just
-  `before`'s and `after`'s static viewport content - verified 27-48%
-  larger on a real corpus, because a `shiftRow`/`shiftCol` rotates a whole
-  line and the conveyor stages a needed value in from wherever it sits, see
-  `illusion.ts`), fetches all of it, and waits up to
-  `config.slide.prepareTimeoutMs` before proceeding with whatever's ready.
-  Past that budget, or if the reader interacts mid-prepare, the
-  rearrangement falls back to the instant rebuild rather than blocking
-  indefinitely.
+  lands.** `prepareRearrangement` (`useRearrangement.ts`) simulates the
+  planned moves to find every room the slide will show - 27-48% more than
+  `before`'s and `after`'s static viewport content on a real corpus, since a
+  `shiftRow`/`shiftCol` rotates a whole line - fetches all of it, and waits
+  up to `config.slide.prepareTimeoutMs` before proceeding with whatever's
+  ready. Past that budget, or if the reader interacts mid-prepare, it falls
+  back to the instant rebuild rather than blocking indefinitely. See its own
+  comment for why computing the landing rectangle from the camera's
+  pre-flight x/y is sound here.
 - **`board.ts` returning null is a real answer, not a failure.** With the
   rooms-on-the-map slider pulled back, a room the new order wants on camera may
   never have been on the old board; the caller falls back to an instant
@@ -1251,79 +1220,25 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   hint, which must never share a node with `role="status"`.
 - **Rows are a fixed height and the spacers are arithmetic, not estimates.**
   `spacerHeight` stands in for unmounted pages exactly, so a recycled page
-  cannot move the scroll position under a reader's hands. That is why the story
-  is cut to the card rather than allowed to grow it, why the score breakdown in
-  a row is the `strip` layout rather than the card's `table` (the table's
-  stacked lines are taller than any fixed row and clip themselves), and why
-  the row height is the max of the tile and the text minimum - on a narrow
-  display the thumbnail shrinks and
-  the story does not. A row is two stacked pieces: a fixed-height flow area
-  (`.catalog-flow`, `--catalog-flow-h` = the taller of tile or text minimum)
-  holding tile/name/chips/story, and the score strip in normal flow below it
-  (height reserved via `scoreStripHeight` -> `--catalog-score-h`). Splitting
-  them this way is what keeps match certainty from being pushed off the card,
-  and the story is what yields: `CatalogRow` measures the story's leftover
-  space in the flow area and sets its `max-height` so it cuts there, and the
-  strip's top rule always lands under the tile (never beside it) because the
-  strip is a
-  separate block below the flow. The per-axis detail lines flow into a
-  content-sized, left-aligned grid (`--score-cols`, not stretched to fill)
-  beneath the full-width composite line; once the row is wide enough to give
-  every detail its own column the composite joins them as one more column
-  (`score-one-row`) instead of taking a line to itself. The story's cut fade is
-  a mask on `.catalog-row .catalog-body.clipped .story`, so it lands on the
-  story's own measured edge and never touches the floated tile. The center
-  room's row is the one exception, allowed to size itself because it sits
-  outside the paging arithmetic; its measured height is the scroll conversion's
-  `leadPx`.
+  cannot move the scroll position under a reader's hands - the fixed height
+  is why the story is cut rather than allowed to grow the row, and why the
+  score breakdown uses a `strip` layout rather than the card's taller
+  `table`. A row is two stacked pieces, a fixed-height flow area
+  (`--catalog-flow-h`) and the score strip below it (`scoreStripHeight`),
+  so match certainty can never get pushed off the card; the center room's
+  row is the one exception, sized to its own content since it sits outside
+  the paging arithmetic. `catalog.ts`, `CatalogView.tsx` and `style.css`'s
+  `.catalog-flow`/`.score-strip` comments carry the layout mechanics.
 - **A room row's thumbnail floats inside the flow area, and the story wraps
-  around it.** `.catalog-row .catalog-tile-button` is `float: left` inside
-  `.catalog-flow`, so the story's line boxes are narrow beside the picture and
-  full width beneath it - the height a row does not spend on the picture is the
-  story's rather than dark background under a small tile. Two things follow,
-  and both have a dead bug behind them:
-  - **The story cannot be line-clamped, and it must not become a block
-    formatting context.** `-webkit-line-clamp` needs `display: -webkit-box`,
-    which establishes a BFC, and a BFC sits beside a float as a rectangle
-    instead of wrapping around it - the story would be stuck in the thin
-    column beside the tile with the space beneath it empty. For the same reason
-    the story's own cut uses `overflow: clip`, never `hidden`: both clip it to
-    the measured `max-height` (`CatalogRow` fills the flow area's leftover
-    height), but `hidden` establishes a BFC and `clip` does not, so only `clip`
-    keeps the wrap. The fade is a `mask-image` on the clipped story, landing on
-    its measured edge. `.catalog-head` and `.chips` stay flex: each
-    is its own formatting context, so they sit beside the float and keep the
-    narrow column while only the prose wraps.
-  - **Whether a row cut something is asked of the story, not the card.** The
-    story carries its own `max-height`, so `story.scrollHeight >
-    story.clientHeight` is the honest question, and the float (a sibling
-    outside `.story`) cannot pollute it. Measuring the whole card instead
-    counts the float and its margin toward `scrollHeight` even when the story
-    has already finished, and offers "read the rest" on every wide row.
-  The center room has its own layout (`.catalog-center` in style.css): one
-  shared column grid at every width above a phone, and a single stacked column
-  on a phone (`.ultra-narrow`, which also carries `.narrow`, so its rules
-  reassign every item off the shared grid's span vars via `grid-area`). On the
-  shared grid the spines wrap around the picture and stay aligned above and
-  below it: the picture is a grid item spanning `--pic-cols` columns and
-  `--pic-rows` rows of the shelf's own column grid, the title and index-shelf
-  line take the columns to its right, and the spines auto-flow into every
-  remaining cell - beside the picture, then full width beneath it, all on one
-  set of column lines. A wide display just fits more columns (more spines
-  beside the picture before any wrap); the layout is identical. A float cannot
-  do this: its beside run starts at the picture's edge and its below run at the
-  card's left, two grids that do not line up. The spans are fitted in JS
-  (`CatalogView`'s layout effect) from the grid's own resolved track sizes,
-  and `--pic-cols` always rounds up - the cover picture may be larger than the
-  spines but never snapped smaller than its natural width. The shelf's wrapper
-  is dissolved with `display: contents` so each spine is its own grid item
-  rather than one rigid box beside the picture. The picture's hotspots
-  (`CENTER_BOOK_PATH`, the distill toggle) are positioned as fractions of the
-  thumbnail (the book's SVG fills it; the distill toggle is `iconSize /
-  BASE_TILE` of it), so being sized by the grid never knocks them off the art.
-  The card carries a 7px top margin (its one exterior gap) so it does not butt
-  against the top of the list - matching the gap a room row's top padding
-  leaves beneath it.
+  around it; the center room instead lays the picture, title and spines out
+  on one CSS grid.** The float shape is why the story is cut by measured
+  `max-height`/`overflow: clip` rather than `-webkit-line-clamp` (a BFC would
+  stop it wrapping the float), and why "did this row cut something" asks the
+  story's own `scrollHeight`, not the card's. The center room can't use a
+  float at all - a spines-beside-then-below layout needs one shared grid so
+  both runs land on the same column lines. `style.css`'s comments on
+  `.catalog-flow`/`.catalog-row .story`/`.catalog-center` carry the full
+  reasoning; `CatalogView`'s layout effect is what fits `--pic-cols`.
 - **What a row cannot show, it counts - it never just stops.** A fixed-height
   row cannot promise a room's keywords fit: no reserve can, at an arbitrary
   width with arbitrary keyword lengths. So `chipLines` sizes the chip box from
@@ -1505,21 +1420,15 @@ two in step - see *Testing and CI*.
   spot. Simulate suspected gesture bugs explicitly and confirm on a device
   with `?touchdebug`.
 - **A `flyTo` issued while a rearrangement is animating is overridden, not
-  honored.** The rearrangement's camera control keeps driving x/y/zoom
-  regardless, and `useMapCamera.ts`'s `flyTo` has no way to interrupt an
-  active rearrangement - a fast-clicking reader triggers this for real, and
-  in a test it shows up as a plain click-then-`landed()` on the 'center'
-  button reporting a "settled" camera that never actually moved.
-  `e2e/support.ts`'s `recentre()` is the robust form: it waits out any
-  in-flight rearrangement before clicking and retries if the camera didn't
-  reach the target, rather than trusting one `landed()` read. Use it instead
-  of a bare click whenever a test's `before` state might follow a search or
-  any other `requestAnimation` trigger. Camera coordinates from `flyTo(x, y,
-  ...)` land on the cell's center (`cameraAtCell`'s `+ 0.5`), so `recentre()`
-  (which calls `flyTo(0, 0, ...)`) checks for `(0.5, 0.5)`, not `(0, 0)`.
-  Whether a control-issued `flyTo` should end an active rearrangement the way
-  a pointer grab does is the open question recorded in
-  `docs/pending_task_list.md`.
+  honored** - a fast-clicking reader triggers this for real, and in a test
+  it shows up as a plain click-then-`landed()` on the 'center' button
+  reporting a "settled" camera that never actually moved. Use
+  `e2e/support.ts`'s `recentre()` instead of a bare click whenever a test's
+  `before` state might follow a search or other `requestAnimation` trigger
+  - its own comment explains why it waits out and retries rather than
+  trusting one `landed()` read. Whether a control-issued `flyTo` should end
+  an active rearrangement the way a pointer grab does is the open question
+  recorded in `docs/pending_task_list.md`.
 
 ## Working with GitHub
 
