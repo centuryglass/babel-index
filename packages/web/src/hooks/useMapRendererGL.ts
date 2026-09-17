@@ -33,7 +33,7 @@ import { roomAtPoint } from '../lib/picking.ts';
 import { favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from '../lib/distillToggle.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
+import { sizeOf as pyramidSizeOf, DPR_CAP } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Slot, SpineFontLimits } from '../lib/center.ts';
@@ -88,8 +88,8 @@ interface UseMapRendererGLOpts {
    * not exist - before the effect runs, or after a context loss.
    */
   warmTexturesRef?: { current: (ids: ReadonlySet<number>, level: number) => void };
-  /** Budget for `gl/warm.ts`'s polling loop - `config.slide.prepareTimeoutMs` in practice, matching `prepareRearrangement`'s own budget. */
-  warmTimeoutMs?: number;
+  /** Budget for `gl/warm.ts`'s polling loop - the caller passes `config.slide.prepareTimeoutMs`, matching `prepareRearrangement`'s own budget, so there is no second default here to drift from it. */
+  warmTimeoutMs: number;
   /** The center-tile loading indicator, a ref - see `useMapRenderer.ts`'s own `loadingAnim`. */
   loadingAnim?: { current: LoadingAnimation | null };
 }
@@ -108,15 +108,12 @@ interface Latest {
   distillMode: boolean;
 }
 
-/** Used when the caller omits `warmTimeoutMs`; the app always passes `config.slide.prepareTimeoutMs`. */
-const DEFAULT_WARM_TIMEOUT_MS = 1200;
-
 export function useMapRendererGL({
   canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef,
   draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null, favTooltipRef, sortMode = 'relevance',
   genericFade, distillMode = false, distillTooltipRef, warmTexturesRef,
-  warmTimeoutMs = DEFAULT_WARM_TIMEOUT_MS, loadingAnim,
+  warmTimeoutMs, loadingAnim,
 }: UseMapRendererGLOpts) {
   // Assigned during the render body, not inside an effect, so it is current
   // before either effect runs - whatever their declaration order. See this
@@ -180,7 +177,7 @@ export function useMapRendererGL({
       if (!runtime) return;
       const { gl, renderer, slideRenderer } = runtime;
 
-      const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(2, window.devicePixelRatio || 1);
+      const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(DPR_CAP, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
 

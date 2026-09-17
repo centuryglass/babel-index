@@ -31,7 +31,7 @@ import { roomAtPoint } from '../lib/picking.ts';
 import { favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from '../lib/distillToggle.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import { sizeOf as pyramidSizeOf } from '../lib/pyramid.ts';
+import { sizeOf as pyramidSizeOf, DPR_CAP } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
@@ -206,7 +206,7 @@ export function useMapRenderer({
       // the cache and the pyramid's LRU stay untouched meanwhile, which is
       // what makes coming back free.
       if (mode !== 'map') return;
-      const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(2, window.devicePixelRatio || 1);
+      const dpr = PERF_FORCE_DPR1 ? 1 : Math.min(DPR_CAP, window.devicePixelRatio || 1);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       if (canvas.width !== w * dpr || canvas.height !== h * dpr) {

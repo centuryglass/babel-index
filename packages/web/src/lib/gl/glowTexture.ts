@@ -25,13 +25,10 @@
  * file is imported there through `glRenderer.ts`).
  */
 import { tracePathCommands } from '../svgPath.ts';
+import { HOVER_GLOW_FILL as FILL, HOVER_GLOW_STROKE as STROKE } from '../center.ts';
 
 /** Bake resolution - see this file's doc for why any value is geometrically valid. */
 const BAKE_SIZE = 256;
-
-/** Same gold as `render.ts`'s `FAVORITE_HOVER_GLOW_FILL`/`_STROKE` - one hover treatment across every integrated control. */
-const FILL = 'rgba(200,169,95,0.28)';
-const STROKE = 'rgba(200,169,95,0.55)';
 
 export interface GLGlowTexture {
   texture: WebGLTexture;
