@@ -30,9 +30,9 @@ const rect = { width: 1280, height: 720 };
 const cam = { x: 3.25, y: -7.5, zoom: 220 };
 
 /**
- * The same camera at cell shapes the corpus is not in. A cell is the world's
- * base unit and nothing may assume its width equals its height, so every
- * invariant below is checked at all of these rather than only the square one.
+ * The same camera at cell shapes the corpus is not in. Nothing may assume a
+ * cell's width equals its height, so the invariants here are checked at every
+ * shape rather than only the square one.
  */
 const SHAPES = [
   { name: 'square', aspect: 1 },
@@ -62,8 +62,8 @@ test('the camera center lands at the middle of the viewport', () => {
 });
 
 test('one cell is one zoom wide, and the aspect tall', () => {
-  // zoom is pixels per cell WIDTH; the height follows from the tile's shape.
-  // Asserting both axes against zoom would bake the square assumption back in.
+  // The axes are asserted separately: measuring the height against `zoom` too
+  // would bake the square assumption back into the test.
   for (const { name, aspect } of SHAPES) {
     const c = shaped(aspect);
     const a = worldToScreen(0, 0, c, rect);
@@ -74,8 +74,8 @@ test('one cell is one zoom wide, and the aspect tall', () => {
 });
 
 test('a non-square cell is actually drawn non-square', () => {
-  // The whole point of the change: a 16:9 cell must not come out square. If
-  // pxPerCell ever ignores the aspect again, this is what says so.
+  // A 16:9 cell must not come out square: this fails if `pxPerCell` ever stops
+  // applying the aspect.
   const wide = pxPerCell(shaped(720 / 1280));
   assert.ok(wide.y < wide.x, `16:9 cell came out ${wide.x}x${wide.y}`);
   assert.equal(wide.y, cam.zoom * (720 / 1280));
@@ -89,9 +89,8 @@ test('a camera with no aspect falls back to the configured tile', () => {
 });
 
 test('zoom keeps the world point under the cursor fixed', () => {
-  // The exact invariant that makes scroll-to-zoom feel right, and the easiest
-  // one to break: whatever is under the pointer must not move as you zoom. It
-  // has to hold on the short axis of a non-square cell too, which is where a
+  // Whatever is under the pointer must not move as the zoom changes. It has to
+  // hold on the short axis of a non-square cell too, which is where a
   // half-applied aspect would show up.
   for (const { name, aspect } of SHAPES) {
     const c = shaped(aspect);
@@ -121,8 +120,9 @@ test('the cell shape survives every camera operation', () => {
 });
 
 test('the fixed point holds when the zoom clamps', () => {
-  // Recentring against the *requested* zoom rather than the clamped one would
-  // drift here, and only here - at the ends of the range.
+  // The ends of the range are where the zoom clamps, so they are the only place
+  // a recentring done against the requested zoom rather than the clamped one
+  // would drift.
   for (const start of [{ ...cam, zoom: MIN_ZOOM }, { ...cam, zoom: MAX_ZOOM }]) {
     const deltaY = start.zoom === MIN_ZOOM ? 5000 : -5000;
     const before = screenToWorld(200, 500, start, rect);
@@ -144,9 +144,8 @@ test('scrolling up zooms in, down zooms out, and both stay in range', () => {
 });
 
 test('zoomBy keeps the world point under the anchor fixed', () => {
-  // The invariant a pinch depends on: whatever is between your fingers stays
-  // between your fingers. Same property the wheel has, asserted on the shared
-  // implementation rather than only through the wheel's delta.
+  // The pinch's own entry point: the same fixed point the wheel has, asserted on
+  // `zoomBy` directly rather than only through a wheel delta.
   for (const factor of [0.4, 0.95, 1, 1.05, 3]) {
     const anchor = { px: 320, py: 610 };
     const before = screenToWorld(anchor.px, anchor.py, cam, rect);
@@ -278,11 +277,10 @@ test('repeated glide steps converge on the origin', () => {
 });
 
 test('glideToRest reaches the same place repeated glideStep calls would', () => {
-  // A REALISTIC resistance function - full damp near the origin, easing to
-  // nothing further out - unlike the constant-damp cases above. That easing is
-  // exactly what makes real convergence fast: the pull shrinks as the camera
-  // approaches the origin AND resistance climbs back toward 1 at the same
-  // time, unlike the pathological constant-zero case those tests use.
+  // A resistance function that behaves like the map's: full damp near the
+  // origin, easing to nothing further out. The pull shrinking as resistance
+  // climbs is what `glideToRest` iterates, and the constant-damp cases in this
+  // file never exercise it.
   const resistanceAt = (x, y) => {
     const d = Math.hypot(x, y);
     if (d <= 5) return 1;
@@ -340,11 +338,9 @@ test('a flight before its start time has not moved', () => {
 });
 
 test('zoom interpolates geometrically, position linearly', () => {
-  // The assertion that fails against a linear zoom ramp, which is the obvious
-  // implementation and the wrong one: halfway through a flight from 26 to 2048
-  // the zoom is their geometric mean (~231), not their arithmetic one (~1037).
-  // A linear ramp puts nearly the whole flight up at the top of the range, so
-  // it reads as a snap followed by a crawl.
+  // Halfway through a flight from `MIN_ZOOM` to `MAX_ZOOM` the zoom is their
+  // geometric mean, not their arithmetic one: this is the assertion a linear
+  // ramp fails. See `camera.ts`'s `flightAt` for why a ramp reads wrong.
   const mid = at(0.5).cam;
   assert.ok(
     Math.abs(mid.zoom - Math.sqrt(MIN_ZOOM * MAX_ZOOM)) < 1e-9,
@@ -398,16 +394,16 @@ test('a flight carries the cell shape and the configured limits', () => {
 });
 
 test('a flight of no duration arrives at once', () => {
-  // How a caller honouring `prefers-reduced-motion` asks for the old teleport,
-  // rather than a second code path that could drift from this one.
+  // How a caller honouring `prefers-reduced-motion` asks for an instant move,
+  // so there is no second path that could drift from this one.
   const { cam: c, done } = flightAt(beginFlight(far, home, 1000, 0), 1000);
   assert.equal(c, home);
   assert.equal(done, true);
 });
 
 test('a flight interrupted by another picks up from where it had got to', () => {
-  // The reason `beginFlight` takes the LIVE camera: pressing "center" twice, or
-  // searching mid-flight, must not restart from the original position.
+  // `beginFlight` takes the live camera: pressing "center" twice, or searching
+  // mid-flight, must not restart the move from its original position.
   const midway = at(0.4).cam;
   const second = flightAt(beginFlight(midway, far, 2000), 2000);
   assert.deepEqual(
@@ -417,10 +413,9 @@ test('a flight interrupted by another picks up from where it had got to', () => 
 });
 
 test('the cursor cell is the cell under the camera center', () => {
-  // `cam.x`/`cam.y` are already world cells (the same convention
-  // `cameraAtCell`'s `+ 0.5` states the other way round), so this is a floor
-  // and nothing more - asserted so a future refactor cannot quietly swap in a
-  // round or a different rounding direction.
+  // A floor and nothing more, asserted so a future refactor cannot quietly swap
+  // in a round or a different rounding direction. `cameraAtCell`'s `+ 0.5` is the
+  // same convention stated the other way round.
   assert.deepEqual(cursorCell({ x: 3.9, y: -0.1, zoom: 220 }), { x: 3, y: -1 });
   assert.deepEqual(cursorCell({ x: 0, y: 0, zoom: 220 }), { x: 0, y: 0 });
 });
@@ -442,8 +437,8 @@ test('granularity has hysteresis, like the pyramid level it copies the shape fro
   const atThreshold = pickGranularity(24, null);
   assert.equal(atThreshold, 'cell');
 
-  // Once 'cell' is current, a small dip just under the threshold must not
-  // immediately flip to 'region' - that is the whole point of hysteresis.
+  // Once 'cell' is current, a small dip just under the threshold must not flip
+  // to 'region'.
   const stillCell = pickGranularity(20, 'cell');
   assert.equal(stillCell, 'cell', 'a small dip below threshold must not flicker');
 
@@ -460,7 +455,7 @@ test('granularity has hysteresis, like the pyramid level it copies the shape fro
 
 test('granularity never oscillates across a boundary held steady', () => {
   // A zoom sitting exactly on the raw threshold, sampled every frame: without
-  // hysteresis this is the classic flicker case.
+  // hysteresis this flips its announcement on every sample.
   let g = null;
   for (let i = 0; i < 20; i++) g = pickGranularity(24, g);
   assert.equal(g, 'cell');
@@ -468,7 +463,7 @@ test('granularity never oscillates across a boundary held steady', () => {
 
 test('a keyboard nudge is exactly one cell inside the content region', () => {
   // The cursor contract: one arrow press is one room. Damping must not touch
-  // that in the case that matters, which is everywhere a reader normally is.
+  // that in the case a reader is normally in.
   const c = { x: 3.5, y: 3.5, zoom: 220 };
   const moved = panByCells(c, 1, 0, 1);
   assert.equal(moved.x, 4.5);
@@ -479,18 +474,13 @@ test('a keyboard nudge is exactly one cell inside the content region', () => {
 });
 
 test('a keyboard nudge has NO floor, unlike a pointer drag', () => {
-  // The asymmetry is the point, and it is about the INPUT, not the map. A drag
-  // is bounded by how far a hand travels, so `panByPixels` can afford a 0.12
-  // floor that keeps the map from feeling frozen. A held arrow key repeats
-  // about thirty times a second for as long as it is down, so the same floor
-  // is a constant outward velocity that never stops - measured, it let a
-  // six-second hold reach 31 cells past a boundary a mouse could barely push
-  // 11 past.
+  // The nudge has no floor because a held key repeats for as long as it is
+  // down; `camera.ts`'s `panByCells` carries the measurement behind it.
   const c = { x: 40, y: 0, zoom: 220 };
   assert.equal(panByCells(c, 1, 0, 0).x, 40, 'at zero resistance a nudge must not move at all');
 
-  // The pointer keeps its floor - asserted here so the two cannot be
-  // "unified" back together by someone tidying up.
+  // The pointer keeps its floor, asserted alongside the nudge's absence of one
+  // so the two cannot be "unified" back together by someone tidying up.
   const dragged = panByPixels(c, -220, 0, 0);
   assert.ok(dragged.x > c.x, 'a fully resisted drag must still creep');
 });
@@ -518,12 +508,9 @@ test('the cell shape and limits survive a keyboard nudge', () => {
 });
 
 test('a keyboard nudge re-centers an off-grid camera, on BOTH axes', () => {
-  // The bug this pins: a trip outside the region leaves the camera off the
-  // grid (damped steps out there are fractional by design, and the glide
-  // stops wherever it happens to cross back in). Adding a raw delta would
-  // carry that offset forever - the cursor's own cell sitting visibly
-  // off-center, part of it hanging off the screen edge, with no way to
-  // correct it by arrowing.
+  // The bug this pins: a trip outside the region leaves the camera off the grid,
+  // because the damped steps out there are fractional and the glide stops
+  // wherever it happens to cross back in. Arrowing must recover that.
   const off = { x: 7.0, y: 0.3, zoom: 220 };
   const moved = panByCells(off, -1, 0, 1);
   assert.equal(moved.x, 6.5, 'the axis moved along must land cell-centered');
@@ -541,7 +528,7 @@ test('the offset does not survive repeated in-bounds presses', () => {
     assert.equal(c.x - Math.floor(c.x), 0.5, `x off-center after press ${i + 1}`);
     assert.equal(c.y - Math.floor(c.y), 0.5, `y off-center after press ${i + 1}`);
   }
-  // ...and it is still exactly one cell per press, not a bigger jump each time.
+  // ...and it is still one cell per press, not a bigger jump each time.
   assert.equal(c.x, 3.5, 'four presses from cell 7 must land on cell 3');
 });
 

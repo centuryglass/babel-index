@@ -1,13 +1,12 @@
 /**
  * Pack the center-tile loading-animation frames into sprite sheets.
  *
- * The rearrangement preload (packages/web/src/hooks/useRearrangement.ts) can
- * take up to a couple of seconds; while it runs, a short frame cycle plays over
- * the illustrated page of the center room's artist-statement book so the map
- * does not feel frozen. The raw frames are authored one PNG per frame, each the
- * full size of the center tile with everything but the animated page left
- * transparent. Shipping ~16 full-tile PNGs per cycle would be wasteful, so this
- * tool crops every cycle to the one rectangle its content occupies and lays the
+ * The sheets play over the illustrated page of the center room's
+ * artist-statement book during a rearrangement preload;
+ * `packages/web/src/lib/loadingAnimation.ts` is the client half and owns what
+ * happens there. Frames are authored one PNG per frame, each the full size of
+ * the center tile with everything but the animated page left transparent. This
+ * tool crops a cycle to the one rectangle its content occupies and lays the
  * cropped frames into a single grid sheet.
  *
  * Input layout (default `assets/animation/`):
@@ -17,18 +16,16 @@
  *
  * A cycle is any immediate subdirectory holding numbered PNG frames; the tool
  * discovers them, so adding a new cycle is dropping in a new folder and
- * re-running - no code change. Frames are ordered by their numeric filename,
- * not lexically, so `10.png` follows `9.png`.
+ * re-running. Frames are ordered by their numeric filename, not lexically, so
+ * `10.png` follows `9.png`.
  *
  * Output (written under the same root, served via `/shared/animation/`):
  *
  *   assets/animation/sheets/center_0.png         packed grid of cropped frames
  *   assets/animation/manifest.json               per-cycle crop rect + grid shape
  *
- * The crop rectangle is stored in cell fractions (see lib.ts) so the client can
- * place it on the stretched center cell without re-measuring. The union of
- * every frame's content bounds is used for the whole cycle, so a frame whose
- * drawing shifts stays registered against one origin rather than jittering.
+ * The crop rect is stored in cell fractions, as the union of the cycle's frame
+ * bounds; `lib.ts` defines both.
  *
  * Run: `npm run generate:animation` (optionally `-- --dir <root>`).
  */
@@ -73,9 +70,9 @@ async function frameFiles(dir: string): Promise<string[]> {
 /**
  * The tight content bounds of one frame: the smallest half-open box covering
  * every pixel whose alpha clears `threshold`. Null when the frame is fully
- * transparent. Scans the raw RGBA buffer rather than trusting sharp's `trim`,
- * so the same threshold governs every frame and a faint antialiased fringe does
- * not quietly widen one frame's box past the others'.
+ * transparent. Scans the raw RGBA buffer instead of using sharp's `trim` so
+ * one threshold governs every frame - a faint antialiased fringe must not
+ * widen one frame's box past the others'.
  */
 async function contentBounds(file: string, threshold: number): Promise<{ bounds: Bounds | null; size: Size }> {
   const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -162,8 +159,6 @@ async function main(): Promise<void> {
 
     const frame = boundsSize(bounds);
     const layout = packLayout(files.length, frame, columns);
-    // Extract each frame's crop as its own buffer, then composite them onto one
-    // transparent sheet at their grid cells.
     const composites = await Promise.all(
       files.map(async (f, i) => {
         const cell = frameCellAt(i, layout);

@@ -1,15 +1,16 @@
 /**
  * `?touchdebug` puts the raw pointer stream on screen.
  *
- * Read at module scope so the whole feature compiles out of a normal session:
- * nothing renders, and `useMapCamera` is handed no callback at all rather than
- * one that discards. Touch is the one layer that cannot be judged from a
- * desktop, and the CDP touch injection the e2e test uses bypasses the browser's
+ * Read once at module scope, the same gating `perfProbe.ts`'s `PERF` and
+ * `debug.ts`'s `DEBUG` use: with the flag off nothing renders, and
+ * `useMapCamera` is handed no callback at all rather than one that discards.
+ * Touch is the one layer that cannot be judged from a desktop, and
+ * `map-gestures.e2e.ts`'s CDP touch injection bypasses the browser's
  * own gesture arbitration - so a real device reporting for itself is the only
  * way some of these questions get answered.
  *
- * Its own module because both halves need it and they now live in different
- * files: `main.jsx` hands `appendTouchLog` to the camera hook, and `MapView`
+ * Its own module because both halves need it and they live in different
+ * files: `main.tsx` hands `appendTouchLog` to the camera hook, and `MapView`
  * mounts the element it writes into. Importing one from the other would be a
  * cycle.
  */

@@ -41,7 +41,7 @@ test('the center room is never picked', () => {
 
 test('a generic cell is picked as generic, not as a room', () => {
   // Unlike the center, a generic cell has something to say (see
-  // `describe.js`), so it picks - just without an id or rank.
+  // `describe.ts`), so it picks - just without an id or rank.
   let checked = 0;
   for (let x = -6; x <= 6 && checked < 5; x++)
     for (let y = -6; y <= 6 && checked < 5; y++) {

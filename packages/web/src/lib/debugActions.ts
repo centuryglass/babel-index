@@ -7,10 +7,12 @@
  * a live `DebugActions` object supplied by `main.tsx`'s `?debug` wiring,
  * which is the only place that knows the current camera/layout/room count.
  *
- * Steps carry only primitives (deltas, factors, ids, terms) rather than
- * resolved coordinates - a room's cell or the map's extent can change
- * mid-session (a reorder, a rescatter), so anything state-dependent is
- * resolved by the executor at call time, not baked in at generation time.
+ * Steps carry only primitives (deltas, factors, ids, terms), not resolved
+ * positions - a room's cell and the map's extent change mid-session (a
+ * reorder, a rescatter), so the executor resolves positions at dispatch
+ * time. `roomCount` is the one state value read at generation time, as the
+ * bound on room ids; it is safe because no scripted action adds or removes
+ * rooms.
  */
 import { prng, seedFrom } from '../../../map/prng.ts';
 import { BOOK_COUNT } from './center.ts';
@@ -37,7 +39,7 @@ export type DebugActionName =
 
 export interface DebugStep {
   action: DebugActionName;
-  /** Meaning depends on `action` - see the switch in `runSequence`. */
+  /** Meaning depends on `action` - see the switch in `dispatch`. */
   args: Record<string, number | string>;
   /** How long to wait after this step before the next one runs. */
   delayMs: number;
@@ -67,19 +69,17 @@ const ACTION_TABLE = Object.entries(WEIGHTS) as [DebugActionName, number][];
 const TOTAL_WEIGHT = ACTION_TABLE.reduce((sum, [, w]) => sum + w, 0);
 
 /**
- * Actions that need the map canvas on screen - meaningless, or actively
- * confusing to profile, while the catalog is showing instead. Checked at
- * dispatch time in `runSequence`, not here at generation time: the sequence
- * is built once up front, but which steps land in catalog mode depends on
- * where the `enterCatalog`/`exitCatalog` steps earlier in the same run fall.
+ * Actions that need the map canvas on screen. `runSequence` skips them at
+ * dispatch time while the mode reports `'catalog'`: the sequence is built
+ * before the run, and which steps land in catalog mode depends on the
+ * `enterCatalog`/`exitCatalog` steps earlier in the same run.
  */
 const MAP_ONLY_ACTIONS: ReadonlySet<DebugActionName> = new Set([
   'pan', 'zoom', 'book', 'recentre', 'goToSearch', 'openCard',
 ]);
 
-/** One minute of rapid-fire actions is enough to surface a leak or a jank
- * regression - long enough to matter, short enough that the browser's own
- * profiler doesn't buckle under the recording before you get to look at it. */
+/** One minute of scripted usage: long enough to surface a leak or a jank
+ * regression, short enough to keep a browser profiler recording usable. */
 export const DEFAULT_DURATION_MS = 60 * 1000;
 
 /** A mix of real words and nonsense, so both a match and a no-match path run. */
@@ -205,9 +205,8 @@ const realWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resol
 
 /**
  * Run a built sequence against live actions, in real time. Marks each step
- * with `performance.mark` so a Firefox Profiler or Chrome Performance
- * capture running alongside shows labelled sections instead of an
- * undifferentiated trace.
+ * with `performance.mark` so a profiler running alongside (Firefox
+ * Profiler, Chrome Performance) shows labelled sections.
  *
  * `opts.mode`, if given, is read before every step - a map-only step
  * (`MAP_ONLY_ACTIONS`) is skipped rather than dispatched while it reports

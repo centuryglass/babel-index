@@ -278,8 +278,7 @@ test('the level directories are not mistaken for source images', async () => {
     await makeImage(join(dir, '000.jpg'), 128, 128);
     await writeMips({ file: join(dir, '000.jpg'), outDir: dir, inPlace: true });
 
-    // Re-running must resize the two originals, not the levels it just wrote -
-    // otherwise every run compounds, resizing already-resized images.
+    // Re-running must resize the two originals, not the levels it just wrote.
     assert.deepEqual(await sourceImages(dir), ['000.jpg', '001.jpg']);
   });
 });

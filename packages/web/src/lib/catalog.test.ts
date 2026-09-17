@@ -217,8 +217,8 @@ test('a focused row lands centered in the viewport, regardless of which page it 
   // Centered: half a viewport's worth of rows above it, not flush to the top.
   assert.equal(focusScrollTop(10, { rowPx, leadPx, viewportPx: 1000 }), leadPx + 10 * rowPx - 450);
 
-  // A page boundary is invisible to this arithmetic, exactly as it is to
-  // `pageAtScroll`'s - one rank further is one row further, full stop.
+  // A page boundary is invisible to this arithmetic, as it is to
+  // `pageAtScroll`'s: one rank further is one row further.
   const a = focusScrollTop(9, { rowPx, leadPx, viewportPx: 1000 });
   const b = focusScrollTop(10, { rowPx, leadPx, viewportPx: 1000 });
   assert.equal(b - a, rowPx);
@@ -252,10 +252,10 @@ test('the flip is its own inverse, so entering and leaving cannot disagree', () 
 });
 
 test('a DOMRect has to be converted, and the conversion is what makes the scale right', () => {
-  // A DOMRect says width/height; every rect inside this module says w/h. The
-  // mismatch does not throw - `to.w` is undefined, so the zero-size guard below
-  // returns a scale of 1 and the animation translates without scaling, which
-  // reads as a working transition rather than as a bug.
+  // `rectOf` carries the mechanism: `to.w` on a DOMRect is undefined, so
+  // `flipTransform`'s zero-size guard returns a scale of 1 and the animation
+  // translates without scaling. Both readings are asserted here, so the trap and
+  // the conversion that avoids it are pinned by one test.
   const anchor = { x: 128, y: 144, w: 1024, h: 768 };
   const domRect = { x: 16, y: 102, width: 240, height: 180 };
 
@@ -273,8 +273,9 @@ test('a zero-sized destination does not produce a divide by zero', () => {
 });
 
 test('the chip clamp is derived from the room the row actually has', () => {
-  // A tall card (a narrow display's small tile against a fixed text minimum)
-  // has room for more than the flat two lines of chips a `max-height` gave it.
+  // A tall card - a narrow display's small thumbnail against a fixed text
+  // minimum - has room for more than two lines of chips, and the count follows
+  // the room rather than a constant.
   assert.equal(chipLines(160, 50, 24), 4);
   assert.equal(chipLines(74, 50, 24), 1);
 
@@ -294,9 +295,9 @@ test('the catalog\'s idle order is every room by filename, not by id', () => {
   assert.deepEqual(alphabeticalOrder(rooms), [1, 2, 0]);
 });
 
-test('the alphabetical order is plain string comparison, matching scan.mjs', () => {
+test('the alphabetical order is plain string comparison, matching scan.ts', () => {
   // Not localeCompare: "Z" < "a" under plain comparison, which is what
-  // scan.mjs's own `.sort()` of the same filenames already produces.
+  // scan.ts's own `.sort()` of the same filenames already produces.
   const rooms = [{ file: 'a.jpg' }, { file: 'Z.jpg' }];
   assert.deepEqual(alphabeticalOrder(rooms), [1, 0]);
 });

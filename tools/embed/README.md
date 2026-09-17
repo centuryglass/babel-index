@@ -2,7 +2,8 @@
 
 Runs the CLIP **image** tower over a directory of room images, once, offline,
 and writes a static blob the browser ranks against at search time. This is the
-pipeline's `embed` stage (see `docs/pending_task_list.md` §4 and Phase 4).
+pipeline's `embed` stage: the expensive half of search, done per corpus rather
+than per request.
 
 It is Node, not Python: it uses the same `@huggingface/transformers` CLIP model
 (`Xenova/clip-vit-base-patch32`) the demo server loads for the **text** tower, so
@@ -14,9 +15,13 @@ regenerate this blob.
 ## Run
 
 ```sh
-node tools/embed/embed.ts                        # against assets/corpus-sample/
-node tools/embed/embed.ts --images <dir> [--center center.jpg] [--out <dir>]
+npm run generate:embeddings                        # against assets/corpus-sample/
+npm run generate:embeddings -- --images <dir> [--center center.jpg] [--shared-dir assets] [--out <dir>]
 ```
+
+Plain `node tools/embed/embed.ts` does not work: the tool imports `.ts` modules,
+and the npm script is what loads them through `build/register.mjs` (AGENTS.md,
+*Commands*).
 
 First run downloads the model (cached under `~/.cache/huggingface` afterwards).
 Writes two files, next to the images by default:

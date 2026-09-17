@@ -1,7 +1,6 @@
 /**
- * Entry point for `--import build/register.mjs`: hooks `.ts`/`.tsx` module
- * loading for the process that imports this. See `ts-loader.mjs` for what
- * the hook actually does.
+ * Entry point for `--import build/register.mjs`: installs the `.ts`/`.tsx`
+ * module-loading hook for the process. `ts-loader.mjs` is the hook itself.
  */
 import { register } from 'node:module';
 

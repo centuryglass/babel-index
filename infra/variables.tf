@@ -94,7 +94,7 @@ variable "billing_alert_limit_usd" {
 # it needs no zone. It exists because packages/server/remote.ts points the
 # --remote-mode manifest's urls straight at this bucket, and two of them
 # (embeddings.bin, metadata.json) are read with `fetch()` in
-# packages/web/src/main.jsx rather than an <img> tag - fetch() enforces CORS
+# packages/web/src/main.tsx rather than an <img> tag - fetch() enforces CORS
 # cross-origin, an <img> tag does not, so the room tiles work with no CORS
 # rule at all but those two requests fail silently without one.
 

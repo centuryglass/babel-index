@@ -99,7 +99,7 @@ test('empty and malformed entries come back as null, not as empty records', () =
 });
 
 test('junk inside a keyword list is dropped, and the rest survives', () => {
-  // A plain string is junk now too - the generator always writes {text, type}.
+  // A plain string is junk: the generator always writes {text, type}.
   const e = normaliseEntry({
     keywords: ['spalted maple', null, 42, { type: 'movement' }, { text: '' }, { text: '  oak burl  ' }],
   });
@@ -120,7 +120,7 @@ test('the join is by filename and indexed by room id', () => {
 test('a renamed or added room loses only its own entry', () => {
   // The whole reason this is keyed on filename rather than on row order: the
   // embedding blob has to be thrown away when the corpus moves, and this does
-  // not. Room 1 is new and undescribed; everything else still lands.
+  // not. Room 1 gets no entry and room 3 is brand new; the rest still land.
   const grown = [...rooms, { id: 3, file: '004.jpg', url: 'images/004.jpg', bytes: 0 }];
   const joined = joinMetadata(grown, { '001.jpg': { story: 'a' }, '004.jpg': { story: 'd' } });
   assert.equal(joined[0].story, 'a');

@@ -1,8 +1,8 @@
 /**
- * Pure logic for the R2 upload tool: which files need uploading, and under
- * what keys. No filesystem, no network - so it can be tested without a
- * corpus on disk or a bucket to talk to. `upload-r2.ts` does the I/O and
- * calls in here for the decisions.
+ * Pure decision logic for the R2 upload tool: which files need uploading, and
+ * under what keys. No filesystem and no network here, so the rules are
+ * testable without a corpus on disk or a bucket to talk to; `upload-r2.ts`
+ * does the I/O.
  */
 import type { Manifest } from '../../packages/map/manifest.ts';
 import type { AnimationManifest } from '../center-animation/lib.ts';
@@ -15,13 +15,13 @@ export interface UploadEntry {
 
 /**
  * The loading-animation manifest and every sheet it names, under
- * `shared/animation/`. Unlike the corpus's own files these aren't described by
- * the corpus `Manifest` at all - the client fetches `<sharedBase>/animation/
- * manifest.json` and each sheet directly (`loadingAnimation.ts`), tolerating a
- * 404 as "no indicator deployed" - so the caller loads the on-disk animation
- * manifest itself and hands it in. Null (no manifest on disk) uploads nothing,
- * matching that same "no indicator" case. Shared across corpora like the rest
- * of `shared/`, so it isn't gated on any one corpus's prefix.
+ * `shared/animation/`.
+ *
+ * The corpus `Manifest` does not describe these files, so the caller loads
+ * the on-disk animation manifest itself and hands it in. Null (no manifest on
+ * disk) uploads nothing - the same "no indicator deployed" case the client
+ * (`loadingAnimation.ts`) tolerates as a 404. Like the rest of `shared/`,
+ * these are shared across corpora, so no corpus prefix gates them.
  */
 function animationKeys(animation: AnimationManifest | null | undefined): string[] {
   if (!animation) return [];
@@ -42,15 +42,15 @@ export type JoinPath = (...parts: string[]) => string;
 /**
  * Every (local path, remote key) pair a corpus upload touches, derived from a
  * `scanDirectory()` manifest the same way the demo server and `tools/embed`
- * read it - so a change to scan.mjs's shape shows up here rather than behind
- * a second, drifting copy of "what files make up a corpus".
+ * read it - "what files make up a corpus" has one definition, so a change to
+ * the scan's shape lands here too.
  *
  * Keys mirror the local layout (`<prefix>/<file>`, `<prefix>/<level-dir>/<file>`)
- * so a future R2-backed demo server can resolve a room's url the same way
- * `rooms.js` does locally. Shared assets (the center tile and the generics)
- * live outside any one corpus's prefix, at `shared/...`, matching where the
- * demo server mounts them (`/shared/`) - multiple corpora can point at the
- * same shared tiles without re-uploading them.
+ * so `packages/server/remote.ts` can resolve a room's url the same way
+ * `packages/web/src/lib/rooms.ts` does locally. Shared assets (the center tile
+ * and the generics) live outside any one corpus's prefix, at `shared/...`,
+ * matching the demo server's `/shared/` mount, so multiple corpora point at
+ * the same tiles.
  *
  * `join` is path.join, injected so this stays free of node:path and testable
  * with plain strings.
@@ -70,10 +70,10 @@ export function buildUploadList(
   for (const room of manifest.rooms) uploads.push({ local: join(imagesDir, room.file), key: `${prefix}/${room.file}` });
 
   for (const level of manifest.levels) {
-    if (level.level === 0) continue; // level 0 is the flat files above
+    if (level.level === 0) continue; // level 0 is the flat files, pushed by the manifest.rooms loop
     if (level.sheet) {
       // A sheet-packed level uploads one object per sheet file, not per room -
-      // the whole point is fewer, larger objects.
+      // fewer, larger objects is the point of sheet packing.
       for (let i = 0; i < level.sheet.sheetCount; i++) {
         const file = sheetFileName(i, level.sheet.ext);
         uploads.push({ local: join(imagesDir, level.sheet.dir, file), key: `${prefix}/${level.sheet.dir}/${file}` });
@@ -107,11 +107,11 @@ export function buildUploadList(
         key: `shared/generic_distill/${distill.file}`,
       });
 
-  // Fixed app art, not part of any corpus's manifest.shared - resolved off
-  // manifest.sharedBase in packages/web/src/lib/rooms.ts (the badges and
-  // toggles) or by a relative `url(shared/...)` in style.css (the leather
-  // grain behind the dark chrome). Always uploaded, unlike center/generic,
-  // because there's no manifest field to gate on.
+  // Fixed app art, not part of any corpus's manifest.shared: the badges and
+  // toggles resolve off `manifest.sharedBase` in packages/web/src/lib/rooms.ts,
+  // the leather texture behind the dark chrome via a relative `url(shared/...)`
+  // in packages/web/style.css. Always uploaded, unlike the manifest-gated
+  // center/generic tiles - there is no manifest field to gate on.
   for (const file of [
     'fav_on.png', 'fav_off.png',
     'fav_center_switch_base.png', 'fav_mine_on.png', 'fav_count_on.png',
@@ -121,9 +121,9 @@ export function buildUploadList(
   ])
     uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
 
-  // The loading-animation manifest + sheets, present only when the caller found
-  // one on disk (see animationKeys). key `shared/animation/...` -> local under
-  // sharedDir, the same relationship the center/generic tiles use.
+  // The animation files (see animationKeys), mapped from the
+  // `shared/animation/...` key to a path under sharedDir, like the
+  // center/generic entries.
   for (const key of animationKeys(animation))
     uploads.push({ local: join(sharedDir, key.slice('shared/'.length)), key });
 
@@ -131,23 +131,21 @@ export function buildUploadList(
 }
 
 /**
- * Split an upload list into what needs uploading and what's already current,
- * by comparing each file's freshly-computed content hash against the record
- * for that key in the previously-uploaded manifest. A key absent from the
- * remote manifest (new file, or first run) always uploads.
+ * Split an upload list into what needs uploading and what's already current:
+ * each file's freshly-computed content hash against the record for its key in
+ * the previously-uploaded manifest. A key absent from the remote manifest
+ * (new file, or first run) always uploads.
  *
- * Hashing the file's own bytes - not reusing metadata.json's per-source hash
- * - is deliberate: it also catches a pyramid level re-encoded at a different
- * quality setting, which shares its source hash with the old level but isn't
- * the same bytes.
+ * Hashing the file's own bytes, not reusing metadata.json's per-source hash,
+ * is deliberate: every quality setting of a re-encoded pyramid level shares
+ * the old level's source hash while being different bytes.
  *
- * A matching hash alone isn't enough: `upload-manifest.json` only records what
- * a *previous run believed it wrote*, not what's actually in the bucket right
- * now. An object deleted out-of-band, or lost to a run that crashed after the
- * manifest write but is somehow still recorded, would read as "unchanged"
- * forever with no way to notice. `existingKeys` - a live listing of the bucket
- * - closes that gap: a key missing from it uploads regardless of what the
- * manifest says.
+ * A matching hash alone isn't enough. `upload-manifest.json` records what a
+ * previous run believed it wrote, not what's in the bucket now - an object
+ * deleted out-of-band, by hand or by a lifecycle rule, would read as
+ * "unchanged" forever with no way to notice. `existingKeys`, a live listing
+ * of the bucket, closes that gap: a key missing from it uploads regardless of
+ * the recorded hash.
  */
 export function diffAgainstManifest(
   uploads: UploadEntry[],
@@ -167,18 +165,17 @@ export function diffAgainstManifest(
 }
 
 /**
- * The keys `packages/web/src/hooks/useCorpus.js` reads with `fetch()` rather
- * than an `<img>` tag - the ones a stale cached *response* (missing CORS
- * headers, not stale bytes) silently breaks in `--remote` mode. Content-hash
- * diffing correctly skips re-uploading these when their bytes haven't
- * changed, but that's a different question from whether the edge's cached
- * response for them is still the one CORS headers were configured against -
- * so the upload tool purges these every run regardless of `toUpload`, same
- * list `buildUploadList` guards with the same manifest fields.
+ * The keys a browser reads with `fetch()` rather than an `<img>` tag: the
+ * corpus sidecars in `packages/web/src/hooks/useCorpus.ts` and the animation
+ * files in `loadingAnimation.ts`, gated on the same manifest fields as
+ * `buildUploadList`.
  *
- * The loading-animation manifest and its sheets are fetched the same way
- * (`loadingAnimation.ts`'s `fetch()`, not an `<img>` tag), so they belong here
- * too - a stale cached response missing CORS headers breaks them identically.
+ * The upload tool purges these from the edge cache every run, regardless of
+ * `toUpload`. For a `fetch()`ed resource a stale cached *response* can be the
+ * problem rather than stale bytes: a response cached without CORS headers -
+ * before `cloudflare_r2_bucket_cors` existed, or by a no-Origin request -
+ * silently breaks the reader in `--remote` mode even when the bytes are
+ * current, and content-hash diffing only guards against the latter.
  */
 export function crossOriginFetchedKeys(
   manifest: Manifest,

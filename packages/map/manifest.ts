@@ -1,15 +1,15 @@
 /**
- * The corpus manifest's shape: what `scan.mjs` (or `remote.mjs`, rewriting a
- * remote scan's urls) produces, `/api/manifest` serves verbatim plus a
- * `config` field, and every consumer in `packages/web` and `packages/map`
- * reads.
+ * The corpus manifest's shape: what `scan.ts`'s `scanDirectory()` (or
+ * `remote.ts`, rewriting a remote scan's urls) produces, what `/api/manifest`
+ * serves with `config` and `favorites` added, and what every consumer in
+ * `packages/web` and `packages/map` reads.
  *
- * Type-only, imported through JSDoc (`@type {import('./manifest.ts').Manifest}`)
- * rather than `.js`/`.mjs`/`.jsx` importing it at runtime - this is the first
- * `.ts` file in the repo (see AGENTS.md), and it stays a pure type contract so
- * it never needs to go through esbuild's client bundle or Node's loader. `tsc
- * --noEmit` (npm run typecheck) is what actually checks it against every
- * `@type`/`@param` that names it.
+ * A pure type contract, the shape AGENTS.md's "A pure type contract" bullet
+ * names this file as: exported interfaces only, imported through JSDoc
+ * (`@type {import('./manifest.ts').Manifest}`) and never by `.js`/`.mjs`/
+ * `.jsx` at runtime, so it never needs esbuild's client bundle or Node's
+ * loader. `tsc --noEmit` (`npm run typecheck`) is what checks it against
+ * every `@type`/`@param` that names it.
  */
 
 export interface ImageSize {
@@ -34,11 +34,10 @@ export interface SharedAsset extends Partial<ImageSize> {
 /**
  * The shared tiles: the blank center (if any), the generic alternates, and
  * distill mode's paired alternates for them - `genericDistill[i]` is
- * `generic[i]`'s replacement art (a dim star field, in this project's actual
- * corpus) when distill mode fades it in, matched by filename stem in
- * `scan.ts`'s `scanShared`. Null at an index whose generic tile has no
- * matching distill alternate on disk - the fade falls back to a flat black
- * overlay for that one rather than failing the whole corpus.
+ * `generic[i]`'s replacement art when distill mode fades it in, matched by
+ * filename stem in `scan.ts`'s `scanShared`. Null at an index whose generic
+ * tile has no matching distill alternate on disk; the fade falls back to a
+ * flat black overlay for that one rather than failing the whole corpus.
  */
 export interface SharedAssets {
   center: SharedAsset | null;
@@ -49,7 +48,7 @@ export interface SharedAssets {
 /**
  * A sheet-packed level's grid geometry: `roomsPerSheet` rooms live in each
  * `<dir>/sheet-NNNN.<ext>`, addressed by a formula from room order
- * (`packages/pipeline/sheets.ts`'s `sheetPosition()`), not a per-room lookup
+ * (`packages/pipeline/layout.ts`'s `sheetPosition`), not a per-room lookup
  * table - `rooms[].url`/`file` are unchanged and unused for these levels.
  */
 export interface SheetLayout {
@@ -85,9 +84,9 @@ export interface EmbeddingsInfo {
 }
 
 /**
- * The keyword/story sidecar's coverage, if `METADATA_FILE` was found. `matched`
- * far below `entries` means the sidecar describes files this corpus does not
- * have - see `packages/map/metadata.js`.
+ * The keyword/story sidecar's coverage, if `scan.ts` found its
+ * `METADATA_FILE`: the matched/entries pair `metadataCoverage()` produces,
+ * whose drift diagnostic is explained there (see `packages/map/metadata.ts`).
  */
 export interface MetadataInfo {
   url: string;
@@ -105,10 +104,10 @@ export interface TagLinksInfo {
   count: number;
 }
 
-/** A corpus manifest, as `scanDirectory()`/`fetchRemoteManifest()` produce it. */
+/** A corpus manifest, as `scanDirectory()`/`scanRemote()` produce it. */
 export interface Manifest {
   mode: 'offline' | 'remote';
-  /** The scanned local directory; absent from a remote manifest (see remote.mjs). */
+  /** The scanned local directory; absent from a remote manifest (`scanRemote` drops it). */
   directory?: string;
   /** The remote manifest.json url this was fetched from, in remote mode only. */
   source?: string;
@@ -123,20 +122,19 @@ export interface Manifest {
   levels: LevelInfo[];
 }
 
-/**
- * Whether this deployment records global favorite counts at all.
- *
- * Not part of the scan - the corpus has nothing to say about it - so it is
- * added by `app.ts` on the way out, alongside `config`. Null means no store was
- * configured and the favorite routes are not mounted, which is what the client
- * reads as "do not offer favoriting"; a count of zero is a different statement
- * and one this cannot be confused with.
- */
+/** That this deployment records global favorite counts at all. */
 export interface FavoritesInfo {
   enabled: boolean;
 }
 
-/** The manifest as served by `/api/manifest`: the scan plus the client config. */
+/**
+ * The manifest as served by `/api/manifest`: the scan plus the client config
+ * and the favorite-store status, both added by `app.ts` on the way out - the
+ * corpus has nothing to say about either. A null `favorites` means no store
+ * was configured and the routes are not mounted, which the client reads as
+ * "render no favorite control" - a different statement from a count of zero
+ * (AGENTS.md, "No store, no feature").
+ */
 export interface ManifestResponse extends Manifest {
   favorites: FavoritesInfo | null;
   config: Record<string, unknown>;

@@ -2,22 +2,23 @@
  * The tile cache: which resolution of which room is in memory, and what to draw
  * when the one you asked for is not.
  *
- * Keyed on `(id, level)`, not on url. A room is one thing at five resolutions,
- * and the whole point of the pyramid is that those five are interchangeable in
- * a pinch - so the cache has to be able to answer "what do you have for room
- * 12?" rather than only "do you have this url?".
+ * Keyed on `(id, level)`, not on url. A room is one thing at every rung of
+ * `pyramid.ts`'s ladder, and the whole point of the pyramid is that those
+ * rungs are interchangeable in a pinch - so the cache has to be able to
+ * answer "what do you have for room 12?" rather than only "do you have this
+ * url?".
  *
  * ### Sheet-packed levels share one decoded image across many rooms
  *
  * A level whose `locateTile()` answer carries a `rect` (see rooms.ts) is
  * sheet-packed: many rooms live in one image. Decoded image identity is kept
- * separate from per-room cache-entry identity for exactly this reason - a
+ * separate from per-room cache-entry identity: a
  * per-`(id, level)` entry for a sheet-backed room is a lightweight pointer
  * `{ sheetUrl, rect }`, and the actual `Image` is held once, keyed by url, in
- * `sheetImages`. Many rooms therefore cost one fetch and one decode, which is
- * the entire point (see SHEETS's docblock in pyramid.ts for why this exists).
- * A per-file level (no `rect`) is unchanged: the entry owns its own `Image`
- * directly, exactly as before sheets existed.
+ * `sheetImages`. Many rooms therefore cost one fetch and one decode - the
+ * reason sheets exist (see SHEETS's docblock in pyramid.ts).
+ * A per-file level (no `rect`) is the other case: the entry owns its own
+ * `Image` directly.
  *
  * Because a sheet-backed entry does not own the fetch, evicting one never
  * orphans a request the way evicting a loading per-file entry would - the
@@ -38,8 +39,8 @@
  *
  * ### Eviction is frame-aware, and that is too
  *
- * The renderer walks cells row by row, so mid-frame the tiles it has ALREADY
- * DRAWN are the least recently used entries in the cache. A plain LRU therefore
+ * The renderer walks cells row by row, so mid-frame the tiles it has already
+ * drawn are the least recently used entries in the cache. A plain LRU therefore
  * evicts the top of the screen to make room for the bottom of the same screen,
  * and the pan blanks and refetches tiles that never left the viewport. Entries
  * carry the frame they were last drawn in, and eviction skips anything touched
@@ -47,7 +48,7 @@
  * because eviction runs at the top of a frame, before the renderer has touched
  * anything, so protecting only the frame in progress would protect nothing.
  * `sheetImages` entries are touched the same way whenever a room backed by
- * them is touched, so a sheet stays resident exactly as long as any room it
+ * them is touched, so a sheet stays resident as long as any room it
  * covers is still on camera.
  *
  * When one screen genuinely exceeds a level's budget the cache holds it anyway
@@ -86,8 +87,8 @@ export const genericId = (i: number): number | string => (i < 0 ? CENTER : `gene
  * cell fades to instead of flat black (`manifest.shared.genericDistill[i]`,
  * see `scan.ts`'s `scanShared`). Same shared-id treatment as `genericId`;
  * whether this id actually resolves to anything is a `rooms.ts` question,
- * not this one - an index with no matching distill alternate on disk simply
- * has no entry in `createTileLocator`'s url map, and `drawGenericFade`
+ * not this one - an index with no matching distill alternate on disk has no
+ * entry in `createTileLocator`'s url map, and `drawGenericFade`
  * (`render.ts`) falls back to flat black when the cache has nothing for it.
  */
 export const genericDistillId = (i: number): number | string => `generic-distill:${i}`;
@@ -118,7 +119,7 @@ export const DISTILL_ON = 'distill-on';
  */
 export const CLEAR_HISTORY_BOOK = 'clear-history-book';
 
-/** How many prefetches may be waiting at once. See prefetch() for why. */
+/** How many prefetches may be waiting at once. See `prefetch()` for why. */
 const QUEUE_LIMIT = 256;
 
 /**
@@ -127,7 +128,7 @@ const QUEUE_LIMIT = 256;
  * reads, so this narrows them to zero-arg callbacks rather than widening
  * every caller to accept one it would ignore.
  *
- * This is the LOADER, not the thing that gets painted. Setting `src` starts a
+ * This is the loader, not the thing that gets painted. Setting `src` starts a
  * load; when it finishes, `onload` fires and `bitmap` holds the decoded,
  * drawable result. The renderer paints `bitmap` (via `TileHit.img`), never the
  * loader itself - see `Drawable` and the default `createBitmapImage`.
@@ -195,7 +196,7 @@ export interface TileHit {
   img: Drawable;
   rect: Rect | null;
   level: number;
-  /** The sheet this hit is packed into, if it is sheet-backed - see `perfProbe.ts`'s §2.3 instrumentation. */
+  /** The sheet this hit is packed into, if it is sheet-backed - the sheet fetch timing in `perfProbe.ts` keys on it. */
   sheetUrl?: string;
 }
 
@@ -261,12 +262,11 @@ async function decodeOnThread(url: string): Promise<ImageBitmap> {
 
 /**
  * A shared decoder that runs `DECODE_ON_THREAD` in a Web Worker and transfers
- * the finished `ImageBitmap` back. This is what actually gets the decode off
- * the CONTENT main thread: `createImageBitmap(blob)` on the main thread is
- * still drained onto it by Firefox's `DecodePool::SyncRunIfPossible` whenever
- * the event loop idles (~1.5s of main-thread decode in one zoom capture, the
- * jank that survived moving off the `<img>` path). Requested from a worker, the
- * content main thread never runs those jobs.
+ * the finished `ImageBitmap` back. This is what gets the decode off the
+ * content main thread: `createImageBitmap(blob)` on the main thread is still
+ * drained onto it by Firefox's `DecodePool::SyncRunIfPossible` whenever the
+ * event loop idles (~1.5s of main-thread decode in one zoom capture). Requested
+ * from a worker, the content main thread never runs those jobs.
  *
  * Lazily built and shared across every tile, browser-only (tests inject their
  * own `createImage` and never reach here). `undefined` means "not tried yet",
@@ -324,7 +324,7 @@ self.onmessage = (e) => {
 }
 
 /**
- * The browser's `LoadableImage`: fetch the encoded bytes and decode OFF the
+ * The browser's `LoadableImage`: fetch the encoded bytes and decode off the
  * content main thread into an owned `ImageBitmap` (see `decodeInWorker`). Buys
  * two things, both from profiling zoom lag:
  *
@@ -405,11 +405,12 @@ export function createTileCache({
   const entry = (id: RoomId, level: number) => bucket(level)?.get(id);
 
   // servableLevel's answer is immutable for a given (id, want): a shared id
-  // resolves at level 0 only, so a generic cell walks the whole ladder (up to
-  // eleven `locateTile` calls) to rediscover that same constant on every frame
-  // (see performance-research.md §4.1). Memoized per want then id, valid for
-  // the life of this cache - a manifest change gets a fresh `locateTile` and
-  // therefore a fresh cache via the caller's own memoization of both.
+  // resolves at level 0 only, so a generic cell walks the whole ladder - one
+  // `locateTile` call per rung in each direction - to rediscover that same
+  // constant on every frame (see docs/performance-research.md §4.1).
+  // Memoized per want then id, valid for the life of this cache - a manifest
+  // change gets a fresh `locateTile` and therefore a fresh cache via the
+  // caller's own memoization of both.
   const servableLevelCache = new Map<number, Map<RoomId, number | null>>();
 
   const sheetReady = (url: string) => sheetImages.get(url)?.state === 'ready';
@@ -649,7 +650,7 @@ export function createTileCache({
   }
 
   /**
-   * A capacity-gated LRU, exactly like `evict()` for per-file entries: nothing
+   * A capacity-gated LRU, the same rule `evict()` applies to per-file entries: nothing
    * is dropped just because it is off screen this frame - only once the total
    * held exceeds `sheetBudget`, and then only the least-recently-used sheets
    * among those not currently in use, oldest first, until back at budget.

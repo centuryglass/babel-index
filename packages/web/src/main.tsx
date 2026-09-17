@@ -83,58 +83,46 @@ type CardState = RoomPick;
 
 function Library({ manifest }: { manifest: ManifestResponse }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // A canvas only ever hands out one context type - the first `getContext`
-  // call wins for its whole lifetime. `?webgl` is read once at module scope
-  // and never changes mid-session, so rather than gate a context type inside
-  // `useMapRenderer.ts`/`useMapRendererGL.ts` (spike code, not meant to touch
-  // the production hook), whichever hook is NOT active gets this permanently-
-  // null ref instead of the real canvas - its effect bails before ever
-  // calling `getContext`, so only the active hook ever touches the element.
+  // A canvas commits to one context type, permanently, at the first
+  // `getContext` call - so exactly one renderer may touch it. `WEBGL` is
+  // decided at page load, and the inactive hook gets this permanently-null
+  // ref: its effect bails before ever calling `getContext`.
   const inertCanvasRef = useRef<HTMLCanvasElement>(null);
-  // The live search field lives on the center tile, not in the panel; its
-  // position is driven imperatively from the render loop below, the same way
-  // the canvas itself is - see `positionSearchBox`.
+  // The refs below are DOM elements positioned imperatively from the render
+  // loop, not from React state: the camera moves every frame, and
+  // re-rendering the tree that often would cost far more than the style
+  // writes the loop makes alongside each canvas repaint.
+
+  // The live search field, on the center tile rather than in the side panel.
   const searchFormRef = useRef<HTMLFormElement>(null);
-  // The book buttons' container - one absolutely-positioned box matching the
-  // center cell, positioned imperatively from the render loop exactly as the
-  // search field is. The forty buttons inside it are laid out in percentages,
-  // so this is the only per-frame geometry the shelf costs.
+  // The shelf's book buttons: one box matching the center cell, its buttons
+  // laid out in percentages inside it - so panning costs one style write,
+  // not one per book.
   const booksRef = useRef<HTMLDivElement>(null);
-  // The search badge's orbiting arrow - not diegetic content, but it still
-  // moves every frame with the camera (it points at wherever the center tile
-  // currently is on screen), so it gets the same imperative-ref treatment as
-  // the two center-tile overlays above rather than being React state.
+  // The search badge's orbiting arrow: it points at wherever the center
+  // tile currently is on screen.
   const searchArrowRef = useRef<HTMLSpanElement>(null);
-  // The open book's hotspot - positioned and shown/hidden imperatively from
-  // the render loop exactly like `booksRef`, one button rather than forty
-  // because it is one fixed rect (the whole cell, like `booksRef`), holding
-  // an SVG that traces the exact silhouette (`CENTER_BOOK_PATH`) rather than
-  // a rectangle.
+  // The artist's-statement hotspot, sized over the whole cell. The traced
+  // `CENTER_BOOK_PATH` SVG inside is the visual shape; taps reach it through
+  // the canvas (`centerBookAtPoint`), so the button itself stays
+  // `pointer-events: none` (see style.css).
   const centerBookRef = useRef<HTMLButtonElement>(null);
-  // The favorites-sort switch and reorder button's container - one
-  // absolutely-positioned box matching the center cell, positioned
-  // imperatively exactly like `booksRef`, holding three buttons laid out in
-  // percentages of it.
+  // The reorder button and favorites-sort switch, laid out in percentages
+  // the same way `booksRef`'s buttons are.
   const controlsRef = useRef<HTMLDivElement>(null);
-  // The on-tile favorite badge's tooltip - one floating element for the
-  // whole map, positioned and shown imperatively from the render loop's
-  // pointermove listener exactly like the overlays above, since a badge is
-  // painted on every tile and has no DOM element of its own to anchor one to.
+  // The favorite badge's tooltip. Badges are painted onto every tile and
+  // have no DOM of their own, so one floating element serves the whole map.
   const favTooltipRef = useRef<HTMLDivElement>(null);
-  // The distill toggle's own tooltip - same floating-element treatment as
-  // `favTooltipRef`, for the same reason: it is canvas-painted onto the
-  // center tile and has no DOM element of its own to anchor one to.
+  // The distill toggle's tooltip, for the same reason.
   const distillTooltipRef = useRef<HTMLDivElement>(null);
   const total = manifest.count;
 
-  // Every by-feel starting value comes from the manifest's config block rather
-  // than from a literal here - see packages/config. The sliders still move
-  // freely afterwards; config decides where they start.
+  // Config (packages/config) supplies every by-feel number, including where
+  // the sliders start; nothing here restates those values as literals.
   const config = manifest.config as unknown as Config;
 
-  // How the catalog advances, and one of the two things that survive a reload.
-  // Config supplies the DEFAULT for a reader who has never chosen; a stored
-  // choice wins over it.
+  // How the catalog advances. Persisted: the reader's stored choice beats
+  // config's default, which only decides where a first visit starts.
   const [paging, setPaging] = useState(() =>
     load(KEYS.paging, config.catalog.paging, {
       validate: (v) => v === 'scroll' || v === 'pages',
@@ -149,27 +137,23 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const [seed, setSeed] = useState(config.map.slotSeed);
   const [orderSeed, setOrderSeed] = useState(() => Date.now());
   // Which of the four readings of the same ranking is in force. Session-only,
-  // unlike the favorites themselves: the list is a standing choice about the
-  // library, "show me it sorted by favorites right now" is not.
+  // unlike favorites: a favorite list is a standing choice about the library;
+  // "sorted by favorites right now" is not.
   const [sortMode, setSortMode] = useState<SortMode>('relevance');
-  // The permutation `'random'` sorts by - see `favorites.ts`'s `'random'`
-  // section. Only rerolled when `changeSort` switches INTO `'random'` from
-  // something else, so a mode-agnostic re-render (a favorite toggle, a
-  // map/catalog switch) never reshuffles a random order already in force.
+  // The permutation `'random'` sorts by (see `favorites.ts`). Rerolled only
+  // when `changeSort` switches into it, so ordinary re-renders - a favorite
+  // toggle, a map/catalog switch - never reshuffle an order on screen.
   const [randomSortSeed, setRandomSortSeed] = useState(() => Date.now());
 
   const [status, setStatus] = useState('');
-  // Search history, newest first, one book per entry - and one of the two
-  // things in this app that survives a reload (see `persist.js` for why so few
-  // do). It is not only a convenience: this is what titles the center room's
-  // shelf, so persisting it makes the wall of books a record of what this
-  // reader has asked the library rather than something that resets to keyword
-  // tags every session.
+  // Search history, newest first, one book per entry. Persisted because it
+  // titles the center shelf: the wall reads as a record of what this reader
+  // has asked the library, not keyword tags that reset each session.
   //
-  // Read once at mount, through a validator - storage is hand-editable and
-  // outlives any given version of this code, so "it parsed" is not the same as
-  // "it is a list of search terms". Capped at the wall's size, because the wall
-  // is the only place it is ever shown.
+  // Read once at mount through a validator - storage is hand-editable and
+  // outlives any version of this code, so "it parsed" is not "it is a list
+  // of search terms". Capped at the wall's size; the wall is the only place
+  // it is shown.
   const [history, setHistory] = useState(() =>
     load<string[]>(KEYS.history, [], {
       validate: (v) => Array.isArray(v) && v.every((term) => typeof term === 'string'),
@@ -178,20 +162,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const pushHistory = useCallback((term: string) => {
     setHistory((prev) => [term, ...prev.filter((t) => t !== term)].slice(0, HISTORY_SLOT_COUNT));
   }, []);
-  // Cleared rather than stored empty, so forgetting really does leave nothing
-  // behind rather than an empty key that reads the same but looks different.
+  // An emptied history removes the storage key rather than saving [].
   useEffect(() => {
     if (history.length) save(KEYS.history, history);
     else clear(KEYS.history);
   }, [history]);
 
-  // Sensitive-content tags a reader has chosen to block, from HelpDialog's
-  // collapsible panel. Seeded from `?blockTags` on first visit only - once
-  // there is a stored choice it wins, the same "read once, then the reader
-  // owns it" rule `paging` and `history` already follow. Persisted for the
-  // same reason `history` is: it is a standing choice about the library, not
-  // session state, and forgetting it on reload would mean re-blocking by hand
-  // every time.
+  // Sensitive-content tags the reader has blocked, from HelpDialog's panel.
+  // Persisted like `history` - a standing choice, not session state.
+  // `?blockTags` seeds this only when nothing is stored yet: after the
+  // reader's first manual choice, the link parameter is inert.
   const [blockedTags, setBlockedTags] = useState(() =>
     load<string[]>(KEYS.blockedTags, URL_BLOCKED_TAGS, {
       validate: (v) => Array.isArray(v) && v.every((t) => typeof t === 'string'),
@@ -206,22 +186,21 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   }, [blockedTags]);
   const blockedTagSet = useMemo(() => new Set(blockedTags), [blockedTags]);
 
-  // Everything the corpus IS - the sidecar, the embedding blob, the search
-  // index built over them. See useCorpus.ts.
+  // The corpus itself: metadata sidecar, embedding blob, and the search
+  // index built over both - see useCorpus.ts.
   const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
 
-  // Every sensitive-content tag the corpus actually has, for the panel's
-  // checklist - not a fixed vocabulary, so a corpus with none renders no
-  // panel at all. And how many rooms the current choice actually removes,
-  // for the panel itself and the debug HUD (`useMapRenderer`).
+  // availableTags: only the sensitive tags this corpus actually has, so a
+  // corpus with none renders no blocking panel at all. blockedCount: rooms
+  // the current choice removes (panel text and debug HUD).
   const availableTags = useMemo(() => availableSensitiveTags(metadata), [metadata]);
   const blockedCount = useMemo(() => countBlocked(metadata, blockedTagSet), [metadata, blockedTagSet]);
 
-  // `requestAnimation` doesn't exist yet - it comes back from `useRearrangement`
-  // below, which itself needs `announce`, which needs this hook's `result` to
-  // say what a change was for. `useSearch` has to run before that circle closes,
-  // so it takes a ref and `main.tsx` fills it in once `useRearrangement` has
-  // returned - see useSearch.ts's file comment.
+  // useSearch and useRearrangement need each other: a search asks for the
+  // rearrangement, and the rearrangement's announcement needs the search's
+  // `result`. The cycle can't be reordered away, so useSearch takes this
+  // ref and it is filled in below once useRearrangement has returned.
+  // See useSearch.ts's file comment.
   const requestAnimationRef = useRef<(note: string) => void>(() => {});
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
@@ -233,49 +212,32 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setStatus,
   });
 
-  // Both of these are runtime parameters: changing either re-derives the
-  // layout without touching a single byte of downloaded image data.
-  //
-  // The cell aspect goes in so the library is round on screen rather than round
-  // in the index - the edge should be the same distance away whichever way you
-  // drag, and with a non-square cell those are not the same thing.
-  //
-  // The search's certainty profile rides in as `density`, which is what makes
-  // the matches cluster toward the center rather than scatter at the slider's
-  // ratio. No search means no profile, and no profile means the uniform map -
-  // so clearing the box restores it exactly, without a second code path.
-  // How many generic tiles the corpus shipped, and the seed that scatters
-  // them. Both are positional and order-independent, so they never change under
-  // a search or a reorder - which is why the rearrangement can treat every
-  // generic cell as one interchangeable value.
-  // The reader's own favorites and the library's global counts - see
-  // `useFavorites`. Absent from a deployment with no store, in which case
-  // `enabled` is false and no favorite control renders anywhere.
+  // The reader's own favorites and the library's global counts
+  // (useFavorites). With no favorite store deployed, `enabled` is false and
+  // no favorite control renders anywhere.
   const favorites = useFavorites({ manifest, setStatus });
 
+  // How many generic tiles the corpus shipped, and the seed that scatters
+  // them. Which face a generic cell shows depends on the cell alone, never
+  // on order or search - which is why the rearrangement can treat every
+  // generic cell as one interchangeable value.
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
-  // A running search already has its own order; reshuffling on top of it
-  // would bury the match ranking a reader just asked for, so 'random' reads
-  // as 'relevance' - plain match order - for as long as a search stays
-  // active. `changeSort` clears the search when picking 'random' fresh, but
-  // this also covers running a new search while 'random' was already chosen.
+  // A running search wins over 'random': a reshuffle would bury the ranking
+  // the reader just asked for, so 'random' reads as 'relevance' while a
+  // search is active. `changeSort` clears the search when entering 'random',
+  // but a new search can start while 'random' is already chosen.
   const effectiveSortMode: SortMode = sortMode === 'random' && result ? 'relevance' : sortMode;
 
-  // The map's order AND its density profile, from one sort: an active favorite
-  // sort is a placement input exactly as a search is, so the certainty a room
-  // lands with has to be derived from the same sort that placed it rather
-  // than from the search alone. `favoriteSort` composes the two - a search's
-  // own certainty, boosted to 1 for whatever the sort lifted to the front -
-  // so `layout` below reads one number per room instead of two that could
-  // disagree.
+  // The map's order and its density profile, from one sort: a favorite sort
+  // is a placement input exactly as a search is, so `favoriteSort` composes
+  // the two - a search's own certainty, boosted to 1 for whatever the sort
+  // lifted to the front - and `layout` reads one number per room instead of
+  // two that could disagree.
   //
-  // A search ranks the whole corpus; the layout takes as many as it has slots.
-  // A blocked room drops out of the ranking entirely - not hidden behind a
-  // cell, absent from it - so it never gets a slot on the map at all. Blocking
-  // first, then sorting: a blocked room must not come back because somebody
-  // favorited it.
+  // Rooms are blocked before sorting, not after: filtering last would let a
+  // favorite bring a blocked room back onto the map.
   const sortResult = useMemo(() => {
     const base = result ? result.order : shuffledOrder(total, orderSeed);
     return favoriteSort(
@@ -287,6 +249,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   const order = sortResult.order;
 
+  // The map's placement. Every argument is a runtime parameter: re-deriving
+  // touches no downloaded image bytes. `aspect` makes the library round on
+  // screen rather than in the index - cells are not square, so those differ,
+  // and the edge should be equally far whichever way you drag. `density`
+  // carries the search's certainty profile, which is what clusters matches
+  // toward the center; no search means no profile means the uniform map, so
+  // clearing the box restores the baseline layout without a second code path.
   const layout = useMemo(
     () =>
       createLayout({
@@ -303,19 +272,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [roomCount, contentRatio, seed, total, sortResult, config, genericCount, genericSeed]
   );
 
-  // The catalog's own order: a shuffle is not a list order anyone can read by
-  // eye, so its idle default is alphabetical rather than a second read of the
-  // map's random `order`. The two only agree while a search is running -
-  // `result.order` is the one array both views take a rank from - which is
-  // why a search and a clear are the only things that can move a room's
-  // catalog row, exactly as they are the only things that move it on the map.
+  // The catalog's order: alphabetical at rest, since a shuffle is not an
+  // order anyone can read by eye. Map and catalog agree only while a search
+  // runs - `result.order` is the one array both views rank on - so a search
+  // and a clear are the only things that move a catalog row.
   //
-  // Kept separate from `catalogOrder` below so its identity survives a
-  // favorite toggle: `favoriteOrder` returns this same array back for
-  // `'relevance'` (see `packages/map/favorites.ts`), and `CatalogView` resets
-  // scroll position whenever `order`'s identity changes - recomputing `base`
-  // on every `favorites.sortInput` change would scroll the reader back to the
-  // top just for favoriting a row.
+  // Kept separate from `catalogOrder` so a favorite toggle never changes
+  // this array's identity: `favoriteOrder` returns this array unchanged for
+  // 'relevance', and CatalogView resets scroll whenever `order`'s identity
+  // changes - merging the two memos would scroll a favoriting reader to the
+  // top of the list.
   const catalogBase = useMemo(() => {
     const base = result ? result.order : alphabeticalOrder(manifest.rooms, metadata);
     return filterBlockedIds(base, metadata, blockedTagSet);
@@ -331,10 +297,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [catalogBase, effectiveSortMode, randomSortSeed, favorites.sortInput]
   );
 
-  // Which cell a room id sits in on the map right now, keyed by id rather
-  // than by rank - the catalog's rank in `catalogOrder` and the map's rank in
-  // `order` are the same number only while a search is active, so "show on
-  // the map" has to look a room up by what it IS, not by its row position.
+  // Which cell a room id sits in on the map right now. Keyed by id, not
+  // rank: map rank and catalog rank coincide only while a search is active,
+  // so "show on the map" looks rooms up by what they are.
   const cellById = useMemo(() => {
     const cells = new Map<number, { x: number; y: number }>();
     order.forEach((id, rank) => {
@@ -350,20 +315,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   }, []);
 
   // The WebGL renderer's GPU-texture warmer, filled in by `useMapRendererGL`
-  // once its GL runtime exists - same "caller owns the ref, hook fills it
-  // in" shape as `draw` above. `onPreparingGL` is a stable wrapper
-  // (`useCallback` with no deps, closing only over the ref object itself)
-  // so `useRearrangement`'s own `useCallback` chain doesn't rebuild on every
-  // render.
+  // once its GL runtime exists (same ref pattern as `draw`). `onPreparingGL`
+  // is a stable wrapper so useRearrangement's callback chain does not
+  // rebuild every render.
   const warmTexturesRef = useRef((_ids: ReadonlySet<number>, _level: number) => {});
   const onPreparingGL = useCallback((ids: ReadonlySet<number>, level: number) => {
     warmTexturesRef.current(ids, level);
   }, []);
 
-  // The center shelf's webfont. `composeSpines` falls back to Georgia until
-  // this resolves, so a spine composited on the first frame is legible but
-  // not final - this redraws once the real face is registered on the
-  // document. See spineFont.ts for why loading lives outside `center.ts`.
+  // Until the center shelf's webfont loads, `composeSpines` falls back to
+  // Georgia - legible but not final. This redraws once the real face is
+  // registered. See spineFont.ts for why loading lives outside `center.ts`.
   useEffect(() => {
     let cancelled = false;
     loadSpineFont().then(() => {
@@ -374,14 +336,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     };
   }, []);
 
-  // Where a room's tile lives, at a level. `createTileLocator` is the full
-  // answer - a url plus a source rect when the level is packed into a shared
-  // sheet - which the canvas cache needs to draw sub-rects cheaply.
-  // `createUrlFor` is the same lookup narrowed to a bare url (null for a
-  // sheet-packed level, which an `<img src>` cannot address), for the catalog
-  // and the overlay. Both read the manifest, because it is the scan that
-  // discovered which levels the corpus actually has and two readings of that
-  // would be two chances to be wrong.
+  // Where a room's tile lives at each level. `locateTile` is the full
+  // answer - url plus a source rect when the level is packed into a shared
+  // sheet - for the canvas cache. `urlFor` is the same lookup as a bare url
+  // for the catalog and overlay `<img>`s (null when sheet-packed, which an
+  // `<img src>` cannot address). Both read the manifest, the record of
+  // which levels the corpus actually has.
   const locateTile = useMemo(() => createTileLocator(manifest), [manifest]);
   const urlFor = useMemo(() => createUrlFor(manifest), [manifest]);
 
@@ -390,15 +350,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       locateTile,
       onLoad: () => requestDraw(),
     });
-    // The shared tiles are rule 1's floor: pinned and preloaded so every cell has
-    // something to draw however little of its own room has arrived. That is now
-    // the blank center plus one entry per generic tile, plus distill mode's
-    // paired alternates (only where one actually exists on disk - see
-    // `genericDistillId`'s doc) - a bounded handful, so pinning them all still
-    // fits under the level's budget. Pinning the distill alternates up front is
-    // what keeps the first-ever toggle from showing a flat black fallback while
-    // they load. They are served flat (level 0), so preload and pin there
-    // rather than at the coarsest rung.
+    // The shared tiles are pinned and preloaded so every cell can draw
+    // something before any room image has arrived: the blank center, one
+    // face per generic tile, and distill mode's alternates where they exist
+    // on disk (see `genericDistillId`'s doc). The set is small enough that
+    // pinning all of it fits the cache budget, and pinning the distill
+    // alternates up front keeps the first-ever toggle from falling to flat
+    // black while they load. Shared tiles are served flat, so pin and
+    // preload at level 0.
     const genericDistillIds = (manifest.shared?.genericDistill ?? [])
       .map((v, i) => (v ? genericDistillId(i) : null))
       .filter((id): id is number | string => id != null);
@@ -408,10 +367,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       tiles.pin(id);
       tiles.request(id, 0);
     }
-    // The favorite badge's two faces, pinned the same way - a bounded pair of
-    // tiny images every non-generic, non-center cell can draw. The center
-    // tile's favorites-sort switch art rides along with them: same gate,
-    // same reasoning, one more bounded handful of tiny images.
+    // The favorite badge's two faces and the center tile's sort-switch art,
+    // pinned the same way - tiny images, gated on the store existing.
     if (favorites.enabled) {
       for (const id of [FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON]) {
         tiles.pin(id);
@@ -430,22 +387,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const renderer = useMemo(() => createRenderer({ cache }), [cache]);
   const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
 
-  // The rearrangement animation, when one is running.
-  //
-  // A ref rather than state on purpose: it changes every frame, and the render
-  // effect must not be torn down and rebuilt sixty times a second. What it
-  // holds is the whole animation - its board, how far through it is, and the
-  // camera it was planned for, which is the one the frame must be drawn at
-  // however the live camera has been nudged since.
+  // The rearrangement in progress, or null. A ref, not state: it changes
+  // every frame, and state would tear down the render effect sixty times a
+  // second. It holds the animation's board, its progress, and the camera it
+  // was planned for - frames draw at that camera, not the live one.
   const anim = useRef(null);
 
-  // The center-tile loading indicator (`loadingAnimation.ts`), loaded once from
-  // the shared assets and held in a ref for the same reason `anim` is: the
-  // render hooks read its current frame every tick and must not rebuild when it
-  // changes. Null until the manifest loads, and stays null on a corpus deployed
-  // without one - read as "no indicator" everywhere, like a missing favorite
-  // store. `hasLoadingAnim` is the reactive mirror the dev panel's preview
-  // checkbox is gated on.
+  // The center-tile loading indicator (loadingAnimation.ts), loaded once
+  // from the shared assets; a ref for the same reason as `anim`. Null until
+  // the manifest loads, and forever on a corpus deployed without sheets -
+  // read as "no indicator". `hasLoadingAnim` mirrors it for the dev panel's
+  // preview checkbox.
   const loadingAnim = useRef<LoadingAnimation | null>(null);
   const [hasLoadingAnim, setHasLoadingAnim] = useState(false);
   useEffect(() => {
@@ -460,9 +412,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     };
   }, [manifest.sharedBase]);
 
-  // The dev panel's "loop loading animations" checkbox - a standalone preview
-  // that walks every cycle in order so each can be eyeballed in place. Toggled
-  // straight on the controller; the current cycle name shows in the HUD.
+  // The dev panel's "loop loading animations" checkbox: a standalone
+  // preview that walks every cycle in order, toggled straight on the
+  // controller. The current cycle name shows in the HUD.
   const setAnimationPreview = useCallback(
     (on: boolean) => {
       if (on) loadingAnim.current?.startDebug(requestDraw);
@@ -471,24 +423,20 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [requestDraw]
   );
 
-  // The search badge's own spinner - the far-field loading affordance
-  // `docs/pending_task_list.md` asked for, played unconditionally over the
-  // same preload window as the center-tile indicator above rather than
-  // gated on the center book being on screen. See `useRearrangement.ts`'s
-  // `onPreparingChange`.
+  // The search badge's spinner: the same preload window as the center-tile
+  // indicator, visible anywhere on screen - this is what a reader browsing
+  // far from the center sees during a preload. Driven by
+  // useRearrangement's `onPreparingChange`.
   const [preparingRearrangement, setPreparingRearrangement] = useState(false);
 
   const resistanceAt = useCallback((x: number, y: number) => layout.resistanceAt(x, y), [layout]);
 
-  // The catalog's expanded room: the tile at full size and the whole story.
-  // A row is a fixed height and its thumbnail is a thumbnail, so this is how a
-  // reader sees either without going back to the map - see `RoomOverlay`.
-  // Seeded from `INITIAL_ROUTE.room` (a filename, from a `/catalog/<file>`
-  // permalink) on first render only - the same one-time seed `blockedTags`
-  // above uses - so following such a link opens straight to that room's
-  // overlay instead of a blank catalog. `order` is already computed above,
-  // so the initial `rank` this room opens with matches the catalog's real
-  // idle order rather than a placeholder.
+  // The catalog's expanded room: tile at full size and the whole story -
+  // how a reader sees either without leaving the fixed-height rows (see
+  // `RoomOverlay`). Seeded once at mount from `INITIAL_ROUTE.room`, so a
+  // `/catalog/<file>` permalink opens that room's overlay directly, and
+  // `order` is already final here, so the rank it opens with is the row's
+  // real position.
   const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(() => {
     if (!INITIAL_ROUTE?.room) return null;
     const room = manifest.rooms.find((r) => r.file === INITIAL_ROUTE.room);
@@ -498,11 +446,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
   const expandRoom = useCallback((id: number, rank: number) => setOverlay({ id, rank }), []);
 
-  // "Show in the catalog", the map card's own reciprocal of a catalog row's
-  // "show on the map" - a one-shot instruction for `CatalogView` to scroll to
-  // and pick out this room, cleared once it has (see `spotlightId`'s own doc
-  // comment on `CatalogView`). Not the same state as `overlay` above: this
-  // names a row to jump to, not a room to render full-size.
+  // "Show in the catalog", the card's reciprocal of a row's "show on the
+  // map": a one-shot instruction for CatalogView to scroll to and mark this
+  // room, cleared once done. Names a row to jump to - `overlay` names a room
+  // to open full-size.
   const [catalogSpotlightId, setCatalogSpotlightId] = useState<number | null>(null);
   const clearCatalogSpotlight = useCallback(() => setCatalogSpotlightId(null), []);
 
@@ -511,12 +458,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const [helpOpen, setHelpOpen] = useState(false);
 
   // A one-time visual nudge toward the "READ ME" book, for a reader who has
-  // never opened it. `showHelpHint` starts true exactly when the stored flag
-  // was never set; the flag is written back on this same mount so a reload -
-  // whether or not the book was ever opened - never shows the nudge again.
-  // Cleared early (`onOverride` in useCenterShelf.ts) the moment help is
-  // actually opened, so the nudge does not keep pulsing for the rest of a
-  // session that has already answered it.
+  // never opened it. The stored flag is written on this same mount, so a
+  // reload never re-nudges - opened or not. Opening help clears the nudge
+  // right away (`onOverride` in useCenterShelf.ts).
   const [showHelpHint, setShowHelpHint] = useState(() => !load(KEYS.seenHelpHint, false));
   useEffect(() => {
     if (showHelpHint) save(KEYS.seenHelpHint, true);
@@ -524,15 +468,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   }, []);
 
   // The open book painted into a shelf gap - a distinct hotspot from the
-  // lettered books above, reached the same way in both views: a tap routed
-  // through `centerBookAtPoint` on the map, an ordinary click in the catalog.
+  // lettered books: a tap routed through `centerBookAtPoint` on the map, an
+  // ordinary click in the catalog.
   const [artistStatementOpen, setArtistStatementOpen] = useState(false);
   const openArtistStatement = useCallback(() => setArtistStatementOpen(true), []);
 
-  // Right-click or long press opens the room's card - a modal dialog now, so
-  // there is no click point to anchor it to, only which room (or generic
-  // cell) it names. The card names its room, so a pan underneath it while
-  // it's open is harmless.
+  // The open room card, from right-click or long press. A modal dialog, so
+  // the state is only which room or generic cell it names - there is no
+  // anchor point, and a pan underneath the open card is harmless.
   const [card, setCard] = useState<CardState | null>(null);
   const onPick = useCallback(
     (px: number, py: number, camera: Camera) => {
@@ -544,65 +487,53 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [layout, order]
   );
 
-  // The map-opened card's accessible name and its story text, from the one
-  // function that also names a listbox option: `describeCell`. Computed here
-  // rather than inside `RoomOverlay`, because this is where
-  // `layout`/`order`/`metadata` are already in scope - the pick itself only
-  // knows the cell it was opened for.
+  // The card's accessible name and story, from `describeCell` - the same
+  // function that names listbox options. Computed here because `layout`,
+  // `order`, and `metadata` are in scope here; the pick knows only its cell.
   const cardDescription = useMemo(
     () => (card ? describeCell(card.x, card.y, { layout, order, metadata }) : null),
     [card, layout, order, metadata]
   );
 
-  // The catalog overlay's own room, by real pixel size read at scan time -
-  // see `cardNaturalSize` below and RoomOverlay's `naturalSize` doc.
+  // The catalog overlay's tile size in real pixels, read at scan time - see
+  // `cardNaturalSize` below and RoomOverlay's `naturalSize` doc.
   const overlayNaturalSize = useMemo(() => {
     if (!overlay) return null;
     const room = manifest.rooms[overlay.id];
     return room?.w && room?.h ? { w: room.w, h: room.h } : null;
   }, [overlay, manifest]);
 
-  // The map-opened card's own tile image, resolved the same way the
-  // catalog's overlay is - a real room by id, a generic cell by the same
-  // positional face `render.ts` draws for that cell (`layout.genericIndexAt`,
-  // load-bearing: it must not depend on rank, see AGENTS.md). Level 0, the
-  // only level `urlFor` (an `<img src>`, not the canvas cache) can address.
+  // The card's tile image: a real room by id, a generic cell by the same
+  // positional face `render.ts` draws for its cell (`layout.genericIndexAt`
+  // must not depend on rank - see AGENTS.md). Level 0, the only level
+  // `urlFor` can give an `<img src>`.
   const cardSrc = useMemo(() => {
     if (!card) return null;
     return urlFor('id' in card ? card.id : genericId(layout.genericIndexAt(card.x, card.y)), 0);
   }, [card, layout, urlFor]);
 
-  // The same tile's own real pixel size, read at scan time - see
-  // RoomOverlay's `naturalSize` doc for why this beats a shared aspect ratio
-  // for the pre-load placeholder. Resolved the same two ways `cardSrc` is:
-  // a real room by id, a generic cell by its positional face.
+  // The same tile's real pixel size, resolved the two ways `cardSrc` is.
+  // See RoomOverlay's `naturalSize` doc for why the pre-load placeholder
+  // uses this rather than a shared aspect ratio.
   const cardNaturalSize = useMemo(() => {
     if (!card) return null;
     const asset = 'id' in card ? manifest.rooms[card.id] : manifest.shared?.generic?.[layout.genericIndexAt(card.x, card.y)];
     return asset?.w && asset?.h ? { w: asset.w, h: asset.h } : null;
   }, [card, layout, manifest]);
 
-  // The ranked listbox: every rank the search's gradient actually lifted above
-  // the baseline (`gradedCount` - "the size of the cluster", 0 for a uniform
-  // map), each named by the same `describeCell` the card uses. This is the
-  // LOSSLESS channel accessibility-plan.md §3.2 argues for - position on the
-  // map is lossy (rank and certainty, not adjacency), the ranking is not.
+  // The ranked listbox: the `gradedCount` ranks the search's gradient
+  // lifted above baseline - the cluster's size, and 0 for a uniform map.
+  // This is the lossless channel: map position encodes rank and certainty
+  // but not adjacency; the ranking encodes everything.
   //
-  // Windowed to `RESULTS_WINDOW`: `gradedCount` is normally tens of rooms, not
-  // thousands, but nothing bounds it against a corpus where it could be. Capped
-  // a second way too - only ranks that actually landed a cell (`cellOfRank`)
-  // are listed, because there is nowhere to fly a reader to otherwise. Pulling
-  // the "rooms on the map" slider down can make that the tighter of the two
-  // bounds; either way `total` still reports the true match count via
-  // `aria-setsize`, so the list stays honest about what it is not showing.
+  // Bounded twice: by `RESULTS_WINDOW` (a DOM budget) and by `cellOfRank` -
+  // a rank that never landed a cell has nowhere to fly to, and with the
+  // "rooms on the map" slider down that bound is the tighter one. `total`
+  // still reports the real match count via `aria-setsize`.
   //
-  // Worth knowing before "fixing" an empty list that looks wrong: at
-  // `contentRatio: 1` (the "non-generic" slider maxed) `gradedCount` is ALWAYS
-  // 0. It counts ranks the gradient lifts above the baseline, and there is no
-  // "above" left once the baseline already is the maximum - every cell already
-  // holds a room regardless of match quality, so there is nothing left for a
-  // search to cluster. That is the ratio slider's own logic working as
-  // designed, not a bug in this list.
+  // At `contentRatio: 1` this list is always empty, and that is the ratio
+  // slider's own logic, not a bug here: the gradient has nothing left to
+  // lift above the baseline, so a search cannot cluster anything.
   const searchResults = useMemo(() => {
     if (!result) return null;
     const total = Math.min(layout.gradedCount, RESULTS_WINDOW);
@@ -610,9 +541,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     for (let rank = 0; rank < total; rank++) {
       const cell = layout.cellOfRank(rank);
       if (!cell) continue;
-      // Blocking can leave `order` shorter than the layout's own slot count -
-      // a rank past the end of a filtered order holds no room, generic or
-      // otherwise, so it is skipped rather than listed with no id.
+      // A rank past the end of the filtered `order` holds no room at all -
+      // skipped rather than listed with no id.
       if (order[rank] === undefined) continue;
       rooms.push({
         id: order[rank], rank, x: cell.x, y: cell.y,
@@ -622,41 +552,36 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     return { rooms, total: layout.gradedCount };
   }, [result, layout, order, metadata]);
 
-  // A tap selects a book on the center room. Stable identity - so the pointer
-  // listeners are not re-bound every render - over a ref that always holds the
-  // latest logic, since the handler closes over `search` and `centreSlots`,
-  // which are redefined below and on every render.
+  // The tap handlers live behind refs: ref identity is stable, so the
+  // camera's pointer listeners bind once, while the bodies assigned further
+  // down are reassigned every render and close over `search`, `centreSlots`,
+  // and `flyTo` - none of which exist yet at this line.
   const tapRef = useRef((_px: number, _py: number, _camera: Camera) => {});
   const onTap = useCallback((px: number, py: number, camera: Camera) => tapRef.current(px, py, camera), []);
 
-  // A double tap zooms to fit the tapped room, and a second double tap on the
-  // same room returns to the camera it had before - the map's equivalent of a
-  // photo viewer's double-tap zoom. Same ref-indirection as `onTap`/`tapRef`
-  // above, and for the same reason: the handler needs `flyTo`, which does not
-  // exist until `useMapCamera` below returns it.
+  // A double tap zooms to fit the tapped room; a second on the same room
+  // returns the camera from before it - the map's version of a photo
+  // viewer's double-tap zoom. Same ref indirection as `tapRef` above.
   const doubleTapRef = useRef((_px: number, _py: number, _camera: Camera) => {});
   const onDoubleTap = useCallback(
     (px: number, py: number, camera: Camera) => doubleTapRef.current(px, py, camera),
     []
   );
-  // The camera to return to on the next double tap of the SAME room, and which
-  // room that is - `null` once there is nothing to return to (no zoom pending,
-  // or the reader has moved on to a different room).
+  // The camera to return to on the next double tap of the same room, and
+  // which room that is; null when no zoom is pending.
   const zoomToggle = useRef<{ cellKey: string; from: Camera } | null>(null);
 
-  // `?touchdebug` puts the raw pointer stream on screen. A gesture can only
-  // really be judged on a device, and a phone has no console you can read with
-  // both thumbs busy - so this is how "what did the browser actually send"
-  // stays answerable without a USB cable.
+  // `?touchdebug` puts the raw pointer stream on screen: gestures can only
+  // be judged on a device, and a phone has no readable console.
   const onDebug = useMemo(() => (TOUCH_DEBUG ? appendTouchLog : undefined), []);
 
-  // Where the map opens: centered on the center room's bookshelf and zoomed so it
-  // fills the display, rather than at a fixed zoom that is too far out on a phone
-  // and too far in on a wide monitor. Capped at the tile's NATIVE width so a page
-  // never loads already upscaled - a reader can still zoom to the 2x ceiling by
-  // hand, and this cap rises once the center tile earns a finer pyramid rung.
-  // Computed once at mount from the viewport; a resize afterwards is the reader's
-  // camera to move, not ours, so this deliberately does not track window size.
+  // The page-load view: the center room's bookshelf framed to the display -
+  // a fixed zoom would be too far out on a phone and too far in on a wide
+  // monitor. Capped at the tile's native width so the page never loads
+  // already upscaled (a reader can still zoom by hand to the 2x ceiling,
+  // and the cap rises if the center tile ever earns a finer pyramid rung).
+  // Computed once at mount; a later resize is the reader's camera to move,
+  // not ours.
   const opening = useMemo(() => {
     const rect = CENTER_OPENING_RECT;
     const zoom = openingZoom(
@@ -680,18 +605,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     onDebug,
   });
 
-  // Where the center tile is on screen, and whether each of the two overlays it
-  // carries - the live search field and the book buttons - is currently usable
-  // there. One computation, because both the render loop (to position and
-  // show/hide them) and the panel's search trigger (to decide whether to fly
-  // home first) need it and neither should restate the other's notion of
-  // "usable". The render loop draws on partial overlap (`usable`); the search
-  // trigger needs the stricter `fullyUsable` - a box half off screen is not one
-  // a reader can actually use, even though it is still worth drawing.
-  //
-  // A rearrangement disqualifies both: mid-slide the center tile is drawn from
-  // the animation's own board at a camera this function knows nothing about, so
-  // an overlay placed from the live camera would sit over the wrong pixels.
+  // Where the center tile is on screen, and what its overlays accept:
+  // `usable` (partly on screen - what the render loop draws), `fullyUsable`
+  // (entirely on screen - what `goToSearch` focuses rather than flying),
+  // and `books` (on screen with legible spines - the book buttons are
+  // tabbable only while a reader can see what they are named). Computed
+  // once so the loop and the trigger share a definition of "usable". All
+  // three are false during a rearrangement: the tile is drawn from the
+  // animation's board, at a camera this function cannot see.
   const centreOverlay = useCallback(
     (w: number, h: number) => {
       const cellRect = centerCellRect(cam.current, { width: w, height: h });
@@ -701,34 +622,22 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         cellRect,
         box,
         usable: settled && overlapsViewport(box, w, h) && isSearchBoxUsable(cellRect),
-        // Stricter than `usable`: the box must be ENTIRELY on screen, not
-        // merely overlapping it. `goToSearch` reads this rather than
-        // `usable` - a box only partly visible is one a reader can't actually
-        // read or use, even though it still overlaps the viewport enough to
-        // stay drawn.
+        // Stricter than `usable`: half a search box is worth drawing but
+        // not worth focusing.
         fullyUsable: settled && fullyInViewport(box, w, h) && isSearchBoxUsable(cellRect),
-        // The buttons exist exactly while the titles are legible, so tabbing
-        // into the shelf never reaches a book nobody can see named. Off-screen
-        // is the other half: a focus ring somewhere past the edge of the
-        // display is not a focus ring.
+        // No tab stop on a book whose title is illegible or off-display.
         books: settled && overlapsViewport(cellRect, w, h) && areSpinesLegible(cellRect),
       };
     },
     [cam]
   );
 
-  // The panel's one remaining search affordance: reach the live field on the
-  // center tile. If it is already on screen and legible, just focus it -
-  // otherwise fly home to the opening view first, the same framing the map
-  // loads on, and focus once landed. A dropped flight (the reader grabbed the
-  // map mid-flight) leaves the field alone rather than fighting for focus.
-  //
-  // Defined here, right after its own inputs (`flyTo`, `opening`,
-  // `centreOverlay`) exist, rather than down with the rest of the search
-  // wiring - `useMapCursor` needs it for `/` and takes it directly. There is
-  // no listener-rebind cost to protect against by holding it behind a ref:
-  // `onMapKeyDown` is a plain JSX prop, not something an effect re-subscribes
-  // when it changes.
+  // The panel's search affordance: focus the live field on the center tile
+  // if it is fully usable, otherwise fly to the opening view and focus once
+  // landed. A dropped flight (the reader grabbed the map mid-flight) leaves
+  // focus alone. Defined here rather than with the search wiring below
+  // because `useMapCursor` takes it for `/` - as a plain JSX prop, this
+  // position costs no listener rebinding.
   const goToSearch = useCallback(async () => {
     const canvas = canvasRef.current;
     const input = searchFormRef.current?.querySelector('input');
@@ -737,23 +646,19 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       input.focus();
       return;
     }
-    // flyTo always routes through cameraAtCell, which adds +0.5 to aim at a
-    // cell's MIDDLE - every other caller flies to a whole cell by its corner
-    // index. `opening` is already a raw camera target, not a cell index (see
-    // useMapCamera's mount-time use of it, unmodified), so that offset has to
-    // be cancelled here or the flight lands half a cell short on each axis.
+    // flyTo aims at a cell's middle (+0.5, via cameraAtCell); `opening` is
+    // already a raw camera position, so cancel the offset here or the
+    // flight lands half a cell short. Same reasoning in the double-tap
+    // handler below.
     const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
     if (landed) input.focus();
   }, [flyTo, opening, centreOverlay]);
 
-  // `Escape`'s way back to the canvas - the shelf's own `Escape` binding
-  // (`useCenterShelf.ts`) does the same thing for the same reason:
-  // `Shift+Tab` already gets there, but it's a reversal a reader has to think
-  // to make, and past the shelf it's not even a fixed number of presses -
-  // `.center-book`, the reorder/favorite-sort toggles and the search trigger
-  // are each conditionally rendered, so how many controls sit between
-  // wherever focus is and the canvas depends on zoom and which features are
-  // on. `Escape` sidesteps all of that with a direct jump, from any of them.
+  // `Escape` returns focus to the canvas from any center-tile control.
+  // `Shift+Tab` can also reach it, but the controls in between are
+  // conditionally rendered - the distance depends on zoom and features, so
+  // Escape gives it as a fixed jump. The shelf binds `Escape` the same way
+  // (`useCenterShelf.ts`).
   const focusCanvas = useCallback(() => {
     canvasRef.current?.focus();
   }, [canvasRef]);
@@ -767,11 +672,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [focusCanvas]
   );
 
-  // Shared by every plain center-tile control button - `.center-book`, the
-  // reorder button, the two favorite-sort toggles, and the search trigger.
-  // None of them has any other reason to intercept a key (activation is
-  // native button click, same as the shelf's books), so one handler covers
-  // all five rather than five near-identical copies.
+  // `Escape` handler shared by the five plain center-tile buttons
+  // (`.center-book`, reorder, the two sort toggles, the search trigger) -
+  // they use no other keys, since activation is native click.
   const onControlKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
       if (e.key !== 'Escape') return;
@@ -805,11 +708,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // --- switching between the two readings ----------------------------------
   //
-  // The map is hidden rather than unmounted, so neither direction rebuilds
-  // anything: the camera is exactly where it was left, the tile cache is
-  // warm, and `useMapCamera`'s pointer listeners - bound once against a ref
-  // object rather than an element - are still attached to a canvas that
-  // never went away. See `useModeTransition.ts` for the FLIP itself.
+  // The map is hidden, never unmounted: the camera and tile cache survive,
+  // and so do useMapCamera's pointer listeners, which bind once against the
+  // ref object - a remounted canvas would silently have none. See
+  // `useModeTransition.ts` for the FLIP.
   const { mode, leaving, enterCatalog, exitCatalog, firstTileRef } = useModeTransition({
     canvasRef,
     cam,
@@ -818,16 +720,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     initialMode: INITIAL_MODE,
   });
 
-  // Cleared rather than emptied one at a time - see the shelf's "forget
-  // searches" book. Defined here, ahead of `useCenterShelf` just below, which
-  // is the only thing that runs it.
+  // The shelf's "forget searches" book wipes the whole wall at once.
+  // Declared here because `useCenterShelf` below is its only caller.
   const forgetSearches = useCallback(() => setHistory([]), []);
 
-  // The center room's bookshelf. Called here rather than earlier in the file
-  // because two of the four actions a book can run - `enterCatalog` (just
-  // above) and `search` (from `useSearch`, already in scope) - have to exist
-  // first; `centreSlots` has no reader of its own until `useMapRenderer`
-  // just below, so nothing is lost by waiting this long to call it.
+  // The center room's bookshelf. Called here because two of the actions a
+  // book runs - `enterCatalog` and `search` - must exist first.
   const { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown } = useCenterShelf({
     metadata,
     slotSeed: config.map.slotSeed,
@@ -846,19 +744,20 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // --- rendering -----------------------------------------------------------
   //
-  // The frame loop itself is `useMapRenderer.ts`. `draw` stays here because the
-  // tile cache above is built with `onLoad: requestDraw`, so the request has to
-  // exist before the hook that fulfils it - one ref, and the cycle is broken.
-  // Only in map mode: the catalog is a conventional list, not the diegetic
-  // surface a badge painted onto a tile belongs to.
+  // The frame loop is `useMapRenderer`/`useMapRendererGL`. `draw` stays here
+  // because the tile cache above is built with `onLoad: requestDraw` - the
+  // request must exist before the hook that fulfils it; one ref breaks the
+  // cycle.
+  //
+  // The favorite badge's paint inputs - null with no store, so no badge is
+  // drawn anywhere. Badges belong to the map: the catalog's favorite
+  // control is DOM.
   const favoritesOverlay = useMemo(
     () => (favorites.enabled ? { isFavorite: favorites.isFavorite } : null),
     [favorites.enabled, favorites.isFavorite]
   );
-  // `config.center`'s auto-fit font range for the shelf's spines - memoized so
-  // `useMapRenderer`'s effect (which depends on the object identity) does not
-  // rebuild every render over an object literal that is really the same two
-  // numbers each time.
+  // config.center's auto-fit font range for spines. Memoized because
+  // useMapRenderer's effect keys on the object's identity.
   const spineFontLimits = useMemo(
     () => ({ minPx: config.center.spineMinPx, maxPx: config.center.spineMaxPx }),
     [config.center.spineMinPx, config.center.spineMaxPx]
@@ -866,13 +765,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // --- the rearrangement animation -----------------------------------------
   //
-  // Everything about it - whether a layout/order change animates, what plays
-  // out on screen while it does, and what gets said once it lands - is
-  // `useRearrangement`. `announce` is the one thing it cannot own: which
-  // voice speaks for a change is a fact about which reading is on screen, and
-  // that lives here, not in the hook. The catalog has no map to rearrange, so
-  // it says what happened in its own voice instead - the arrangement sentence
-  // talks about clustering near a center that reading does not have.
+  // useRearrangement owns whether a change animates, what plays while it
+  // does, and what is said when it lands. `announce` is the exception:
+  // which voice speaks depends on which reading is on screen, which lives
+  // here. In the catalog it describes the list instead - the arrangement
+  // sentence talks about clustering around a center the catalog has no
+  // notion of.
   const announce = useCallback(
     (note: string) => {
       if (mode !== 'map') {
@@ -884,11 +782,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [mode, order, result, setStatus, announceArrangement]
   );
 
-  // `useSearch`'s `search()` needs `requestAnimation`, but `useRearrangement`
-  // needs `announce`, which needs `useSearch`'s own `result` (by way of
-  // `layout`/`order`) - a genuine cycle, not just an ordering accident, so
-  // `requestAnimationRef` (filled in below) is the one forward reference left
-  // in this file that reordering cannot remove.
+  // Closes the useSearch <-> useRearrangement cycle discussed at
+  // `requestAnimationRef`'s declaration.
   const { requestAnimation } = useRearrangement({
     layout,
     order,
@@ -912,9 +807,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // --- distill mode ------------------------------------------------------------
   //
   // Hides every generic room and lets the corpus rooms already on the map
-  // pack together to fill the space, then reverses it - see
-  // `useDistillMode.ts` for why a `contentRatio` flip is the whole mechanism
-  // and what the fade adds on top.
+  // pack into the space, then reverses. `useDistillMode.ts` explains the
+  // contentRatio flip behind it and what the fade adds.
   const { distillMode, toggleDistill, genericFade } = useDistillMode({
     defaultRatio: config.map.contentRatio,
     fadeMs: config.map.distillFadeMs,
@@ -938,15 +832,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs, loadingAnim,
   });
 
-  // Where the toggle above sends the camera once that resort has actually
-  // landed - a ref, reassigned every render, because `onSettled` fires later
-  // against whatever `card`/`cellById` are BY THEN, not whatever they were
-  // when the star was clicked. If the room whose card is open is the one just
-  // favorited, its cell after the resort is exactly what `cellById` already
-  // tracks (built for "show on the map"); flying there with no zoom argument
-  // keeps whatever zoom the reader was already at - the point is to bring the
-  // shelf back under an open card, not to reframe it. A card for a different
-  // room, or none at all, is left alone: nothing to reunite with the camera.
+  // After a favorite-triggered resort lands: if the room just favorited is
+  // the one whose card is open, fly the camera to its new cell at the
+  // reader's existing zoom - the resort may have moved it out from under
+  // the card. A different room's card, or none, is left alone. A ref
+  // reassigned every render because `onSettled` fires later, against the
+  // `card` and `cellById` of that moment, not of the click.
   const onFavoriteRearrangedRef = useRef((_id: number) => {});
   onFavoriteRearrangedRef.current = (id: number) => {
     if (mode !== 'map' || !card || 'generic' in card || card.id !== id) return;
@@ -955,22 +846,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   };
 
   /**
-   * One room's favorite state, in the shape `RoomDetails` wants it.
+   * One room's favorite state, in the shape `RoomDetails` wants; null for a
+   * generic cell (no file to favorite) and null throughout when no store is
+   * deployed. A function, not a map, so nothing assembles per-room state
+   * for rooms nobody is looking at.
    *
-   * Handed down as a function rather than a map so a component asks about the
-   * room it is rendering and nothing builds a per-room object for a corpus of
-   * rooms nobody is looking at. Null for a generic cell (no file to favorite)
-   * and null throughout when the feature is off.
-   *
-   * Toggling asks for the sliding-tile treatment whenever the map is sorted
-   * by favorites: the toggle changes `favorites.sortInput`, which changes
-   * `sortResult` (order AND density) above, and without this that resort
-   * would just snap - `useRearrangement`'s effect only animates a change a
-   * caller asked for. `startRearrangement` zooms out in place rather than
-   * flying home, so a reader who is off-center keeps their position; it may
-   * still need to catch up afterwards, though - `onSettled` flies it to
-   * wherever this room ended up if that room's card is what is still open
-   * once the resort lands.
+   * Toggling requests the slide animation under a favorites sort: the
+   * toggle changes `sortResult` - order and density - and useRearrangement
+   * only animates a change a caller asked for. Under 'relevance'/'random'
+   * the toggle moves nothing. `startRearrangement` zooms out in place, so
+   * the reader's position survives; `onFavoriteRearrangedRef` handles an
+   * open card when the resort lands.
    */
   const favoriteFor = useCallback(
     (id: number | null | undefined) =>
@@ -979,9 +865,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
             on: favorites.isFavorite(id),
             count: favorites.countOf(id),
             toggle: () => {
-              // Only 'mine'/'count' read favorites.sortInput for placement -
-              // 'random' sorts by seed alone, so a toggle under it changes
-              // nothing about `order` and must not ask for an animation.
               if (mode === 'map' && (sortMode === 'mine' || sortMode === 'count')) {
                 requestAnimation('', { onSettled: () => onFavoriteRearrangedRef.current(id) });
               }
@@ -992,10 +875,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [favorites.enabled, favorites.isFavorite, favorites.countOf, favorites.toggle, mode, sortMode, requestAnimation]
   );
 
-  // A chip on the card is a live search: reading a room becomes a way of moving
-  // through the library rather than a dead end. The card closes because the map
-  // is about to rearrange under it, and it would be describing a cell that no
-  // longer holds that room.
+  // A chip on a card is a live search. The card and the catalog overlay
+  // close first: the map is about to rearrange, and each names a position
+  // that would then hold a different room.
   const searchKeyword = (text: string) => {
     setQuery(text);
     setCard(null);
@@ -1005,13 +887,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     search(text);
   };
 
-  // Choosing a result in the ranked list (below) moves the camera AND opens
-  // the room's card, in that order but not waiting on one another. The card is
-  // an independent DOM dialog, so its content is reachable the instant this
-  // runs regardless of whether - or how fast - the camera arrives; the flight
-  // is for the sighted reader's continuity, not a precondition for anyone
-  // else's access. This is the touch/VoiceOver path into a room's content
-  // that right-click and long-press never gave them.
+  // Choosing a ranked result flies the camera and opens the card, ordered
+  // but not waiting on each other: the card's content is reachable the
+  // instant this runs, and the flight is continuity for a sighted reader,
+  // not a precondition for anyone else. This is the touch reader's path
+  // into a room that right-click and long-press never gave them.
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
       setCard({ id, rank, x, y });
@@ -1024,12 +904,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // it stays here rather than moving into `useModeTransition`.
   const catalogScrollRef = useRef<HTMLDivElement>(null);
 
-  // The canvas is `display: none` for the whole time `mode !== 'map'`
-  // (`.map-view[hidden]`), so it reports 0x0 for as long as the catalog is
-  // open or mid-exit - `overviewZoom` fed that shrinks its fit target to
-  // nothing and clamps to the widest zoom-out there is. It fills the full
-  // viewport whenever it IS shown (`#root, canvas { inset: 0; width/height:
-  // 100% }`), so the viewport is the size it would report if visible.
+  // A canvas-sized box for overviewZoom. While the catalog is open the map
+  // is `display: none` and reports 0x0, which shrinks the fit target to
+  // nothing and clamps to the widest zoom-out there is; the viewport is the
+  // size the canvas reports whenever it is shown (`#root, canvas { inset: 0
+  // }`, both full width/height).
   const mapViewport = useCallback(
     (): { clientWidth: number; clientHeight: number } =>
       mode === 'map' && canvasRef.current
@@ -1047,26 +926,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [flyTo, config, exitCatalog, mapViewport, cam]
   );
 
-  // The panel's three map controls, as handlers rather than as inline bodies in
-  // the markup: "a reorder" is bumping a seed AND asking for the next layout
-  // change to animate, which is a fact about this file's machinery and not
-  // something a presenter should have to know.
+  // The panel's map controls are handlers, not inline markup: a reorder is
+  // seed bumps plus an animation request - machinery this file owns, not
+  // something a presenter should know.
   //
-  // A full reshuffle, not just a swap of `order`: it also rerolls `seed`, the
-  // same scatter `rescatter` reruns, so which cells are content slots at all
-  // changes along with which room lands in each - "reorder the library" reads
-  // as a promise to remix the whole shelf, not just the room-to-slot mapping
-  // on top of a scatter that never moves. `startRearrangement` already treats
-  // a combined layout+order change as one arrangement (a search does the same
-  // two things at once), so this needs no new animation path.
-  //
-  // A reshuffle this total also has to drop whatever the current arrangement
-  // was standing on: an active search's certainty profile no longer describes
-  // anything (clearing it is itself a rearrangement, exactly as clearing the
-  // box by hand is), and an active favorite sort is a placement input the new
-  // scatter would otherwise be laid out around - leaving either in place would
-  // make "reorder" reroll everything except the one thing the reader is
-  // looking at.
+  // A full reshuffle: it rerolls `seed` (which cells are content slots)
+  // along with `orderSeed` (which room lands where), and drops the active
+  // search and favorite sort - both are placement inputs the new scatter
+  // would otherwise be laid out around. Leaving either in place would reroll
+  // everything except the one thing the reader is looking at.
+  // `startRearrangement` already treats a combined layout+order change as
+  // one arrangement (a search makes the same two), so no new animation path.
   const reorder = useCallback(() => {
     requestAnimation('');
     setOrderSeed((s) => s + 1);
@@ -1074,18 +944,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setSortMode('relevance');
     clearSearch();
   }, [requestAnimation, clearSearch]);
-  // Changing the sort is a RE-RANK, exactly like the reorder above it: it
-  // swaps `order` and lets the sliding-tile animation carry the map from one
-  // arrangement to the other. It must not rebuild the layout - only a search
-  // may do that, because only a search has a certainty profile to place by.
+  // A sort change is a re-rank, not a rebuild: it swaps `order` and lets
+  // the sliding-tile animation carry the map over. Only a search may rebuild
+  // the layout, because only a search has a certainty profile to place by.
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;
-      // Switching INTO 'random' draws a fresh shuffle - re-picking it later
-      // (without leaving it first) must not reroll an order already on
-      // screen. And a running search would otherwise make the reshuffle look
-      // like a no-op (`favoriteOrder` falls back to match order while a
-      // search is active - see the `result` check below), so clear it too.
+      // Entering 'random' draws a fresh shuffle, and clears an active
+      // search: while one runs, `effectiveSortMode` reads 'random' as
+      // 'relevance', so the shuffle would look like a no-op.
       if (next === 'random') {
         setRandomSortSeed(Date.now());
         if (result) clearSearch();
@@ -1096,11 +963,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [sortMode, requestAnimation, manifest, favorites.mine, result, clearSearch]
   );
 
-  // The center tile's favorites-sort switch reads as a physical switch, not a
-  // three-way select like the debug panel's buttons: pressing the active
-  // switch again returns to 'relevance' rather than doing nothing, which is
-  // what lets the switch's two "on" faces (`render.ts`'s `drawFavoriteSwitch`)
-  // double as the control's own state - neither face lit means 'relevance'.
+  // The center tile's favorites-sort switch works like a physical switch,
+  // not a select: pressing the lit one returns to 'relevance'. That is what
+  // lets `render.ts`'s two "on" faces be the whole state display - neither
+  // lit means 'relevance'.
   const toggleSort = useCallback(
     (next: SortMode) => changeSort(sortMode === next ? 'relevance' : next),
     [changeSort, sortMode]
@@ -1123,37 +989,31 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
     const cell = centerCellRect(camera, rect);
 
-    // A tap on the live search field focuses it - checked before the books,
-    // since the box sits above the shelf and never overlaps one. Routing
-    // through `onTap` rather than the field's own pointer events is what lets
-    // a real click activate it while a pan or pinch that merely crosses its
-    // screen rect keeps doing what it was doing: `onTap` only ever fires for
-    // a genuine tap in the first place.
+    // The live search field: focus it. Checked before the books - it sits
+    // above the shelf, never over a spine. Going through `onTap` (which
+    // only fires for a genuine tap) is what lets a pan or pinch that
+    // crosses the box's rect keep panning.
     if (searchBoxAtPoint(px, py, cell)) {
       searchFormRef.current?.querySelector('input')?.focus();
       return;
     }
 
-    // The open book sits in a shelf gap, outside the lettered runs
-    // `bookAtPoint` walks, so it needs its own check - before the books, same
-    // as the search field above, since nothing about it overlaps a spine.
+    // The open book, in a shelf gap: outside the lettered runs
+    // `bookAtPoint` walks, so it gets its own check before the books.
     if (centerBookAtPoint(px, py, cell)) {
       openArtistStatement();
       return;
     }
 
-    // The reorder button - a fixed hotspot on the center tile, checked before
-    // the shelf's own books for the same reason the search field and the open
-    // book are above: it does not overlap a spine. Unlike the two switches
-    // below it, reordering needs no favorite store.
+    // The reorder button - a fixed hotspot, checked before the books for
+    // the same reason as the two above: it overlaps no spine.
     if (shuffleButtonAtPoint(px, py, cell)) {
       reorder();
       return;
     }
 
-    // The favorites-sort switch - two more fixed hotspots, meaningless
-    // without a favorite store to sort by, which is why they are gated on
-    // `favorites.enabled` while the reorder button above is not.
+    // The favorites-sort switches - two more fixed hotspots, meaningless
+    // without a store, hence gated where the reorder button above is not.
     if (favorites.enabled) {
       if (mineToggleAtPoint(px, py, cell)) {
         toggleSort('mine');
@@ -1165,8 +1025,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       }
     }
 
-    // The distill toggle - another fixed hotspot, meaningless behind
-    // `favorites.enabled` above since distill mode needs no favorite store.
+    // The distill toggle - another fixed hotspot, outside the gate above:
+    // distill mode needs no favorite store.
     if (distillToggleAtPoint(px, py, { x: cell.w, y: cell.h }, cell.x, cell.y, distillMode)) {
       toggleDistill();
       return;
@@ -1178,11 +1038,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       return;
     }
 
-    // A tap on a room's favorite badge toggles it, rather than doing nothing
-    // (an ordinary room tile has no other tap behaviour - right-click/long
-    // press opens the card, double-tap zooms). `roomAtPoint` returns null for
-    // the center cell and `{generic: true}` for a generic one, so both are
-    // already excluded from having a badge to tap.
+    // A tap on a room's favorite badge toggles it - an ordinary room tile
+    // has no other tap behaviour. `roomAtPoint` already excludes the center
+    // cell (null) and generic cells, which have no badge.
     if (favorites.enabled) {
       const hit = roomAtPoint(px, py, camera, rect, layout, order);
       if (hit && !('generic' in hit)) {
@@ -1194,10 +1052,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     }
   };
 
-  // Double-tapping a room zooms to fit it; double-tapping the same room again
-  // flies back to the camera it had before. `roomAtPoint` returns null for the
-  // center cell - it is the controls, not a room - so double-tapping the
-  // shelf is left alone rather than fighting the book taps above.
+  // The double-tap body: fit the room, or undo the fit (see `doubleTapRef`
+  // above). `roomAtPoint` returns null for the center cell, so
+  // double-tapping the shelf never fights the book taps above.
   doubleTapRef.current = (px, py, camera) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1209,9 +1066,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     const toggle = zoomToggle.current;
     if (toggle && toggle.cellKey === cellKey) {
       zoomToggle.current = null;
-      // Undo the +0.5 `flyTo`/`cameraAtCell` add to aim at a cell's middle -
-      // `toggle.from` is a raw camera target, not a cell index. Same fix
-      // `goToSearch` applies above, and for the same reason.
+      // Cancel flyTo's +0.5 cell-centering: `toggle.from` is already a raw
+      // camera position (see `goToSearch`).
       flyTo(toggle.from.x - 0.5, toggle.from.y - 0.5, toggle.from.zoom);
       return;
     }
@@ -1228,17 +1084,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     flyTo(hit.x, hit.y, zoom);
   };
 
-  // `?debug`'s scripted action runner - a seeded, repeatable "aggressive
-  // random usage" session for perf/memory profiling (pan/zoom/search/
-  // favorite/catalog/shelf/reorder/sort/distill), driven from a browser
-  // console: `__babelDebug.run('some-seed')`. `debugActions.ts` builds and
-  // dispatches the sequence; this object is the only place that resolves a
-  // step's abstract args (a delta, a factor, a room id) against the live
-  // camera/layout/cellById the way a real gesture would - see that file's
-  // header for why the split exists. Recomputed every render, unmemoized,
-  // the same way `tapRef.current`/`doubleTapRef.current` above are - cheap,
-  // and the alternative is a dependency array naming nearly everything in
-  // this component.
+  // `?debug`'s scripted runner, for perf/memory profiling: from a browser
+  // console, `__babelDebug.run('some-seed')` replays a seeded, repeatable
+  // random-usage session. `debugActions.ts` builds and dispatches the steps;
+  // this object is where a step's abstract args (a delta, a factor, a room
+  // id) resolve against the live camera/layout/cellById the way a real
+  // gesture would - see that file's header for why the split exists.
+  // Rebuilt unmemoized every render, like the tap handlers: cheaper than a
+  // dependency array naming nearly everything in this hook.
   if (DEBUG) {
     const debugActions: DebugActions = {
       pan: (dx, dy) => nudgeBy(dx, dy),
@@ -1383,16 +1236,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       )}
 
       {/*
-        ONE live region for the whole app, and it lives out here rather than in
-        the panel for a structural reason: the panel is part of the map, so a
-        region inside it would be unmounted and remounted on every mode switch,
+        The app's one live region, outside both views: the panel is part of
+        the map, so a region inside it would remount on every mode switch -
         and a screen reader loses a live region that goes away. What it says
-        differs by mode - a cursor move, or what the catalog is showing - but
-        the node a reader is listening to never changes.
+        varies by mode; the node a reader is listening to never changes.
 
-        `role="status"` announces every change to its subtree, so nothing else
-        may share it; the map's static hint stays in the panel where it cannot
-        be read aloud on every update.
+        `role="status"` announces every change to its subtree, so nothing
+        else may share it; the map's static hint stays in the panel.
       */}
       <div className="live">
         <span role="status">{status}</span>
@@ -1476,29 +1326,27 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 }
 
 /**
- * The most options the ranked listbox mounts at once - the DOM budget from
- * accessibility-plan.md §4.2b. `gradedCount` is normally tens of rooms, not
- * thousands, so this rarely bites; it exists for the corpus where it would.
+ * The most options the ranked listbox mounts at once - a DOM budget.
+ * `gradedCount` is normally tens of rooms; this exists for the corpus where
+ * it is not.
  */
 const RESULTS_WINDOW = 50;
 
 /**
- * Whether this pointer is coarse (touch) rather than fine (mouse/trackpad) -
- * the same `matchMedia` reasoning `useMapCamera.ts`'s `prefersReducedMotion`
- * uses, computed once at module load. Decides whether a favorite badge's tap
- * target gets padded out to `MIN_FAVORITE_HIT_TOUCH` - a mouse stays precise.
+ * Touch (coarse pointer) or mouse (fine), from one matchMedia call at module
+ * load - same reasoning as `prefersReducedMotion` in useMapCamera.ts. On
+ * touch, a favorite badge's tap target is padded out to
+ * `MIN_FAVORITE_HIT_TOUCH`; a mouse stays precise.
  */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
  * `window.__INITIAL_ROUTE__` - set by `app.ts`'s `renderPage` only on the
- * SSR `/catalog`/`/catalog/:file` routes (see index.html's
- * `%%INITIAL_ROUTE_SCRIPT%%`), absent everywhere else including plain `/`.
- * Read once at module scope, the same as `INITIAL_MODE`/`URL_BLOCKED_TAGS`
- * below - it exists so a JS-capable visitor who landed on one of those urls
- * (a search result, a shared link) boots straight into the matching
- * interactive view instead of the map, rather than the real content those
- * routes render server-side simply vanishing once `bundle.js` takes over.
+ * SSR `/catalog` and `/catalog/:file` routes (see index.html's
+ * `%%INITIAL_ROUTE_SCRIPT%%`), absent on plain `/`. Read once at module
+ * scope, so a visitor landing on one of those urls boots straight into the
+ * matching interactive view instead of watching the server-rendered content
+ * vanish when `bundle.js` takes over.
  */
 declare global {
   interface Window {
@@ -1508,14 +1356,10 @@ declare global {
 const INITIAL_ROUTE = typeof window !== 'undefined' ? (window.__INITIAL_ROUTE__ ?? null) : null;
 
 /**
- * Which reading the page opens on.
- *
- * `?catalog` in the url opens straight into the list, read once at module scope
- * exactly as `?touchdebug` is. Read-only on purpose: the toggle does not write
- * the url back, so there is no history-entry behaviour to design and no way for
- * the address bar and the page to disagree. It makes the mode linkable, and it
- * lets a test land in the catalog without a click. `INITIAL_ROUTE`'s `mode` is
- * the same signal from a server-rendered url rather than a query param.
+ * Which reading the page opens on: `?catalog`, or `INITIAL_ROUTE.mode` on a
+ * server-rendered url. Read once at module scope, read-only thereafter: the
+ * toggle never writes the param back, so there are no history entries to
+ * design and no way for the address bar and the page to disagree.
  */
 const INITIAL_MODE =
   INITIAL_ROUTE?.mode === 'catalog' ||
@@ -1525,32 +1369,16 @@ const INITIAL_MODE =
 
 /**
  * `?blockTags=a,b,c` - sensitive-content tags to exclude from the map and
- * catalog, read once at module scope exactly as `INITIAL_MODE` is. This only
- * ever SEEDS the stored choice (`KEYS.blockedTags`, below): a reader who has
- * already picked tags in HelpDialog's panel keeps that choice on their next
- * visit rather than having a stale link silently override it, but a fresh
- * browser following a shared link starts blocked as the link asks.
+ * catalog, read once at module scope. It only ever seeds the stored choice
+ * (`KEYS.blockedTags`): a reader who has already chosen tags in HelpDialog
+ * keeps them, and a fresh browser following a shared link starts blocked as
+ * the link asks.
  */
 const URL_BLOCKED_TAGS: string[] =
   (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('blockTags') : null)
     ?.split(',')
     .map((t) => t.trim())
     .filter(Boolean) ?? [];
-
-
-/**
- * `?` - the screen-reader equivalent of peripheral vision
- * (accessibility-plan.md §4.2a): what a sighted reader gets for free by
- * glancing at the screen, on request rather than on every move, because
- * "verbose by default" is the classic live-region mistake.
- *
- * Sentence construction over already-tested primitives (`nextRoom`,
- * `cellDistance`) rather than a new pure module of its own - the same kind of
- * job `describeSignals` (useSearch.ts) does for a search. Simplified from the
- * plan's own example on purpose: four cardinal directions via straight-line
- * `nextRoom` walks, not eight - a true diagonal nearest-room search is more
- * geometry than a `?` press needs to earn its keep.
- */
 
 const rootEl = document.getElementById('root');
 if (rootEl) createRoot(rootEl).render(<App />);

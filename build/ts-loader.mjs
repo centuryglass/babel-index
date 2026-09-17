@@ -3,17 +3,14 @@
  * separate compile step, no output directory to keep in sync with the tree
  * `AGENTS.md`'s Layout section describes.
  *
- * `esbuild` already does exactly this transform for the browser bundle
- * (`packages/server/index.ts` bundles the client in-process at startup), so
- * this reuses the same dependency and the same idea for everything Node runs
- * directly: strip types, leave the module graph and every other semantic
- * (top-level await, dynamic `import()`, ESM/CJS interop) alone. Output is
- * never cached to disk - `load` is called once per process per module by the
- * ESM loader itself, so re-transforming on every run costs nothing that
- * matters next to network/fs latency elsewhere in this app.
+ * esbuild strips the types - the same dependency `packages/server/index.ts`
+ * bundles the client with - and leaves the module graph and every other
+ * semantic (top-level await, dynamic `import()`, ESM/CJS interop) alone.
+ * Output is never cached to disk: `load` runs once per process per module, so
+ * a module is re-transformed at most once per run.
  *
- * Registered via `build/register.mjs`; see `npm run` scripts in package.json
- * for where `--import` wires it in.
+ * Registered via `build/register.mjs`; the `npm run` scripts in package.json
+ * carry the `--import` wiring.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

@@ -1,11 +1,10 @@
 # Keyboard controls - map mode
 
 The spec for every key map mode handles, state by state. Catalog mode is out
-of scope here (see the note at the end). `RoomCard` no longer exists -
-`RoomOverlay.tsx` is the one room-detail dialog, reached from the card icon,
-a click/tap on a room, or `Enter`/`Space` over the keyboard cursor, and it is
-fully modal (Tab trapped, `Escape` closes) - there is no non-modal popover
-variant to special-case.
+of scope here (see the note at the end). `RoomOverlay.tsx` is the one
+room-detail dialog, reached from a ranked result, a click/tap on a room, or
+`Enter`/`Space` over the keyboard cursor, and it is fully modal (Tab trapped,
+`Escape` closes).
 
 ## Focus states and tab order
 
@@ -126,13 +125,12 @@ alongside its other DOM listeners; on `focus` it checks `canvas.matches(
 ':focus-visible')` and shows the ring if true, and `blur` always hides it.
 `:focus-visible`, not plain `:focus`, is what keeps a mouse click on the map
 from lighting up a permanent reticle for someone who never touched a
-keyboard - the same distinction every other focus ring in this app already
-draws (`index.html`'s global `:focus-visible` rule). This replaced an
-earlier design where the ring only appeared after the first *handled*
-keypress (gated on a `keyboardUsed` ref) - that hid the ring for exactly the
-span between successfully tabbing onto the canvas and the first arrow press,
-which is the one moment a keyboard user most needs confirmation that the tab
-stop was real.
+keyboard - the same distinction every other focus ring in this app draws
+(`style.css`'s `:focus-visible` rules). Waiting for the first *handled*
+keypress instead would hide the ring for exactly the span between
+successfully tabbing onto the canvas and the first arrow press, which is the
+one moment a keyboard user most needs confirmation that the tab stop was
+real.
 
 **Precedence rules, restated from code comments:**
 - A pointer/wheel/touch event always interrupts an in-flight keyboard-
@@ -208,8 +206,8 @@ one `onKeyDown` (`main.tsx`'s `onControlKeyDown`).
 ## State 5 - `RoomOverlay` open
 
 `role="dialog"`, `aria-modal="true"`. One handler, reached however the
-overlay was opened (icon, click/tap on a room, or `Enter`/`Space` on the
-keyboard cursor).
+overlay was opened (a ranked result, a click/tap on a room, or `Enter`/`Space`
+on the keyboard cursor).
 
 | Key | Behavior |
 |---|---|
@@ -223,13 +221,15 @@ never fire - the same "focus ownership is the whole gating mechanism"
 pattern as the search box, and deliberately not backed by a redundant "is a
 dialog open" flag anywhere.
 
-`HelpDialog` and `ArtistStatementOverlay` follow the identical pattern
-(their own independent `window`-level `keydown` listener, `Escape` closes,
-Tab trapped) and are not restated here since they are not part of the center
-tile's own control surface.
+`HelpDialog` and `ArtistStatementOverlay` follow the same pattern - `Escape`
+closes, Tab trapped, and a `window`-level `keydown` listener that only acts
+when that dialog is topmost (`HelpDialog` inlines its own copy;
+`ArtistStatementOverlay` gets it from `useDialog`'s dialog stack) - and are
+not restated here since they are not part of the center tile's own control
+surface.
 
 ## Out of scope here
 
 Catalog mode's own keyboard behavior (list navigation, pagination, the
 overlay reached from a catalog row) is a separate spec - the states above
-cover map mode only, per the scope this document was written to.
+cover map mode only.

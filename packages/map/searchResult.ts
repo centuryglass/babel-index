@@ -1,17 +1,17 @@
 /**
  * Search's own data protocols: what `rankHybrid()` (`scoring.ts`) returns,
- * what `useSearch.js` stores as `result`, and the match ranges/explanation
+ * what `useSearch.ts` stores as `result`, and the match ranges/explanation
  * rows built from either.
  *
  * Type-only, imported through JSDoc (`@type {import('./searchResult.ts').X}`)
- * the same way `manifest.ts` is - see AGENTS.md's TypeScript bullet. `scoring.ts`
- * is one of the deliberately-loose files the migration plan defers (heavy
- * duck-typing, computed almost entirely from arrays keyed by rank rather than
- * a fixed record shape), so this file types the shapes that cross its
- * boundary rather than converting the module itself.
+ * the same way `manifest.ts` is - see AGENTS.md's TypeScript bullet. This
+ * file types the shapes that cross `scoring.ts`'s boundary - heavy
+ * duck-typing, data computed almost entirely from arrays keyed by rank
+ * rather than a fixed record shape - rather than converting the module
+ * itself.
  */
 
-/** One story word, lemmatised, keeping its span into the FOLDED story text. */
+/** One story word, lemmatised, keeping its span into the folded story text. */
 export interface StorySequenceEntry {
   lemma: string;
   start: number;
@@ -58,7 +58,7 @@ export interface Term {
 export interface ParsedQuery {
   /** the query exactly as typed */
   raw: string;
-  /** fold(raw) - the whole query, still used for the existing "whole query against one keyword" reading */
+  /** fold(raw) - the whole query, used for `keywordScore`'s whole-query-against-one-keyword reading */
   folded: string;
   terms: Term[];
 }
@@ -100,11 +100,10 @@ export interface ScoreBreakdown {
 
 /**
  * One signal's own ranking over the corpus, independent of the composite
- * `order` - `rankAxis` in `scoring.ts`. Both parallel to `order` (by rank, not
- * id), same as `ScoreBreakdown`. `ranks` is 1-based competition ranking
- * (`1, 2, 2, 4`, not `1, 2, 2, 3`); `ties` is how many OTHER rooms share it -
- * together, "this room ranks #4 by tag, tied with 2 others"
- * (docs/search_rules.md "Reporting").
+ * `order`, and - like `ScoreBreakdown` - parallel to `order` by rank, not by
+ * id. 1-based competition ranking with a per-rank tie count; see `rankAxis`
+ * in `scoring.ts` for the rule, and docs/search_rules.md "Reporting" for how
+ * it is shown.
  */
 export interface SignalRanks {
   tag: Int32Array;
@@ -126,7 +125,7 @@ export interface RankHybridResult {
 }
 
 /**
- * `useSearch.js`'s `result` state: a ranking bound to the term it was run
+ * `useSearch.ts`'s `result` state: a ranking bound to the term it was run
  * for, or the no-signal stub (`certainty`/`breakdown`/`signals`/`ranks`/`ties`
  * all `null`) when the corpus has neither embeddings nor keywords to rank
  * with.
@@ -148,11 +147,10 @@ export interface MatchRange {
 }
 
 /**
- * One axis's SHARE of the total weighted score (docs/search_rules.md
- * "Reporting" - "a percentage of the total score contributed by each signal
- * that actually contributed something"), not a percentage of anything
- * absolute - `RankingExplanation.contributions` sorts these greatest first
- * and omits any axis that contributed nothing.
+ * One axis's share of the total weighted score, per docs/search_rules.md
+ * "Reporting" - a percentage of the score, not of anything absolute.
+ * `RankingExplanation.contributions` sorts these greatest first and omits
+ * any axis that contributed nothing.
  */
 export interface ContributionShare {
   key: 'clip' | 'tag' | 'title' | 'story';
@@ -217,7 +215,7 @@ export interface ClipRankingSummary {
 export interface RankingExplanation {
   /** 1-based - "#4 of 2048" */
   rank: number;
-  /** corpus size - "#4 OF 2048" */
+  /** corpus size - the "of 2048" in "#4 of 2048" */
   total: number;
   /** the composite `certainty`, as a signed clamped percentage */
   percent: number;

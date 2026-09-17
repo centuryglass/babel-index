@@ -1,12 +1,11 @@
 /**
- * One frame of the map.
+ * One frame of the map: a 2d context and the state of the world in, a painted
+ * frame and draw stats out. No React, no DOM lookups, no event handlers - so
+ * its decisions (which level to draw, what to substitute when that level is
+ * missing, what to warm next) are asserted browser-free by `render.test.ts`.
  *
- * Pulled out of `main.jsx`'s effect so the decisions it makes - which level to
- * draw, what to substitute when that level is missing, what to warm next - can
- * be asserted without a browser. What it needs is a 2d context and the state of
- * the world; it owns no React, no DOM lookups and no event handlers.
- *
- * The renderer is where the three pyramid rules meet the screen:
+ * Where the three pyramid rules meet the screen. "Rule 1"/"rule 2" elsewhere
+ * in this cluster mean these:
  *
  *   1. Never blank. Every cell asks the cache for its room and takes whatever
  *      comes back, at whatever level; only a room with nothing at all resident
@@ -14,14 +13,15 @@
  *      rare.
  *   2. Load ahead. After the visible pass, a ring of cells outside the viewport
  *      is queued at the current level, and the next level out is warmed for
- *      what is on screen - both behind everything visible, because a prefetch
- *      that delays a visible tile has served rule 2 by breaking rule 1.
+ *      what is on screen. Both run behind everything visible: a prefetch that
+ *      delays a visible tile has served rule 2 by breaking rule 1.
  *   3. Hold. Nothing here evicts; that is the cache's business, and it is told
- *      where the frame starts so it never drops what this pass is drawing.
+ *      where the frame starts (`beginFrame()`) so it never drops what this
+ *      pass is drawing.
  *
- * The level is remembered between frames because `pickLevel()` needs it: the
- * hysteresis band is what stops a zoom held near a boundary from flickering
- * between two levels, and it can only apply if it knows what is on screen now.
+ * The level is remembered between frames for `pickLevel()`'s hysteresis band:
+ * it stops a zoom held near a boundary from flickering between two levels,
+ * and it can only apply if it knows what was on screen last frame.
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
@@ -41,35 +41,35 @@ import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
 /**
- * The 2d-context surface this file actually calls - not the whole DOM
- * `CanvasRenderingContext2D`, which `render.test.mjs`'s recording fake has
- * never implemented and should not have to. A real context satisfies this
- * structurally, so nothing at the call sites changes.
+ * The 2d-context surface this file calls - the whole `CanvasRenderingContext2D`
+ * narrowed to what a frame uses, so `render.test.ts`'s recording fake implements
+ * exactly the calls it records. A real context satisfies this structurally, so
+ * nothing at the call sites changes - and the same is true of the wider
+ * surfaces this file casts into (`SpineContext`, `PathContext`): a real context
+ * supports them all, and the fake never exercises those paths.
  */
 export interface DrawContext {
-  // A real `CanvasRenderingContext2D`'s `fillStyle`/`strokeStyle` read back as
-  // `string | CanvasGradient | CanvasPattern` even though this file only ever
-  // assigns a string to them - matching that union here is what lets a real
-  // context satisfy this interface, not just the test's recording fake.
+  // The union, not `string`: a real `CanvasRenderingContext2D` types
+  // `fillStyle`/`strokeStyle` as `string | CanvasGradient | CanvasPattern`
+  // even where only strings are assigned, and matching that union is what lets
+  // a real context satisfy this interface.
   fillStyle: string | CanvasGradient | CanvasPattern;
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
   font: string;
-  /** 0-1. Used only for distill mode's black fade over generic tiles - restored to 1 after. */
+  /** 0-1. Distill mode's crossfade over generic tiles; restored to 1 after. */
   globalAlpha: number;
   /**
    * Whether `drawImage` bilinearly filters. Set per frame from the draw's
-   * downscale ratio - see `SMOOTHING_MAX_DOWNSCALE`. A shrinking mip drawn
-   * with nearest-neighbour is far cheaper and, since the mip is already a
-   * clean downsample, indistinguishable at the sizes it happens.
+   * downscale ratio - see `SMOOTHING_MAX_DOWNSCALE`.
    */
   imageSmoothingEnabled: boolean;
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
   fillText(text: string, x: number, y: number): void;
-  // A `Drawable` is all this file ever passes; `CanvasImageSource` is added to
-  // the union purely so a real `CanvasRenderingContext2D` - whose own
-  // `drawImage` only accepts the latter - still satisfies this interface.
+  // `CanvasImageSource` is added to the union only so a real
+  // `CanvasRenderingContext2D`, whose `drawImage` accepts nothing else, keeps
+  // satisfying this interface; all call sites pass a `Drawable`.
   drawImage(
     image: Drawable | CanvasImageSource,
     dx: number, dy: number, dw: number, dh: number
@@ -82,25 +82,23 @@ export interface DrawContext {
 }
 
 /**
- * The cache id for whatever a cell holds. The center is the blank center tile;
- * a generic cell is one of the generic tiles, chosen positionally by the
- * layout (so a reorder never changes it); a slot is its room. `genericId(-1)`
- * falls back to the center tile, which covers a corpus with no generic tiles
- * at all.
+ * The cache id for whatever a cell holds: the center cell takes the blank
+ * center tile, a generic cell one of the generic tiles chosen by
+ * `layout.genericIndexAt`, a content cell its room. `genericId(-1)` is
+ * `CENTER`, the fallback for a corpus with no generic tiles at all.
  */
 const idOf = (cell: RoomAtResult, layout: MapLayout, gx: number, gy: number): RoomId =>
   cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
 
 /**
- * How much larger than the drawn cell a tile may be before smoothing is turned
- * off for the frame. `pickLevel` always hands back a tile at least as large as
- * the demand, so this ratio is >= 1 for the visible field; below this it is a
- * near-1:1 (or upscaled, when a coarser tile is substituted) draw where bilinear
- * filtering earns its cost, and above it the tile is being shrunk enough that
- * nearest-neighbour of an already-filtered mip looks the same for a fraction of
- * the work. Bilinear downscaling of the whole visible field is the single
- * largest cost in a zoomed-out frame (Skia's filtered sampler), and a zoomed-out
- * frame is exactly where this ratio is high.
+ * The largest tile-to-cell downscale ratio at which bilinear filtering still
+ * earns its cost. `pickLevel` hands back a tile at least as large as the
+ * demand, so this ratio is >= 1; near 1:1 (and above, when a coarser tile is
+ * substituted) filtering pays for itself, and beyond it nearest-neighbour of
+ * an already-filtered mip looks the same for a fraction of the work. Bilinear
+ * downscaling of the whole visible field is the largest single cost in a
+ * zoomed-out frame (Skia's filtered sampler), and a zoomed-out frame is where
+ * this ratio is high.
  */
 export const SMOOTHING_MAX_DOWNSCALE = 1.25;
 
@@ -123,9 +121,9 @@ export interface DrawOpts {
   /** room ids, best first */
   order: number[];
   /**
-   * the history/tag titles to composite onto the center tile's spines, or
-   * null to draw none. Optional so tests and the slide renderer, which never
-   * pass it, exercise no text compositing.
+   * The history/tag titles to composite onto the center tile's spines, or
+   * null to draw none. The slide renderer draws no spine text, so only the
+   * map's draw call passes it.
    */
   centreSlots?: (Slot | null)[] | null;
   /** the shelf book under the pointer, or null - see `composeSpines`'s hover backdrop */
@@ -139,64 +137,56 @@ export interface DrawOpts {
   cursor?: { x: number; y: number } | null;
   /**
    * Overlay a favorite badge on every non-center, non-generic cell, or null
-   * to draw none - absent whenever this deployment has no favorite store
-   * (see `useFavorites.ts`'s `enabled`).
+   * to draw none - null whenever this deployment has no favorite store (see
+   * `useFavorites.ts`'s `enabled`).
    */
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /**
    * The world cell of the tile whose favorite badge is under the pointer, or
-   * null - same split as `hoveredBook`: read each frame here, written by
-   * `useMapRenderer.ts`'s `pointermove` listener. Compared against `(gx, gy)`
-   * in the draw loop below rather than carried as a room id, since a generic
-   * or center cell never has a badge to hover in the first place.
+   * null - same read-per-frame split as `hoveredBook`. A cell, not a room id:
+   * only real rooms carry badges, and a favorite's cell is what the draw loop
+   * compares against.
    */
   hoveredFavorite?: { x: number; y: number } | null;
   /**
    * Which of the three rankings is in force, for the center tile's
    * favorites-sort switch (drawn whenever `favorites` is non-null - see
-   * `drawFavoriteSwitch`). Read together with `favorites` rather than folded
-   * into it: `sortMode` always has a value, `favorites` is what actually
-   * gates whether the switch draws at all.
+   * `drawFavoriteSwitch`). `favorites`, not this, gates whether the switch
+   * draws: `sortMode` always has a value.
    */
   sortMode?: SortMode;
   /**
    * Distill mode's crossfade over generic tiles - 0 (normal) to 1 (fully
-   * replaced by the tile's paired distill alternate, `genericDistillId`), or
-   * undefined/0 to draw generics as usual. See
-   * `packages/web/src/hooks/useDistillMode.ts`.
+   * replaced by the tile's paired distill alternate, `genericDistillId`);
+   * see `useDistillMode.ts`.
    */
   genericFade?: number;
   /**
-   * Whether distill mode is on, for the center tile's distill toggle (drawn
-   * whenever the center cell renders - see `drawDistillToggle`). Distinct
-   * from `genericFade`, which is the transition's own animation progress;
-   * this is the state the toggle's icon and hover highlight read.
+   * Whether distill mode is on, for the center tile's distill toggle - the
+   * state its icon and hover highlight read, distinct from `genericFade`,
+   * which is the transition's progress. See `drawDistillToggle`.
    */
   distillMode?: boolean;
-  /**
-   * Whether the pointer is over the distill toggle's traced silhouette -
-   * same split as `hoveredBook`/`hoveredFavorite`: read here, written by
-   * `useMapRenderer.ts`'s `pointermove` listener.
-   */
+  /** Whether the pointer is over the distill toggle's traced silhouette - same split as `hoveredBook`. */
   hoveredDistill?: boolean;
   /**
-   * The center-tile loading indicator's current frame, or null to draw none.
-   * Composited over the center cell's book page while a rearrangement preloads
-   * (`loadingAnimation.ts`). Optional so tests and the slide renderer, which
-   * never pass it, draw no overlay.
+   * The center-tile loading indicator's current frame, or null to draw none -
+   * composited over the center cell's book page while a rearrangement
+   * preloads (`loadingAnimation.ts`). The slide renderer draws none.
    */
   loadingFrame?: LoadingFrame | null;
 }
 
 /**
- * Distill mode's crossfade for a generic tile: its paired distill alternate
- * (`distillId`, from `genericDistillId`), drawn OVER the tile's own art at
- * `fade` opacity rather than a flat overlay - a real crossfade between the
- * two images rather than a fade to black. Falls back to flat black when the
- * alternate has not loaded yet (or, per `genericDistillId`'s doc, does not
- * exist for this index) so a slow load never shows the base art bleeding
- * through at an opacity that reads as broken. Shared with `slide.ts` so a
- * generic tile mid-slide gets the same treatment.
+ * Distill mode's crossfade for a generic tile: the tile's paired distill
+ * alternate (`genericDistillId`) drawn over the base art at `fade` opacity -
+ * a crossfade between two images, not a fade to black. When the alternate has
+ * no cached tile yet - or, per `genericDistillId`'s doc, none exists for this
+ * index - it draws flat black at `fade` instead, so a slow load never lets the
+ * base art bleed through at an opacity that reads as broken. `slide.ts` calls
+ * this too, so a generic tile mid-slide gets the same treatment; the fully-
+ * faded skip lives at each draw loop (a tile under a full fade is pure waste
+ * there), not here.
  */
 export function drawGenericFade(
   ctx: DrawContext, cache: TileCache, distillId: RoomId, fade: number,
@@ -220,11 +210,10 @@ export function drawGenericFade(
 }
 
 /**
- * Composite one loading-indicator frame onto the center cell. `cellRect` is the
- * center cell's on-screen rectangle; the frame's cell-fraction `rect` places it
- * within, per-axis (see `loadingAnimation.ts`). The source sub-rect is the
- * frame's slot in the packed sheet. Shared with the WebGL renderer's own
- * counterpart so the two draw the same placement (glRenderer.ts).
+ * Composite one loading-indicator frame onto the center cell: the frame's
+ * sheet sub-rect (`src`) at its cell-fraction position (`rect`) inside
+ * `cellRect`, per-axis (`loadingAnimation.ts`). `glRenderer.ts`'s counterpart
+ * draws the same placement; the parity suite checks the two stay in step.
  */
 export function drawLoadingFrame(
   ctx: DrawContext,
@@ -279,10 +268,8 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
     // display. Both axes go in: a cell need not share the tile's aspect.
     level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, level);
 
-    // Turn off bilinear filtering once the tiles are being shrunk hard enough
-    // that a nearest-neighbour draw of the already-filtered mip is
-    // indistinguishable - see `SMOOTHING_MAX_DOWNSCALE`. Decided once per frame
-    // from the level all visible tiles share, not per cell.
+    // Smoothing decided once per frame from the level every visible tile
+    // shares, not per cell - see `SMOOTHING_MAX_DOWNSCALE`.
     const src = pyramid.sizeOf(level);
     ctx.imageSmoothingEnabled = !src || src.w <= cellPx.x * dpr * SMOOTHING_MAX_DOWNSCALE;
 
@@ -306,12 +293,10 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         const [sx, sy] = toScreen(gx, gy);
         const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
-        // A generic cell that distill mode has fully faded shows nothing of the
-        // base tile's art - only its distill alternate - so drawing (and
-        // scaling) the tile beneath the fade is pure waste, and on a zoomed-out
-        // map generic cells are the majority. The base tile is still warmed by
-        // the prefetch pass below, so toggling distill back off has it ready
-        // without a pop.
+        // A generic cell fully faded to its distill alternate shows none of the
+        // base tile's art, so drawing the base beneath the fade is pure waste -
+        // and zoomed out, generic cells are the majority. The prefetch pass
+        // still warms the base, so toggling distill off again does not pop.
         if (cell.generic && genericFade >= 1) {
           drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
         } else {
@@ -338,7 +323,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
           if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
         }
 
-        // The favorite badge - every real room, never the center (it is the
+        // The favorite badge: every real room, never the center (it is the
         // controls, not a room) and never a generic cell (nothing to favorite).
         if (favorites && !cell.center && !cell.generic) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
@@ -346,45 +331,37 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
           );
         }
-        // The "forget searches" book's spine swaps to its black art whenever
-        // history has claimed that slot - see `drawClearHistoryBookOverlay`'s
-        // doc. Checked off `centreSlots` itself (the same override
-        // `useCenterShelf.ts` reserves the slot with) rather than a second
-        // "is there history" flag, so the two can never drift apart. Drawn
-        // before the shelf's titles so the gilt text still composites on top.
+        // The "forget searches" book's black spine, claimed whenever history
+        // holds its slot. The check reads `centreSlots` itself - the same
+        // override `useCenterShelf.ts` reserves the slot with - so there is no
+        // second "is there history" flag to drift. Drawn before the shelf's
+        // titles so the gilt text composites on top.
         if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
           drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
-        // The center room's spines carry the search history - gated on
-        // legible spine width inside composeSpines, so far out it draws
-        // nothing.
-        //
-        // `ctx` is only `DrawContext` here (see that interface's own doc) - a
-        // real 2d context also satisfies `composeSpines`'s wider `SpineContext`,
-        // and the cast is what lets `render.test.mjs`'s fake stay narrow per
-        // AGENTS.md, since it never exercises this path.
+        // The center room's spines carry the search history; `composeSpines`
+        // gates on legible spine width, so far out it draws nothing. The cast
+        // is the `DrawContext` note's wider-surface case.
         if (cell.center && centreSlots && spineFontLimits)
           composeSpines(
             ctx as SpineContext, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots, hoveredBook, spineFontLimits
           );
-        // The favorites-sort switch, painted into the center tile's upper
-        // left corner - the mirror of the favorite badge's upper right,
-        // drawn only once this deployment actually has a favorite store
-        // (`favorites` is null otherwise) and only once the tile is zoomed in
-        // enough to be worth reading, the same gate the shelf's own titles use.
+        // The favorites-sort switch, in the center tile's upper left corner -
+        // the favorite badge's upper-right mirror. Gated on a favorite store
+        // existing and on `areSpinesLegible`, the same zoom gate the shelf's
+        // titles use.
         if (cell.center && favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
           drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
-        // The distill toggle, painted into the center tile's lower right
-        // corner - independent of `favorites`, since distill mode needs no
-        // favorite store. `distillMode` is undefined (not just false) for a
-        // caller that never mentions distill mode at all - a test asserting
-        // on level selection or prefetch order, say - so this draws nothing
-        // rather than requesting art nobody asked for.
+        // The distill toggle, in the center tile's lower right corner -
+        // ungated by `favorites`, since distill mode needs no favorite store.
+        // `distillMode === undefined` means the caller does not use distill
+        // mode at all (a test asserting on level selection, say), and the
+        // toggle then draws nothing rather than requesting art nobody asked
+        // for.
         if (cell.center && distillMode !== undefined)
           drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
-        // The loading indicator's current frame, over the center book's page.
-        // Its region is disjoint from the spines/switch/toggle above, so the
-        // order among them is cosmetic; it draws last purely for symmetry with
-        // the GL renderer's own draw loop (glRenderer.ts).
+        // The loading indicator's frame, over the center book's page. Its
+        // region is disjoint from everything above, so the order among them is
+        // cosmetic; last matches the GL draw loop's order (glRenderer.ts).
         if (cell.center && loadingFrame)
           drawLoadingFrame(ctx, loadingFrame, { x: sx, y: sy, w: cellPx.x, h: cellPx.y });
       }
@@ -407,12 +384,10 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
       for (const id of visible) cache.prefetch(id, coarser);
 
     const cells = (bounds.x1 - bounds.x0 + 1) * (bounds.y1 - bounds.y0 + 1);
-    // The keyboard cursor's ring - drawn LAST, over everything, and only once
-    // the reader has actually used a keyboard (the caller gates `cursor` on
-    // that; a permanent reticle in the middle of a page nobody has touched
-    // would be a strong visual choice made on nobody's behalf). Doubles as a
-    // desync detector: if this ring is ever on the wrong cell, that is visible
-    // to every sighted reader, not only to the one it would otherwise mislead.
+    // The keyboard cursor's ring, drawn last and over everything, and only
+    // once the reader has used a keyboard - the caller gates `cursor` on that.
+    // It doubles as a desync detector: a ring on the wrong cell is visible to
+    // every sighted reader, not only to the one it would otherwise mislead.
     if (cursor && cursor.x >= bounds.x0 && cursor.x <= bounds.x1
       && cursor.y >= bounds.y0 && cursor.y <= bounds.y1) {
       const [sx, sy] = toScreen(cursor.x, cursor.y);
@@ -428,9 +403,9 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 }
 
 /**
- * The 2d-context surface a traced-path highlight needs, beyond `DrawContext` -
- * same split as `SpineContext` above, and for the same reason: `render.test.mjs`
- * never hovers a badge, so its recording fake never implements these either.
+ * The extra 2d-context surface a traced-path hover highlight needs, beyond
+ * `DrawContext`, for the same reason that interface is narrow: `render.test.ts`
+ * never hovers a badge, so its recording fake implements no path calls.
  */
 interface PathContext extends DrawContext {
   beginPath(): void;
@@ -447,20 +422,18 @@ const FAVORITE_HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
 const FAVORITE_HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
 /**
- * `hit.img`'s own decoded pixel size - a sheet-packed hit's sub-rect if it
- * has one (never actually true for any of the shared, corner-overlay ids
- * this feeds, which `rooms.ts` always resolves flat, but this stays
- * consistent with every other tile lookup rather than assuming that of just
- * those ids), else the whole image's natural width/height. What every corner
- * overlay's own screen-rect function (`favoriteIconScreenRect`,
- * `distillIconScreenRect`, `clearHistoryBookScreenRect`) is sized from,
- * rather than a hardcoded size constant - hit-testing for all three is
- * independent of this (see each's own doc for why), so a differently-sized
- * asset only ever changes where it's drawn, never whether it's clickable.
- * `Drawable` is only ever a real `ImageBitmap` at runtime (see `tiles.ts`'s
- * `TileHit` doc) - which `LoadableImage` is not typed to guarantee - so the
- * cast here is the same "a real thing satisfies a wider interface" move as
- * `ctx as SpineContext`.
+ * The hit's decoded pixel size: a sheet sub-rect's `sw`/`sh`, else the
+ * image's natural size. Sheet packing never actually happens for the shared
+ * corner-overlay ids this feeds - `rooms.ts` resolves them flat - but sizing
+ * from the hit keeps the rule the same as every other tile lookup. The cast
+ * is sound because `tiles.ts`'s `Drawable` doc makes a real tile's image an
+ * `ImageBitmap` in the browser.
+ *
+ * Each corner overlay's screen rect (`favoriteIconScreenRect`,
+ * `distillIconScreenRect`, `clearHistoryBookScreenRect`) is sized from this
+ * rather than a constant, so replacement art of a different size moves where
+ * the overlay draws; hit-testing is independent of it (see each rect's own
+ * doc), so a size change cannot silently change what is clickable.
  */
 function naturalIconSize(hit: TileHit): { w: number; h: number } {
   if (hit.rect) return { w: hit.rect.sw, h: hit.rect.sh };
@@ -469,30 +442,26 @@ function naturalIconSize(hit: TileHit): { w: number; h: number } {
 }
 
 /**
- * Trace `FAVORITE_TOGGLE_PATH` (a per-axis tile fraction, like every other
- * traced rect on a tile) onto a real path at this tile's screen position,
- * ready to `fill()`/`stroke()`. Replays the true Bezier curve rather than a
- * flattened polygon - `tracePathCommands` (`svgPath.ts`) exists for exactly
- * this, `flattenPath` (same file) is for hit-testing only.
+ * Trace `FAVORITE_TOGGLE_PATH` onto a real path at this tile's screen
+ * position, ready to `fill()`/`stroke()`. The path is per-axis tile fractions
+ * like every other traced rect. The hover highlight replays the true Bezier
+ * (`tracePathCommands`, `svgPath.ts`); `flattenPath` (same file) is for
+ * hit-testing only.
  */
 function traceFavoriteToggle(ctx: PathContext, cellPx: { x: number; y: number }, sx: number, sy: number): void {
   tracePathCommands(ctx, FAVORITE_TOGGLE_PATH as string, cellPx, sx, sy);
 }
 
 /**
- * Draw one tile's favorite badge, if its art has landed - rule 1 does not
- * apply here, since a badge that has not loaded yet simply does not draw
- * rather than falling back to anything. Shared between `render.ts` and
- * `slide.ts`, since both draw the exact same badge over the exact same corner.
+ * Draw one tile's favorite badge if its art has landed: rule 1 does not
+ * apply, a missing badge simply does not draw. `slide.ts` calls this too, so
+ * a sliding room wears the same badge in the same corner.
  *
- * `hovered` paints a gold glow OVER the art, in the badge's own traced
- * silhouette (`FAVORITE_TOGGLE_PATH`) rather than a rectangle loose enough to
- * cover the tile's corner - the same "shape, not a box" choice the shelf's
- * open book makes, and the same reason it is drawn on the canvas rather than
- * as a DOM overlay: there is no per-tile DOM element to hang a CSS `:hover`
- * off of. `ctx` is only `DrawContext` here (see that interface's own doc) - a
- * real 2d context also satisfies `PathContext`, and the cast is sound for the
- * same reason `render()`'s own cast into `SpineContext` is.
+ * `hovered` paints the gold glow in the badge's own traced silhouette
+ * (`FAVORITE_TOGGLE_PATH`) - shape, not box, like the shelf's open book.
+ * Canvas-side because a tile has no DOM element of its own for CSS `:hover`
+ * to sit on; `drawDistillToggle` and the GL renderer's baked glows follow the
+ * same rule. The `ctx` cast: see the `DrawContext` note.
  */
 export function drawFavoriteBadge(
   ctx: DrawContext,
@@ -526,11 +495,10 @@ export function drawFavoriteBadge(
 
 /**
  * Draw the "forget searches" book's black spine overlay, if its art has
- * landed - rule 1 does not apply here, same as `drawFavoriteBadge`. Anchored
- * to that book's own bottom-right corner (`clearHistoryBookScreenRect`)
- * rather than stretched to fit its rect exactly - see that function's doc for
- * why. No hover treatment - the book already gets one from `composeSpines`'s
- * own hover glow, drawn on top of this.
+ * landed - rule 1 does not apply, same as `drawFavoriteBadge`. Anchored to
+ * that book's own bottom-right corner, not stretched to fill its rect - see
+ * `clearHistoryBookScreenRect`'s doc for why. No hover treatment of its own:
+ * `composeSpines`'s glow, drawn on top, already covers the book.
  */
 export function drawClearHistoryBookOverlay(
   ctx: DrawContext,
@@ -561,14 +529,10 @@ function traceDistillToggle(ctx: PathContext, cellPx: { x: number; y: number }, 
 }
 
 /**
- * Draw the center tile's distill toggle: whichever overlay PNG matches
- * `distillMode` (off/on), anchored to the tile's lower right corner
- * (`distillIconScreenRect`), plus a hover highlight traced onto the CURRENT
- * state's own silhouette - same "shape, not a box" treatment
- * `drawFavoriteBadge` gives the favorite badge, and the same reason it is
- * drawn on the canvas rather than as a DOM overlay: there is no per-tile DOM
- * element to hang a CSS `:hover` off of, and this control moves with the
- * camera exactly like every other tile.
+ * Draw the center tile's distill toggle: the overlay PNG matching
+ * `distillMode` at the tile's lower right corner (`distillIconScreenRect`),
+ * plus the hover glow traced onto the active state's own silhouette - the
+ * `drawFavoriteBadge` treatment, same gold, same reasons.
  */
 export function drawDistillToggle(
   ctx: DrawContext,
@@ -603,20 +567,20 @@ export function drawDistillToggle(
 }
 
 /**
- * Draw the center tile's favorites-sort switch: the base plate, always drawn
- * once favorites are enabled, plus whichever "on" face matches the active
- * sort - neither face for `'relevance'`, which is the switch's off position.
- * Each piece draws only once its own art has landed, same as
- * `drawFavoriteBadge`, anchored to the SAME tile corner but each sized off
- * its OWN decoded pixels rather than sharing one rect - the three pieces are
- * meant to overlay by sharing an anchor and canvas convention, not by being
- * identically sized (`fav_mine_on.png`/`fav_count_on.png`/
- * `fav_center_switch_base.png` are close but not pixel-identical in the real
- * art), and forcing an "on" face into the base plate's own rect stretched it
- * off the base's own indicator. Exported and shared with `slide.ts` (same as
- * `drawFavoriteBadge`) - the center tile is the rearrangement's fixed tile,
- * so its controls must keep drawing across the handoff between renderers
- * rather than blinking out for the animation.
+ * Draw the center tile's favorites-sort switch: the base plate plus whichever
+ * "on" face matches `sortMode` - neither face for `'relevance'`, the switch's
+ * off position. Each piece draws only once its own art has landed, like
+ * `drawFavoriteBadge`.
+ *
+ * The three pieces share the tile's upper-left anchor but each is sized from
+ * its own decoded pixels (`naturalIconSize`), not one shared rect: the real
+ * art of `fav_mine_on.png`/`fav_count_on.png`/`fav_center_switch_base.png` is
+ * close but not pixel-identical, and forcing a face into the base plate's
+ * rect stretched it off the base's own indicator.
+ *
+ * `slide.ts` and `glSlideRenderer.ts` call this (or its GL twin) because the
+ * center tile is the rearrangement's fixed tile: its controls must keep
+ * drawing across the handoff between renderers, not blink out mid-animation.
  */
 export function drawFavoriteSwitch(
   ctx: DrawContext,

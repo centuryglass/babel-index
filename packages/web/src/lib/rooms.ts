@@ -41,7 +41,7 @@ export type UrlFor = (id: number | string, level: number) => string | null;
 /**
  * The full locator: resolves `(id, level)` to a url and, for a sheet-packed
  * level, the rectangle within that sheet's image the room occupies. This is
- * what the canvas render path (`tiles.ts`/`render.js`/`slide.js`) uses, since
+ * what the canvas render path (`tiles.ts`/`render.ts`/`slide.ts`) uses, since
  * a canvas can cheaply draw a sub-rect of a shared, already-decoded image.
  *
  * @param manifest as served by /api/manifest
@@ -50,7 +50,7 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // Older manifests have no `levels`; a flat level 0 is the honest reading.
   const levels = new Map((manifest.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
   // Older manifests (and any manifest.imagesBase omission) fall back to the
-  // local mount path - see scan.mjs's IMAGES_BASE.
+  // local mount path - see `scan.ts`'s IMAGES_BASE.
   const imagesBase = manifest.imagesBase ?? '/images';
 
   // Every shared-tile id to its (flat) url, so resolving one is a lookup rather
@@ -107,10 +107,10 @@ export function createTileLocator(manifest: Manifest): LocateTile {
 
   // The answer for a given (id, level) never changes for this manifest, but
   // computing it allocates a fresh TileLocation/rect every call - and the
-  // cache asks on every visible cell every frame, cache hits included (see
-  // performance-research.md §4.1). Memoized per level then id: the returned
-  // object is now SHARED across every caller for that (id, level), so nobody
-  // may mutate a TileLocation or its rect - callers only ever read them today.
+  // cache asks on every visible cell every frame, cache hits included.
+  // Memoized per level then id: the returned object is now SHARED across
+  // every caller for that (id, level), so nobody may mutate a TileLocation
+  // or its rect - callers only ever read them today.
   const cache = new Map<number, Map<number | string, TileLocation | null>>();
   return (id, level) => {
     let byId = cache.get(level);

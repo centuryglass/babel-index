@@ -1,22 +1,15 @@
 /**
- * The browser smoke test: the center room's shelf
- * (docs/accessibility-plan.md phase D) - the diegetic search controls painted
- * into the center tile, and their keyboard interface. One of five files split
- * out of the original `smoke.e2e.mjs` (see `docs/pending_task_list.md`);
- * see `map-gestures.e2e.ts` for the shared header comment on why and how.
+ * The browser smoke test for the center room's shelf: the diegetic search
+ * controls painted into the center tile, and their keyboard interface. See
+ * `map-gestures.e2e.ts` for the shared header comment on why and how,
+ * including how to run the suite.
  *
- * The center room's forty spines were painted pixels behind a hit-test - the
- * application's PRIMARY interface reachable only by mouse or finger.
- * Everything here is what a keyboard can now do with them, which only a real
- * browser can confirm: `center.js`'s `bookNeighbour` is asserted exactly in
- * its own unit test, but whether the key actually reaches it and focus
- * actually follows is a browser-only question.
- *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
+ * The shelf's spines are painted pixels behind a hit-test - the
+ * application's primary interface for the mouse and finger. Everything here
+ * is what a keyboard can do with them, which only a real browser can
+ * confirm: `center.ts`'s `bookNeighbour` is asserted exactly in its own unit
+ * test, but whether the key actually reaches it and focus actually follows
+ * is a browser-only question.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,9 +43,9 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       const books = shelf.locator('button');
       await waitFor(async () => (await books.count()) > 0, 5000, 'the shelf mounted no books');
 
-      // ONE tab stop for forty controls. Forty would put forty presses between
-      // the map and the panel for every keyboard user, on a wall that is
-      // mostly a browsable index of keywords.
+      // One tab stop for the whole wall. A stop per book would put a press
+      // per spine between the map and the panel for every keyboard user, on
+      // a wall that is mostly a browsable index of keywords.
       assert.equal(
         await shelf.locator('button[tabindex="0"]').count(),
         1,
@@ -78,7 +71,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       const first = await inShelf();
       assert.ok(first !== null, 'Tab from the clear button must reach the shelf');
 
-      // Arrows move WITHIN the shelf: right along the wall's flat queue, down
+      // Arrows move within the shelf: right along the wall's flat queue, down
       // by a shelf. Both are `bookNeighbour`, which is asserted exactly in
       // center.test.ts - what only a browser can say is that the key actually
       // reaches it and focus actually follows.
@@ -96,8 +89,8 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       await page.keyboard.press('Tab');
       assert.equal(await inShelf(), null, 'Tab must leave the shelf, not walk it');
 
-      // The names carry what the button DOES, not just what the spine says -
-      // forty buttons called `brass` and `art nouveau` would say nothing about
+      // The names carry what the button does, not just what the spine says -
+      // buttons called `brass` and `art nouveau` would say nothing about
       // what pressing one is for.
       const nodes = await axNodes(page);
       const toolbar = axFind(nodes, 'toolbar', /shelf/);
@@ -158,10 +151,9 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
 
   test('a rearrangement says what it did and what is now under the cursor', async () => {
     const { page } = session;
-    // accessibility-plan.md §4.3 has said since it was written that "the new
-    // occupant is announced"; §8 item 4 recorded that phase C never wired it
-    // up. Standing still while the library reorders around you and hearing
-    // nothing is not an accessible rearrangement, whatever the animation does.
+    // Standing still while the library reorders around you and hearing
+    // nothing is not an accessible rearrangement, whatever the animation
+    // does: the new occupant must be announced.
     const live = page.locator('[role=status]');
     await page.locator('button.search-trigger').click();
     await landed(page, session.flightMs);
@@ -175,9 +167,9 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     );
     const said = (await live.textContent()) ?? '';
     assert.match(said, /\d+ rooms on the map/, `no size in the announcement: ${said}`);
-    // And where the reader now stands - the clause §4.3 asks for. An animated
-    // rearrangement parks the camera on the center, so that is the honest
-    // answer here rather than the cell the search was typed from.
+    // And where the reader now stands. An animated rearrangement parks the
+    // camera on the center, so that is the honest answer here rather than
+    // the cell the search was typed from.
     assert.match(
       said,
       /the center of the library|Room \d+|a Babel shelf|the far field/,

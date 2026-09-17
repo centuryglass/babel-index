@@ -180,8 +180,8 @@ test('distill mode\'s paired alternates are matched to the generic tiles by file
       'center_tile.png': fixture.png(1024, 768),
       'generic/v1.webp': fixture.webpVp8(1024, 768),
       'generic/v2.webp': fixture.webpVp8(1024, 768),
-      // Stems match v1/v2 despite a different extension and reverse file order,
-      // which is exactly the case index-based pairing would get wrong.
+      // Stems match v1/v2 despite a different extension and reverse file
+      // order - the case index-based pairing would get wrong.
       'generic_distill/v2.jpg': fixture.jpeg(1024, 768),
       'generic_distill/v1.jpg': fixture.jpeg(1024, 768),
       'generic_distill/stray.jpg': fixture.jpeg(1024, 768),

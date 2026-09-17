@@ -4,28 +4,20 @@
  * decode gets a new object - so the `img` object's own identity is already a
  * stable, zero-coordination cache key.
  *
- * Eviction mirrors `tiles.ts`'s own frame-aware LRU rather than reusing it:
- * `beginFrame()` bumps a monotonic counter, `get()` stamps whatever it
- * returns with the current frame, and anything not touched in the current or
- * previous frame is eligible for eviction once the cache is over budget -
- * same "current and previous frame are always protected" rule `tiles.ts`
- * itself follows, so a tile drawn last frame surviving into this one is
- * never evicted out from under a render still using it. This needs its own
- * budget independent of `tiles.ts`'s pyramid-level budgets (`pyramid.ts`) -
- * this cache is flat (one map, not one per level), and GPU memory pressure
- * is a different resource than the decoded-bitmap budget `tiles.ts` already
- * manages.
+ * Eviction mirrors `tiles.ts`'s frame-aware LRU rather than hooking into
+ * it: `beginFrame()` bumps a monotonic counter, `get()` stamps whatever it
+ * returns with the current frame, and over budget the cache drops anything
+ * not stamped in the current or previous frame - a tile drawn last frame is
+ * never evicted out from under a render still using it. The cache is a
+ * strong `Map`, and its budget is separate from `pyramid.ts`'s
+ * decoded-byte budgets; AGENTS.md's "The texture cache has its own eviction
+ * budget" bullet carries that reasoning.
  *
- * A `Map` (strong references), not a `WeakMap`: `tiles.ts` could otherwise
- * drop its own last reference to a bitmap this cache still holds a texture
- * for, with no way to know - eviction here has to be a decision this cache
- * makes deliberately, not something GC decides for it.
- *
- * Only handles a real `ImageBitmap` - the browser's actual `Drawable`. The
- * `LoadableImage` half of that union exists for `render.test.ts`'s
- * browser-free fakes, which this GL renderer has no equivalent for (its own
- * decision logic is tested against a recording `GLContext` fake instead -
- * see `glRenderer.test.ts`).
+ * Only uploads real `ImageBitmap`s - the `LoadableImage` half of
+ * `tiles.ts`'s `Drawable` exists for browser-free fakes, and under Node
+ * `ImageBitmap` is undefined, so every `get()` returns null here.
+ * `glRenderer.test.ts` accordingly injects a fake cache, and tests the
+ * renderer's decisions against a recording `GLContext` fake.
  */
 import type { GLContext } from './context.ts';
 
@@ -39,7 +31,7 @@ export interface GLTextureCache {
   /** Call once per frame, before any `get()` - bumps the eviction clock. */
   beginFrame(): void;
   get(gl: GLContext, drawable: unknown): GLTexture | null;
-  /** Drops every texture without freeing GPU state - for a lost context, where every GL object is already invalid. See `dispose()` for the normal teardown path. */
+  /** Drops every texture without freeing GPU state - the right shape for a lost context, whose handles are already invalid. Nothing calls it: `useMapRendererGL.ts`'s lost-context handling drops the whole renderer, caches included. See `dispose()` for the teardown that does have a caller. */
   reset(): void;
   /** Frees every resident texture via `gl.deleteTexture`, then drops them - for a context still alive (unlike `reset()`, which assumes it is not). */
   dispose(gl: WebGL2RenderingContext): void;

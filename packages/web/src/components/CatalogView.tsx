@@ -1,37 +1,38 @@
 /**
  * The catalog: the same corpus as one list, alphabetical by default and
- * ranked exactly like the map whenever a search is running - the two views'
- * idle orders are deliberately not the same array, since a shuffle is not a
- * list order anyone can read by eye (see `alphabeticalOrder` in catalog.js).
+ * ranked like the map whenever a search is running - the two views' idle
+ * orders are not the same array, since a shuffle is not a list order anyone
+ * can read by eye (see `alphabeticalOrder` in `lib/catalog.ts`).
  *
- * The map is where you are STANDING - one cursor, whatever is around it. The
- * catalog is the RANKING - what matched, all of it, every tile unique and
- * nothing repeated. Different questions, which is why both exist and why
- * neither is a fallback for the other (see `docs/catalog-plan.md` §7 for what
- * that obliges, and why this is not the accessibility mode).
+ * The map is where you are standing - one cursor, whatever is around it.
+ * The catalog is the ranking - what matched, all of it, every tile unique
+ * and nothing repeated. Different questions, which is why both exist, why
+ * neither is a fallback for the other, and why this is not the
+ * accessibility mode (AGENTS.md, "The catalog, and the two modes").
  *
- * Everything this has to be right about lives in `catalog.js` and is asserted
- * without a browser: which rooms are on a page, which pages stay mounted, how
- * tall a spacer must be, which pyramid level a thumbnail asks for. What is here
- * is the rendering and the scroll listener.
+ * Everything this has to be right about lives in `lib/catalog.ts` and is
+ * asserted without a browser: which rooms are on a page, which pages stay
+ * mounted, how tall a spacer must be, which pyramid level a thumbnail asks
+ * for. What is here is the rendering and the scroll listener; the pixel
+ * constants below are the exception - the pieces of the CSS the spacer
+ * arithmetic has to mirror.
  *
  * ### Two paging modes, one mount rule
  *
- * Pagination mounts one page; scrolling mounts a window of them and replaces
- * the rest with spacers of exactly the height they would have occupied. That is
- * the ONLY difference - both slice `pageOf`, so a room cannot appear at a
- * different position depending on how the reader is paging.
+ * Pagination mounts one page; scrolling mounts a window of them and
+ * replaces the rest with spacers of exactly the height they would have
+ * occupied. That is the only difference: both slice `pageOf`, so a room
+ * cannot appear at a different position depending on how the reader pages.
  *
  * ### Why the rows are ordinary DOM and not a listbox
  *
- * `accessibility-plan.md` §3.7 argues the linear reading of the corpus should
- * be a `listbox` - it announces "3 of 511" natively and supports type-ahead.
- * That argument is about the panel's ranked results, which are bare names, and
- * it does not carry here: a listbox option cannot contain the keyword chips
- * every row has, and stripping the chips to win the role would cost more than
- * the role is worth. So this is a `<ul>` whose rows each carry a heading and one
- * primary control, and `aria-setsize`/`aria-posinset` on the `<li>` do the
- * "3 of 511" part by hand.
+ * The case for `listbox` - native "3 of 511" announcement and type-ahead -
+ * holds for the panel's ranked results, which are bare names. It does not
+ * carry here: a listbox option cannot contain the keyword chips every row
+ * has, and stripping the chips to win the role would cost more than the
+ * role is worth. So this is a `<ul>` whose rows each carry a heading and
+ * one primary control, and `aria-setsize`/`aria-posinset` on the `<li>` do
+ * the "3 of 511" part by hand.
  */
 import type { CSSProperties, FormEventHandler, Ref, RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -75,35 +76,35 @@ type Highlight = {
 /**
  * Where the row stops having width to spend on anything but the room itself.
  *
- * Measured from the list, not from a media query, because the two layouts do
- * not differ only in CSS: the narrow one gives the title a second line, and
- * that line has to be paid for in `TEXT_MIN` and the chip/story reserves or
- * the spacer arithmetic every unmounted page rests on is wrong for every row.
- * One flag, read by the class name and by the constants together, is what
- * keeps them from disagreeing - a media query could only move the CSS half.
+ * Measured from the list, not from a media query, because the two layouts
+ * do not differ only in CSS: the narrow one gives the title a second line,
+ * and that line has to be paid for in `TEXT_MIN` and the chip/story
+ * reserves, or the spacer arithmetic every unmounted page rests on is wrong
+ * for every row. One flag, read by the class name and by the constants
+ * together, is what keeps them from disagreeing - a media query could only
+ * move the CSS half.
  *
- * A width rather than an orientation: a phone in portrait is the case that
- * prompted this, but a split-screen landscape phone and a narrow desktop
- * window are the same row with the same problem.
+ * A width rather than an orientation: portrait phones, split-screen
+ * landscape phones and narrow desktop windows all produce the same row
+ * with the same problem.
  */
 const NARROW_PX = 560;
 
 /**
- * Where a row loses the width to show a thumbnail BESIDE any text at all.
+ * Where a row loses the width to show a thumbnail beside any text at all.
  *
- * `NARROW_PX` already drops the map link and lets the title wrap rather than
- * shrink the two columns forever - but a text column a couple dozen
- * characters wide is unreadable rubble, not a smaller version of the wide
- * row. Below this, a row is a different SHAPE rather than a smaller one:
- * rank/title/favorite get their own full-width line, the picture runs full
- * width beneath it, and the keywords and story move behind a "keywords &
- * story" link into the room overlay (`onExpand`) that already exists for
- * this, rather than being crushed into a sliver beside the tile.
+ * `NARROW_PX` already drops the map link and lets the title wrap rather
+ * than shrink the two columns forever - but a text column a couple dozen
+ * characters wide is rubble, not a smaller version of the wide row. Below
+ * this, a row is a different shape: rank/title/favorite get their own
+ * full-width line, the picture runs full width beneath it, and the
+ * keywords and story move behind a "keywords & story" link into the room
+ * overlay (`onExpand`).
  *
- * A width below `NARROW_PX`, same reasoning as that constant - measured from
- * the list, not a media query, because the ultra-narrow shape changes what
- * `rowHeight`'s spacer arithmetic has to account for (`stackedRowHeight`
- * instead of `rowHeight`), not just how the row looks.
+ * Measured from the list like `NARROW_PX`, for the same reason: the
+ * ultra-narrow shape changes what `rowPx` accounts for
+ * (`stackedRowHeight` instead of the flow-area sum), not just how the row
+ * looks.
  */
 const ULTRA_NARROW_PX = 400;
 
@@ -111,13 +112,14 @@ const ULTRA_NARROW_PX = 400;
  * How wide an ultra-narrow row's thumbnail is - the row's own width, not a
  * fraction of it like `thumbWidth`, since the picture runs full-bleed
  * beneath the name row rather than sharing the row with a text column.
- * Trimmed by the two nested horizontal insets around it (the row's own
- * padding and the card's, 16px a side each - see `.catalog-row`/
- * `.catalog-row .catalog-body.paper-sheet` in style.css) and by the mat
- * border on both sides, so the image (plus its mat) lands flush with the
- * card's edges instead of overflowing them - `matPad` is `CatalogView`'s
- * `MAT_PAD`, passed in rather than read as a module constant here so this
- * stays a pure function of its arguments.
+ *
+ * Trimmed by the two nested horizontal insets around it on both sides
+ * (`ROW_H_PAD` + `CARD_H_PAD` doubled = `ULTRA_ROW_HPAD`; the padding
+ * rules live on `.catalog-row`/`.catalog-row .catalog-body.paper-sheet` in
+ * style.css) and by the mat border on both sides, so the image plus its
+ * mat lands flush with the card's edges rather than overflowing them.
+ * `matPad` is `CatalogView`'s `MAT_PAD` passed in as an argument, keeping
+ * this a pure function.
  */
 const ULTRA_ROW_HPAD = 64;
 const ultraThumbWidth = (available: number, matPad: number): number =>
@@ -126,16 +128,16 @@ const ultraThumbWidth = (available: number, matPad: number): number =>
 /**
  * The center row's own outer margin and inner padding, one side each -
  * `.catalog-center.paper-sheet`'s `margin`/`padding` in style.css. JS and
- * CSS must agree on both for the same reason `CARD_PAD` does: together they
- * are what `centreUltraThumbWidth` trims the full-bleed thumbnail by.
+ * CSS must agree on both for the same reason `CARD_PAD` does: together
+ * they are what `centreUltraThumbWidth` trims the full-bleed thumbnail by.
  */
 const CENTRE_MARGIN = 16;
 const CENTRE_PAD = 16;
 /**
- * How wide the center row's own thumbnail is under ultra-narrow - full-bleed
- * across the sheet exactly like `ultraThumbWidth` gives every other row, just
- * trimmed by the center sheet's own margin and padding on both sides
- * (`CENTRE_MARGIN`, `CENTRE_PAD`) rather than a room row's row-plus-card inset.
+ * How wide the center row's own thumbnail is under ultra-narrow:
+ * full-bleed like `ultraThumbWidth` gives every other row, trimmed by the
+ * center sheet's own margin and padding rather than a room row's
+ * row-plus-card inset.
  */
 const centreUltraThumbWidth = (available: number, matPad: number): number =>
   Math.max(80, available - 2 * CENTRE_MARGIN - 2 * CENTRE_PAD - 2 * matPad);
@@ -143,73 +145,71 @@ const centreUltraThumbWidth = (available: number, matPad: number): number =>
 /**
  * How wide a thumbnail is, from the width the list has to spend.
  *
- * Bounded at both ends rather than a fraction outright: below about 120px a
- * wall of books is an unreadable smudge, and above 240 the story beside it gets
- * squeezed into a column too narrow to read. Between those it tracks the
- * display, so a phone gets a smaller tile and more words.
+ * Bounded at both ends rather than a fraction outright: under the floor a
+ * wall of books is an unreadable smudge, over the cap the story column
+ * beside it is too narrow to read. Between them it tracks the display, so
+ * a phone gets a smaller tile and more words.
  *
- * The fraction itself is bigger under `NARROW_PX`: a narrow row's text column
- * needs a fixed amount of vertical space regardless of the tile (the name row,
- * a line of story, the button), so a tile sized off the same fraction as a
- * wide row sits far short of that and leaves the row's own dark background
- * showing beneath it. Giving the tile more of a narrow row's width is half of
- * closing that gap - trimming the fixed text reserves for narrow is the other
- * half, in the chip/story accounting below.
+ * The fraction is bigger under `NARROW_PX`: a narrow row's text column
+ * needs a fixed amount of vertical space regardless of the tile (the name
+ * row, a line of story, the button), so a tile sized off the wide-row
+ * fraction sits far short of that and leaves the row's dark background
+ * showing beneath it. The bigger fraction closes half of that gap;
+ * trimming the fixed text reserves for narrow (`TEXT_MIN`,
+ * `CARD_PAD_NARROW`) is the other half.
  */
 const thumbWidth = (available: number): number =>
   Math.round(Math.min(240, Math.max(120, available * (available < NARROW_PX ? 0.34 : 0.26))));
 
 /** A row's vertical padding, both halves - the one number CSS and JS must agree on. */
 const ROW_PAD = 14;
-/** A row's horizontal padding, ONE side - `.catalog-row`'s `padding: 7px 16px` in style.css. Used to work out the score strip's real width. */
+/** A row's horizontal padding, one side - `.catalog-row`'s `padding: 7px 16px` in style.css. Used to work out the score strip's real width. */
 const ROW_H_PAD = 16;
-/** The card's horizontal padding, ONE side - `.catalog-row .catalog-body.paper-sheet`'s `padding: … 16px`. Same purpose as `ROW_H_PAD`. */
+/** The card's horizontal padding, one side - `.catalog-row .catalog-body.paper-sheet`'s `padding: … 16px`. Same purpose as `ROW_H_PAD`. */
 const CARD_H_PAD = 16;
 
 /**
- * The paper card's own vertical padding, both halves - a room sits on a cream
- * `.paper-sheet` (see `.catalog-row .catalog-body.paper-sheet` in style.css),
- * and that inset costs height the story would otherwise have. Charged to the
- * row alongside `ROW_PAD`, because the card wraps both of `rowHeight`'s
- * columns - the thumbnail floats inside it. Same fixed-height invariant the
- * spacer arithmetic rests on. Must match the CSS.
+ * The paper card's own vertical padding, both halves -
+ * `.catalog-row .catalog-body.paper-sheet` in style.css. The card wraps
+ * both of the flow area's columns - the thumbnail floats inside it - so
+ * this inset costs height the story would otherwise have, and the fixed
+ * row it feeds charges it like `ROW_PAD`. Must match the CSS.
  */
 const CARD_PAD = 24;
 /**
- * The same inset, trimmed for narrow rows - `.catalog.narrow .catalog-row
- * .catalog-body.paper-sheet` in style.css. A narrow row is already tight on
- * height (a small tile, a wrapped title, the same fixed chrome as a wide
- * row), so giving back a few pixels of padding here is real room for the
- * chips/story clamps below rather than wasted whitespace, unlike `CARD_PAD`
- * on a wide row where the tile usually sets the height anyway.
+ * The same inset under `.catalog.narrow` (style.css). A narrow row is
+ * already tight on height - small tile, wrapped title, the same fixed
+ * chrome as a wide row - so a few pixels of padding back go into the
+ * chip/story clamps rather than sitting as whitespace; on a wide row the
+ * tile usually sets the height anyway.
  */
 const CARD_PAD_NARROW = 16;
 
 /**
- * The thumbnail's paper mat - a thin cream border around every tile image,
- * one side's worth. It is a CSS `border` (`--catalog-mat` below), not
- * padding, so the absolutely-positioned overlays on the center row's
- * thumbnail (the open-book hotspot, the distill toggle) keep landing on the
- * image itself rather than needing their own offset - see the mat's own
- * comment in style.css. Priced into `rowHeight` exactly like `CARD_PAD`, so
- * the row still matches the mat's full height and the black gap between rows
+ * The thumbnail's paper mat - a thin cream border around every tile
+ * image, one side's worth. It is a CSS `border` (`--catalog-mat` below),
+ * not padding, so the absolutely-positioned overlays on the center row's
+ * thumbnail (the open-book hotspot, the distill toggle) keep landing on
+ * the image itself rather than needing their own offset - see the mat's
+ * comment in style.css. Priced into the row's height like `CARD_PAD`, so
+ * the row still matches the mat's full height and the gap between rows
  * never widens.
  */
 const MAT_PAD = 6;
 
 /**
- * What sits above and below the story and the chips inside a row, and how
- * tall one line of story is - what `chipLines` works its clamp out against,
- * and what `TEXT_MIN` is built from.
+ * What sits above and below the story inside a row, and how tall one line
+ * of story is - what `chipLines` works its clamp out against, and what
+ * `TEXT_MIN` is built from.
  *
- * `TEXT_CHROME_PX` covers the name row and the "read the rest" button -
- * INCLUDING on rows that do not show one. Reserving only where the button
- * appears would need the clamp to vary per row, and it is uniform by design;
- * reserving nowhere is what made the button invisible on a phone, which is
- * the display it matters most on. A row without one carries a little slack
- * instead, which is the cheaper mistake. Chips are no longer folded into this
- * as a flat "two lines" - see `CHIP_LINE_PX` below, which is what replaced
- * that guess with the row's actual leftover space.
+ * `TEXT_CHROME_PX` covers the name row and the "read the rest" button, and
+ * it is reserved on every row, including the ones that show no button. A
+ * per-row reserve would make the clamp vary per row; skipping the reserve
+ * clipped the button out of existence on the narrow displays that need it
+ * (AGENTS.md, "A fixed row cannot show everything"). A row without one
+ * carries a little slack instead. The chips are not folded into it as a
+ * flat line count - `CHIP_LINE_PX` works their clamp out of the row's
+ * actual leftover space.
  */
 const TEXT_CHROME_PX = 50;
 const STORY_LINE_PX = 19;
@@ -223,11 +223,10 @@ const STORY_LINE_PX = 19;
  * reserved for it cannot be allowed to drift.
  *
  * The head stays one line even though `ULTRA_NARROW_PX < NARROW_PX` means
- * `.narrow`'s two-line title clamp is also in force - style.css overrides it
+ * `.narrow`'s two-line title clamp is also in force: style.css overrides it
  * back to a single ellipsised line for `.ultra-narrow` specifically, because
- * the head is now the row's own full width rather than a text column beside
- * a floated tile, and has room for the title on one line that the narrow
- * shape never did.
+ * there the head has the row's own full width rather than a text column
+ * beside a floated tile.
  */
 const ULTRA_HEAD_PX = 32;
 const ULTRA_DETAILS_PX = 30;
@@ -241,21 +240,20 @@ const ULTRA_DETAILS_PX = 30;
 const ULTRA_STACK_GAP = 8;
 
 /**
- * The chips' own line height, CSS gap included - the pixel cost `chipLines`
- * charges per line, and what `--catalog-chips-max` below hands to
- * `.catalog-row .chips`'s `max-height` so the two never disagree. Measured
- * against the real rendered chip (24.5px tall) plus `.chips`'s own 5px wrap
- * gap, rounded up rather than down - a budget that undercounts the real
- * pitch clips the last allowed line instead of showing it whole, which is
- * the same bug this whole change exists to fix.
+ * The chips' own line height, CSS gap included - the pixel cost
+ * `chipLines` charges per line, and what `--catalog-chips-max` hands to
+ * `.catalog-row .chips`'s `max-height`; the two must never disagree. It is
+ * the real chip height (24.5px rendered) plus `.chips`'s 5px wrap gap,
+ * rounded up rather than down: a budget that undercounts the pitch clips
+ * the last allowed line instead of showing it whole.
  *
  * Bounded at `CHIP_LINES_MAX`/`_NARROW` rather than left to grow with
- * whatever a tall row leaves over: a corpus room can carry many keywords, and
- * nothing stops the wall of chips from being the tallest thing in the row if
- * the cap were the only budget. Narrow gets one more line than wide because a
- * narrow text column is where a chip is most likely to already be alone on
- * its own line - the case a flat two-line cap silently clipped a third
- * keyword in, with headroom to spare elsewhere in the very same row.
+ * whatever a tall row leaves over: a corpus room can carry many keywords,
+ * and nothing stops a chip wall from being the tallest thing in the row if
+ * the cap were the only budget. Narrow gets one more line than wide because
+ * a narrow text column is where a chip is most likely to already be alone
+ * on its own line - the case a flat cap clips silently, with headroom to
+ * spare elsewhere in the very same row.
  */
 const CHIP_LINE_PX = 30;
 const CHIP_LINES_MAX = 2;
@@ -265,35 +263,35 @@ const CHIP_LINES_MAX_NARROW = 3;
  * What the text column needs when the tile is too small to set the row's
  * height: the name row and button (`TEXT_CHROME_PX`), the most chip lines a
  * narrow row is ever allowed (`CHIP_LINES_MAX_NARROW`), and one line of
- * story - derived from those rather than a separate guess, so a row is never
- * sized too short for the chip budget `chipLines` is about to compute against
- * it. `rowHeight` takes whichever of the two columns is taller.
+ * story - derived from those rather than a separate guess, so a row is
+ * never sized too short for the chip budget `chipLines` is about to compute
+ * against it. The row's height is whichever of the two columns is taller.
  */
 const TEXT_MIN = TEXT_CHROME_PX + CHIP_LINES_MAX_NARROW * CHIP_LINE_PX + STORY_LINE_PX;
 /**
  * The score strip's arithmetic, while a search is running.
  *
- * The strip sits in normal flow BELOW the fixed-height flow area that carries
- * the tile, name, chips and story, so its top rule always lands under the
- * image rather than crossing it (the layout notes' "make the horiz rule stop
- * being full-width unless it lands beneath the image"), and it always gets the
- * card's full width - no inset stealing room from the columns.
+ * The strip sits in normal flow below the fixed-height flow area that
+ * carries the tile, name, chips and story, so its top rule always lands
+ * under the image rather than crossing it, and it always gets the card's
+ * full width - no inset stealing room from the columns.
  *
  * It is a full-width "match certainty" composite line plus up to
- * `SCORE_DETAIL_LINES` per-axis detail lines (tag, title, story, clip). Those
- * flow into columns that are content-sized and left-aligned (not stretched to
- * fill), and once the row is wide enough to give every detail its OWN column
- * the composite joins them as one more column (`oneRow`) instead of taking a
- * line to itself. `scoreLayoutFor` derives the column count and the resulting
- * line count purely from the width the strip has, so the reserved height is
- * uniform across every row - reserving the worst case (all four details) the
- * same way `TEXT_CHROME_PX` reserves the "read the rest" button on rows that
- * don't show one, since a height that varied per room would make the sliding
- * window's spacer arithmetic wrong for that row.
+ * `SCORE_DETAIL_LINES` per-axis detail lines (tag, title, story, clip).
+ * Those flow into columns that are content-sized and left-aligned (not
+ * stretched to fill), and once the row is wide enough to give every detail
+ * its own column the composite joins them as one more column (`oneRow`)
+ * instead of taking a line to itself. `scoreLayoutFor` derives the column
+ * count and the resulting line count purely from the width the strip has,
+ * so the reserved height is uniform across every row - reserving the worst
+ * case (all `SCORE_DETAIL_LINES` details) the same way `TEXT_CHROME_PX`
+ * reserves the "read the rest" button on rows that don't show one: a height
+ * that varied per room would make the sliding window's spacer arithmetic
+ * wrong for that row.
  *
- * `SCORE_LINE_PX`/`SCORE_PAD_PX` are the rendered line pitch and the strip's own
- * border+padding (`.score-strip` in style.css) - the numbers CSS and this
- * reserve must agree on, same contract as `CHIP_LINE_PX`.
+ * `SCORE_LINE_PX`/`SCORE_PAD_PX` are the rendered line pitch and the
+ * strip's own border+padding (`.score-strip` in style.css) - the numbers
+ * CSS and this reserve must agree on, same contract as `CHIP_LINE_PX`.
  */
 const SCORE_DETAIL_LINES = 4;
 const SCORE_LINE_PX = 15;
@@ -305,7 +303,7 @@ const SCORE_GAP_PX = 22;
  * around 135-150px, so this both caps the rare long one (`.score-line`'s
  * `max-width` in style.css, ellipsised past it) and is the width the fit math
  * budgets per column - a real ceiling rather than a guess at the widest
- * possible line, which is what lets more columns fit than the old 250 estimate.
+ * possible line.
  */
 const SCORE_DETAIL_COL_PX = 200;
 /** About how wide the composite "match certainty" line is - its own column in the one-row layout. */
@@ -314,15 +312,15 @@ const SCORE_COMPOSITE_PX = 225;
  * The score strip's column layout for a given strip width: how many columns the
  * details take, whether the composite line joins them as one more column on a
  * single row, and the total line count that follows (what the reserved height
- * is built from). `columnsFor` is the exact "how many W-wide columns fit with a
- * gap between each" - N columns need N·W + (N-1)·gap, so it credits back the
- * last column's missing gap instead of charging a full column+gap to every one.
+ * is built from). `columnsFor` answers "how many W-wide columns fit with a gap
+ * between each" - N columns need N·W + (N-1)·gap - so it credits back the last
+ * column's missing gap instead of charging a full column+gap to every one.
  */
 function columnsFor(availPx: number, colPx: number): number {
   return Math.max(0, Math.floor((availPx + SCORE_GAP_PX) / (colPx + SCORE_GAP_PX)));
 }
 function scoreLayoutFor(stripWidthPx: number): { oneRow: boolean; cols: number; lines: number } {
-  // One row when the four detail columns AND the composite column all fit side
+  // One row when all four detail columns and the composite column fit side
   // by side (five items, four gaps between them).
   const oneRowPx = SCORE_DETAIL_LINES * SCORE_DETAIL_COL_PX + SCORE_COMPOSITE_PX + SCORE_DETAIL_LINES * SCORE_GAP_PX;
   if (stripWidthPx >= oneRowPx) return { oneRow: true, cols: SCORE_DETAIL_LINES, lines: 1 };
@@ -345,22 +343,23 @@ const TITLE_LINE_PX = 16;
 /**
  * How wide a shelf link is, in characters.
  *
- * The shelf is a GRID of equal cells rather than a wrapped row of pill-shaped
- * buttons sized to their own text: forty tags of forty different lengths read
- * as rubble, and the wall they stand for is a grid of identical spines. So one
- * width, taken from the longest title actually on the wall so nothing is
- * clipped that does not have to be, and bounded - one very long search term
- * should not set the column width for the other thirty-nine.
+ * The shelf is a grid of equal cells rather than a wrapped row of pills
+ * sized to their own text: tags of many different lengths read as rubble,
+ * and the wall they stand for is a grid of identical spines. So one width,
+ * taken from the longest title actually on the wall (`shelfColumnCh`) so
+ * nothing is clipped that does not have to be - bounded, so one very long
+ * search term cannot set the column width for every other book.
  */
 const SHELF_MIN_CH = 9;
 const SHELF_MAX_CH = 18;
 
 /**
- * How long a room's row stays visibly picked out after "show in the catalog"
- * lands it - long enough to find on a page full of identical rows, short
- * enough that it reads as a one-time announcement rather than a persistent
- * marker of anything. `SPOTLIGHT_MS` names the CSS animation's own duration
- * (`catalog-spotlight` in index.html) so the two cannot drift apart.
+ * How long a room's row stays visibly picked out after "show in the
+ * catalog" lands it - long enough to find on a page full of identical
+ * rows, short enough to read as a one-time announcement rather than a
+ * standing marker. The CSS animation named `catalog-spotlight` in style.css
+ * runs this same duration; the timer here and the animation there have to
+ * be changed together.
  */
 const SPOTLIGHT_MS = 1600;
 const shelfColumnCh = (slots: Slot[]): number =>
@@ -461,31 +460,32 @@ export function CatalogView({
   const contentZoom = useContentZoom(scrollRef);
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
-  // The distill toggle's own decoded pixel size, read off its `<img>` once it
-  // loads rather than hardcoded - see the distill fraction comment below.
-  // Starts at {0, 0} so the button has no footprint (but the right corner it
-  // anchors to) until the first load reports real numbers.
+  // The distill toggle's own decoded pixel size, read off its `<img>` once
+  // it loads rather than hardcoded - see `distillW`. Starts at {0, 0} so
+  // the button has no footprint (but the right corner it anchors to) until
+  // the first load reports real numbers.
   const [distillIconSize, setDistillIconSize] = useState({ w: 0, h: 0 });
-  // Where the center row's cover picture sits on the shelf's own column grid,
-  // when narrow (`.catalog.narrow .catalog-center` in style.css). The picture
-  // is a grid item spanning `picCols` columns and `picRows` rows of the SAME
-  // grid the spine buttons flow through, so the two columns beside it and the
-  // columns beneath it land on one set of grid lines - the alignment the
-  // float could not give. `picNext`/`subStart` are the grid LINES the title
-  // and index-shelf line start on (CSS grid line numbers take a plain custom
-  // property but not a `calc()`, so the addition is done here). Filled by the
-  // effect below from the grid's own resolved track sizes; the defaults are a
+  // Where the center row's cover picture sits on the shelf's own column
+  // grid, when narrow (`.catalog.narrow .catalog-center` in style.css). The
+  // picture is a grid item spanning `picCols` columns and `picRows` rows of
+  // the same grid the spine buttons flow through, so both column sets land
+  // on one set of grid lines - a float cannot share grid lines, and the
+  // center row cannot use one (AGENTS.md, "The catalog, and the two modes").
+  // `picNext`/`subStart` are grid lines the title and index-shelf line
+  // start on: CSS grid line numbers take a plain custom property but not a
+  // `calc()`, so the addition happens here. The fitting effect below fills
+  // these from the grid's own resolved track sizes; the defaults are a
   // sane first paint before it measures.
   const [centreGrid, setCentreGrid] = useState({
     picCols: 2, picNext: 3, picRows: 4, subStart: 2, subRows: 1, titleRows: 1,
   });
-  // The center row's real height. It is the ONE row allowed to size itself -
-  // it holds the whole shelf, forty titles that wrap to as many lines as the
-  // width needs, and clipping them to a tile's height would hide the newest
-  // searches. It can be variable precisely because it sits outside the paging
-  // arithmetic: the spacers stand in for PAGED rows, and this is not one. What
-  // the arithmetic does need is how tall it actually is, which is measured
-  // rather than assumed.
+  // The center row's real height. It is the one row allowed to size itself:
+  // it holds the whole shelf - every title, wrapping to as many lines as
+  // the width needs - and clipping them to a tile's height would hide the
+  // newest searches. It can be variable because it sits outside the paging
+  // arithmetic: the spacers stand in for paged rows, and this is not one.
+  // What the arithmetic does need is how tall it actually is, which is
+  // measured rather than assumed.
   const [leadPx, setLeadPx] = useState(0);
   // The row "show in the catalog" is currently picking out - see
   // `spotlightId`'s effect below. Distinct from `spotlightId` itself: this is
@@ -523,43 +523,39 @@ export function CatalogView({
   // (`ULTRA_NARROW_PX < NARROW_PX`), so the map-link/wrapped-title trade
   // above applies underneath it too.
   const ultraNarrow = geom.width < ULTRA_NARROW_PX;
-  // The mat is halved on a widescreen row, where the larger thumbnail no longer
-  // needs the full cream frame to read as a plate on the sheet; a narrow row's
-  // smaller tile keeps it. Everything the mat is priced into below reads this
-  // rather than `MAT_PAD` directly so the row height stays exact at either
-  // width (`ultraNarrow` implies `narrow`, so a phone row keeps the full mat).
+  // The mat is halved on a widescreen row, where the larger thumbnail does
+  // not need the full cream frame to read as a plate on the sheet; a narrow
+  // row's smaller tile keeps it. Everything the mat is priced into below
+  // reads this rather than `MAT_PAD` directly, so the row height stays exact
+  // at either width (`ultraNarrow` implies `narrow`, so a phone row keeps
+  // the full mat).
   const matPad = narrow ? MAT_PAD : MAT_PAD / 2;
-  // The center row's own thumbnail - `thumbWidth`'s fixed two-column
-  // fraction ordinarily, but full-bleed under ultra-narrow exactly like
-  // `ultraThumbWidth` gives every other row, just trimmed by the sheet's own
-  // padding (`CENTRE_PAD`, both sides - `.catalog.ultra-narrow
-  // .catalog-center.paper-sheet` in style.css) and the mat border instead of
-  // a room row's separate row-plus-card inset.
+  // The center row's own thumbnail - `thumbWidth`'s fraction ordinarily,
+  // full-bleed under ultra-narrow via `centreUltraThumbWidth`.
   const thumbPx = ultraNarrow ? centreUltraThumbWidth(geom.width, matPad) : thumbWidth(geom.width);
-  // The distill toggle as FRACTIONS of the thumbnail, not pixels: the map's
-  // canvas overlay (`distillIconScreenRect`) scales the icon by the tile's
-  // pixels-per-cell-width over `BASE_TILE.w`, so as a share of the tile the
-  // icon is a constant `iconSize / BASE_TILE`, independent of how the
-  // thumbnail is sized. Percentages let the picture be sized by the grid
-  // (see the center-row layout below) without a pixel rect to keep in step -
-  // it anchors to the bottom right corner (style.css) at these two sizes.
-  // `distillIconSize` starts at {0, 0} (0% - the button has no footprint
-  // until the `<img>` reports its decoded size on load), same "read the real
-  // art, don't hardcode it" reasoning as `render.ts`'s canvas draw.
+  // The distill toggle as fractions of the thumbnail, not pixels: the map's
+  // canvas overlay (`distillIconScreenRect`, `distillToggle.ts`) scales the
+  // icon by the tile's pixels-per-cell-width over `BASE_TILE.w`, so as a
+  // share of the tile the icon is a constant `iconSize / BASE_TILE`,
+  // whatever the thumbnail's size. Percentages let the picture be sized by
+  // the grid without a pixel rect to keep in step; the anchor is the
+  // bottom-right corner (style.css). Like the canvas draw, the real art's
+  // size is read at load - the `<img>`'s own `onLoad` reports it - not
+  // hardcoded.
   const distillW = distillIconSize.w ? `${(distillIconSize.w / BASE_TILE.w) * 100}%` : '0';
   const distillH = distillIconSize.h ? `${(distillIconSize.h / BASE_TILE.h) * 100}%` : '0';
-  // Fit the cover picture to a whole number of the shelf's own grid columns so
-  // the spines above and below it share one set of column lines. Read the
-  // grid's RESOLVED track sizes rather than mirroring the CSS math in JS - the
-  // browser has already stretched `minmax(--shelf-col, 1fr)` to the real
+  // Fit the cover picture to a whole number of the shelf's own grid columns
+  // so the spines above and below share one set of column lines. Read the
+  // grid's resolved track sizes rather than mirroring the CSS math in JS:
+  // the browser has already stretched `minmax(--shelf-col, 1fr)` to the real
   // column width, and `-1` handles the last line without JS ever counting
-  // columns. Both wide and narrow use this one grid (a wide display just fits
-  // more columns); only a phone (`ultraNarrow`) stacks into a single column
-  // and ignores these vars. Runs pre-paint (`useLayoutEffect`) so the fitted
+  // columns. Wide and narrow share this one grid (a wide display just fits
+  // more columns); only `ultraNarrow` stacks into a single column and
+  // ignores these vars. Runs pre-paint (`useLayoutEffect`) so the fitted
   // spans are in place before the row is ever shown; `centreGrid` is in the
   // deps so a title or index-line that reflows to a new height (its width
-  // changes with `picCols`) settles in a second pass, and the equality guard
-  // stops there.
+  // changes with `picCols`) settles in a second pass, and the equality
+  // guard stops there.
   useLayoutEffect(() => {
     const el = centreRowRef.current;
     if (!el || ultraNarrow) return;
@@ -573,14 +569,15 @@ export function CatalogView({
     const rowGap = parseFloat(cs.rowGap) || 0;
     const rowH = parseFloat(cs.gridAutoRows) || 24;
     const rowsFor = (h: number) => Math.max(1, Math.ceil((h + rowGap) / (rowH + rowGap)));
-    // Round the span UP, never down: the cover picture is allowed to be larger
-    // than the spines beneath it, but snapping it smaller than its natural
-    // width is not.
+    // Round the span up, never down: the cover picture is allowed to be
+    // larger than the spines beneath it, but snapping it smaller than its
+    // natural width is not.
     const picCols = Math.max(1, Math.min(cols - 1, Math.ceil((thumbPx + colGap) / (colW + colGap))));
-    // The picture's row span comes from its own MEASURED height (its width is
-    // now `picCols` columns), not from aspect-and-border arithmetic that would
-    // have to track the mat border and box-sizing by hand. It may be a pass
-    // behind when `picCols` just changed - `centreGrid` in the deps settles it.
+    // The picture's row span comes from its own measured height (its width
+    // is now `picCols` columns), not from aspect-and-border arithmetic that
+    // would have to track the mat border and box-sizing by hand. It may be a
+    // pass behind when `picCols` just changed - `centreGrid` in the deps
+    // settles it.
     const wrapEl = el.querySelector('.catalog-tile-wrap');
     const nameEl = el.querySelector('.catalog-name');
     const subEl = el.querySelector('.catalog-sub');
@@ -611,14 +608,14 @@ export function CatalogView({
   const stripWidth = Math.max(0, geom.width - 2 * ROW_H_PAD - 2 * CARD_H_PAD);
   const scoreLayout = scoreLayoutFor(stripWidth);
   const scoreH = scoring ? scoreStripHeight(scoreLayout.lines) : 0;
-  // The flow area carries the tile, name, chips and story at a FIXED height; the
-  // score strip sits in normal flow beneath it. Every row grows together when a
-  // search starts, because every row gains the same score band under the same
-  // flow - so the rows stay uniform and the spacers stay exact, which is the
-  // property the sliding window rests on. `flowH` is what the tile (or the text
-  // minimum, whichever is taller) needs; the score is added on top rather than
-  // competing with the tile for one shared band, so its rule never has to sit
-  // beside the image.
+  // The flow area carries the tile, name, chips and story at a fixed height;
+  // the score strip sits in normal flow beneath it. Every row grows together
+  // when a search starts, because every row gains the same score band under
+  // the same flow - so the rows stay uniform and the spacers stay exact,
+  // which is the property the sliding window rests on. `flowH` is what the
+  // tile (or the text minimum, whichever is taller) needs; the score is
+  // added on top rather than competing with the tile for one shared band, so
+  // its rule never has to sit beside the image.
   const flowH = ultraNarrow ? 0 : Math.max(tileHeight(rowThumbPx) + 2 * matPad, TEXT_MIN + titleReserve);
   const rowPx = ultraNarrow
     ? stackedRowHeight(rowThumbPx, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, matPad, ULTRA_STACK_GAP)
@@ -638,23 +635,15 @@ export function CatalogView({
   });
   const { first, last } = mountedPages(active, pages, window_);
 
-  // How many lines of chips a row can show, derived from what is actually
-  // left rather than a flat two-line guess - see `chipLines`/`CHIP_LINE_PX`.
-  // Reserving one story line up front (rather than letting chips claim the
-  // whole leftover) is what keeps a room with many keywords from squeezing
-  // the story out entirely; the cap (`CHIP_LINES_MAX`/`_NARROW`) is what
-  // keeps a very tall row's chip wall from growing without bound. Whatever
-  // does not fit is counted and reported by the row itself (`chipOverflow`
-  // in `CatalogRow`) rather than disappearing - no reserve can promise that
-  // a room's keywords fit at a given width, so the row says so instead.
-  // How many lines of chips a row can show, derived from the FLOW area's height
-  // (the score sits below it now, not inside it) rather than a flat two-line
-  // guess - see `chipLines`/`CHIP_LINE_PX`. Reserving one story line up front
-  // (rather than letting chips claim the whole leftover) is what keeps a room
-  // with many keywords from squeezing the story out entirely; the cap
-  // (`CHIP_LINES_MAX`/`_NARROW`) is what keeps a very tall row's chip wall from
-  // growing without bound. Whatever does not fit is counted and reported by the
-  // row itself (`chipOverflow` in `CatalogRow`) rather than disappearing.
+  // How many lines of chips a row can show, derived from the flow area's
+  // height (the score sits below the flow, not inside it) - see
+  // `chipLines`/`CHIP_LINE_PX`. Reserving one story line up front keeps a
+  // keyword-heavy room from squeezing the story out entirely; the cap
+  // (`CHIP_LINES_MAX`/`_NARROW`) keeps a very tall row's chip wall from
+  // growing without bound. Whatever does not fit is counted and reported by
+  // the row itself (`chipOverflow` in `CatalogRow`) rather than
+  // disappearing - no reserve can promise that a room's keywords fit at a
+  // given width, so the row says so instead.
   const chips = Math.min(
     narrow ? CHIP_LINES_MAX_NARROW : CHIP_LINES_MAX,
     chipLines(flowH, TEXT_CHROME_PX + titleReserve + STORY_LINE_PX, CHIP_LINE_PX)
@@ -682,9 +671,9 @@ export function CatalogView({
   // either way, `highlightId` is what actually picks it out; that happens in
   // its own effect below, once the row exists to pick out.
   //
-  // Deliberately keyed on `spotlightId` alone: everything else this reads
-  // (`order`, `paging`, `rowPx`, ...) is read at the moment the trigger fires,
-  // not re-applied if one of them changes afterwards - this is a jump, not a
+  // Keyed on `spotlightId` alone: everything else this reads (`order`,
+  // `paging`, `rowPx`, ...) is read at the moment the trigger fires, not
+  // re-applied if one of them changes afterwards - this is a jump, not a
   // standing constraint to keep re-satisfying.
   useEffect(() => {
     if (spotlightId == null) return;
@@ -737,7 +726,7 @@ export function CatalogView({
     tile.focus();
   }, [highlightId, rows]);
 
-  // Spacers stand in for pages the reader can SCROLL to. Paginated, there is
+  // Spacers stand in for pages the reader can scroll to. Paginated, there is
   // nowhere to scroll - the other pages are behind a button - so standing in
   // for them leaves a screenful of nothing between the last row and the pager.
   const scrolls = paging !== 'pages';
@@ -788,8 +777,8 @@ export function CatalogView({
             canZoomOut={contentZoom.canZoomOut}
           />
           {/*
-            The same "forget searches" act the bottom-right book on the shelf
-            runs (main.jsx's `CENTER_OVERRIDES`/`onOverride`)
+            The same "forget searches" act as the shelf's black-spined book
+            (`useCenterShelf.ts`'s `overrides`) and the debug panel's button.
             Absent when there is nothing to forget.
           */}
           {history.length > 0 && (
@@ -837,18 +826,18 @@ export function CatalogView({
 
           {/*
             A select rather than the paging radiogroup's shape: these are
-            mutually exclusive orderings of the same list, one of which is the
-            default, which is exactly what a select says natively - and unlike
-            paging, a reader is choosing WHAT they are looking at rather than
-            how it advances. Shown regardless of `favorites` - 'random' needs
-            no favorite data, only the 'mine'/'count' options do.
+            mutually exclusive orderings of the same list, one of which is
+            the default - what a select says natively - and, unlike paging,
+            the reader is choosing what they are looking at rather than how
+            it advances. Shown regardless of `favorites`: 'random' needs no
+            favorite data, only the 'mine'/'count' options do.
 
             Sorting is a re-rank, not a search: it moves rooms within the
             ranking already in force (see `favoriteOrder`), so a term stays
             searched and the row a room sits in stays the row the map would
             fly to. Picking 'random' while a search is running clears it
             first (`main.tsx`'s `changeSort`) - reshuffling underneath a
-            search's own order would otherwise look like the sort did nothing.
+            search's own order would look like the sort did nothing.
           */}
           <label className="catalog-sort">
             {/*
@@ -900,10 +889,9 @@ export function CatalogView({
         >
           {/*
             Row 0 is the center room, and its right-hand column is the shelf -
-            the same forty slots `assignTitles` returns, as ordinary links. This
-            is the one view where the whole wall is legible at once, and it is
-            the same `onBook` a painted spine runs, so there is no second idea
-            of what a book does.
+            the slots `assignTitles` returns, as ordinary links. This is the
+            one view where the whole wall is legible at once, and each link
+            runs the same `onBook` a painted spine does.
           */}
           <li
             className="catalog-row catalog-center paper-sheet"
@@ -949,9 +937,9 @@ export function CatalogView({
               {/*
                 The distill toggle - the same lower right corner overlay the
                 map's own canvas draws (`render.ts`'s `drawDistillToggle`),
-                positioned here with plain pixels rather than per-frame
-                imperative style writes, since this thumbnail is a fixed size
-                and never moves.
+                sized by static percentages here (`distillW`/`distillH`)
+                rather than per-frame imperative style writes, since this
+                thumbnail is a fixed size and never moves.
               */}
               <button
                 type="button"
@@ -1059,16 +1047,17 @@ export function CatalogView({
 /**
  * One room in the list.
  *
- * Its own component for one reason: it has to know whether its own story got
- * clipped, and that is a measurement, not something the parent can work out.
- * The clamp is uniform across the page but the stories are not - so "is there
- * more to read" is per row, and a "read the rest" button on a story that is
- * already whole would be a lie forty times a screen.
+ * Its own component for one reason: it has to know whether its own story
+ * got clipped, and that is a measurement, not something the parent can work
+ * out. The clamp is uniform across the page but the stories are not - so
+ * "is there more to read" is per row, and a "read the rest" button on a
+ * story that is already whole would be a lie on every row that has nothing
+ * to expand.
  *
- * Measured rather than estimated from the character count. Where the text
- * actually breaks depends on the font, the column width and the words; counting
- * characters would be wrong exactly at the boundary, which is the only place the
- * answer matters.
+ * Measured rather than estimated from the character count: where the text
+ * actually breaks depends on the font, the column width and the words, and
+ * a character count is wrong at the boundary - the only place the answer
+ * matters.
  */
 function CatalogRow({
   id, rank, total, entry, src, thumbPx, cell,
@@ -1107,21 +1096,21 @@ function CatalogRow({
   const [hiddenChips, setHiddenChips] = useState(0);
   const desc: Description = describeRoom(id, rank, total, entry);
 
-  // What the row could not show, measured after layout and again whenever the
-  // row changes shape. The story is fitted to the FLOW area's remaining height
-  // and cut there, and whatever keywords the chip box can't hold are counted.
+  // What the row could not show, measured after layout and again whenever
+  // the row changes shape: the story's cut, and the count of keywords the
+  // chip box cannot hold.
   //
   // The story's ceiling is measured, not reserved: the flow area is a fixed
   // height (`--catalog-flow-h`), so the story gets exactly what is left under
-  // the name and chips, down to the flow's bottom edge - which is why it can
-  // fill several more lines than a worst-case reserve would have allowed, and
-  // why its fade (a mask keyed to `.clipped`) lands exactly on its own cut
-  // rather than a guessed offset. Setting the story's `max-height` cannot feed
-  // back into this: the story sits below the name and chips, so its own height
-  // never moves its top, and the flow (and card) heights are fixed regardless.
+  // the name and chips, down to the flow's bottom edge. It can fill several
+  // more lines than a worst-case reserve would have allowed, and its fade (a
+  // mask keyed to `.clipped`) lands on its own cut rather than a guessed
+  // offset. Setting the story's `max-height` cannot feed back into this: the
+  // story sits below the name and chips, so its own height never moves its
+  // top, and the flow (and card) heights are fixed regardless.
   //
-  // Ultra-narrow renders neither the story nor the chips at all - see
-  // `RoomDetails` below - so there is nothing here to measure. Both flags
+  // Ultra-narrow renders neither the story nor the chips - see the
+  // `ultraNarrow` prop - so there is nothing here to measure. Both flags
   // still have to be reset rather than just skipped: a row that was clipped
   // in the floated shape and then resizes into this one keeps whatever
   // state that last measurement left behind otherwise.
@@ -1208,12 +1197,12 @@ function CatalogRow({
       <h2 className="catalog-name">
         <span className="catalog-rank">{rank + 1}</span>
         {/*
-          The title carries search highlighting exactly as the chips and story
-          do - a title match is one of the axes the ranking scores (see
-          `titleLine`), so a reader should see where in the name it landed.
-          Only the corpus's real title is marked; the "Room N" fallback never
-          scored a title match, so highlighting it would claim one that did not
-          happen.
+          The title carries search highlighting as the chips and story do -
+          a title match is one of the axes the ranking scores (RoomDetails'
+          `titleLine`), so a reader sees where in the name it landed. Only
+          the corpus's real title is marked; the "Room N" fallback never
+          scored a title match, so highlighting it would claim one that did
+          not happen.
         */}
         <span className="catalog-title">
           <Highlight text={roomTitle(entry, id)} ranges={entry?.title ? highlight?.title(entry.title) : null} />
@@ -1241,13 +1230,12 @@ function CatalogRow({
           <span className="catalog-show dim">not on the map</span>
         ))}
       {/*
-        In the head, NOT inside `RoomDetails` where the card and the
-        overlay put it. A row is a fixed height - that is what lets the
-        spacers standing in for unmounted pages be arithmetic - so a
-        control added to the text column would have to be reserved for in
-        `TEXT_MIN`/`TEXT_CHROME_PX` and would eat two lines of story on
-        every row to do it. In the head it costs width on a line that
-        already exists.
+        The row's favorite toggle sits in the head, not inside
+        `RoomDetails` where the card and the overlay put it: a fixed-height
+        row cannot reserve text-column room for a control without costing
+        story lines on every row (AGENTS.md, "the catalog row's toggle is
+        in the head"). In the head it costs width on a line that already
+        exists.
       */}
       {favorite && <FavoriteToggle favorite={favorite} />}
     </div>
@@ -1263,14 +1251,13 @@ function CatalogRow({
       <div className={clipped ? 'catalog-body paper-sheet clipped' : 'catalog-body paper-sheet'} ref={cardRef}>
         {ultraNarrow ? (
           /*
-            No width left to show the tile beside anything - see
-            `ULTRA_NARROW_PX`. The name row comes FIRST and full width (unlike
-            the floated-tile shape below, where the head sits beside the
-            picture), the picture runs the row's own width beneath it, and the
-            keywords/story that `RoomDetails` would otherwise show are not
-            rendered at all - a link into the same room overlay every other
-            "read more" affordance here already opens (`onExpand`) stands in
-            for them, since there is nothing left to fit them beside.
+            The ultra-narrow stack - see `ULTRA_NARROW_PX`. The name row
+            comes first and full width (in the floated shape below, the head
+            sits beside the picture), the picture runs the row's own width
+            beneath it, and the keywords and story `RoomDetails` would
+            otherwise show are not rendered at all: a "keywords & story"
+            link into the same overlay every other "read more" affordance
+            here opens (`onExpand`) stands in for them.
           */
           <>
             {head}
@@ -1282,21 +1269,21 @@ function CatalogRow({
         ) : (
           <>
             {/*
-              The tile, name, chips and story live in a FIXED-HEIGHT flow area;
-              the score strip sits in normal flow beneath it (see below). That
-              keeps the strip's top rule below the tile rather than beside it,
-              and gives the strip the card's full width for its columns.
+              The fixed-height flow area (`flowH`), with the score strip in
+              normal flow beneath it - the split the score-strip arithmetic
+              reserves against, which keeps the strip's top rule below the
+              tile and gives its columns the card's full width.
 
-              The tile is a button, because pressing it does something - it
-              opens the room at whatever size the display allows. It floats
-              INSIDE the flow, so the story wraps beside it and then runs the
-              flow's full width once past its bottom edge. The height a row does
-              not spend on the picture is the story's, rather than dark
-              background under a small thumbnail. `RoomDetails` is called with
-              `weights={null}` here so it renders no score of its own - the row
-              places `ScoreBreakdown` below the flow instead, and "read the
-              rest" is absolutely positioned at the flow's bottom edge, over the
-              story's own cut.
+              The tile is a button because pressing it opens the room at
+              whatever size the display allows. It floats inside the flow, so
+              the story wraps beside it and runs the flow's full width once
+              past its bottom edge: height a row does not spend on the
+              picture goes to the story rather than dark background under a
+              small thumbnail (AGENTS.md, "The catalog, and the two modes").
+              `RoomDetails` is called with `weights={null}` here so it renders
+              no score of its own - the row places `ScoreBreakdown` below the
+              flow instead - and "read the rest" is absolutely positioned at
+              the flow's bottom edge, over the story's own cut.
             */}
             <div className="catalog-flow">
               {tile}

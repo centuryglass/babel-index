@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /**
- * The pyramid generator.
+ * The pyramid generator - `npm run generate:mips`.
  *
  *   npm run generate:mips -- --images assets/corpus-sample
  *   npm run generate:mips -- --images <dir> --out <dir> [--quality 82]
  *
- * Writes every level below 0 as <out>/<width>/<file>. With no --out it works in
- * place, leaving the source files where they are as level 0 - so running it on
- * a corpus directory adds the smaller levels and changes nothing that was
- * already there. Levels already current for their source (see mips.ts's
- * content-hash caching) are left alone, so a rerun after touching a handful of
- * images only re-resizes those.
+ * Resizes every source image to each level of the ladder and writes the result
+ * to the layout `layout.ts` states. With no --out it works in place: the
+ * sources stay as level 0 and only the smaller levels are added, so running it
+ * on a corpus directory changes nothing that was already there. Reruns skip
+ * work that is still current - see `mips.ts`.
  *
- * The ladder comes from packages/web/src/lib/pyramid.ts, so what this writes and
- * what the client asks for cannot drift apart. Resizing is the whole of the
- * work, which is why it is a pipeline job run once rather than anything the
- * demo server does on request.
+ * The coarse levels are then repacked into shared sheets (`sheets.ts`), and
+ * every source's content hash recorded in the corpus's `metadata.json`.
+ *
+ * The ladder is `LEVELS` in packages/web/src/lib/pyramid.ts, the same list the
+ * client picks levels from, so what this writes and what it asks for cannot
+ * drift apart.
  */
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -42,8 +43,8 @@ if (!files.length) {
   process.exit(1);
 }
 
-// Aspect first: a corpus that cannot agree on a shape cannot tile, and finding
-// that out after resizing 10,000 rooms is finding it out too late.
+// The aspect check runs before any resizing: a corpus that cannot tile is
+// worth knowing about before 10,000 rooms have been resized for nothing.
 const sizes: SourceSize[] = [];
 for (const file of files) {
   const meta = await sharp(join(imagesDir, file)).metadata();
@@ -89,17 +90,15 @@ for (const file of files) {
 
 console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across ${plan.length} levels\n`);
 
-// Pack the coarse levels into shared sheets so a scroll session at that zoom
-// needs a handful of requests instead of one per room (see SHEETS's docblock
-// in packages/web/src/lib/pyramid.ts for why this exists and which levels).
-// writeMips above always writes every level per-file first - sheets are
-// composited FROM those files, not from the source directly - so the
-// per-file directory for a sheet-packed level is deleted once its sheets are
-// current: it is pure scratch at that point, absorbed into the sheets and
-// never read by anything downstream (discoverLevels checks sheets for these
-// levels, not the per-file directory). A future rerun just re-resizes into
-// it again before repacking - cheap, and the sheets themselves still skip
-// recompositing via their own hash sidecar since the resize is deterministic.
+// The coarse levels are packed into shared sheets - see `SHEETS` and
+// `writeSheets`. Every level is written per-file first, and a sheet is
+// composited from those files rather than from the source, so once a packed
+// level's sheets are current its per-file directory is scratch and is removed:
+// `discoverLevels` reads that level from the sheets.
+//
+// A later rerun resizes into the directory again before repacking. That costs
+// no sheet work, because the resize is deterministic and a sheet's
+// `hashes.json` entry still matches unless one of its rooms changed.
 const sheetSteps = plan.filter((step) => step.level >= SHEETS.fromLevel);
 if (sheetSteps.length) {
   console.log(`  packing ${sheetSteps.length} level(s) into ${SHEETS.roomsPerSheet}-room sheets ...\n`);
@@ -114,9 +113,8 @@ if (sheetSteps.length) {
   console.log('');
 }
 
-// Recorded alongside the keyword/story sidecar so that once the corpus is
-// hosted, a local regeneration's metadata.json can be diffed against the last
-// uploaded one to name exactly which source images changed.
+// Each source's content hash is recorded in the corpus sidecar too - see
+// `updateMetadataHashes`.
 await updateMetadataHashes(imagesDir, hashes);
 console.log(`  metadata.json: ${hashes.size} content hash(es) recorded\n`);
 

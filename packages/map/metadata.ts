@@ -1,57 +1,44 @@
 /**
- * Room metadata: the three stylistic keywords and the short story text that the
+ * Room metadata: the stylistic keywords and the short story text that the
  * generator writes alongside each image.
  *
- * ### Why this is keyed on filename, and why that matters
- *
- * `embeddings.bin` is row-major by room id, which is only correct while nothing
- * about the directory changes - so `scan.mjs` has to reject a blob whose count
- * has drifted, because its rows are positional and a stale one would attach the
- * wrong vector to the wrong room. Quiet, and wrong.
- *
- * A filename-keyed sidecar has no such failure mode. Add, remove or rename
- * images and every surviving entry still lands on its own room. So the rule here
- * is deliberately weaker than the blob's: join per file, tolerate a miss, and
- * report how many matched. A room with no entry simply has no keywords - which
- * is what the center room and the generic alternates want anyway.
- *
- * The one thing worth being loud about is a sidecar that matches *nothing*: that
- * is not "no metadata", it is metadata whose filenames have drifted, and it
- * looks identical from the map. `scan.mjs` reports both numbers so the two can
- * be told apart.
+ * The join is per filename: add, remove or rename images and every surviving
+ * entry still lands on its own room. (`embeddings.bin` is keyed by row order
+ * instead and must be regenerated when the corpus moves - AGENTS.md,
+ * "embeddings.bin is keyed by row order".) Joining tolerates a miss and
+ * reports how many matched; a room with no entry simply has no keywords,
+ * which is what the center room and the generic alternates want anyway.
  *
  * ### `keywords` is a fixed shape
  *
  * Every keyword is a `{text, type}` record - the generator always writes it
- * that way. The count is not enforced - "exactly three" is a fact about how
- * the corpus is generated, not a constraint the map needs, and rejecting a room
- * with two would lose real data to a rule nothing here depends on.
+ * that way. The count is not enforced: "three keywords" is a fact about how
+ * the corpus is generated, not a constraint the map needs, and rejecting a
+ * room with two would lose real data to a rule nothing here depends on.
  *
- * ### `title` is optional, and falls back to the filename everywhere it is shown
+ * ### `title` is optional
  *
  * A room may carry a human-written `title`, shown in place of its filename
- * wherever a reader is told which room they're looking at, and used in place
- * of the filename to alphabetize the catalog's idle order. Absent for most
- * rooms until the corpus is retitled, which is why every consumer falls back
- * to the filename rather than assuming one is there.
+ * wherever a reader is told which room they're looking at (`roomTitle`), and
+ * used in place of the filename as the sort key of the catalog's idle
+ * alphabetized order (`alphabeticalOrder`). Most rooms have none until the
+ * corpus is retitled, so both consumers carry a fallback.
  *
- * ### `alt`, and why it is optional in the strong sense
+ * ### `alt` is optional in the strong sense
  *
- * A room may carry an `alt`: one sentence describing the PICTURE, for a reader
- * who cannot see it (accessibility-plan.md §3.5, phase E). It is written once,
- * offline, by the same generator that wrote the story and WITH the story as
- * context - never at runtime, and never by anything in this repository, which
- * is the whole reason the map has no model dependency.
+ * A room may carry an `alt`: one sentence describing the picture, for a
+ * reader who cannot see it. It is written offline, beside the story and with
+ * the story as context - never at runtime, which is why the map carries no
+ * model dependency. A room whose story is thin should carry no `alt` at all
+ * rather than a padded one: `describe.ts`'s honesty rule ("no description
+ * recorded") is a better answer than a confident sentence about a wall of
+ * books that could be any wall of books. So absence normalises to null and
+ * every consumer falls back to what the room already has.
  *
- * Optional in the strong sense: a room whose story is thin should carry no
- * `alt` at all rather than a padded one. `describeCell`'s honesty rule ("no
- * description recorded") is a better answer than a confident sentence about a
- * wall of books that could be any wall of books, so absence normalises to null
- * and every consumer falls back to what the room already has.
- *
- * No DOM and no imports, like everything else in this package: it is joined by
- * `scan.mjs` in Node and by the client in the browser, and one implementation
- * with two consumers is what keeps those two from drifting.
+ * No DOM and no runtime imports, like the rest of this package: the server
+ * joins it (`scan.ts`, `roomContent.ts`) and the browser joins it
+ * (`useCorpus.ts`), and one implementation with both consumers is what keeps
+ * them from drifting.
  */
 
 /** One keyword, as the generator writes it. */
@@ -72,11 +59,10 @@ export interface RoomMeta {
 
 /**
  * What a reader calls this room: its title, or "Room {id}" for a room the
- * corpus hasn't retitled. The numeric fallback is meaningful on its own -
- * every other consumer (the map's aria-live cursor, the search listbox, the
- * catalog's default order) already names an untitled room this way - so
- * this is the one place that fallback is written, rather than every caller
- * re-deriving `Room ${id}` next to its own `entry?.title` check.
+ * corpus has not retitled. This is the resolver for everywhere a name is
+ * shown (catalog rows, the room overlay, the SSR pages); the cursor's
+ * announcement and `describeRoom`'s rank message lead with the bare id
+ * whether or not a title exists - the id is how the map refers to rooms.
  */
 export function roomTitle(entry: RoomMeta | null, id: number): string {
   return entry?.title || `Room ${id}`;
@@ -113,10 +99,9 @@ export function normaliseEntry(raw: unknown): RoomMeta | null {
     }
 
   // An entry carrying only an `alt` is still an entry: it describes the room,
-  // which is the question "has metadata" is actually asking. Nothing at all -
-  // an empty object, a string, a number - is what null is for. A room with
-  // only sensitive-content tags and nothing else to describe is not one of
-  // these entries either - there's nothing here worth reporting as coverage.
+  // which is what "has metadata" is asking. Tags alone are not - a room with
+  // only sensitive-content tags has nothing here worth reporting as coverage.
+  // Null is for nothing at all: an empty object, a string, a number.
   return keywords.length || story || alt || title ? { title, keywords, story, alt, sensitiveContentTags } : null;
 }
 
@@ -134,9 +119,9 @@ export function joinMetadata(rooms: import('./manifest.ts').Room[], sidecar: unk
 
   for (const room of rooms) {
     // hasOwn rather than a bare lookup, for a corpus containing a file called
-    // `constructor` or `toString`. Defensive rather than load-bearing: every
-    // Object.prototype member normalises to null anyway, so this is style, and
-    // there is deliberately no test pinning it - one could not fail.
+    // `constructor` or `toString`. Style, not load-bearing: every
+    // Object.prototype member normalises to null anyway, and no test pins it
+    // - one could not fail.
     if (Object.hasOwn(table, room.file)) byId[room.id] = normaliseEntry(table[room.file]);
   }
   return byId;
@@ -146,8 +131,8 @@ export function joinMetadata(rooms: import('./manifest.ts').Room[], sidecar: unk
  * How many rooms a sidecar actually covers, and how many entries it holds.
  *
  * The pair is the point: `matched` far below `entries` means the sidecar is
- * describing files this corpus does not have, which reads exactly like having
- * no metadata unless someone says so.
+ * describing files this corpus does not have, which from the map reads like
+ * having no metadata at all unless someone says so.
  */
 export function metadataCoverage(
   rooms: import('./manifest.ts').Room[],
@@ -174,10 +159,10 @@ export function isBlocked(meta: RoomMeta | null, blocked: ReadonlySet<string>): 
 /**
  * Drop every id whose room carries a blocked tag, keeping the rest in order.
  *
- * This is the one place blocking actually removes a room from what the map or
- * catalog can show: it runs on an already-ranked/ordered id list, so a
- * blocked room simply never reaches a cell or a row rather than needing every
- * consumer of `order` to check `metadata` itself.
+ * This is the one place blocking removes a room from what the map or catalog
+ * can show: it runs on an already-ranked/ordered id list, so a blocked room
+ * never reaches a cell or a row, and no consumer of `order` has to check
+ * `metadata` itself.
  *
  * @param ids room ids, in whatever order the caller ranked them
  * @param metadata indexed by room id, as `joinMetadata` produces it
@@ -192,7 +177,7 @@ export function filterBlockedIds(
   return ids.filter((id) => !isBlocked(metadata[id], blocked));
 }
 
-/** How many rooms `blocked` actually removes - what the debug HUD reports. */
+/** How many rooms `blocked` removes - what the debug HUD reports. */
 export function countBlocked(metadata: (RoomMeta | null)[] | null, blocked: ReadonlySet<string>): number {
   if (!metadata || !blocked.size) return 0;
   let n = 0;

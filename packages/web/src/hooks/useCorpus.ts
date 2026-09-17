@@ -1,18 +1,15 @@
 /**
  * Everything the corpus IS: the keyword/story sidecar, the embedding blob, and
  * the search index built over them - three things fetched or derived from the
- * manifest and nothing else.
- *
- * Split out of `main.jsx`. Small and obvious on its own; worth doing mostly so "load the corpus" is one
- * call instead of two fetch effects and a memo scattered through `Library`.
+ * manifest and nothing else, so "load the corpus" is one call instead of two
+ * fetch effects and a memo scattered through `Library`.
  *
  * `embeddings` stays a ref holding `{ data, dim }` rather than becoming React
- * state - it is a megabyte-scale `Int8Array`, and re-rendering `Library` every
- * time it arrives would be paid for nothing anyone reads from it synchronously.
+ * state - it is a megabyte-scale `Int8Array`, and re-rendering every time it
+ * arrives would be paid for nothing anyone reads from it synchronously.
  *
  * `tagLinks` is a flat keyword -> url object, small enough (a few dozen
- * entries at most) to just become React state directly rather than getting
- * the ref treatment `embeddings` needs.
+ * entries at most) to be React state directly.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinMetadata, type RoomMeta } from '../../../map/metadata.ts';
@@ -60,8 +57,9 @@ export function useCorpus(manifest: ManifestResponse) {
     };
   }, [manifest]);
 
-  // The keyword -> external-link map, fetched the same way as the sidecar: a
-  // corpus-specific file, absent from a corpus that hasn't been given one.
+  // The keyword -> external-link map: a corpus-specific file, fetched from
+  // its own url and absent from any corpus that has not been given one
+  // (AGENTS.md, "`tagLinks.json` is a flat keyword -> url map").
   useEffect(() => {
     if (!manifest.tagLinks) return;
     let cancelled = false;

@@ -1,17 +1,12 @@
 /**
- * The browser smoke test: favorites - the star toggle, the global count, and
+ * The browser smoke test for favorites: the star toggle, the global count, and
  * the sliding-tile resort that follows one while sorted by favorites.
  *
  * `openLibrary({ favorites: true })` is what makes this file different from
  * the rest of the suite: every other file boots the server with no store at
  * all, so `manifest.favorites` is null there and no favorite control renders.
- * This is the one place that flag is on.
- *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
+ * This is the one place that flag is on. See `map-gestures.e2e.ts` for the
+ * shared header comment on why and how, including how to run the suite.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,12 +36,12 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       await ratio.press('End');
       await settled(page);
 
-      // Sorting BY favorites is a rearrangement like any other, so it gets the
+      // Sorting by favorites is a rearrangement like any other, so it gets the
       // same zoom-out-in-place `startRearrangement` gives every rearrangement
       // (`useRearrangement.ts`) - the page is still centered on the shelf at
       // this point, so widening to the default zoom is a camera move here. Let
       // it land before panning away, otherwise a flaky "did the camera move"
-      // assertion below could be catching THIS flight rather than the one
+      // assertion below could be catching this flight rather than the one
       // under test. It eases back to whatever zoom it was called from (here,
       // the page-load opening view - see `useRearrangement.ts`'s
       // `returnZoom`), so explicitly return to the "center" button's wider
@@ -54,7 +49,7 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       // shelf, too tight for a real room to be under the fixed point used
       // below (`map-gestures.e2e.ts` relies on the same "center" button for
       // the same reason).
-      // The "sort by my favorites" switch is diegetic now, painted onto the
+      // The "sort by my favorites" switch is diegetic, painted onto the
       // center tile with `pointer-events: none` (see AGENTS.md's Favorites
       // section) - a real click reaches it through the canvas's own hit
       // testing, not a native pointer event on the button itself. Activating
@@ -101,11 +96,11 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       await page.keyboard.press('Escape');
       await card.waitFor({ state: 'detached', timeout: 5000 });
 
-      // The camera must not have moved AT ALL - this is the behavior this
+      // The camera must not have moved at all - this is the behavior this
       // test exists for. Already at the overview zoom here (the "center"
       // button above), so `startRearrangement`'s zoom-out-in-place is a no-op and
       // there is no flight to wait out - a regression would be a camera
-      // FLIGHT. `landed`, not `settled`: `settled` only waits out the
+      // flight. `landed`, not `settled`: `settled` only waits out the
       // tile-slide, not a flight still easing toward its target - reading
       // straight after `settled` can catch an early frame of exactly that
       // flight, whose eased position rounds to the pre-toggle one by

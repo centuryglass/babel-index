@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { nextRoom } from './nextRoom.ts';
 import { createLayout } from './ordering.ts';
 
-// `createLayout` requires a real cell shape; the corpus is never square.
+// Any non-square cell shape will do; the point is that width and height differ.
 const ASPECT = 720 / 1280;
 
 const layout = createLayout({ roomCount: 30, contentRatio: 0.15, seed: 1, aspect: ASPECT });
@@ -19,8 +19,8 @@ test('finds the nearest room in the given direction, skipping wallpaper', () => 
 
 test('never returns the starting cell, even when it is itself a room', () => {
   const slot = layout.slots[0];
-  // Standing exactly on a room and walking dx=0,dy=0 would return `from`
-  // immediately if the walk did not step first - assert it always steps.
+  // The cell it starts on holds a room, so a walk that tested before stepping
+  // would return it. This is the assertion that it steps first.
   const found = nextRoom(layout, slot, { dx: 1, dy: 0 });
   assert.ok(!found || found.x !== slot.x || found.y !== slot.y);
 });

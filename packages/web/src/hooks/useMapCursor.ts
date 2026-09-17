@@ -2,7 +2,7 @@
  * The keyboard cursor: where it is, what a reader hears about it, and what
  * every key over the map does.
  *
- * Split out of `main.jsx`. The
+ * Split out of `main.tsx`. The
  * four pieces this hides - the granularity hysteresis, the boundary-crossing
  * latch, `cursorNow`, and the key switch itself - had no reader anywhere else
  * in that file, which is what made this the seam to cut first.
@@ -75,15 +75,12 @@ export function useMapCursor({
 }: UseMapCursorOpts) {
   // --- the keyboard cursor ---------------------------------------------------
   //
-  // The cell under the camera center (accessibility-plan.md §4.2), and
-  // DERIVED rather than separately tracked - that definition is the whole
-  // design, so anything that moves the camera moves the cursor with it and
-  // there is no second copy that can drift out of step. That includes the
-  // edge's own glide easing back after a keyboard press crosses the boundary:
-  // the camera moves, so the cursor does too, which is correct rather than a
-  // conflict. (An earlier version kept a hand-maintained ref and exempted
-  // keyboard landings from the glide to protect it - that got the causality
-  // backwards, and disabled the boundary pushback for the whole session.)
+  // The cell under the camera center, DERIVED rather than separately tracked -
+  // that definition is the whole design, so anything that moves the camera
+  // moves the cursor with it and there is no second copy that can drift out
+  // of step. That includes the edge's own glide easing back after a keyboard
+  // press crosses the boundary: the camera moves, so the cursor does too,
+  // which is correct rather than a conflict.
   //
   // `cursor` is React state only because JSX needs it - the canvas's
   // `aria-label` and its nested, touch-reachable story/chips. The render loop
@@ -93,7 +90,7 @@ export function useMapCursor({
   const [cursor, setCursor] = useState<Cell>(() => cursorCell(cam.current));
 
   /**
-   * Where the cursor is RIGHT NOW, for the keyboard's own next move.
+   * Where the cursor is currently, for the keyboard's own next move.
    *
    * `flightTarget()` rather than `cam.current`: mid-flight the latter is the
    * interpolated position, so a second key press arriving in the same tick as
@@ -119,11 +116,11 @@ export function useMapCursor({
   // Carries the announcement's granularity across cursor moves, so a zoom held
   // near the threshold does not flicker between naming a cell and naming a
   // region (the same hysteresis `pickLevel` uses for the pyramid, applied to
-  // what is SAID rather than to what is drawn - §3.1).
+  // what is said rather than what is drawn).
   const granularityRef = useRef<CursorGranularity>('cell');
 
   // Whether the cursor is past the ranked content's edge, tracked so the
-  // boundary is announced on the move that CROSSES it rather than on every
+  // boundary is announced on the move that crosses it rather than on every
   // press once already outside - the room name would otherwise be drowned by
   // "edge of the library" on every single step through the far field.
   const wasBeyondBoundary = useRef(false);
@@ -174,17 +171,12 @@ export function useMapCursor({
   );
 
   /**
-   * What a reader hears when the library rearranges under them
-   * (accessibility-plan.md §4.3, §8 item 4).
+   * What a reader hears when the library rearranges under them.
    *
    * Three clauses, and each is a different question: what decided the ranking
-   * (the search's own note, if a search is what caused this), what the map now
-   * looks like as a whole, and what is under the cursor NOW. The third is the
-   * one §4.3 promises and Phase C never wired up - standing still while the
-   * library reorders around you and hearing nothing about what arrived is not
-   * an accessible rearrangement, whatever the animation is doing.
-   *
-   * Read after the camera has settled rather than before, so the cursor it
+   * (the search's own note, if a search caused this), what the map now
+   * looks like as a whole, and what is under the cursor NOW. The announcement
+   * reads after the camera has settled rather than before, so the cursor it
    * names is the one the reader actually ends up at: an animated rearrangement
    * parks the camera on the center first, and saying the cell they left would
    * be describing somewhere they are no longer standing.
@@ -202,18 +194,17 @@ export function useMapCursor({
     [announceCursorMove, cursorNow, layout]
   );
 
-  /** `?` - the screen-reader equivalent of peripheral vision (§4.2a). */
+  /** `?` - the screen-reader equivalent of peripheral vision, built once as a pure module at file scope. */
   const announceSurroundings = useCallback(() => {
     setStatus(describeSurroundings(layout, order, metadata, cursor));
   }, [layout, order, metadata, cursor, setStatus]);
 
   // The cursor's own story and keyword chips, nested inside the canvas as real
-  // fallback content (accessibility-plan.md §4.2b, §4.4): "touch users get the
-  // DOM... the cursor's contents", which a keyboard-only Enter would not give
-  // them, since touch has nothing that corresponds to Enter. `tabIndex={-1}`
-  // on the chips keeps them out of the desktop Tab sequence - the map is still
-  // exactly one tab stop - while leaving them real, interactive elements a
-  // touch screen reader's swipe navigation reaches regardless of tabindex.
+  // fallback content - touch users get this through the DOM while a
+  // keyboard-only Enter would not reach it. `tabIndex={-1}` on the chips keeps
+  // them out of the desktop Tab sequence - the map is still exactly one tab
+  // stop - while leaving them real, interactive elements a touch screen
+  // reader's swipe navigation reaches regardless of tabindex.
   const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
   const cursorEntry = cursorRoom.center || cursorRoom.generic ? null : (metadata?.[cursorRoom.id] ?? null);
   // Named here rather than in the view, so `describeRoom` has exactly one
@@ -225,7 +216,7 @@ export function useMapCursor({
       : null;
 
   // The canvas's own accessible name - what a reader hears landing on it for
-  // the FIRST time, before any move has run `announceCursorMove` and pushed
+  // the first time, before any move has run `announceCursorMove` and pushed
   // anything into the live region. Always the plain per-cell name, independent
   // of the region/cell granularity split that only matters once movement is
   // in progress.
@@ -407,9 +398,14 @@ export function useMapCursor({
 }
 
 /**
- * `?`'s sentence: where you are, the nearest ranked room each way, and how far
- * the edge is. Module scope and pure, so it is one function of its arguments
- * rather than something that reads the hook's closure.
+ * `?`'s sentence: where you are, the nearest ranked room each way, and how
+ * far the edge is. Module scope and pure, so it is one function of its
+ * arguments rather than something that reads the hook's closure. Built over
+ * already-tested primitives (`nextRoom`, `cellDistance`) rather than a new
+ * pure module. Four cardinal directions via straight-line walks - a true
+ * diagonal nearest-room search is more geometry than the key needs. On
+ * request rather than on every move, because "verbose by default" is the
+ * classic live-region mistake.
  */
 function describeSurroundings(
   layout: MapLayout,

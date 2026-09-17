@@ -1,3 +1,8 @@
+/**
+ * Tests for `cosine-stats.ts`: pure arithmetic over arrays, so the calibration
+ * math is covered here without a corpus or a CLIP download.
+ */
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { percentileOf, summarize, suggestClipBounds, summarizeUniversal } from './cosine-stats.ts';
@@ -43,8 +48,8 @@ test('summarize: does not mutate its input', () => {
 });
 
 test('suggestClipBounds: separates a noise band from a match band', () => {
-  // Overall is dominated by unrelated pairs clustered low; each keyword's own
-  // best match sits well above that band - the shape the file header argues for.
+  // Overall is dominated by unrelated pairs clustered low, and each keyword's
+  // own best match sits above that band.
   const overall = Array.from({ length: 1000 }, () => 0.1 + Math.random() * 0.05);
   const keywordMax = Array.from({ length: 50 }, () => 0.3 + Math.random() * 0.05);
   const out = suggestClipBounds({ overall, keywordMax });

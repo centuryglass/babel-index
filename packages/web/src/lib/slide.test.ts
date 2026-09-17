@@ -148,7 +148,7 @@ test('the conveyor plays as one wave, not a queue of columns', () => {
 test('a cascade overlaps its runs but never finishes them out of order', () => {
   // The safety argument for overlapping a sequential stage: a run's moves are
   // applied as it passes them and the last of them at its completion, so
-  // ordered completions ARE ordered application. Overlap the starts and the
+  // ordered completions are ordered application. Overlap the starts and the
   // picture stops being a queue; let a completion slip out of order and the
   // plan is silently applied in the wrong sequence.
   const { moves } = rearrangement(50, 1, 2);
@@ -351,9 +351,9 @@ test('a narrow viewport costs proportionally less', () => {
 });
 
 test('the favorite badge rides along with a sliding board, room cells only', () => {
-  // The requirement this exists to prove: a rearrangement is exactly the one
-  // moment `render.ts`'s per-frame badge draw is replaced by this file's own,
-  // and it must not silently drop the badge for the duration of the animation.
+  // The requirement this exists to prove: a rearrangement is the one moment
+  // `render.ts`'s per-frame badge draw is replaced by this file's own, and
+  // it must not silently drop the badge for the duration of the animation.
   const { built, moves } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };

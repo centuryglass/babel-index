@@ -1,20 +1,18 @@
 /**
- * Render-mode parity: drive the SAME corpus, viewport and camera through both
- * the Canvas2D renderer and the experimental WebGL one (`?webgl` -
+ * Render-mode parity: drive the same corpus, viewport and camera through both
+ * the Canvas2D renderer and the WebGL one (`?webgl=0` vs `?webgl` -
  * `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`), and check the two draw
- * the same map. This is the "manual side-by-side" that
- * `docs/pending_task_list.md`'s Rendering section names as the last thing
- * standing between the GL renderer and flipping `DEFAULT_WEBGL` - the recording
- * fakes in `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call
- * shape, never pixels or a real GPU.
+ * the same map. This is the real-GPU check behind the lockstep invariant in
+ * AGENTS.md's "The WebGL renderer" - the recording fakes in
+ * `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call shape,
+ * never pixels or a real GPU.
  *
- * TWO checks per scene, one strict and one loose:
+ * Two checks per scene, one strict and one loose:
  *   - HUD parity is the strict, deterministic backbone. Both renderers print
  *     their own account of the frame (`support.ts`'s `parseHud`), and every
- *     draw-loop decision that isn't a raw pixel - which pyramid level, how many
- *     cells substituted/blank, the shared tile cache's occupancy - must agree,
- *     because the two loops are supposed to run in lockstep (see AGENTS.md, "The
- *     WebGL renderer").
+ *     draw-loop decision that isn't a raw pixel - which pyramid level, how
+ *     many cells substituted/blank - must agree, because the two loops are
+ *     supposed to run in lockstep (see AGENTS.md, "The WebGL renderer").
  *   - A pixel diff is the loose guard. GL's LINEAR sampling and the browser's
  *     2D image smoothing genuinely differ at tile edges and on text, so an
  *     exact match is not the bar; the bar is "these are the same picture, not
@@ -22,9 +20,9 @@
  *     tile, or a missing badge. Every scene writes canvas2d/webgl/diff PNGs to
  *     `packages/web/e2e/artifacts/` so a human can read what the number meant.
  *
- * DELIBERATELY NOT part of `npm test` OR `npm run test:e2e` - the `.parity.ts`
- * suffix matches neither glob. It needs a real GPU and boots two servers and
- * two browsers, so it is a thing you run on purpose:
+ * Not part of `npm test` OR `npm run test:e2e` - the `.parity.ts` suffix
+ * matches neither glob. It needs a real GPU and boots two servers and two
+ * browsers, so it is a thing you run on purpose:
  *
  *   npx playwright install chromium   # once
  *   npm run test:parity
@@ -229,7 +227,7 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
 
   // No far-zoom "overview" scene, on purpose. At the return-to-center view the
   // whole map's room tiles exceed the decoded-tile cache budget, so each of the
-  // two independently-warmed sessions settles with a DIFFERENT subset of tiles
+  // two independently-warmed sessions settles with a different subset of tiles
   // at a different pyramid level (the aggregate `substituted` count can
   // coincide while *which* cells are coarse does not). The pixel diff there
   // swings run to run for a reason that is not a renderer parity break - the

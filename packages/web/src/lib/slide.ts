@@ -1,59 +1,58 @@
 /**
- * The rearrangement animation: a second renderer, for the one moment the map is
- * not a map.
+ * The rearrangement animation: a second renderer, for the one moment the map
+ * is not a map.
  *
- * `render.js` draws an infinite world under a camera the reader controls. This
- * draws a finite board under a camera parked on the center, with one row or
- * column part-way through a slide. Those are different enough jobs that sharing
- * a loop would mean threading "is something sliding" through every decision the
- * other one makes, so they stay separate and `main.jsx` picks which is drawing.
- * The animation ends by handing back, and the board is discarded.
+ * `render.ts` draws an infinite world under a camera the reader controls; this
+ * draws a finite board under a camera parked for the animation's duration,
+ * with one row or column part-way through a slide. The loops stay separate
+ * because a shared one would thread "is something sliding" through every
+ * other decision; `main.tsx` picks which is drawing, and the animation ends
+ * by handing back.
  *
  * ### A run is a whole line's worth of motion, not one step
  *
- * The planner's conveyor emits a column's k steps as k separate rotations, each
- * preceded by a swap that feeds the next value in below the camera. Animated
- * literally that is k discrete jerks. But the swaps all land off camera and all
- * land at whole-cell boundaries, so the *motion* can be continuous while the
- * *state* advances a step at a time: the column slides k cells in one gesture,
- * and each swap is applied as the slide crosses the corresponding cell. What
- * the viewer sees is a column of tiles riding upward with fresh rooms arriving
- * from below the screen edge.
+ * The planner's conveyor emits a column's k steps as k separate rotations,
+ * each preceded by a swap that feeds the next value in below the camera.
+ * Animated literally that is k discrete jerks. But the swaps all land off
+ * camera and at whole-cell boundaries, so the *motion* can be continuous
+ * while the *state* advances a step at a time: the column slides k cells in
+ * one gesture, and each swap is applied as the slide crosses the
+ * corresponding cell. What the viewer sees is a column of tiles riding
+ * upward with fresh rooms arriving from below the screen edge.
  *
- * Grouping consecutive same-line, same-direction shifts into one run is all it
- * takes, and it gives the right answer for both shapes the planner emits: a
- * conveyor becomes one long slide, and phase 1's single multi-cell row shift
- * becomes one slide of that many cells.
+ * Grouping consecutive same-line, same-direction shifts into one run is all
+ * it takes, and it gives the right answer for both shapes the planner emits:
+ * a conveyor becomes one long slide, and phase 1's single multi-cell row
+ * shift becomes one slide of that many cells.
  *
  * ### A wave, not a queue
  *
- * The planner marks the stages whose lines are independent - it parks a whole
- * batch of values before feeding any of them, so no column's ride can disturb
- * another's. Those play concurrently, one lane per line, set off a stagger
- * apart and ordered outward from the center. That is most of the animation: a
- * batch of columns sweeps across together rather than queuing one after another.
- * Stages that are not marked stay strictly ordered, because a parking stage's
- * extraction rotates a line and the swap after it depends on that rotation.
+ * The planner's `wave` flag marks the stages whose lines are independent -
+ * see the *primitives* block in `illusion.ts` for what makes them so. Those
+ * play concurrently, one lane per line, set off a stagger apart and ordered
+ * outward from the center, so a batch of columns sweeps across together
+ * instead of queuing one after another. Unmarked stages stay strictly
+ * ordered.
  *
  * ### Why the offset is a remainder
  *
- * A run's visual offset is `progress - applied`: how far it has travelled, less
- * what the board has already absorbed. For a conveyor that stays inside one
- * cell, because a step is applied the moment the slide crosses it. For a single
- * six-cell row shift nothing is absorbed until the end, so the offset runs all
- * the way to six. One rule, both behaviours, and no case analysis.
+ * A run's visual offset is `progress - applied`: how far it has travelled,
+ * less what the board has already absorbed. For a conveyor that stays inside
+ * one cell, because a step is applied the moment the slide crosses it. For a
+ * single six-cell row shift nothing is absorbed until the end, so the offset
+ * runs all the way to six. One rule, both behaviours, no case analysis.
  *
- * ### Timing comes from config, and there is deliberately no fallback here
+ * ### Timing comes from config
  *
- * The five durations are by-feel numbers, so they live in `packages/config`
- * with their reasoning, the way the opening zoom does - and for the same
- * reason `useMapCamera.ts` refuses to default one: a fallback in this file
- * would be a second statement of the same fact, and the two would drift. What
- * this file owns is how a plan is laid out in time; what the numbers should be
- * is somebody else's question.
+ * The five durations are by-feel numbers, so they live in `packages/config`,
+ * and this file states no fallback for them - the same rule
+ * `useMapCamera.ts` gives for the flight duration, and AGENTS.md's
+ * "Consuming files state no fallback defaults". What this file owns is how a
+ * plan is laid out in time; what the numbers should be is somebody else's
+ * question.
  *
- * The visible cost is the region's, not the corpus's - only lines crossing the
- * on-camera rectangle ever slide - so the duration is set by the viewport and
+ * The visible cost is the region's, not the corpus's: only lines crossing the
+ * on-camera rectangle ever slide. The duration is set by the viewport, and
  * corpus size does not enter into it.
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
@@ -70,14 +69,14 @@ import {
 import { areSpinesLegible } from './center.ts';
 
 /**
- * The cache id for a board value at its HOME map cell.
+ * The cache id for a board value at its home map cell.
  *
- * The board carries one interchangeable `GENERIC` value everywhere a generic
- * tile sits - `board.js` and `illusion.js` never need to know one generic tile
- * from another - so the actual tile is resolved here, positionally, from the
- * cell the value lives at. A generic tile therefore carries its own face as
- * its line slides: `genericIndexAt` is read at the value's board home, not at
- * wherever the slide has pushed it to, so nothing flips face mid-ride.
+ * The board carries one interchangeable `GENERIC` value wherever a generic
+ * tile sits (`board.ts` and `illusion.ts` never distinguish one from
+ * another), so the actual tile is resolved here, positionally, from the home
+ * cell - never from wherever the slide has pushed the value. That is what
+ * lets a generic tile carry its own face across a ride instead of flipping
+ * mid-slide.
  */
 const idFor = (
   value: BoardValue,
@@ -185,15 +184,15 @@ export function buildTimeline(moves: Move[], timing: Config['slide']): Timeline 
     stage.lanes = lanes;
     let end = at;
     lanes.forEach((lane, i) => {
-      // A wave's lanes are independent, so each simply sets off a stagger after
-      // the last and runs its own course.
+      // A wave's lanes are independent, so each sets off a stagger after the
+      // last and runs its own course.
       //
-      // A sequential lane instead CASCADES: its runs start a beat apart and so
-      // overlap on screen, but each is forced to finish no earlier than the one
-      // before it. Since a run's moves are applied as it passes them, and the
-      // last of them at its completion, ordered completions are exactly ordered
-      // application - the plan is honoured to the letter while the picture stops
-      // being a queue. This is what the extraction rotations ride on: a small
+      // A sequential lane cascades instead: its runs start a beat apart and
+      // overlap on screen, but each is forced to finish no earlier than the
+      // one before it. Since a run's moves are applied as it passes them and
+      // the last of them at its completion, ordered completions are ordered
+      // application - the plan is honoured to the letter while the picture
+      // stops being a queue. The extraction rotations ride on this: a small
       // corpus keeps most of its rooms on camera, so it needs many of them.
       let cursor = at + (stage.wave ? i * timing.stagger : 0);
       let previousEnd = cursor;
@@ -221,11 +220,11 @@ export function buildTimeline(moves: Move[], timing: Config['slide']): Timeline 
  * Append a move to a lane, extending its current run or opening a new one.
  *
  * Every step carries the travel the run must have reached before it may be
- * applied. For a shift that is the far end of its own motion; for a swap it is
- * wherever the run already stands, so a swap emitted after a shift lands at
- * that shift's COMPLETION rather than at the next run's start. The distinction
- * is invisible while runs play strictly in sequence and load-bearing the
- * moment they overlap - see the cascade in `buildTimeline`.
+ * applied. For a shift that is the far end of its own motion; for a swap it
+ * is wherever the run already stands, so a swap emitted after a shift lands
+ * at that shift's completion, not at the next run's start. While runs play
+ * strictly in sequence the distinction is invisible; once they overlap it is
+ * load-bearing - see the cascade in `buildTimeline`.
  */
 function pushMove(lane: Lane, move: Move): void {
   let run = lane.runs[lane.runs.length - 1];
@@ -269,10 +268,11 @@ export interface CreateSlideshowOpts {
  * Drive a plan over a board.
  *
  * Owns the mutable board and how much of the plan has been absorbed into it.
- * `advanceTo` is the whole interface: hand it a time and it applies whatever
- * the board should have absorbed by then, and answers with every line currently
- * in motion. There can be several, which is the point of a wave - and they can
- * never overlap on screen, because a wave stage's lines are all the same kind.
+ * `advanceTo` is the whole interface: hand it a time, and it applies whatever
+ * the board should have absorbed by then and answers with every line
+ * currently in motion. There can be several - that is the point of a wave -
+ * and they can never overlap on screen, because a wave stage's lines are all
+ * the same kind.
  */
 export function createSlideshow({ board, moves, apply, timing }: CreateSlideshowOpts) {
   const { stages, totalMs } = buildTimeline(moves, timing);
@@ -355,9 +355,8 @@ export interface SlideDrawOpts {
   /** board index of map cell (0, 0) */
   origin: Point;
   /**
-   * from `advanceTo` - several at once during a wave. They can never overlap
-   * on screen: a wave stage's lines are all rows or all columns, and two rows
-   * share no cell
+   * from `advanceTo` - several at once during a wave, and never overlapping
+   * on screen; see `createSlideshow`'s doc for why
    */
   motions?: Motion[];
   /**
@@ -372,20 +371,17 @@ export interface SlideDrawOpts {
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
   sortMode?: SortMode;
-  /** distill mode's black fade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
+  /** distill mode's crossfade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
   genericFade?: number;
   /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
   distillMode?: boolean;
   /** whether the pointer is over the distill toggle - see `render.ts`'s `DrawOpts.hoveredDistill` */
   hoveredDistill?: boolean;
   /**
-   * Whether the "forget searches" book's slot is currently claimed - i.e.
-   * whether `centreSlots[BOOK_COUNT - 1]?.action === 'forgetHistory'`, the
-   * same check `render.ts`'s own draw loop makes off `centreSlots` directly.
-   * This renderer never receives `centreSlots` itself (it draws no spine
-   * text at all), so the caller reduces it to this one boolean rather than
-   * this file learning the shelf's slot-assignment shape just to re-derive
-   * it.
+   * Whether the "forget searches" book's slot is claimed - the caller's
+   * reduction of `centreSlots[BOOK_COUNT - 1]?.action === 'forgetHistory'`,
+   * the check `render.ts`'s loop makes directly. This renderer receives no
+   * `centreSlots` at all: it draws no spine text.
    */
   clearHistoryAvailable?: boolean;
 }
@@ -400,9 +396,9 @@ export interface SlideDrawResult {
 /**
  * Draw one frame of the animation.
  *
- * Takes a 2d context and the state of the board, the same way `render.js` takes
- * one and the state of the world - so a frame's decisions are assertable
- * without a browser.
+ * Takes a 2d context and the state of the board, the same way `render.ts`
+ * takes one and the state of the world, so a frame's decisions are
+ * assertable without a browser.
  */
 export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
   function draw({
@@ -418,9 +414,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
     const cellPx = pxPerCell(cam);
     const level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, null);
 
-    // Same per-frame smoothing gate as `render.ts`'s draw - a rearrangement runs
-    // zoomed out, exactly where shrinking every tile with bilinear filtering
-    // costs the most. See `SMOOTHING_MAX_DOWNSCALE`.
+    // The same smoothing gate `render.ts`'s draw applies.
     const src = pyramid.sizeOf(level);
     ctx.imageSmoothingEnabled = !src || src.w <= cellPx.x * dpr * SMOOTHING_MAX_DOWNSCALE;
 
@@ -435,7 +429,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
     const H = board.height;
     const valueAt = (bx: number, by: number): BoardValue =>
       board.cells[(((by % H) + H) % H) * W + (((bx % W) + W) % W)];
-    // +1 on each axis kills hairline gaps from rounding, exactly as render.js does.
+    // +1 on each axis kills hairline gaps from rounding, as in `render.ts`.
     const cw = cellPx.x + 1;
     const ch = cellPx.y + 1;
 
@@ -443,18 +437,14 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
     let blank = 0;
     const wanted: RoomId[] = [];
 
-    // A value's generic tile is read at its HOME map cell, which is not always where
-    // it is drawn: a sliding line reads its board home but paints at the shifted
-    // position, so the tile carries its own face across the ride.
     const paint = (value: BoardValue, homeMx: number, homeMy: number, drawMx: number, drawMy: number): void => {
       const sx = (drawMx - cam.x) * cellPx.x + w / 2;
       const sy = (drawMy - cam.y) * cellPx.y + h / 2;
       const id = idFor(value, homeMx, homeMy, genericIndexAt);
       const distillId = value === BOARD_GENERIC ? genericDistillId(genericIndexAt(homeMx, homeMy)) : null;
-      // A generic tile fully faded by distill mode shows none of the base
-      // tile's art, only its distill alternate, so scaling the base under the
-      // fade is wasted. Same skip as `render.ts`'s draw loop; the tile is
-      // still warmed below.
+      // The fully-faded skip `render.ts`'s loop makes too: under a complete
+      // fade the base tile's art is never seen, so it is not drawn - though
+      // the prefetch pass still warms it.
       if (value === BOARD_GENERIC && genericFade >= 1) {
         drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
         wanted.push(id);
@@ -475,9 +465,9 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
         blank++;
       }
       if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
-      // The favorite badge rides along with a sliding tile - never the center
-      // or a generic face, only a real room, which is exactly when `value` is
-      // its numeric id rather than one of the two shared board values.
+      // The favorite badge rides along with a sliding tile. Only real rooms
+      // carry one - which is when `value` is a numeric id rather than one of
+      // the two shared board values.
       if (favorites && typeof value === 'number')
         drawFavoriteBadge(ctx, cache, favorites.isFavorite(value) ? FAV_ON : FAV_OFF, cellPx, sx, sy);
       wanted.push(id);
@@ -518,23 +508,18 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
           cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, genericIndexAt), level);
 
     if (chrome) {
-      // The center room, which by construction has not moved.
+      // The center tile's controls, drawn for the whole animation - see
+      // `drawFavoriteSwitch`'s doc for why the handoff needs them. The gates
+      // are the ones `render.ts`'s loop uses: a favorite store and legible
+      // spines for the switch, an opted-in `distillMode` for the toggle,
+      // `clearHistoryAvailable` for the black spine.
+      //
+      // The center room itself has not moved, by construction.
       const sx = (0 - cam.x) * cellPx.x + w / 2;
       const sy = (0 - cam.y) * cellPx.y + h / 2;
-      // The favorites-sort switch rides along with the center room across the
-      // handoff between renderers - same gate as `render.ts`'s own draw, so it
-      // never blinks out for the animation only to reappear once it lands.
       if (favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
         drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
-      // The distill toggle rides along the same way - independent of
-      // `favorites`, since distill mode needs no favorite store. Same
-      // `undefined` opt-out as `render.ts`'s own draw loop.
       if (distillMode !== undefined) drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
-      // The "forget searches" book's black spine overlay rides along the same
-      // way - `clearHistoryAvailable` is the caller's reduction of
-      // `centreSlots[BOOK_COUNT - 1]?.action === 'forgetHistory'`, since this
-      // renderer never sees `centreSlots` itself (no spine text is drawn
-      // during a rearrangement at all).
       if (clearHistoryAvailable) drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
     }
 

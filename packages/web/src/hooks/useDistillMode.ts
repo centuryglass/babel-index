@@ -4,34 +4,33 @@
  *
  * The heavy lifting - moving rooms without ever looking like a teleport - is
  * the sliding-tile animation `useRearrangement.ts` already drives off a
- * `layout`/`order` change; distill mode is nothing more than a `contentRatio`
- * flip (1 to pack every corpus room into the smallest area near the origin,
- * back to `defaultRatio` to restore the usual sparseness) asked for through
- * `requestAnimation`, the same way the reorder button or a favorite sort
- * already are. See the plan's Context section for why that flip animates
- * cleanly even though it changes which physical cells are occupied: the
- * corpus's room-id multiset never changes, only where each id sits, and
- * `buildRearrangement` already tolerates that (it's what a favorite sort
- * does on every activation).
+ * `layout`/`order` change; distill mode is a `contentRatio` flip (1 to pack
+ * every corpus room into the smallest area near the origin, back to
+ * `defaultRatio` to restore the usual sparseness) asked for through
+ * `requestAnimation`, like the reorder button or a favorite sort. The flip
+ * animates cleanly even though it changes which physical cells are occupied:
+ * the corpus's room-id multiset never changes, only where each id sits, and
+ * `buildRearrangement` tolerates that - it is what a favorite sort does on
+ * every activation.
  *
- * What this hook owns beyond the flip is the fade: no compositing exists
- * elsewhere for a generic tile to visibly disappear rather than just stop
- * being drawn, so `genericFade` (0-1, read every frame by `render.ts`/
- * `slide.ts` via `useMapRenderer.ts`) is driven by a small rAF loop here,
- * pattern-matched on `useRearrangement.ts`'s own `tick()`.
+ * What this hook owns beyond the flip is the fade: nothing composites a
+ * generic tile's disappearance elsewhere, so `genericFade` (0-1, read every
+ * frame by `render.ts`/`slide.ts` via `useMapRenderer.ts`) is driven by a
+ * small rAF loop here. The scalar crossfades generic tiles to their paired
+ * distill alternates - `drawGenericFade` in `render.ts` owns what the faded
+ * end actually looks like.
  *
- * Sequencing is deliberately asymmetric. Entering: fade the generics to
- * black first, THEN flip the ratio and let the slide carry the corpus rooms
- * inward - by the time anything moves, every generic cell is already fully
- * hidden, so nothing flashes its art mid-ride. Leaving: flip the ratio and
- * let the slide bring the sparser arrangement back first (generic cells
- * reappear on camera exactly as any other value would - a swap or a shift,
- * same as always - but held fully black throughout), THEN fade them in once
- * `requestAnimation`'s `onSettled` reports the slide has landed. The
- * alternative - fading generics in while still at the boundary, ahead of the
- * slide - would need the illusion planner to stage moves in a way it does
- * not today; holding the fade through the slide gets the same "nothing
- * teleports, nothing flashes" guarantee without touching `packages/map`.
+ * The sequence is asymmetric.
+ *
+ * - Entering: fade the generics out first, then flip the ratio and let the
+ *   slide carry the corpus rooms inward - by the time anything moves, every
+ *   generic cell is already fully faded, so nothing flashes its art mid-ride.
+ * - Leaving: flip the ratio and let the slide bring the sparser arrangement
+ *   back first (generic cells reappear on camera as any other value would -
+ *   a swap or a shift, same as always - but held fully faded throughout),
+ *   then fade them in once `requestAnimation`'s `onSettled` reports the
+ *   slide has landed. Fading them in ahead of the slide would need the
+ *   illusion planner to stage moves it does not make today.
  */
 import { useCallback, useRef, useState } from 'react';
 import { prefersReducedMotion } from './useMapCamera.ts';
@@ -39,7 +38,7 @@ import { prefersReducedMotion } from './useMapCamera.ts';
 export interface UseDistillModeOpts {
   /** the ratio to restore when leaving distill mode - `config.map.contentRatio` */
   defaultRatio: number;
-  /** how long the black fade takes, each direction - `config.map.distillFadeMs` */
+  /** how long the crossfade takes, each direction - `config.map.distillFadeMs` */
   fadeMs: number;
   setContentRatio: (ratio: number) => void;
   /** from `useRearrangement.ts` */
@@ -55,9 +54,9 @@ export function useDistillMode({
   requestDraw,
 }: UseDistillModeOpts) {
   const [distillMode, setDistillMode] = useState(false);
-  // Read every frame by `useMapRenderer.ts` - not React state, since it
-  // changes every rAF tick and a frame's worth of re-renders is not the
-  // architecture here (same reasoning as the camera ref).
+  // Read every frame by `useMapRenderer.ts`. A ref, not React state, for the
+  // same reason the camera is: it changes every rAF tick, and a frame's worth
+  // of re-renders is not the architecture here.
   const genericFade = useRef(0);
   // Guards against a second toggle landing mid-fade, before the ratio flip
   // and slide it is building up to have even happened.

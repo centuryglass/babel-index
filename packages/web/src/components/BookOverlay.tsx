@@ -10,8 +10,8 @@
  * (not a device or pointer gate, so a shrunk desktop window collapses too). A
  * reader that pages a spread at a time - the Babel book, two pages when wide
  * and one when narrow - needs to know which layout is showing to advance by the
- * right amount, so the SAME width and threshold are reported back through
- * `onWideChange`. CSS and JS read the one number; they cannot disagree about
+ * right amount, so the same width and threshold are reported back through
+ * `onWideChange`. CSS and JS read one number; they cannot disagree about
  * whether two pages are on screen.
  */
 import { useLayoutEffect, useRef } from 'react';
@@ -20,7 +20,7 @@ import { useDialog, useScrimDismiss } from '../hooks/useDialog.ts';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
 import { ZoomControls } from './ZoomControls.tsx';
 
-// Must match `@container book (min-width: ...)` in index.html - the width below
+// Must match `@container book (min-width: ...)` in style.css - the width below
 // which the spread collapses to a single column.
 const WIDE_MIN = 680;
 

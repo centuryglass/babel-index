@@ -1,65 +1,60 @@
 /**
  * Text scoring for search: keywords and story against a query.
  *
- * Separate from `ordering.js` because it is the only meaty string code in the
- * package - folding, tokenising, stopwords - and that file is worth keeping as
- * arithmetic. The blend that combines these with CLIP lives here too, since the
- * normalisation it depends on is the whole reason the weights mean anything.
+ * Separate from `ordering.ts` because it is the only meaty string code in the
+ * package - folding, tokenising, stopwords. The blend that combines these
+ * with CLIP lives here too, because the normalisation its weights depend on
+ * is defined in this file.
  *
  * ### Why every signal is normalised before it is weighted
  *
- * The three signals are not remotely on the same scale. Keyword and story scores
+ * The four signals are not on the same scale. Keyword, title and story scores
  * are ratios and land in [0, 1] by construction. A CLIP cosine is nominally
  * [-1, 1], but on a corpus of near-identical library walls the scores for one
  * query cluster into a narrow band - the images differ far less than CLIP's
- * range allows - so the raw number is a poor thing to weight. Blend it as-is and
- * there is no weight that works: large enough to matter and any keyword bonus
- * still swamps it, small enough to balance one and it is lost inside its own
- * spread.
+ * range allows - so no single weight balances it against the other three: large
+ * enough to matter and it swamps keyword bonuses, small enough to balance one
+ * and it is lost inside its own spread.
  *
- * So the CLIP term is min-max normalised across the corpus *for that query*: one
- * extra pass over an array that has just been scored anyway, after which a
- * weight of 0.25 really does mean "a quarter of what a perfect keyword match is
+ * So the CLIP term is min-max normalised across the corpus *for that query*:
+ * one extra pass over an array that has just been scored anyway, after which
+ * a weight of 0.25 means "a quarter of what a perfect keyword match is
  * worth". See `packages/config` for the weights themselves.
  *
  * ### One sort, not tiers
  *
  * Everything is ranked by the blended score. Bucketing - exact matches first,
  * then CLIP within the remainder - would let a room with one weak partial
- * keyword beat a room CLIP is certain about, and would break the thing the map
- * is for: the whole library rearranging, best in the middle and worst at the
- * edge, rather than a few results spliced to the front of an unchanged order.
+ * keyword beat a room CLIP is certain about, and would splice a few results
+ * onto the front of an unchanged order instead of rearranging the whole
+ * library, best in the middle and worst at the edge.
  *
  * ### Ranking is relative; certainty is not
  *
  * The blend answers "which room is most like the query". The map's density
- * gradient (`ordering.js`) asks a different question - "how sure are we at all"
- * - and the blended score cannot answer it, because min-max normalisation
- * destroys exactly the information required: some room always scores 1, whether
- * the query was `art nouveau` or `cghjj`. Certainty is therefore computed from
- * the *absolute* form of each signal, alongside the ranking and from the same
- * pass:
+ * gradient (`ordering.ts`) asks a different question - "how sure are we at
+ * all" - and the blended score cannot answer it: min-max normalisation
+ * destroys the very information required, since some room always scores 1
+ * whether the query was `art nouveau` or `cghjj`. Certainty is therefore
+ * computed from the *absolute* form of each signal, alongside the ranking and
+ * from the same pass:
  *
- *   - keyword and story ratios are already absolute. An exact keyword match is
- *     1 because it is a match, not because it beat the corpus.
- *   - CLIP contributes its raw cosine against a pair of thresholds. This is the
- *     only place the raw number is used rather than the normalised one, and it
- *     is the reason `embeddingScores` dequantises: a nonsense string still
+ *   - keyword and story ratios are already absolute. An exact keyword match
+ *     is 1 because it is a match, not because it beat the corpus.
+ *   - CLIP contributes its raw cosine against a pair of thresholds. This is
+ *     the only place the raw number is used rather than the normalised one,
+ *     and the reason `embeddingScores` dequantises: a nonsense string still
  *     produces a valid text vector, and what marks it as nonsense is that its
- *     cosine against every image is low in absolute terms, not that the spread
- *     between images vanished.
+ *     cosine against every image is low in absolute terms.
  *
- * The thresholds are the one part of this that genuinely wants calibrating
- * against a real corpus, which is the argument for them living in config.
+ * The thresholds want calibrating against a real corpus, which is why they
+ * live in config (`search.density`).
  *
- * No DOM. Two imports: the dot products it would otherwise duplicate, and a
- * lemmatizer - reducing free text to a base form is exactly the kind of thing
- * that is unwise to reimplement. `wink-lemmatizer` is chosen over a Porter
- * stemmer because a stemmer collapses by suffix alone and can't tell a noun
- * from a verb, so `animation` and `animal` share the stem `anim` - a real false
- * positive. The lemmatizer looks a word up per part of speech, so `lemmatise`
- * below tries noun, then verb, then adjective and keeps the first that changed
- * the word.
+ * No DOM. Two imports: the dot products from `ordering.ts` so they have one
+ * implementation, and a lemmatizer. `wink-lemmatizer` looks a word up per
+ * part of speech rather than collapsing by suffix like a stemmer would; a
+ * suffix-collapsing stem folds `animation` and `animal` together, which is a
+ * false positive. See `lemmatise` for the lookup order.
  */
 // Default import only: wink-lemmatizer is CommonJS, and Node's ESM interop
 // does not statically discover its named exports.
@@ -111,13 +106,13 @@ export function lemmatise(word: string): string {
  * `low` is a genuinely-irrelevant query's typical confidence (-1). Continuous
  * and monotone between them - see `signedClipCertainty`.
  *
- * All three are measured against a real corpus via `tools/embed/cosine-range.ts`
- * (2048 rooms x 2149 generation keywords, CLIP ViT-B/32), read off
+ * All three are measured against a real corpus via
+ * `tools/embed/cosine-range.ts` (CLIP ViT-B/32), read off
  * `cosine-range-report.json`:
- *   - `centre` is the *median* of the overall keyword x room distribution
- *     (mostly-unrelated pairs - `overall.p50`), cross-checked by a `--nonsense`
- *     keysmash probe that lands right on it (mean 0.212 vs 0.205).
- *   - `high` (`--universal`, `universal.ceiling`) is the *median* ceiling
+ *   - `centre` is the median of the overall keyword x room distribution
+ *     (mostly-unrelated pairs - `overall.p50`), cross-checked by a
+ *     `--nonsense` keysmash probe that lands on the same point.
+ *   - `high` (`--universal`, `universal.ceiling`) is the median ceiling
  *     across near-universal keywords true of nearly every room (`bookshelf`,
  *     `book`, `library`, ...), preferred over the raw max so one outlier pair
  *     does not define "as sure as it gets".
@@ -125,21 +120,20 @@ export function lemmatise(word: string): string {
  *     ten strong concepts CLIP recognises but that share no visual structure
  *     with library walls (`race car`, `swimming pool`, `sandy beach`, ...).
  *
- * `low` sits BELOW `centre` (0.171 < 0.205): a coherent-but-wrong concept is
- * confidently negative, not merely no-opinion, because it has its own specific
- * direction that is actively dissimilar to library imagery - where gibberish
- * just embeds near the corpus mean. That is a property of the embedding space,
- * and the reason `low` is measured rather than mirrored from `high`.
+ * `low` sits below `centre`: a coherent-but-wrong concept is confidently
+ * negative, not merely no-opinion, because it has its own specific direction
+ * that is actively dissimilar to library imagery - where gibberish just
+ * embeds near the corpus mean. So `low` is measured, not mirrored from `high`.
  */
 export const CLIP_CERTAINTY: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
  *
- * Short and ASCII on purpose. This is not a linguistic resource, it is a guard
- * against a query like "the room of glass" spending two thirds of its weight on
- * "the" and "of" - and, for keywords, against `the` scoring a partial match
- * against `theatrical`.
+ * A short hand-maintained list, not a linguistic resource. It guards two
+ * things: a query like "the room of glass" spending two thirds of its weight
+ * on "the" and "of", and, for keywords, `the` scoring a partial match against
+ * `theatrical`.
  */
 export const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'this', 'that', 'was', 'are', 'its',
@@ -156,8 +150,8 @@ export const STOPWORDS = new Set([
  * terms borrowed from French and German. NFD only exposes marks riding on a
  * base letter, though - `ł`, `ø`, `đ` are letters in their own right with
  * nothing to strip, so `Zdzisław` survives NFD unchanged. `any-ascii` is the
- * fallback for exactly that remainder: a per-code-point transliteration table,
- * so `Zdzisław` and `Zdzislaw` fold to the same string.
+ * fallback for that remainder: a per-code-point transliteration table, so
+ * `Zdzisław` and `Zdzislaw` fold to the same string.
  */
 export function fold(text: unknown): string {
   return foldWithMap(text).folded.trim();
@@ -170,32 +164,30 @@ const COMBINING = /[\u0300-\u036f]/g;
  * `fold`, but keeping track of where every folded character came from.
  *
  * Highlighting needs this and nothing else does. Matching happens on folded
- * text; the `<mark>` has to land on the ORIGINAL, and a folded index is not an
- * original index - every step of folding can change length. Decomposed
- * `cafe\u0301` is five characters and folds to four; `\u0130` lowercases to two
- * from one. Use one as the other and every highlight on a corpus with an accent
- * in it lands slightly wrong, which is the kind of bug nobody reports because it
- * looks like sloppy rendering rather than a defect.
+ * text; the `<mark>` has to land on the original text, and a folded index is
+ * not an original index - every step of folding can change length.
+ * Decomposed `cafe\u0301` is five characters and folds to four; `\u0130`
+ * lowercases to two from one. Used as one another, every highlight on a
+ * corpus with an accent in it lands slightly wrong.
  *
- * So this folds one CODE POINT at a time and records, for each UTF-16 unit of
- * the output, the index of the source unit that produced it. `map.length` is
- * always `folded.length`, and `map[i] <= map[i + 1]`, which is what lets a range
- * in folded space be read straight back as a range in the original.
+ * So this folds one code point at a time and records, for each UTF-16 unit
+ * of the output, the index of the source unit that produced it. `map.length`
+ * is always `folded.length`, and `map[i] <= map[i + 1]`, which is what lets a
+ * range in folded space be read straight back as a range in the original.
  *
- * Per code point rather than over the whole string is a small, deliberate change
- * of meaning that `fold` inherits: whole-string lowercasing is context
- * sensitive in a couple of places (Greek sigma takes its final form at the end
- * of a word), and an index wants folding to be position independent, so the
- * same word folds the same way wherever it appears. Canonical reordering across
- * a combining sequence is likewise moot here, because every combining mark is
- * stripped a line later. `any-ascii` is called per code point for the same
- * reason - it accepts a whole string, but feeding it one code point at a time
- * keeps its output attributable to a single source index like everything else
- * in this loop, even though nothing in this corpus's vocabulary actually
- * produces its multi-character transliterations (CJK, emoji).
+ * Per code point rather than over the whole string makes folding position
+ * independent, which is what an index wants - the same word folds the same
+ * way wherever it appears. Whole-string lowercasing is context sensitive in a
+ * couple of places (Greek sigma takes its final form at the end of a word);
+ * canonical reordering across a combining sequence is moot here, since every
+ * combining mark is stripped a line later. `any-ascii` is called per code
+ * point for the same reason: it accepts a whole string, but feeding it one
+ * code point at a time keeps its output attributable to a single source
+ * index, even though only CJK and emoji produce its multi-character
+ * transliterations.
  *
- * Deliberately does NOT trim: `fold` trims its own result, and trimming inside
- * this would shift every recorded index off the text it describes.
+ * Does not trim: `fold` trims its own result, and trimming inside this would
+ * shift every recorded index off the text it describes.
  */
 export function foldWithMap(text: unknown): { folded: string; map: number[] } {
   const src = String(text ?? '');
@@ -233,17 +225,16 @@ export function tokenise(text: unknown, { minLength = 3, stopwords = true }: Tok
  * Parse a raw query into an ordered list of terms - one word, or one quoted
  * phrase treated as a single unit (docs/search_rules.md, "The parsed query").
  *
- * Quotes are found FIRST, before folding removes anything meaningful: every
+ * Quotes are found before folding removes anything meaningful: every
  * `"..."` span becomes one term with `quoted: true`, and everything outside
  * quotes is split on whitespace into single-word terms the same way
- * `tokenise()` already splits. An unterminated quote (`art "nouveau`) is not a
- * parse error - the dangling `"` is just a character with nothing either side
- * of it to pair with, so the rest of the query reads as ordinary words.
+ * `tokenise()` already splits. An unterminated quote (`art "nouveau`) is not
+ * a parse error - the dangling `"` is just a character with nothing either
+ * side of it to pair with, so the rest of the query reads as ordinary words.
  *
- * Deliberately does not apply the stopword/`minTokenLength` floor here -
- * that still happens per word for SCORING (`tokenise` inside `keywordScore`/
- * `storyScore` and friends). Quoting changes how a term is matched, not the
- * vocabulary floor.
+ * The stopword/`minTokenLength` floor is not applied here - it still happens
+ * per word for scoring (`tokenise` inside `keywordScore`/`storyScore`).
+ * Quoting changes how a term is matched, not the vocabulary floor.
  */
 export function parseQuery(raw: unknown): ParsedQuery {
   const text = String(raw ?? '');
@@ -276,14 +267,14 @@ export function parseQuery(raw: unknown): ParsedQuery {
 
 /**
  * How one term matches a room's keywords - exact, partial, or neither - as
- * ONE classification, whether the term is a single word or a quoted phrase.
+ * one classification, whether the term is a single word or a quoted phrase.
  *
  * This is `keywordScore`'s substring rule, read per term rather than blended
- * across the whole query: a quoted phrase is tested as its whole `folded` text
- * against each keyword, exactly like an unquoted single-word term already is,
- * which is what makes "quoting an unquoted-equivalent single word changes
- * nothing" (docs/search_rules.md, Feature additions) true for free - the two
- * cases share this one code path rather than being handled separately.
+ * across the whole query: a quoted phrase is tested as its whole `folded`
+ * text against each keyword, the same way an unquoted single-word term
+ * already is. So "quoting an unquoted-equivalent single word changes nothing"
+ * (docs/search_rules.md, "Feature additions") holds by construction - the two
+ * cases share this one code path.
  *
  * @param keywords folded room keywords
  * @returns `partial` is the best substring fraction found, 0 when there is no
@@ -306,7 +297,7 @@ export function classifyTagTerm(
 
 /**
  * Fold and tokenise, but keep each surviving token's [start, end) span into
- * the FOLDED text rather than throwing position away.
+ * the folded text rather than throwing position away.
  *
  * `tokenise()` is `fold(text).split(...)`, which is enough for a bag of words
  * but not for "how many characters does this run of the story span" - the
@@ -346,14 +337,14 @@ export interface SearchIndexSource {
  * lookups. Rooms without metadata stay null, so the array is still indexed by
  * room id.
  *
- * The story is kept as an ordered SEQUENCE of `{lemma, start, end}`, not a bag -
- * `storyScore`'s ratio only needs membership (`set`, kept alongside so that stays
- * an O(1) lookup), but the longest-contiguous-run measurement a long story match
- * needs (`longestMatchRun`, `storyPhraseRun`) has to know which words sit next to
- * which. Positions are into the FOLDED story, not the original - good enough for
- * a character-count threshold, and `storyMatchRanges` (which does need the
- * original for highlighting) re-walks the source text itself rather than reading
- * this index.
+ * Stories are kept as an ordered *sequence* of `{lemma, start, end}`, not a
+ * bag - `storyScore`'s ratio only needs membership (`set`, kept alongside so
+ * that stays an O(1) lookup), but the longest-contiguous-run measurement a
+ * long story match needs (`longestMatchRun`, `storyPhraseRun`) has to know
+ * which words sit next to which. Positions are into the folded story, not
+ * the original - good enough for a character-count threshold, and
+ * `storyMatchRanges` (which does need the original for highlighting)
+ * re-walks the source text itself rather than reading this index.
  *
  * @param joined output of `joinMetadata()`
  */
@@ -368,7 +359,7 @@ export function buildSearchIndex(joined: (SearchIndexSource | null)[] | null | u
       end,
     }));
     return {
-      // Folded but NOT tokenised: a keyword is matched whole as well as by
+      // Folded but not tokenised: a keyword is matched whole as well as by
       // token, so that a query of "art nouveau" scores 1 against the keyword
       // "art nouveau" rather than the 0.45 its two tokens would average to.
       keywords: (entry.keywords ?? []).map((k) => fold(k.text)),
@@ -391,12 +382,12 @@ export function buildSearchIndex(joined: (SearchIndexSource | null)[] | null | u
  *     what lets a partial or reordered query score at all.
  *
  * A partial match is `matched length / keyword length`, so `art` against
- * `art nouveau` scores 3/11 and against `art` scores 1. Dividing by the KEYWORD
- * is deliberate: a short query matching a long keyword has matched less of it,
- * and should say so.
+ * `art nouveau` scores 3/11 and against `art` scores 1. The divisor is the
+ * keyword, not the query - a short query matching a long keyword has matched
+ * less of it, and should say so.
  *
- * The mean rather than the sum keeps the result in [0, 1] without clamping, and
- * rewards matching more *of the query* rather than rewarding longer queries.
+ * The mean rather than the sum keeps the result in [0, 1] without clamping,
+ * and rewards matching more *of the query* rather than longer queries.
  */
 export function keywordScore(foldedQuery: string, queryTokens: string[], keywords: string[] | null | undefined): number {
   if (!keywords?.length) return 0;
@@ -433,18 +424,18 @@ export function keywordScore(foldedQuery: string, queryTokens: string[], keyword
 /**
  * How well a query matches a room's story, in [0, 1].
  *
- * Normalised by the QUERY, not by the text - the opposite of the keyword rule,
- * and for a reason. Dividing a match by the length of the story would mean a
- * longer story scores lower for the same hit, which is backwards; what is being
- * asked is "how much of what you asked for is in here".
+ * Normalised by the query, not by the text - the opposite of the keyword
+ * rule. Dividing a match by the length of the story would score the same hit
+ * lower in a longer story; the question being asked is "how much of what you
+ * asked for is in here".
  *
  * Each token is weighted by its own length, so `cartographer` counts for more
  * than `oil`. Matching is by lemma, so `room` finds `rooms`, `survey` finds
  * `surveyed`, and the reverse; `cat` does not match `catalogue`, nor
  * `animation` `animal`. The story index is lemmatised once at build time
  * (`buildSearchIndex`); the query's few tokens are lemmatised here, and
- * weighting stays keyed to the ORIGINAL token length so the query-normalisation
- * above still holds.
+ * weighting stays keyed to the original token length so the query-
+ * normalisation above still holds.
  *
  * @param queryTokens raw (folded, untokenised-past-splitting) tokens
  * @param storyIndex the room's story
@@ -463,15 +454,16 @@ export function storyScore(queryTokens: string[], storyIndex: StoryIndex | null 
 }
 
 /**
- * The character span of the longest CONTIGUOUS run of story words whose lemma
- * is one of `matchLemmas` - what tells "cat" (one word, moderate certainty)
- * from "a room walled in glass" (a whole matched clause, saturating).
+ * The character span of the longest *contiguous* run of story words whose
+ * lemma is one of `matchLemmas` - what tells "cat" (one word, moderate
+ * certainty) from "a room walled in glass" (a whole matched clause,
+ * saturating).
  *
- * "Contiguous" means adjacent in the story's own filtered token SEQUENCE, not
- * in the raw text - a stopword or a too-short word between two matches (`a
- * room OF glass`) does not break the run, because it was never part of the
- * index either. `matchLemmas` is unordered on purpose: this measures "most of
- * a sentence matched", not "matched in the order the query gave it" - that
+ * "Contiguous" means adjacent in the story's own filtered token sequence,
+ * not in the raw text - a stopword or a too-short word between two matches
+ * (`a room of glass`) does not break the run, because it was never part of
+ * the index either. `matchLemmas` is unordered: this measures "most of a
+ * sentence matched", not "matched in the order the query gave it" - that
  * stricter, ordered test is `storyPhraseRun`, for a quoted phrase.
  *
  * @returns characters spanned by the longest run, 0 if none
@@ -497,11 +489,11 @@ export function longestMatchRun(
 }
 
 /**
- * Whether a quoted phrase's words appear in the story CONSECUTIVELY, by lemma,
- * in the order the phrase gave them - the story-side half of "a quoted phrase
- * is one contiguous story match" (docs/search_rules.md, Feature additions).
- * Unlike `longestMatchRun`, order matters: `"glass room"` must not match a
- * story where only `room glass` appears.
+ * Whether a quoted phrase's words appear consecutively in the story, by
+ * lemma, in the order the phrase gave them - the story-side half of "a quoted
+ * phrase is one contiguous story match" (docs/search_rules.md, "Feature
+ * additions"). Unlike `longestMatchRun`, order matters: `"glass room"` must
+ * not match a story where only `room glass` appears.
  *
  * @param phraseLemmas the phrase's own words, lemmatised, in order
  * @returns characters spanned by the match, 0 if the phrase is not found
@@ -518,29 +510,21 @@ export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined
   return 0;
 }
 
-/**
- * ## Where the query matched, for highlighting
- *
- * Two functions, one per match rule, sitting under the two scorers they shadow
- * so that a change to either is visibly a change to a pair.
- *
- * They exist here rather than in a component for one reason: a view that
- * re-derives "what matched" will drift from the thing that ranked, and it will
- * drift silently - marked text that scored nothing, or a room in the cluster
- * with nothing marked at all. Both take the SAME `foldedQuery` and `queryTokens`
- * the ranking was computed from, so a token dropped for being a stopword or for
- * being under `minTokenLength` cannot highlight. It did not score, so it does
- * not mark.
- *
- * The asymmetry between them is the asymmetry between the scorers, and it is
- * not incidental: a keyword matches by SUBSTRING (`k.includes(token)`), a story
- * word by LEMMA (`lemmatise(word)` equality). One highlighter over both would
- * mark text `keywordScore` never looked at and miss text `storyScore` credited.
- *
- * Both return ranges into the ORIGINAL string - sorted, merged, non-overlapping
- * - which is what `<Highlight>` renders and what makes them assertable without
- * a DOM.
- */
+// --- Where the query matched, for highlighting --------------------------------
+//
+// Two range finders, one per match rule, shadowing the two scorers above
+// them. A keyword matches by substring and a story word by lemma; one
+// highlighter over both would mark text `keywordScore` never looked at and
+// miss text `storyScore` credited. They live here rather than in a component
+// for one reason: a view that re-derives "what matched" drifts from the
+// thing that ranked, silently - marked text that scored nothing, or a ranked
+// room with nothing marked.
+//
+// Both take the same `foldedQuery` and `queryTokens` the ranking was
+// computed from, so a token dropped as a stopword or under `minTokenLength`
+// cannot highlight: it did not score, so it does not mark. Both return
+// ranges into the original string - sorted, merged, non-overlapping - which
+// is what `<Highlight>` renders and what makes them assertable without a DOM.
 
 /**
  * Merge sorted-by-start ranges, dropping empties and collapsing overlaps.
@@ -561,7 +545,7 @@ function mergeRanges(ranges: MatchRange[]): MatchRange[] {
 }
 
 /**
- * Turn a [start, end) span of FOLDED text into one of the original.
+ * Turn a [start, end) span of folded text into one of the original.
  *
  * The end is exclusive, so it is the source index of the character *after* the
  * span - `map[end]` when there is one, and the string's length when the span
@@ -587,11 +571,10 @@ function occurrences(hay: string, needle: string): MatchRange[] {
  * Where a query matched one keyword, mirroring `keywordScore`'s substring rule.
  *
  * The union of both of that function's readings - the whole query as a
- * substring, and each query token as a substring - rather than only whichever
- * of the two won the score. They almost always overlap into one range anyway,
- * since a query contains its own tokens, and the union is the honest answer to
- * the question the reader is asking ("why is this chip here?") rather than to
- * the narrower "which arithmetic produced the number".
+ * substring, and each query token as a substring - not only whichever won
+ * the score. A query contains its own tokens, so the two almost always
+ * overlap into one range anyway; and the reader's question is "why is this
+ * chip here", not "which arithmetic produced the number".
  *
  * @param text the keyword as written, unfolded
  * @returns ranges into `text`
@@ -609,23 +592,23 @@ export function keywordMatchRanges(text: unknown, foldedQuery: string, queryToke
 }
 
 /**
- * Where a query matched a story, mirroring `storyScore`'s LEMMA rule.
+ * Where a query matched a story, mirroring `storyScore`'s lemma rule.
  *
  * Walks the text on the same word boundary `tokenise` splits on, and marks a
  * word whose lemma is one of the query's. That is the same test `storyScore`
- * makes against the pre-lemmatised index `buildSearchIndex` holds - lemmatising
- * here rather than reusing that set because this needs to know WHICH word in
- * the original text matched, and the index has thrown the positions away.
+ * makes against the pre-lemmatised index `buildSearchIndex` holds -
+ * lemmatising here rather than reusing that set because this needs to know
+ * which word in the original text matched, and the index has thrown the
+ * positions away.
  *
  * Two details keep it faithful to what actually scored:
  *
  *   - words `tokenise` would have dropped are skipped, so a query token that
  *     lemmatises onto a stopword marks nothing - `storyScore` tests against
  *     the tokenised story, where that word is not present.
- *   - the WHOLE matched word is marked, not the lemma. `survey` marks all of
+ *   - the whole matched word is marked, not the lemma. `survey` marks all of
  *     `surveyed`. Marking three quarters of a word reads as a rendering bug;
- *     marking the word reads as "this is why this room is here", which is the
- *     question being asked.
+ *     marking the word reads as "this is why this room is here".
  *
  * @param text the story as written, unfolded
  * @param opts.minLength must match what built the story index
@@ -683,15 +666,15 @@ const clamp01 = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.ma
 /**
  * Formula constants that are not user-tunable weights - unlike
  * `config.search.weights`, moving these means re-checking every cross-signal
- * inequality in docs/search_rules.md ("Balancing signals") they were chosen
- * to satisfy, not retuning by feel.
+ * inequality in docs/search_rules.md ("Balancing signals against each other")
+ * they were chosen to satisfy, not retuning by feel.
  *
  * `TAG_PARTIAL_SATURATION` caps how much a query can inflate `tagPartialSum`
  * by adding more partially-matching terms - without it, a long enough query
  * could add up to more than the `P` budget the exact-tag margin (`E > P + S +
  * L + C`) assumes. `STORY_LONG_RANGE` is the char-length band the "long story
  * match" bonus ramps across: below `low` (roughly one or two words) it is
- * exactly zero, by `high` (roughly a full clause) it has saturated.
+ * zero, and by `high` (roughly a full clause) it has saturated.
  */
 export const TAG_PARTIAL_SATURATION = 2;
 export const STORY_LONG_RANGE = { low: 16, high: 40 };
@@ -722,18 +705,17 @@ export interface CertaintyParts {
 }
 
 /**
- * CLIP's raw cosine placed against the three-anchor band, as a SIGNED
- * certainty in [-1, 1] (`docs/search_rules.md` "Computing certainty" and
- * "Image-content (CLIP) matching"): 0 at `band.centre` (the no-opinion point),
- * rising to +1 at `band.high` (a genuine match's typical confidence), falling
- * to -1 at `band.low` (a genuinely-irrelevant query's typical confidence).
- * Two linear segments, continuous at the centre - not one band either side of
- * a single hand-set floor.
+ * CLIP's raw cosine placed against the three-anchor band, as a signed
+ * certainty in [-1, 1] (docs/search_rules.md "Computing certainty" and
+ * "Image-content (CLIP) matching"): 0 at `band.centre` (the no-opinion
+ * point), rising to +1 at `band.high` (a genuine match's typical
+ * confidence), falling to -1 at `band.low` (a genuinely-irrelevant query's
+ * typical confidence). Two linear segments, continuous at the centre.
  *
  * `clipCertaintyGate` - the ranking term docs/search_rules.md calls for - is
  * this function's output clamped to its positive half: `Math.max(0, ...)`,
- * done by the caller (`rankHybrid`), not here, because certainty's negative
- * half (`Cneg` in `matchCertainty`) needs the same call's negative half too.
+ * done by the caller (`rankHybrid`) rather than here, because
+ * `matchCertainty` needs the same call's negative half too.
  *
  * @returns in [-1, 1]
  */
@@ -752,9 +734,9 @@ export function signedClipCertainty(cosine: number | null | undefined, band: Cli
 
 /**
  * A signed `[-1, 1]` certainty as a percentage, magnitude clamped to
- * `0.01`-`99.99` so nothing - CLIP's own signed curve, or the composite
- * `certainty` `explainRanking` reports up top - ever reads as completely
- * certain in either direction, not even at the anchor cosines themselves
+ * 0.01-99.99. Nothing reads as completely certain in either direction, not
+ * even at the anchor cosines themselves: this covers both CLIP's own signed
+ * curve and the composite `certainty` `explainRanking` reports up top
  * (docs/search_rules.md "Reporting").
  *
  * @param signed in [-1, 1]
@@ -770,37 +752,36 @@ export function signedPercent(signed: number): number {
  * [-1, 1], positive is confidence the room matches, 0 is no opinion, negative
  * is confidence it does NOT (docs/search_rules.md, "Computing certainty").
  *
- * A signed soft-OR of three absolute readings, each computed from the room's
- * RAW evidence rather than anything normalised across the corpus - certainty
- * answers "would this hold up on its own", which a query nothing in the
- * corpus can answer honestly still needs a real answer to (this is what
- * `ordering.ts`'s density gradient reads, not the ranking score):
+ * A signed soft-OR of absolute readings, each computed from the room's raw
+ * evidence rather than anything normalised across the corpus. This is the
+ * number `ordering.ts`'s density gradient reads, not the ranking score:
  *
  *   - `K` (tags): coverage-scaled - the mean, over every query term, of 1 for
  *     an exact match, the substring fraction for a partial one, 0 for none.
- *     Already computed by the caller (mean of `classifyTagTerm` over the
- *     query's terms), since certainty and ranking read the same per-term
+ *     Computed by the caller (mean of `classifyTagTerm` over the query's
+ *     terms), since certainty and ranking read the same per-term
  *     classification.
- *   - `S` (story): from ABSOLUTE matched length, not the query-relative ratio
- *     ranking uses - a single matched word sits at the moderate `STORY_FLOOR`,
- *     a full matched clause reaches 1. Using the ratio here would make a
- *     one-word query that matches read as 100% certain, which this exists to
- *     avoid.
+ *   - `Kt` (title): the same coverage-scaled mean as K, against the room's one
+ *     title (a one-keyword index) - computed by the caller alongside K.
+ *   - `S` (story): from absolute matched length, not the query-relative
+ *     ratio the ranking uses. A single matched word sits at the moderate
+ *     `STORY_FLOOR`, a full matched clause reaches 1; using the ratio here
+ *     would make a one-word query that matches read as 100% certain.
  *   - `Cpos`/`Cneg`: the positive and negative halves of the signed CLIP curve.
  *
- * Positive certainty is `1 - (1-K)(1-S)(1-Cpos)` - any one signal can carry it
- * alone, and two weak agreeing signals count for more than either alone. The
- * signed result is that value when any positive signal fired, else `-Cneg`: a
- * room with real text evidence is never reported as a mismatch just because
- * CLIP is cool on its picture.
+ * Positive certainty is `1 - (1-K)(1-Kt)(1-S)(1-Cpos)` - any one signal can
+ * carry it alone, and two weak agreeing signals count for more than either
+ * alone. The signed result is that value when any positive signal fired,
+ * else `-Cneg`: a room with real text evidence is never reported as a
+ * mismatch just because CLIP is cool on its picture.
  *
  * @param parts.tagCoverage K, already in [0, 1]
  * @param parts.titleCoverage Kt, already in [0, 1] - the same coverage-scaled
  *   reading as K, against the room's title instead of its keywords
  * @param parts.storyLongChars longest contiguous matched run, chars
  * @param parts.storyMatched did any story word match at all - a single
- *   matched word's `storyLongChars` can sit under the ramp's floor and read as
- *   the same "zero" a non-match would, so this is passed explicitly
+ *   matched word's `storyLongChars` can sit under the ramp's floor and read
+ *   as the same "zero" a non-match would, so this is passed explicitly
  * @param parts.cosine raw CLIP cosine, or null/undefined
  * @param clip raw-cosine anchors
  * @returns signed, in [-1, 1]
@@ -817,9 +798,10 @@ export function matchCertainty(
   const Cneg = Math.max(0, -signed);
 
   const pos = 1 - (1 - K) * (1 - Kt) * (1 - S) * (1 - Cpos);
-  // `-0` is technically correct when nothing at all fired, but reads as a
-  // surprising sign flip on an otherwise-zero certainty - `Cneg` itself is
-  // already 0 in that case, so this is just avoiding IEEE 754's negative zero.
+  // When nothing fired, `-Cneg` would return `-0`: it compares equal to 0,
+  // but a sign on a zero certainty reads as a negative claim. `Cneg` is
+  // already 0 in that case, so the explicit `0` only avoids IEEE 754's
+  // negative zero.
   return pos > 0 ? pos : Cneg > 0 ? -Cneg : 0;
 }
 
@@ -859,15 +841,16 @@ function compareClipAxis(x: ScoredRow, y: ScoredRow): number {
 
 /**
  * One signal's own ranking over `byId` (id-indexed, same shape `scored` has
- * before the composite sort below reorders it) - "this room ranks #4 by tag,
- * tied with 2 others" (docs/search_rules.md "Reporting"), independent of
- * whatever the weighted sum decides. Competition ranking (`1, 2, 2, 4`, not
+ * when `rankHybrid` passes it in) - "this room ranks #4 by tag, tied with 2
+ * others" (docs/search_rules.md "Reporting"), independent of whatever the
+ * weighted sum decides. Competition ranking (`1, 2, 2, 4`, not
  * `1, 2, 2, 3`): a tie shares the rank the group's best position would have
  * gotten, so "#4" always means "3 rooms score higher", tie or no tie.
  *
  * @param byId one row per room, indexed by id
  * @param compare ascending on this axis
- * @returns both indexed by id; `rank` is 1-based, `ties` is how many OTHER rooms share it
+ * @returns both indexed by id; `rank` is 1-based, `ties` is how many other
+ *   rooms share it
  */
 function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => number): { rank: Int32Array; ties: Int32Array } {
   const ids = byId.map((_, i) => i);
@@ -892,20 +875,20 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
  * Rank the whole corpus by the blend of whatever signals are available.
  *
  * The weighted sum is the seven constants docs/search_rules.md "Balancing
- * signals" names: `E` per exact tag, `P` for the saturating partial-tag
- * budget, `T` for an exact title match, `Pt` for the partial-title budget,
- * `S` for a short story match, `L` for the saturating long-story bonus, `C`
- * for CLIP (`clipNorm * clipCertaintyGate` - the relative rank position times
- * the absolute confidence, so a query CLIP has no opinion about cannot look
- * confident just because it produced *some* top result).
- * Missing signals are omitted rather than substituted: no embedding blob means
- * the ranking is text-only and honest about it, and no metadata means it is
- * CLIP-only. Both are real rankings. Only the case where neither exists needs
- * the server's stub.
+ * signals against each other" names: `E` per exact tag, `P` for the
+ * saturating partial-tag budget, `T` for an exact title match, `Pt` for the
+ * partial-title budget, `S` for a short story match, `L` for the saturating
+ * long-story bonus, `C` for CLIP (`clipNorm * clipCertaintyGate` - relative
+ * rank position times absolute confidence, so a query CLIP has no opinion
+ * about cannot look confident just because it produced *some* top result).
+ * Missing signals are omitted rather than substituted: no embedding blob
+ * means the ranking is text-only and honest about it, and no metadata means
+ * it is CLIP-only. Both are real rankings. Only the case where neither
+ * exists needs the server's stub.
  *
  * @param opts.query          the raw query string
  * @param opts.count          rooms in the corpus
- * @param opts.weights        `config.search.weights` - the five-constant shape
+ * @param opts.weights        `config.search.weights`
  * @param opts.embeddings the blob, roomCount * dim row-major
  * @param opts.vector the query vector, L2-normalised
  * @param opts.clipCertainty raw-cosine anchors for CLIP's share of certainty
@@ -913,17 +896,17 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
  *   density gradient wants it - and `breakdown` follows the same convention,
  *   every array indexed by rank rather than by room id.
  *
- *   `breakdown` is what the catalog shows under a room and what `explainScore`
- *   formats. It is returned always rather than behind a flag: a second pass
- *   that recomputed these for display could disagree with the one that sorted,
- *   and a scoring explanation that does not match the scoring is worse than
- *   none.
+ *   `breakdown` is what the catalog shows under a room and what
+ *   `explainRanking` formats. It is returned always rather than behind a
+ *   flag: a second pass that recomputed these for display could disagree
+ *   with the one that sorted, and a scoring explanation that does not match
+ *   the scoring is worse than none.
  *
- *   `ranks`/`ties` are three more independent sorts of `breakdown`'s own
- *   numbers (tag: `tagExact`/`tagPartialSum`; story: `story`/`storyLongChars`;
- *   clip: `cosine`), each parallel to `order` like `breakdown` - "this room
- *   ranks #4 by tag, tied with 2 others" without the composite `order` ever
- *   being touched by a single-axis re-sort.
+ *   `ranks`/`ties` are independent per-axis sorts of `breakdown`'s own
+ *   numbers (tag: `tagExact`/`tagPartialSum`; title: `titleExact`/
+ *   `titlePartial`; story: `story`/`storyLongChars`; clip: `cosine`), each
+ *   parallel to `order` like `breakdown` - see `rankAxis` for what the
+ *   per-axis rank and tie counts mean.
  */
 export interface RankHybridOpts {
   query: string;
@@ -951,22 +934,23 @@ export function rankHybrid({
   const parsed = parseQuery(query);
   const queryTokens = tokenise(query, { minLength: minTokenLength });
   const queryLemmas = new Set(queryTokens.map(lemmatise));
-  // Quoted multi-word phrases get an ORDERED story run of their own, on top of
-  // the unordered scattered-word run every query gets - see storyPhraseRun.
+  // Quoted multi-word phrases get an ordered story run of their own, on top
+  // of the unordered scattered-word run every query gets - see
+  // `storyPhraseRun`.
   const phraseLemmas = parsed.terms.filter((t) => t.quoted && t.words.length > 1).map((t) => t.words.map(lemmatise));
 
   // Stopwords and the minTokenLength floor still apply per word for tag
-  // scoring, same as they always have for `queryTokens` above - quoting
-  // changes how a term is MATCHED, not the vocabulary floor (docs/search_rules.md
-  // "The parsed query"). A quoted phrase is one already-formed unit rather
-  // than "a word", so it is always eligible regardless of its own length.
+  // scoring, as they do for `queryTokens`. Quoting changes how a term is
+  // matched, not the vocabulary floor (docs/search_rules.md "The parsed
+  // query"). A quoted phrase is one already-formed unit rather than a word,
+  // so it is always eligible regardless of its own length.
   const tagTerms = parsed.terms.filter(
     (t) => t.quoted || (t.folded.length >= minTokenLength && !STOPWORDS.has(t.folded))
   );
 
-  // CLIP twice over, from one pass of dot products: raw cosines for certainty,
-  // and the same column min-maxed for the blend. Two questions, two scalings -
-  // see the header.
+  // CLIP twice over, from one pass of dot products: raw cosines for
+  // certainty, and the same column min-maxed for the blend. Two questions,
+  // two scalings - see *Ranking is relative; certainty is not* above.
   let cosines = null;
   let clipNormAll = null;
   if (embeddings && dim > 0 && vector) {
@@ -1065,18 +1049,18 @@ export function rankHybrid({
     };
   }
 
-  // Independent per-signal sorts of the same numbers just computed, run
-  // BEFORE the main sort below while `scored` is still id-indexed - so
+  // Independent per-signal sorts of the numbers just computed, run before
+  // the composite sort below while `scored` is still id-indexed - so
   // `rank`/`ties` come back indexed by room id, same as `scored` itself, and
   // re-sorting for one display column never touches the composite `order`
-  // (docs/search_rules.md "Data structures" §4, "Reporting").
+  // (docs/search_rules.md "The corpus-wide result", "Reporting").
   const tagRanking = rankAxis(scored, compareTagAxis);
   const titleRanking = rankAxis(scored, compareTitleAxis);
   const storyRanking = rankAxis(scored, compareStoryAxis);
   const clipRanking = rankAxis(scored, compareClipAxis);
 
-  // Stable sort, so rooms that every signal is silent about keep their id order
-  // rather than shuffling for no reason the reader can see.
+  // Stable sort, so rooms that every signal is silent about keep their id
+  // order rather than shuffling.
   scored.sort((a, b) => b.score - a.score);
 
   const certainty = new Float32Array(count);
@@ -1146,31 +1130,28 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 
 
 /**
  * One room's ranking, as a reader reads it rather than as the sum computed
- * it: one composite line ("#4 of 2048, 73% match certainty"), and one line
- * per axis that actually found something for this room - tag, story, and
- * (whenever the corpus has embeddings at all) CLIP - each carrying its OWN
+ * it: one composite line ("#4 of 2,048, 73% match certainty"), and one line
+ * per axis that actually found something for this room - tag, title, story,
+ * and CLIP whenever the corpus has embeddings at all - each carrying its own
  * independent rank/tie count from `rankHybrid`'s `ranks`/`ties`, not the
- * composite's. A reader needs "why", not the sum's arithmetic read out loud -
- * the arithmetic backs every number here without being the display itself.
+ * composite's.
  *
  * `certainty` is the only number here computed against absolute bounds
- * (docs/search_rules.md "Computing certainty") rather than being read
- * straight off `breakdown.score`, and `contributions` exists so a reader can
- * still ask "why" without that absolute number being confused for one of the
- * terms that produced it: each is that axis's weighted term as a SHARE of
- * `breakdown.score` (docs/search_rules.md "Reporting" - "a percentage of the
- * total score contributed by each signal that actually contributed
- * something"), sorted greatest first, an axis that contributed nothing
- * omitted rather than shown as `0%`.
+ * (docs/search_rules.md "Computing certainty") rather than read straight off
+ * `breakdown.score`. `contributions` exists so a reader can still ask "why"
+ * without confusing that absolute number for one of the terms that produced
+ * it: each is that axis's weighted term as a share of `breakdown.score`,
+ * sorted greatest first, an axis that contributed nothing omitted rather
+ * than shown as `0%` (docs/search_rules.md "Reporting").
  *
  * @param rank position in `order`
  * @param opts.breakdown from `rankHybrid`
  * @param opts.certainty from `rankHybrid`
  * @param opts.ranks from `rankHybrid`
  * @param opts.ties from `rankHybrid`
- * @param opts.weights the five-constant `config.search.weights` shape
+ * @param opts.weights `config.search.weights`
  * @param opts.total rooms in the corpus (`result.order.length`)
- * @returns `null` when nothing at all matched this room - no tag, no story, no CLIP data.
+ * @returns `null` when nothing at all matched this room - no tag, no title, no story, no CLIP data.
  */
 export interface ExplainRankingOpts {
   breakdown: ScoreBreakdown;

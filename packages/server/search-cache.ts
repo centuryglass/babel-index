@@ -1,23 +1,20 @@
 /**
  * Bounded caching and concurrency for the CLIP text tower.
  *
- * `/api/search` runs CLIP inference synchronously per request with no cache and
- * no concurrency cap - a burst of distinct queries piles every request onto
- * however many threads `onnxruntime-node` uses, each paying full inference
- * cost. Two small, generic primitives fix that: an LRU cache (repeat searches -
- * history, re-searching the same term - are common) and a queue that caps how
- * many inferences run at once, so a burst degrades to latency instead of
- * thrashing the CPU. Neither primitive knows about CLIP; that keeps both
+ * `/api/search` runs CLIP inference per request. Unbounded, a burst of
+ * distinct queries piles onto every core `onnxruntime-node` uses, each
+ * paying full inference cost. Two generic primitives cover it: an LRU cache
+ * (repeat searches - history, re-searching a term - are common) and a
+ * limiter that caps concurrent inferences, so a burst degrades to latency
+ * instead of thrashing the CPU. Neither knows about CLIP, which keeps both
  * testable with no model and no network.
  */
 
 /**
  * A capacity-bounded least-recently-used cache.
  *
- * Built on a `Map` rather than a dependency: insertion order is what a `Map`
- * already tracks, and re-inserting the key on every `get`/`set` is enough to
- * keep that order equal to recency - the oldest key is always
- * `keys().next().value`.
+ * A `Map`'s insertion order is the recency order: re-inserting the key on
+ * every get/set keeps the oldest key at `keys().next().value`.
  *
  * @param max entries to keep; must be at least 1
  */
@@ -48,15 +45,14 @@ export function createLruCache<K, V>(max: number) {
 /**
  * Caps how many async jobs run at once; the rest wait in FIFO order.
  *
- * A promise-based semaphore rather than a real thread pool - `run` only
- * delays calling `fn` until a slot is free - which is enough to bound
- * `onnxruntime-node`'s CPU-bound inference without knowing anything about it.
+ * `run` only delays calling `fn` until a slot is free - no threads are
+ * created - which is enough to bound `onnxruntime-node`'s CPU-bound
+ * inference without knowing anything about it.
  *
  * @param max concurrent jobs; must be at least 1
  * @param onSaturated called when a job is queued because `max` are already
- *   active, with the active/queued counts right after that job was pushed -
- *   the caller's signal that load is starting to queue rather than run, with
- *   no opinion of its own on whether that's worth logging or how often.
+ *   active, with the active/queued counts right after that push. Whether the
+ *   queueing is worth logging, and how often, is the caller's decision.
  * @returns `run`
  */
 export function createLimiter(max: number, { onSaturated }: { onSaturated?: (info: { active: number; queued: number }) => void } = {}) {

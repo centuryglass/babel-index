@@ -77,34 +77,27 @@ body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
 canvas { display: block; cursor: grab; touch-action: none; }
 canvas.dragging { cursor: grabbing; }
 /*
-  touch-action only ever restricts, never re-enables: the used value at a
-  touch point is the intersection of every element's value from the hit
-  target up to html, so a descendant's relaxed value (`.overlay-scrim`/
-  `.catalog` below) cannot undo the `none` above it - a finger drag down the
-  catalog list, or over a long dialog's own content, still crosses
-  `#root`/`body`/`html`'s `none` on its way up and gets eaten as a
-  two-finger map gesture with nothing under it to pan. `:has()` relaxes the
+  touch-action only ever restricts, never re-enables: `:has()` relaxes the
   whole chain to `pan-y` exactly while one of those is mounted
-  (`.overlay-scrim` is shared by RoomOverlay/HelpDialog/BookOverlay, so this
-  one rule covers every dialog's own vertical scrolling), leaving the map's
-  own gesture handling - the reason for `none` up here - untouched at every
-  other time.
+  (`.overlay-scrim` is shared by RoomOverlay, HelpDialog, BookOverlay, so
+  this one rule covers every dialog's own vertical scrolling), leaving the
+  map's own gesture handling untouched at every other time. The descendant's
+  relaxed value cannot undo the `none` at `html`/`body`/`#root` because
+  touch-action uses the intersection of every ancestor's used value up the tree.
 
-  `pan-y`, not `auto`: neither a dialog nor the catalog needs the BROWSER's
+  `pan-y`, not `auto`: neither a dialog nor the catalog needs the browser's
   own pinch-zoom or horizontal pan, only their own vertical scroll region.
-  Two real-device reports found that letting native page zoom happen at all -
-  even just for the room overlay's tile, the one place zooming in was
-  actually wanted - leaves the rest of the document (the map canvas, its
-  search badge, all fixed-size and absolutely positioned) visibly detached
-  the moment the reader also pans, not just zooms; a later attempt to
-  toggle native zoom back on per-dialog and reset it at each boundary
-  (`origin/claude/mobile-pinch-zoom-bugs-n7ec23`, abandoned) found Firefox
-  Mobile doesn't reliably discard a native zoom/pan left over once a
-  dialog closes even when the reset mutates the viewport meta directly.
-  The fix in both cases is the same: never grant native zoom permission at
-  the document level at all, and give any content that needs magnifying a
-  SCOPED zoom instead (`.zoom-scope` below, `useContentZoom.ts`) that
-  never leaves its own element - nothing to leak, nothing to reset.
+  Letting native page zoom happen at all - even scoped to a single dialog -
+  left the rest of the document (the map canvas, its search badge, all
+  fixed-size and absolutely positioned) visibly detached the moment the
+  reader also panned, and a later attempt to toggle native zoom on
+  per-dialog and reset it at each boundary found Firefox Mobile doesn't
+  reliably discard a leftover native zoom/pan once a dialog closes, even
+  when the reset mutates the viewport meta directly. The fix in both cases
+  is the same: never grant native zoom permission at the document level,
+  and give any content that needs magnifying a scoped zoom instead
+  (`.zoom-scope` below, `useContentZoom.ts`) that never leaves its own
+  element.
 */
 html:has(.overlay-scrim, .catalog),
 body:has(.overlay-scrim, .catalog),
@@ -125,7 +118,7 @@ body:has(.overlay-scrim, .catalog),
 
 /*
  * The live search field, anchored to the center tile's traced search
- * box. `main.jsx` drives display/left/top/width/height imperatively
+ * box. `main.tsx` drives display/left/top/width/height imperatively
  * from the render loop each frame - `display: none` here is only the
  * pre-first-frame default, never re-asserted by React.
  */
@@ -482,9 +475,9 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 /*
   The card head sits on the dialog's dark cover, same as the catalog bar
   sits on the dark backdrop - light-on-dark, like `.favorite-toggle`/
-  `.catalog-show` elsewhere. A paper fill was tried here (see git history)
-  and pulled the eye toward the frame instead of whatever it was framing -
-  a tile and story in `RoomOverlay`, the prose itself in the other three.
+  `.catalog-show` elsewhere. A paper fill was tried here and pulled the
+  eye toward the frame instead of whatever it frames - a tile and story
+  in `RoomOverlay`, the prose itself in the other three.
 */
 .card-id {
   padding: 2px 6px; color: var(--dim); font-size: 10px;
@@ -707,7 +700,7 @@ mark {
 }
 /*
   The cross-fade half of the transition. The FLIP on the first row's
-  thumbnail is driven from main.jsx; this is what the REST of the list
+  thumbnail is driven from `main.tsx`; this is what the rest of the list
   does, and it is what the whole transition degrades to when the center
   tile was off screen.
 */
@@ -1228,10 +1221,11 @@ mark {
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
 /*
   The score's detail lines go multi-column only in the STACKED overlay, where
-  the text sits below the image and has the full dialog width - it auto-flows
-  into as many ~200px columns as fit. The side-by-side split keeps one column:
-  its text page is a narrow reading column with no room for a second (see the
-  layout notes). The composite certainty line stays full width in both.
+  the text sits below the image and has the full dialog width - a fixed two
+  content-sized columns, not one per detail line. The side-by-side split
+  keeps one column: its text page is a narrow reading column with no room
+  for a second (see the layout notes). The composite certainty line stays
+  full width in both.
 */
 .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
 .overlay-columns.columns .overlay-body .score-details { grid-template-columns: max-content; }
@@ -1406,7 +1400,7 @@ mark {
   background: rgba(60,44,20,0.07); border: 1px solid var(--paper-edge); border-radius: 4px;
   font-size: 11px; line-height: 1.4; color: var(--paper-ink);
 }
-/* "Click here to run some equivalent code" - a control that reads as link-text inline in the prose. */
+/* The statement's inline control that opens the Babel book - reads as link-text in the prose. */
 .statement-link {
   display: inline; padding: 0; border: none; background: none;
   font: inherit; color: var(--paper-accent); text-decoration: underline; cursor: pointer;

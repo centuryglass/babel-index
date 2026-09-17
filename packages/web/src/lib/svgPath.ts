@@ -1,13 +1,18 @@
 /**
- * Pure helpers for the canonical absolute M/L/C/Z path grammar
+ * Pure helpers over the canonical absolute M/L/C/Z path grammar
  * `tools/center-placement/import-shelf-svg.ts` emits (see that file's
- * `normalizePath`/`ellipseToPath`) - flattening one into a polygon for a
- * hit-test, and testing a point against the result.
+ * `normalizePath`/`ellipseToPath`): `flattenPath` turns a path into a polygon
+ * for a hit-test, `parsePath`/`tracePathCommands` replay it as a real canvas
+ * path, and `pointInPolygon` tests the result. One shared copy of the walk is
+ * the point of the file; no DOM.
  *
- * Split out of `center.ts` once `favoriteBadge.ts` needed the same walk for
- * the on-tile favorite badge's traced silhouette (`tile_fav_toggle`): two
- * copies of a Bezier flattener is exactly the drift this file exists to
- * avoid. No DOM.
+ * The grammar is a fact about the callers, not a check anything here runs: a
+ * letter outside M/L/C/Z is not refused - it and every number up to the next
+ * known command are dropped, so a path carrying one silently flattens to the
+ * subset before it. Every caller passes a path the importer emitted, and
+ * M/L/C/Z is all the importer emits; its `normalizePath` doc records what
+ * happens to a trace carrying the others (the shape comes out quietly wrong
+ * there too).
  */
 
 export interface Point {
@@ -16,16 +21,15 @@ export interface Point {
 }
 
 /**
- * Flatten an SVG path in the canonical absolute M/L/C/Z grammar into a
- * polygon of `{x, y}` points.
+ * Flatten an SVG path in the canonical absolute M/L/C/Z grammar (see the
+ * file header for what happens to a path outside it) into a polygon of
+ * `{x, y}` points.
  *
  * Cubic segments are sampled rather than solved exactly: a hover/hit test has
  * no need for a mathematically exact curve, only one fine enough that the
  * boundary looks right at screen resolution, and a fixed sample count keeps
  * this pure and assertable without a browser (no `Path2D`/`isPointInFill`,
- * which need a live canvas). Only M/L/C/Z ever appear - the same restriction
- * the importer itself enforces on import, so a path that reaches this
- * function is already known to be one of these four commands.
+ * which need a live canvas).
  */
 export function flattenPath(d: string, samples = 12): Point[] {
   const tokens = d.match(/[MLCZ]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
@@ -65,10 +69,10 @@ export function flattenPath(d: string, samples = 12): Point[] {
 /**
  * The canvas-path surface a traced silhouette needs to replay itself -
  * satisfied by a real `CanvasRenderingContext2D` (2D or offscreen) via duck
- * typing, same as every other DOM-shaped interface in this codebase that
- * still keeps this file itself DOM-free. `render.ts`'s `PathContext` is a
- * superset (it adds `fill`/`stroke`, left with the caller since a live hover
- * highlight and a baked GL texture fill/stroke in different colors).
+ * typing, which is how this DOM-shaped file stays DOM-free. `render.ts`'s
+ * `PathContext` is a superset: it adds `fill`/`stroke`, which stay with the
+ * caller because a live hover highlight and a baked GL texture need them in
+ * different colors.
  */
 export interface PathTracer {
   beginPath(): void;
@@ -86,7 +90,7 @@ export interface PathTracer {
  * `traceFavoriteToggle`/`traceDistillToggle` call this with a tile's own
  * `cellPx`/`sx`/`sy`; `gl/glowTexture.ts` calls it with a bake canvas's own
  * pixel size and a zero offset, since a traced path's coordinates are
- * fractions of the WHOLE tile either way.
+ * fractions of the whole tile either way.
  */
 export function tracePathCommands(
   ctx: PathTracer,
@@ -122,7 +126,7 @@ export function pointInPolygon(px: number, py: number, poly: Point[]): boolean {
   return inside;
 }
 
-/** Command sequence for the same grammar, one step short of a polygon - what a canvas path draw needs instead of a hit-test. */
+/** The parsed form of the same grammar - a canvas draw consumes commands, where a hit-test wants `flattenPath`'s polygon. */
 export type PathCommand =
   | { type: 'M'; x: number; y: number }
   | { type: 'L'; x: number; y: number }

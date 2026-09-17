@@ -1,8 +1,8 @@
 /**
  * The center-tile loading indicator: a short frame cycle played over the
  * illustrated page of the center room's artist-statement book while a
- * rearrangement preloads (`useRearrangement.ts`). The preload can take up to a
- * couple of seconds now that the whole slide is fetched before the flight, so
+ * rearrangement preloads (`useRearrangement.ts`). The preload can run long -
+ * `prepareRearrangement` fetches the whole slide before the flight starts - so
  * this is what keeps that pause from reading as a freeze.
  *
  * Three responsibilities live here:
@@ -171,9 +171,9 @@ export interface LoadingAnimation {
    */
   play(requestDraw: () => void): boolean;
   /**
-   * Ask the running indicator to stop at the next cycle boundary, guaranteeing
-   * at least one full cycle. Resolves once it has actually stopped (or at once
-   * if nothing is running / the debug loop owns the screen).
+   * Ask the running indicator to stop at the next cycle boundary. Resolves
+   * once it has actually stopped (or at once if nothing is running / the
+   * debug loop owns the screen).
    */
   finish(): Promise<void>;
   /** Stop immediately, whatever mode - the map-interrupt path. */
@@ -271,8 +271,6 @@ export function createLoadingAnimation(
     },
 
     play(rd) {
-      // The dev-panel preview owns the screen while it runs; a stray
-      // rearrangement must not fight it or steal its requestDraw.
       if (state?.mode === 'debug') return false;
       begin('run', rd);
       return true;
@@ -315,8 +313,10 @@ export function createLoadingAnimation(
  * `<sharedBase>/animation/`. Returns null when there is no manifest to load (a
  * corpus deployed without the indicator), when it is malformed, or when no sheet
  * decodes - every one of which means "play no indicator", never a thrown error
- * on the corpus-load path. `sharedBase` is relative (see `scan.ts`), so the urls
- * built here inherit the subpath deployment's `<base href>`.
+ * on the corpus-load path. A non-positive `frameDurationMs` falls back to 100ms
+ * per frame rather than rejecting the manifest. `sharedBase` is relative (see
+ * `scan.ts`), so the urls built here inherit the subpath deployment's
+ * `<base href>`.
  */
 export async function loadLoadingAnimation(
   sharedBase: string,

@@ -1,23 +1,15 @@
 /**
- * Fully automated Chrome counterpart to the Firefox `?debug`/`__babelDebug`
- * console workflow: boot the demo server, launch Chromium, run a seeded
- * `debugActions.ts` session against it, and record memory/perf metrics over
- * CDP the whole time - no manual profiler start/stop, no console pasting.
+ * Fully automated Chrome perf capture: boot the demo server, launch
+ * Chromium, run a seeded `debugActions.ts` session against it, and sample
+ * memory/perf metrics over the DevTools Protocol the whole time; `--trace`
+ * records a full Chrome trace alongside, loadable in DevTools.
  *
- * Chromium exposes this over the DevTools Protocol in a way Firefox's
- * Playwright build does not (see the accompanying README for why the two
- * browsers' tooling had to diverge this far): `Performance.getMetrics` for
- * periodic JS heap/DOM/listener samples, and `Tracing.start`/`stop` for a
- * full Chrome trace (`--trace`) loadable in `chrome://tracing` or DevTools'
- * own Performance panel - including the same `performance.mark` calls
- * `debugActions.ts` emits, via the `blink.user_timing` category, so a step
- * boundary is visible in the trace exactly like it is in the Firefox
- * Profiler's timeline.
+ * The Firefox counterpart of this workflow stays a manual console session;
+ * README.md explains why the two browsers' tooling diverged, and carries
+ * the full flag list and how to read the output.
  *
  *   node --import ./build/register.mjs tools/perf-capture/capture.ts
  *   node --import ./build/register.mjs tools/perf-capture/capture.ts --renderer webgl --seed my-seed
- *
- * See README.md for the full flag list and how to read the output.
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -32,10 +24,10 @@ const REPO_ROOT = resolve(HERE, '../..');
 
 const BOOT_TIMEOUT_MS = 90_000;
 
-/** Puppeteer's own default trace category set - a well-worn choice for "the
- * categories DevTools' Performance panel actually reads", including
- * `blink.user_timing` for the `performance.mark` calls `debugActions.ts`
- * makes per step. */
+/** Puppeteer's default trace category set - the categories DevTools'
+ * Performance panel reads. `blink.user_timing` is the entry that carries
+ * `debugActions.ts`'s `performance.mark` calls into the trace as labelled
+ * step boundaries. */
 const DEFAULT_TRACE_CATEGORIES = [
   '-*',
   'devtools.timeline',
@@ -115,10 +107,9 @@ async function main() {
   const runDir = join(outRoot, `${renderer}-${slug(seed)}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   await mkdir(runDir, { recursive: true });
 
-  // `--server` points this at a demo server already running against whatever
-  // real dataset you launched it with (`npm run demo -- --images ...`), so
-  // there is no need to restate `--images`/`--port` here just to profile it -
-  // this process spawns nothing and kills nothing in that case.
+  // With `--server`, the capture runs against a demo server this process
+  // neither spawned nor may kill: `server` stays null and the teardown in
+  // the finally is inert. README.md documents the flag.
   const externalOrigin = values.server ? (values.server as string).replace(/\/+$/, '') : null;
   let origin = externalOrigin;
   let server: ReturnType<typeof spawn> | null = null;

@@ -2,12 +2,9 @@
  * Reading `config.json` off disk, kept apart from the defaults and validation in
  * `config.ts` so that file needs no filesystem to be tested.
  *
- * The overlay is optional and partial. Absent, the app runs on `DEFAULTS`
- * exactly; present, it need only carry the keys being changed - which is what
- * keeps `DEFAULTS` the single statement of every default rather than a second
- * copy of a committed file. That is also why no `config.json` is committed:
- * one that spelled out every value would silently become the real tuning
- * surface, and editing the documented defaults would stop having any effect.
+ * The overlay is optional and partial: absent, the app runs on `DEFAULTS`
+ * exactly; present, it need only carry the keys being changed. Why no
+ * `config.json` is committed is under AGENTS.md, "Config and the pyramid".
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -27,8 +24,8 @@ export type LoadedConfig = Config & { source: string | null };
  * Load and resolve the config.
  *
  * A missing file is the normal case and says nothing. A file that exists but
- * cannot be read or parsed *does* say something - it was meant to take effect
- * and did not - so it lands in `notes` rather than being swallowed.
+ * cannot be read or parsed says something else: it was meant to take effect and
+ * did not, so it lands in `notes` rather than being swallowed.
  *
  * @returns the resolved config, plus `source` (where the overlay came from, if anywhere)
  */

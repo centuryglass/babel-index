@@ -1,25 +1,21 @@
 /**
- * The one leveled logger the server writes through.
+ * The one leveled, structured logger every server module writes through.
  *
- * Before this, startup notes and runtime failures went straight to
- * `console.log`/`warn`/`error` - unattributed lines with no level and no
- * timestamp, indistinguishable from each other once piped into journald. That
- * cost a real incident: a broken CLIP install had nothing to grep for and the
- * evidence was gone by the time anyone went looking. Every such note now goes
- * through `logger` instead, as JSON lines when stdout is piped (systemd, CI -
- * anything journald or a log tool can parse) and pretty-printed when a human
- * is watching a terminal (`npm run demo`).
+ * JSON lines when stdout is piped (systemd, CI - anything journald or a log
+ * tool parses), pretty-printed when a human is watching a terminal
+ * (`npm run demo`). The level and the structured fields are the point:
+ * unattributed console output gives nothing to grep for once something has
+ * broken and the evidence still matters.
  *
  * `LOG_LEVEL` (default `info`) sets the floor.
  */
 import pino from 'pino';
 
 /**
- * `pino-pretty` is a devDependency - fine for a terminal, but a production
- * install (`npm ci --omit=dev`) may not have it. Checking resolution rather
- * than requiring it directly means a TTY with no pretty package installed
- * degrades to plain JSON instead of crashing the process on the first log
- * call.
+ * `pino-pretty` is a devDependency, so a production install
+ * (`npm ci --omit=dev`) may not have it. Resolution is checked rather than
+ * the package required: a TTY with no pretty package installed degrades to
+ * plain JSON instead of crashing the process on the first log call.
  */
 function prettyPrinterAvailable(): boolean {
   try {

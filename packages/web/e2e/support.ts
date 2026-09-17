@@ -1,20 +1,16 @@
 /**
  * Shared harness for the browser smoke suite, split across this directory's
- * `*.e2e.ts` files (see `docs/pending_task_list.md`'s note on why - one
- * 2440-line file sharing one `page` meant a single stranded piece of state
- * turned one failure into several unrelated ones).
+ * `*.e2e.ts` files: each file shares one `page` across its own tests (real
+ * gesture state, camera position and cache warmth are cheaper to carry
+ * forward than to rebuild every test) but not across the suite. Every file
+ * calls `openLibrary()` in its own `before` and `closeLibrary()` in its own
+ * `after`, so a failure in one file cannot strand state for a file it has
+ * nothing to do with. That does mean each file pays its own server boot and
+ * browser launch - worth it for the isolation, and `node --test` runs files
+ * in parallel processes by default anyway.
  *
- * Each `*.e2e.ts` file keeps the original design of ONE shared `page` across
- * ITS OWN tests (real gesture state, camera position and cache warmth are
- * cheaper to carry forward than to rebuild every test), but no longer across
- * the whole suite: every file calls `openLibrary()` in its own `before` and
- * `closeLibrary()` in its own `after`, so a failure in one file cannot strand
- * state for a file it has nothing to do with. That does mean each file pays
- * its own server boot and browser launch - worth it for the isolation, and
- * `node --test` runs files in parallel processes by default anyway.
- *
- * This module is deliberately not itself a test file (no `.e2e.ts` suffix,
- * no `describe`/`test`), so `node --test`'s glob never picks it up.
+ * This module is not itself a test file (no `.e2e.ts` suffix, no
+ * `describe`/`test`), so `node --test`'s glob never picks it up.
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -74,17 +70,17 @@ export async function waitFor(predicate, timeoutMs, message) {
  * per-run temp file - no file existing is an empty store (see
  * `favorites.ts`'s `read`), so nothing has to be seeded. Every other file in
  * this suite omits it, which is why `manifest.favorites` is null and no
- * favorite control renders anywhere else in the suite - a favorites-specific
- * test needs the flag on purpose, not as an oversight to fix elsewhere.
+ * favorite control renders anywhere else in the suite - favorites coverage
+ * is the flag's opt-in, not a gap to fix elsewhere.
  *
- * `webgl` pins the renderer EXPLICITLY - `webgl=0` (Canvas2D) or `webgl`
- * (WebGL) is always on the query string, never left to `webglFlag.ts`'s
- * `DEFAULT_WEBGL`. The default there is now WebGL, so an unpinned suite would
- * silently switch renderers under this suite's 2D-canvas readbacks
- * (`fingerprint`, the blank-tile checks) and break them; pinning keeps every
- * spec's renderer a fact of the test rather than a fact of production. Defaults
- * to Canvas2D because that is what those readbacks need - the GL renderer has
- * its own coverage in `webgl-map.e2e.ts` and `render-parity.parity.ts`.
+ * `webgl` pins the renderer - `webgl=0` (Canvas2D) or `webgl` (WebGL) is
+ * always on the query string, never left to `webglFlag.ts`'s `DEFAULT_WEBGL`
+ * (WebGL), because an unpinned suite would silently switch renderers under
+ * this suite's 2D-canvas readbacks (`fingerprint`, the blank-tile checks) and
+ * break them; pinning keeps every spec's renderer a fact of the test rather
+ * than a fact of production. Defaults to Canvas2D because that is what those
+ * readbacks need - the GL renderer has its own coverage in
+ * `webgl-map.e2e.ts` and `render-parity.parity.ts`.
  *
  * `extraParams` are appended to the page's query string alongside `?debug` for
  * anything else a spec needs to set before `main.tsx` mounts.
@@ -114,13 +110,11 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
   });
 
   // Everything past here can throw - a launch failure, a page that never
-  // draws - and each split file pays for its own server, so a setup failure
-  // is five times as likely to happen somewhere in the suite as it was when
-  // this was one file. Without the catch, a thrown error here leaves the
-  // server running with nothing left holding a reference to kill it; a
-  // spawned child keeps the worker process's event loop alive even after
-  // node:test has given up on the file, so the whole run hangs until an
-  // external timeout kills it instead of failing this file fast.
+  // draws. Without the catch, a thrown error leaves the server running with
+  // nothing left holding a reference to kill it; a spawned child keeps the
+  // worker process's event loop alive even after node:test has given up on
+  // the file, so the whole run hangs until an external timeout kills it
+  // instead of failing this file fast.
   let browser;
   try {
     await waitFor(
@@ -159,8 +153,8 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
     page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()));
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-    // `?debug` mounts the dev panel and the cache/rearrangement HUD - both now
-    // gated off by default (see `debug.js`), and this suite leans on them
+    // `?debug` mounts the dev panel and the cache/rearrangement HUD - both
+    // gated off by default (see `debug.ts`), and this suite leans on them
     // throughout as its settling signal and its window into cache/level state.
     const query = ['debug', webgl ? 'webgl' : 'webgl=0', ...extraParams].join('&');
     await page.goto(`${origin}?${query}`, { waitUntil: 'domcontentloaded' });
@@ -226,7 +220,7 @@ export function parseHud(text) {
   const body = gl ? text.slice('[gl] '.length) : text;
   // `over` is only printed when a screen needs more than the level's cache
   // budget, and `clustered` only when a search's density gradient actually
-  // lifted some ranks above the baseline (`layout.gradedCount > 0` - main.jsx)
+  // lifted some ranks above the baseline (`layout.gradedCount > 0` - main.tsx)
   // - both optional here, but parsed rather than skipped, because both are
   // numbers a test might need.
   const m = body.match(
@@ -292,7 +286,7 @@ export async function settled(page) {
       () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     );
     const text = await page.locator('#hud').textContent();
-    // Parse THIS text, not a freshly re-fetched one - see `parseHud`'s comment.
+    // Parse this text, not a freshly re-fetched one - see `parseHud`'s comment.
     if (!text.replace(/^\[gl\] /, '').startsWith('rearranging')) return parseHud(text);
     assert.ok(Date.now() < deadline, 'a rearrangement never finished');
   }
@@ -301,10 +295,10 @@ export async function settled(page) {
 /**
  * The HUD once the camera has stopped moving.
  *
- * Two frames were enough while `flyTo` teleported. It now eases over
- * `camera.flightMs`, so anything reading the camera straight after a "center" click
- * reads one still in the air - and every assertion here that compares a camera
- * before and after some gesture needs the before to be a camera at rest.
+ * `flyTo` eases over `camera.flightMs`, so anything reading the camera
+ * straight after a "center" click reads one still in the air - and every
+ * assertion here that compares a camera before and after some gesture needs
+ * the before to be a camera at rest.
  *
  * The clock decides, not stillness: the last frames of a smoothstep move by
  * less than the HUD prints, so "two identical readings" would call it early.

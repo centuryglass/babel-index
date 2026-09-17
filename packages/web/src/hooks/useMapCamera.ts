@@ -36,29 +36,26 @@ import type { Config } from '../../../config/config.ts';
  * ### Picking, and why it lives here
  *
  * The metadata overlay opens on right-click or long press, and the long press
- * has to LOSE to a pan - a press that turns into a drag must not also open a
- * card, or panning on a phone becomes unusable. That means the press timer has
- * to watch the same pointer stream the drag does, which is this one. What is
- * picked is `picking.ts`; when, is here.
+ * has to lose to a pan - a press that turns into a drag must not also open a
+ * card, or panning on a phone becomes unusable. The press timer watches the
+ * same pointer stream the drag does, which is this one. What is picked is
+ * `picking.ts`; when, is here.
  *
- * Left-click stays free: `§5` reserves it for "focus this room", and a map whose
- * primary button opens a modal is a map you cannot explore.
+ * Left-click stays free: it is reserved for "focus this room", because a map
+ * whose primary button opens a modal is a map you cannot explore.
  *
  * ### Flying, and why it shares the glide's loop
  *
- * `flyTo` eases rather than teleports, because a teleport loses the reader's
- * sense of where they were - and after a search, the flight home is carrying
- * the meaning: it shows the top result's location relative to where you were
- * standing. The step is `flightAt` in `camera.ts`; what is here is the frame
- * clock and the interruption.
+ * `flyTo` eases rather than teleports - after a search, the flight home
+ * carries meaning: it shows the top result's location relative to where the
+ * reader was standing. The step is `flightAt` in `camera.ts`; what is here
+ * is the frame clock and the interruption.
  *
- * It rides the glide's rAF loop rather than starting one of its own. There is
- * already a permanent loop, and one loop is what makes the precedence between
- * the two statable in a single `else`: a flight owns the camera while it lasts,
- * and the glide takes over on arrival - which is what lets a flight land
- * outside the content region and be pulled back afterwards instead of being
- * fought all the way there.
- *
+ * It rides the glide's rAF loop rather than starting one of its own. One loop
+ * is what makes the precedence between the two statable in a single `else`: a
+ * flight owns the camera while it lasts, and the glide takes over on arrival -
+ * which is what lets a flight land outside the content region and be pulled
+ * back afterwards instead of being fought all the way there.
  *
  * Every gesture threshold below (press/tap timing and slop) comes off
  * `camera.gesture` rather than a local constant - see
@@ -72,7 +69,7 @@ import type { Config } from '../../../config/config.ts';
  * Read per flight rather than once: the setting can change while a page is
  * open, and this costs nothing next to the flight it is deciding about.
  *
- * Exported because the rearrangement asks the same question in `main.jsx`, and
+ * Exported because the rearrangement asks the same question in `main.tsx`, and
  * a second `matchMedia` call there would be a second statement of one fact -
  * the two would drift the first time the query string needed changing.
  */
@@ -137,15 +134,14 @@ interface UseMapCameraOpts {
    * qualifying first one. Fires in addition to `onTap` (both fire for the
    * second tap), never instead of it - a single tap must not wait to find
    * out whether a second one is coming, or every ordinary tap (selecting a
-   * book, focusing the search field) picks up a `doubleTapMs` delay it never
-   * used to have.
+   * book, focusing the search field) picks up a `doubleTapMs` delay.
    */
   onDoubleTap?: OnTap;
   /**
    * one line per pointer event. Off unless asked for. Touch gestures can only
    * really be judged on a device, and a phone has no console you can read while
    * both thumbs are busy - so this exists to make "what did the browser
-   * actually send" answerable from the glass. See `?touchdebug` in main.jsx.
+   * actually send" answerable from the glass. See `?touchdebug` in main.tsx.
    */
   onDebug?: OnDebug;
 }
@@ -156,12 +152,10 @@ interface TapCandidate extends PointerPoint {
 }
 
 /**
- * A candidate two-finger tap, tracked from the moment a second finger lands
- * to `firstLiftAt` (still `null` while both fingers are down) to the second
- * liftoff, which is what commits it. `cx`/`cy` are the midpoint at
- * touchdown, fixed rather than tracked, because ANY drift beyond
- * `camera.gesture.twoFingerTapSlopPx` cancels the candidate outright - see
- * the pinch branch of `onPointerMove`.
+ * A candidate two-finger tap, tracked from a second finger landing through
+ * the second liftoff. The mid-point (`cx`/`cy`) is fixed at touchdown rather
+ * than tracked: any drift beyond `camera.gesture.twoFingerTapSlopPx` cancels
+ * the candidate outright (see the pinch branch of `onPointerMove`).
  */
 interface TwoTapCandidate extends PointerPoint {
   dist0: number;
@@ -641,13 +635,12 @@ export function useMapCamera({
    * Reduced motion overrides it rather than being overridden by it: someone who
    * has asked for less motion is not asking about this map in particular.
    *
-   * `ms` overrides the configured duration for a single call, which is what
-   * lets the keyboard's short nudges (accessibility-plan.md §4.2a - one arrow
-   * press, a ctrl+arrow jump, a PgUp/PgDn zoom step) share every mechanic a
-   * "fly home" already has - the interrupt-on-a-new-flight below, the landing
-   * promise, `prefers-reduced-motion` collapsing it to zero - rather than a
-   * second, parallel implementation of "ease the camera." Omit it for the
-   * ordinary configured flight.
+   * `ms` overrides the configured duration for a single call, letting the
+   * keyboard's short nudges share every mechanic a "fly home" already has -
+   * the interrupt-on-a-new-flight below, the landing promise,
+   * `prefers-reduced-motion` collapsing it to zero - rather than a second,
+   * parallel implementation of "ease the camera." Omit it for the ordinary
+   * configured flight.
    *
    * Returns a promise for the landing - true if it arrived, false if the reader
    * took the map first. Callers that only want the camera moved can ignore it;
@@ -664,7 +657,7 @@ export function useMapCamera({
 
   /**
    * Move by a cell delta, damped by the map's resistance - the keyboard's
-   * equivalent of a pointer drag. Same resistance, deliberately DIFFERENT
+   * equivalent of a pointer drag. Same resistance, a different
    * curve: see `panByCells` in `camera.ts` for why a drag can afford a floor
    * and a held key cannot.
    *
@@ -675,11 +668,11 @@ export function useMapCamera({
    * but does nothing to the outbound step, so a fast enough key repeat simply
    * outruns it.
    *
-   * Damping reads the resistance at `flightTarget()`, not at `cam.current`:
+   * Damping reads the resistance at `flightTarget()`, not `cam.current`:
    * mid-flight the latter is the interpolated position, so a key repeat would
    * sample a resistance from behind where it has already been told to go and
    * damp too little. It is also what makes repeated presses compound rather
-   * than collapse, exactly as in `flyTo`'s callers.
+   * than collapse, as `flyTo`'s callers demonstrate.
    */
   const nudgeBy = useCallback(
     (dx: number, dy: number, { ms }: FlyOpts = {}) => {
@@ -691,15 +684,15 @@ export function useMapCamera({
   );
 
   /**
-   * The camera a NEW keyboard move should chain off, rather than teleporting
+   * The camera a keyboard move should chain off, rather than teleporting
    * from wherever an in-progress flight currently is.
    *
-   * `cam.current` is the INTERPOLATED position - correct for drawing a frame,
+   * `cam.current` is the interpolated position - correct for drawing a frame,
    * wrong for planning the next flight. `flyTo` itself never mutates
    * `cam.current` (only the rAF loop does, as a flight progresses), so a
    * second keyboard press arriving before that loop has ticked even once - two
    * PgDn presses back to back is the case that surfaced this - would compute
-   * ITS target from the same pre-flight zoom the first press already started
+   * its target from the same pre-flight zoom the first press already started
    * leaving, and the two presses would collapse into one. The already-known,
    * fully-resolved target of a flight in progress (`flight.current.to`) is
    * what a chained press should build on instead; idle, this is just

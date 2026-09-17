@@ -10,21 +10,18 @@
  * The manifest's urls come out of that scan rooted at the LOCAL mount paths
  * (`scan.ts`'s `IMAGES_BASE`/`SHARED_BASE`, `images` and `shared`), because
  * the scan has no idea it will ever be served remotely. `rebase` below
- * rewrites every one of them - `imagesBase`/`sharedBase` themselves, and every
- * url already baked into `rooms`/`shared`/`embeddings`/`metadata` - to point
- * directly at the remote host instead. That is deliberate: the browser then
- * fetches every tile, the embeddings blob and the metadata sidecar straight
- * from R2/Cloudflare, never through this server, so this VPS is never in the
- * hot path for image bytes and Cloudflare's edge cache actually gets used.
- * (Previously this module proxied `/images` and `/shared` through the server
- * with a per-request `fetch` - simpler to wire up, but it meant every tile
- * byte for every visitor round-tripped through the one cheap VPS instead of
- * Cloudflare's edge, and none of `infra/abuse-protection.tf`'s cache/rate-limit
- * rules - scoped to the R2 hostname - ever saw that traffic.)
+ * rewrites every one of them - `imagesBase`/`sharedBase` themselves, and
+ * every url already baked into `rooms`/`shared`/`embeddings`/`metadata` - to
+ * point directly at the remote host instead. The browser then fetches every
+ * tile, the embeddings blob and the metadata sidecar straight from
+ * R2/Cloudflare, never through this server: the VPS stays out of the image
+ * hot path, and `infra/abuse-protection.tf`'s cache and rate-limit rules -
+ * scoped to the R2 hostname - see that traffic.
  *
  * The R2/Cloudflare host must serve `imagesBase`/`sharedBase` with CORS
- * allowing this app's origin - `embeddings.bin` and `metadata.json` are read
- * via `fetch()` in main.jsx, which enforces CORS unlike a plain `<img>` tag.
+ * allowing this app's origin - `useCorpus.ts` reads `embeddings.bin` and
+ * `metadata.json` (and `tagLinks.json`) via `fetch()`, which enforces CORS
+ * unlike a plain `<img>` tag.
  */
 import type { Manifest } from '../map/manifest.ts';
 

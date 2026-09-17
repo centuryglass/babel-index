@@ -1,35 +1,26 @@
 import { MEASURED } from './measured.ts';
 
 /**
- * Layout of one tile.
+ * Layout of one center tile, as pixels for a tile of a given size. The center
+ * is the only tile traced exactly (AGENTS.md, "Tile geometry"); a corpus room
+ * needs only a bounding box.
  *
- * A tile is ONE SHELVED WALL of a gallery, seen in shallow one-point
- * perspective - not a whole room. Only the center tile (cell (0, 0)) is
- * traced exactly; every corpus room is inpainted and needs only a bounding
- * box, so this module's precision exists for the center alone.
+ * Two kinds of number come out of `layout()`:
  *
- * The center's own book count and shelf count are a UI choice - legible
- * search-history titles - not a restatement of Borges' 5 shelves x 32 books,
- * which this module does not track.
+ *   Measured - the opening, the search box, every control hit region and every
+ *   book rect. These come from `measured.ts`: traced off the render in
+ *   Inkscape, imported by `import-shelf-svg.ts`, and exact. The hit-tests and
+ *   the composited spines run on them.
  *
- * TWO CLASSES OF NUMBER LIVE HERE, and the difference matters:
+ *   Provisional - the side returns, the ceiling strip and the cornice
+ *   (`PROVISIONAL`). Nothing is traced for them, so they are eyeballed
+ *   fractions, and only the placeholder's own drawing reads them. A hit-test
+ *   that came to depend on one would be testing an untraced guess.
  *
- *   MEASURED - the opening, the search box and every book rectangle come from
- *   measured.ts, traced off the Blender render in Inkscape and imported by
- *   import-shelf-svg.mjs. These are exact. Shelf boards, case uprights and the
- *   lamp used to be traced too; they no longer are; only books and the search
- *   box are read from the SVG.
- *
- *   PROVISIONAL - the side returns, the ceiling strip and the cornice were not
- *   traced, so they are still eyeballed fractions. They only affect the
- *   placeholder's looks, never hit-testing, so they can stay approximate until
- *   there is a reason for them not to be.
- *
- * TILING needs no machinery: every variant is inpainted from the same base with
- * an edge-clear mask, so the frame is shared by construction.
+ * `SHELF_COUNT` and `BOOK_COUNT` in `measured.ts` are a legibility choice - how
+ * many spines the wall can carry - not the novel's 5 shelves of 32 books.
  */
 
-/** Not traced; affects the placeholder's appearance only. */
 const PROVISIONAL = {
   sideReturn: 0.085,
   ceiling: 0.055,
@@ -40,27 +31,22 @@ const round = (n: number) => Math.round(n * 1e4) / 1e4;
 /**
  * Scale a `CenterBook.d` string onto a tile of size `W x H`.
  *
- * Every number in `import-shelf-svg.ts`'s canonical M/L/C/Z output is one
- * half of an `x,y` pair (H/V/S/Q/T were all normalised away on import, and Z
- * carries no numbers), so a blind regex over `x,y` pairs is enough - the same
- * shortcut every other rect in this module takes (`r()`, above), just applied
- * to path data instead of four numbers.
+ * A blind regex over `x,y` pairs is enough because `normalizePath` and
+ * `ellipseToPath` leave only absolute M/L/C/Z behind, every number one half of
+ * such a pair and Z carrying no numbers at all. Change that grammar and this
+ * scales silently wrong.
  */
 const scalePathData = (d: string, W: number, H: number) =>
   d.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${round(Number(x) * W)},${round(Number(y) * H)}`);
 
 /**
- * The tile's shape, from the trace itself.
+ * The traced tile's height over its width. `layout()` defaults its height to
+ * this, so a caller giving only a width gets the shape the numbers were
+ * measured at: on any other aspect every rect is stretched onto art it no
+ * longer matches, silently, because each rect is still inside the tile.
  *
- * `height` defaults to this rather than to `width`. It used to default to a
- * square, which is silent and wrong the moment the tile is not one: every
- * measured rect gets stretched onto art it no longer matches, and each rect is
- * individually still inside the tile, so nothing complains. Defaulting to the
- * traced aspect means a caller that gives only a width gets the shape the
- * numbers were measured at, which is the only shape they mean anything at.
- *
- * The trace and `BASE_TILE` are two statements of one fact and geometry.test.mjs
- * asserts they agree, so this is the tile's aspect however you reach it.
+ * The trace and `BASE_TILE` are two statements of one fact, and
+ * `geometry.test.ts` asserts they agree.
  */
 export const TILE_ASPECT = MEASURED.tile.aspect;
 
@@ -86,7 +72,7 @@ export interface SideReturn {
   inner: { x: number; top: number; bottom: number };
 }
 
-/** The open book's exact outline, scaled to a tile size - see measured.ts's `CenterBook`. */
+/** A traced silhouette scaled onto this tile - see `measured.ts`'s `CenterBook`. */
 export interface CenterBook {
   d: string;
   bbox: Rect;
@@ -97,24 +83,19 @@ export interface TileLayout {
   height: number;
   measured: true;
   opening: Rect;
-  searchBox: Rect;
-  /** hit region for the "sort by my favorites" switch - null if the trace has none */
-  mineToggle: Rect | null;
-  /** hit region for the "sort by most favorited" switch - null if the trace has none */
-  countToggle: Rect | null;
-  /** hit region for the reorder control - null if the trace has none */
-  shuffleButton: Rect | null;
-  /** the open book painted into a shelf gap - null if the trace has none */
-  centerBook: CenterBook | null;
-  /** the "enable distillation" icon's outline - null if the trace has none */
-  distillOff: CenterBook | null;
-  /** the "disable distillation" icon's outline - null if the trace has none */
-  distillOn: CenterBook | null;
   /**
-   * The on-tile favorite badge's traced silhouette, in the same per-axis
-   * fraction space as every other rect here (see measured.ts) - null if the
-   * trace has none.
+   * One field per traced element, scaled to this tile, and null when the trace
+   * carried none. What each is for is `import-shelf-svg.ts`'s label table.
+   * `searchBox` is the one the trace must carry: the importer reports a trace
+   * without it, and `layout()`'s `!` throws at load if it is ever missing.
    */
+  searchBox: Rect;
+  mineToggle: Rect | null;
+  countToggle: Rect | null;
+  shuffleButton: Rect | null;
+  centerBook: CenterBook | null;
+  distillOff: CenterBook | null;
+  distillOn: CenterBook | null;
   favoriteToggle: CenterBook | null;
   shelves: Shelf[];
   floorLine: number;
@@ -125,13 +106,13 @@ export interface TileLayout {
   floor: Rect;
 }
 
-/** Every rectangle the renderer and the web app need. */
+/** Scales the measured fractions onto a tile of the given size. */
 export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) } = {}): TileLayout {
   const W = width;
   const H = height;
-  // Rects carry no aspect of their own - the importer normalised x against the
-  // traced width and y against the traced height separately - so each axis
-  // scales by its own edge and a tile of any shape comes out right.
+  // One divisor per axis, and that is load-bearing: the measured fractions
+  // carry no aspect, so a single divisor for both axes stretches every rect
+  // onto a shape the trace never had (AGENTS.md, "The fractions are per-axis").
   const r = ([x, y, w, h]: [number, number, number, number]): Rect => ({
     x: round(x * W),
     y: round(y * H),
@@ -162,8 +143,6 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
     books: s.books.map((b, i) => ({ index: i, ...r(b) })),
   }));
 
-  // No case uprights are traced any more, so the opening IS the case frame -
-  // the bounding box of every book on the wall.
   const sideReturn = round(W * PROVISIONAL.sideReturn);
   const ceilingH = round(H * PROVISIONAL.ceiling);
   const floorLine = round(opening.y + opening.h);

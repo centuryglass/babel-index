@@ -1,15 +1,7 @@
 /**
- * The browser smoke test: the catalog interface (docs/catalog-plan.md) - the
- * conventional web search UI and linear tile list that swaps in for the map.
- * One of five files split out of the original `smoke.e2e.mjs` (see
- * `docs/pending_task_list.md`); see `map-gestures.e2e.ts` for the shared
- * header comment on why and how.
- *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
+ * The browser smoke test for the catalog: the conventional web search UI and
+ * linear tile list that swaps in for the map. See `map-gestures.e2e.ts` for
+ * the shared header comment on why and how, including how to run the suite.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -47,8 +39,8 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     await openCatalog();
     try {
       const rows = page.locator('.catalog-row');
-      // One row per room, plus the center's - "always 100% unique tiles", so
-      // nothing here is wallpaper and nothing repeats.
+      // One row per room, plus the center's - every tile here is a unique
+      // generated room, so nothing is wallpaper and nothing repeats.
       assert.equal(await rows.count(), roomCount + 1);
       const firstClass = (await rows.first().getAttribute('class')) ?? '';
       assert.ok(
@@ -87,8 +79,8 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
       const top = page.locator('.catalog-row:not(.catalog-center)').first();
 
-      // The match is MARKED where it matched. Not a decoration: it is the only
-      // thing on the row that says WHY these words put this room first.
+      // The match is marked where it matched. Not a decoration: it is the only
+      // thing on the row that says why these words put this room first.
       const marks = await top.locator('mark').allTextContents();
       assert.ok(marks.length > 0, `nothing was marked for ${JSON.stringify(term)}`);
       for (const m of marks)
@@ -197,9 +189,9 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       await box.press('Enter');
 
       // Nothing rearranged, so the effect that normally speaks for a search
-      // never runs - the failure path has to write the live region itself.
-      // Before this was handled the rejected promise simply went unhandled and
-      // the reader was told nothing at all, which is the case this catches.
+      // never runs - without this handling the rejected promise goes
+      // unhandled and the reader is told nothing at all, which is the case
+      // this catches.
       await waitFor(
         async () => /could not be run/.test((await page.locator('[role=status]').textContent()) ?? ''),
         SEARCH_TIMEOUT,
@@ -250,7 +242,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       for (const name of secondPage)
         assert.ok(!firstPage.includes(name), `${name} is on two pages at once`);
 
-      // The choice outlives the session - one of the two things that do.
+      // The choice outlives the session.
       assert.equal(
         await page.evaluate(() => localStorage.getItem('babel:paging')),
         '"pages"'
@@ -263,24 +255,24 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
   test('the catalog folds out of the center tile rather than appearing', async () => {
     const { page } = session;
-    // The FLIP, which is the whole transition: the first row's thumbnail starts
-    // ON the map's center tile and eases to its resting place. Worth an
+    // The flip, which is the whole transition: the first row's thumbnail starts
+    // on the map's center tile and eases to its resting place. Worth an
     // assertion of its own because the bug this had was silent - a DOMRect says
     // `width` where the rest of the app says `w`, so the scale fell through a
     // zero-size guard to 1 and the tile translated into place without ever
     // growing. It looked like a working transition.
     //
-    // A CONDITION, not a duration: this waits for the scale to have been
+    // A condition, not a duration: this waits for the scale to have been
     // meaningfully above 1 at some point, which is true for the whole 380ms and
     // never true at all when the scale is being dropped.
     //
     // The camera has to be established first. How big the tile starts depends
     // entirely on how large the center cell is on screen, and this file shares
-    // one page - at the return-to-center zoom (220) the cell is SMALLER than
-    // the thumbnail and the tile would legitimately shrink into place, while
-    // from far enough out the center is off screen and there is deliberately no
-    // flip at all. The search trigger flies to the opening view, which frames
-    // the center tile near its native width.
+    // one page - at the return-to-center zoom the cell is smaller than the
+    // thumbnail and the tile would legitimately shrink into place, while from
+    // far enough out the center is off screen and there is no flip at all.
+    // The search trigger flies to the opening view, which frames the center
+    // tile near its native width.
     await page.locator('button.search-trigger').click();
     await landed(page, session.flightMs);
 
@@ -358,7 +350,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
   test('paginated, the pager sits under the rows rather than a screenful of nothing', async () => {
     const { page } = session;
-    // Spacers stand in for pages a reader can SCROLL to. Paginated there are
+    // Spacers stand in for pages a reader can scroll to. Paginated there are
     // none - the other pages are behind a button - and standing in for them put
     // a page-sized hole between the last row and the pager.
     await openCatalog();
@@ -412,10 +404,10 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
   test('the map is where it was left when the catalog closes', async () => {
     const { page } = session;
-    // THE assertion the whole design rests on. The map is hidden rather than
+    // The assertion the whole design rests on. The map is hidden rather than
     // unmounted, so a trip through the catalog carries no state and rebuilds
-    // nothing - if this fails, the mode has become the thing design-history
-    // rejected ("modes carry state, and state desyncs").
+    // nothing - if this fails, the mode carries state across switches, and
+    // carried state desyncs.
     await page.locator('canvas').focus();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowDown');
@@ -437,10 +429,10 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     // be near-empty here, which is the other half of "nothing was torn down".
     assert.ok(after.cached > 1, `the tile cache was rebuilt: ${after.cached} cached`);
 
-    // The canvas is still LIVE, which is a different claim from the state
+    // The canvas is still live, which is a different claim from the state
     // having survived and the one a remount actually breaks. `useMapCamera`
     // binds its pointer listeners once, in an effect that depends on the ref
-    // OBJECT rather than on the element - so a canvas that unmounted and came
+    // object rather than on the element - so a canvas that unmounted and came
     // back would look perfectly correct here, hold the right camera, and
     // silently never pan again. A drag is the only thing that can tell.
     await page.mouse.move(700, 400);

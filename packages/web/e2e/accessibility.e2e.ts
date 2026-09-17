@@ -1,23 +1,15 @@
 /**
- * The browser smoke test: accessibility-plan.md phases A/B and E - the axe
- * sweeps, the panel's accessible names, the card's focus handling, the live
- * region, reduced motion, and the sidecar's optional `alt` caption. One of
- * five files split out of the original `smoke.e2e.mjs` (see
- * `docs/pending_task_list.md`); see `map-gestures.e2e.ts` for the shared
- * header comment on why and how. The map's own keyboard interface (phase C)
- * is `keyboard-cursor.e2e.ts`, and the center room's shelf (phase D) is
- * `shelf.e2e.ts`.
+ * The browser smoke test for accessibility: the axe sweeps, the panel's
+ * accessible names, the card's focus handling, the live region, reduced
+ * motion, and the sidecar's optional `alt` caption. See
+ * `map-gestures.e2e.ts` for the shared header comment on why and how,
+ * including how to run the suite. The map's own keyboard interface is
+ * `keyboard-cursor.e2e.ts`, and the center room's shelf is `shelf.e2e.ts`.
  *
  * The accessibility block asserts what only a browser can compute: an
  * accessible name comes from labels, roles and content together, so checking
  * the JSX would only restate the source. Those tests read the real tree back
  * out - `axNodes` for Chromium's computed properties, axe for the broad sweep.
- *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -59,8 +51,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
   test('the ranked listbox is honestly counted, reachable with no arrow keys, and axe-clean', async () => {
     const { page } = session;
     // The "non-generic" slider defaults short of maxed, and at anything less
-    // than 100% the density gradient CAN show a cluster - `gradedCount` counts
-    // ranks the gradient lifts ABOVE the baseline, and there is no "above" left
+    // than 100% the density gradient can show a cluster - `gradedCount` counts
+    // ranks the gradient lifts above the baseline, and there is no "above" left
     // once the baseline already is the maximum. Pulling it down first is what
     // makes a cluster possible at all; a maxed ratio would make this test time
     // out waiting for a listbox a correct app is right not to show.
@@ -71,7 +63,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // try/finally, not just a trailing restore at the end of the test: several
     // tests after this one - card focus, the live region, reduced motion - rely
     // on the map being dense and the camera centered, so an assertion failing
-    // partway through must not ALSO strand those for everything that runs
+    // partway through must not also strand those for everything that runs
     // afterward. That turns one failure into an unrelated-looking cascade,
     // which is exactly what made a flake here harder to diagnose than it
     // needed to be.
@@ -106,7 +98,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       let count;
       // `previousCount` starts at `null`, which cannot equal a real count, so
       // this always waits out at least one real 200ms gap (`waitFor`'s own
-      // poll interval) between two AGREEING reads before trusting one - not
+      // poll interval) between two agreeing reads before trusting one - not
       // just two reads taken back to back with nothing between them, which
       // would prove nothing about whether it had actually settled.
       await waitFor(
@@ -124,11 +116,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // Let the search's rearrangement fully settle before moving on. Later
       // tests in this file lean on its announcement still being in the live
       // region, and the announcement fires only once the rearrangement settles
-      // AND is still the current arrangement - so if this test returned while it
-      // was mid-animation, a later layout change would drop it as stale before
-      // it was ever announced. The center-tile loading indicator
-      // (`loadingAnimation.ts`) holds that settle a full cycle longer now,
-      // which is what first surfaced the latent dependency.
+      // and is still the current arrangement - so if this test returned while
+      // it was mid-animation, a later layout change would drop it as stale
+      // before it was ever announced. The center-tile loading indicator
+      // (`loadingAnimation.ts`) adds a full cycle to that settle, so the wait
+      // here is not optional.
       await settled(page);
 
       const label = await page.locator('#results-label').textContent();
@@ -136,7 +128,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       const posinset = await first.getAttribute('aria-posinset');
       const setsize = await first.getAttribute('aria-setsize');
 
-      // The label reports the TRUE match count, not just what got mounted -
+      // The label reports the true match count, not just what got mounted -
       // that is the whole point of windowing rather than silently truncating.
       assert.match(label, /results\s+\d+/, `the results label must report a count, got ${JSON.stringify(label)}`);
 
@@ -153,7 +145,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       assert.equal(posinset, '1');
       assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
 
-      // The BUTTON is what carries the name a reader hears - `listitem` has
+      // The button is what carries the name a reader hears - `listitem` has
       // no "name from contents" in the accessible-name algorithm, so the
       // `<li>` wrapping it is correctly nameless in the tree; only its child
       // speaks. Checked last, since it is the slow CDP round trip and nothing
@@ -163,7 +155,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
 
       // No arrow keys anywhere in this flow - Tab is the whole story, which
-      // is the reason this phase ships before the map's keyboard interface (§5).
+      // is why this ships before the map's keyboard interface
+      // (`keyboard-cursor.e2e.ts`).
       await options.first().focus();
       await page.keyboard.press('Enter');
 
@@ -194,18 +187,18 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       await page.keyboard.press('Escape');
       await card.waitFor({ state: 'detached', timeout: 5000 });
     } finally {
-      // Restores the RATIO and the CAMERA, not just the ratio. A search that
+      // Restores the ratio and the camera, not just the ratio. A search that
       // finds the field off screen flies to the far-zoomed `opening` view
       // (fitted tight on the center tile) rather than simply focusing it; an
       // assertion failing before this test flies anywhere else left the
       // camera there once, and a right-click at a fixed screen point in a
-      // LATER test landed on the center tile's own controls instead of a room
+      // later test landed on the center tile's own controls instead of a room
       // - one test's failure taking down an unrelated one's precondition,
       // which is worse than the original failure. Clicking "center" is cheap
       // and makes every subsequent test's assumption ("a dense map, framed
-      // normally") true regardless of how far this one got. Deliberately does
-      // NOT clear the search query - the live-region and reduced-motion tests
-      // below need it still active.
+      // normally") true regardless of how far this one got. Does not clear
+      // the search query - the live-region and reduced-motion tests below
+      // need it still active.
       await ratio.press('End');
       await page.getByRole('button', { name: 'center' }).click();
       await landed(page, session.flightMs);
@@ -216,9 +209,9 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     const { page } = session;
     const nodes = await axNodes(page);
 
-    // Both labels used to be SIBLINGS of their input with no `htmlFor`, so both
-    // sliders reached the reader as a bare number with no indication of what it
-    // measured.
+    // A slider whose label is a sibling with no `htmlFor` reaches the reader
+    // as a bare number with no indication of what it measures - the failure
+    // both assertions below exist for.
     const rooms = axFind(nodes, 'slider', /rooms on the map/i);
     const ratio = axFind(nodes, 'slider', /non-generic/i);
     assert.ok(rooms, 'the rooms slider must have an accessible name');
@@ -226,7 +219,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
     // Having a name is only half of it: a range announces its raw number, which
     // is the one thing about it nobody was wondering about. The units have to
-    // reach the reader THROUGH THE NAME, which is why this asserts on `name`
+    // reach the reader through the name, which is why this asserts on `name`
     // and not on `aria-valuetext`: that attribute is honoured by chromium 1194
     // and ignored by Chrome 151 on a native `input[type=range]`, so a test that
     // reads it back is testing the browser. This still catches the bug the test
@@ -262,19 +255,18 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('the canvas is a named application region, not an anonymous graphic', async () => {
     const { page } = session;
-    // Superseded by phase C: the canvas WAS `role="img"` with a static label,
-    // a placeholder for the picture nobody could yet navigate. Now it is the
-    // cursor's own `role="application"` region, named by whatever cell is
-    // currently under the camera center.
+    // The canvas is the cursor's own `role="application"` region, named by
+    // whatever cell is currently under the camera center - not a static label
+    // on a picture nobody can navigate.
     //
-    // Named by WHICHEVER cell that is, and this test deliberately does not
-    // move the camera to make it a known one. The rearrangement announcement
-    // (§8 item 4) means a search moves the cursor as well as the map, so a
-    // listbox jump earlier in this file can leave it on a room rather than
-    // the center - and flying home to pin the name down would wipe the live
-    // region the announcement test after this one reads. What must hold here
-    // is the role and that the name is a real cell's, which is exactly what
-    // an unlabelled graphic or a static placeholder would fail.
+    // Named by whichever cell that is, and this test does not move the camera
+    // to make it a known one. The rearrangement announcement means a search
+    // moves the cursor as well as the map, so a listbox jump earlier in this
+    // file can leave it on a room rather than the center - and flying home to
+    // pin the name down would wipe the live region the announcement test after
+    // this one reads. What must hold here is the role and that the name is a
+    // real cell's, which is exactly what an unlabelled graphic or a static
+    // placeholder would fail.
     const named = page.getByRole('application', {
       name: /the center of the library|Room \d+, rank \d+ of \d+|a blank wall|the far field/i,
     });
@@ -286,12 +278,10 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     const { page } = session;
     const card = page.locator('.overlay');
 
-    // This used to right-click a fixed pixel with no setup of its own,
-    // trusting the camera/ratio state the tests before it happened to leave
-    // behind - which read as this test's own flake on a run where it didn't
-    // (see git history). A dense map and a centered camera are a real,
-    // checkable precondition, not a guess, so establish both explicitly
-    // rather than lean on whatever ran earlier in this file.
+    // A dense map and a centered camera are real, checkable preconditions -
+    // establish both rather than lean on whatever the tests before this one
+    // happened to leave behind, which reads as this test's own flake when
+    // they don't hold.
     const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
     await ratio.focus();
     await ratio.press('End');
@@ -317,16 +307,16 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       'the card must take focus when it opens'
     );
 
-    // And it is named by the room it describes. "room" - what it used to
-    // announce - is the one fact the reader already had.
+    // And it is named by the room it describes, not just "room" - the one
+    // fact the reader already had.
     //
     // Matched case-insensitively on purpose: `.card-id` is styled
-    // `text-transform: uppercase`, and Chrome folds that INTO the computed
+    // `text-transform: uppercase`, and Chrome folds that into the computed
     // accessible name, so the reader is handed "ROOM 21 · 022.WEBP" rather than
     // the DOM's own "room 21 · 022.webp". Harmless for a word that is still
     // pronounceable, worth knowing before naming anything after an acronym, and
-    // it goes away when the card takes its label from `describeCell` (phase B)
-    // rather than from a visually-transformed node.
+    // it goes away when the card takes its label from `describeCell` rather
+    // than from a visually-transformed node.
     const dialog = axFind(await axNodes(page), 'dialog', /^room \d+/i);
     assert.ok(dialog, 'the card must be named by the room it describes');
 
@@ -338,7 +328,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // Tab restarts from the top, and a screen reader is left describing a card
     // that is no longer there.
     //
-    // What is NOT asserted here, because it is not yet true: returning focus to
+    // What is not asserted here, because it is not yet true: returning focus to
     // whatever opened the card. Right-clicking the canvas blurs the focused
     // control to the body before the card ever mounts, so a pointer-opened card
     // has no opener to go back to. `RoomOverlay` restores when there is one,
@@ -352,11 +342,10 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('what the map just did is announced politely', async () => {
     const { page } = session;
-    // The status text already existed and already said the right thing; it
-    // simply updated a div nothing was listening to. The hint must stay OUT of
-    // the live region - a node that falls back to the instructions would read
-    // them aloud again every time a status cleared. Leans on the ranked-listbox
-    // test's search ("clockwork") still being active.
+    // The hint must stay out of the live region - a node that falls back to
+    // the instructions would read them aloud again every time a status
+    // cleared. Leans on the ranked-listbox test's search ("clockwork") still
+    // being active.
     const live = page.locator('[role=status]');
     await live.waitFor({ timeout: 5000 });
     await waitFor(
@@ -369,7 +358,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('reduced motion rebuilds the library instead of sliding it', async () => {
     const { page } = session;
-    // Asserted through the CAMERA rather than by watching for the absence of an
+    // Asserted through the camera rather than by watching for the absence of an
     // animation, which would be a race dressed up as a test. A normal
     // rearrangement parks the camera on the center first, because the slide is
     // planned against exactly the cells on screen. Reduced motion bails out
@@ -389,13 +378,12 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
         `the drag must leave the center, got (${before.x}, ${before.y})`
       );
 
-      // "rescatter", not "reorder": "reorder" now clears any active search as
+      // "rescatter", not "reorder": "reorder" clears any active search as
       // part of its own reshuffle, which would confound this test's own
       // camera-didn't-move assertion with a second rearrangement it didn't
       // ask for. Rescatter only bumps the layout seed, which rebuilds
       // `layout` and always triggers a rearrangement on its own, with no
-      // search to clear. Written down because this test passed against a
-      // deliberately broken app until the button was swapped.
+      // search to clear.
       await page.getByRole('button', { name: 'rescatter' }).click();
       const after = await settled(page);
 
@@ -418,10 +406,10 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('keyboard focus is visible', async () => {
     const { page } = session;
-    // The search fields used to say `outline: none` and lean on a border-colour
-    // shift. Reading the computed outline back is the only way to catch that
-    // returning, since it looks perfectly reasonable in the stylesheet.
-    // Focus has to arrive by KEYBOARD. `:focus-visible` follows the most recent
+    // `outline: none` with a border-colour shift instead reads as perfectly
+    // reasonable in the stylesheet, so the computed outline is what this
+    // reads back - the only place that regression is visible.
+    // Focus has to arrive by keyboard. `:focus-visible` follows the most recent
     // input modality, so an `el.focus()` from the test inherits the mouse click
     // that came before it and correctly shows no ring - which would fail this
     // test for a reason that has nothing to do with the stylesheet. Click
@@ -439,7 +427,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.ok(parseFloat(ring.outlineWidth) >= 2, `the focus ring must be visible, got ${ring.outlineWidth}`);
   });
 
-  // --- the sidecar's optional alt (accessibility-plan.md phase E) ------------
+  // --- the sidecar's optional alt caption ------------------------------------
   //
   // Last in this file because it reloads: everything above shares one page,
   // and a reload would wipe the search/ratio/camera state the tests above
@@ -447,13 +435,13 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test("a room's picture caption becomes real <img alt> text in the catalog and overlay, and nothing is invented when it is absent", async () => {
     const { page } = session;
-    // Phase E is a format change plus a fallback. The sample corpus now ships a
-    // real caption for every room (the curation tools produce it upstream of
-    // this repo), so the whole path - fetch, join, describeRoom, `<img alt>` -
-    // can be seen end to end against the corpus exactly as it ships. The absent
-    // case - a corpus that carries no caption, where nothing may be invented in
-    // its place - no longer occurs in the shipped corpus, so it is produced by
-    // routing the sidecar's `alt` back out.
+    // The caption path is a format change plus a fallback. The sample corpus
+    // now ships a real caption for every room (the curation tools produce it
+    // upstream of this repo), so the whole path - fetch, join, describeRoom,
+    // `<img alt>` - can be seen end to end against the corpus exactly as it
+    // ships. The absent case - a corpus that carries no caption, where
+    // nothing may be invented in its place - no longer occurs in the shipped
+    // corpus, so it is produced by routing the sidecar's `alt` back out.
     const openCatalogHere = async () => {
       await page.locator('.panel .mode-toggle').click();
       await page.locator('.catalog').waitFor({ timeout: 5000 });
@@ -511,8 +499,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     await closeCatalogHere();
 
     // The one consumer with no `<img>` to put the caption on - the map canvas's
-    // own fallback content, read by a touch screen reader (accessibility-plan.md
-    // §4.2b) - still carries it as text.
+    // own fallback content, read by a touch screen reader - still carries it
+    // as text.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Control+Home');

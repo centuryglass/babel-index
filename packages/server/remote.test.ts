@@ -103,10 +103,10 @@ test('scanRemote raises a clear error when the manifest is missing', async () =>
 });
 
 test('a sheet-packed level round-trips through rebase untouched - it carries no url of its own', async () => {
-  // rebase() only rewrites literal stored urls (rooms/shared/embeddings/...).
-  // A sheet-packed level's `sheet.dir` is a bare relative path, addressed the
-  // same formula-based way `dir` always has been, resolved client-side against
-  // the already-rebased `imagesBase` - so this must survive verbatim.
+  // rebase() only rewrites literal stored urls (rooms, shared, embeddings,
+  // metadata, tagLinks). A sheet-packed level's `sheet.dir` is a bare relative
+  // path, addressed by formula against the already-rebased `imagesBase` as a
+  // per-file `dir` always was - so it must survive verbatim.
   const manifest = sampleManifest();
   manifest.levels.push({
     level: 2,

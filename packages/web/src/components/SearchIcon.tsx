@@ -1,21 +1,20 @@
 /**
- * The map's search affordance - not part of the panel and not diegetic
- * either. Everything else earns its place as an object in the room (the
- * shelf, the in-tile field); this is the one exception, a piece of screen
- * chrome the map still needs because the diegetic route to search requires
- * already being close enough to the center tile to see it.
+ * The map's search affordance - the one piece of screen chrome the map
+ * view carries. Everything else in the interface is an object in the room
+ * (the shelf, the in-tile search field); this exists because the diegetic
+ * route to search requires already being close enough to the center tile
+ * to see it.
  *
- * The badge and its arrow are imported as raw markup (`loader: { '.svg':
- * 'text' }` in packages/server/index.ts and bundle.test.mjs) rather than
- * traced into JSX by hand, so `assets/search_button.svg`/`search_arrow.svg`
- * stay the one copy of that path data - editing them in Inkscape is enough,
- * with no second copy here to fall out of step.
+ * The badge and its arrow are imported as raw markup (esbuild's `.svg`
+ * text loader, `packages/server/index.ts`), so
+ * `assets/search_button.svg`/`search_arrow.svg` stay the one copy of that
+ * path data; a copy traced into JSX here would drift from them.
  *
- * The two files share one coordinate system on purpose: the arrow was drawn
- * to sit flush against the top of the button's circle, so rotating it around
- * the circle's own center (`transform-origin: 50% 50%`) keeps it riding the
- * rim rather than drifting off it. `useMapRenderer` sets that rotation every
- * frame from the live camera, so the arrow always points at wherever the
+ * The two files share one coordinate system: the arrow was drawn to sit
+ * flush against the top of the button's circle, so rotating it around the
+ * circle's own center (`transform-origin: 50% 50%`) keeps it riding the
+ * rim rather than drifting off it. The render loop sets that rotation
+ * every frame from the live camera, so the arrow points at wherever the
  * center tile currently is on screen - including off it.
  */
 import { forwardRef, type ComponentPropsWithoutRef } from 'react';
@@ -26,11 +25,10 @@ export function SearchGlyph(props: ComponentPropsWithoutRef<'span'>) {
   return <span aria-hidden="true" {...props} dangerouslySetInnerHTML={{ __html: buttonSvg }} />;
 }
 
-// `forwardRef` because `useMapRenderer` needs the live DOM node to write a
-// per-frame `transform` onto - the same imperative arrangement the render
-// loop already uses for `.center-search` and `.center-books`, and for the
-// same reason: this rotates every frame with the camera, which is not
-// something a React re-render should be doing sixty times a second.
+// `forwardRef` because the render loop writes a per-frame `transform`
+// onto the live DOM node - the same imperative arrangement as
+// `.center-search` and `.center-books`, for the same reason: it turns with
+// the camera, which React re-rendering should not be driving.
 export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithoutRef<'span'>>(function SearchOrbitArrow(props, ref) {
   return (
     <span
@@ -43,12 +41,13 @@ export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithou
 });
 
 /**
- * A ring spinning around the badge, shown while a rearrangement's preload is
- * running - the far-field loading affordance (`docs/pending_task_list.md`)
- * for when the center-tile indicator isn't on screen to play. Unlike
+ * A ring spinning around the badge, shown while a rearrangement's preload
+ * is running - what a reader browsing away from the center tile sees
+ * during a preload, since the center-tile indicator only plays when its
+ * book is on screen (AGENTS.md, "The loading indicator"). Unlike
  * `SearchOrbitArrow` it carries no per-frame state (`style.css`'s
- * `.search-icon-button.preparing` gates a plain CSS animation), so it needs
- * no ref and is plain markup rather than injected SVG.
+ * `.search-icon-button.preparing` gates a plain CSS animation), so it
+ * needs no ref and is plain markup rather than injected SVG.
  */
 export function SearchOrbitSpinner(props: ComponentPropsWithoutRef<'span'>) {
   return <span aria-hidden="true" {...props} />;

@@ -1,25 +1,16 @@
 /**
  * The favorite badge painted into a tile's upper right corner.
  *
- * `assets/fav_on.png`/`fav_off.png` are fixed, checked-in art, designed to
- * integrate with any tile when anchored to its top right corner and scaled
- * by the same factor `render.ts`/`slide.ts` scale the tile itself - a cell's
- * pixels-per-cell-width divided by `BASE_TILE.w`, since both assets share the
- * tile's aspect and so need no per-axis split.
+ * `assets/fav_on.png`/`fav_off.png` are fixed, checked-in art that
+ * integrates with any tile: anchored to the tile's top right corner and
+ * scaled by a cell's pixels-per-cell-width over `BASE_TILE.w` - the factor
+ * `render.ts`/`slide.ts` draw the tile itself at, and the one factor covers
+ * both axes because both assets share the tile's aspect.
  *
- * Hit-testing and drawing are independent here, and that's deliberate:
- * `favoriteHitRect`/`favoriteToggleAtPoint` size and place the tap/hover
- * target from `FAVORITE_TOGGLE_BBOX`/`FAVORITE_TOGGLE_PATH` alone - both
- * traced straight off the art's own non-transparent pixels in
- * `shelf_geometry.svg`, in the same per-axis tile-fraction space as every
- * other traced rect - so neither needs the art's native pixel size at all.
- * `favoriteIconScreenRect` is the one place a size is needed, purely to place
- * the drawn icon, and it takes that size as a parameter (the decoded art's
- * own natural width/height, read by `render.ts`'s `drawFavoriteBadge` once
- * the tile cache reports it loaded) rather than a hardcoded constant, so a
- * differently-sized asset just works. This used to be one hardcoded pixel
- * rect doing both jobs, before the hit region was traced into the SVG - now
- * that it is, there's no reason left for the two to be coupled.
+ * Hit-testing and drawing read different size sources: the hit test works
+ * in traced tile fractions (`FAVORITE_TOGGLE_BBOX`/`FAVORITE_TOGGLE_PATH`)
+ * and needs no native pixel size, while the drawn icon is placed from the
+ * decoded art's own pixels - see `favoriteIconScreenRect`.
  *
  * No DOM - this is the pure geometry/hit-test half, split out the same way
  * `picking.ts` and `center.ts` are.
@@ -40,11 +31,11 @@ const GEOMETRY = layout({ width: 1, height: 1 });
 /**
  * The on-tile favorite badge's traced silhouette - `tile_fav_toggle` in
  * `shelf_geometry.svg`, an ellipse fitted to the badge art's non-transparent
- * pixels and imported the same way `center.ts`'s `CENTER_BOOK_PATH` is: the
- * canonical M/L/C/Z grammar, every coordinate a fraction of the WHOLE tile
- * (not of the badge's own icon), so it scales the same way every other traced
- * rect on a tile does - per axis, by that tile's `cellPx`. Null on a trace
- * with none, in which case a badge draws no hover highlight.
+ * pixels and imported the same way `center.ts`'s `CENTER_BOOK_PATH` is:
+ * the canonical M/L/C/Z grammar, every coordinate a fraction of the whole
+ * tile (not of the badge icon), scaled per axis by the tile's `cellPx`
+ * like every other traced rect. Null on a trace with none, in which case a
+ * badge draws no hover highlight.
  */
 export const FAVORITE_TOGGLE_PATH: string | null = GEOMETRY.favoriteToggle?.d ?? null;
 
@@ -56,10 +47,9 @@ const FAVORITE_TOGGLE_POLYGON: Point[] | null = FAVORITE_TOGGLE_PATH ? flattenPa
  * fraction space - `tile_fav_toggle`'s bbox from `shelf_geometry.svg`,
  * imported by `import-shelf-svg.ts` alongside its outline. This is the tap
  * target's geometry (`favoriteHitRect`); the outline itself
- * (`FAVORITE_TOGGLE_POLYGON`) is only for the hover highlight, which can
- * afford to be exact where a tap needs the touch padding below. Null on a
- * trace with none, in which case the badge has no tap target of its own -
- * see `favoriteHitRect`.
+ * (`FAVORITE_TOGGLE_POLYGON`) is only for the hover highlight, which can be
+ * exact where a tap needs the touch padding below. Null on a trace with
+ * none, in which case the badge has no tap target - see `favoriteHitRect`.
  */
 const FAVORITE_TOGGLE_BBOX: Rect | null = GEOMETRY.favoriteToggle?.bbox ?? null;
 
@@ -67,24 +57,23 @@ const FAVORITE_TOGGLE_BBOX: Rect | null = GEOMETRY.favoriteToggle?.bbox ?? null;
  * Touch-only floor for the badge's tap target, on each axis - a coarse
  * pointer gets its hit rect padded up to at least this size (see
  * `favoriteHitRect`). Mouse/trackpad input is precise enough that the art's
- * own bounds are always a fair target, so this never applies to it.
+ * own bounds are a fair target, so the floor does not apply there.
  */
 export const MIN_FAVORITE_HIT_TOUCH = 20;
 
 /**
- * The padded touch hit rect may never exceed this fraction of the tile's own
- * area - otherwise, at extreme zoom-out, a tiny badge would pad out to
- * cover most of the tile and turn "tap the tile" into "tap the favorite
- * button" by accident.
+ * The padded touch hit rect may never exceed this fraction of the tile's
+ * own area - at extreme zoom-out, a tiny badge padded past this would cover
+ * most of the tile and turn "tap the tile" into "tap the favorite button".
  */
 const TOUCH_HIT_AREA_CAP = 0.1;
 
 /**
  * The badge's full screen rect for a tile whose top left corner is at
- * `(sx, sy)` and whose width is `cellPx.x` - anchored to the tile's upper
- * right corner, scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the art's own decoded pixel size (see this file's doc
- * comment for why it isn't a constant here) - unrelated to
+ * `(sx, sy)` and whose width is `cellPx.x`, anchored to the tile's upper
+ * right corner and scaled by the same factor the tile itself is drawn at.
+ * `iconSize` is the decoded art's own pixel size, read by `render.ts`'s
+ * `drawFavoriteBadge` once the tile cache reports it loaded - unrelated to
  * `FAVORITE_TOGGLE_BBOX`, which sizes the tap target instead.
  */
 export function favoriteIconScreenRect(
@@ -100,11 +89,11 @@ export function favoriteIconScreenRect(
 }
 
 /**
- * The favorites-sort switch's full screen rect on the CENTER tile, anchored
- * to its upper LEFT corner - the mirror of `favoriteIconScreenRect`'s upper
- * right, scaled by the same factor the tile itself is drawn at. `iconSize` is
- * the base plate's own decoded pixel size, same reasoning as
- * `favoriteIconScreenRect`'s. The switch's own hit regions are traced
+ * The favorites-sort switch's full screen rect on the center tile, anchored
+ * to its upper left corner - the mirror of `favoriteIconScreenRect`'s upper
+ * right - and scaled by the same factor the tile itself is drawn at.
+ * `iconSize` is the base plate's own decoded pixel size, read like
+ * `favoriteIconScreenRect`'s. The switch's hit regions are traced
  * separately (`center.ts`'s `CENTER_MINE_TOGGLE_RECT`/
  * `CENTER_COUNT_TOGGLE_RECT`/`CENTER_SHUFFLE_RECT`); this is only where the
  * art is drawn.
@@ -154,14 +143,14 @@ export function pointInRect(px: number, py: number, rect: Rect): boolean {
 }
 
 /**
- * Whether a screen point lands on the favorite badge's traced SILHOUETTE, not
- * merely `favoriteHitRect`'s bounding box - the same "shape, not a box"
- * argument `centerBookAtPoint` (`center.ts`) makes for the open book.
+ * Whether a screen point lands on the favorite badge's traced silhouette,
+ * not merely `favoriteHitRect`'s bounding box - the same "shape, not a box"
+ * test `centerBookAtPoint` (`center.ts`) makes for the open book.
  * `cellPx`/`sx`/`sy` are the whole tile's own screen geometry (as `render.ts`
  * draws it), since `FAVORITE_TOGGLE_PATH` is traced against the whole tile,
- * not the badge icon alone. Used for the hover highlight only - the tap hit
- * test still goes through `favoriteHitRect`, which exists precisely to be
- * more forgiving than the art's own outline (on touch, considerably more so).
+ * not the badge icon alone. Hover highlight only: the tap hit test goes
+ * through `favoriteHitRect`, whose box is more forgiving than this outline -
+ * on touch, padded further still.
  */
 export function favoriteToggleAtPoint(
   px: number,

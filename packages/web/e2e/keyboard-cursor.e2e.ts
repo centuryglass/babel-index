@@ -1,22 +1,14 @@
 /**
- * The browser smoke test: the map's own keyboard interface
- * (docs/accessibility-plan.md phase C) - the keyboard cursor, arrow panning,
- * the boundary announcement, PageUp/PageDown zoom, and the `/`/`?` shortcuts.
- * One of five files split out of the original `smoke.e2e.mjs` (see
- * `docs/pending_task_list.md`); see `map-gestures.e2e.ts` for the shared
- * header comment on why and how.
+ * The browser smoke test for the map's own keyboard interface: the keyboard
+ * cursor, arrow panning, the boundary announcement, PageUp/PageDown zoom, and
+ * the `/`/`?` shortcuts. See `map-gestures.e2e.ts` for the shared header
+ * comment on why and how, including how to run the suite.
  *
  * `role="application"` on the canvas turns off a screen reader's browse-mode
  * reading for exactly this element, which is what lets arrow keys reach the
  * page at all rather than being consumed by the reader's own navigation. None
  * of that can be asserted from JSX - only a real browser resolves whether a
  * role actually changes what a key press does.
- *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
- *
- *   npx playwright install chromium   # once
- *   npm run test:e2e
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,10 +28,11 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
   test('the map is reachable, and the sample corpus is small enough to have a real edge', async () => {
     const { page } = session;
-    // The 26-room sample corpus gives a `boundaryRadius` of only a few cells
-    // even fully dense - discovered while driving this by hand, not designed
-    // in - which is what makes the boundary-crossing test below reachable in
-    // a handful of presses rather than needing a huge synthetic corpus.
+    // The sample corpus is small enough that its `boundaryRadius` is only a
+    // few cells even fully dense - a property of its size, not a design
+    // guarantee - which is what makes the boundary-crossing test below
+    // reachable in a handful of presses rather than needing a huge synthetic
+    // corpus.
     const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
     await ratio.focus();
     await ratio.press('End');
@@ -99,7 +92,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     const ctrlArrowText = await live.textContent();
     if (!/^nothing further/.test(ctrlArrowText)) {
       assert.match(ctrlArrowText, /^Room \d+/, 'ctrl+arrow must never land announcing a generic shelf');
-      // And it must actually have MOVED the camera - a room announcement
+      // And it must actually have moved the camera - a room announcement
       // without a matching jump would mean the text and the map disagree.
       await waitFor(async () => (await hud(page)).x !== home.x, 2000, 'ctrl+arrow never moved the camera');
     }
@@ -127,7 +120,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     }
     assert.ok(crossedAt > 0, 'walking outward must eventually cross the boundary and say so');
 
-    // One more step past it must NOT repeat the boundary sentence - only the
+    // One more step past it must not repeat the boundary sentence - only the
     // crossing itself is announced, or the room name would be drowned every
     // single press through the far field.
     await page.keyboard.press('ArrowRight');
@@ -181,10 +174,10 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     const { page } = session;
     // A keyboard zoom eases over `camera.keyboardMoveMs`, so the HUD is not
     // final the moment `page.keyboard.press` returns - poll for the change
-    // rather than reading once. This needed polling even back when the move
-    // was instant, because "instant" still meant "on the next animation
-    // frame"; it raced about one run in four then, and the easing only widens
-    // the window. Same discipline `settled()` uses for its own asynchrony.
+    // rather than reading once. Even an instant move lands on the next
+    // animation frame, so a single read races the frame; the easing only
+    // widens that window. Same discipline `settled()` uses for its own
+    // asynchrony.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Home');
@@ -211,11 +204,11 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
   test('a keyboard nudge eases under normal motion and arrives at once under reduced motion', async () => {
     const { page } = session;
-    // The keyboard used to write the camera directly - instant, no animation
-    // at all, which read as jarring against a search or a click that always
-    // eases. `keyboardMoveMs` (config) gives a short flight instead; this is
-    // the only layer that can see whether one is actually happening, since
-    // `flyTo`'s timing lives in a rAF loop no unit test drives.
+    // The camera eases over `keyboardMoveMs` (config) rather than being
+    // written directly - an instant write reads as jarring against a search
+    // or a click that always eases. This is the only layer that can see
+    // whether the easing is happening, since `flyTo`'s timing lives in a rAF
+    // loop no unit test drives.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Home');
@@ -269,12 +262,10 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
   test('rapid keyboard presses compound instead of collapsing into one', async () => {
     const { page } = session;
-    // A real regression, found driving this by hand: two PageDown presses back
-    // to back both read the camera's pre-flight zoom (nothing had eased yet,
-    // even one frame in) and computed the SAME target, so the second press
-    // silently cancelled the first instead of zooming out twice. Fixed by
-    // chaining off the in-flight target rather than the interpolated one;
-    // this is the test that would have caught it.
+    // Two rapid presses that each read the camera's pre-flight zoom (nothing
+    // has eased yet, even one frame in) compute the same target, so the
+    // second silently cancels the first instead of compounding - the failure
+    // this test exists to catch.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Home');
@@ -345,7 +336,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     assert.ok(outsideNow.x > outsideNow.edge, `the hold must end outside: x=${outsideNow.x}, edge=${outsideNow.edge}`);
 
     // Walk back in. Once inside, a press must land the camera cell-centered on
-    // BOTH axes - the offset a trip outward leaves is rarely axis-aligned, so
+    // both axes - the offset a trip outward leaves is rarely axis-aligned, so
     // an implementation that only fixed the axis being moved along would leave
     // the other one crooked forever.
     const offCenter = (v) => Math.abs(v - Math.floor(v) - 0.5);
@@ -389,13 +380,13 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // it is down, each flagged `repeat: true`) that no unit test produces and
     // no single `press()` reproduces.
     //
-    // The bug this pins: damping the keyboard with the POINTER's curve looks
-    // right and is not. `panByPixels` floors its scale at 0.12 so a drag never
-    // feels frozen, which costs nothing because a hand runs out of screen -
-    // but for a key that repeats indefinitely, any non-zero floor is a
-    // constant outward velocity. Measured with the shared curve, a six-second
-    // hold reached 31 cells past a boundary eight full-width drags could only
-    // push 15 past, and it was still climbing linearly.
+    // Damping the keyboard with the pointer's curve looks right and is not.
+    // `panByPixels` floors its scale at 0.12 so a drag never feels frozen,
+    // which costs nothing because a hand runs out of screen - but for a key
+    // that repeats indefinitely, any non-zero floor is a constant outward
+    // velocity. Measured with the shared curve, a six-second hold reached 31
+    // cells past a boundary eight full-width drags could only push 15 past,
+    // and it was still climbing linearly.
     const canvas = page.locator('canvas');
     const recentre = async () => {
       await page.getByRole('button', { name: 'center' }).click();
@@ -443,19 +434,16 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
   test('the edge pushes back on a keyboard cursor too, and respects reduced motion', async () => {
     const { page } = session;
-    // The boundary's pan resistance is a REAL affordance, not an obstacle for
+    // The boundary's pan resistance is a real affordance, not an obstacle for
     // the keyboard to be exempted from: walking out past the last ranked room
     // and feeling the library pull you home is the same thing a pointer drag
-    // gets on release (accessibility-plan.md §3.1's "the edge speaks").
+    // gets on release.
     //
-    // Written after shipping the opposite. An earlier fix exempted every
-    // landed flight from the glide, on the theory that correcting a
-    // keyboard-placed camera would fight the cursor's announced position -
-    // which got the causality backwards (the cursor is DERIVED from the
-    // camera, so it simply moves with it) and, because the exemption was set
-    // on every landing and only cleared by a pointerdown, silently disabled
-    // the pushback for the entire keyboard session. This is the test that
-    // would have caught that.
+    // An exemption for landed flights looks harmless and is not: set on every
+    // landing and cleared only by a pointerdown, it silently disables the
+    // pushback for the whole keyboard session - and it gets the causality
+    // backwards, since the cursor is derived from the camera and simply moves
+    // with it. This is the test that catches that class of fix.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Home');
@@ -475,8 +463,8 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
     // Walk a few cells clear of the boundary so the pull is unambiguous, then
     // stop touching anything. The drift back must happen on its own - no
-    // pointer, no further keys. A mouse pan producing a sudden correction that
-    // idling does not is precisely the "snaps back when I try to pan" symptom.
+    // pointer, no further keys. A mouse pan producing a sudden correction
+    // that idling does not is the "snaps back when I try to pan" symptom.
     for (let i = 0; i < 4; i++) {
       await page.keyboard.press('ArrowRight');
       await page.waitForTimeout(200);
@@ -499,8 +487,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     );
 
     // Reduced motion gets the same correction without the frames it takes to
-    // ease there - the glide had never checked the setting at all, an ambient
-    // gap older than any of the keyboard work.
+    // ease there - the glide applies it at once instead.
     await page.getByRole('button', { name: 'center' }).click();
     await landed(page, session.flightMs);
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -560,14 +547,14 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
   test("the cursor's own story and chips are real, touch-reachable elements - not gated on Enter", async () => {
     const { page } = session;
-    // `role="application"` plus a keyboard IS the desktop story, but VoiceOver
-    // and TalkBack have nothing that corresponds to "press Enter" - accessibility-
-    // plan.md §4.2b/§4.4 requires the cursor's content to be reachable without
-    // it. Canvas fallback content is never PAINTED (that is the whole point -
-    // it does not duplicate what is already on screen for sighted users), so a
-    // real pointer click cannot reach it; `dispatchEvent` is the stand-in here
-    // for how an assistive technology's own activation lands on an element
-    // regardless of visibility.
+    // `role="application"` plus a keyboard is the desktop story, but VoiceOver
+    // and TalkBack have nothing that corresponds to "press Enter", so the
+    // cursor's content must be reachable without it. Canvas fallback content
+    // is never painted (that is the whole point - it does not duplicate what
+    // is already on screen for sighted users), so a real pointer click cannot
+    // reach it; `dispatchEvent` is the stand-in here for how an assistive
+    // technology's own activation lands on an element regardless of
+    // visibility.
     const canvas = page.locator('canvas');
     await canvas.focus();
     await page.keyboard.press('Control+Home');

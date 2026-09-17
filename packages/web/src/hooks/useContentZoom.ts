@@ -21,31 +21,29 @@ interface Frame {
  * Two-finger pinch-to-zoom and one-finger pan, scoped to one DOM subtree -
  * a room overlay's tile-and-story, a help/book dialog's page, the catalog
  * list - so a reader can magnify any of it without touching the browser's
- * own page zoom. Native zoom moves the ENTIRE page, and fixed-size,
- * absolutely-positioned chrome elsewhere in the document (the map canvas,
- * its search badge) never tracks that; worse, on Firefox Mobile a
- * viewport-meta reset meant to undo a native zoom/pan after a dialog
- * closes doesn't reliably take (Firefox bug 1498729 - a dynamically-
- * mutated viewport meta doesn't discard its old parsed values there),
- * leaving a zoom/pan that leaks past whatever dialog it happened in.
- * Confining the gesture to one scoped element sidesteps both problems:
- * nothing outside it is ever touched, and the zoom resets for free
- * whenever `resetKey` changes, since it is just React state, not
- * anything the browser has to be asked to undo.
+ * own page zoom.
+ *
+ * Native browser zoom is not offered as a fallback: it moves the entire
+ * page, and fixed-size, absolutely-positioned chrome elsewhere in the
+ * document (the map canvas, its search badge) does not track it; and on
+ * Firefox Mobile a viewport-meta reset meant to undo a native zoom/pan
+ * after a dialog closes does not reliably take (Firefox bug 1498729 - a
+ * dynamically-mutated viewport meta doesn't discard its old parsed values
+ * there), leaving a zoom/pan that leaks past whatever dialog it happened
+ * in. Confining the gesture to one scoped element avoids both problems:
+ * nothing outside it is ever touched, and the zoom resets for free whenever
+ * `resetKey` changes, since it is just React state, not anything the
+ * browser has to be asked to undo.
  *
  * Entirely independent of the map's own camera (`camera.ts`/
- * `useMapCamera.ts`) - this is private React state per hook instance, so
- * a content zoom here can never affect, or be affected by, the map's zoom.
+ * `useMapCamera.ts`) - private React state per hook instance, so a content
+ * zoom here can never affect, or be affected by, the map's zoom.
  *
- * `viewportRef` and the returned `ref` are deliberately two different
- * elements: the content being scaled is often taller/wider than the
- * region showing it (a long story, a tall virtualized list) and already
- * scrolled to an arbitrary offset within it when a gesture starts - see
- * `contentZoomCamera.ts`'s file doc comment for why the geometry needs
- * both rather than just the zoomed element's own size, the mistake an
- * earlier, image-only version of this hook (`imageZoom.ts`) made
- * unproblematically only because a room overlay's tile happens to be
- * about the size of its own viewport.
+ * `viewportRef` and the returned `ref` are two different elements because
+ * the content being scaled is often taller/wider than the region showing it
+ * (a long story, a tall virtualized list) and is already scrolled to an
+ * arbitrary offset within it when a gesture starts.
+ * `contentZoomCamera.ts`'s file doc carries the geometry that needs both.
  */
 export function useContentZoom(viewportRef: RefObject<HTMLElement | null>, resetKey?: unknown) {
   const [node, setNode] = useState<HTMLElement | null>(null);
@@ -91,10 +89,9 @@ export function useContentZoom(viewportRef: RefObject<HTMLElement | null>, reset
     [captureFrame]
   );
 
-  // Buttons/keyboard: the non-pinch path a reader who can't (or doesn't
-  // want to) use touch still needs - see the plan this hook implements,
-  // "a non-pinch way to reach the same zoom." Always anchored at the
-  // viewport's own center rather than a gesture midpoint.
+  // Buttons/keyboard: the non-pinch path a mouse-and-keyboard reader needs
+  // (AGENTS.md, "`ZoomControls.tsx`"). Always anchored at the viewport's own
+  // center rather than a gesture midpoint.
   const zoomIn = useCallback(() => applyZoom(1.5), [applyZoom]);
   const zoomOut = useCallback(() => applyZoom(1 / 1.5), [applyZoom]);
   const resetZoom = useCallback(() => {
@@ -110,14 +107,13 @@ export function useContentZoom(viewportRef: RefObject<HTMLElement | null>, reset
     // A single pointer down while already zoomed is ambiguous - it might be
     // the start of a pan, or it might be a plain click/tap on real content
     // inside the zoomed scope (a keyword chip, "read the rest", a link in
-    // the artist's statement). Unlike the old tile-only `useImageZoom.ts`,
-    // this hook wraps content that CAN contain such controls, so claiming
-    // the pointer immediately would silently break every one of them.
-    // `dragCandidate` defers the claim until the pointer has actually moved
-    // past a slop radius - short of that, nothing here calls
-    // `setPointerCapture`/`preventDefault`, so an unmoved pointer up still
-    // reaches whatever is under it as an ordinary click. A two-finger pinch
-    // has no such ambiguity and claims immediately, same as before.
+    // the artist's statement). This hook wraps content that can contain such
+    // controls, so claiming the pointer immediately would silently break
+    // every one of them. `dragCandidate` defers the claim until the pointer
+    // has actually moved past a slop radius - short of that, nothing here
+    // calls `setPointerCapture`/`preventDefault`, so an unmoved pointer up
+    // still reaches whatever is under it as an ordinary click. A two-finger
+    // pinch has no such ambiguity and claims immediately.
     let dragCandidate: { pointerId: number; x: number; y: number } | null = null;
     const DRAG_SLOP = 6;
 

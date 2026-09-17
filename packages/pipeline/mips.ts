@@ -1,47 +1,26 @@
 /**
  * Writing the resolution pyramid to disk.
  *
- * The client picks a level per frame (see packages/web/src/lib/pyramid.ts); this is
- * the job that makes those levels exist. It runs once per corpus, offline, and
- * is deliberately not something the server does on demand - resizing 10,000
- * rooms is a pipeline concern, and a server that resizes on request has put a
- * CPU-bound job on the request path.
+ * The client picks a level per frame (`packages/web/src/lib/pyramid.ts`); this
+ * is the job that makes those levels exist. It runs once per corpus, offline:
+ * resizing 10,000 rooms is a CPU-bound job, and a server that resizes on
+ * request has put that job on the request path.
  *
- * The ladder is imported from pyramid.js rather than restated, so the sizes
- * written here cannot drift from the sizes the client asks for. That import is
- * the point: one ladder, two consumers.
- *
- * ### Layout on disk
- *
- *   <dir>/000.jpg          level 0 - the source art, left where it is
- *   <dir>/512/000.jpg      level 1
- *   <dir>/256/000.jpg      level 2      ... directory named for the width
- *
- * Level 0 stays flat rather than being copied into a <width>/ directory of its
- * own, so running this in place costs no duplicated bytes and a corpus that has
- * never been through the pipeline still reads as a valid level 0. Pass a
- * separate --out and every level is written, including 0, for the case where
- * the pyramid is being staged for upload.
- *
- * Widths name the directories because width is the axis the client's ladder is
- * expressed in; a non-square tile keeps its aspect at every level, so the width
- * identifies the level unambiguously.
+ * The level sizes come from `LEVELS`, imported rather than restated, so the
+ * sizes written here cannot drift from the sizes the client asks for. The
+ * on-disk layout - the directory convention, why a directory is named for its
+ * width, why level 0 stays flat - is `layout.ts`'s to state.
  *
  * ### Re-runs are incremental
  *
- * Every scaled level is written with the source file's content hash embedded
- * in its JPEG EXIF (`ImageDescription`). A rerun hashes the source again and
- * skips any level whose file already carries that hash - so touching a few
- * images in a large corpus costs a few resizes, not the whole pyramid.
- * Level 0 is untouched by this: in place it is never rewritten anyway, and to
- * a separate `--out` it is copied byte for byte, which is already cheap.
+ * Every scaled level is written with its source's content hash embedded in the
+ * JPEG EXIF (`ImageDescription`). A rerun hashes the source again and skips any
+ * level whose file already carries that hash, so touching a few images in a
+ * large corpus costs a few resizes. Level 0 is never gated by this: in place it
+ * is not rewritten, and to a separate `--out` it is copied byte for byte.
  *
- * The same hash also lands in `metadata.json` - the keyword/story sidecar
- * (packages/map/metadata.js), keyed by filename like everything else there -
- * via `updateMetadataHashes`. That copy is not for gating a rewrite; it is so
- * that once a corpus is hosted somewhere, a local regeneration's hashes can be
- * diffed against the last uploaded metadata.json to name exactly which source
- * images changed, without fetching the images themselves to check.
+ * `updateMetadataHashes` records each source's hash in the corpus's
+ * `metadata.json` as well.
  */
 import { mkdir, copyFile, readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
@@ -50,16 +29,16 @@ import sharp from 'sharp';
 import { LEVELS } from '../web/src/lib/pyramid.ts';
 import { mipPlan, type Size, type LevelStep, type MipStep } from './layout.ts';
 
-// Re-exported because this is where callers have always looked for it. It lives
-// in layout.ts so scan.ts can read the layout without importing sharp.
+// Re-exported for callers that plan and write through this module. The
+// definition is `layout.ts`'s, for the dependency-budget reason stated there.
 export { mipPlan } from './layout.ts';
 export type { Size, LevelStep, MipStep } from './layout.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
-// Mirrors packages/server/scan.ts's METADATA_FILE constant. Not imported from
-// there - that module pulls in the server's directory-scan machinery, and this
-// is a name, not behaviour, so restating it is cheaper than the coupling.
+// Mirrors packages/server/scan.ts's METADATA_FILE. Not imported from there:
+// that module pulls in the server's directory-scan machinery, and this is a
+// name, not behaviour.
 const METADATA_FILE = 'metadata.json';
 
 // Prefixes the hash inside the EXIF ImageDescription so it reads unambiguously
@@ -68,15 +47,19 @@ const METADATA_FILE = 'metadata.json';
 const HASH_PREFIX = 'babel-index:sha256:';
 const HASH_PATTERN = new RegExp(`${HASH_PREFIX}([0-9a-f]{64})`);
 
-/** One `metadata.json` sidecar entry - loose on purpose, see updateMetadataHashes. */
+/** One `metadata.json` sidecar entry. Unknown fields must round-trip - see `updateMetadataHashes`. */
 type SidecarEntry = Record<string, unknown>;
 type Sidecar = Record<string, SidecarEntry>;
 
 export interface WriteMipsResult {
   plan: MipStep[];
+  /** Levels this run resized or copied. */
   written: number;
+  /** Level 0 in place: already where it belongs, so never counted as written. */
   skipped: number;
+  /** Levels whose embedded hash matched the source, so nothing was resized. */
   cached: number;
+  /** The source's content hash, for the caller to record. */
   hash: string;
   source: Size;
 }
@@ -104,10 +87,12 @@ async function embeddedHash(file: string): Promise<string | null> {
 /**
  * Resize one image into every level below 0.
  *
- * Level 0 is written only when `outDir` differs from the image's own directory;
- * in place it is already there. `lanczos3` is sharp's default kernel and the
- * right one here - these are photographs being minified, where a box filter
- * would alias the book spines into moire.
+ * Level 0 is written only when `outDir` is not the image's own directory: in
+ * place, the flat source already is level 0, and to a separate `--out` it is
+ * copied so a staged corpus holds every level for upload.
+ *
+ * `lanczos3` is sharp's default kernel, spelled out because a box filter
+ * aliases the art's fine book spines into moire.
  *
  * @param opts.file        absolute path to the source image
  * @param opts.outDir      root the <width>/ directories go under
@@ -169,14 +154,22 @@ export async function writeMips({
 
 /**
  * Merge a content hash onto each file's entry in the corpus's `metadata.json`
- * sidecar, keyed by filename like every other field there (packages/map/
- * metadata.js). Existing `keywords`/`story`/`alt` are left exactly as they
- * are - this only adds or refreshes `hash`; `normaliseEntry` ignores fields it
- * doesn't know, so an entry that is otherwise empty stays "no metadata" to the
- * map while still carrying a hash for sync tooling to read.
+ * sidecar - the keyword/story data, keyed by filename like every other field
+ * there (`packages/map/metadata.ts`).
  *
- * A missing or unreadable sidecar is started fresh rather than failing the
- * run - a corpus with no keyword/story data yet still gets one with hashes.
+ * This copy is not what gates a rewrite - the EXIF stamp is. It is there so a
+ * hosted corpus can be compared with a local one: diffing two
+ * `metadata.json` files names which source images changed, without fetching the
+ * images to compare them. `tools/upload` does not read this field; see its
+ * `diffAgainstManifest`.
+ *
+ * Existing `keywords`/`story`/`alt` are preserved untouched; only `hash` is
+ * added or refreshed. `normaliseEntry` ignores fields it does not know, so an
+ * entry that is otherwise empty stays "no metadata" to the map while still
+ * carrying a hash.
+ *
+ * A missing or unreadable sidecar is started fresh rather than failing the run,
+ * so a corpus with no keyword/story data yet still gets one with hashes.
  *
  * @param dir the corpus directory `metadata.json` lives in
  * @param hashes filename -> content hash
@@ -188,7 +181,7 @@ export async function updateMetadataHashes(dir: string, hashes: Map<string, stri
     const parsed = JSON.parse(await readFile(path, 'utf8'));
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) sidecar = parsed;
   } catch {
-    // no sidecar yet, or unreadable - start fresh rather than fail the run
+    // no sidecar yet, or unreadable: starts fresh
   }
 
   for (const [file, hash] of hashes) {
@@ -201,8 +194,10 @@ export async function updateMetadataHashes(dir: string, hashes: Map<string, stri
 }
 
 /**
- * Every image directly inside a directory, ignoring the <width>/ subdirectories
- * this tool writes. Sorted, so ids stay stable the way scan.mjs assigns them.
+ * Every image directly inside a directory, ignoring the `<width>/` and
+ * `<width>-sheets/` subdirectories this tool writes - a rerun that found them
+ * would resize its own output, one level per run. Sorted, because `scan.ts`
+ * assigns room ids by position in that order.
  */
 export async function sourceImages(dir: string): Promise<string[]> {
   const entries = await readdir(dir);
@@ -223,8 +218,11 @@ export interface SourceSize extends Size {
  * Check every source shares one aspect ratio.
  *
  * A corpus of mixed aspects cannot tile: the map draws one cell shape, so a
- * room with a different one is either stretched or letterboxed, and neither is
- * a decision worth making silently on someone's behalf.
+ * room with a different one is stretched or letterboxed, and neither is a
+ * decision to make silently.
+ *
+ * Shape only, not size. Same-aspect sources of different dimensions pass, and
+ * the caller plans levels and sheet grids from the first of them.
  *
  * @param tolerance fractional difference allowed against the first
  */

@@ -1,44 +1,42 @@
 /**
- * Cutting a finite board out of an infinite map, so the illusion can be planned.
+ * Cut a finite board out of the infinite map so a rearrangement can be planned.
  *
  * `illusion.ts` rearranges values in a rectangle and knows nothing about rooms.
- * This is the half that knows: it turns "the map looked like *this* and must now
- * look like *that*" into the two boards, the on-camera rectangle and the fixed
- * cell that the planner takes, and it is where every assumption connecting the
- * two lives.
+ * This is the half that knows: it turns "the map looked like this and must now
+ * look like that" into the two boards, the on-camera rectangle, and the fixed
+ * cell, and it is where every assumption connecting the two lives.
  *
- * ### Why a finite board is honest here
+ * ### A finite board with a parked camera
  *
- * The map has no edges and the planner's rotations wrap around. Those are only
- * compatible because the camera is parked on the center for the duration of a
- * rearrangement: the wrap happens far off camera, where nothing is drawn from
- * the board at all. Let the camera move during the animation and this stops
- * being true - which is why the board is built per rearrangement and thrown
- * away, rather than being a thing the app maintains.
+ * The map has no edges and the planner's rotations wrap around. Those are
+ * compatible because the camera is parked for the whole rearrangement, so the
+ * wrap happens off camera, where nothing is drawn from the board at all. Move
+ * the camera mid-animation and this stops holding, which is why a board is
+ * built per rearrangement and thrown away.
  *
- * ### The board must be big enough for two different reasons
+ * ### Two size bounds
  *
- *   - It has to hold every slot of BOTH layouts, because a room the new order
+ *   - It has to hold every slot of both layouts, because a room the new order
  *     wants on camera has to be findable somewhere. A search reranks the whole
  *     corpus, so the room that lands beside the center may have been at the far
  *     edge a moment ago.
- *   - It has to be at least four times the on-camera rectangle, which is the
- *     planner's precondition - the cells outside the region are where values are
- *     parked, and too small a board starves that pool mid-plan.
+ *   - It has to be at least four times the on-camera rectangle: the cells
+ *     outside the region are where values are parked, and a board too small
+ *     starves that pool mid-plan. `illusion.ts`'s `validate` refuses it.
  *
  * The second binds on a small corpus and the first on a large one, so the board
  * takes the larger. Neither costs anything to animate: every move outside the
- * region is a swap, and swaps are invisible by construction.
+ * region is a swap.
  *
- * ### The end board is only pinned down where it can be seen
+ * ### The end board is pinned only where it can be seen
  *
- * Outside the region the final arrangement is *free*, and taking that freedom is
- * what keeps the plan cheap. The end board is therefore the start board with the
- * region overwritten, then the multiset repaired by rewriting as few off-camera
- * cells as possible - so the planner's last phase has a region's worth of work
- * to do rather than a board's worth. What it costs is that the board stops
- * agreeing with the new layout off camera, which is exactly the part nobody can
- * see, and the board is discarded the moment the animation ends.
+ * Outside the region the final arrangement is free, and taking that freedom is
+ * what keeps the plan short. The end board is the start board with the region
+ * overwritten, then repaired to a matching multiset by rewriting as few
+ * off-camera cells as possible, so the planner's last phase has a region's
+ * worth of work instead of a board's worth. The cost is that the board stops
+ * agreeing with the new layout off camera - the part nobody can see, on a board
+ * that is discarded when the animation ends.
  *
  * ### When a rearrangement cannot be animated
  *
@@ -46,11 +44,10 @@
  * board. It always is when the two orders are permutations of the same placed
  * set - the reorder button, and any search at full corpus size. It is not when
  * the "rooms on the map" slider has been pulled back, because then a reorder
- * changes *which* rooms are placed at all, and a room that was not on the map
- * cannot slide in from a cell it was never in. That case returns null, and the
- * caller falls back to the instant rebuild that has always been there. Faking
- * it would mean a tile changing its face off camera and sliding on as something
- * else, which is the one thing this whole approach exists to avoid.
+ * changes which rooms are placed at all, and a room that was not on the map
+ * cannot slide in from a cell it was never in. That case returns null and the
+ * caller falls back to an instant rebuild; the alternative is a tile changing
+ * its face off camera and arriving as something else.
  */
 
 import type { BoardValue, Rearrangement } from './moves.ts';
@@ -58,8 +55,8 @@ import type { MapLayout } from './ordering.ts';
 
 /**
  * The center room's value. Distinct from the wallpaper so the board is
- * self-describing. Must agree with `BoardValue` in `moves.ts` - that type
- * contract can't import this runtime constant, so it re-declares the literal.
+ * self-describing. Its string has to stay `'center'`: `moves.ts`'s `BoardValue`
+ * re-declares the literal and cannot import this one.
  */
 export const CENTER = 'center';
 
@@ -120,13 +117,13 @@ export function buildRearrangement({
 
   // Far enough out to hold every slot either layout uses, and at least one cell
   // clear of the region on every side. `boundaryRadius` is in cell widths, so
-  // the vertical reach is that over the aspect - the same measure the map uses
-  // everywhere else.
+  // the vertical reach divides it by `aspect` - the same weighting
+  // `cellDistance` gives the y axis.
   const radius = Math.max(before.layout.boundaryRadius, after.layout.boundaryRadius);
   let halfW = Math.max(Math.ceil(radius), Math.abs(rx0), Math.abs(rx1), 5) + 1;
   let halfH = Math.max(Math.ceil(radius / aspect), Math.abs(ry0), Math.abs(ry1), 5) + 1;
-  // ... and big enough that the region is under a quarter of it, which is the
-  // parking pool the planner needs. Grows both axes so the board keeps its shape.
+  // `validate`'s quarter-board rule, met by growing both axes together so the
+  // board keeps the map's shape.
   while (regionArea * 4 >= (2 * halfW + 1) * (2 * halfH + 1)) {
     halfW = Math.ceil(halfW * 1.3) + 1;
     halfH = Math.ceil(halfH * 1.3) + 1;
@@ -143,7 +140,7 @@ export function buildRearrangement({
 
   // The end board: the start board with the region overwritten by what the new
   // arrangement puts there. Everything outside is still the start board, which
-  // is what keeps the repair below - and the planner's last phase - small.
+  // is what keeps `repairMultiset`, and so the planner's last phase, small.
   const end = start.slice();
   const delta = new Map<BoardValue, number>();
   const bump = (v: BoardValue, n: number) => delta.set(v, (delta.get(v) ?? 0) + n);
@@ -164,9 +161,9 @@ export function buildRearrangement({
     start: { width, height, cells: start },
     end: { width, height, cells: end },
     bounds: { xmin: rx0 + halfW, xmax: rx1 + halfW, ymin: ry0 + halfH, ymax: ry1 + halfH },
-    // The center room, which never moves. It is cell (0, 0) on the map and is
-    // reserved by `ordering.ts`, so it holds the same value in both boards for
-    // free - the planner's precondition is satisfied by the map's own design.
+    // The center room, which never moves. It is map cell (0, 0), reserved by
+    // `ordering.ts`, so both boards hold the same value here for free: the
+    // planner's precondition is satisfied by the layout's own design.
     fixed: { x: halfW, y: halfH },
     origin: { x: halfW, y: halfH },
   };
@@ -193,14 +190,14 @@ interface RepairGeometry {
  * Make the two boards agree as multisets, by rewriting off-camera cells.
  *
  * Overwriting the region left `end` holding too many of some values and too few
- * of others - `delta` counts exactly which, since the two boards are identical
+ * of others; `delta` counts which, since the two boards are identical
  * everywhere else. Every surplus occurrence is an off-camera cell that can be
  * rewritten to a value that is short, and there are always as many of one as of
  * the other because both boards are the same size.
  *
  * The one way this fails is a value that is short but has no surplus occurrence
  * anywhere: a room the new arrangement wants on camera that is not on the board
- * at all. See the module comment on when that happens.
+ * at all. See *When a rearrangement cannot be animated* in the module header.
  *
  * @param end mutated in place
  * @returns whether the repair was possible
