@@ -26,13 +26,16 @@ proportional to risk. Two passes are committed as exemplars:
 - `illusion.ts` (10bf4c8) — the nuance: a file where heavy commentary is
   *mostly earned*, so the pass is narrower (dedup + de-shout, not compress).
 
-167 code files total (107 sources + 60 tests/specs); the running checklist in §4
-is the source of truth for how many are done. That is far more than one session,
-so it proceeds in batches. This document tracks the queue and the method.
+167 code files total (107 sources + 60 tests/specs), plus two CSS/HTML files
+tracked separately since neither has a test to pair with; the running checklist
+in §4 is the source of truth for how many are done. That is far more than one
+session, so it proceeds in batches. This document tracks the queue and the
+method.
 
-Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests.
-CSS/HTML stay out: §5's verifier parses JS/TS, and a CSS or HTML comment pass
-would need a different one.
+Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests,
+plus `packages/web/index.html` and `packages/web/style.css` - §5's verifier
+covers all four via `tools/comment-check/strip.mjs`'s per-extension dispatch
+(a real parser for JS/TS, a hand-rolled comment scan for CSS/HTML).
 
 Bug-fixing and deep code analysis are outside of the scope of this plan, but
 a pass of this breadth is likely to incidentally find bugs, design oversights,
@@ -432,6 +435,8 @@ of citing it.
   - [x] packages/server/version.test.ts
 
 #### packages/web
+- [ ] packages/web/index.html  — no unit test, checked by `stripHtml`
+- [ ] packages/web/style.css  — no unit test, checked by `stripCss`
 - [ ] packages/web/e2e/support.ts  — no unit test
 - [x] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
 - [x] packages/web/src/components/BabelBookOverlay.tsx
@@ -573,16 +578,27 @@ node tools/comment-check/check.mjs <file>...          # working tree vs HEAD
 node tools/comment-check/check.mjs --base <rev> <file>...   # vs another rev
 ```
 
-It parses each file with the real TypeScript 5 parser and **prints it back with
-comments removed** (`ts.createPrinter({ removeComments: true })`), then diffs
-that canonical output between the two versions. Equal ⟹ only comments changed;
-it prints `-/+` of the code lines that actually moved otherwise. It preserves
-**type annotations**, so a slipped `a: number` → `a: string` is caught, and
-parses correctly through regex-vs-division, template `${}` substitutions, and
-JSX text — the cases a hand-rolled lexer (or eyeballing a diff) gets wrong.
+For JS/TS it parses each file with the real TypeScript 5 parser and **prints it
+back with comments removed** (`ts.createPrinter({ removeComments: true })`),
+then diffs that canonical output between the two versions. Equal ⟹ only
+comments changed; it prints `-/+` of the code lines that actually moved
+otherwise. It preserves **type annotations**, so a slipped `a: number` →
+`a: string` is caught, and parses correctly through regex-vs-division, template
+`${}` substitutions, and JSX text — the cases a hand-rolled lexer (or
+eyeballing a diff) gets wrong.
 
-Contract self-tests live in `tools/comment-check/strip.test.mjs` (also run by
-`npm test`, which discovers `tools/`).
+For `.css`/`.html` (`packages/web/style.css`, `packages/web/index.html`) there
+is no parser in this tree, so `strip.mjs`'s `stripCss`/`stripHtml` hand-scan
+the source instead — safe because both languages' comment delimiters are
+unambiguous outside a string, unlike JS's `/`. They track quoted strings so a
+comment-like sequence inside one is left alone, then collapse whitespace runs
+to one space so a comment edit that shifts surrounding blank lines still reads
+as comment-only. Neither walks into a nested language: `stripHtml` has no
+`<script>`/`<style>` handling, which is fine only because `index.html` embeds
+neither today.
+
+Contract self-tests for both paths live in `tools/comment-check/strip.test.mjs`
+(also run by `npm test`, which discovers `tools/`).
 
 This is a **local-only tool**: classic TS is installed in a nested
 `tools/comment-check/package.json` so its `tsc` binary can't shadow the

@@ -48,3 +48,33 @@ test('template substitutions are handled, comments inside them invisible', () =>
 test('malformed input throws rather than comparing falsely', () => {
   assert.throws(() => strip('function f( {', 'bad.ts'), /does not parse/);
 });
+
+test('CSS: comment-only edits are invisible, including whitespace churn around them', () => {
+  assert.ok(eq('a { color: red; /* why */ }', 'a { color: red; }', 'x.css'));
+  assert.ok(eq('a { color: red; }\n/* note */\nb { color: blue; }', 'a { color: red; }\n\nb { color: blue; }', 'x.css'));
+});
+
+test('CSS: code changes are caught, including inside a comment-like string', () => {
+  assert.ok(!eq('a { color: red; }', 'a { color: blue; }', 'x.css'));
+  assert.ok(eq('a::before { content: "/* not a comment */"; }', 'a::before { content: "/* not a comment */"; }', 'x.css'));
+  assert.ok(!eq('a::before { content: "/* a */"; }', 'a::before { content: "/* b */"; }', 'x.css'));
+});
+
+test('CSS: an unterminated comment throws', () => {
+  assert.throws(() => strip('a { color: red; } /* oops', 'bad.css'), /unterminated comment/);
+});
+
+test('HTML: comment-only edits are invisible, including whitespace churn around them', () => {
+  assert.ok(eq('<p>hi</p><!-- why -->', '<p>hi</p>', 'x.html'));
+  assert.ok(eq('<p>hi</p>\n<!-- note -->\n<p>bye</p>', '<p>hi</p>\n\n<p>bye</p>', 'x.html'));
+});
+
+test('HTML: code changes are caught, including inside a comment-like attribute value', () => {
+  assert.ok(!eq('<p>hi</p>', '<p>bye</p>', 'x.html'));
+  assert.ok(eq('<p title="<!-- not a comment -->">hi</p>', '<p title="<!-- not a comment -->">hi</p>', 'x.html'));
+  assert.ok(!eq('<p title="a">hi</p>', '<p title="b">hi</p>', 'x.html'));
+});
+
+test('HTML: an unterminated comment throws', () => {
+  assert.throws(() => strip('<p>hi</p><!-- oops', 'bad.html'), /unterminated comment/);
+});
