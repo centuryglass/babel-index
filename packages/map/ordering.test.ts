@@ -166,7 +166,7 @@ test('resistance is flat inside the region and falls off outside', () => {
   const just = L.resistanceAt(r + 3, 0);
   const far = L.resistanceAt(r + 11, 0);
   assert.ok(just < 1 && just > 0, `expected soft falloff, got ${just}`);
-  assert.ok(far < just, 'resistance must keep increasing outward');
+  assert.ok(far < just, 'resistance must keep falling outward');
 });
 
 test('rejects nonsense parameters', () => {
