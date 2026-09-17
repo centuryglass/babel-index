@@ -2,10 +2,9 @@
 /**
  * Upload a corpus to Cloudflare R2: room images at every generated pyramid
  * level, the keyword/story sidecar, the CLIP embeddings blob, and the shared
- * center/generic tiles. See docs/pending_task_list.md's Hosting section.
+ * center/generic tiles. Usage and setup: tools/upload/README.md.
  *
- * R2 is S3-compatible, so this talks to it with @aws-sdk/client-s3 rather
- * than a bespoke client.
+ * R2 is S3-compatible, so this talks to it with @aws-sdk/client-s3.
  *
  * Credentials come from the environment, never from the command line:
  *   R2_ACCOUNT_ID          Cloudflare account id (builds the default endpoint)
@@ -23,54 +22,44 @@
  * A previous run's manifest - key -> sha256 of what was uploaded under that
  * key - is stored in the bucket at `<prefix>/upload-manifest.json`. Every
  * local file this corpus touches (room images at every level, metadata.json,
- * the embeddings blob and sidecar, the shared tiles) is hashed fresh, with
- * the same `contentHash()` the pyramid generator uses (packages/pipeline/
- * mips.ts) rather than a second sha256-of-bytes implementation; a file whose
- * hash matches the manifest's record for its key is skipped. Nothing is
- * deleted from R2, and no other tool reads that upload manifest - it exists
- * only so a rerun after touching a handful of images costs a handful of PUTs,
- * not the whole corpus. See tools/upload/lib.ts for the pure decision logic.
- *
- * The recorded manifest is only ever what a past run *believed* it wrote, so
- * a matching hash alone doesn't prove the object still exists in the bucket -
- * a manual delete, a lifecycle rule, or any other out-of-band loss would read
- * as "unchanged" forever. Every run also lists the bucket (`ListObjectsV2`,
- * scoped to this corpus's prefix and to `shared/`) and treats a key missing
- * from that listing as needing upload regardless of its recorded hash.
+ * the embeddings blob and sidecar, the shared tiles) is hashed fresh with the
+ * same `contentHash()` the pyramid generator uses
+ * (packages/pipeline/mips.ts); a file whose hash matches the manifest's
+ * record for its key is skipped. Nothing is deleted from R2, and no other
+ * tool reads that upload manifest - it exists so a rerun after touching a
+ * handful of images costs a handful of PUTs, not the whole corpus. The full
+ * skip rule is `diffAgainstManifest` in tools/upload/lib.ts, including why a
+ * matching hash must also appear in a live listing of the bucket (done here
+ * via `listExistingKeys`).
  *
  * ### Concurrency
  *
- * Hashing and uploading both run through the same bounded-concurrency
- * `createLimiter` used for CLIP inference in packages/server/search-cache.ts -
- * a corpus is many small files, and doing either step one file at a time pays
- * full round-trip latency per file for no reason; R2 handles many concurrent
- * requests fine.
+ * Hashing and uploading both run through `createLimiter`, the
+ * bounded-concurrency helper in packages/server/search-cache.ts. A corpus is
+ * many small files: one file at a time would pay full round-trip latency per
+ * file, and R2 handles many concurrent requests fine.
  *
  * ### The public manifest
  *
  * Separately, the `scanDirectory()` result itself - the same shape
  * `/api/manifest` serves locally - is written to `<prefix>/manifest.json` on
- * every run, changed or not. `packages/server/remote.ts` fetches this when
- * the demo server is started with `--remote`, so a bucket holding a corpus
- * needs no listing API: the one local scan that ran here is the only place
- * "what files make up this corpus" gets decided.
+ * every run. `packages/server/remote.ts` fetches this when the demo server is
+ * started with `--remote`, so a bucket holding a corpus needs no listing API:
+ * the one local scan that ran here is the only place "what files make up this
+ * corpus" gets decided.
  *
  * ### Cache purge
  *
  * `infra/variables.tf`'s `cache_edge_ttl_seconds` caches every object under
  * `assets_hostname` at the edge (`infra/abuse-protection.tf`'s `cache_assets`
  * ruleset) - that includes `manifest.json` itself, not just images. Replacing
- * a file under an existing key (the sheet regeneration this was written for:
- * old per-file tiles deleted, new sheets uploaded under different names, but
- * `manifest.json` overwritten in place) leaves the edge serving the stale
- * manifest and any stale object for up to that TTL. This tool purges the keys
- * it just wrote, plus the fixed set of keys `useCorpus.js` reads with
- * `fetch()` (`crossOriginFetchedKeys` in lib.ts) regardless of whether their
- * content changed - a stale cached *response* missing CORS headers (from
- * before `cloudflare_r2_bucket_cors` existed, or from being cached by a
- * no-Origin request) is a different failure than stale bytes, and content-hash
- * diffing only guards against the latter. All of it goes out via Cloudflare's
- * zone purge API, entirely optional and gated on three env vars:
+ * a file under an existing key leaves the edge serving the stale version until
+ * the TTL expires; sheet regeneration is the case that hits this, where tiles
+ * arrive under new names but `manifest.json` is overwritten in place. A run
+ * purges the keys it just wrote plus `crossOriginFetchedKeys` (lib.ts),
+ * purged every run unchanged because for those keys the danger is a stale
+ * cached response, not stale bytes. All of it goes out via Cloudflare's zone
+ * purge API, entirely optional and gated on three env vars:
  *
  *   CLOUDFLARE_API_TOKEN            needs Zone.Cache Purge on the zone below
  *   CLOUDFLARE_ZONE_ID              the zone fronting the bucket (see infra/)
@@ -82,21 +71,21 @@
  * fails throws, because a purge that silently didn't happen is the exact
  * "why is it still stale" confusion this exists to prevent.
  *
- * Cloudflare's per-file purge takes at most 30 URLs per call, so a full
- * corpus re-upload (this run's actual trigger) can mean hundreds of calls;
- * past `PURGE_ALL_THRESHOLD` keys, one `purge_everything` call replaces all
- * of them - cheaper for Cloudflare and for us, and safe because the whole
- * point of a run past that size is that most of the corpus changed anyway.
+ * Cloudflare caps a by-URL purge at `PURGE_BATCH` files per call, so a full
+ * corpus re-upload can mean hundreds of calls; past `PURGE_ALL_THRESHOLD`
+ * keys, one `purge_everything` call replaces all of them - cheaper for
+ * Cloudflare and for us, and safe because a run that large is one where most
+ * of the corpus changed anyway.
  *
- * A `success: true` response here is not a guarantee - Cloudflare has been
- * observed accepting a by-URL purge for a specific object and simply not
- * evicting it, confirmed by comparing a normal request against one with a
- * cache-busting query string (which reaches the origin directly and proved
- * the object was already correct there). If a page is still stale after this
- * prints `cache purged: N key(s)`, that's a real possibility, not proof this
- * script is broken - see tools/upload/README.md's Cache purge section for
- * how to tell the difference and the manual fallback (a dashboard purge, or
- * a `purge_everything` call) that has actually cleared it in practice.
+ * A `success: true` response is not a guarantee: Cloudflare has been observed
+ * accepting a by-URL purge for a specific object and simply not evicting it,
+ * confirmed by comparing a normal request against one with a cache-busting
+ * query string (which reaches the origin directly and proved the object was
+ * already correct there). A page still stale after this prints
+ * `cache purged: N key(s)` is therefore not proof this script is broken - see
+ * tools/upload/README.md's Cache purge section for telling the difference and
+ * the manual fallback (a dashboard purge, or a `purge_everything` call) that
+ * has actually cleared it in practice.
  */
 import { readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
@@ -149,10 +138,9 @@ function makeClient() {
 
 /**
  * The on-disk loading-animation manifest under `<sharedDir>/animation/`, or
- * null when there is none - a corpus deployed without the indicator, exactly
- * the "no manifest = no indicator" case the client already tolerates. Read and
- * handed to buildUploadList/crossOriginFetchedKeys so its sheets ride up to
- * `shared/animation/`; the corpus `Manifest` says nothing about it.
+ * null when there is none - a corpus deployed without the indicator. Handed
+ * to `buildUploadList` and `crossOriginFetchedKeys`; see `animationKeys` in
+ * lib.ts for which keys ride on it and why null uploads nothing.
  */
 async function loadAnimationManifest(sharedDir: string): Promise<AnimationManifest | null> {
   try {
@@ -190,9 +178,10 @@ async function listKeys(client: S3Client, bucket: string, prefix: string): Promi
 }
 
 /**
- * Keys this run's uploads could occupy, in two namespaces: `<prefix>/...` for
- * the corpus, `shared/...` for the center/generic tiles (shared across
- * corpora, so listed separately rather than folded into the prefix scan).
+ * Keys actually present in the bucket that this run could occupy, in two
+ * namespaces: `<prefix>/...` for the corpus and `shared/...` for the shared
+ * assets - the latter live outside any corpus prefix, so they need their own
+ * listing.
  */
 async function listExistingKeys(client: S3Client, bucket: string, prefix: string): Promise<Set<string>> {
   const [corpus, shared] = await Promise.all([
@@ -208,7 +197,7 @@ interface CloudflarePurgeConfig {
   hostname: string;
 }
 
-/** Reads the purge env vars; null (not thrown) when they're unset - see the docblock above. */
+/** Reads the purge env vars; null (not thrown) when any is unset. */
 function cloudflarePurgeConfig(): CloudflarePurgeConfig | null {
   const apiToken = process.env.CLOUDFLARE_API_TOKEN;
   const zoneId = process.env.CLOUDFLARE_ZONE_ID;
@@ -229,10 +218,10 @@ async function callPurgeApi(cfg: CloudflarePurgeConfig, body: Record<string, unk
 }
 
 /**
- * Purge exactly the keys this run wrote, or the whole zone past
- * `PURGE_ALL_THRESHOLD` - see the docblock above for why. Keys are turned into
- * full urls under `cfg.hostname`, matching how `packages/server/remote.ts`
- * addresses this bucket.
+ * Purge exactly the given keys, or the whole zone past `PURGE_ALL_THRESHOLD`
+ * (see *Cache purge* in the preamble for why both shapes exist). Keys are
+ * turned into full urls under `cfg.hostname`, matching how
+ * `packages/server/remote.ts` addresses this bucket.
  */
 async function purgeCache(cfg: CloudflarePurgeConfig, keys: string[]): Promise<void> {
   if (keys.length === 0) return;
@@ -337,8 +326,8 @@ async function main() {
   }
 
   // The public manifest - what packages/server/remote.ts fetches to serve
-  // this corpus with --remote. Written every run, not diffed against a hash:
-  // it is small, and it must reflect this scan even when the room bytes it
+  // this corpus with --remote. Written every run, not hash-diffed: it is
+  // small, and it must reflect this scan even when the room bytes it
   // describes didn't change (a metadata-only or embeddings-only rerun still
   // needs it current).
   if (!dryRun) {
@@ -377,8 +366,9 @@ async function main() {
 }
 
 main().catch((err: any) => {
-  // A missing credential or a real transfer failure is a message, not a
-  // stack, in the common case - see tools/embed/embed.ts for the same split.
+  // A missing credential sets `expected` and lands as a one-line message;
+  // anything else is a real failure and keeps its stack. tools/embed/embed.ts
+  // ends on the same split.
   console.error(err?.expected ? err.message : err);
   process.exit(1);
 });

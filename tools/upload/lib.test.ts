@@ -177,8 +177,8 @@ test('diffAgainstManifest treats an empty remote manifest as upload-everything',
 test('diffAgainstManifest re-uploads a key whose hash matches but is missing from the live bucket listing', () => {
   const uploads = [{ local: '/a', key: 'k/a' }];
   const hashes = new Map([['/a', 'hash-a']]);
-  const remoteManifest = { 'k/a': 'hash-a' }; // recorded as uploaded before...
-  const existingKeys = new Set<string>(); // ...but not actually present in the bucket (deleted, or lost)
+  const remoteManifest = { 'k/a': 'hash-a' }; // recorded as uploaded by a previous run...
+  const existingKeys = new Set<string>(); // the bucket itself has no record of k/a (deleted, or lost)
 
   const { toUpload, unchanged } = diffAgainstManifest(uploads, hashes, remoteManifest, existingKeys);
   assert.deepEqual(

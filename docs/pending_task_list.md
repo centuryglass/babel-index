@@ -162,6 +162,18 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   Each owning pass (`packages/web`, `packages/map`) reaches them; recorded here
   because a comment pass must not edit files another checkout is in.
 
+- **[2026-09-17] A `remote.ts` preamble names a fetcher that has moved.** Its
+  CORS warning says "`embeddings.bin` and `metadata.json` are read via
+  `fetch()` in `main.tsx`", but those fetches now live in
+  `packages/web/src/hooks/useCorpus.ts`, which also `fetch()`es
+  `tagLinks.json` the same way; `main.tsx` fetches only `api/manifest`. The
+  sentence is a hazard note — a reader wiring CORS who opens `main.tsx` finds
+  nothing — so only the attribution is wrong. `tools/upload`'s comment pass
+  (2026-09-17) standardized on `useCorpus.ts` for the same fact, in
+  `crossOriginFetchedKeys`. Fix there: name `useCorpus.ts`. Recorded here
+  because `packages/server` is already ticked done and a pass must not edit a
+  file another checkout owns.
+
 ## Corpus generation:
 - **[2026-09-17] The pipeline assumes one source size, and checks only that it
   is not mixed in shape** (found during the `packages/pipeline` comment pass,

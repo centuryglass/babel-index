@@ -282,14 +282,15 @@ home early — see §6 for the rationale:
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
-Progress so far: **27 / 107 source files** (`main.tsx`, `illusion.ts`,
+Progress so far: **29 / 107 source files** (`main.tsx`, `illusion.ts`,
 `board.ts`, `moves.ts`, `nextRoom.ts`, `prng.ts`, `packages/map`'s search half
 (`ordering.ts`, `scoring.ts`, `searchResult.ts`), plus all 14 of
-`packages/server` and all four of `packages/pipeline` — server and pipeline
-taken out of order on 2026-09-17, in parallel across checkouts, server's
-alongside batches 2–3), plus 19 paired tests (`illusion.test.ts`,
-`board.test.ts`, `nextRoom.test.ts`, `ordering.test.ts`, `scoring.test.ts`,
-server's 12, and the two pipeline tests) — all ticked in the list below. The
+`packages/server`, all four of `packages/pipeline`, and both of
+`tools/upload` — server, pipeline and upload taken out of order on
+2026-09-17, in parallel across checkouts, server's alongside batches 2–3),
+plus 20 paired tests (`illusion.test.ts`, `board.test.ts`, `nextRoom.test.ts`,
+`ordering.test.ts`, `scoring.test.ts`, server's 12, the two pipeline tests,
+and `lib.test.ts`) — all ticked in the list below. The
 running checklist is the source of truth; tick boxes as you go. Order is a
 deduping aid within a cluster, not a rule between clusters, so a batch can be
 taken from any package no other checkout is in.
@@ -472,9 +473,9 @@ _Standalone specs/helpers (no same-name source):_
 - [ ] tools/embed/embed.ts  — no unit test
 
 #### tools/upload
-- [ ] tools/upload/lib.ts
-  - [ ] tools/upload/lib.test.ts
-- [ ] tools/upload/upload-r2.ts  — no unit test
+- [x] tools/upload/lib.ts
+  - [x] tools/upload/lib.test.ts
+- [x] tools/upload/upload-r2.ts  — no unit test
 
 #### tools/perf-capture
 - [ ] tools/perf-capture/capture.ts  — no unit test
