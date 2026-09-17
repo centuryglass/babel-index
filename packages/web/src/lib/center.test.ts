@@ -113,25 +113,25 @@ test('centerBookAtPoint hits only inside the traced silhouette, never off-cell, 
   // Well outside the bbox entirely - never hits, on or off the cell.
   assert.equal(centerBookAtPoint(cell.x - 50, cy, cell), false);
   assert.equal(centerBookAtPoint(cx, cell.y + cell.h + 50, cell), false);
-  // The bbox's own top-left corner sits outside a non-rectangular silhouette -
-  // exactly the "clips into the books too" bug an exact path fixes.
+  // The bbox's own top-left corner sits outside a non-rectangular silhouette,
+  // which is what an exact path catches that a bounding box would not.
   const cornerX = cell.x + b.x * cell.w;
   const cornerY = cell.y + b.y * cell.h;
   assert.equal(centerBookAtPoint(cornerX, cornerY, cell), false);
 });
 
 test('openingZoom floors a narrow portrait viewport at exactly what the search box needs', () => {
-  // A portrait phone: fitting CENTER_OPENING_RECT (the shelf+box union, wide
+  // A portrait phone: fitting `CENTER_OPENING_RECT` (the shelf+box union, wide
   // relative to the box alone) binds on width and lands short of the box's own
-  // height minimum, so the floor is what decides this viewport. Asserting the
-  // exact equality rather than `>=` is what keeps this viewport a real fixture:
-  // if the unfloored fit ever clears the floor here, this fails loudly instead
-  // of passing while exercising nothing.
+  // height minimum, so the floor is what decides this viewport. The equality is
+  // asserted rather than `>=` to keep this viewport a real fixture: if the
+  // unfloored fit ever cleared the floor here, the test would pass while
+  // exercising nothing.
   const portrait = { width: 360, height: 780 };
   const z = openingZoom(portrait);
   assert.equal(z, minZoomForSearchBox());
-  // The floor lands exactly ON the usability boundary, so that boundary has to
-  // be inclusive for a narrow phone to open with a field it can actually use.
+  // The floor lands on the usability boundary, so that boundary is inclusive: a
+  // narrow phone has to open with a field it can actually use.
   assert.equal(isSearchBoxUsable({ x: 0, y: 0, w: z, h: z * CELL_ASPECT }), true);
 
   // A wide desktop viewport clears the floor unaided, so the floor stays a
@@ -188,9 +188,9 @@ test('a point in the gap between two spines resolves to a book, not null', () =>
 });
 
 test('a gap wider than a book (art breaking up a shelf) is not a book', () => {
-  // The middle shelf leaves room for a decorative element mid-shelf, so its
-  // books form two runs rather than one. A click over that gap must fall
-  // through to null - it must not snap to whichever run was checked first.
+  // Where the art leaves a gap wider than a book, that shelf is two runs, and a
+  // click over the gap must fall through to null rather than snap to whichever
+  // run the scan happens to reach first.
   const cell = { x: 0, y: 0, w: 1000, h: 1000 };
   const rects = bookScreenRects(cell);
   let k = 0;
@@ -334,8 +334,8 @@ test('a book says what it is as well as what it says', () => {
 });
 
 test('the buttons exist exactly while the titles are legible', () => {
-  // The gate is the SPINE's on-screen width, not the cell's, so it tracks the
-  // trace rather than a number restated here.
+  // The gate measures a spine's on-screen width, not the cell's, so the test
+  // derives both bounds from `BOOK_RECTS` instead of restating a number.
   const spine = BOOK_RECTS[0].w;
   assert.equal(areSpinesLegible({ x: 0, y: 0, w: 4 / spine, h: 100 }), false);
   assert.equal(areSpinesLegible({ x: 0, y: 0, w: 6 / spine, h: 100 }), true);
