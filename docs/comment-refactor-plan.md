@@ -553,14 +553,14 @@ rewritten from copy-paste history into an AGENTS.md pointer; distill mode's
   - [ ] packages/web/src/lib/perfProbe.test.ts
 - [ ] packages/web/src/lib/persist.ts
   - [ ] packages/web/src/lib/persist.test.ts
-- [ ] packages/web/src/lib/picking.ts
-  - [ ] packages/web/src/lib/picking.test.ts
-- [ ] packages/web/src/lib/pyramid.ts
-  - [ ] packages/web/src/lib/pyramid.test.ts
+- [x] packages/web/src/lib/picking.ts
+  - [x] packages/web/src/lib/picking.test.ts
+- [x] packages/web/src/lib/pyramid.ts
+  - [x] packages/web/src/lib/pyramid.test.ts
 - [x] packages/web/src/lib/render.ts
   - [x] packages/web/src/lib/render.test.ts  (reviewed; no edits needed)
-- [ ] packages/web/src/lib/rooms.ts
-  - [ ] packages/web/src/lib/rooms.test.ts
+- [x] packages/web/src/lib/rooms.ts
+  - [x] packages/web/src/lib/rooms.test.ts
 - [x] packages/web/src/lib/slide.ts
   - [x] packages/web/src/lib/slide.test.ts
 - [ ] packages/web/src/lib/spineFont.ts  — no unit test

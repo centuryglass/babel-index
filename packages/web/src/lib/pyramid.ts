@@ -84,13 +84,13 @@ export type Demand = number | Size;
  *     since a shorter tile fits more rows and so puts more cells on a screen.
  *
  * Non-square is not merely tolerated, it is what the tile currently is: 4:3.
- * The aspect is threaded through the whole map from here - `camera.js` derives
+ * The aspect is threaded through the whole map from here - `camera.ts` derives
  * CELL_ASPECT from this object and applies it in `pxPerCell()`, and
  * `packages/map` takes it to measure distance in cell widths. Change the shape
  * and the world changes shape with it, which is the point.
  *
  * The trace that produced `tools/center-placement/lib/measured.ts` records the
- * shape it was made at, and `geometry.test.mjs` asserts it against this
+ * shape it was made at, and `geometry.test.ts` asserts it against this
  * object - so this and the `viewBox` of `shelf_geometry.svg` cannot drift apart
  * silently.
  */
@@ -127,38 +127,25 @@ export const BASE_TILE: Size = { w: 1024, h: 768 };
  *                                          ~2.6 GB nominal, ~2.4 GB real*
  *
  * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
- * zoom in that level's band which shows the most of them. Every budget is
- * comfortably above its own worst case, which is the point: a cache that
- * cannot hold one screen thrashes within a single frame. That column moves
- * with BASE_TILE's aspect, which is why the test recomputes it rather than
- * trusting this comment - treat the table as illustrative, the test as true.
- * Going 4:3 is what last moved it: a shorter tile fits more rows on the same
- * screen, so the coarsest level's worst case rose past its old 7000 budget.
- * Adding level 5 is what moved it again: the ~7500 that used to be level 4's
- * open-ended worst case is now level 5's, and level 4's shrank to 4740 now
- * that its own band has an upper bound.
+ * zoom in that level's band which shows the most of them. The test
+ * (`pyramid.test.ts`) recomputes these columns against multiple tile shapes,
+ * so this comment is illustrative only - trust the assertion.
  *
- * Level 2 is per-file, not sheet-packed (see SHEETS.fromLevel) - a sheet at
- * that zoom band is under 8% utilized and, because room order is a random
- * per-session permutation, nearly every sheet ends up pulled in to show a
- * handful of rooms (docs/performance-research.md §6). Its budget is real
- * decoded bytes again, sized well above both its own worst case (336) and
- * level 1's budget (rule 3 needs each coarser level to hold strictly more
- * than the one before it).
+ * †Not real bytes. Real bytes for levels 3-5 come from `SHEETS.cacheBudget`
+ * sheets instead; "~2.4 GB real" adds a 2048-room corpus's full complement
+ * of sheets on top of levels 0-2, which is the actual ceiling to budget a
+ * machine against, not the nominal table total.
  *
- * †Not real bytes - see above. Real bytes for levels 3-5 come from
- * `SHEETS.cacheBudget` sheets instead, at their own (much larger) per-image
- * size; "~2.4 GB real" adds a 2048-room corpus's full complement of sheets
- * (SHEETS's own docblock) on top of levels 0-2's real cost, which is the
- * actual ceiling to budget a machine against, not the nominal table total.
+ * Level 2 is per-file, not sheet-packed (see SHEETS.fromLevel) - its zoom band
+ * pulls nearly every 256-room sheet just to show a handful of rooms (under
+ * 8% utilization), costing ~94x the bytes to save a dozen requests. Its
+ * budget is real decoded bytes again, sized well above both its own worst
+ * case (336) and level 1's (rule 3 needs each coarser level to hold strictly
+ * more than the one before it).
  *
- * Note how far above its worst case level 0 is - 480 against 30. That is rule
- * 3 buying revisits, not screens: you can tour many rooms up close and come
- * back to the first without a refetch. Lower CACHE_SCALE if the total is more
- * than the machine can spare; the ratios between levels are the part worth
- * keeping. Levels 0-1 were doubled (240->480, 400->800) once sheets took
- * levels 2-4's real byte cost off this budget's plate, freeing room to hold
- * more revisits of the levels that are still one file per room.
+ * Level 0 holds 480 rooms against a worst case of 30 - rule 3 buying revisits,
+ * not screens. Lower CACHE_SCALE if the total exceeds what the machine can
+ * spare; the ratios between levels are the part worth keeping.
  */
 export const LEVELS: LevelSpec[] = [
   { level: 0, divisor: 1, budget: 480 },
@@ -195,13 +182,7 @@ export const HYSTERESIS = 0.15;
  * large, and cheap at the zooms where they are not.
  *
  * `marginRatio` is what actually governs the ring at anything but the closest
- * zoom - see `marginFor()`. A fixed cell count is a shrinking fraction of the
- * screen the further the camera zooms out (the same 2 cells is 20% of a
- * 10-cell-wide screen but 0.1% of an 2000-cell-wide one), which is backwards:
- * a fast pan at a coarse zoom crosses many more cells per gesture, exactly
- * where warming further ahead is closest to free, because those levels are
- * sheet-packed (see SHEETS) - most of a wider ring resolves to a sheet
- * already resident rather than a new request.
+ * zoom - see `marginFor()`. At coarse zooms a fast pan crosses many more cells, exactly where warming ahead is closest to free (those levels are sheet-packed, see SHEETS, so most of the wider ring resolves to a sheet already resident).
  *
  * `concurrency` caps in-flight prefetches. Browsers allow ~6 connections per
  * host; leaving headroom is deliberate, because a prefetch that queues ahead of
@@ -236,8 +217,8 @@ export const PREFETCH: PrefetchConfig = {
  * 256-room sheet (under 8% utilization), and because room order is a random
  * per-session permutation, sheets carry no locality: those 12-20 rooms land
  * in nearly every sheet, not a shared few. Fetching whole sheets there cost
- * ~94x the bytes of per-file tiles to save a dozen requests
- * (docs/performance-research.md §6). Fewer rooms per sheet also means a
+ * ~94x the bytes of per-file tiles to save a dozen requests, which is why
+ * only the coarsest levels are packed. Fewer rooms per sheet also means a
  * smaller re-upload blast radius when one room in it changes (see
  * tools/upload/lib.ts) - another reason to leave the request-cheap, room-
  * sparse end of the ladder unpacked.
