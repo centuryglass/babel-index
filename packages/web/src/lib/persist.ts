@@ -2,38 +2,22 @@
  * The few things that survive a reload, and the reason so few do.
  *
  * Everything in this app is runtime state by default - the camera, the current
- * ranking, the mode, the dev sliders - and that is deliberate rather than
- * unfinished. Restoring a reader to a camera position they cannot remember
- * choosing is disorienting, and the opening view is DERIVED from the display
- * (`fitZoom` in main.jsx) precisely so it is right on whatever device is in
- * front of them rather than right on the one they used last.
- *
- * Six things earn an exception, most of them the reader's own choices rather
- * than the map's state: which way they page the catalog, what they have
- * searched for, which sensitive-content tags they have blocked, which rooms
- * they have favorited, and whether they have already been shown the one-time
- * nudge toward the help book. The
- * second is the consequential one - the search history titles the center
- * room's shelf, so persisting it means the wall of books becomes a record of
- * what this reader has asked the library instead of resetting to keyword tags
- * every session. Blocked tags are consequential in the other direction: they
- * are a standing choice about what a reader does not want to see, so it has
- * to survive a reload the same way the choice to see it again would. The help
- * nudge is the odd one out - not a choice at all, just a flag so a returning
- * reader isn't shown the same "try this book" hint every visit. The sixth,
- * the favorites client id, isn't a choice either - it's the random token a
- * favorite toggle is recorded against on the server (`favorites.ts`), and it
- * has to survive a reload or every visit would look like a new visitor.
+ * ranking, the mode, the dev sliders. That is deliberate, not unfinished:
+ * restoring a reader to a camera position they cannot remember choosing is
+ * disorienting, and the opening view is derived from the display (`fitZoom`,
+ * `main.tsx`) so it is right on whatever device is in front of them rather
+ * than on the one they used last. The exceptions are the entries in `KEYS`,
+ * mostly the reader's own choices rather than the map's state; each key's
+ * comment carries why it earns storage.
  *
  * ### Why every call is wrapped
  *
  * `localStorage` is not a safe object. Safari in private mode throws on
  * `setItem`, a browser configured to block site data throws on the accessor
- * ITSELF, and stored JSON can be anything by the time it is read back. None of
+ * itself, and stored JSON can be anything by the time it is read back. None of
  * those are reasons for a search to fail, so a read that throws returns the
  * fallback and a write that throws is dropped: with storage unavailable the app
- * behaves exactly as it did before this file existed, which is the whole
- * requirement.
+ * behaves as if nothing was ever stored, which is the whole requirement.
  *
  * No React, no DOM beyond the one accessor, so the failure modes are assertable
  * with an injected stub.
@@ -52,27 +36,36 @@ const PREFIX = 'babel:';
 export const KEYS = {
   /** Past searches, newest first - the center shelf's book titles. */
   history: `${PREFIX}history`,
-  /** 'scroll' or 'pages' - how the catalog advances. */
+  /** 'scroll' or 'pages' - how the catalog advances; a reading preference, not session state. */
   paging: `${PREFIX}paging`,
-  /** Sensitive-content tags a reader has chosen to block, from HelpDialog's panel. */
+  /**
+   * Sensitive-content tags a reader has chosen to block, from HelpDialog's
+   * panel - a standing choice about what they do not want to see, so it
+   * survives a reload the same way the choice to unblock would.
+   */
   blockedTags: `${PREFIX}blockedTags`,
   /**
-   * The reader's own favorites, as room FILENAMES.
+   * The reader's own favorites, as room filenames.
    *
-   * Here rather than on the server on purpose (docs/concept.md, 8/30/26): the
-   * server records global counts and nothing per-visitor, so a personal list
+   * Kept here rather than on the server: the server records global counts and
+   * nothing per-visitor (`packages/server/favorites.ts`), so a personal list
    * is only ever kept by the person it belongs to. Filenames rather than room
-   * ids because ids are positional - scan.ts sorts filenames and indexes them,
-   * so one image added to the corpus renumbers every id after it and a stored
-   * id would silently come back pointing at a different room.
+   * ids because ids are positional - `scan.ts` sorts filenames and indexes
+   * them, so one image added to the corpus renumbers every id after it and a
+   * stored id would silently come back pointing at a different room.
    */
   favorites: `${PREFIX}favorites`,
-  /** Whether the one-time nudge toward the "READ ME" book has already been shown. */
+  /**
+   * Whether the one-time nudge toward the "READ ME" book has already been
+   * shown - not a choice, just so the nudge shows once rather than every
+   * visit.
+   */
   seenHelpHint: `${PREFIX}seenHelpHint`,
   /**
-   * This browser's own random id for global favorite writes - see
-   * `favorites.ts` for why it replaced the visitor's IP address as what the
-   * server hashes a favorite against.
+   * This browser's own random id for global favorite writes - the token the
+   * server hashes, with the room's filename, into the room's favorite set
+   * (`packages/server/favorites.ts`). It has to survive a reload or every
+   * visit would look like a new visitor.
    */
   favoriteClientId: `${PREFIX}favoriteClientId`,
 };
@@ -81,11 +74,11 @@ export const KEYS = {
  * This browser's id for favorite writes, generating and persisting one on
  * first use.
  *
- * Not returned deterministically when storage is unavailable - a fresh id
- * every call would make every write from that session look like a different
- * visitor, which is worse than one id that happens not to survive a reload.
- * Callers that need one id for the page's lifetime should call this once and
- * hold the result, which is exactly what `useFavorites.ts` does.
+ * With no storage the id is not stable: a fresh id every call would make
+ * every write from that session look like a different visitor, which is worse
+ * than one id that happens not to survive a reload. Callers that need one id
+ * for the page's lifetime call this once and hold the result, which is what
+ * `useFavorites.ts` does.
  */
 export function getOrCreateFavoriteClientId({ store }: { store?: StorageLike | null } = {}): string {
   const existing = load<string>(KEYS.favoriteClientId, '', {
@@ -123,8 +116,8 @@ function storage(override?: StorageLike | null): StorageLike | null {
  *
  * `validate` is what keeps junk from reaching the app: storage is editable by
  * hand and survives across versions of this code, so "it parsed" is not the
- * same as "it is what this release expects". A value that fails it is treated
- * exactly like a value that was never written.
+ * same as "it is what this release expects". A value that fails it reads as
+ * one that was never written.
  *
  * @param key one of `KEYS`
  * @param opts.store injected, for tests
@@ -149,10 +142,9 @@ export function load<T>(
 /**
  * Write a value, or silently do nothing if storage will not take it.
  *
- * Returns whether it landed, for a caller that wants to know - nothing in the
- * app does today, because there is no useful thing to tell a reader whose
- * browser declines to remember their paging preference.
- *
+ * Returns whether it landed, for a caller that wants to know - no current
+ * caller does, because there is nothing useful to tell a reader whose browser
+ * declines to remember their paging preference.
  */
 export function save(key: string, value: unknown, { store }: { store?: StorageLike | null } = {}): boolean {
   const s = storage(store);

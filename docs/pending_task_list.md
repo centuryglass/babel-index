@@ -318,9 +318,11 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   existing check catches a mis-parse like this: `geometry.test.ts` asserts only
   that a `d` starts with a moveto and ends closed, both of which the result
   satisfies. Fix: add `SsQqTt` to the tokenizer so the existing throw sees
-  them. `svgPath.ts`'s `flattenPath` comment repeats the same claim ("the same
-  restriction the importer itself enforces on import"); it wants the same
-  correction if the behaviour is documented rather than fixed.
+  them. `svgPath.ts`'s `flattenPath` comment repeated the same claim ("the
+  same restriction the importer itself enforces on import"); the 2026-09-17
+  comment pass on that file corrected it to the actual behaviour instead -
+  non-canonical letters and their numbers drop silently there too - so the
+  remaining ask here is the importer-side fix only.
 - **[2026-09-17] `tools/embed/cosine-range.ts` prints the conclusions of a
   calibration method it no longer uses** (found during the `tools/embed` comment
   pass, which could state the method in comments and nothing more). Two places,

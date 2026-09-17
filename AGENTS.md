@@ -831,8 +831,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   the viewport" is the regression guard.
 - **`onTap` must lose to a pan and to a flight.** It fires only on a pointer-up
   that stayed within the slop and did not stop a flight, and a completed
-  long-press clears the tap candidate so a press is never also a tap. History is
-  session-only React state; it fills the whole wall as one queue, newest search
+  long-press clears the tap candidate so a press is never also a tap. History
+  is persisted React state (`persist.ts`'s `KEYS.history`); it fills the whole
+  wall as one queue, newest search
   first, top left to bottom right, skipping any book an override has claimed.
   Any book history has not reached is a random keyword tag (the pool is
   cycled to letter the whole wall). Assignment order is

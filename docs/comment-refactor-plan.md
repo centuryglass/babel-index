@@ -196,8 +196,9 @@ sentence — cheap in a tools tree, where the input is a text file you can edit 
 a repro. Then per AGENTS.md's bug rule: correct the comment to the truth, and file
 the gap when the code is what is wrong (both of this file's findings are in
 `docs/pending_task_list.md`'s "Tools"). The claim travels, so check where it is
-quoted: `svgPath.ts`'s `flattenPath` repeats the importer's false one and inherits
-the entry.
+quoted: `svgPath.ts`'s `flattenPath` carried the importer's false one until
+its own pass corrected it to the code's actual behaviour (documented rather
+than fixed; the importer-side fix stays in the pending entry).
 
 **A rationale whose premise moved elsewhere.** A comment can state its rule
 correctly and still be false because it reasons from what *another* file wants.
@@ -439,6 +440,23 @@ without the flag compiles the panel out of the tree, when `MapView.tsx` still
 renders them behind a runtime `DEBUG &&` — the comment now lists the panel's
 actual contents and describes the gate as it is.
 
+The next `packages/web/src/lib` batch went the same day: loadingAnimation +
+test, svgPath + test, persist + test. What it found: `persist.ts`'s header
+carried a `main.jsx` citation, a six-thing count, and a per-key story
+paragraph the `KEYS` entries and `main.tsx` already own (the whys moved down
+to each key), a dated provenance cite into `docs/concept.md`, and a client-id
+comment reasoned from the IP address it replaced; `svgPath.ts`'s
+`flattenPath` repeated the importer's since-corrected false claim ("the same
+restriction the importer itself enforces on import") and now states the code's
+actual behaviour - non-canonical letters and their numbers drop silently;
+`loadingAnimation.ts` priced the preload at "a couple of seconds" and stated
+the stop-at-a-boundary guarantee three times over. Found-bug fixes in the
+same pass: AGENTS.md's "History is session-only React state" (history is
+persisted, `KEYS.history`), three `main.jsx` citations in `infra/`
+(`README.md`, `variables.tf`, `terraform.tfvars.example`), and
+`touchDebug.ts`'s own `main.jsx` citation - that file still owes its full
+pass.
+
 ### Source files and their tests
 
 #### packages/map
@@ -562,12 +580,12 @@ actual contents and describes the gate as it is.
   - [x] packages/web/src/lib/glRenderer.test.ts  (reviewed; no edits needed)
 - [x] packages/web/src/lib/glSlideRenderer.ts
   - [x] packages/web/src/lib/glSlideRenderer.test.ts  (reviewed; no edits needed)
-- [ ] packages/web/src/lib/loadingAnimation.ts
-  - [ ] packages/web/src/lib/loadingAnimation.test.ts
+- [x] packages/web/src/lib/loadingAnimation.ts
+  - [x] packages/web/src/lib/loadingAnimation.test.ts  (reviewed; no edits needed)
 - [ ] packages/web/src/lib/perfProbe.ts
   - [ ] packages/web/src/lib/perfProbe.test.ts
-- [ ] packages/web/src/lib/persist.ts
-  - [ ] packages/web/src/lib/persist.test.ts
+- [x] packages/web/src/lib/persist.ts
+  - [x] packages/web/src/lib/persist.test.ts  (reviewed; no edits needed)
 - [x] packages/web/src/lib/picking.ts
   - [x] packages/web/src/lib/picking.test.ts
 - [x] packages/web/src/lib/pyramid.ts
@@ -579,11 +597,13 @@ actual contents and describes the gate as it is.
 - [x] packages/web/src/lib/slide.ts
   - [x] packages/web/src/lib/slide.test.ts
 - [ ] packages/web/src/lib/spineFont.ts  — no unit test
-- [ ] packages/web/src/lib/svgPath.ts
-  - [ ] packages/web/src/lib/svgPath.test.ts
+- [x] packages/web/src/lib/svgPath.ts
+  - [x] packages/web/src/lib/svgPath.test.ts  (reviewed; no edits needed)
 - [ ] packages/web/src/lib/tiles.ts
   - [ ] packages/web/src/lib/tiles.test.ts
-- [ ] packages/web/src/lib/touchDebug.ts  — no unit test
+- [ ] packages/web/src/lib/touchDebug.ts  — no unit test (partial: stale
+  `main.jsx` citation fixed 2026-09-17 alongside the persist batch; rest not
+  yet reviewed)
 - [x] packages/web/src/lib/webglFlag.ts  — no unit test
 - [ ] packages/web/src/main.tsx  — no unit test (partial: almost completely done, but some fresh changes were pulled in from a different branch.)
 - [ ] packages/web/src/assets.d.ts  — no unit test
