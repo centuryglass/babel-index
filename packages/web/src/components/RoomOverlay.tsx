@@ -77,6 +77,97 @@ import type { Config } from '../../../config/config.ts';
  */
 type RoomSubject = { id: number; rank?: number } | { generic: true };
 
+/**
+ * The permalink itself - relative `catalog/<file>` resolved against
+ * `document.baseURI`, the same `<base href>` every other relative fetch in
+ * this app resolves against (see AGENTS.md's "Deployment and the base
+ * path"), so the copied link is correct under a subpath deployment without
+ * this file knowing what that prefix is. `encodeURIComponent` matches
+ * `app.ts`'s own `canonicalPath` for this same route.
+ */
+function buildShareUrl(file: string): string {
+  return new URL(`catalog/${encodeURIComponent(file)}`, document.baseURI).href;
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+      <polyline
+        points="15 14 19 10 15 6"
+        fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      <path
+        d="M20 10H9a4 4 0 0 0-4 4v6"
+        fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+      <polyline
+        points="4 12 9 17 20 6"
+        fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The room permalink, copied to the clipboard rather than navigated to -
+ * this dialog is already the destination. Pinned over the page's own
+ * corner (see style.css's `.share-button`) rather than a third row in the
+ * head, which already carries the favorite toggle, the other reading's
+ * link, zoom controls and close.
+ *
+ * `copied`'s feedback swaps both the icon and the label, not just the
+ * label - the label alone disappears at a narrow width (`.share-button-full`
+ * in style.css), and a reader relying on the icon still needs to see the
+ * press land. `aria-label`/`title` carry the same words regardless of which
+ * is visible, so the accessible name never depends on layout.
+ */
+function ShareButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (timeoutRef.current != null) window.clearTimeout(timeoutRef.current);
+  }, []);
+
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // No clipboard permission, or a non-secure context - the browser's own
+      // prompt still lets the reader select and copy it by hand.
+      window.prompt('Copy this link:', url);
+      return;
+    }
+    setCopied(true);
+    if (timeoutRef.current != null) window.clearTimeout(timeoutRef.current);
+    timeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  const label = copied ? 'link copied' : 'copy link to this room';
+  return (
+    <button
+      type="button"
+      className={copied ? 'share-button copied' : 'share-button'}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    >
+      {copied ? <CheckIcon /> : <ShareIcon />}
+      <span className="share-button-full" aria-hidden="true">{copied ? 'Copied!' : 'Share'}</span>
+    </button>
+  );
+}
+
 export function RoomOverlay({
   room,
   desc,
@@ -91,6 +182,7 @@ export function RoomOverlay({
   favorite = null,
   view = null,
   naturalSize = null,
+  shareFile = null,
 }: {
   room: RoomSubject;
   desc: Description;
@@ -128,6 +220,15 @@ export function RoomOverlay({
    * narrow display (see the head's comment); `label` stays the accessible name.
    */
   view?: { label: string; shortLabel: string; onClick: () => void } | null;
+  /**
+   * This room's filename, for the copy-link button - `null` for a generic
+   * cell, which has no permalink (`/catalog/:file` only exists for a real
+   * corpus room). The url itself is built from it in `buildShareUrl` rather
+   * than passed in whole, so every caller states the one fact it actually
+   * knows (which room) instead of each re-deriving the same `catalog/...`
+   * path.
+   */
+  shareFile?: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -455,6 +556,8 @@ export function RoomOverlay({
               favorite={null}
             />
           </div>
+
+          {shareFile && <ShareButton url={buildShareUrl(shareFile)} />}
         </div>
       </div>
     </div>
