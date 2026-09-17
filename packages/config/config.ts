@@ -1,91 +1,57 @@
 /**
- * THIS FILE IS THE TUNING SURFACE for everything decided by feel.
+ * The tuning surface: every number that has no right answer, only a preferred
+ * one, each with the reasoning behind it.
  *
- * The pyramid has its own (`packages/web/src/lib/pyramid.ts`) and keeps it: tile
- * size, the ladder, per-level budgets, the hysteresis band and the prefetch ring
- * are *derived and asserted*, not tuned - restating any of them here would be a
- * second statement of a fact that already has one. What lives here is the other
- * kind of number: the ones with no right answer, only a preferred one.
+ * `DEFAULTS` is the whole set and the single statement of every default; the
+ * `config.json` overlay `load.ts` reads is optional, partial, and never
+ * committed (AGENTS.md, "Config and the pyramid"). No filesystem and no side
+ * effects here - `load.ts` is the part that touches a disk.
  *
- * `DEFAULTS` below is the surface. Every value carries the reasoning that
- * justifies it, the way `pyramid.js` does, because a number without its argument
- * is a number nobody dares change. A `config.json` beside the repo root can
- * override any subset of it - see `load.ts` - but it is an overlay and is not
- * committed, so this object stays the single statement of every default.
+ * The overlay arrives as `unknown`: parsed JSON nothing has validated before it
+ * gets here, so every reader below checks what it takes rather than trusting a
+ * type.
  *
- * The overlay itself (`raw` below) is deliberately typed `unknown`: it's
- * parsed JSON from a file nothing validates before it gets here, so every
- * value handled below is exactly as loose as the input actually is - a
- * stricter type on `raw` would just be a lying assertion.
+ * Zoom is the one place a hard limit sits outside this file:
+ * `camera.minZoom`/`maxZoom` may narrow `camera.ts`'s `ZOOM_LIMITS` and never
+ * widen it. A value beyond the hard range is clamped rather than refused, and a
+ * narrowing that leaves the finest rung or two unreachable is legal and silent.
+ * `ZOOM_LIMITS`'s own comment carries why the direction is one-way.
  *
- * ### Zoom config narrows, and never widens
+ * ### Numbers deliberately kept out
  *
- * `camera.js` states the hard zoom limits; this file can only tighten them.
- * That asymmetry is what keeps configuration from being able to break anything
- * derived: `pyramid.test.mjs` asserts every rung of the ladder is reachable
- * somewhere in the *widest* range, and no config can move that range outward, so
- * the assertion still covers every reachable state at runtime.
+ * Other by-feel constants live where they are read, either because more than one
+ * runtime needs them or because moving them means re-checking a derived
+ * invariant that a `config.json` overlay cannot verify at load time:
  *
- * A narrowed range can leave the finest rung or two unreachable, and that is
- * fine and deliberately not an error. The cost of a level nothing asks for is a
- * few inactive lines and some files in a bucket that are never requested - and
- * the alternative, letting a config edit orphan a rung the tests believed in,
- * is the failure this asymmetry exists to make impossible.
- *
- * No side effects and no filesystem: this is defaults plus validation, so it can
- * be exercised at any limits without a disk or a server. `load.ts` is the part
- * that reads a file.
- *
- * ### See also
- *
- * This is not the only place a tunable number lives - some by-feel constants are
- * deliberately kept elsewhere, either because they are read by more than one
- * runtime (server and client) that this client-shaped config does not reach, or
- * because changing them safely takes more than validating a range - it means
- * re-checking a derived invariant (a test, an inequality in a doc) that a
- * `config.json` overlay has no way to verify at load time. Each of the
- * following is worth knowing about if you're looking for something to tune:
- *
- *   - `packages/web/src/lib/pyramid.ts`: tile resolution ladder, per-level cache
- *     budgets, prefetch ring and sheet-packing - its own tuning surface, kept
- *     separate because a bad override here can violate an invariant this file's
- *     validation cannot check (a budget below its own worst-case-visible count
- *     thrashes the cache within a single frame). Only `BASE_TILE` (tile size and
- *     aspect) is genuinely derived rather than tuned; everything else in that
- *     file trades off memory, bandwidth and request-count deliberately.
+ *   - `packages/web/src/lib/pyramid.ts`: the tile ladder, per-level cache
+ *     budgets, the prefetch ring and sheet packing (AGENTS.md, "Config and the
+ *     pyramid"). Kept out because a budget below its own worst-case-visible cell
+ *     count thrashes the cache within a single frame, and no range check here
+ *     could see that.
  *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
- *     HARD zoom range. Stays in code on purpose - this file's `camera.minZoom`/
- *     `maxZoom` may only narrow it, never widen it, and that asymmetry has to
- *     live somewhere config itself cannot override.
+ *     hard zoom range, in code so config cannot widen it.
  *   - `packages/map/scoring.ts`'s `TAG_PARTIAL_SATURATION`/`STORY_FLOOR`: paired
- *     with `search.weights` above in the inequalities `docs/search_rules.md`
- *     states and `scoring.test.ts` checks - move one without the others and the
- *     inequalities need re-deriving, not just re-tuning.
- *   - `packages/web/src/lib/center.ts`: the center shelf's spine sizing
- *     (`SPINE_SIZE_SCALE`, `SPINE_HALO_SCALE`, `SPINE_HALO_FLOOR`) and opening
- *     fit (`OPENING_MARGIN`) - visual tuning in the same by-feel spirit as
- *     `center.spineMinPx`/`spineMaxPx` above, not yet plumbed through here.
+ *     with `search.weights` in the inequalities
+ *     `docs/search_rules.md` "Balancing signals against each other" states and
+ *     `scoring.test.ts` checks. Moving one means re-deriving the others.
+ *   - `packages/web/src/lib/center.ts`'s spine sizing (`SPINE_SIZE_SCALE`,
+ *     `SPINE_HALO_SCALE`, `SPINE_HALO_FLOOR`) and opening fit
+ *     (`OPENING_MARGIN`): the same kind of tuning as `center` below, not
+ *     exposed here.
  *   - `packages/web/src/lib/favoriteBadge.ts`'s `MIN_FAVORITE_HIT_TOUCH`/
- *     `TOUCH_HIT_AREA_CAP`: the favorite badge's touch target floor and area
- *     cap - UX policy, not yet plumbed through here.
- *   - `packages/web/src/components/CatalogView.tsx`'s layout constants
- *     (`ROW_PAD`, `TEXT_MIN`, `STORY_RESERVED_PX`, and neighbours): NOT safe to
- *     move here even though they look tunable - the catalog's fixed-row
- *     virtualization computes real pixel arithmetic (`spacerHeight`) from these
- *     exact numbers, so an independent override would desync the scroll math
- *     from what is actually rendered and corrupt scroll position, not just look
- *     different.
+ *     `TOUCH_HIT_AREA_CAP`: the badge's touch-target floor and area cap.
+ *   - `packages/web/src/components/CatalogView.tsx`'s `ROW_PAD`, `TEXT_MIN`,
+ *     `STORY_RESERVED_PX` and neighbours: not movable here even though they look
+ *     tunable. `spacerHeight` computes the catalog's scroll arithmetic from these
+ *     exact numbers, so an override would desync the spacers from what actually
+ *     renders and corrupt scroll position rather than just look different.
  *   - `packages/server/app.ts`'s `RATE_BURST`/`RATE_REFILL_MS`/
  *     `RATE_MAX_TRACKED`/`EMBED_CACHE_SIZE`: server-side rate-limit and cache
- *     tuning. Not plumbed through here yet, but a reasonable candidate - this
- *     file is currently client-config-shaped (rides to the browser on the
- *     manifest), which server-only knobs have no need to do.
- *   - `tools/center-placement/lib/measured.ts`: generated from a traced SVG, not
- *     tunable by feel at all - never hand-edit it, see `AGENTS.md`.
- *   - `tools/upload`, `tools/embed`, `tools/perf-capture`, `tools/font-lab`: each
- *     has its own offline/dev-tool constants (concurrency, batch sizes, timeouts).
- *     Deliberately outside this file's reach - they run outside the demo server
- *     entirely, and `config.json` has no business shaping a one-off script.
+ *     tuning. This object rides to the browser on the manifest, which
+ *     server-only knobs have no need to do.
+ *   - `tools/upload`, `tools/embed`, `tools/perf-capture`, `tools/font-lab`:
+ *     each has its own offline/dev-tool constants (concurrency, batch sizes,
+ *     timeouts). They run outside the demo server, so nothing here reaches them.
  */
 import {
   CURSOR_GRANULARITY_PX,
@@ -215,99 +181,88 @@ export interface Config {
 type Section = Record<string, unknown>;
 
 export const DEFAULTS: Defaults = {
+  /**
+   * Where `camera.ts` already states a constant, this block imports it rather
+   * than restating it, so the value the code uses and the value documented here
+   * cannot end up different (AGENTS.md, "Consuming files state no fallback
+   * defaults").
+   */
   camera: {
     /**
-     * The zoom range actually offered, as pixels per cell WIDTH.
+     * The zoom range offered, as pixels per cell width.
      *
-     * `null` means "as far as `camera.js` allows" - the honest spelling of "no
-     * narrowing", and the reason this file does not restate 26 and 900. Set a
-     * number to pull the range in; a number outside the hard limits is clamped
-     * to them rather than honoured, because config narrows and never widens.
+     * `null` means that end's hard limit, which is how this file says "no
+     * narrowing" without restating `ZOOM_LIMITS`'s numbers.
      */
     minZoom: 50,
     maxZoom: null,
 
     /**
-     * How many whole rows and columns must be visible at once wherever the
-     * camera returns to - the "center" button, a room double-tap's zoom
-     * toggle, and the zoom a search flies home to before rearranging.
-     * `overviewZoom` (camera.ts) picks the largest zoom that still fits an
-     * n x n square of cells on the binding axis, so the map reads as a wall
-     * of rooms rather than one image and the reorder animation has cells to
-     * slide - on whatever display it is asked from, a stated pixels-per-cell
-     * number cannot: a viewport's binding axis (width on a phone, height on a
-     * wide monitor) is exactly what varies, and a cell count is the one unit
-     * that means the same thing regardless of which axis binds.
+     * How many whole rows and columns stay visible wherever the camera parks at
+     * an overview. `overviewZoom` (`camera.ts`) picks the largest zoom that
+     * still fits an n x n square of cells on the viewport's binding axis, so the
+     * map reads as a wall of rooms rather than one image and the reorder
+     * animation has cells to slide across.
+     *
+     * A cell count rather than a pixels-per-cell number because which axis
+     * binds varies - width on a phone, height on a wide monitor - and cells mean
+     * the same thing on either. AGENTS.md's "Two opening views" is what this
+     * value belongs to; the page-load view is fitted to the display instead.
      */
     minVisibleCells: 5,
 
     /**
-     * How long a camera flight takes - "center", and the fly home after a
-     * search - in milliseconds.
-     *
-     * 450 is a starting point rather than a measurement, which is the same
-     * argument that puts the search weights here: how long a transition should
-     * take is a judgement about the map in front of you, and the only way to
-     * settle it is to sit with it. The number itself is `FLIGHT_MS` in
-     * `camera.js`, imported rather than restated, so the source default and the
-     * documented one cannot drift.
-     *
-     * Zero is meaningful: it means arrive at once, which is what
-     * `prefers-reduced-motion` asks for and how a config switches the animation
-     * off. Reduced motion still wins over any value set here.
+     * How long a camera flight takes, in milliseconds: the "center" button, and
+     * the fly home after a search. The default is `FLIGHT_MS` in `camera.ts`,
+     * and it is a starting point rather than a measurement.
      */
     flightMs: FLIGHT_MS,
 
     /**
-     * How long a single keyboard nudge takes - one arrow press, a ctrl+arrow
-     * jump, a PgUp/PgDn zoom step - in milliseconds. Deliberately its own
-     * number rather than a reuse of `flightMs`: a keyboard move is a single
-     * cell or a screenful, not a cross-map jump, and animating it at the same
-     * pace as "fly home" reads as sluggish under repeated key presses. Short
-     * enough that a held-down key still feels responsive; long enough to read
-     * as a glide rather than a snap.
+     * How long a single keyboard move takes - one arrow press, a ctrl+arrow
+     * jump, a PgUp/PgDn zoom step. Its own number because a keyboard move is one
+     * cell or a screenful, not a cross-map jump: at `flightMs`'s pace, repeated
+     * presses read as sluggish. Short enough that a held key stays responsive,
+     * long enough to read as a glide rather than a snap.
      *
-     * Zero means arrive at once, the same `prefers-reduced-motion` escape hatch
-     * `flightMs` has - and for the same reason, since `useMapCamera.ts` routes
-     * every keyboard move through `flyTo` with this as the duration override.
+     * `useMapCursor.ts` passes it as the duration override on the
+     * `flyTo`/`nudgeBy` calls every keypress makes (both from `useMapCamera.ts`).
      */
     keyboardMoveMs: 140,
 
     /**
      * How much of a wheel delta becomes zoom - exponential, so a notch is a
      * fixed ratio rather than a fixed pixel count. `WHEEL_ZOOM_RATE` in
-     * `camera.ts`, imported rather than restated, same as `flightMs` above.
+     * `camera.ts`.
      */
     wheelZoomRate: WHEEL_ZOOM_RATE,
 
     /**
-     * How much one discrete zoom "step" scales the camera - PageUp/PageDown
-     * and a two-finger tap. `ZOOM_STEP_FACTOR` in `camera.ts`.
+     * How much one discrete zoom step scales the camera - PageUp/PageDown and a
+     * two-finger tap. `ZOOM_STEP_FACTOR` in `camera.ts`.
      */
     zoomStepFactor: ZOOM_STEP_FACTOR,
 
     /**
-     * Below this many device pixels per cell width, the keyboard cursor names
-     * a region rather than a single cell (accessibility-plan.md §3.1).
-     * `CURSOR_GRANULARITY_PX` in `camera.ts`.
+     * Below this many device pixels per cell width, the keyboard cursor names a
+     * region rather than a single cell. `CURSOR_GRANULARITY_PX` in `camera.ts`.
      */
     cursorGranularityPx: CURSOR_GRANULARITY_PX,
 
     /**
-     * How far past `cursorGranularityPx` a zoom must move before the
-     * announced granularity flips, so holding a zoom near the boundary does
-     * not flicker between naming a cell and naming a region.
-     * `GRANULARITY_HYSTERESIS` in `camera.ts`.
+     * How far past `cursorGranularityPx` a zoom must move before the announced
+     * granularity flips, so holding a zoom near the boundary does not flicker
+     * between naming a cell and naming a region. `GRANULARITY_HYSTERESIS` in
+     * `camera.ts`.
      */
     granularityHysteresis: GRANULARITY_HYSTERESIS,
 
     /**
      * Press/tap gesture thresholds for the map's pointer handling
-     * (`useMapCamera.ts`) - timing windows and pixel slop for telling a long
-     * press from a drag, a double tap from two unrelated taps, and a
-     * two-finger tap from a pinch. By-feel, like the slide and catalog
-     * timings elsewhere: nothing derives from these, and no test pins their
-     * exact values, only the logic that compares against them.
+     * (`useMapCamera.ts`): timing windows and pixel slop for telling a long
+     * press from a drag, a double tap from two unrelated taps, and a two-finger
+     * tap from a pinch. Nothing derives from these, and no test pins their
+     * values - only the logic that compares against them.
      */
     gesture: {
       /** How long a press must be held before it opens the metadata overlay. */
@@ -335,7 +290,10 @@ export const DEFAULTS: Defaults = {
        */
       twoFingerTapMs: 400,
 
-      /** How far apart the two liftoffs of a two-finger tap may land. */
+      /**
+       * How long a gap the two liftoffs of a two-finger tap may have: the second
+       * must lift within this of the first.
+       */
       twoFingerTapGapMs: 250,
 
       /**
@@ -349,8 +307,9 @@ export const DEFAULTS: Defaults = {
   map: {
     /**
      * Fraction of cells that may hold a corpus room; the rest are copies of the
-     * generic. 0.2 is the concept's "maybe 80% generic" - sparse enough that
-     * finding a distinct room feels like finding something.
+     * generic. Low enough that finding a distinct room feels like finding
+     * something. A search's density gradient lifts the middle of the map away
+     * from this baseline - see `search.density`.
      */
     contentRatio: 0.25,
 
@@ -358,17 +317,17 @@ export const DEFAULTS: Defaults = {
     slotSeed: 1,
 
     /**
-     * Seed for choosing between alternate generic tiles. Separate from
-     * `slotSeed` on purpose: sharing one would correlate the choice of
-     * generic tile with which cells are content slots, and the two patterns
-     * would be visible in each other.
+     * Seed for choosing between alternate generic tiles. Its own number because
+     * sharing `slotSeed` would correlate which generic tile a cell shows with
+     * whether that cell is a content slot, and the two patterns would be visible
+     * in each other.
      */
     genericSeed: 1,
 
     /**
-     * How long distill mode's fade to/from black takes, in milliseconds - the
-     * phase that runs before the slide when hiding generic rooms, and after
-     * it when bringing them back. See `packages/web/src/hooks/useDistillMode.ts`.
+     * How long distill mode's generic crossfade takes in each direction, in
+     * milliseconds - the phase that runs before the slide when hiding generic
+     * rooms, and after it when bringing them back. `useDistillMode.ts` drives it.
      */
     distillFadeMs: 320,
   },
@@ -377,28 +336,28 @@ export const DEFAULTS: Defaults = {
     /**
      * How long a rearrangement takes, in milliseconds.
      *
-     * The visible cost is the viewport's, not the corpus's - the planner slides
-     * only lines that cross the on-camera rectangle, and everything else is an
-     * invisible swap - so these numbers set the whole duration and the corpus
-     * size does not enter into it. See `packages/web/src/lib/slide.js` for how a
-     * plan is laid out in time, and `packages/map/illusion.ts` for why the
-     * lines of a wave are free to move at once.
+     * Duration is the viewport's, not the corpus's (AGENTS.md, "The reorder
+     * animation"): the planner slides only the lines that cross the on-camera
+     * rectangle and everything else is an invisible swap, so these numbers set
+     * the whole animation whatever the corpus size. `packages/web/src/lib/slide.ts`
+     * is how a plan is laid out in time, and `packages/map/illusion.ts` is why a
+     * wave's lines are free to move at once.
      *
      * Lowering all five proportionally makes the same animation faster; the
      * ratios between them are what shape it.
      */
 
     /**
-     * Per-run constant, so a one-cell slide is not instantaneous. This is what
-     * a move costs before any distance is travelled.
+     * Per-run constant, so a one-cell slide is not instantaneous: what a move
+     * costs before any distance is travelled.
      */
     base: 80,
 
     /**
-     * Per cell of travel. A line moving as one piece reads at a speed a single
-     * tile would not, which is why this is nearer 25ms than the 100ms a lone
-     * sliding tile would want. It dominates a long ride: a column crossing a
-     * ten-cell region is `base + 10 x perCell`.
+     * Per cell of travel, so it dominates a long ride - a column crossing a
+     * ten-cell region is `base + 10 x perCell`. Far below what a lone sliding
+     * tile would want, because a line moving as one piece reads at a speed a
+     * single tile does not.
      */
     perCell: 26,
 
@@ -411,91 +370,87 @@ export const DEFAULTS: Defaults = {
     /**
      * How far apart the lines of a wave set off.
      *
-     * A wave's lines are independent - the planner stages a whole batch before
-     * feeding any of it - so they need not queue. Starting them together would
-     * read as the whole field scrolling, which is a pan rather than a
-     * rearrangement; starting them a beat apart turns the conveyor into a sweep
-     * that leaves from the center. This, not `perCell`, is what sets how long
-     * the sweep takes to cross the screen.
+     * A wave's lines are independent, so they need not queue - `illusion.ts`
+     * stages a whole batch before feeding any of it. Starting them together
+     * reads as the whole field scrolling, which is a pan rather than a
+     * rearrangement; a beat apart turns the conveyor into a sweep that leaves
+     * from the center. This, not `perCell`, sets how long the sweep takes to
+     * cross the screen.
      */
     stagger: 65,
 
     /**
      * How far apart the runs of a sequential lane set off. They still finish in
-     * plan order - that is what keeps the plan honoured - but starting the next
+     * plan order, which is what keeps the plan honoured, but starting the next
      * before the last has landed turns a queue into a cascade. Shorter than
-     * `stagger`, because these are incidental motion: mostly rotations freeing
-     * a room the new arrangement wants but which has no copy off camera.
+     * `stagger`, because this is incidental motion: mostly rotations freeing a
+     * room the new arrangement wants and which has no copy off camera.
      */
     cascade: 45,
 
     /**
      * How long `prepareRearrangement` (`useRearrangement.ts`) waits for the
-     * plan's tiles to fetch and decode before giving up and animating with
-     * whatever is ready - proceeding on a timeout is a fallback, not a failure.
-     * Not a composed beat like the timings above - it is a real wait on its
-     * own, so a sub-frame value here is exactly as suspicious as it looks.
+     * plan's tiles to fetch and decode before animating with whatever is ready.
+     * Proceeding on the timeout is a fallback, not a failure.
      *
-     * A real `?perf` capture across four browser/device combinations
-     * (`docs/performance-research.md` §9) measured cold-cache prepare taking up
-     * to ~2.1-2.8s on Android; this sits above that with headroom rather than
-     * cutting it close, while still reading as "gave up and proceeded" rather
-     * than "hung" on a genuinely bad connection.
+     * Sized against the cold-cache waits `docs/performance-research.md`'s
+     * "Measured findings" records: about a second on desktop Chrome and Android
+     * Chrome, with a longer tail on Android Firefox. A wait before anything moves
+     * reads as loading; the same time spent stuttering mid-slide does not.
+     *
+     * Two consequences of being a wait rather than a beat: `duration()`'s
+     * sub-frame warning applies here (this is the one slide timing not passed
+     * `composed`), and this value sits at `DURATION_MAX_MS`, so an overlay can
+     * only shorten it.
      */
     prepareTimeoutMs: 5000,
   },
 
   catalog: {
     /**
-     * Rows per page - the unit BOTH paging modes slice by. Pagination shows one
-     * page; infinite scroll keeps a window of them mounted and replaces the
-     * rest with spacers. They are one primitive with a different window (see
-     * `packages/web/src/lib/catalog.js`), so this number sets the granularity of
-     * both and there is deliberately no second one for scrolling.
+     * Rows per page - the unit both paging modes slice by, so this one number
+     * sets the granularity of pagination and of infinite scroll alike
+     * (AGENTS.md, "Pagination and infinite scroll are one primitive with a
+     * different window"; `packages/web/src/lib/catalog.ts`'s `pageOf`).
      */
     perPage: 20,
 
     /**
-     * How many pages stay mounted either side of the one being read.
+     * How many pages stay mounted either side of the one being read - the DOM
+     * budget in one number. One either side is enough that a fast scroll never
+     * outruns the mount, and the mounted set stays a window rather than the
+     * whole corpus of rows.
      *
-     * The DOM budget in one number. A whole corpus of rows would be about
-     * thirty nodes each; one either side is enough that a fast scroll never
-     * outruns the mount, and small enough that the list stays a few hundred
-     * nodes rather than a hundred thousand. Zero is what pagination passes, so
-     * this is also the knob that makes the two modes the same code.
+     * Zero is what pagination passes, which is the knob that makes the two modes
+     * one code path. `windowFor` (`catalog.ts`) widens it when a screenful spans
+     * more pages than this mounts, so a tall display cannot scroll into a spacer.
      */
     windowPages: 1,
 
     /**
-     * How long the map folds into the list, and back, in milliseconds.
-     *
-     * By-feel, like the slide durations and for the same reason: nothing
-     * derives from it and no test pins its value. Zero means swap at once, and
-     * `prefers-reduced-motion` still wins over whatever is set here.
+     * How long the map folds into the list, and back, in milliseconds. Nothing
+     * derives from it and no test pins its value; `useModeTransition.ts` honours
+     * `prefers-reduced-motion` over it.
      */
     transitionMs: 380,
 
     /**
-     * How the catalog advances for a reader who has never chosen - 'scroll' or
-     * 'pages'.
-     *
-     * The DEFAULT, not the setting. A stored choice overrides it, which is the
-     * ordinary relationship between config and a preference and is worth saying
-     * out loud because every other value in this block is the live number.
+     * How the catalog advances for a reader who has never chosen: 'scroll' or
+     * 'pages'. A default rather than the live setting - a choice the reader has
+     * made is stored under `persist.ts`'s `KEYS.paging` and wins over this.
      */
     paging: 'scroll',
   },
 
   center: {
     /**
-     * The center shelf's per-title auto-fit font range, in px - see
-     * `composeSpines` (packages/web/src/lib/center.ts). A short title grows
-     * toward `spineMaxPx`, a long one shrinks toward `spineMinPx` before it is
-     * truncated with an ellipsis; both are ceilings/floors, not fixed sizes -
-     * most titles land somewhere between them. Chosen with `tools/font-lab`'s
-     * sweep (`--cap 32 --min 12`, Roboto Slab) as a starting point meant to be
-     * tuned further by feel, which is why these are config and not a rendering
-     * constant the way `MIN_SPINE_PX` (the zoom-legibility gate) is.
+     * The range `composeSpines` (`packages/web/src/lib/center.ts`) auto-fits a
+     * spine title's font within, in px. A short title grows toward `spineMaxPx`
+     * and a long one shrinks toward `spineMinPx` before it is truncated with an
+     * ellipsis, so both are bounds rather than sizes - most titles land between
+     * them. `tools/font-lab`'s sweep (`--cap 32 --min 12`, Roboto Slab) is where
+     * these started. The zoom-legibility gate is a different thing and stays a
+     * rendering constant: `MIN_SPINE_PX`.
      */
     spineMinPx: 10,
     spineMaxPx: 30,
@@ -503,25 +458,21 @@ export const DEFAULTS: Defaults = {
 
   search: {
     /**
-     * The seven constants docs/search_rules.md "Balancing signals" names: `E`
-     * (per exact tag), `P` (the saturating partial-tag budget), `T` (an exact
-     * title match), `Pt` (the partial-title budget), `S` (a short story
-     * match), `L` (the saturating long-story bonus), `C` (CLIP). Every
-     * non-CLIP signal is already an absolute ratio or count; CLIP is min-max
-     * normalised across the corpus *for this query* before this weight is
-     * applied - see `packages/map/scoring.ts`'s header for why a raw cosine
-     * cannot be weighted directly.
+     * The seven constants `docs/search_rules.md` "Balancing signals against each
+     * other" names `E`, `P`, `T`, `Pt`, `S`, `L`, `C`: one exact tag, the
+     * saturating partial-tag budget, one exact title match, the partial-title
+     * budget, a short story match, the saturating long-story bonus, and CLIP.
+     * Every non-CLIP signal is already an absolute ratio or count; CLIP is
+     * min-maxed across the corpus for that query before its weight applies, and
+     * `packages/map/scoring.ts`'s header is why a raw cosine cannot be weighted
+     * directly.
      *
-     * Each value is chosen so its rule's inequality
-     * (docs/search_rules.md's "Tag matching"/"Title matching"/"Story matching"
-     * assertions) holds with real margin, not just at the boundary - `E = 5`
-     * clears `tagPartial + titlePartial + story + storyLong + clip = 0.45 +
-     * 0.2 + 0.4 + 2 + 1 = 4.05`, `T = 5.5` clears the same ceiling and clears
-     * `E` itself by the "slightly" the rule calls for, and `storyLong = 2`
-     * clears `clip + tagPartial + titlePartial = 1.65` the same way.
-     * Re-tuning any one of these means re-checking every inequality it was
-     * chosen to satisfy, not eyeballing it alone - `scoring.test.ts` asserts
-     * each inequality directly against whatever is resolved here.
+     * Each is chosen so the inequality its own rule states -
+     * `docs/search_rules.md`'s "Tag matching", "Title matching" and "Story
+     * matching" assertions - holds with margin rather than at the boundary.
+     * `scoring.test.ts` asserts those inequalities against these numbers, so a
+     * re-tune that breaks one fails a test instead of quietly changing the
+     * ranking.
      */
     weights: {
       tagExact: 5,
@@ -535,68 +486,64 @@ export const DEFAULTS: Defaults = {
 
     /**
      * Query tokens shorter than this never match. Without a floor, `a` matches
-     * most keywords in the corpus by substring and the partial-match score
-     * stops meaning anything.
+     * most keywords in the corpus by substring and the partial-match score stops
+     * meaning anything.
      */
     minTokenLength: 3,
 
     /**
      * The longest query the box will take, in characters.
      *
-     * Not a guard against abuse - this is an offline demo - but against a
-     * plausible accident: pasting a tag list into the search field. Scoring is
-     * O(tokens x keywords) per room, so a two-thousand-token query against a
-     * five-thousand-room corpus is tens of millions of substring tests on the
-     * main thread, and the page simply stops. It also has to be BOUNDED for the
-     * things that display a query to stay sane - the top bar names it in full,
-     * and history titles a book with it.
+     * A guard against a plausible accident rather than an attack: pasting a tag
+     * list into the search field. Scoring is O(tokens x keywords) per room, so a
+     * two-thousand-token query against a five-thousand-room corpus is tens of
+     * millions of substring tests on the main thread, and the page simply stops.
      *
-     * Large enough that no real query reaches it: a sentence-long natural
-     * language search is well under 200 characters.
+     * A bound is also what lets everything that displays a query stay sane - the
+     * top bar names one in full, and history titles a book with it. Set well
+     * above any real query: a sentence-long natural language search is a fraction
+     * of this.
      */
     maxQueryLength: 256,
 
     /**
-     * Precision the CLIP text tower loads at - one of transformers.js's
-     * `dtype` options ('fp32', 'fp16', 'q8', 'q4', ...). 'fp32' is the model's
-     * native precision and the accurate default; 'q8' quantises to a quarter
-     * the memory (one byte per parameter instead of four) at some cost to
-     * embedding accuracy, which is the tradeoff a memory-constrained host
-     * (a cheap VPS) wants and a normal one does not. Server-side only - it
-     * governs `packages/server/app.ts`'s text tower, not the vision tower
-     * `tools/embed/embed.ts` runs offline, which stays fp32 since it runs
-     * once per corpus rather than per request.
+     * Precision the CLIP text tower loads at - one of `CLIP_TEXT_DTYPES`. 'fp32'
+     * is the model's native precision; 'q8' quantises to a quarter the memory (one
+     * byte per parameter instead of four) at some cost to embedding accuracy, the
+     * tradeoff a memory-constrained host wants and a normal one does not.
+     *
+     * Server-side only: it governs `packages/server/app.ts`'s text tower, not the
+     * vision tower `tools/embed/embed.ts` runs offline, which stays fp32 because it
+     * runs once per corpus rather than per request.
      */
     clipTextDtype: 'fp32',
 
     /**
-     * How a search's certainty becomes map density - see the gradient section
-     * of `packages/map/ordering.ts`. `map.contentRatio` above is the baseline
-     * these numbers lift the middle of the map away from.
+     * How a search's certainty becomes map density - see the gradient section of
+     * `packages/map/ordering.ts`. `map.contentRatio` is the baseline these numbers
+     * lift the middle of the map away from.
      */
     density: {
       /**
        * Density offered to a rank the search is certain about. 1 packs perfect
-       * matches into every cell they meet, so a handful of exact hits reads as
-       * a solid block against the center - which is the whole effect. Lower it
-       * to keep some wallpaper showing through even the surest cluster.
+       * matches into every cell they meet, so a handful of exact hits reads as a
+       * solid block against the center. Lower it to keep some wallpaper showing
+       * through even the surest cluster.
        */
       peak: 1,
 
       /**
-       * Certainty under this clusters nothing at all. A query the corpus cannot
-       * answer still ranks *something* first, and without a floor the faintest
-       * hunch would pull it to the center and claim a find. Defaults to
-       * `CERTAINTY_FLOOR`, which is where the reasoning is written down.
+       * Certainty under this clusters nothing at all. `CERTAINTY_FLOOR`
+       * (`packages/map/ordering.ts`) is where the reasoning is written down.
        */
       floor: CERTAINTY_FLOOR,
 
       /**
-       * The three anchors of CLIP's signed certainty curve: `clipCentre` is
-       * the no-opinion point (0), `clipHigh` a genuine match's typical
-       * confidence (+1), `clipLow` a genuinely-irrelevant query's (-1). The
-       * one part of the gradient that is a measurement rather than a
-       * preference - see `CLIP_CERTAINTY` for where these come from.
+       * The three anchors of CLIP's signed certainty curve: `clipCentre` is the
+       * no-opinion point (0), `clipHigh` a genuine match's typical confidence
+       * (+1), `clipLow` a genuinely irrelevant query's (-1). The one part of the
+       * gradient that is a measurement rather than a preference - `CLIP_CERTAINTY`
+       * (`packages/map/scoring.ts`) is where they were measured.
        */
       clipCentre: CLIP_CERTAINTY.centre,
       clipHigh: CLIP_CERTAINTY.high,
@@ -606,13 +553,9 @@ export const DEFAULTS: Defaults = {
 };
 
 /**
- * Merge an overlay over `DEFAULTS`, validating as it goes.
- *
- * Never throws and always returns something usable: a demo that will not start
- * because of a typo in a tuning file is worse than one that starts and says what
- * it ignored. Everything adjusted is reported in `notes`, which the server
- * prints at startup - silence about a value that did not take effect is the
- * failure mode worth avoiding here.
+ * Merge an overlay over `DEFAULTS`, validating as it goes. Never throws: a bad
+ * value falls back and every adjustment is reported in `notes`, which the server
+ * prints at startup (AGENTS.md, "Config and the pyramid").
  *
  * @param raw the overlay, typically parsed `config.json`
  * @param opts.zoomLimits the hard range this config may narrow but not widen.
@@ -734,10 +677,9 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
  * The catalog's block.
  *
  * `perPage` and `windowPages` are floored rather than rejected: a page of zero
- * rows is a list that renders nothing at all and a negative window is the same
- * bug spelled differently, and neither is worth failing a whole config over
- * when the honest reading is obvious. `windowPages` of 0 is legal and
- * meaningful - it is exactly what pagination passes.
+ * rows renders nothing at all, a negative window is the same bug spelled
+ * differently, and what the writer meant is obvious in both cases. A
+ * `windowPages` of 0 is legal and meaningful - what pagination passes.
  */
 function catalog(src: Section, notes: string[]): CatalogConfig {
   const d = DEFAULTS.catalog;
@@ -767,13 +709,11 @@ function catalog(src: Section, notes: string[]): CatalogConfig {
 /**
  * The center shelf's auto-fit font range.
  *
- * Both floored at 1px rather than rejected, the same reasoning `catalog`'s
- * counts use - a font size of zero or less renders nothing, which is an
- * honest reading of "auto-fit turned off" rather than a config error. An
- * inverted range (`spineMinPx` above `spineMaxPx`) would leave every title
- * with no size that satisfies both the floor and the ceiling `fitFontSize`
- * binary-searches between, so it falls back to the defaults together, the
- * same as camera's inverted zoom range.
+ * Both floored at 1px, the way `catalog()` floors its counts. An inverted range
+ * is refused outright: `fitFontSize` (`center.ts`) binary-searches between the
+ * two, so a floor above the ceiling leaves every title no size that satisfies
+ * both, and the pair falls back together the way camera's inverted zoom range
+ * does.
  */
 function center(src: Section, notes: string[]): CenterConfig {
   const d = DEFAULTS.center;
@@ -796,9 +736,9 @@ function center(src: Section, notes: string[]): CenterConfig {
 /**
  * The map's press/tap gesture thresholds - `camera.gesture` in the overlay.
  *
- * Every `*Ms` field is a duration (see `duration()` below); every `*Px` field
- * is floored at 1 the same way `catalog()`'s counts are - a slop of zero or
- * less is nonsensical as a gesture threshold, not a meaningful "off".
+ * Each `*Ms` field is a duration and goes through `duration()`; each `*Px` field
+ * is floored at 1 the way `catalog()`'s counts are, since a slop of zero or less
+ * is not a meaningful "off" for a gesture, just a mis-typed number.
  */
 function gesture(src: Section, notes: string[]): GestureConfig {
   const d = DEFAULTS.camera.gesture;
@@ -818,7 +758,7 @@ function gesture(src: Section, notes: string[]): GestureConfig {
   };
 }
 
-/** Floor a value with a note, for the two counts above. */
+/** Floor a value, with a note when it had to move. */
 function atLeast(n: number, min: number, path: string, notes: string[]): number {
   if (n >= min) return n;
   notes.push(`${path} must be at least ${min}; using ${min}`);
@@ -828,11 +768,12 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
 /**
  * The density gradient's block.
  *
- * `peak` below `map.contentRatio` is not rejected here, because the layout
+ * A `peak` below `map.contentRatio` is not rejected here because the layout
  * treats the baseline as a floor anyway - a gradient may add density, never
  * remove it - so the worst such a config can do is switch the effect off. An
- * inverted cosine band is worth a note: it would silently mean "CLIP never
- * contributes certainty", which looks exactly like a corpus with no blob.
+ * inverted cosine band gets a note and falls back: `clipHigh <= clipLow` means
+ * CLIP contributes no certainty at all, which from the map looks like a corpus
+ * with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {
   const d = DEFAULTS.search.density;
@@ -858,23 +799,23 @@ function density(src: Section, notes: string[]): SearchDensity {
 /**
  * The rearrangement animation's timings.
  *
- * Each is a duration in milliseconds and gets the same treatment as the flight
- * above, with one difference: `composed`. These five do not each describe a
- * whole animation, they add up to one - a run takes `base + perCell x cells`,
- * and `gap`, `stagger` and `cascade` are beats between things that are
- * themselves moving. So a value under one frame is ordinary here rather than
- * suspicious, and warning about it would be noise. The ceiling and the
- * not-negative rule still apply, and both still matter: a negative beat would
- * schedule a run to start before the one it follows, and the animation applies
- * its plan in completion order.
+ * Each is a duration in milliseconds and gets the same treatment as the flight,
+ * with one difference: the five beats are passed `composed`. They do not each
+ * describe a whole animation, they add up to one - a run takes
+ * `base + perCell x cells`, and `gap`, `stagger` and `cascade` are beats between
+ * things that are themselves moving - so a value under one frame is ordinary
+ * here and warning about it would be noise. The ceiling and the not-negative
+ * rule still apply, and both still matter: a negative beat schedules a run to
+ * start before the one it follows, and the animation applies its plan in
+ * completion order.
  */
 function slideTiming(src: Section, notes: string[]): SlideConfig {
   const d = DEFAULTS.slide;
   const out = {} as SlideConfig;
   for (const key of ['base', 'perCell', 'gap', 'stagger', 'cascade'] as const)
     out[key] = duration(src[key], d[key], `slide.${key}`, notes, { composed: true });
-  // Not composed - see the constant's own doc comment for why this one is a
-  // real wait rather than a beat between moving things.
+  // The one slide timing that is not composed: see
+  // DEFAULTS.slide.prepareTimeoutMs.
   out.prepareTimeoutMs = duration(src.prepareTimeoutMs, d.prepareTimeoutMs, 'slide.prepareTimeoutMs', notes);
   return out;
 }
@@ -934,26 +875,29 @@ function tokenLength(value: unknown, fallback: number, path: string, notes: stri
   return n;
 }
 
+/** Ceiling for any duration this config accepts, in milliseconds. */
+const DURATION_MAX_MS = 5000;
+/** One 60Hz frame. A whole animation shorter than this will not be seen. */
+const ONE_FRAME_MS = 1000 / 60;
+
 /**
  * An animation duration in milliseconds.
  *
- * Zero is legitimate and stays - it means "arrive at once", the same thing
- * `prefers-reduced-motion` asks for, so it is how a config switches an
- * animation off rather than an error. Negative is not a slower flight or a
- * reversed one; it is a typo.
+ * Zero is legitimate and stays: it means arrive at once, which is how a config
+ * turns an animation off. Negative is not a slower flight or a reversed one, it
+ * is a typo. `prefers-reduced-motion` wins over any value here - every consumer
+ * of a duration checks `useMapCamera.ts`'s `prefersReducedMotion` first.
  *
- * The ceiling is a judgement rather than a limit of anything: past a few
- * seconds a camera move has stopped being a transition and become a wait, and a
- * value that far out is much likelier to be a units mistake than a taste.
+ * The ceiling is a judgement rather than a limit of anything: past a few seconds
+ * a camera move has stopped being a transition and become a wait, so a value
+ * that far out is likelier a units mistake than a taste.
  *
- * The sub-frame note is the one worth having. `0.45` is what seconds look like
- * typed into a milliseconds field, and it is not rejected - it is a perfectly
- * good way to say "no animation" - but it would otherwise be a flight that
- * silently never appears, which is exactly the failure mode a tuning file has.
+ * A positive sub-frame value is honoured and flagged. `0.45` is what seconds look
+ * like typed into a milliseconds field - a valid way to say "no animation", but
+ * otherwise a flight that silently never appears, which is the failure mode a
+ * tuning file has. `composed` opts a value out of that note: a four millisecond
+ * beat between two slides is a beat, not a flight nobody will see.
  */
-const DURATION_MAX_MS = 5000;
-const ONE_FRAME_MS = 1000 / 60;
-
 function duration(
   value: unknown, fallback: number, path: string, notes: string[], { composed = false }: { composed?: boolean } = {}
 ): number {
@@ -966,9 +910,6 @@ function duration(
     notes.push(`${path} ${n} is longer than ${DURATION_MAX_MS}ms; using ${DURATION_MAX_MS}`);
     return DURATION_MAX_MS;
   }
-  // Only for a number that IS an animation's duration. One that merely
-  // contributes to a longer one is legitimately sub-frame - a four millisecond
-  // beat between two slides is a beat, not a flight nobody will see.
   if (!composed && n > 0 && n < ONE_FRAME_MS) {
     notes.push(`${path} ${n} is shorter than one frame, so nothing will animate - milliseconds, not seconds?`);
   }
@@ -976,8 +917,9 @@ function duration(
 }
 
 /**
- * The CLIP text tower's dtype - one of transformers.js's supported precisions.
- * Anything else is a typo, not a request for a precision that doesn't exist.
+ * The precisions `search.clipTextDtype` accepts: transformers.js's `dtype`
+ * options. Anything else is a typo, not a request for a precision that does not
+ * exist.
  */
 const CLIP_TEXT_DTYPES = ['fp32', 'fp16', 'q8', 'q4', 'int8', 'uint8', 'q4f16', 'bnb4'];
 

@@ -150,6 +150,15 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   A live TODO pointer anchored at the line it warns about is fine and gets
   cleaned up with the issue; a citation of finished work is dead text. Remove
   the citation, keep the sentence's own claim about what the component is for.
+- **[2026-09-17] Two comments still call distill mode's transition a fade to
+  black**: `useDistillMode.ts`'s `fadeMs` option doc ("how long the black fade
+  takes") and `render.ts`'s `genericFade` doc ("distill mode's black fade over
+  generic tiles"). Generic tiles now crossfade to their paired
+  `assets/generic_distill` alternate — `drawGenericFade` in `render.ts` and
+  AGENTS.md's "The center tile and its generic tiles" both describe it — so
+  "black" names an implementation the crossfade replaced. Found while passing
+  `packages/config/config.ts`, whose own copy of the claim this commit fixes;
+  the two files above belong to the renderers' and hooks' batches.
 
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in
@@ -284,3 +293,14 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   whole contract is that the verifier reports `comment-only` - so it is filed
   rather than fixed. Nothing gates it: eslint's `no-unused-vars` only reports
   arguments after the last used one, and `tsc` has no `noUnusedParameters`.
+- **[2026-09-17] `slide.prepareTimeoutMs` cannot be raised above 5000ms.**
+  `duration()`'s `DURATION_MAX_MS` ceiling is written for animation durations —
+  "past a few seconds a camera move has stopped being a transition and become a
+  wait" — and `prepareRearrangement`'s fetch budget is the one value in the
+  config that *is* a wait, so the default sits exactly at the ceiling and the
+  overlay can only shorten it. A slow host that wants a longer prepare (the
+  Android Firefox tail in `docs/performance-research.md`'s "Measured findings"
+  runs well past it) has no way to ask. Found while passing
+  `packages/config/config.ts`, whose comment now states the limit rather than
+  implying the budget is tunable; lifting it is a code change and a decision
+  about whether `duration()` should take a separate ceiling for waits.

@@ -4,9 +4,8 @@ import { DEFAULTS, resolveConfig } from './config.ts';
 import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
 
 /**
- * The limits are injected everywhere below rather than assumed, both because
- * that is how the module is meant to be used and because it keeps these tests
- * from re-pinning themselves to whatever `camera.js` currently says.
+ * Limits are injected rather than assumed: that is how the module is used, and
+ * it keeps these tests from re-pinning whatever `camera.ts` currently says.
  */
 const LIMITS = { min: 10, max: 1000 };
 
@@ -15,8 +14,8 @@ test('an empty overlay is exactly the defaults', () => {
   assert.deepEqual(c.notes, []);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio);
   assert.deepEqual(c.search.weights, DEFAULTS.search.weights);
-  // minZoom now has a real default (50); null still means "no narrowing" for
-  // whichever end is left unset, which is why maxZoom still falls to the hard limit.
+  // DEFAULTS narrows the bottom of the range and leaves the top alone, which is
+  // why only maxZoom falls through to the injected limit.
   assert.equal(c.camera.minZoom, DEFAULTS.camera.minZoom);
   assert.equal(c.camera.maxZoom, LIMITS.max);
 });
@@ -27,8 +26,6 @@ test('the slide timings default and validate as durations', () => {
 
   // Zero is meaningful for every one of them - no gap, no stagger, no per-run
   // constant are all reasonable things to try - so only a negative is refused.
-  // A negative beat would schedule a run to start before the one it follows,
-  // and the animation applies its plan in completion order.
   const zeroed = resolveConfig({ slide: { gap: 0, stagger: 0, base: 0 } }, { zoomLimits: LIMITS });
   assert.deepEqual(zeroed.notes, []);
   assert.equal(zeroed.slide.gap, 0);
@@ -94,10 +91,10 @@ test('a fractional minVisibleCells is rounded, and a non-positive one is floored
 });
 
 test('narrowing far enough to orphan a rung is allowed and silent', () => {
-  // The whole point of the narrow-only rule: a config that can only tighten the
-  // range can never invalidate what the ladder's reachability test asserted, so
-  // leaving the finest levels unreachable needs no complaint. What it must not
-  // do is quietly *widen* anything, which the tests above cover.
+  // A range that can only tighten can never invalidate the ladder's
+  // reachability assertion - see `ZOOM_LIMITS` in `camera.ts`. Widening is the
+  // thing that must never happen, and 'config cannot widen the zoom range, in
+  // either direction' covers that.
   const c = resolveConfig({ camera: { minZoom: 26, maxZoom: 30 } }, { zoomLimits: ZOOM_LIMITS });
   assert.deepEqual(c.notes, []);
   assert.equal(c.camera.maxZoom, 30);
@@ -148,10 +145,10 @@ test('an overlay changes only what it names', () => {
 });
 
 test('the default weights satisfy every cross-signal inequality docs/search_rules.md names', () => {
-  // Every non-CLIP signal is already an absolute ratio or count, and CLIP is
-  // normalised to [0, 1] before weighting, so these are directly comparable -
-  // this is the property the seven constants are chosen to express, checked
-  // directly rather than by eyeballing a re-tune.
+  // Comparable because each signal is an absolute ratio or count by the time it
+  // is weighted, with CLIP min-maxed to [0, 1] first. That is the property the
+  // seven constants are chosen to express, so it is checked against the numbers
+  // rather than by eyeballing a re-tune.
   const { tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip } = DEFAULTS.search.weights;
   assert.ok(
     tagExact > tagPartial + titlePartial + story + storyLong + clip,
@@ -179,8 +176,8 @@ test('the shipped defaults are valid against the real limits', () => {
 // --- the flight duration ---------------------------------------------------
 
 test('the flight duration comes through, and the default is the source constant', () => {
-  // Imported rather than restated, so `camera.js` and this file cannot end up
-  // shipping two different 450s.
+  // `camera.ts`'s own constant rather than a copy of it, so the two cannot end
+  // up different.
   assert.equal(DEFAULTS.camera.flightMs, FLIGHT_MS);
   const c = resolveConfig({ camera: { flightMs: 900 } }, { zoomLimits: LIMITS });
   assert.equal(c.camera.flightMs, 900);
@@ -188,9 +185,8 @@ test('the flight duration comes through, and the default is the source constant'
 });
 
 test('zero is a flight duration, not an error', () => {
-  // It means "arrive at once" - the same thing prefers-reduced-motion asks for
-  // - so it is how a config turns the animation off. Rejecting it would leave
-  // no way to say that, and it must not be corrected back to the default.
+  // How a config turns the flight off, so it must not be corrected back to the
+  // default and must not draw a note.
   const c = resolveConfig({ camera: { flightMs: 0 } }, { zoomLimits: LIMITS });
   assert.equal(c.camera.flightMs, 0);
   assert.deepEqual(c.notes, []);
@@ -201,18 +197,17 @@ test('a negative or absurd flight duration is corrected and reported', () => {
   assert.equal(back.camera.flightMs, DEFAULTS.camera.flightMs);
   assert.match(back.notes.join('\n'), /flightMs/);
 
-  // Past a few seconds a camera move has stopped being a transition, so the
-  // ceiling clamps rather than honouring it - and says which it did.
+  // The ceiling clamps a duration this long rather than honouring it, and the
+  // note says which of the two happened.
   const forever = resolveConfig({ camera: { flightMs: 60_000 } }, { zoomLimits: LIMITS });
   assert.ok(forever.camera.flightMs > 0 && forever.camera.flightMs < 60_000);
   assert.match(forever.notes.join('\n'), /longer than/);
 });
 
 test('a duration in seconds is honoured but flagged', () => {
-  // 0.45 is what seconds look like typed into a milliseconds field. It is a
-  // legitimate way to say "no animation", so it is not corrected - but left
-  // silent it is a flight that never appears, which is the one failure mode a
-  // tuning file really has.
+  // 0.45 is what seconds look like typed into a milliseconds field. A legitimate
+  // way to say "no animation", so it is not corrected - and a note is what keeps
+  // it from being a silently missing flight.
   const c = resolveConfig({ camera: { flightMs: 0.45 } }, { zoomLimits: LIMITS });
   assert.equal(c.camera.flightMs, 0.45, 'not corrected');
   assert.match(c.notes.join('\n'), /shorter than one frame/);
@@ -229,8 +224,7 @@ test('the keyboard move duration comes through, distinct from the flight one', (
 });
 
 test('zero is a keyboard move duration too, not an error', () => {
-  // Same escape hatch as flightMs, same reason: prefers-reduced-motion asks
-  // for arrival at once, and this is how a config turns THIS animation off.
+  // The same escape hatch `flightMs` has, for the same reason `duration()` states.
   const c = resolveConfig({ camera: { keyboardMoveMs: 0 } }, { zoomLimits: LIMITS });
   assert.equal(c.camera.keyboardMoveMs, 0);
   assert.deepEqual(c.notes, []);
@@ -253,9 +247,8 @@ test('the density block comes through, and a partial one keeps its neighbours', 
 });
 
 test('an inverted cosine band is reported rather than silently disabling CLIP', () => {
-  // The failure this note exists for: `clipHigh <= clipLow` would mean CLIP
-  // never contributes certainty, which from the map looks exactly like a corpus
-  // with no embeddings at all.
+  // Why the note exists is in `density()`; what this pins is that all three
+  // anchors fall back together rather than one surviving out of order.
   const c = resolveConfig(
     { search: { density: { clipLow: 0.4, clipHigh: 0.2 } } },
     { zoomLimits: LIMITS }
@@ -301,7 +294,8 @@ test('the default gradient bounds bracket a real CLIP cosine', () => {
 test('the catalog block defaults, and a stored paging choice is not its business', () => {
   const { catalog } = resolveConfig({});
   assert.deepEqual(catalog, DEFAULTS.catalog);
-  // `windowPages: 0` is legal and meaningful - it is what pagination passes.
+  // A legal value, not a floored one: unlike a zero `perPage`, a zero window is
+  // what pagination passes.
   assert.equal(resolveConfig({ catalog: { windowPages: 0 } }).catalog.windowPages, 0);
 });
 
@@ -310,8 +304,7 @@ test('nonsense in the catalog block is adjusted with a note, never thrown', () =
     catalog: { perPage: 0, windowPages: -3, paging: 'sideways', transitionMs: -5 },
   });
 
-  // A page of zero rows renders nothing at all, which is the one thing a list
-  // must not do; a negative window is the same bug spelled differently.
+  // Both counts floored rather than rejected - `catalog()`'s note.
   assert.equal(catalog.perPage, 1);
   assert.equal(catalog.windowPages, 0);
   assert.equal(catalog.paging, DEFAULTS.catalog.paging);

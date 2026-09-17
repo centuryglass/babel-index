@@ -20,7 +20,8 @@ async function withFiles(files: Record<string, string>, run: (dir: string) => Pr
 test('no config file is the normal case, and says nothing', async () => {
   await withFiles({}, async (dir) => {
     const c = await loadConfig({ path: join(dir, 'absent.json') });
-    // Asked for by name, so its absence is worth one line - but it still loads.
+    // Asked for by name, so one note - `loadConfig`'s ENOENT branch - and the
+    // defaults still load.
     assert.equal(c.source, null);
     assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio);
     assert.match(c.notes.join('\n'), /no such config file/);
@@ -39,8 +40,8 @@ test('a partial overlay changes only what it names', async () => {
 });
 
 test('a malformed config file is reported, not swallowed', async () => {
-  // The failure that matters: a file that exists, was meant to take effect, and
-  // did not. Falling back silently would leave the reader tuning a dead file.
+  // The reader-tuning-a-dead-file failure `loadConfig`'s note is for: the file
+  // exists, was meant to take effect, and did not.
   await withFiles({ 'config.json': '{ not json' }, async (dir) => {
     const c = await loadConfig({ path: join(dir, 'config.json') });
     assert.equal(c.source, null);
