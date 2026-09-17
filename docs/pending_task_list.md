@@ -61,7 +61,7 @@ code and the git log are the record of what was.
   and `.jsx` files under `packages/` and `tools/`, but eslint's flat-config
   default file list is `.js`/`.mjs`/`.cjs` - no config here extends it. So
   `eslint .` checks `eslint.config.js`, `deploy/health-check.mjs`,
-  `build/*.mjs`, and `tools/comment-check/*.mjs` - nothing else. No
+  and `build/*.mjs` - nothing else. No
   browser-globals or react-hooks checking of `packages/web`, and no
   rule runs against any `.ts`/`.tsx`. The "Linting is minimal" list in
   `AGENTS.md` now states this plainly; the fix is deciding whether the flat

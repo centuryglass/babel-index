@@ -1,8 +1,0 @@
-{
-  "name": "comment-check-tools",
-  "private": true,
-  "description": "Isolated install: the classic TypeScript parser/printer strip.mjs needs, kept out of the root node_modules so it can't win the 'tsc' bin over the project's real typescript (v7/tsgo). See strip.mjs.",
-  "dependencies": {
-    "typescript-classic": "npm:typescript@^5"
-  }
-}
