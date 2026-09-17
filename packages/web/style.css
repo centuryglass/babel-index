@@ -906,7 +906,7 @@ mark {
   center row's open-book hotspot, the distill toggle) measure against; both
   keep working unmoved because their coordinate origin is still the image's
   own edge, not the mat's outer one. `--catalog-mat` (`MAT_PAD`,
-  CatalogView.tsx) is priced into `rowHeight` exactly like `CARD_PAD` is for
+  CatalogView.tsx) is priced into the row height exactly like `CARD_PAD` is for
   the text card, so the card still matches the mat's full height rather than
   just the image inside it, and the black gap between rows never widens -
   the mat lives inside the row's existing height, not added to it.
@@ -920,8 +920,8 @@ mark {
   The same plate-on-a-page framing the room overlay's tile gets
   (`.overlay-tile`): the cream mat above, then a hairline edge and a soft drop
   shadow. Drawn with `box-shadow` rather than more border/padding so it adds no
-  layout space - `rowHeight` and the hotspot insets still measure against the
-  mat's own edge, unchanged.
+  layout space - the row height and the hotspot insets still measure against
+  the mat's own edge, unchanged.
 */
 .catalog-tile-button, .catalog-tile-wrap {
   box-shadow: 0 0 0 1px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);

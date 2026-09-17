@@ -22,8 +22,8 @@
  * reader's hands; measuring instead would mean a real virtualiser and a
  * measurement cache.
  *
- * So `rowHeight` derives one height from whichever of a row's two columns needs
- * more, the content is cut to it, and what a row cannot show is counted rather
+ * So a row's height is derived from whichever of its two columns needs more,
+ * the content is cut to it, and what a row cannot show is counted rather
  * than dropped. The mechanics of the cut - a floated thumbnail the story wraps,
  * chips clamped by `chipLines`, a `+N` chip for the rest - are AGENTS.md's
  * "Rows are a fixed height and the spacers are arithmetic, not estimates" and
@@ -132,29 +132,9 @@ export function tileHeight(thumbWidth: number): number {
 }
 
 /**
- * A row's height: whichever of its two columns needs more, plus padding.
- *
- * The tile is usually the tall one, but on a narrow display the thumbnail
- * shrinks while the story, the chips and the score strip beside it do not, and a
- * row sized to the tile alone clips them.
- *
- * One height applies to every row on a page, which is all the spacer arithmetic
- * needs: `textMin` changes when a search starts and ends, and the rows change
- * with it together.
- *
- * @param thumbWidth css pixels
- * @param padding the row's vertical padding, both halves
- * @param textMin what the text column needs at minimum
- * @param matPad the thumbnail's paper mat, one side - see `CatalogView`'s `MAT_PAD`
- */
-export function rowHeight(thumbWidth: number, padding = 0, textMin = 0, matPad = 0): number {
-  return Math.max(tileHeight(thumbWidth) + 2 * matPad, Math.round(textMin)) + padding;
-}
-
-/**
  * A row's height in the ultra-narrow layout, where the picture runs full width
  * beneath the name row rather than beside it - `CatalogView.tsx`'s
- * `ULTRA_NARROW_PX`. `rowHeight` takes the max of two side-by-side columns; this
+ * `ULTRA_NARROW_PX`. A wide row takes the max of two side-by-side columns; this
  * is a stack, so it is their sum. `headPx`/`detailsPx` are the rank/title/favorite
  * line and the "keywords & story" link that replaces the chips and story text an
  * ultra-narrow row has no room to show.

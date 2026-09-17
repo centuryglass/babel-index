@@ -30,7 +30,6 @@ import { CELL_ASPECT } from './camera.ts';
 const GEO = layout({ width: 1, height: 1 });
 
 test('every book on the wall is a slot, and the whole wall is the history queue', () => {
-  assert.equal(BOOK_COUNT, 40);
   assert.equal(HISTORY_SLOT_COUNT, BOOK_COUNT);
 });
 

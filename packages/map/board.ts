@@ -152,7 +152,7 @@ export function buildRearrangement({
       bump(end[p], 1);
     }
 
-  if (!repairMultiset(start, end, delta, { width, rx0, rx1, ry0, ry1, halfW, halfH }))
+  if (!repairMultiset(end, delta, { width, rx0, rx1, ry0, ry1, halfW, halfH }))
     return null;
 
   return {
@@ -203,7 +203,6 @@ interface RepairGeometry {
  * @returns whether the repair was possible
  */
 function repairMultiset(
-  start: BoardValue[],
   end: BoardValue[],
   delta: Map<BoardValue, number>,
   geom: RepairGeometry
