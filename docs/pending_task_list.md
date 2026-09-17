@@ -252,6 +252,28 @@ Deliberately not listed here: adding a SAST/security-scanning workflow
   them. `svgPath.ts`'s `flattenPath` comment repeats the same claim ("the same
   restriction the importer itself enforces on import"); it wants the same
   correction if the behaviour is documented rather than fixed.
+- **[2026-09-17] `tools/embed/cosine-range.ts` prints the conclusions of a
+  calibration method it no longer uses** (found during the `tools/embed` comment
+  pass, which could state the method in comments and nothing more). Two places,
+  both in `printSummary`:
+  - The `--irrelevant` block warns `! ceiling ... sits BELOW the overall centre -
+    unexpected, expected low-positive`. That is the shipped measurement:
+    `CLIP_CERTAINTY.low` is `irrelevant.ceiling` (0.171), `centre` is
+    `overall.p50` (0.205), so the condition holds on every real run, and
+    `docs/search_rules.md` "Image-content (CLIP) matching" records
+    low-below-centre as the interesting result rather than the expected one. The
+    tool flags its own correct outcome as an anomaly, which trains a reader to
+    skip the line.
+  - The headline number is `suggestion`, `suggestClipBounds`'s two-percentile
+    pair, and the summary closes with "A starting point - read the percentile
+    tables above before trusting it". That pair is not the method the anchors
+    came from (see `suggestClipBounds`'s docblock for why a whole-list high
+    percentile is not a safe noise floor); the anchors are `overall.p50`,
+    `universal.ceiling` and `irrelevant.ceiling`, which the report carries but
+    never names as the answer.
+  Fix: emit the three anchors as the report's suggestion, and drop or reword the
+  warning. Ruled out: the arithmetic - `cosine-stats.test.ts` pins it, and the
+  numbers printed are the ones `CLIP_CERTAINTY` was set from.
 
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in

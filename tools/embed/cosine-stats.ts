@@ -1,54 +1,35 @@
 /**
  * Descriptive statistics for CLIP cosine samples - min/max/mean/std/percentiles
- * over one array, and turning two of those distributions into a clipLow/clipHigh
- * suggestion.
+ * over one array, and the arithmetic `cosine-range.ts` uses to turn a measured
+ * distribution into a calibration number.
  *
- * Pure, no filesystem, no model - what `cosine-range.ts` computes, this states
+ * Pure, no filesystem, no model: what `cosine-range.ts` measures, this states
  * how, so the arithmetic is testable without a corpus or a network connection to
  * download CLIP.
  *
- * ### Why the low/high bounds come from two different distributions
+ * ### What each distribution answers
  *
- * `search.density.clipLow` in `packages/config/config.ts` wants "the cosine at
- * which CLIP starts saying something about this corpus at all" - and across a
- * few thousand keywords against a few thousand rooms, most PAIRS are unrelated
- * (a keyword like `gothic` genuinely describes a handful of rooms out of a
- * couple thousand), so the bulk of the overall keyword x room distribution IS
- * the "unrelated" baseline. A high percentile of it - the edge most unrelated
- * pairs never cross - is a reasonable read of where noise ends.
+ * `overall` - every keyword against every room. Across a few thousand of each,
+ * most pairs are unrelated (`gothic` genuinely describes a handful of rooms out
+ * of a couple thousand), so its centre is the band a query with no real signal
+ * lands in.
  *
- * `clipHigh` wants the opposite question: "when a keyword genuinely has
- * something to point at, how high does CLIP go". The overall distribution
- * cannot answer that - it is dominated by noise - but each keyword's OWN best
- * match can: `keywordMax` is one number per keyword, the top cosine it reached
- * anywhere in the corpus, and a middling percentile of THAT distribution is a
- * measurement of what "as sure as it gets" typically looks like, once a keyword
- * with any purchase on the corpus is doing the asking.
+ * `keywordMax` - one number per keyword, the top cosine it reached anywhere in
+ * the corpus: what "as sure as it gets" looks like for a keyword that has some
+ * purchase on the corpus.
  *
- * Neither is exact - there is no ground truth pairing a keyword to the rooms it
- * "should" match - but both are read off the real corpus and the real keyword
- * list rather than assumed. `docs/search_rules.md` is where these numbers get
- * used, and where the "universal keyword" idea below is spent.
+ * A known-outcome list - `summarizeUniversal` - answers a third question. The
+ * two above assume nobody knows which keyword truly describes which room, so
+ * their bounds are percentile cuts of a pool that mixes real matches in with
+ * unrelated pairs. A word true of nearly every room (`bookshelf`, for a corpus
+ * of library walls) is a real positive match for close to the whole corpus, and
+ * a concept CLIP recognises that shares nothing with it (`swimming pool`) is a
+ * known negative. Either list's own distribution measures what a genuine match
+ * or a genuine miss looks like, rather than where a mixed pool thins out.
  *
- * ### Universal keywords, a third calibration
- *
- * `overall` and `keywordMax` both assume that whether a keyword genuinely
- * applies to a room is unknown - there is no ground truth to check against, so
- * both bounds are read off distribution shape rather than known outcomes. A
- * word that is true of nearly every room (`bookshelf`, for a corpus of library
- * walls) is the one case where the outcome IS known: it is a real positive
- * match for something close to the whole corpus, not a handful of rooms out of
- * a couple thousand. Its own cosine distribution is therefore a direct
- * measurement of "what does a real match look like", rather than a percentile
- * cut of a distribution that mixes real matches into a sea of unrelated ones.
- *
- * The caveat is that CLIP's cosine scale is not comparable across different
- * strings - a longer or differently-tokenised phrase shifts the whole
- * distribution up or down for reasons that have nothing to do with how true it
- * is. `summarizeUniversal` below is deliberately conservative about this: it
- * takes the LOWEST float across every universal keyword's own low percentile as
- * the floor (the weakest a genuine match has been observed to score, across
- * several different phrasings) rather than trusting any single keyword's scale.
+ * The shipped anchors are `CLIP_CERTAINTY`'s three numbers; its docblock in
+ * packages/map/scoring.ts says which of these measurements each one reads.
+ * `docs/search_rules.md` "Image-content (CLIP) matching" is where they are used.
  */
 
 /** The percentiles a report prints, at the resolution worth reading by eye. */
@@ -63,6 +44,8 @@ export interface Summary {
   percentiles: Record<string, number>;
 }
 
+/** A suggested pair, with the percentiles that produced it echoed so a stored
+ *  report still says which cut each number came from. */
 export interface ClipBoundsSuggestion {
   clipLow: number;
   clipHigh: number;
@@ -77,6 +60,11 @@ export interface KeywordSummary extends Summary {
   keyword: string;
 }
 
+/**
+ * The two bands `summarizeUniversal` reports for a known-outcome keyword list.
+ * The anchors the app ships are ceilings - see `CLIP_CERTAINTY`; the floor is
+ * reported alongside, as the low end of the same measurement.
+ */
 export interface UniversalCalibration {
   floor: number;
   ceiling: number;
@@ -110,8 +98,9 @@ export function percentileOf(sorted: ArrayLike<number>, p: number): number {
  * samples. Population std (dividing by `n`, not `n - 1`): these are the whole
  * set of cosines for a keyword or a corpus, not a sample standing in for one.
  *
- * Sorts a COPY - `values` is never mutated, so a caller can reuse the array it
- * passed in (`cosine-range.ts` does, for the per-room breakdown of one keyword).
+ * Sorts a COPY. `values` is never mutated, so a caller can keep using the array
+ * after summarizing it - `cosine-range.ts`'s per-keyword cosines are also its
+ * overall pool.
  */
 export function summarize(values: ArrayLike<number>, percentiles: number[] = REPORT_PERCENTILES): Summary {
   const n = values.length;
@@ -133,13 +122,20 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
 }
 
 /**
- * Turn two measured distributions into a clipLow/clipHigh starting point.
+ * Turn two measured distributions into a clipLow/clipHigh starting point: a high
+ * percentile of `overall` as the noise floor, a middling percentile of
+ * `keywordMax` as a typical best match.
  *
- * A suggestion, not an answer - see the file header for what each bound is read
- * off and why. `valid: false` means the two bands overlap at the chosen
- * percentiles on this corpus, which is a real possible outcome (a small or
- * generic keyword list, or a corpus CLIP finds hard to tell apart) worth seeing
- * rather than papering over with an arbitrary widening.
+ * A first read off the shape of the corpus, not what the app ships: the anchors
+ * in `CLIP_CERTAINTY` are read off a known-outcome list instead. Do not promote
+ * `clipLow` to a certainty floor on its own - a high percentile of `overall`
+ * assumes most pairs are unrelated, and a common word that is genuinely true of
+ * many rooms (`book`) scores below such a cutoff on correct matches.
+ *
+ * `valid: false` means the two bands overlap at the chosen percentiles on this
+ * corpus - a real possible outcome for a small or generic keyword list, or a
+ * corpus CLIP finds hard to tell apart, and worth seeing rather than papering
+ * over with an arbitrary widening.
  *
  * @param opts.lowPercentile percentile of `overall` for clipLow (default 90)
  * @param opts.highPercentile percentile of `keywordMax` for clipHigh (default 50)
@@ -168,16 +164,20 @@ export function suggestClipBounds(
 }
 
 /**
- * Calibrate against keywords known (not merely assumed) to be true of nearly
- * every room, rather than off distribution shape alone.
+ * Calibrate against a known-outcome keyword list, where an outcome is measured
+ * rather than inferred from distribution shape.
  *
- * `floor` is the minimum, across every universal keyword, of that keyword's own
- * `floorPercentile` - conservative on purpose, since two different phrasings of
- * "there are books here" can sit at noticeably different absolute cosines (see
- * the file header), and the floor is only trustworthy if every phrasing tried
- * clears it. `ceiling` is the median of each keyword's own `ceilingPercentile`,
- * a typical rather than a worst-case reading of "about as sure as a real match
- * gets", the same role `keywordMax`'s median plays for the ordinary suggestion.
+ * `floor` is the minimum, across every keyword, of that keyword's own
+ * `floorPercentile`; `ceiling` is the median of each keyword's own
+ * `ceilingPercentile` - a typical rather than a worst-case reading of "about as
+ * sure as a real match gets", the same role `keywordMax`'s median plays for
+ * `suggestClipBounds`.
+ *
+ * The min/median split answers one hazard: CLIP's cosine scale is not
+ * comparable across strings, since a longer or differently-tokenised phrase
+ * shifts a whole distribution up or down for reasons unrelated to how true it
+ * is. So the floor is only trustworthy if every phrasing tried clears it, and a
+ * single keyword's scale is never trusted for either number.
  */
 export function summarizeUniversal(
   entries: { keyword: string; percentiles: Record<string, number> }[],

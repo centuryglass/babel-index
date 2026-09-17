@@ -195,6 +195,19 @@ the gap when the code is what is wrong (both of this file's findings are in
 quoted: `svgPath.ts`'s `flattenPath` repeats the importer's false one and inherits
 the entry.
 
+**A rationale whose premise moved elsewhere.** A comment can state its rule
+correctly and still be false because it reasons from what *another* file wants.
+`cosine-stats.ts`'s header argued at length what `search.density.clipLow` "wants"
+— a high percentile of the overall distribution — while `CLIP_CERTAINTY` and
+`docs/search_rules.md` had long since moved to anchors read off known-outcome
+keyword lists, so the file's whole first section explained a calibration nobody
+used, in the present tense. *Move:* when a comment names another module's field,
+constant, or doc, read that thing rather than trusting the comment's paraphrase
+of it, and rewrite the comment around what the consumer now asks — keeping any
+part of the old reasoning that is a live hazard (there it was "a common word
+genuinely true of many rooms scores below a whole-list percentile cutoff", which
+belongs on `suggestClipBounds`, the function that still computes it).
+
 **One abstraction level per comment.** (Gemini's "entanglement of abstraction
 levels.") A single sentence that swerves from product metaphor ("the library is
 round") to DOM mechanics (`pointer-events: none`) to React lifecycle to repo
@@ -310,19 +323,19 @@ home early — see §6 for the rationale:
    `tools/center-placement` half went alone on 2026-09-17, out of order and in
    parallel, so that pairing note now applies to `center.ts` by itself.
 6. `packages/pipeline`, then the `tools/*` trees, then `build/`. Pipeline is
-   done (2026-09-17, out of order and in parallel).
+   done (2026-09-17, out of order and in parallel), and so is `tools/embed`.
 7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
    most often — doing them late avoids churn).
 
 Progress: §4's checklist is the whole record — tick boxes as you go, and do not
 maintain a count here, because a tally that every pass has to re-derive is a
 number that is wrong the moment two passes run at once. `packages/map`,
-`packages/server`, `packages/pipeline`, `packages/config` and the renderer
-cluster were taken on 2026-09-17 in parallel across checkouts, out of the
-recommended order; `main.tsx` passed first and passed again, and stays unticked
-because fresh changes from another branch went in after the second pass. Order
-is a deduping aid within a cluster, not a rule between clusters, so a batch can
-be taken from any package no other checkout is in.
+`packages/server`, `packages/pipeline`, `packages/config`, the renderer cluster
+and `tools/embed` were taken on 2026-09-17 in parallel across checkouts, out of
+the recommended order; `main.tsx` passed first and passed again, and stays
+unticked because fresh changes from another branch went in after the second
+pass. Order is a deduping aid within a cluster, not a rule between clusters, so
+a batch can be taken from any package no other checkout is in.
 
 `tools/center-placement` went without `center.ts`, which order 5 pairs it with.
 What that file owes the pass that takes them together: its "see `RUNS` below" is
@@ -505,10 +518,10 @@ _Standalone specs/helpers (no same-name source):_
   - [ ] tools/center-animation/lib.test.ts
 
 #### tools/embed
-- [ ] tools/embed/cosine-range.ts  — no unit test
-- [ ] tools/embed/cosine-stats.ts
-  - [ ] tools/embed/cosine-stats.test.ts
-- [ ] tools/embed/embed.ts  — no unit test
+- [x] tools/embed/cosine-range.ts  — no unit test
+- [x] tools/embed/cosine-stats.ts
+  - [x] tools/embed/cosine-stats.test.ts
+- [x] tools/embed/embed.ts  — no unit test
 
 #### tools/upload
 - [ ] tools/upload/lib.ts

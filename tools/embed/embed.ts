@@ -1,47 +1,46 @@
 /**
  * Compute CLIP image embeddings for a corpus of room images, offline.
  *
- * This is Phase 4's expensive half (docs/pending_task_list.md): the image
- * tower runs here, once, and ships as a static blob the browser ranks against.
- * Only the text tower runs at request time, in the demo server's /api/search.
- *
- * It is deliberately the *same* transformers.js model the server loads for the
- * text tower (Xenova/clip-vit-base-patch32). Same files, same space: an image
- * vector and a text vector are directly comparable, which is the only thing
- * that makes the ranking mean anything. Change the model here and you must
- * change it there, and regenerate this blob.
+ * The image tower runs here, once, and ships as a static blob the browser ranks
+ * against; only the text tower runs at request time, in the demo server's
+ * /api/search. Both towers are the same model, which is what makes an image
+ * vector and a text vector comparable at all - see `MODEL_ID`.
  *
  * Emits, next to the images by default:
  *   embeddings.bin   int8, row-major, one row per room, `count * dim` bytes
  *   embeddings.json  the sidecar: model, dim, count, scale, file order, and hashes
  *
- * Row order is the contract. It comes from scanDirectory() - the exact same
- * scan the server assigns room ids from - so row i is always room id i. We do
- * not re-derive the ordering here; we borrow the one source of truth.
+ * Row order is the contract. It comes from `scanDirectory()` - the same scan the
+ * server assigns room ids from - so row i is room id i. Nothing here re-derives
+ * an ordering.
  *
- * Vectors are L2-normalised (so an int8 dot product approximates cosine) and
- * quantised symmetrically at scale 127 (the int8 half-range). Dequantise as
- * v / 127.
+ * Vectors are L2-normalised, so an int8 dot product approximates cosine, and
+ * quantised symmetrically at `QUANT_SCALE` (the int8 half-range). Dequantise a
+ * byte as `v / QUANT_SCALE`.
  *
  * ### Re-runs are incremental
  *
  * `embeddings.json` carries a `hashes` map (filename -> content hash) alongside
- * `order`. A rerun hashes every source file, and any file whose hash and model
- * both match the previous run's has its row COPIED from the old blob rather
- * than run back through the vision tower - so touching a few images in a large
- * corpus costs a few inferences, not the whole corpus. A model change (the
- * whole point of which is that old vectors are no longer comparable to new
- * ones) invalidates every cached row, same as no cache existing at all. This
- * mirrors packages/pipeline/mips.ts's content-hash cache; contentHash() is
- * shared with it rather than reimplemented.
+ * `order`. A rerun hashes every source file and copies the row of any file whose
+ * hash and model both match, rather than running it back through the vision
+ * tower, so touching a few images in a large corpus costs a few inferences. A
+ * model change matches nothing, so every row is re-embedded. This mirrors the
+ * content-hash cache in packages/pipeline/mips.ts, and `contentHash()` is shared
+ * with it rather than reimplemented.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanDirectory } from '../../packages/server/scan.ts';
 import { contentHash } from '../../packages/pipeline/mips.ts';
 
+/**
+ * Must be the model `TEXT_MODEL` (packages/server/app.ts) loads for the text
+ * tower, or the two towers point into different spaces and every ranking is
+ * nonsense. Changing this also invalidates every cached row, so the next run
+ * re-embeds the whole corpus.
+ */
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
-const QUANT_SCALE = 127; // int8 half-range; see file header
+const QUANT_SCALE = 127; // int8 half-range
 const BATCH = 16;
 
 type Args = Record<string, string | undefined>;
@@ -57,7 +56,7 @@ function parseArgs(args: string[]): Args {
   return out;
 }
 
-/** L2-normalise a row in place, then symmetric int8 quantise into `out`. */
+/** L2-normalise a row and quantise it symmetrically into `out`, from `base`. */
 function quantiseInto(row: ArrayLike<number>, out: Int8Array, base: number): void {
   let norm = 0;
   for (let d = 0; d < row.length; d++) norm += row[d] * row[d];
@@ -71,22 +70,19 @@ function quantiseInto(row: ArrayLike<number>, out: Int8Array, base: number): voi
 /**
  * The vision tower, imported only once there is work for it.
  *
- * Dynamically, and with the failure explained rather than re-thrown as a module
- * resolution stack: transformers.js is an OPTIONAL dependency of this repo,
- * because `onnxruntime-node` publishes for win32/darwin/linux only and as a
- * required dependency it fails the whole `npm install` on anything else. So a
- * machine that can run the demo perfectly well can be missing this, and the
- * useful thing to say is which machine can do the job instead - not that a
- * specifier could not be resolved.
+ * `@huggingface/transformers` is an optional dependency (AGENTS.md,
+ * "@huggingface/transformers is OPTIONAL"), so a machine that runs the demo
+ * perfectly well may not have it. The message says which machine can do this job
+ * rather than reporting an unresolvable specifier.
  */
 async function loadVisionTower(): Promise<typeof import('@huggingface/transformers')> {
   try {
     return await import('@huggingface/transformers');
   } catch (err: any) {
     if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
-    // Tagged, so the top-level handler can print this as a message rather than
-    // as a stack. Sniffing the shape of the error there instead would swallow
-    // the stack of every real bug that happens to look similar.
+    // Tagged `expected` for main()'s handler. Deciding that by sniffing the
+    // error's shape there would swallow the stack of every real bug that happens
+    // to look similar.
     throw Object.assign(new Error(
       'This tool needs @huggingface/transformers, which is an optional dependency and is ' +
         'not installed here.\n' +
@@ -100,17 +96,22 @@ async function loadVisionTower(): Promise<typeof import('@huggingface/transforme
   }
 }
 
-/**
- * The previous run's blob and sidecar, keyed by filename, or null if there
- * isn't one, it's unreadable, or its model doesn't match MODEL_ID (in which
- * case every row it holds is incomparable to what this run produces).
- */
+/** The previous run's blob, with each cached row's content hash and byte offset by filename. */
 interface EmbeddingCache {
   dim: number;
   bin: Buffer;
   rows: Map<string, { hash: string; offset: number }>;
 }
 
+/**
+ * Load the previous run's cache, or null when there is nothing to reuse: no
+ * sidecar or blob, either unreadable, a sidecar whose model or dtype is not this
+ * run's, or a byte count that is not `order.length x dim`.
+ *
+ * A model mismatch drops the whole cache. Rows from another model are
+ * incomparable to what this run writes, so no per-file reuse is safe there. See
+ * `MODEL_ID`.
+ */
 async function loadCache(binPath: string, jsonPath: string): Promise<EmbeddingCache | null> {
   let sidecar;
   try {
@@ -140,9 +141,10 @@ async function main() {
   const argv = parseArgs(process.argv.slice(2));
   const imagesDir = argv.images ?? 'assets/corpus-sample';
   const outDir = argv.out ?? imagesDir;
-  // Must match the server's shared directory, or the room set embed writes here
-  // and the room set the server ranks against drift - and the blob is keyed by
-  // row order, so a drift ranks the wrong rooms. Same default as index.mjs.
+  // Must match the server's `--shared-dir` (packages/server/index.ts, which
+  // defaults to `assets` too), or the room set embedded here and the set the
+  // server ranks against drift. Rows are matched by order, so a drift ranks the
+  // wrong rooms.
   const sharedDir = argv['shared-dir'] ?? 'assets';
 
   // One source of truth for which files are rooms and in what id order.
@@ -227,8 +229,6 @@ async function main() {
 }
 
 main().catch((err: any) => {
-  // A missing optional dependency is a message, not a stack: the reader has not
-  // hit a bug, they are on a platform onnxruntime does not publish for.
   console.error(err?.expected ? err.message : err);
   process.exit(1);
 });

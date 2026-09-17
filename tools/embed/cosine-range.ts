@@ -1,33 +1,28 @@
 /**
  * Measure where CLIP's raw cosine range actually sits on a real corpus.
  *
- * `search.density.clipLow/clipCentre/clipHigh` and `CLIP_CERTAINTY`
- * (`packages/map/scoring.ts`) want numbers read off this corpus's own
- * behaviour, not guessed. This script embeds every line of a keyword list
- * with the same text tower `packages/server/app.ts` uses at search time,
- * scores each one against every row of a corpus's `embeddings.bin` with the
- * exact `embeddingScores()` the app ranks with, and reports the distribution:
- * overall (mostly unrelated pairs, the noise band and its centre), per
- * keyword (each keyword's own best match), and - if given - two more
- * calibrations `docs/search_rules.md`'s "Image-content (CLIP) matching"
- * section names: `--universal` (the high extreme,
- * keywords known to be true of nearly every room) and `--irrelevant` (the low
- * extreme, keywords known to have nothing to do with the corpus). `--nonsense`
- * is a third, validation-only list (keysmash queries, expected to land near
- * the overall centre - not a formula input). See `cosine-stats.ts` for what
- * each of the first three answers and why they need to be different
- * distributions.
+ * `CLIP_CERTAINTY` (`packages/map/scoring.ts`) and `search.density.clipCentre/
+ * clipHigh/clipLow` want numbers read off this corpus's own behaviour, not
+ * guessed. This script embeds every line of a keyword list with the same text
+ * tower `packages/server/app.ts` loads at search time and scores each vector
+ * against every row of a corpus's `embeddings.bin` with the same
+ * `embeddingScores()` the app ranks with. Reusing that path is the point: a
+ * calibration measured through a different one measures something else.
  *
- * Two required inputs, both prepared elsewhere, plus three optional probe
- * lists:
+ * The report holds the overall distribution, one summary per keyword, and the
+ * optional probe lists. `cosine-stats.ts` defines what each distribution can
+ * answer and how a bound is read off it.
+ *
+ * Two required inputs, both prepared elsewhere, plus the optional probes:
  *   --embeddings <dir>   a directory holding embeddings.bin + embeddings.json,
  *                        as written by tools/embed/embed.ts
  *   --keywords <file>    a text file, one keyword or phrase per line
- *   --universal <file>   optional: keywords true of nearly every room
- *                        (e.g. "bookshelf" for a library corpus) - the high extreme
- *   --irrelevant <file>  optional: keywords with nothing to do with the corpus
- *                        (e.g. "race car", "swimming pool") - the low extreme
- *   --nonsense <file>    optional: keysmash/nonsense queries - validation only
+ *   --universal <file>   keywords true of nearly every room (e.g. "bookshelf"
+ *                        for a library corpus) - the high extreme
+ *   --irrelevant <file>  keywords with nothing to do with the corpus (e.g.
+ *                        "race car", "swimming pool") - the low extreme
+ *   --nonsense <file>    keysmash/nonsense queries - validation only
+ * `docs/search_rules.md` "Image-content (CLIP) matching" names both extremes.
  *
  * Run:
  *   node --import ./build/register.mjs tools/embed/cosine-range.ts \
@@ -36,14 +31,14 @@
  *     [--out report.json] [--low-percentile 90] [--high-percentile 50]
  *
  * Emits a JSON report (--out, default ./cosine-range-report.json) with the full
- * percentile tables, per-keyword stats, and a suggested clipLow/clipHigh - and
- * prints a shorter version of the same to the console. The suggestion is a
- * starting point; see cosine-stats.ts for what it is read off and why.
+ * percentile tables, per-keyword stats, and a suggested clipLow/clipHigh, and
+ * prints a shorter version of the same to the console. See `suggestClipBounds`
+ * for what that pair is read off, and what it is not.
  *
  * The expensive part is the text tower, not the arithmetic: a few thousand
- * cosines per keyword is a few million multiply-adds total, well under a
- * second, but embedding a few thousand keyword strings is a few thousand
- * forward passes. Batched the same way tools/embed/embed.ts batches images.
+ * cosines per keyword is a few million multiply-adds total, well under a second,
+ * but embedding a few thousand keyword strings is a few thousand forward passes.
+ * Batched the way tools/embed/embed.ts batches images.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -61,6 +56,7 @@ import {
 const BATCH = 32;
 const SHOW_EXTREMES = 10;
 
+/** A corpus's embedding blob, with the `embeddings.json` fields that describe it. */
 interface EmbeddingSet {
   embeddings: Int8Array;
   dim: number;
@@ -68,32 +64,36 @@ interface EmbeddingSet {
   model: string;
 }
 
+/** The JSON written to `--out`, and the shape the console summary reads. */
 interface Report {
   generatedAt: string;
   model: string;
   rooms: number;
   keywords: number;
+  /** Every keyword against every room: the noise band, and its centre. */
   overall: Summary;
+  /** Each keyword's best cosine anywhere in the corpus: the match band. */
   keywordMax: Summary;
+  /** Each keyword's own mean: how far apart keywords sit from each other. */
   keywordMean: Summary;
+  /** Each keyword's max - min: how much a keyword separates the corpus. */
   keywordRange: Summary;
+  /** The coarse percentile pair - see `suggestClipBounds`. */
   suggestion: ClipBoundsSuggestion;
+  /** The high extreme: `summarizeUniversal` over the `--universal` list. */
   universal: UniversalCalibration | null;
   /**
-   * The low-extreme calibration `docs/search_rules.md` calls for: known
-   * concepts CLIP should recognise but that have nothing to do with this
-   * corpus (a "swimming pool" query against a library). Same shape and same
-   * min-p10/median-p50 math as `universal` - `summarizeUniversal` is generic,
-   * it is only the semantic label that changes - because "how high does a
-   * genuinely irrelevant concept's best match get" wants the same robustness
-   * against a single phrasing's absolute cosine scale.
+   * The low extreme: `summarizeUniversal` over the `--irrelevant` list, known
+   * concepts that share nothing with this corpus (a "swimming pool" query
+   * against a library). One function serves both extremes because only the
+   * list's meaning changes, not the arithmetic.
    */
   irrelevant: UniversalCalibration | null;
   /**
-   * Validation only, not a formula input: nonsense/keysmash queries should
-   * land in the same band as `overall`'s centre (`overall.percentiles.p50`) -
-   * both are readings of "no real signal". Reported alongside `overall` so
-   * that agreement (or disagreement) is visible without extra arithmetic.
+   * Validation only, never a formula input: the `--nonsense` pool scored the same
+   * way `overall` is, expected to sit in `overall`'s centre band since both are
+   * readings of no real signal. Reported beside it so agreement needs no extra
+   * arithmetic.
    */
   nonsense: Summary | null;
   perKeyword: KeywordSummary[];
@@ -112,9 +112,10 @@ function parseArgs(args: string[]): Record<string, string> {
 
 /**
  * Read embeddings.bin + embeddings.json from a directory written by
- * tools/embed/embed.ts. Checked against a stale or mismatched blob the same
- * way scan.ts checks it - a byte count that does not match `count x dim`
- * would silently misalign every row.
+ * tools/embed/embed.ts.
+ *
+ * A byte count that is not `count x dim` is refused: rows are positional, so a
+ * short or over-long blob would misalign every row after the gap.
  */
 async function loadEmbeddings(dir: string): Promise<EmbeddingSet> {
   const json = JSON.parse(await readFile(join(dir, 'embeddings.json'), 'utf8'));
@@ -144,12 +145,15 @@ async function loadKeywords(file: string): Promise<string[]> {
 }
 
 /**
- * The CLIP text tower, loaded once. Dynamic import, same reason as
- * `packages/server/app.ts`'s `textTower()`: `@huggingface/transformers` is an
- * optional dependency, and the failure is worth explaining rather than
- * rethrowing as a bare module-resolution stack. Both members are typed `any`
- * for the same reason `app.ts` leaves them untyped - the package is never
- * imported statically, so there is no type to import either.
+ * The CLIP text tower, loaded once.
+ *
+ * A dynamic import because the package is optional (AGENTS.md,
+ * "@huggingface/transformers is OPTIONAL"). `packages/server/app.ts`'s
+ * `hasTextModel()` carries the platform detail, and its `textTower()` is the
+ * lazy load this mirrors.
+ *
+ * Both members are typed `any`: never imported statically, so there is no type to
+ * import either.
  */
 async function loadTextTower(model: string): Promise<{ tokenizer: any; textModel: any }> {
   let transformers;
@@ -171,7 +175,10 @@ async function loadTextTower(model: string): Promise<{ tokenizer: any; textModel
   return { tokenizer, textModel };
 }
 
-/** L2-normalise one row, matching how both `embed.ts` and `app.ts` prepare a vector. */
+/**
+ * L2-normalise one embedded string, the way `embedQuery` (packages/server/app.ts)
+ * prepares a live query and `quantiseInto` (tools/embed/embed.ts) an image row.
+ */
 function normalise(row: ArrayLike<number>): Float32Array {
   let norm = 0;
   for (let i = 0; i < row.length; i++) norm += row[i] * row[i];
@@ -188,7 +195,14 @@ async function embedBatch(tokenizer: any, textModel: any, strings: string[]): Pr
   return text_embeds.tolist().map(normalise);
 }
 
-/** Embed and score every keyword in `list` against the corpus; returns per-keyword stats. */
+/**
+ * Embed and score every string in `list` against the corpus, in `BATCH` chunks.
+ *
+ * `overall` is the flat keyword x room pool - `count` cosines per keyword, in
+ * list order - and `perKeyword` each keyword's own summary of the same numbers.
+ *
+ * @param label tag on the per-chunk progress line
+ */
 async function scoreList(
   tokenizer: any,
   textModel: any,
@@ -333,10 +347,6 @@ async function main() {
     universal = summarizeUniversal(universalPerKeyword);
   }
 
-  // The low-extreme calibration: same min-p10/median-p50 read `universal`
-  // uses for the high extreme, just off a list of concepts known to have
-  // nothing to do with this corpus instead of ones known to be true of
-  // nearly every room.
   let irrelevant: UniversalCalibration | null = null;
   if (irrelevantWords.length) {
     const { perKeyword: irrelevantPerKeyword } = await scoreList(
@@ -345,9 +355,6 @@ async function main() {
     irrelevant = summarizeUniversal(irrelevantPerKeyword);
   }
 
-  // Validation, not calibration: a nonsense/keysmash query has no real
-  // signal either, so its cosines should land in the same band as `overall`'s
-  // centre - agreement is the check, there is no separate suggestion to read.
   let nonsense: Summary | null = null;
   if (nonsenseWords.length) {
     const { overall: nonsenseOverall } = await scoreList(
