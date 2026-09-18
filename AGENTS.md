@@ -809,12 +809,15 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   a human merges *that* PR. `package.json`'s `version` field and
   `.release-please-manifest.json` are only ever written by that merge - never
   hand-edit either.
-- **This is independent of `deploy.yml` and always will be.** Every push to
-  main deploys regardless of version state (see "Deploying to the VPS");
-  release-please's tags exist to mark what shipped when, in step with
-  `/api/health`'s commit reporting, not to gate whether it ships. Wiring
-  deploy to wait on a release tag would reintroduce exactly the release-train
-  latency this setup is meant to avoid for a single-maintainer project.
+- **`deploy.yml` deploys only that merge, not every push to main.** Its `if`
+  matches the head commit message against `chore(main): release ` - the
+  literal prefix of a release-please release-PR title, which becomes the
+  commit subject the same way any squash-merged PR's does - so an ordinary
+  merge to main builds and tests but never ships. That makes every deploy
+  correspond to a tagged, changelogged version; the tradeoff is the same lag
+  between "merged" and "live" any release-gated deploy has, kept small by not
+  leaving a release PR open once it's ready to merge. A manual
+  `workflow_dispatch` is still the hatch for an urgent fix between releases.
 
 ### The catalog, and the two modes
 
