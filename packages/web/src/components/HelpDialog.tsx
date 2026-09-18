@@ -137,8 +137,8 @@ export function HelpDialog({
             <strong>Favorites:</strong> mark a room as a favorite to find it again later and
             to help others discover the most interesting ones. Sort by your favorites to see
             all rooms you've marked, or by most favorited to see which ones other people
-            recommend. Favorite counts are anonymized and tied to your browser, not to you -
-            it's the only data this site stores on its server.
+            recommend. Favorite counts are anonymized and tied to your browser, not to you.
+            It's the only data this site stores on its server.
           </p>
           <p>
             <strong>Keyboard, general:</strong> Tab moves between controls, arrow keys pan
