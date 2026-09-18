@@ -423,10 +423,9 @@ test('the favorites-sort switch rides along with the center room during a rearra
 });
 
 test('no favorites option on the slide renderer means no badge at all', () => {
-  const { built, moves } = rearrangement();
+  const { built } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
@@ -469,10 +468,9 @@ test('the distill toggle rides along with the center room during a rearrangement
 });
 
 test('distillMode undefined on the slide renderer means no distill toggle at all', () => {
-  const { built, moves } = rearrangement();
+  const { built } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
@@ -515,10 +513,9 @@ test('the clear-history book overlay rides along with the center room during a r
 });
 
 test('clearHistoryAvailable omitted on the slide renderer means no clear-history book overlay at all', () => {
-  const { built, moves } = rearrangement();
+  const { built } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 

@@ -225,7 +225,6 @@ export function RoomOverlay({
     };
     // Mount and unmount only: re-running this on a re-render would drag
     // focus back to the dialog while someone is reading a chip inside it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

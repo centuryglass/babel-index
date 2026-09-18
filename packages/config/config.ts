@@ -575,8 +575,8 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
   // Resolve "no narrowing" to the hard limits, then intersect. Both directions
   // are clamped rather than refused: a config asking for more range than exists
   // is a request that cannot be granted, not a corrupt file.
-  let minZoom = numberOrNull(camIn.minZoom, DEFAULTS.camera.minZoom, 'camera.minZoom', notes);
-  let maxZoom = numberOrNull(camIn.maxZoom, DEFAULTS.camera.maxZoom, 'camera.maxZoom', notes);
+  const minZoom = numberOrNull(camIn.minZoom, DEFAULTS.camera.minZoom, 'camera.minZoom', notes);
+  const maxZoom = numberOrNull(camIn.maxZoom, DEFAULTS.camera.maxZoom, 'camera.maxZoom', notes);
   let minZoomResolved = minZoom ?? zoomLimits.min;
   let maxZoomResolved = maxZoom ?? zoomLimits.max;
 

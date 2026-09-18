@@ -467,13 +467,11 @@ export function createApp({
     app.get('/catalog/:file', async (req, res, next) => {
       try {
         const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
-        const urlFor = createUrlFor(manifest);
         const result = renderRoomPage({
           rooms: manifest.rooms,
           metadata,
           tagLinks,
           file: req.params.file,
-          urlFor,
           base,
         });
         const canonicalPath = `catalog/${encodeURIComponent(req.params.file)}`;

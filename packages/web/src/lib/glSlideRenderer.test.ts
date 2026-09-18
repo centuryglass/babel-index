@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
 import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
-import { buildTimeline, createSlideshow } from './slide.ts';
+import { createSlideshow } from './slide.ts';
 import { DEFAULTS } from '../../../config/config.ts';
 import { createTileCache, CENTER as CENTER_TILE, type LoadableImage } from './tiles.ts';
 import { CELL_ASPECT } from './camera.ts';
@@ -132,7 +132,7 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
   for (let t = 0; t <= w.show.totalMs; t += 37) {
     const { motions } = w.show.advanceTo(t);
     const gl = fakeGLContext();
-    const stats = frame(w, motions, gl);
+    frame(w, motions, gl);
 
     const covers = [...gl.textured, ...gl.flats.filter((f) => f.w <= cellPx.x + 2)];
     for (let py = 20; py < 1080; py += 120)

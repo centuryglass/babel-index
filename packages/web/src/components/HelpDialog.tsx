@@ -49,7 +49,6 @@ export function HelpDialog({
       if (active && active !== document.body && !ref.current?.contains(active)) return;
       opener.focus();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

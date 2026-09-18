@@ -217,7 +217,6 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
       diff.sameSize,
       `${scene}: the two canvases screenshotted at different sizes (${diff.w}x${diff.h})`
     );
-    // eslint-disable-next-line no-console
     console.log(
       `[parity] ${scene}: meanAbs=${diff.meanAbs.toFixed(2)} ` +
       `strongFraction=${(diff.strongFraction * 100).toFixed(2)}%`

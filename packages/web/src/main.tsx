@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { favoriteOrder, favoriteSort, favoriteCount, type SortMode } from '../../map/favorites.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
-import type { RoomMeta } from '../../map/metadata.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
 import type { Config } from '../../config/config.ts';
 import { MapView } from './components/MapView.tsx';

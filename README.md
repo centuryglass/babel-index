@@ -1,5 +1,9 @@
 # The Index of Babel
 
+[![ci](https://github.com/centuryglass/babel-index/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/centuryglass/babel-index/actions/workflows/ci.yml)
+[![codeql](https://github.com/centuryglass/babel-index/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/centuryglass/babel-index/actions/workflows/codeql.yml)
+[![deploy](https://github.com/centuryglass/babel-index/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/centuryglass/babel-index/actions/workflows/deploy.yml)
+
 https://centuryglass.us/babel-index/
 
 This project is a love letter to the art of exploring and curating the
