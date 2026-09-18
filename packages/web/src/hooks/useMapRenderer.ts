@@ -322,11 +322,10 @@ export function useMapRenderer({
         genericFade: genericFade?.current, distillMode, hoveredDistill,
         loadingFrame: loadingAnim?.current?.frame() ?? null,
       };
-      // The flight-vs-slide split of `docs/performance-research.md` 2.1:
-      // which of the two rearrangement phases drops frames. Recorded only
-      // while an animation runs (`running` is set by `useRearrangement.ts`);
-      // tagging ordinary browsing frames 'flight' would bury the real
-      // samples.
+      // Which of the two rearrangement phases (flight vs. slide) drops
+      // frames - see perfProbe.ts. Recorded only while an animation runs
+      // (`running` is set by `useRearrangement.ts`); tagging ordinary
+      // browsing frames 'flight' would bury the real samples.
       const t0 = PERF && running ? performance.now() : 0;
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
       if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);

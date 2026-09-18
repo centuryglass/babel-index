@@ -1,8 +1,9 @@
 /**
- * Rearrangement performance instrumentation - docs/performance-research.md §2,
- * "measure first". Off by default; `?perf` in the url turns it on, the same
- * gating `debug.ts`'s `DEBUG` uses (read once at module scope so a normal
- * session has nothing to check per call beyond one boolean).
+ * Rearrangement performance instrumentation: measure before optimizing,
+ * rather than guessing which phase or mechanism drops frames. Off by
+ * default; `?perf` in the url turns it on, the same gating `debug.ts`'s
+ * `DEBUG` uses (read once at module scope so a normal session has nothing
+ * to check per call beyond one boolean).
  *
  * This is a side channel to the console, not part of the render path: every
  * recorder is a no-op push behind the `PERF` check, and `perfDump()` (called
@@ -15,18 +16,18 @@ export const PERF =
   typeof location !== 'undefined' && new URLSearchParams(location.search).has('perf');
 
 /**
- * §2.6: force the canvas backing store to `dpr = 1` regardless of the
- * display's real ratio, so a run with `?perf&perfDpr1` can be compared
- * against an ordinary run to see whether fill rate is the bottleneck. Only
- * meaningful alongside `?perf` - checked independently in `useMapRenderer.ts`
- * so it isn't silently ignored if someone passes it alone, but there is
- * nothing to compare against without `PERF`'s reports.
+ * Force the canvas backing store to `dpr = 1` regardless of the display's
+ * real ratio, so a run with `?perf&perfDpr1` can be compared against an
+ * ordinary run to see whether fill rate is the bottleneck. Only meaningful
+ * alongside `?perf` - checked independently in `useMapRenderer.ts` so it
+ * isn't silently ignored if someone passes it alone, but there is nothing
+ * to compare against without `PERF`'s reports.
  */
 export const PERF_FORCE_DPR1 =
   typeof location !== 'undefined' && new URLSearchParams(location.search).has('perfDpr1');
 
 /**
- * §2.1: which rearrangement phase a sample belongs to. `'preparing'` is the
+ * Which rearrangement phase a sample belongs to. `'preparing'` is the
  * plan-and-fetch phase before the camera moves at all - see
  * `useRearrangement.ts`'s `prepareRearrangement`.
  */
@@ -40,9 +41,9 @@ interface FrameSample {
 interface SheetSample {
   url: string;
   level: number;
-  /** §2.3: wall-clock gap between `img.src = url` and `onload`. */
+  /** Wall-clock gap between `img.src = url` and `onload`. */
   fetchMs: number;
-  /** §2.3: gap between `onload` and the first frame that actually drew from it. */
+  /** Gap between `onload` and the first frame that actually drew from it. */
   toFirstDrawMs: number | null;
 }
 
@@ -53,7 +54,7 @@ interface LongtaskSample {
   attribution: string;
 }
 
-/** §9: how long one `prepareRearrangement` call took, and what it waited for. */
+/** How long one `prepareRearrangement` call took, and what it waited for. */
 interface PrepareSample {
   ms: number;
   requested: number;
@@ -77,7 +78,7 @@ const prepareSamples: PrepareSample[] = [];
 let observer: PerformanceObserver | null = null;
 let frameGapLoopStarted = false;
 
-/** §2.2: a `longtask` entry has no script attribution when it comes from decode/upload or GC rather than our own JS. */
+/** A `longtask` entry has no script attribution when it comes from decode/upload or GC rather than our own JS. */
 function attributionOf(entry: PerformanceEntry): string {
   const scripts = (entry as unknown as { scripts?: { name?: string; sourceURL?: string }[] }).scripts;
   if (!scripts?.length) return 'unattributed';
@@ -109,7 +110,7 @@ function ensureObserver(): void {
     // `catch` below is what makes that "no observer", not a startup crash.
     observer.observe({ type: 'longtask' });
   } catch {
-    // longtask unsupported - §2.2 reports nothing.
+    // longtask unsupported - attributionOf's caller reports nothing.
   }
 }
 
@@ -124,8 +125,11 @@ function ensureObserver(): void {
  * whenever the next rAF fires by roughly that much, whatever caused it - so
  * the gap is a faithful proxy for "a long task happened here," with the same
  * two limitations the native API has here anyway: no attribution, and the
- * phase read at report time can lag the phase the stall actually happened in
- * (docs/performance-research.md's "Instrumentation caveats").
+ * phase read at report time can lag the phase the stall actually happened
+ * in - the observer callback (`ensureObserver`, above) runs after the
+ * synchronous block that produced the entry, by which point `currentPhase`
+ * may have already advanced, so a seam-timed stall can read as the phase
+ * that follows it. The timestamps still pin the moment it actually happened.
  *
  * Runs continuously once started - not gated to a rearrangement - so it also
  * catches stalls during 'idle' periods the native observer would too. The
@@ -154,19 +158,19 @@ export function perfSetPhase(phase: Phase | 'idle'): void {
   ensureFrameGapLoop();
 }
 
-/** §2.1: one draw call's wall time, tagged with the phase it ran in. */
+/** One draw call's wall time, tagged with the phase it ran in. */
 export function perfRecordFrame(phase: Phase, ms: number): void {
   if (!PERF) return;
   frames.push({ phase, ms });
 }
 
-/** §2.3: a sheet fetch just started (`requestSheet` minting a fresh entry in `tiles.ts`). */
+/** A sheet fetch just started (`requestSheet` minting a fresh entry in `tiles.ts`). */
 export function perfRecordSheetStart(url: string, level: number): void {
   if (!PERF) return;
   sheetsInFlight.set(url, { level, t0: performance.now(), loaded: null });
 }
 
-/** §2.3: the sheet's `onload` fired. */
+/** The sheet's `onload` fired. */
 export function perfRecordSheetLoaded(url: string): void {
   if (!PERF) return;
   const s = sheetsInFlight.get(url);
@@ -174,7 +178,7 @@ export function perfRecordSheetLoaded(url: string): void {
 }
 
 /**
- * §2.3: the first frame that actually drew from this sheet. One sample per
+ * The first frame that actually drew from this sheet. One sample per
  * sheet is the point - once cached, later draws say nothing new about the
  * fetch/decode/upload path, so the entry is retired here rather than kept
  * around to be overwritten every frame the sheet stays on screen.
@@ -188,7 +192,7 @@ export function perfRecordSheetFirstDraw(url: string): void {
 }
 
 /**
- * §9: `prepareRearrangement`'s own wall-clock cost - the plan/build/sim work
+ * `prepareRearrangement`'s own wall-clock cost - the plan/build/sim work
  * plus however long it waited on `cache.isReady` for the tiles it fetched, up
  * to `config.slide.prepareTimeoutMs`. This is the number the "prepare fully
  * before animating" tradeoff lives or dies on: a large value here is the delay
@@ -244,7 +248,7 @@ export function perfDump(): void {
         `to first draw ${s.toFirstDrawMs?.toFixed(1)}ms`
       );
   } else {
-    console.info('[perf] sheets drawn: none (desktop rearrangements may never leave level 0/1 - see §3.1)');
+    console.info('[perf] sheets drawn: none (desktop rearrangements may never leave level 0/1, which are per-file, not sheet-packed)');
   }
 
   if (longtasks.length) {
