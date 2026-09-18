@@ -50,6 +50,7 @@ import { context } from 'esbuild';
 import { scanDirectory } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
+import { loadRoomContent } from './roomContent.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
@@ -165,6 +166,11 @@ if (manifest.metadata) {
   // out loud (see scanDirectory's `metadata` note).
   if (matched === 0) logger.warn('none of the sidecar entries matched a room - are the keys the image filenames?');
 }
+
+// The sidecar is read here so roomContent.ts's duplicate-permalink warning
+// lands in the startup log, beside the rest of what this corpus turned out to
+// be. The catalog routes share this one memoized load.
+await loadRoomContent(manifest, imagesDir);
 
 // The text tower is optional - app.ts's `hasTextModel` says why. Without it
 // a search still ranks by keywords and story, so this is a note, not a

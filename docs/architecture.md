@@ -42,7 +42,7 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
 1. A browser requests `/`. `app.ts`'s `renderPage` reads `index.html` (not
    compiled - re-read per request, along with `style.css`) and stamps in a
    `<base href>`, title/description/canonical/OG-image meta, and, for the
-   SSR `/catalog` and `/catalog/:file` routes, a server-rendered HTML
+   SSR `/catalog` and `/catalog/:slug` routes, a server-rendered HTML
    fragment plus a `window.__INITIAL_ROUTE__` hint so a JS-capable visitor
    boots straight into the right view.
 2. The page requests `/bundle.js`. There is no build step: `packages/server/

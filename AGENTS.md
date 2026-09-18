@@ -829,6 +829,18 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   catalog closes" test drags after a mode switch because every
   cheaper assertion passes under that bug. Hiding also keeps the tile cache
   and the pyramid's LRU warm, so returning is a repaint, not a rebuild.
+- **A room's permalink is its title, and `packages/map/slug.ts` decides it
+  for every caller.** `roomPath` builds `catalog/<slug>` from the room's
+  title folded to ASCII (`slugify`, over `scoring.ts`'s own `fold`), and the
+  server, the sitemap and the overlay's copy-link button all read
+  `buildSlugTable` rather than assembling a path each. A room's filename
+  stem is a permanent alias that redirects to the title url, so a retitle leaves
+  the links already shared somewhere to land; an untitled room has the stem
+  as its real url. A room id never reaches a path - ids are positional, so
+  one in a shared url comes back pointing at a different room. Unique titles
+  are the generator's to keep: two rooms claiming one path each take their
+  stem as a suffix and `roomContent.ts` warns at startup, which is the only
+  sign it happened.
 - **The catalog is not the accessibility mode.** A linear list was rejected
   as an accommodation and left open as a control for everyone. So: nothing
   detects a screen reader, nothing defaults into it, the panel's ranked

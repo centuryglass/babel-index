@@ -12,11 +12,18 @@
  * Loaded once and memoized per manifest: the server scans a corpus once at
  * startup and never rescans it, and re-parsing a multi-megabyte sidecar on
  * every catalog request would be waste, not freshness.
+ *
+ * The permalink table (`packages/map/slug.ts`) is built here rather than by
+ * each route, so it is memoized alongside the titles it reads and the
+ * duplicate-title warning is said once per process instead of once per
+ * request.
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { joinMetadata } from '../map/metadata.ts';
+import { buildSlugTable, type SlugTable } from '../map/slug.ts';
 import { METADATA_FILE, TAG_LINKS_FILE } from './scan.ts';
+import { logger } from './logger.ts';
 import type { Manifest, Room } from '../map/manifest.ts';
 import type { RoomMeta } from '../map/metadata.ts';
 
@@ -25,6 +32,8 @@ export interface RoomContent {
   metadata: (RoomMeta | null)[];
   /** Keyword -> external link, or null when the corpus has no tagLinks.json. */
   tagLinks: Record<string, string> | null;
+  /** Every room's permalink, built from the titles just loaded. */
+  slugs: SlugTable;
 }
 
 /**
@@ -66,7 +75,18 @@ async function loadUncached(manifest: Manifest, imagesDir: string | null): Promi
     }
   }
 
-  return { metadata, tagLinks };
+  const slugs = buildSlugTable(rooms, metadata);
+  // Unique titles are the generator's job, and this is the only place a lapse
+  // becomes visible: every room stays reachable (`buildSlugTable` disambiguates
+  // with the filename stem), so nothing here fails, and a permalink nobody
+  // meant to write would otherwise ship unnoticed.
+  for (const c of slugs.collisions)
+    logger.warn(
+      { wanted: c.wanted, rooms: c.rooms },
+      'more than one room asked for this permalink - two rooms share a title, or a title matches another room\'s filename'
+    );
+
+  return { metadata, tagLinks, slugs };
 }
 
 // Keyed by manifest identity (a process only ever scans one corpus, but tests
