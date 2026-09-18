@@ -76,10 +76,6 @@ for that audience specifically, not things the art itself needs:
   description — nothing points a skimming reviewer at the interesting
   engineering (the health-check-gated deploy, the rearrangement planner, the
   favorites set-hashing design) without making them excavate this file.
-- **No release discipline.** `package.json` is pinned at `0.0.0`, there are no
-  git tags, and no `CHANGELOG.md` — nothing visibly marks what shipped when,
-  even though `deploy.yml`/`health-check.mjs` already tie a live deployment to
-  an exact commit.
 - **No API contract documentation.** `/api/manifest`, `/api/search`,
   `/api/favorites`, `/api/health` (see `packages/server/app.ts`) exist only as
   inline code — no OpenAPI spec, not even a short `docs/api.md` describing
