@@ -60,12 +60,6 @@ code and the git log are the record of what was.
   rewrite, and it will drift out of step with `package.json` unnoticed until
   the day that matters. A build-only job is enough — no push, no registry.
 
-## The public face:
-- **Nothing tells a visitor what the site stores.** Favoriting mints a token in
-  `localStorage` and sends it to the server, and the whole shape of
-  `favorites.ts` is an argument about refusing to spy on people — an argument
-  no reader can currently see. A short paragraph in `HelpDialog` would say it.
-
 ## Portfolio signal (2026-09-16):
 This repo is also a software engineering portfolio piece (see AGENTS.md's
 section on this), and a reviewer skimming it fast is a different audience
