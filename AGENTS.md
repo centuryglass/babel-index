@@ -394,6 +394,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `prng.ts`: Seedable RNG (mulberry32) and a string-to-seed hash (FNV-1a) -
               shared by `packages/web/src/lib/center.ts` and anything else that
               needs a deterministic, repeatable random sequence.
+  * `wink-lemmatizer-stub.d.ts`: A type-only stand-in for the untyped
+    `wink-lemmatizer` package, resolved in its place by `jsconfig.json`'s
+    `paths` - not imported by any real module. See its own header comment
+    for why (`checkJs` under the TS 6 pin above, following the real
+    package's import into `wink-lexicon`, errors on a harmless duplicate
+    property assignment there).
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out, packing the coarse levels into shared sheets
   * `index.ts`: CLI
   * `mips.ts`: Generate+fill alternate image size directories
