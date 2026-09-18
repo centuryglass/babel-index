@@ -1,0 +1,561 @@
+# File map
+
+Exhaustive file-by-file layout of the repo, split out of `AGENTS.md` so an
+agent (or a human) can load just this when it needs to find something,
+without pulling in every engineering invariant below it. `AGENTS.md`
+directs agents to read this file at the start of a session; a human wanting
+a five-minute system overview instead should start with
+[`docs/architecture.md`](architecture.md).
+
+**This map is part of the change.** A file added, removed or renamed here is
+not done until this list says so - the list is how anyone (or anything) finds
+its way around the tree, and one silently missing entry is how a module gets
+written twice.
+
+Tests and test helpers not listed, assume each appropriate file is paired with
+a corresponding `{name}.test.ts` (pre-conversion ones are `{name}.test.mjs`)
+within the same directory. Playwright tests
+are in `packages/web/e2e`. Anything under `reference` is only used with the
+inpainting pipeline, and isn't touched anywhere else in the project.
+
+### Root:
+- `README.md`: What this is and how to run it.
+- `LICENSE`: Unlicense.
+- `AGENTS.md`: this file's own source; `CLAUDE.md` is a symlink to it (see
+              its own "Conventions" bullet on why).
+- `package.json` / `package-lock.json`: dependencies and every `npm run`
+                                        script (see `AGENTS.md`'s
+                                        *Commands*).
+- `jsconfig.json`: `checkJs`/`paths` config `npm run typecheck` reads.
+- `eslint.config.js`: lint rules (see `AGENTS.md`'s *Commands* for what's
+                      enabled and why).
+- `.gitignore`: local/generated paths kept out of the repo - see its own
+               comments for what each entry is and why.
+- `.claude`: Claude Code session config for this repo, not part of the app.
+            `settings.json` wires `hooks/session-start.sh`, which runs
+            `npm install` once at the start of a Claude Code Remote session
+            (a no-op everywhere else, gated on `CLAUDE_CODE_REMOTE`).
+
+### Build:
+- `build`: the Node-side TypeScript hook (see `AGENTS.md`'s *Commands*) - not
+           a bundler, nothing here touches `packages/web`'s client bundle
+  * `register.mjs`: what every `node`-invoking npm script passes to `--import`
+  * `ts-loader.mjs`: the ESM `load` hook that runs `.ts`/`.tsx` through
+                     esbuild's `transform` in memory
+
+### Client/Server code:
+- `packages/server`: the demo server
+  * `index.ts`: CLI
+  * `app.ts`: Express setup, manifest/search/favorites/images endpoints
+  * `scan.ts`: Image tile directory loading
+  * `remote.ts`: Reading a corpus manifest from a remote host (R2/Cloudflare)
+                 instead of a local directory
+  * `port.ts`: portInUse helper function
+  * `favorites.ts`: The global favorite counts - a `FavoriteStore` interface
+                   and one JSON-file implementation (`--favorites <path>`)
+  * `logger.ts`: The one leveled/structured logger every server module logs
+                through - pino, pretty-printed on a TTY, plain JSON otherwise
+                (journald, CI)
+  * `search-cache.ts`: LRU cache and concurrency limiter (with an
+                        `onSaturated` hook `app.ts` logs from) backing
+                        `/api/search`'s CLIP text tower calls
+  * `image-fixtures.ts`: Synthetic image headers for testing scan.ts's parsers
+  * `base-path.ts`: Normalizes `--base-path`, for a subpath deployment behind
+                    a prefix-stripping reverse proxy (the VPS's hand-managed
+                    nginx config; see `deploy/README.md`)
+  * `version.ts`: Which commit this process is running - `BABEL_COMMIT`, else
+                  the checkout's own `.git`, read once at startup. What
+                  `/api/health` reports and what `deploy/` verifies a release
+                  against; null rather than a throw when it cannot be
+                  established.
+  * `roomContent.ts`: Mode-aware, memoized loader for `metadata.json`/
+                      `tagLinks.json`'s real content - `readFile` in local
+                      mode, `fetch` in remote mode - for the SSR catalog/room
+                      routes below. `scan.ts`/`remote.ts` deliberately don't
+                      do this themselves; `/api/manifest` only ever ships
+                      `{url, ...counts}` for either file.
+  * `catalogPage.ts`: Pure HTML-fragment builders for the SSR `/catalog` list
+                      and `/catalog/:file` room permalink (`app.ts`'s
+                      `renderPage` embeds the result in `index.html`'s
+                      `#root`) - reuses `packages/web/src/lib/catalog.ts`'s
+                      own `alphabeticalOrder`/`pageOf`/`pageCount` rather than
+                      a second paging implementation.
+  * `seo.ts`: Pure builders for `robots.txt` and `sitemap.xml` - every room
+             permalink, every catalog page, and `/`.
+- `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
+  out by React convention - components, hooks, and everything else (`lib/`) -
+  rather than by feature area; a hook and the `lib/` module it wraps often
+  belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
+  `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
+  * `index.html`: HTML entry point, static page structure. Its `<head>`
+                    carries the favicon/manifest links and the OG/Twitter card
+                    meta tags; `app.ts`'s `renderPage` (shared by `/`,
+                    `/catalog`, and `/catalog/:file`) fills in
+                    `%%TITLE%%`/`%%DESCRIPTION%%`/`%%CANONICAL_URL%%`/
+                    `%%OG_IMAGE_URL%%` per request - the last two absolute,
+                    since a link unfurler parses this HTML directly and never
+                    sees `<base href>`, unlike every other relative url on the
+                    page. `%%SSR_BODY%%` (inside `#root`) and
+                    `%%INITIAL_ROUTE_SCRIPT%%` (before `bundle.js`) are empty
+                    on `/` and carry the SSR catalog/room markup and a
+                    `window.__INITIAL_ROUTE__` hint on the other two - see
+                    `main.tsx`'s own note on that global.
+  * `style.css`: All of the app's CSS - one file, no CSS-in-JS, no
+                   per-component styles. Linked from `index.html` rather than
+                   inlined, and served by `app.ts`'s `/style.css` route the same
+                   way `index.html` itself is - re-read on each request, so a
+                   margin or color tweak needs no restart.
+  * `public/`: App-level static assets unrelated to any corpus - favicon.ico
+                (16/32/48, hand-assembled since Pillow's `sizes=` resamples
+                rather than embedding exact per-size art), `favicon-32.png`,
+                `apple-touch-icon.png` (180x180, composited onto the app's own
+                background color since iOS renders a transparent one on
+                black), `icon-192.png`/`icon-512.png` (referenced from
+                `site.webmanifest`), and `og-image.jpg` (the OG/Twitter card
+                image - JPEG rather than the source PNG, since the art has no
+                transparency and a card image is fetched on every share).
+                Served at the same root paths `index.html` links, via
+                `app.ts`'s `publicDir` static mount. Without it (most tests,
+                and any deployment that omits the option) `app.ts` still
+                answers `/favicon.ico` with a bare 204 rather than a 404.
+  * `src/main.tsx`: React entry point - loads the corpus, derives the layout
+                      from the search, wires the hooks below together, renders
+                      the map and catalog views. The only file at `src/` top level.
+                      Reads `window.__INITIAL_ROUTE__` once at module scope
+                      (set only by the SSR `/catalog`/`/catalog/:file` routes,
+                      see `index.html`) alongside `?catalog`/`?blockTags`, so
+                      a JS-capable visitor who lands on one of those urls
+                      boots straight into the interactive catalog - with that
+                      room's overlay already open, for a permalink - instead
+                      of the map. No router: this is a one-time seed exactly
+                      like the others, absent (and therefore inert) on `/`.
+  * `src/assets.d.ts`: Declares the `.svg` import shape esbuild's
+                         `loader: { '.svg': 'text' }` produces, for `.ts`/`.tsx`
+                         files that import one as raw markup
+  * `src/assets/roboto-slab-400.woff2`: The center shelf's spine typeface,
+                         bundled with the client rather than fetched from
+                         Google Fonts at runtime - see `spineFont.ts`.
+  - `src/components/`: presentational React components
+    * `MapView.tsx`: The 2D map canvas view
+    * `CatalogView.tsx`: Alternate catalog list view
+    * `RoomOverlay.tsx`: Modal showing a room's tile at full size along with its
+                        story - reached from the map (right-click, long press,
+                        Enter, a ranked result) or by expanding a catalog row
+    * `RoomDetails.tsx`: Room tile keywords, story text, search ranking info,
+                         and alt text handling - shared by the card, the
+                         overlay, and catalog rows
+    * `SearchForm.tsx`: Shared search box component
+    * `SearchIcon.tsx`: The search badge's glyph, orbiting arrow, and the
+                        preload spinner ring
+    * `HelpDialog.tsx`: The "READ ME" book's dialog
+    * `BookOverlay.tsx`: The open-book overlay shell both reading dialogs are
+                         built from - scrim, focus-trapped dialog (`useDialog`),
+                         corner close button, and a `.book` whose two pages sit
+                         side by side when wide and collapse to one column when
+                         narrow. The collapse is a container query; the same
+                         width/threshold is reported through `onWideChange` so a
+                         spread-at-a-time reader can advance by the right amount.
+    * `ArtistStatementOverlay.tsx`: The artist's statement, reached by the open
+                                    book traced into the center tile's shelf gap
+                                    (`CENTER_BOOK_PATH` in `lib/center.ts`). A
+                                    `BookOverlay` of two pages: the diegetic myth
+                                    on the left, the real statement on the right,
+                                    collapsing to one stacked column when too
+                                    narrow for two. The component is the source
+                                    of truth for both texts (JSX, not a parsed
+                                    doc). Opens `BabelBookOverlay` on top of
+                                    itself.
+    * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel,
+                             paged as the same `BookOverlay` - a spread of two
+                             pages when wide, one when narrow, so next/previous
+                             step by two or one to match. An easter egg opened
+                             from the artist's statement's `.statement-link`
+                             button and stacked over it.
+    * `ZoomControls.tsx`: Zoom in/reset/zoom out for a `useContentZoom`
+                          scope - the non-pinch path a mouse-and-keyboard
+                          reader needs, since native browser zoom is
+                          not offered as a fallback. Shared by
+                          `RoomOverlay`, `HelpDialog`, `BookOverlay` and
+                          `CatalogView` rather than four copies of the same
+                          three buttons.
+  - `src/hooks/`: the subsystems `main.tsx` wires together, each hiding state
+                 nobody outside it needs to see
+    * `useCorpus.ts`: Load the metadata sidecar and embedding blob, build the search index
+    * `useFavorites.ts`: The reader's own favorites (localStorage) and the
+                         library's global counts (`/api/favorites`), and the
+                         one toggle that changes both
+    * `useSearch.ts`: The query box, the `/api/search` fetch, blending the
+                      reply into one ranking, the highlight range-finders
+    * `useMapCamera.ts`: React hook for camera changes, inputs entangled with
+                         camera controls
+    * `useMapRenderer.ts`: Map frame loop/redraw hook
+    * `useMapRendererGL.ts`: The WebGL counterpart of `useMapRenderer.ts`,
+                             active when `webglFlag.ts`'s `WEBGL` is true (the
+                             default) - see AGENTS.md's "The WebGL renderer".
+    * `useMapCursor.ts`: The keyboard cursor - where it is, what a reader
+                         hears about it, and every key over the map
+    * `useCenterShelf.ts`: The center room's bookshelf - titles, roving
+                           tabindex focus, and what a tap or arrow key does
+    * `useModeTransition.ts`: Switching between the map and catalog readings,
+                              the FLIP animation between them
+    * `useRearrangement.ts`: The sliding-tile rearrangement animation - whether
+                             a layout/order change animates, and what gets said
+                             once it lands. The prepare-then-fly-then-slide
+                             pipeline is under AGENTS.md's "The reorder animation"
+    * `useDistillMode.ts`: The distill toggle's state and its asymmetric
+                           sequence (fade the generic tiles out, then slide the
+                           corpus rooms inward; reversed on the way back). The
+                           `genericFade` scalar its rAF loop drives is read by
+                           both renderers; `drawGenericFade` in `render.ts`
+                           owns what the faded end looks like.
+    * `useDialog.ts`: The modal-dialog machinery every overlay shares - focus
+                      in on open and back out on close, Escape, Tab-trap - plus
+                      a topmost-only dialog stack so a stacked overlay (the
+                      Babel book over the artist's statement) takes the key and
+                      the one beneath it does not. Adopted by
+                      `ArtistStatementOverlay`/`BabelBookOverlay`;
+                      `HelpDialog`/`RoomOverlay` still inline their own copies.
+    * `useContentZoom.ts`: Two-finger pinch-to-zoom and one-finger pan,
+                           scoped to one DOM subtree at a time - a room
+                           overlay's tile-and-story, a help/book dialog's
+                           page, the catalog list. Native browser zoom is
+                           never used instead (see its own comment). Reads
+                           its own gesture math from `contentZoomCamera.ts`.
+  - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
+               geometry, and rendering
+    * `center.ts`: Geometry and content management for the center tile interface
+    * `spineFont.ts`: The center shelf's spine typeface (Roboto Slab) - the
+                      pure `SPINE_FONT_FAMILY` constant `composeSpines` puts
+                      in `ctx.font`, and `loadSpineFont`, the DOM half that
+                      loads the bundled `src/assets/roboto-slab-400.woff2`
+                      `FontFace`, called once from `main.tsx`.
+    * `svgPath.ts`: Pure walk over the absolute M/L/C/Z path grammar
+                    `tools/center-placement/import-shelf-svg.ts` emits -
+                    `flattenPath` (hit-test polygon), `parsePath`/
+                    `tracePathCommands` (replay as a canvas path), and
+                    `pointInPolygon`.
+    * `camera.ts`: Pure-math mapping functions for the map camera
+    * `loadingAnimation.ts`: The center-tile loading indicator - sprite-sheet
+                            playback over the artist-statement book's page while
+                            a rearrangement preloads. Loads the sheets + manifest
+                            `tools/center-animation` wrote; exposes `frame()` for
+                            both renderers and `startDebug`/`stopDebug` for the
+                            dev preview. The gating and cycle-wait rules are
+                            under AGENTS.md's "The loading indicator".
+    * `render.ts`: Render a single map frame
+    * `slide.ts`: Room rearrangement animation renderer
+    * `picking.ts`: Defines the roomAtPoint function
+    * `favoriteBadge.ts`: Geometry and hit-test for the favorite badge painted
+                          onto a room tile's upper right corner
+    * `distillToggle.ts`: Geometry and hit-test for the distill-mode toggle
+                          painted onto the center tile's lower right corner
+    * `clearHistoryBook.ts`: Geometry for the "forget searches" book's black
+                             spine overlay, anchored to the center tile's own
+                             lower right corner
+    * `catalog.ts`: Catalog pagination and geometry helpers
+    * `pyramid.ts`: Manage room tile resolution options and cache budgets
+    * `tiles.ts`: Load, cache, and unload room images
+    * `rooms.ts`: Map room data in the manifest to image URLs
+    * `persist.ts`: Persistent data management (search history, pagination
+                    settings, blocked tags, the reader's own favorites)
+    * `touchDebug.ts`: View touch event stream if `?touchdebug` set
+    * `debug.ts`: Gates the dev panel behind `?debug`
+    * `debugActions.ts`: A seeded, repeatable "aggressive random usage"
+                         session (pan, zoom, search, favorite, catalog,
+                         shelf, reorder, sort, distill, overlays) for
+                         perf/memory profiling - `buildSequence` is pure,
+                         `runSequence` dispatches it against a live
+                         `DebugActions` object from `main.tsx`'s `?debug`
+                         wiring. Shared by `tools/perf-capture/capture.ts`.
+    * `contentZoomCamera.ts`: Pure anchor-preserving zoom/pan-bounds math
+                              for `useContentZoom.ts` - viewport-relative,
+                              so it holds for content taller/wider than the
+                              region showing it (a long story, a tall
+                              virtualized list), not just a tile roughly
+                              the size of its own viewport. Kept DOM-free
+                              the same way `camera.ts` is.
+    * `perfProbe.ts`: Rearrangement performance instrumentation behind
+                      `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
+                      store) - `docs/performance-research.md` §2's "measure
+                      first" step. Records phase-tagged frame timings, sheet
+                      fetch/decode/first-draw gaps, and `longtask` entries;
+                      `perfDump()` prints percentiles to the console once a
+                      rearrangement settles (`useRearrangement.ts`).
+    * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl`/`?webgl=0` override and the
+                      WebGL2 capability probe - see AGENTS.md's "The WebGL renderer".
+    * `glRenderer.ts`: The WebGL counterpart of `render.ts`.
+    * `glSlideRenderer.ts`: The WebGL counterpart of `slide.ts`.
+    * `gl/context.ts`: One shader program, VAO and quad-drawing primitives
+                       (`drawFlatQuad`/`drawTexturedQuad`/`drawStrokeQuad`) -
+                       the WebGL equivalent of a 2D context, created exactly
+                       once per canvas lifetime.
+    * `gl/shaders.ts`: The quad shader's GLSL source, read from
+                       `gl/shaders/quad.vert`/`gl/shaders/quad.frag`.
+    * `gl/shaders/quad.vert`: The quad shader's vertex stage.
+    * `gl/shaders/quad.frag`: The quad shader's fragment stage.
+    * `gl/textureCache.ts`: `TileHit.img` -> `WebGLTexture`, with its own
+                            frame-aware eviction budget independent of
+                            `tiles.ts`'s.
+    * `gl/warm.ts`: Uploads every tile a rearrangement is about to need to
+                    the GPU ahead of the flight, so a newly-decoded bitmap's
+                    first `texImage2D` upload doesn't land during the one
+                    phase that's supposed to feel instant.
+    * `gl/spineTexture.ts`: The center tile's spine text, composited via
+                            `composeSpines` onto an offscreen 2D canvas and
+                            cached as a texture.
+    * `gl/glowTexture.ts`: A hover-glow silhouette (favorite badge, either
+                           distill-toggle state), baked once to an offscreen
+                           2D canvas and cached as a texture, keyed by path
+                           string rather than a content/size key like
+                           `gl/spineTexture.ts`'s - the shape never changes.
+- `packages/web/e2e`: Playwright browser tests (`*.e2e.ts`) plus
+                      `render-parity.parity.ts` (`npm run test:parity`, a
+                      separate manual suite) and `support.ts`'s shared
+                      helpers - see AGENTS.md's "Testing and CI".
+- `packages/config`: Central definition for numbers tuned by feel
+  * `config.ts`: Defaults and validation (no fs)
+  * `load.ts`: Load an optional config.json
+- `packages/map`: Map and room data handling
+  * `ordering.ts`: Room placement, search density gradient, rank by embedding, pan resistance
+  * `nextRoom.ts`: Find the next non-default room on the map in a given direction
+  * `metadata.ts`: Normalizing and joining per-room keyword/story data
+  * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
+                   `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
+  * `moves.ts`: The rearrangement animation's type contract (`Move` and its
+               `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
+               ...), type-only, shared by `illusion.ts`, `board.ts` and
+               `packages/web/src/lib/slide.ts`
+  * `searchResult.ts`: Search's own type contract - what `rankHybrid()`
+                       (`scoring.ts`) returns, what `useSearch.ts` stores as
+                       `result`, and the match ranges/explanation rows built
+                       from either. Type-only, imported through JSDoc the
+                       same way `manifest.ts` is.
+  * `scoring.ts`: Find room rank and match certainty for a search, search tokenization
+  * `favorites.ts`: The favorite sort modes, as a stable re-sort of an order
+                    that already exists
+  * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
+  * `board.ts`: Sliding animation illusion's board data structure
+  * `describe.ts`: Build screen reader messages
+  * `prng.ts`: Seedable RNG (mulberry32) and a string-to-seed hash (FNV-1a) -
+              shared by `packages/web/src/lib/center.ts` and anything else that
+              needs a deterministic, repeatable random sequence.
+  * `wink-lemmatizer-stub.d.ts`: A type-only stand-in for the untyped
+    `wink-lemmatizer` package, resolved in its place by `jsconfig.json`'s
+    `paths` - not imported by any real module. See its own header comment
+    for why (`checkJs` under the TS 6 pin AGENTS.md's Commands section
+    describes, following the real package's import into `wink-lexicon`,
+    errors on a harmless duplicate property assignment there).
+- `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out, packing the coarse levels into shared sheets
+  * `index.ts`: CLI
+  * `mips.ts`: Generate+fill alternate image size directories
+  * `sheets.ts`: Composite one level's per-file tiles into `<width>-sheets/` grids
+  * `layout.ts`: Import resolution steps from pyramid.ts, define expected directory structure
+
+### Associated tools:
+- `tools/center-placement`: Calculate center tile geometry for the diegetic interface
+                            from an svg.
+  * `import-shelf-svg.ts`: Import Inkscape tile tracing into exact geometry.
+  * `shelf_geometry.svg`: Center tile geometry.
+  * `lib/geometry.ts`: Book and search box placement structure
+  * `lib/measured.ts`: Auto-generated svg geometry data
+  * `lib/svg.ts`: Minimal SVG element builder; currently unused elsewhere.
+- `tools/center-animation`: Pack the center-tile loading-animation frames into
+                            sprite sheets. Each `assets/animation/<cycle>/`
+                            folder of numbered full-tile PNG frames (animated
+                            content on the artist-statement page, the rest
+                            transparent) is cropped to the union of its content
+                            bounds and laid into one grid sheet under
+                            `assets/animation/sheets/`, with the crop rect (in
+                            cell fractions) and grid shape recorded in
+                            `assets/animation/manifest.json`. Adding a cycle is
+                            dropping in a folder and re-running
+                            `npm run generate:animation`.
+  * `index.ts`: CLI - discover cycles, crop, pack, write sheets + manifest.
+  * `lib.ts`: Pure bounds-union, grid layout, and pixel->cell-fraction math,
+              plus the manifest type contract; no sharp, unit-tested.
+- `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
+- `tools/embed/README.md`: how to run `embed.ts`/`cosine-range.ts` and what
+                           each flag does.
+- `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
+                                 corpus - the source of `CLIP_CERTAINTY`/
+                                 `search.density.clipCentre/clipHigh/clipLow`'s
+                                 calibration and of `docs/search_rules.md`'s
+                                 thresholds. `--universal`/`--irrelevant` probe
+                                 lists measure the high/low extremes;
+                                 `--nonsense` validates the centre.
+  * `cosine-stats.ts`: Percentile/summary arithmetic and the clipLow/clipHigh
+                       and universal-keyword calibration suggestions - pure,
+                       unit-tested without a model or a corpus.
+- `tools/upload`: Sync a corpus (images, pyramid levels, metadata, embeddings,
+                  shared tiles) to Cloudflare R2, incrementally by content hash.
+  * `upload-r2.ts`: CLI, credentials from env.
+  * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
+  * `README.md`: credentials setup and how to run `upload-r2.ts`.
+- `tools/font-lab`: Ad hoc design-exploration lab for the center shelf's spine
+                    titles - not wired into any npm script, not covered by
+                    tests. Run directly, e.g.
+                    `node --import ./build/register.mjs tools/font-lab/render.ts`.
+  * `fonts.ts`: The candidate typefaces and where to fetch them from Google Fonts.
+  * `download-fonts.ts`: Fetch each candidate's latin woff2 into `fonts/`.
+  * `variants.ts`: The font/settings sweep matrix `render.ts` draws.
+  * `render.ts`: Composite each variant onto the real center tile via Playwright
+                 Chromium, three zooms to a labelled contact-sheet PNG.
+  * `README.md`: what the lab is for and how to read its contact sheets.
+- `tools/perf-capture/capture.ts`: Fully automated Chrome memory/perf capture -
+                                   boots the demo server, launches Chromium,
+                                   runs a seeded `debugActions.ts` session
+                                   against either map renderer (`--renderer
+                                   canvas2d|webgl`), and samples
+                                   `Performance.getMetrics` over CDP the whole
+                                   time. `npm run profile:chrome`. See its
+                                   README for why this is Chrome-only - the
+                                   Firefox counterpart stays a manually
+                                   profiled console session, driven by the
+                                   same `debugActions.ts`.
+- `tools/perf-capture/README.md`: why this is Chrome-only, and how to read
+                                  the captured metrics.
+- `tools/check-file-map`: `npm run check:file-map` - diffs this file
+                          against the real tree; see its own header for the
+                          exact rules.
+  * `index.ts`: CLI - reads this file, walks `git ls-files`, reports drift.
+  * `lib.ts`: Pure parsing of this file's bullet list into resolved paths,
+             no filesystem access.
+- `tools/curation`: Python/Qt tools for turning a batch of generated tiles
+                    into `metadata.json` - keyword extraction, story
+                    generation/review, alt text, titles, sensitive-content
+                    tagging. Separate ecosystem from the rest of this repo
+                    (Python, not Node/TS); has its own nested `AGENTS.md`/
+                    `CLAUDE.md` and `README.md` with the real detail - you
+                    don't need them unless you're actually working in this
+                    directory.
+### Infra:
+- `infra`: Terraform for the Cloudflare R2 bucket `tools/upload` syncs the
+           corpus into, plus abuse-protection (rate limiting, edge caching,
+           a billing alert). Applied locally by hand, never from CI -
+           credentials live in a gitignored `terraform.tfvars`. See
+           `infra/README.md`.
+- `Dockerfile`: containerizes the demo server (`npm run demo`) - a deps stage
+               (`npm ci --omit=dev`, optionally `--omit=optional` via the
+               `WITH_CLIP` build arg to drop the CLIP text tower) plus a
+               runtime stage. There is no compiled output to copy (see
+               AGENTS.md's *Commands*), so it's install-then-run, not a build
+               stage. Pulls in `tools/center-placement/lib` even though
+               nothing else under `tools/` is needed at runtime, because
+               `packages/web` imports tile geometry straight out of it at
+               bundle time.
+- `.dockerignore`: keeps the build context out of `node_modules`, `tools/`
+                   (except `center-placement/lib`, re-included), and anything
+                   dev/local-only (`docs`, `infra`, `reference`, `*.env`,
+                   `favorites.json`, `config.json`).
+- `deploy`: shipping main to the VPS. Unlike `infra/` (applied by hand, no
+            credentials in CI), this one does run from Actions - see
+            AGENTS.md's "Deploying to the VPS" for what makes the key it uses
+            narrow enough to store.
+  * `deploy.sh`: the deploy itself, run ON THE VPS - fetch, refuse a sha that
+                 is not an ancestor of `origin/main`, check out, reinstall
+                 only if the lockfile moved, restart the unit, confirm it came
+                 back on the new revision. Also the SSH forced command, which
+                 is what stops the deploy key being a shell.
+  * `health-check.mjs`: poll a server's `/api/health` until it reports an
+                        expected commit. Dependency-free plain Node, run by
+                        both `deploy.sh` (against `127.0.0.1`) and the
+                        workflow (against the public url) so there is one
+                        definition of "the deploy worked".
+  * `README.md`: the one-time VPS and repository-settings setup, and the
+                 rollback path.
+- `.github/workflows/deploy.yml`: waits for `ci` to go green on a push to
+                                  main, ships that exact sha over one ssh
+                                  call, then re-checks health from outside.
+                                  Manually dispatchable with a sha, which is
+                                  the rollback button.
+- `release-please-config.json` / `.release-please-manifest.json`: what
+  `.github/workflows/release-please.yml` reads/writes - see AGENTS.md's
+  "Release discipline" below. `CHANGELOG.md` doesn't exist until that
+  workflow writes it on the first release.
+- `.github/workflows/release-please.yml`: on every push to main, keeps a
+                                          standing release PR current from
+                                          squash-merged PR titles since the
+                                          last release; merging it is the
+                                          release (version bump, changelog,
+                                          tag). Independent of `deploy.yml` -
+                                          see AGENTS.md's "Release discipline".
+- `.github/workflows/pr-title-lint.yml`: enforces the Conventional Commits
+                                         title format release-please.yml
+                                         depends on, as a required PR check.
+- `.github/pull_request_template.md`: explains the title format inline as a
+                                      comment (not rendered), plus a
+                                      description/testing checklist.
+- `.github/workflows/ci.yml`: the required `ci` check (test matrix, lint,
+                              typecheck, and a `changes`-gated call into
+                              `e2e.yml`) - see AGENTS.md's "Testing and CI".
+- `.github/workflows/e2e.yml`: the browser smoke test, called from
+                               `ci.yml` and independently dispatchable.
+- `.github/workflows/codeql.yml`: static analysis scanning, required check.
+- `.github/workflows/dependency-review.yml`: flags newly-added
+                                             vulnerable/disallowed
+                                             dependencies on a PR diff.
+- `.github/dependabot.yml`: automated dependency-update PRs.
+
+### Assets:
+- `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
+                          search controls.
+- `assets/generic`: Non-unique generic "default" tile images.
+- `assets/generic_distill`: Distill mode's paired alternate for each
+                            `assets/generic` tile (matched by filename stem,
+                            see `scan.ts`'s `GENERIC_DISTILL_DIR`) - what a
+                            generic tile crossfades to instead of flat black
+                            once distill mode hides the library's filler.
+- `assets/animation`: Loading-animation frame cycles for the center book's page.
+                      Each `<cycle>/` holds numbered full-tile PNG frames (source,
+                      not shipped); `sheets/` and `manifest.json` are generated by
+                      `tools/center-animation` and served via `/shared/animation/`.
+- `assets/corpus-sample`: Minimal tile set for demo use, with metadata,
+                          embeddings, image pyramid, and tag links included.
+
+### Reference:
+- `reference`: Source material for the inpainting pipeline (Blender renders,
+              a canny edge map, a mask) - isn't touched anywhere else in
+              the project.
+
+### Docs:
+- `docs/architecture.md`: A five-minute, human-facing system overview -
+                          request flow, why esbuild bundles in-process, why
+                          the corpus lives in R2, why deploy is gated on
+                          `/api/health`'s reported commit. Start here rather
+                          than `AGENTS.md` if you don't need the engineering
+                          invariants.
+- `docs/file_map.md`: this file.
+- `docs/concept.md`: The original project concept and a dated log of
+                     significant design decisions made during implementation.
+                     A record of intent, not a spec - it is not kept in sync
+                     with the code and should not be edited to match it.
+- `docs/pending_task_list.md`: What is still to do - open tasks, known bugs
+                               not yet chased down, and decisions deferred.
+                               Not a design doc: a task leaves by being done.
+- `docs/accessibility-plan.md`: The still-open accessibility questions - what
+                                needs real screen reader testing, in order of
+                                doubt. The landed key-by-key spec is
+                                `docs/keyboard-controls.md`.
+- `docs/keyboard-controls.md`: The spec for every key the map view handles,
+                               state by state - tab order, focus targets, what
+                               each key does in each one.
+- `docs/search_rules.md`: The full specification of what a search does -
+                          parsing, scoring, ranking-vs-certainty, and every
+                          reporting rule. Matches the implementation
+                          (`packages/map/scoring.ts`); update this file
+                          alongside a scoring change rather than letting it
+                          drift back into a target/code gap.
+- `docs/cosine-range-report.json`: A checked-in snapshot of
+                                   `tools/embed/cosine-range.ts`'s last real
+                                   run - the numbers `docs/search_rules.md`'s
+                                   thresholds cite.
+- `docs/performance-research.md`: Survey of possible non-trivial performance
+                                  wins, aimed at the dropped frames during the
+                                  rearrangement's zoom-out and slide. §1-§8 are
+                                  hypotheses ranked by reasoning; §9 is the first
+                                  real `?perf` capture and reprioritizes them.
+                                  Most items remain unimplemented - the shipped
+                                  ones are `prepareRearrangement` (§9.7), §6's
+                                  level-2 unpack, §4.1's tile-locator
+                                  memoization, and §5.2's WebGL renderer
+                                  itself.

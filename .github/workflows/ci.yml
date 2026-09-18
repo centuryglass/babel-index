@@ -122,6 +122,9 @@ jobs:
       - name: npm run lint
         run: npm run lint
 
+      - name: npm run check:file-map
+        run: npm run check:file-map
+
   # TypeScript is the default for every new file (AGENTS.md), so `tsc
   # --noEmit` is what makes that mean anything rather than sitting red
   # between the times someone runs it by hand. Doesn't vary by Node version

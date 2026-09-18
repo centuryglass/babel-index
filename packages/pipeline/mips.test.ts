@@ -9,7 +9,7 @@ import {
   mipPlan,
   writeMips,
   sourceImages,
-  checkAspects,
+  checkSizes,
   contentHash,
   updateMetadataHashes,
 } from './mips.ts';
@@ -292,19 +292,19 @@ test('non-images are ignored', async () => {
   });
 });
 
-// --- aspect agreement ------------------------------------------------------
+// --- size agreement ----------------------------------------------------
 
-test('one shared aspect passes, whatever the sizes', () => {
-  const { aspect, outliers } = checkAspects([
+test('sources of one shared size pass', () => {
+  const { size, outliers } = checkSizes([
     { file: 'a', w: 1280, h: 720 },
-    { file: 'b', w: 640, h: 360 },
+    { file: 'b', w: 1280, h: 720 },
   ]);
   assert.equal(outliers.length, 0);
-  assert.ok(Math.abs(aspect - 16 / 9) < 1e-9);
+  assert.deepEqual(size, { file: 'a', w: 1280, h: 720 });
 });
 
-test('a room of the wrong shape is named, not silently stretched', () => {
-  const { outliers } = checkAspects([
+test('a room of the wrong size is named, not silently stretched', () => {
+  const { outliers } = checkSizes([
     { file: 'a', w: 1024, h: 1024 },
     { file: 'b', w: 1024, h: 1024 },
     { file: 'odd', w: 1280, h: 720 },
@@ -315,11 +315,14 @@ test('a room of the wrong shape is named, not silently stretched', () => {
   );
 });
 
-test('encoder rounding is not treated as a different shape', () => {
-  // A resize can land a pixel off; that is not a corpus problem.
-  const { outliers } = checkAspects([
+test('one pixel off still counts as a different size', () => {
+  // The whole point of an exact check: no tolerance to drift inside of.
+  const { outliers } = checkSizes([
     { file: 'a', w: 1280, h: 720 },
     { file: 'b', w: 1281, h: 720 },
   ]);
-  assert.equal(outliers.length, 0);
+  assert.deepEqual(
+    outliers.map((o) => o.file),
+    ['b']
+  );
 });
