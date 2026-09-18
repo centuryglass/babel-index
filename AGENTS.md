@@ -85,16 +85,35 @@ script directly with plain `node` instead of through `npm run` skips the hook
 and fails to import any `.ts` file with `ERR_UNKNOWN_FILE_EXTENSION`.
 
 Linting is minimal:
-- The usual recommended JS rules
-- Browser globals scoped to `packages/web/src/**/*.{js,jsx}`
-- Node globals scoped to `**/*.mjs`
+- The usual recommended JS rules, plus typescript-eslint's non-type-checked
+  `recommended` config on every `.ts`/`.tsx` file - no `parserOptions.project`,
+  since `npm run typecheck` already owns type correctness and a type-checked
+  lint config would just re-run that at lint speed.
+- Browser globals scoped to `packages/web/src/**/*.{ts,tsx}`, plus
+  `packages/web/e2e/**/*.ts` and the two tools that composite onto a real
+  page (`tools/font-lab/render.ts`, `tools/perf-capture/capture.ts`), all
+  three of which reference `document`/`window` directly rather than through
+  a separate browser-only file.
+- Node globals scoped to `**/*.mjs` and every other `.ts` file (`build/`,
+  `packages/config`, `packages/map`, `packages/pipeline`, `packages/server`,
+  the rest of `tools/`).
 - From `eslint-plugin-react-hooks`, only `rules-of-hooks`, `exhaustive-deps`,
   as recommended rules bundled in v7 disagree with how we use refs.
 
-That config's file patterns cover `.js`/`.mjs`/`.cjs`, and nothing under
-`packages/web/src` matches them, so the lint pass checks the Node-side
-`.mjs` tooling, not the `.ts`/`.tsx` app sources (dated entry in
-`docs/pending_task_list.md`).
+**`typescript-eslint` cannot run against TypeScript 7** (`typescript-eslint/typescript-eslint#10940`
+tracks it - months out as of this writing, since ESLint has no async-parser
+support and AST/type-info can't yet cross the Go/WASM boundary tsgo runs on).
+That's why `typescript` is pinned to `^6.0.3` rather than the `^7.0.2` a
+plain `npm install typescript` would grab today - not a deliberate choice
+against TS 7's speed, just the version the tooling that lints it can
+actually parse. A side-by-side alias (`"ts6-for-eslint":
+"npm:typescript@^6.0.3"` alongside a `^7` `typescript`) was tried and
+rejected: aliased `typescript` packages still ship a `bin.tsc`/`bin.tsserver`,
+and npm resolves the collision by an undocumented rule (empirically,
+whichever package name sorts alphabetically last wins the
+`node_modules/.bin/tsc` symlink) - not something worth pinning `npm run
+typecheck`'s compiler to. Revisit the single-version pin once
+typescript-eslint supports TS 7.
 
 ## Layout
 **This map is part of the change.** A file added, removed or renamed here is
@@ -375,6 +394,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `prng.ts`: Seedable RNG (mulberry32) and a string-to-seed hash (FNV-1a) -
               shared by `packages/web/src/lib/center.ts` and anything else that
               needs a deterministic, repeatable random sequence.
+  * `wink-lemmatizer-stub.d.ts`: A type-only stand-in for the untyped
+    `wink-lemmatizer` package, resolved in its place by `jsconfig.json`'s
+    `paths` - not imported by any real module. See its own header comment
+    for why (`checkJs` under the TS 6 pin above, following the real
+    package's import into `wink-lexicon`, errors on a harmless duplicate
+    property assignment there).
 - `packages/pipeline`: Generates the pyramid of tile images at smaller resolutions for use when zoomed-out, packing the coarse levels into shared sheets
   * `index.ts`: CLI
   * `mips.ts`: Generate+fill alternate image size directories

@@ -103,7 +103,6 @@ test('renderRoomPage returns null for a filename this corpus does not have', () 
     metadata: [null],
     tagLinks: null,
     file: 'missing.jpg',
-    urlFor,
     base: '/',
   });
   assert.equal(result, null);
@@ -125,7 +124,6 @@ test('renderRoomPage renders the room title, image, keywords and story, and its 
     metadata,
     tagLinks: { gothic: 'https://example.com/gothic' },
     file: 'a.jpg',
-    urlFor,
     base: '/',
   });
   assert.ok(result);

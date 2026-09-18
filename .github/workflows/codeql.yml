@@ -1,0 +1,52 @@
+name: codeql
+
+# Static analysis (SAST) over the first-party JS/TS source - a different
+# question than `ci.yml`'s `audit` job, which flags known-vulnerable
+# dependencies. This looks for vulnerability patterns (injection, unsafe
+# regex, prototype pollution, ...) in code this repo actually wrote.
+#
+# Runs on every push/PR against main so a new vulnerability pattern is
+# caught before it merges, and weekly on its own so an advisory published
+# against a *pattern* CodeQL didn't used to flag still gets found against
+# code that hasn't changed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 7 * * 3'
+
+permissions:
+  contents: read
+
+# A new push supersedes the analysis in flight for the same branch, same as
+# ci.yml.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # No compiled output ever hits disk here (AGENTS.md, *Commands*) -
+      # esbuild bundles the client in-process at startup and `.ts` runs
+      # straight through the Node loader hook, so there is no build step for
+      # CodeQL to run before it scans. `javascript-typescript` covers both
+      # `.ts`/`.tsx` and the `.js`/`.mjs`/`.jsx` files the TypeScript
+      # migration hasn't reached yet.
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:javascript-typescript'

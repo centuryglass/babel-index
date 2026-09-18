@@ -147,14 +147,12 @@ export function renderRoomPage({
   metadata,
   tagLinks,
   file,
-  urlFor,
   base,
 }: {
   rooms: Room[];
   metadata: (RoomMeta | null)[];
   tagLinks: Record<string, string> | null;
   file: string;
-  urlFor: UrlFor;
   base: string;
 }): RoomPageResult | null {
   const room = rooms.find((r) => r.file === file);

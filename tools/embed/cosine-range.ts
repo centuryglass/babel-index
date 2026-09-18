@@ -265,8 +265,9 @@ function printSummary(report: Report) {
 
   const s = report.suggestion;
   console.log(
-    `Suggested clipLow=${s.clipLow.toFixed(3)} (overall p${s.lowPercentile}), ` +
-      `clipHigh=${s.clipHigh.toFixed(3)} (keywordMax p${s.highPercentile})`
+    `Coarse percentile pair: clipLow=${s.clipLow.toFixed(3)} (overall p${s.lowPercentile}), ` +
+      `clipHigh=${s.clipHigh.toFixed(3)} (keywordMax p${s.highPercentile}) - ` +
+      'not the calibration method, see suggestClipBounds; read against the anchors below.'
   );
   for (const note of s.notes) console.log(`  ! ${note}`);
 
@@ -287,9 +288,18 @@ function printSummary(report: Report) {
     for (const k of i.byKeyword)
       console.log(`  ${k.keyword}: p${i.floorPercentile}=${k.floor.toFixed(3)}  p${i.ceilingPercentile}=${k.ceiling.toFixed(3)}`);
     console.log(`  floor=${i.floor.toFixed(3)}  ceiling=${i.ceiling.toFixed(3)}`);
-    if (i.ceiling < report.overall.percentiles.p50)
-      console.log(`  ! ceiling ${i.ceiling.toFixed(3)} sits BELOW the overall centre - unexpected, expected low-positive`);
     for (const note of i.notes) console.log(`  ! ${note}`);
+  }
+
+  if (report.universal && report.irrelevant) {
+    console.log('');
+    console.log(
+      'Calibration anchors (docs/search_rules.md, "Image-content (CLIP) matching"): ' +
+        `centre=${report.overall.percentiles.p50.toFixed(3)} (overall p50), ` +
+        `high=${report.universal.ceiling.toFixed(3)} (universal ceiling), ` +
+        `low=${report.irrelevant.ceiling.toFixed(3)} (irrelevant ceiling) - ` +
+        'expected below centre, since the corpus shares nothing with these keywords.'
+    );
   }
 
   if (report.nonsense) {
@@ -303,7 +313,7 @@ function printSummary(report: Report) {
     if (drift > 0.02) console.log('  ! nonsense drifts more than 0.02 from the overall centre - worth a closer look');
   }
 
-  console.log('A starting point - read the percentile tables above before trusting it.');
+  console.log('The anchors above are the calibration answer; the percentile tables are how to sanity-check them.');
 }
 
 async function main() {

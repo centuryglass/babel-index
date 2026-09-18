@@ -30,7 +30,10 @@ import {
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
   genericId, genericDistillId, type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
-import { composeSpines, areSpinesLegible, BOOK_COUNT, type Slot, type SpineContext, type SpineFontLimits } from './center.ts';
+import {
+  composeSpines, areSpinesLegible, BOOK_COUNT, HOVER_GLOW_FILL, HOVER_GLOW_STROKE,
+  type Slot, type SpineContext, type SpineFontLimits,
+} from './center.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
@@ -417,10 +420,6 @@ interface PathContext extends DrawContext {
   stroke(): void;
 }
 
-/** Same gold as the shelf's `HOVER_GLOW_FILL`/`_STROKE` (center.ts) - one hover treatment across every integrated control. */
-const FAVORITE_HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
-const FAVORITE_HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
-
 /**
  * The hit's decoded pixel size: a sheet sub-rect's `sw`/`sh`, else the
  * image's natural size. Sheet packing never actually happens for the shared
@@ -485,10 +484,10 @@ export function drawFavoriteBadge(
   if (hovered && FAVORITE_TOGGLE_PATH) {
     const path = ctx as PathContext;
     traceFavoriteToggle(path, cellPx, sx, sy);
-    path.fillStyle = FAVORITE_HOVER_GLOW_FILL;
+    path.fillStyle = HOVER_GLOW_FILL;
     path.fill();
     path.lineWidth = 1;
-    path.strokeStyle = FAVORITE_HOVER_GLOW_STROKE;
+    path.strokeStyle = HOVER_GLOW_STROKE;
     path.stroke();
   }
 }
@@ -558,10 +557,10 @@ export function drawDistillToggle(
   if (hovered && activePath) {
     const path = ctx as PathContext;
     traceDistillToggle(path, cellPx, sx, sy, activePath);
-    path.fillStyle = FAVORITE_HOVER_GLOW_FILL;
+    path.fillStyle = HOVER_GLOW_FILL;
     path.fill();
     path.lineWidth = 1;
-    path.strokeStyle = FAVORITE_HOVER_GLOW_STROKE;
+    path.strokeStyle = HOVER_GLOW_STROKE;
     path.stroke();
   }
 }

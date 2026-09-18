@@ -205,18 +205,17 @@ const HALO = 'rgba(12,9,6,0.85)';
 const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
 /**
  * The hovered book's glow, across the whole spine: the same gold the favorite
- * badge and the distill toggle hover with (`render.ts`'s
- * `FAVORITE_HOVER_GLOW_FILL`/`_STROKE`, and `gl/glowTexture.ts`'s bake).
+ * badge and the distill toggle hover with. This is the one definition -
+ * `render.ts` and `gl/glowTexture.ts` both import it rather than restating the
+ * colour, so the WebGL-renderer lockstep rule (AGENTS.md, "The WebGL
+ * renderer") cannot drift here by one file changing a literal and the other two
+ * being missed.
  *
  * Painted on the canvas rather than as a CSS overlay, for the reason on
  * `useMapRenderer.ts`'s `onMove`.
  */
-const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
-const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
-
-// TODO: see, this is what I mean by that previous point. Everything below
-//       in this comment block is contrary to what it says above about
-//       constant placement.
+export const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
+export const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
 /**
  * The auto-fit range a spine title's font is sized within, per title:

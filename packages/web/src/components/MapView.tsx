@@ -37,7 +37,7 @@ import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow, SearchOrbitSpinner } from './SearchIcon.tsx';
 import type { Description } from '../../../map/describe.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
-import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
+import type { MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 

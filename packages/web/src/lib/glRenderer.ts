@@ -22,7 +22,7 @@
  * for the cursor, `gl/context.ts`'s `drawStrokeQuad`.
  */
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
-import { pxPerCell, type Camera } from './camera.ts';
+import { pxPerCell } from './camera.ts';
 import {
   CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
   DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
@@ -63,7 +63,7 @@ const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255
 /** `#15120f`, `render.ts`'s blank-cell fallback fill, as float RGB. */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 /**
- * `render.ts`'s `FAVORITE_HOVER_GLOW_FILL`, as a flat quad. Used only when
+ * `center.ts`'s `HOVER_GLOW_FILL`, as a flat quad. Used only when
  * `gl/glowTexture.ts` has no offscreen canvas to bake with - a headless
  * environment such as `npm test`, which never exercises a hover state
  * anyway. The real treatment is `drawGlow`'s textured case.
