@@ -1,6 +1,7 @@
 /**
- * Room permalinks: the slug in `catalog/<slug>`, and the table that resolves
- * one back to a room.
+ * Room permalinks: the slug in `catalog/<slug>` (also reachable at
+ * `map/<slug>`, opening the same room in the other reading - see `roomPath`),
+ * and the table that resolves one back to a room.
  *
  * A room's public name is its title, folded to ASCII - `catalog/unparsed-light`
  * says what a reader gets before they follow it. Titles are corpus data and can
@@ -27,9 +28,15 @@ import type { RoomMeta } from './metadata.ts';
  *
  * Takes an already url-safe slug - everything `buildSlugTable` produces is one
  * - so nothing here re-encodes and no caller has to decide whether to.
+ *
+ * `mode` picks which reading the link opens into once JS runs - `'catalog'`
+ * (the default) for the linear list, `'map'` for the pannable map with this
+ * room's overlay already open. Both are the same room at the same slug; only
+ * the path segment in front of it differs, and `app.ts`'s two SSR routes are
+ * otherwise identical (see its own comment on why).
  */
-export function roomPath(slug: string): string {
-  return `catalog/${slug}`;
+export function roomPath(slug: string, mode: 'catalog' | 'map' = 'catalog'): string {
+  return `${mode}/${slug}`;
 }
 
 /**

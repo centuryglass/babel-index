@@ -521,6 +521,7 @@ test('the served index.html fills in an absolute og:image/og:url, since link unf
 const SSR_INDEX_HTML =
   '<head><title>%%TITLE%%</title><meta name="description" content="%%DESCRIPTION%%" />' +
   '<meta property="og:url" content="%%CANONICAL_URL%%" /><meta property="og:image" content="%%OG_IMAGE_URL%%" />' +
+  '%%NOSCRIPT_REDIRECT%%' +
   '</head><body><div id="root">%%SSR_BODY%%</div>%%INITIAL_ROUTE_SCRIPT%%</body>';
 
 test('GET /catalog lists real room links and titles, alphabetically, with correct per-page canonical/og tags', async () => {
@@ -580,6 +581,61 @@ test('GET /catalog/:slug is addressed by title, carries that room\'s content, an
         'metadata.json': JSON.stringify({
           '001.jpg': { title: 'Reading Room', keywords: [{ text: 'gothic', type: null }], story: 'A quiet reading room.' },
         }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('GET /map/:slug serves the same room content, opens map mode, and no-JS-redirects to the catalog url', async () => {
+  await serving(
+    async ({ get, port }) => {
+      const res = await get('/map/reading-room');
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      // Same crawlable content as /catalog/:slug - the two routes are the
+      // same page, differing only in which mode a JS reader boots into.
+      assert.match(html, /A quiet reading room\./);
+      assert.match(html, /gothic/);
+      assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"map","room":"001\.jpg"\}/);
+      // og:url names this route's own url, same as every other SSR page -
+      // a link unfurler reads the meta tags straight off this response
+      // without ever running the noscript redirect below.
+      assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/map/reading-room"`));
+      // A no-JS visitor (or a crawler that never runs main.tsx) is bounced
+      // to that same catalog url instead of being stranded on a page with
+      // no way to browse onward.
+      assert.match(html, /<noscript><meta http-equiv="refresh" content="0; url=\/catalog\/reading-room"><\/noscript>/);
+
+      assert.equal((await get('/map/002')).status, 200);
+      assert.equal((await get('/map/nope')).status, 404);
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        '002.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({
+          '001.jpg': { title: 'Reading Room', keywords: [{ text: 'gothic', type: null }], story: 'A quiet reading room.' },
+        }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('a titled room\'s stem and a stale slug redirect and stay on the /map prefix they were asked on', async () => {
+  await serving(
+    async ({ get }) => {
+      const res = await get('/map/001', { redirect: 'manual' });
+      assert.equal(res.status, 302);
+      assert.equal(res.headers.get('location'), '/map/reading-room');
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({ '001.jpg': { title: 'Reading Room', keywords: [], story: null } }),
       },
       readIndexHtml: async () => SSR_INDEX_HTML,
     }
