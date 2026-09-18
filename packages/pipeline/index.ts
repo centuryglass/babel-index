@@ -23,7 +23,7 @@ import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import sharp from 'sharp';
 import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
-import { mipPlan, writeMips, sourceImages, checkAspects, updateMetadataHashes, type SourceSize } from './mips.ts';
+import { mipPlan, writeMips, sourceImages, checkSizes, updateMetadataHashes, type SourceSize } from './mips.ts';
 import { writeSheets } from './sheets.ts';
 
 const argv = parseArgs(process.argv.slice(2));
@@ -43,7 +43,7 @@ if (!files.length) {
   process.exit(1);
 }
 
-// The aspect check runs before any resizing: a corpus that cannot tile is
+// The size check runs before any resizing: a corpus that cannot tile is
 // worth knowing about before 10,000 rooms have been resized for nothing.
 const sizes: SourceSize[] = [];
 for (const file of files) {
@@ -51,20 +51,19 @@ for (const file of files) {
   sizes.push({ file, w: meta.width ?? 0, h: meta.height ?? 0 });
 }
 
-const { aspect, outliers } = checkAspects(sizes);
+const { size, outliers } = checkSizes(sizes);
 if (outliers.length) {
-  console.error(`\n  ${outliers.length} image(s) do not share the corpus aspect of ${(aspect ?? 0).toFixed(4)}:`);
-  for (const o of outliers.slice(0, 10))
-    console.error(`    ${o.file}  ${o.w}x${o.h}  (${(o.w / o.h).toFixed(4)})`);
+  console.error(`\n  ${outliers.length} image(s) do not match the corpus size of ${size?.w}x${size?.h}:`);
+  for (const o of outliers.slice(0, 10)) console.error(`    ${o.file}  ${o.w}x${o.h}`);
   if (outliers.length > 10) console.error(`    ... and ${outliers.length - 10} more`);
-  console.error('\n  The map draws one cell shape; a room with another is stretched or');
+  console.error('\n  The map draws one cell shape; a room of another size is stretched or');
   console.error('  letterboxed. Fix the corpus, or re-render at one size.\n');
   process.exit(1);
 }
 
 const plan = mipPlan(sizes[0], LEVELS);
 console.log(`\n  ${files.length} rooms in ${imagesDir}`);
-console.log(`  source ${sizes[0].w}x${sizes[0].h}, aspect ${(aspect ?? 0).toFixed(4)}`);
+console.log(`  source ${sizes[0].w}x${sizes[0].h}`);
 if (plan.length < LEVELS.length)
   console.log(`  ${plan.length} of ${LEVELS.length} levels - the source is too small for the rest`);
 for (const step of plan)

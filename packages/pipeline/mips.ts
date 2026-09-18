@@ -215,23 +215,17 @@ export interface SourceSize extends Size {
 }
 
 /**
- * Check every source shares one aspect ratio.
+ * Check every source matches the first one's exact pixel dimensions.
  *
- * A corpus of mixed aspects cannot tile: the map draws one cell shape, so a
- * room with a different one is stretched or letterboxed, and neither is a
- * decision to make silently.
- *
- * Shape only, not size. Same-aspect sources of different dimensions pass, and
- * the caller plans levels and sheet grids from the first of them.
- *
- * @param tolerance fractional difference allowed against the first
+ * A corpus of mixed sizes cannot tile: the map draws one cell shape, sized
+ * from the first source (`index.ts` plans levels and every sheet's
+ * `tileSize` from `sizes[0]`), so a room of another size is stretched,
+ * letterboxed, or throws off a shared sheet's row pitch - and none of that is
+ * a decision to make silently.
  */
-export function checkAspects(
-  sizes: SourceSize[],
-  tolerance = 0.01
-): { aspect: number | null; outliers: SourceSize[] } {
-  if (!sizes.length) return { aspect: null, outliers: [] };
-  const aspect = sizes[0].w / sizes[0].h;
-  const outliers = sizes.filter((s) => Math.abs(s.w / s.h - aspect) / aspect > tolerance);
-  return { aspect, outliers };
+export function checkSizes(sizes: SourceSize[]): { size: Size | null; outliers: SourceSize[] } {
+  if (!sizes.length) return { size: null, outliers: [] };
+  const size = sizes[0];
+  const outliers = sizes.filter((s) => s.w !== size.w || s.h !== size.h);
+  return { size, outliers };
 }
