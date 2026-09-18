@@ -18,6 +18,24 @@ within the same directory. Playwright tests
 are in `packages/web/e2e`. Anything under `reference` is only used with the
 inpainting pipeline, and isn't touched anywhere else in the project.
 
+### Root:
+- `README.md`: What this is and how to run it.
+- `LICENSE`: Unlicense.
+- `AGENTS.md`: this file's own source; `CLAUDE.md` is a symlink to it (see
+              its own "Conventions" bullet on why).
+- `package.json` / `package-lock.json`: dependencies and every `npm run`
+                                        script (see `AGENTS.md`'s
+                                        *Commands*).
+- `jsconfig.json`: `checkJs`/`paths` config `npm run typecheck` reads.
+- `eslint.config.js`: lint rules (see `AGENTS.md`'s *Commands* for what's
+                      enabled and why).
+- `.gitignore`: local/generated paths kept out of the repo - see its own
+               comments for what each entry is and why.
+- `.claude`: Claude Code session config for this repo, not part of the app.
+            `settings.json` wires `hooks/session-start.sh`, which runs
+            `npm install` once at the start of a Claude Code Remote session
+            (a no-op everywhere else, gated on `CLAUDE_CODE_REMOTE`).
+
 ### Build:
 - `build`: the Node-side TypeScript hook (see `AGENTS.md`'s *Commands*) - not
            a bundler, nothing here touches `packages/web`'s client bundle
@@ -69,7 +87,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   rather than by feature area; a hook and the `lib/` module it wraps often
   belong to the same subsystem (`useMapCamera.ts` / `lib/camera.ts`,
   `useRearrangement.ts` / `lib/slide.ts`) without living in the same directory.
-    * `index.html`: HTML entry point, static page structure. Its `<head>`
+  * `index.html`: HTML entry point, static page structure. Its `<head>`
                     carries the favicon/manifest links and the OG/Twitter card
                     meta tags; `app.ts`'s `renderPage` (shared by `/`,
                     `/catalog`, and `/catalog/:file`) fills in
@@ -82,12 +100,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     on `/` and carry the SSR catalog/room markup and a
                     `window.__INITIAL_ROUTE__` hint on the other two - see
                     `main.tsx`'s own note on that global.
-    * `style.css`: All of the app's CSS - one file, no CSS-in-JS, no
+  * `style.css`: All of the app's CSS - one file, no CSS-in-JS, no
                    per-component styles. Linked from `index.html` rather than
                    inlined, and served by `app.ts`'s `/style.css` route the same
                    way `index.html` itself is - re-read on each request, so a
                    margin or color tweak needs no restart.
-    * `public/`: App-level static assets unrelated to any corpus - favicon.ico
+  * `public/`: App-level static assets unrelated to any corpus - favicon.ico
                 (16/32/48, hand-assembled since Pillow's `sizes=` resamples
                 rather than embedding exact per-size art), `favicon-32.png`,
                 `apple-touch-icon.png` (180x180, composited onto the app's own
@@ -100,7 +118,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                 `app.ts`'s `publicDir` static mount. Without it (most tests,
                 and any deployment that omits the option) `app.ts` still
                 answers `/favicon.ico` with a bare 204 rather than a 404.
-    * `src/main.tsx`: React entry point - loads the corpus, derives the layout
+  * `src/main.tsx`: React entry point - loads the corpus, derives the layout
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.
                       Reads `window.__INITIAL_ROUTE__` once at module scope
@@ -111,9 +129,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       room's overlay already open, for a permalink - instead
                       of the map. No router: this is a one-time seed exactly
                       like the others, absent (and therefore inert) on `/`.
-    * `src/assets.d.ts`: Declares the `.svg` import shape esbuild's
+  * `src/assets.d.ts`: Declares the `.svg` import shape esbuild's
                          `loader: { '.svg': 'text' }` produces, for `.ts`/`.tsx`
                          files that import one as raw markup
+  * `src/assets/roboto-slab-400.woff2`: The center shelf's spine typeface,
+                         bundled with the client rather than fetched from
+                         Google Fonts at runtime - see `spineFont.ts`.
   - `src/components/`: presentational React components
     * `MapView.tsx`: The 2D map canvas view
     * `CatalogView.tsx`: Alternate catalog list view
@@ -203,6 +224,16 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
+    * `spineFont.ts`: The center shelf's spine typeface (Roboto Slab) - the
+                      pure `SPINE_FONT_FAMILY` constant `composeSpines` puts
+                      in `ctx.font`, and `loadSpineFont`, the DOM half that
+                      loads the bundled `src/assets/roboto-slab-400.woff2`
+                      `FontFace`, called once from `main.tsx`.
+    * `svgPath.ts`: Pure walk over the absolute M/L/C/Z path grammar
+                    `tools/center-placement/import-shelf-svg.ts` emits -
+                    `flattenPath` (hit-test polygon), `parsePath`/
+                    `tracePathCommands` (replay as a canvas path), and
+                    `pointInPolygon`.
     * `camera.ts`: Pure-math mapping functions for the map camera
     * `loadingAnimation.ts`: The center-tile loading indicator - sprite-sheet
                             playback over the artist-statement book's page while
@@ -229,6 +260,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                     settings, blocked tags, the reader's own favorites)
     * `touchDebug.ts`: View touch event stream if `?touchdebug` set
     * `debug.ts`: Gates the dev panel behind `?debug`
+    * `debugActions.ts`: A seeded, repeatable "aggressive random usage"
+                         session (pan, zoom, search, favorite, catalog,
+                         shelf, reorder, sort, distill, overlays) for
+                         perf/memory profiling - `buildSequence` is pure,
+                         `runSequence` dispatches it against a live
+                         `DebugActions` object from `main.tsx`'s `?debug`
+                         wiring. Shared by `tools/perf-capture/capture.ts`.
     * `contentZoomCamera.ts`: Pure anchor-preserving zoom/pan-bounds math
                               for `useContentZoom.ts` - viewport-relative,
                               so it holds for content taller/wider than the
@@ -251,10 +289,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                        (`drawFlatQuad`/`drawTexturedQuad`/`drawStrokeQuad`) -
                        the WebGL equivalent of a 2D context, created exactly
                        once per canvas lifetime.
-    * `gl/shaders.ts`: The quad shader's GLSL source.
+    * `gl/shaders.ts`: The quad shader's GLSL source, read from
+                       `gl/shaders/quad.vert`/`gl/shaders/quad.frag`.
+    * `gl/shaders/quad.vert`: The quad shader's vertex stage.
+    * `gl/shaders/quad.frag`: The quad shader's fragment stage.
     * `gl/textureCache.ts`: `TileHit.img` -> `WebGLTexture`, with its own
                             frame-aware eviction budget independent of
                             `tiles.ts`'s.
+    * `gl/warm.ts`: Uploads every tile a rearrangement is about to need to
+                    the GPU ahead of the flight, so a newly-decoded bitmap's
+                    first `texImage2D` upload doesn't land during the one
+                    phase that's supposed to feel instant.
     * `gl/spineTexture.ts`: The center tile's spine text, composited via
                             `composeSpines` onto an offscreen 2D canvas and
                             cached as a texture.
@@ -263,6 +308,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                            2D canvas and cached as a texture, keyed by path
                            string rather than a content/size key like
                            `gl/spineTexture.ts`'s - the shape never changes.
+- `packages/web/e2e`: Playwright browser tests (`*.e2e.ts`) plus
+                      `render-parity.parity.ts` (`npm run test:parity`, a
+                      separate manual suite) and `support.ts`'s shared
+                      helpers - see AGENTS.md's "Testing and CI".
 - `packages/config`: Central definition for numbers tuned by feel
   * `config.ts`: Defaults and validation (no fs)
   * `load.ts`: Load an optional config.json
@@ -276,6 +325,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                `shiftRow`/`shiftCol`/`swap` variants, `Board`, `Rearrangement`,
                ...), type-only, shared by `illusion.ts`, `board.ts` and
                `packages/web/src/lib/slide.ts`
+  * `searchResult.ts`: Search's own type contract - what `rankHybrid()`
+                       (`scoring.ts`) returns, what `useSearch.ts` stores as
+                       `result`, and the match ranges/explanation rows built
+                       from either. Type-only, imported through JSDoc the
+                       same way `manifest.ts` is.
   * `scoring.ts`: Find room rank and match certainty for a search, search tokenization
   * `favorites.ts`: The favorite sort modes, as a stable re-sort of an order
                     that already exists
@@ -320,6 +374,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `lib.ts`: Pure bounds-union, grid layout, and pixel->cell-fraction math,
               plus the manifest type contract; no sharp, unit-tested.
 - `tools/embed/embed.ts`: Compute and store CLIP image embeddings for all rooms.
+- `tools/embed/README.md`: how to run `embed.ts`/`cosine-range.ts` and what
+                           each flag does.
 - `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
                                  corpus - the source of `CLIP_CERTAINTY`/
                                  `search.density.clipCentre/clipHigh/clipLow`'s
@@ -334,6 +390,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                   shared tiles) to Cloudflare R2, incrementally by content hash.
   * `upload-r2.ts`: CLI, credentials from env.
   * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
+  * `README.md`: credentials setup and how to run `upload-r2.ts`.
 - `tools/font-lab`: Ad hoc design-exploration lab for the center shelf's spine
                     titles - not wired into any npm script, not covered by
                     tests. Run directly, e.g.
@@ -343,6 +400,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `variants.ts`: The font/settings sweep matrix `render.ts` draws.
   * `render.ts`: Composite each variant onto the real center tile via Playwright
                  Chromium, three zooms to a labelled contact-sheet PNG.
+  * `README.md`: what the lab is for and how to read its contact sheets.
 - `tools/perf-capture/capture.ts`: Fully automated Chrome memory/perf capture -
                                    boots the demo server, launches Chromium,
                                    runs a seeded `debugActions.ts` session
@@ -354,6 +412,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                    Firefox counterpart stays a manually
                                    profiled console session, driven by the
                                    same `debugActions.ts`.
+- `tools/perf-capture/README.md`: why this is Chrome-only, and how to read
+                                  the captured metrics.
+- `tools/check-file-map`: `npm run check:file-map` - diffs this file
+                          against the real tree; see its own header for the
+                          exact rules.
+  * `index.ts`: CLI - reads this file, walks `git ls-files`, reports drift.
+  * `lib.ts`: Pure parsing of this file's bullet list into resolved paths,
+             no filesystem access.
 - `tools/curation`: Python/Qt tools for turning a batch of generated tiles
                     into `metadata.json` - keyword extraction, story
                     generation/review, alt text, titles, sensitive-content
@@ -419,6 +485,16 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `.github/pull_request_template.md`: explains the title format inline as a
                                       comment (not rendered), plus a
                                       description/testing checklist.
+- `.github/workflows/ci.yml`: the required `ci` check (test matrix, lint,
+                              typecheck, and a `changes`-gated call into
+                              `e2e.yml`) - see AGENTS.md's "Testing and CI".
+- `.github/workflows/e2e.yml`: the browser smoke test, called from
+                               `ci.yml` and independently dispatchable.
+- `.github/workflows/codeql.yml`: static analysis scanning, required check.
+- `.github/workflows/dependency-review.yml`: flags newly-added
+                                             vulnerable/disallowed
+                                             dependencies on a PR diff.
+- `.github/dependabot.yml`: automated dependency-update PRs.
 
 ### Assets:
 - `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
@@ -435,6 +511,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       `tools/center-animation` and served via `/shared/animation/`.
 - `assets/corpus-sample`: Minimal tile set for demo use, with metadata,
                           embeddings, image pyramid, and tag links included.
+
+### Reference:
+- `reference`: Source material for the inpainting pipeline (Blender renders,
+              a canny edge map, a mask) - isn't touched anywhere else in
+              the project.
 
 ### Docs:
 - `docs/architecture.md`: A five-minute, human-facing system overview -
@@ -464,6 +545,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           (`packages/map/scoring.ts`); update this file
                           alongside a scoring change rather than letting it
                           drift back into a target/code gap.
+- `docs/cosine-range-report.json`: A checked-in snapshot of
+                                   `tools/embed/cosine-range.ts`'s last real
+                                   run - the numbers `docs/search_rules.md`'s
+                                   thresholds cite.
 - `docs/performance-research.md`: Survey of possible non-trivial performance
                                   wins, aimed at the dropped frames during the
                                   rearrangement's zoom-out and slide. §1-§8 are

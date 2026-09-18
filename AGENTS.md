@@ -61,6 +61,7 @@ npm run test:e2e                   # browser smoke test; needs `npx playwright i
 npm run test:parity                # manual Canvas2D-vs-WebGL render parity; real GPU, not a merge gate
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
+npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
 npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
@@ -975,6 +976,13 @@ two in step - see *Testing and CI*.
 
 ### Testing and CI
 
+- **`npm run check:file-map` is a required check, run from the `lint` CI
+  job.** It diffs `docs/file_map.md` against `git ls-files`, failing on a
+  path the map lists that no longer exists or a tracked file (other than a
+  unit test or an image) the map never mentions - see
+  `tools/check-file-map/index.ts`'s header for the exact rules. This is
+  what makes the Layout section's "part of the change" rule enforced
+  rather than hoped for.
 - **The e2e suite pins its renderer with `openLibrary`'s `webgl` option, not
   the production default.** `DEFAULT_WEBGL` is `true`, but every spec except
   `webgl-map.e2e.ts` passes `webgl=0` (Canvas2D) because the suite's blank/
