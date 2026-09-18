@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.0.0...babel-index-v1.1.0) (2026-09-18)
+
+
+### Features
+
+* address room permalinks by title rather than image filename ([#197](https://github.com/centuryglass/babel-index/issues/197)) ([7ce53df](https://github.com/centuryglass/babel-index/commit/7ce53df3e92dd18d3f92471f79be3abb2e79df9c))
+
+
+### Bug Fixes
+
+* stop forcing a synchronous layout on every map frame ([#198](https://github.com/centuryglass/babel-index/issues/198)) ([a9e098d](https://github.com/centuryglass/babel-index/commit/a9e098d6f3e68f6f9425f521fac83a07d5e46906))
+
 ## 1.0.0 (2026-09-18)
 
 
