@@ -173,7 +173,7 @@ def _validation_error(title: str, used_titles: TitleRegistry) -> str | None:
     if conflict is not None:
         return (
             f'"{title}" is too close to the existing title "{conflict}" (case, '
-            '"a"/"an"/"the", and small typos don\'t count as different). Propose '
+            '"a"/"an"/"the", and 1-2 character changes don\'t count as different). Propose '
             "something more distinct -- respond with only the title."
         )
     return None
@@ -225,6 +225,10 @@ def propose_title(
 
 def run(tile_dir: str, model: str, include_all: bool, workers: int) -> None:
     index = core.load_index(tile_dir)
+    filename_index = {}
+    for key in index:
+        if index[key].get("title"):
+            filename_index[index[key]["title"]] = key
     existing_titles = [entry["title"] for entry in index.values() if entry.get("title")]
     used_titles = TitleRegistry(existing_titles)
 
@@ -236,7 +240,7 @@ def run(tile_dir: str, model: str, include_all: bool, workers: int) -> None:
             file=sys.stderr,
         )
         for title_a, title_b in conflicts:
-            print(f"  {title_a!r} ~ {title_b!r}", file=sys.stderr)
+            print(f"  {filename_index[title_a]}:{title_a!r} ~ {filename_index[title_b]}:{title_b!r}", file=sys.stderr)
 
     targets = list(_tiles_to_title(tile_dir, index, include_all))
     workers = parallel.resolve_workers(model, workers)
