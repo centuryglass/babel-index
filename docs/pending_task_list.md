@@ -101,32 +101,6 @@ for that audience specifically, not things the art itself needs:
   deliberate art-copy layering rather than drift — an art decision for the
   maintainer.
 
-## Corpus generation:
-- **[2026-09-17] The pipeline assumes one source size, and checks only that it
-  is not mixed in shape.**
-  `checkAspects` compares aspect ratios with a 1% tolerance, so a corpus of
-  differing pixel dimensions passes, and `index.ts` takes `sizes[0]` as the
-  corpus's size for the level plan it prints and for every sheet's `tileSize`;
-  `scan.ts`'s `discoverLevels` makes the same assumption from the first room
-  that reports a size. Two consequences, worked out on synthetic pairs:
-  - Same aspect, different sizes (1024x1024 with 512x512): mostly
-    self-correcting, because a level directory is named for its width and each
-    source plans its own rungs, so `<width>/` still holds only that width. What
-    is lost is coverage - the smaller source writes no `512/` file, so that room
-    404s at the level the manifest advertises and falls back through its own
-    levels (rule 1 of `pyramid.ts` absorbs that) - and the `16/` directory only
-    the smaller source produces is written, never discovered, and never served.
-  - Within tolerance, different heights (1024x1024 with 1024x1029, 0.5% apart):
-    both write `128/`, one image 128px tall and the other 129px, and
-    `writeSheets` lays them out on `sizes[0]`'s row pitch. A 16-row sheet drifts
-    15px by its bottom row, and the `tileH` the manifest publishes for that
-    level matches only the first source.
-  Not reachable with a corpus the inpainting renders at one size, so this is a
-  hole in the preflight rather than a live bug. The fix is either to require one
-  exact dimension set (a second check beside the aspect check, and the cheaper
-  option) or to size each sheet grid from its own members, which the sheet
-  addressing in `layout.ts` cannot express today.
-
 ## Corpus loading:
 - **A corpus that half-loads says nothing.** All three fetches in
   `useCorpus.ts` end in `.catch(() => {})`, so a missing `metadata.json` or
