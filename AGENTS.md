@@ -486,6 +486,23 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   call, then re-checks health from outside.
                                   Manually dispatchable with a sha, which is
                                   the rollback button.
+- `release-please-config.json` / `.release-please-manifest.json`: what
+  `.github/workflows/release-please.yml` reads/writes - see "Release
+  discipline" below. `CHANGELOG.md` doesn't exist until that workflow writes
+  it on the first release.
+- `.github/workflows/release-please.yml`: on every push to main, keeps a
+                                          standing release PR current from
+                                          squash-merged PR titles since the
+                                          last release; merging it is the
+                                          release (version bump, changelog,
+                                          tag). Independent of `deploy.yml` -
+                                          see "Release discipline".
+- `.github/workflows/pr-title-lint.yml`: enforces the Conventional Commits
+                                         title format release-please.yml
+                                         depends on, as a required PR check.
+- `.github/pull_request_template.md`: explains the title format inline as a
+                                      comment (not rendered), plus a
+                                      description/testing checklist.
 
 ### Assets:
 - `assets/center_tile.png`: the center tile at cell (0, 0) containing diegetic
@@ -1186,6 +1203,35 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   since it checks out the new revision partway through its own run. A change
   to it lands on the deploy *after* the one introducing it - the same
   one-release lag any self-updating deploy script has, and not a bug to chase.
+
+### Release discipline
+
+- **The PR title is the only release input, and that is why it's linted.**
+  This repo squash-merges, so a PR's title becomes the commit subject on
+  main - the one line `release-please.yml` reads to decide the next version
+  and write `CHANGELOG.md`. `pr-title-lint.yml` enforces Conventional
+  Commits format (`feat: ...`, `fix: ...`, ...) on every PR title as a
+  required check, specifically so a malformed title fails at review time
+  rather than silently dropping out of the changelog. A PR's description and
+  its individual commits are read by nobody downstream of merge; only the
+  title matters, and the PR template says so.
+- **Mark a breaking change with `!` on the title, not a footer.** Squashing
+  keeps only the PR title as the commit subject - a `BREAKING CHANGE:`
+  footer written in the PR description does not survive that and
+  release-please will never see it. `feat!: ...` (or any type) is the one
+  place to flag it, and it's what forces a major bump.
+- **Releasing is a second PR, not a side effect of the first.**
+  `release-please.yml` keeps a standing release PR up to date on every push
+  to main; nothing is tagged, versioned, or written to `CHANGELOG.md` until
+  a human merges *that* PR. `package.json`'s `version` field and
+  `.release-please-manifest.json` are only ever written by that merge - never
+  hand-edit either.
+- **This is independent of `deploy.yml` and always will be.** Every push to
+  main deploys regardless of version state (see "Deploying to the VPS");
+  release-please's tags exist to mark what shipped when, in step with
+  `/api/health`'s commit reporting, not to gate whether it ships. Wiring
+  deploy to wait on a release tag would reintroduce exactly the release-train
+  latency this setup is meant to avoid for a single-maintainer project.
 
 ### The catalog, and the two modes
 
