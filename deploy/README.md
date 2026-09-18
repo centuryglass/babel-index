@@ -215,4 +215,7 @@ left. Read which step failed:
 - **The reverse proxy has to be in front of it.** `--base-path` alone serves a
   page whose every relative url 404s (see AGENTS.md, "Deployment and the base
   path"); the nginx config that strips the prefix is a separate, hand-managed
-  file on the box.
+  file on the box. `deploy/babel-index.nginx.conf` is a reference copy of
+  just the babel-index-relevant blocks - not a drop-in include, and not kept
+  in sync automatically, since the live file also has TLS and unrelated
+  vhosts that don't belong in this repo.
