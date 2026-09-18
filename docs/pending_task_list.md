@@ -4,23 +4,6 @@ What is still to do, and nothing else. Remove a task as it is completed — the
 code and the git log are the record of what was.
 
 ## A11y:
-- **A catalog row's `.catalog-tile-button` can be unclickable, intercepted by
-  its own row's `.story` text** (noticed 2026-09-14 while adding
-  `useContentZoom.ts`/`ZoomControls.tsx`, unrelated to that change - confirmed
-  by reverting it and reproducing the same failure on unmodified `main`).
-  Repro: open `/?catalog` at a 900x700 viewport, click the first row's
-  `.catalog-tile-button` - Playwright (and, by the same geometry, a real
-  pointer) hits the row's `<p class="story">` instead, which "intercepts
-  pointer events" per its own overlap report. `.catalog-row
-  .catalog-tile-button` is `float: left` specifically so the story wraps
-  around it (AGENTS.md's "the story wraps around it" note), and floats sit in
-  their own layer relative to normal-flow siblings - some width/viewport
-  combination is apparently landing the story's box on top of the floated
-  button rather than flowing around it. Not yet root-caused: unconfirmed
-  whether this is a `.catalog-row`/`.catalog-body` stacking order issue, a
-  float-vs-line-box quirk at this specific width, or something else - and it
-  needs checking across `NARROW_PX`/`ULTRA_NARROW_PX` and a few concrete
-  viewport widths before a fix is safe, not a same-pass guess.
 - No actual screen reader testing has happened yet. Learn orca and test
   manually. See accessibility-plan.md for more details on what to check, and
   other lingering questions.
