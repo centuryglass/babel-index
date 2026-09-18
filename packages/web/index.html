@@ -23,7 +23,7 @@
          this HTML without ever seeing <base href>, so app.ts's renderPage
          fills the canonical-url and og-image placeholders below with an
          absolute url per request, naming the page being served rather than
-         the site root - a /catalog/<file> permalink gets its own canonical
+         the site root - a /catalog/<slug> permalink gets its own canonical
          url and its own og:image (the room's own picture). Note that
          renderPage substitutes both placeholder names globally - spelling
          either inside this comment would rewrite this prose too. -->

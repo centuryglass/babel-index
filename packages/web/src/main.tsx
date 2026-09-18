@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { favoriteOrder, favoriteSort, favoriteCount, type SortMode } from '../../map/favorites.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
+import { buildSlugTable } from '../../map/slug.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
 import type { Config } from '../../config/config.ts';
 import { MapView } from './components/MapView.tsx';
@@ -194,6 +195,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // the current choice removes (panel text and debug HUD).
   const availableTags = useMemo(() => availableSensitiveTags(metadata), [metadata]);
   const blockedCount = useMemo(() => countBlocked(metadata, blockedTagSet), [metadata, blockedTagSet]);
+
+  // Room permalinks, for the overlay's copy-link button. Rebuilt when the
+  // sidecar lands: until then every room's slug is its filename stem, which
+  // resolves and redirects to the title url (`app.ts`'s `/catalog/:slug`), so
+  // a link copied in that window is never wrong - only not yet the pretty
+  // form.
+  const roomSlugs = useMemo(() => buildSlugTable(manifest.rooms, metadata).slugs, [manifest, metadata]);
 
   // useSearch and useRearrangement need each other: a search asks for the
   // rearrangement, and the rearrangement's announcement needs the search's
@@ -433,7 +441,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // The catalog's expanded room: tile at full size and the whole story -
   // how a reader sees either without leaving the fixed-height rows (see
   // `RoomOverlay`). Seeded once at mount from `INITIAL_ROUTE.room`, so a
-  // `/catalog/<file>` permalink opens that room's overlay directly, and
+  // `/catalog/<slug>` permalink opens that room's overlay directly, and
   // `order` is already final here, so the rank it opens with is the row's
   // real position.
   const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(() => {
@@ -1266,7 +1274,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={favoriteFor(overlay.id)}
-          shareFile={manifest.rooms[overlay.id]?.file ?? null}
+          shareSlug={roomSlugs[overlay.id] ?? null}
           view={(() => {
             const cell = cellById.get(overlay.id);
             return cell
@@ -1304,7 +1312,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           result={result}
           weights={config.search.weights}
           favorite={'id' in card ? favoriteFor(card.id) : null}
-          shareFile={'id' in card ? manifest.rooms[card.id]?.file ?? null : null}
+          shareSlug={'id' in card ? roomSlugs[card.id] ?? null : null}
           view={
             'id' in card
               ? {
@@ -1341,7 +1349,7 @@ const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer:
 
 /**
  * `window.__INITIAL_ROUTE__` - set by `app.ts`'s `renderPage` only on the
- * SSR `/catalog` and `/catalog/:file` routes (see index.html's
+ * SSR `/catalog` and `/catalog/:slug` routes (see index.html's
  * `%%INITIAL_ROUTE_SCRIPT%%`), absent on plain `/`. Read once at module
  * scope, so a visitor landing on one of those urls boots straight into the
  * matching interactive view instead of watching the server-rendered content

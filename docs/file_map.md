@@ -76,7 +76,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       do this themselves; `/api/manifest` only ever ships
                       `{url, ...counts}` for either file.
   * `catalogPage.ts`: Pure HTML-fragment builders for the SSR `/catalog` list
-                      and `/catalog/:file` room permalink (`app.ts`'s
+                      and `/catalog/:slug` room permalink (`app.ts`'s
                       `renderPage` embeds the result in `index.html`'s
                       `#root`) - reuses `packages/web/src/lib/catalog.ts`'s
                       own `alphabeticalOrder`/`pageOf`/`pageCount` rather than
@@ -91,7 +91,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `index.html`: HTML entry point, static page structure. Its `<head>`
                     carries the favicon/manifest links and the OG/Twitter card
                     meta tags; `app.ts`'s `renderPage` (shared by `/`,
-                    `/catalog`, and `/catalog/:file`) fills in
+                    `/catalog`, and `/catalog/:slug`) fills in
                     `%%TITLE%%`/`%%DESCRIPTION%%`/`%%CANONICAL_URL%%`/
                     `%%OG_IMAGE_URL%%` per request - the last two absolute,
                     since a link unfurler parses this HTML directly and never
@@ -123,7 +123,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.
                       Reads `window.__INITIAL_ROUTE__` once at module scope
-                      (set only by the SSR `/catalog`/`/catalog/:file` routes,
+                      (set only by the SSR `/catalog`/`/catalog/:slug` routes,
                       see `index.html`) alongside `?catalog`/`?blockTags`, so
                       a JS-capable visitor who lands on one of those urls
                       boots straight into the interactive catalog - with that
@@ -319,6 +319,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `ordering.ts`: Room placement, search density gradient, rank by embedding, pan resistance
   * `nextRoom.ts`: Find the next non-default room on the map in a given direction
   * `metadata.ts`: Normalizing and joining per-room keyword/story data
+  * `slug.ts`: Room permalinks - the `catalog/<slug>` path, the slug built
+              from a room's title, and the table resolving one back to a
+              room (with the filename stem as a permanent alias)
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
   * `moves.ts`: The rearrangement animation's type contract (`Move` and its

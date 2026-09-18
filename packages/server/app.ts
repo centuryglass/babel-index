@@ -15,6 +15,7 @@ import { logger } from './logger.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
 import { robotsTxt, renderSitemap } from './seo.ts';
+import { roomPath } from '../map/slug.ts';
 import { alphabeticalOrder, pageCount } from '../web/src/lib/catalog.ts';
 import { createUrlFor } from '../web/src/lib/rooms.ts';
 import type { Manifest } from '../map/manifest.ts';
@@ -342,7 +343,7 @@ export function createApp({
    * in one place regardless of which route is served.
    *
    * `canonicalPath` is the relative-to-base suffix of the page actually
-   * being served (`''` for `/`, `'catalog'`, `'catalog/<file>'`, ...) -
+   * being served (`''` for `/`, `'catalog'`, `'catalog/<slug>'`, ...) -
    * callers already know it, so this doesn't re-derive it from `req`.
    * `bodyHtml`/`initialRoute` are what makes a route more than `/`: real
    * content inside `#root` for crawlers/no-JS, and a hint for `main.tsx` to
@@ -431,7 +432,7 @@ export function createApp({
     app.get('/catalog', async (req, res, next) => {
       try {
         const pageNum = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
-        const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
+        const { metadata, tagLinks, slugs } = await loadRoomContent(manifest, imagesDir ?? null);
         const order = alphabeticalOrder(manifest.rooms, metadata);
         const urlFor = createUrlFor(manifest);
         const perPage = clientConfig.catalog.perPage;
@@ -439,6 +440,7 @@ export function createApp({
           rooms: manifest.rooms,
           metadata,
           tagLinks,
+          slugs: slugs.slugs,
           order,
           page: pageNum - 1,
           perPage,
@@ -459,40 +461,59 @@ export function createApp({
     });
 
     /**
-     * One room's permalink, keyed by filename rather than id: ids are
-     * positional (AGENTS.md, "Favorites") and renumber when the corpus
-     * changes, which would silently repoint an indexed/shared url at a
-     * different room.
+     * One room's permalink, keyed by its title (`packages/map/slug.ts`).
+     *
+     * A room answers to its filename stem as well, and anything but the
+     * canonical slug redirects to it - so a retitled room's old links still
+     * land, and a crawler is handed one url for one page.
+     *
+     * The lowercase retry is for a url that has been through something that
+     * capitalises. Every slug in the table is already lowercase, so it can
+     * only ever find the room the reader asked for, and the redirect then puts
+     * them on its real url.
      */
-    app.get('/catalog/:file', async (req, res, next) => {
+    app.get('/catalog/:slug', async (req, res, next) => {
       try {
-        const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
-        const result = renderRoomPage({
-          rooms: manifest.rooms,
-          metadata,
-          tagLinks,
-          file: req.params.file,
-          base,
-        });
-        const canonicalPath = `catalog/${encodeURIComponent(req.params.file)}`;
-        if (!result) {
+        const { metadata, tagLinks, slugs } = await loadRoomContent(manifest, imagesDir ?? null);
+        const asked = req.params.slug;
+        const id = slugs.lookup.get(asked) ?? slugs.lookup.get(asked.toLowerCase());
+        if (id === undefined) {
           await renderPage(req, res, next, {
             title: `Room not found · ${DEFAULT_TITLE}`,
             description: 'No such room in this library.',
             ogImagePath: 'og-image.jpg',
-            canonicalPath,
+            canonicalPath: roomPath(encodeURIComponent(asked)),
             bodyHtml: `<div class="ssr-page"><h1>No such room</h1><p><a href="${base}catalog">Back to the catalog</a></p></div>`,
             status: 404,
           });
           return;
         }
+        if (asked !== slugs.slugs[id]) {
+          // 302, not 301: a browser caches a permanent redirect forever, so a
+          // retitled room would leave a reader's own cache sending them to a
+          // url this corpus no longer has - the failure the stem alias exists
+          // to prevent. Nothing on the site links a stem, and the sitemap
+          // lists only canonical urls, so there is little for a crawler to
+          // consolidate here anyway.
+          //
+          // `base` is the public prefix the proxy strips (AGENTS.md,
+          // "Deployment and the base path"), so a root-absolute Location built
+          // from it is what the browser needs: a Location resolves against the
+          // request url, never against `<base href>`.
+          res.redirect(302, `${base}${roomPath(slugs.slugs[id])}`);
+          return;
+        }
+        const result = renderRoomPage({ rooms: manifest.rooms, metadata, tagLinks, id, base });
         await renderPage(req, res, next, {
           title: result.title,
           description: result.description,
           ogImagePath: result.ogImagePath,
-          canonicalPath,
+          canonicalPath: roomPath(slugs.slugs[id]),
           bodyHtml: result.bodyHtml,
-          initialRoute: { mode: 'catalog', room: req.params.file },
+          // The filename, not the slug: it is what `main.tsx` matches a room
+          // on, so translating here is what keeps the client from building a
+          // second slug table to read its own url.
+          initialRoute: { mode: 'catalog', room: manifest.rooms[id].file },
         });
       } catch (err) {
         next(err);
@@ -504,11 +525,16 @@ export function createApp({
     res.type('text/plain').send(robotsTxt(requestOrigin(req, base)));
   });
 
-  app.get('/sitemap.xml', (req, res) => {
-    // Every room's url is listed regardless of title, so - unlike /catalog -
-    // this needs no metadata join, only the room count and page size.
-    const pages = pageCount(manifest.rooms.length, clientConfig.catalog.perPage);
-    res.type('application/xml').send(renderSitemap(requestOrigin(req, base), manifest.rooms, pages));
+  app.get('/sitemap.xml', async (req, res, next) => {
+    try {
+      // A room's url is built from its title, so this needs the metadata join
+      // before it can name a single room.
+      const { slugs } = await loadRoomContent(manifest, imagesDir ?? null);
+      const pages = pageCount(manifest.rooms.length, clientConfig.catalog.perPage);
+      res.type('application/xml').send(renderSitemap(requestOrigin(req, base), slugs.slugs, pages));
+    } catch (err) {
+      next(err);
+    }
   });
 
   if (watch) {

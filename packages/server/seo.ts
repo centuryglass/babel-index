@@ -4,7 +4,7 @@
  * `requestOrigin` helper) and mounts these at the plain root paths crawlers
  * expect.
  */
-import type { Room } from '../map/manifest.ts';
+import { roomPath } from '../map/slug.ts';
 
 /**
  * @param origin e.g. `https://example.com/` (trailing slash, matching
@@ -19,13 +19,17 @@ export function robotsTxt(origin: string): string {
  * Every room permalink, every catalog page, and the root - `origin` already
  * carries the base path (see `requestOrigin`), so every `<loc>` here is a
  * plain concatenation.
+ *
+ * @param roomSlugs each room's canonical slug, from `buildSlugTable`. Only the
+ *   canonical form is listed: a room's stem alias redirects to it, and naming
+ *   both would offer a crawler two urls for one page.
  */
-export function renderSitemap(origin: string, rooms: Room[], catalogPageCount: number): string {
+export function renderSitemap(origin: string, roomSlugs: string[], catalogPageCount: number): string {
   const urls = [
     origin,
     `${origin}catalog`,
     ...Array.from({ length: catalogPageCount - 1 }, (_, i) => `${origin}catalog?page=${i + 2}`),
-    ...rooms.map((r) => `${origin}catalog/${encodeURIComponent(r.file)}`),
+    ...roomSlugs.map((slug) => `${origin}${roomPath(slug)}`),
   ];
   const entries = urls.map((u) => `  <url><loc>${escapeXml(u)}</loc></url>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries}\n</urlset>\n`;

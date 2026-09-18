@@ -32,6 +32,7 @@ import { useScrimDismiss } from '../hooks/useDialog.ts';
 import { ZoomControls } from './ZoomControls.tsx';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
+import { roomPath } from '../../../map/slug.ts';
 import { BASE_TILE } from '../lib/pyramid.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
@@ -46,15 +47,14 @@ import type { Config } from '../../../config/config.ts';
 type RoomSubject = { id: number; rank?: number } | { generic: true };
 
 /**
- * The permalink itself - relative `catalog/<file>` resolved against
+ * The permalink itself - `roomPath`'s relative url resolved against
  * `document.baseURI`, the same `<base href>` every other relative fetch in
  * this app resolves against (see AGENTS.md's "Deployment and the base
  * path"), so the copied link is correct under a subpath deployment without
- * this file knowing what that prefix is. `encodeURIComponent` matches
- * `app.ts`'s own `canonicalPath` for this same route.
+ * this file knowing what that prefix is.
  */
-function buildShareUrl(file: string): string {
-  return new URL(`catalog/${encodeURIComponent(file)}`, document.baseURI).href;
+function buildShareUrl(slug: string): string {
+  return new URL(roomPath(slug), document.baseURI).href;
 }
 
 function ShareIcon() {
@@ -150,7 +150,7 @@ export function RoomOverlay({
   favorite = null,
   view = null,
   naturalSize = null,
-  shareFile = null,
+  shareSlug = null,
 }: {
   room: RoomSubject;
   desc: Description;
@@ -190,14 +190,14 @@ export function RoomOverlay({
    */
   view?: { label: string; shortLabel: string; onClick: () => void } | null;
   /**
-   * This room's filename, for the copy-link button - `null` for a generic
-   * cell, which has no permalink (`/catalog/:file` only exists for a real
-   * corpus room). The url itself is built from it in `buildShareUrl` rather
-   * than passed in whole, so every caller states the one fact it actually
-   * knows (which room) instead of each re-deriving the same `catalog/...`
-   * path.
+   * This room's permalink slug, for the copy-link button - `null` for a
+   * generic cell, which has no permalink (`/catalog/:slug` only exists for a
+   * real corpus room). The url itself is built from it in `buildShareUrl`
+   * rather than passed in whole, so every caller states the one fact it
+   * actually knows (which room) instead of each re-deriving the same
+   * `catalog/...` path.
    */
-  shareFile?: string | null;
+  shareSlug?: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -520,7 +520,7 @@ export function RoomOverlay({
             />
           </div>
 
-          {shareFile && <ShareButton url={buildShareUrl(shareFile)} />}
+          {shareSlug && <ShareButton url={buildShareUrl(shareSlug)} />}
         </div>
       </div>
     </div>

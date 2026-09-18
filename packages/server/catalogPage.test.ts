@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
+import { buildSlugTable } from '../map/slug.ts';
 import type { Room } from '../map/manifest.ts';
 import type { RoomMeta } from '../map/metadata.ts';
 import type { UrlFor } from '../web/src/lib/rooms.ts';
@@ -23,6 +24,7 @@ test('renderCatalogList lists a page of rooms with real links, titles and thumbn
     rooms,
     metadata,
     tagLinks: { gothic: 'https://example.com/gothic' },
+    slugs: buildSlugTable(rooms, metadata).slugs,
     order,
     page: 0,
     perPage: 10,
@@ -35,8 +37,8 @@ test('renderCatalogList lists a page of rooms with real links, titles and thumbn
   assert.match(description, /2 rooms/);
   assert.match(bodyHtml, /Alpha/);
   assert.match(bodyHtml, /Bravo/);
-  assert.match(bodyHtml, /href="\/catalog\/a\.jpg"/);
-  assert.match(bodyHtml, /href="\/catalog\/b\.jpg"/);
+  assert.match(bodyHtml, /href="\/catalog\/alpha"/);
+  assert.match(bodyHtml, /href="\/catalog\/bravo"/);
   assert.match(bodyHtml, /src="images\/256\/1\.jpg"/);
   assert.match(bodyHtml, /href="https:\/\/example\.com\/gothic"/);
   assert.match(bodyHtml, /A story about bravo\./);
@@ -49,6 +51,7 @@ test('renderCatalogList falls back to the room file when a thumbnail level is mi
     rooms,
     metadata: [null],
     tagLinks: null,
+    slugs: buildSlugTable(rooms, [null]).slugs,
     order: [0],
     page: 0,
     perPage: 10,
@@ -64,17 +67,18 @@ test('renderCatalogList paginates and links prev/next, dropping ?page=1 from the
   const rooms = Array.from({ length: 25 }, (_, i) => room(i, `${i}.jpg`));
   const metadata: (RoomMeta | null)[] = rooms.map(() => null);
   const order = rooms.map((_, i) => i);
+  const slugs = buildSlugTable(rooms, metadata).slugs;
 
-  const page1 = renderCatalogList({ rooms, metadata, tagLinks: null, order, page: 0, perPage: 10, urlFor, base: '/' });
+  const page1 = renderCatalogList({ rooms, metadata, tagLinks: null, slugs, order, page: 0, perPage: 10, urlFor, base: '/' });
   assert.equal(page1.pageCount, 3);
   assert.doesNotMatch(page1.bodyHtml, /previous/);
   assert.match(page1.bodyHtml, /href="\/catalog\?page=2">next/);
 
-  const page2 = renderCatalogList({ rooms, metadata, tagLinks: null, order, page: 1, perPage: 10, urlFor, base: '/' });
+  const page2 = renderCatalogList({ rooms, metadata, tagLinks: null, slugs, order, page: 1, perPage: 10, urlFor, base: '/' });
   assert.match(page2.bodyHtml, /href="\/catalog">.*previous/s);
   assert.match(page2.bodyHtml, /href="\/catalog\?page=3">next/);
 
-  const page3 = renderCatalogList({ rooms, metadata, tagLinks: null, order, page: 2, perPage: 10, urlFor, base: '/' });
+  const page3 = renderCatalogList({ rooms, metadata, tagLinks: null, slugs, order, page: 2, perPage: 10, urlFor, base: '/' });
   assert.doesNotMatch(page3.bodyHtml, /next/);
 });
 
@@ -87,6 +91,7 @@ test('renderCatalogList escapes a room title so a stray "<" cannot break the mar
     rooms,
     metadata,
     tagLinks: null,
+    slugs: buildSlugTable(rooms, metadata).slugs,
     order: [0],
     page: 0,
     perPage: 10,
@@ -95,17 +100,6 @@ test('renderCatalogList escapes a room title so a stray "<" cannot break the mar
   });
   assert.doesNotMatch(bodyHtml, /<script>alert/);
   assert.match(bodyHtml, /&lt;script&gt;/);
-});
-
-test('renderRoomPage returns null for a filename this corpus does not have', () => {
-  const result = renderRoomPage({
-    rooms: [room(0, 'a.jpg')],
-    metadata: [null],
-    tagLinks: null,
-    file: 'missing.jpg',
-    base: '/',
-  });
-  assert.equal(result, null);
 });
 
 test('renderRoomPage renders the room title, image, keywords and story, and its own og image', () => {
@@ -123,19 +117,18 @@ test('renderRoomPage renders the room title, image, keywords and story, and its 
     rooms,
     metadata,
     tagLinks: { gothic: 'https://example.com/gothic' },
-    file: 'a.jpg',
+    id: 0,
     base: '/',
   });
-  assert.ok(result);
-  assert.match(result!.title, /The Reading Room/);
-  assert.match(result!.description, /quiet room/);
-  assert.equal(result!.ogImagePath, 'images/a.jpg');
-  assert.match(result!.bodyHtml, /The Reading Room/);
-  assert.match(result!.bodyHtml, /alt="A dim library wall\."/);
-  assert.match(result!.bodyHtml, /candlelight/);
-  assert.match(result!.bodyHtml, /href="https:\/\/example\.com\/gothic">gothic/);
-  assert.match(result!.bodyHtml, /half-remembered books/);
-  assert.match(result!.bodyHtml, /href="\/catalog">/);
+  assert.match(result.title, /The Reading Room/);
+  assert.match(result.description, /quiet room/);
+  assert.equal(result.ogImagePath, 'images/a.jpg');
+  assert.match(result.bodyHtml, /The Reading Room/);
+  assert.match(result.bodyHtml, /alt="A dim library wall\."/);
+  assert.match(result.bodyHtml, /candlelight/);
+  assert.match(result.bodyHtml, /href="https:\/\/example\.com\/gothic">gothic/);
+  assert.match(result.bodyHtml, /half-remembered books/);
+  assert.match(result.bodyHtml, /href="\/catalog">/);
 });
 
 test('escapeHtml escapes every reserved character', () => {

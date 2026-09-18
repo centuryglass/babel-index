@@ -17,7 +17,7 @@ import type { AddressInfo } from 'node:net';
  * No browser and no bundler: the endpoints are the thing under test.
  */
 async function serving(
-  run: (ctx: { base: string; dir: string; port: number; get: (p: string) => Promise<Response> }) => Promise<void>,
+  run: (ctx: { base: string; dir: string; port: number; get: (p: string, init?: RequestInit) => Promise<Response> }) => Promise<void>,
   { files, ...opts }: { files?: Record<string, Buffer | string> } & Partial<CreateAppOptions> = {}
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-api-'));
@@ -45,7 +45,7 @@ async function serving(
     // url (relative, no leading slash, since app.ts's urls resolve against
     // <base href> in the browser - see base-path.ts) without the caller
     // having to know which kind it was handed.
-    return await run({ base, dir, port, get: (p) => fetch(`${base}/${p.replace(/^\//, '')}`) });
+    return await run({ base, dir, port, get: (p, init) => fetch(`${base}/${p.replace(/^\//, '')}`, init) });
   } finally {
     await new Promise((r) => server.close(r));
     await rm(dir, { recursive: true, force: true });
@@ -529,9 +529,11 @@ test('GET /catalog lists real room links and titles, alphabetically, with correc
       const res = await get('/catalog');
       assert.equal(res.status, 200);
       const html = await res.text();
-      assert.match(html, /href="\/catalog\/001\.jpg"/);
-      assert.match(html, /href="\/catalog\/002\.jpg"/);
-      assert.match(html, /href="\/catalog\/003\.jpg"/);
+      // No metadata in this corpus, so every room is addressed by its stem.
+      assert.match(html, /href="\/catalog\/001"/);
+      assert.match(html, /href="\/catalog\/002"/);
+      assert.match(html, /href="\/catalog\/003"/);
+      assert.doesNotMatch(html, /href="\/catalog\/00\d\.jpg"/, 'an image extension in a page url is a lie about what it serves');
       assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/catalog"`));
       assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"catalog"\}/);
 
@@ -550,19 +552,25 @@ test('GET /catalog lists real room links and titles, alphabetically, with correc
   );
 });
 
-test('GET /catalog/:file shows that room\'s story/keywords and its own og:image; an unknown file 404s', async () => {
+test('GET /catalog/:slug is addressed by title, carries that room\'s content, and 404s an unknown slug', async () => {
   await serving(
     async ({ get, port }) => {
-      const res = await get('/catalog/001.jpg');
+      const res = await get('/catalog/reading-room');
       assert.equal(res.status, 200);
       const html = await res.text();
       assert.match(html, /A quiet reading room\./);
       assert.match(html, /gothic/);
       assert.match(html, new RegExp(`content="http://127\\.0\\.0\\.1:${port}/images/001\\.jpg"`));
+      assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/catalog/reading-room"`));
+      // The client keys rooms by filename, so the route hands it that rather
+      // than the slug it was reached by.
       assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"catalog","room":"001\.jpg"\}/);
 
-      const missing = await get('/catalog/nope.jpg');
-      assert.equal(missing.status, 404);
+      // An untitled room keeps its stem, and no url anywhere carries the
+      // image extension.
+      assert.equal((await get('/catalog/002')).status, 200);
+      assert.equal((await get('/catalog/001.jpg')).status, 404);
+      assert.equal((await get('/catalog/nope')).status, 404);
     },
     {
       files: {
@@ -572,6 +580,32 @@ test('GET /catalog/:file shows that room\'s story/keywords and its own og:image;
         'metadata.json': JSON.stringify({
           '001.jpg': { title: 'Reading Room', keywords: [{ text: 'gothic', type: null }], story: 'A quiet reading room.' },
         }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('a titled room\'s filename stem still resolves, redirecting to the title url', async () => {
+  // The stability half of the permalink scheme: a title is corpus data and can
+  // be rewritten, and the stem is what `scan.ts` reads off the directory.
+  await serving(
+    async ({ get }) => {
+      const res = await get('/catalog/001', { redirect: 'manual' });
+      assert.equal(res.status, 302, 'a permanent redirect would outlive the title it points at');
+      assert.equal(res.headers.get('location'), '/catalog/reading-room');
+
+      // Case is forgiven the same way, so a url that has been through
+      // something that capitalises still lands.
+      const shouted = await get('/catalog/Reading-Room', { redirect: 'manual' });
+      assert.equal(shouted.status, 302);
+      assert.equal(shouted.headers.get('location'), '/catalog/reading-room');
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({ '001.jpg': { title: 'Reading Room', keywords: [], story: null } }),
       },
       readIndexHtml: async () => SSR_INDEX_HTML,
     }
@@ -589,9 +623,9 @@ test('GET /robots.txt and /sitemap.xml reference every room, and work even witho
     assert.equal(sitemap.status, 200);
     assert.match(sitemap.headers.get('content-type'), /application\/xml/);
     const xml = await sitemap.text();
-    assert.match(xml, /catalog\/001\.jpg/);
-    assert.match(xml, /catalog\/002\.jpg/);
-    assert.match(xml, /catalog\/003\.png/);
+    assert.match(xml, /<loc>[^<]*\/catalog\/001<\/loc>/);
+    assert.match(xml, /<loc>[^<]*\/catalog\/002<\/loc>/);
+    assert.match(xml, /<loc>[^<]*\/catalog\/003<\/loc>/);
   });
 });
 
