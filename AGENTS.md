@@ -834,7 +834,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   title folded to ASCII (`slugify`, over `scoring.ts`'s own `fold`), and the
   server, the sitemap and the overlay's copy-link button all read
   `buildSlugTable` rather than assembling a path each. A room's filename
-  stem is a permanent alias that 301s to the title url, so a retitle leaves
+  stem is a permanent alias that redirects to the title url, so a retitle leaves
   the links already shared somewhere to land; an untitled room has the stem
   as its real url. A room id never reaches a path - ids are positional, so
   one in a shared url comes back pointing at a different room. Unique titles
