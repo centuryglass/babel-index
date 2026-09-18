@@ -1279,12 +1279,30 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           favorite={favoriteFor(overlay.id)}
           shareSlug={roomSlugs[overlay.id] ?? null}
           shareMode={mode}
-          view={(() => {
-            const cell = cellById.get(overlay.id);
-            return cell
-              ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
-              : null;
-          })()}
+          // The reciprocal follows the ambient reading, not which UI opened
+          // this overlay - ordinarily that's the same thing (a catalog row
+          // only ever opens this while `mode === 'catalog'`), but a
+          // `/map/<slug>` permalink opens it while `mode === 'map'`, and there
+          // "show on the map" would point at the map already behind it. Same
+          // "show in the catalog" action the map's own card view offers.
+          view={
+            mode === 'map'
+              ? {
+                  label: 'show in the catalog',
+                  shortLabel: 'catalog',
+                  onClick: () => {
+                    setCatalogSpotlightId(overlay.id);
+                    enterCatalog();
+                    setOverlay(null);
+                  },
+                }
+              : (() => {
+                  const cell = cellById.get(overlay.id);
+                  return cell
+                    ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
+                    : null;
+                })()
+          }
         />
       )}
 
