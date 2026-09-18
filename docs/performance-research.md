@@ -4,6 +4,13 @@ A read-through of the render path looking for non-trivial performance wins, with
 the dropped frames during the rearrangement's zoom-out and slide as the
 motivating case.
 
+**Status: the still-open items below (everything not marked "Implemented")
+are also tracked in `docs/pending_task_list.md`'s "Rendering", "Search" and
+"Rearrangement / camera" sections as of 2026-09-18, each restated
+standalone there rather than by section number - update both places
+together rather than letting the task list drift back out of sync with
+what's actually left here.**
+
 **Status: §1-§7 are hypotheses; §9 is measured.** §1-§7 come from reading the
 code and computing what each cost must be, not from a profile — several are
 arithmetic certainties (a 48 MB decode is a 48 MB decode), others educated

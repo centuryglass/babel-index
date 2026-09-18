@@ -154,7 +154,156 @@ for that audience specifically, not things the art itself needs:
   confidence. `embeddings.json` already records `scale` and nothing reads it
   back — carrying it through the manifest removes the constant from the client
   entirely.
+## Search:
+- **[2026-09-18] `rankHybrid` scores the whole corpus synchronously,
+  immediately before the rearrangement it triggers.** `scoring.ts`'s
+  `rankHybrid` runs `embeddingScores` over the full embedding set plus
+  per-room tokenization/lemmatization on the main thread, and whatever it
+  costs lands as a single stall right at the start of the animation - the
+  moment a dropped frame is most visible. The scoring functions are already
+  pure and browser-free, which is most of the work a worker would need
+  done; the complication is `useSearch` already juggles an async server
+  round trip for the CLIP text tower, so adding a second async boundary
+  needs care about ordering and cancellation. Not yet measured how large
+  this actually is - worth profiling before committing to the worker move.
+
 ## Rendering:
+- **[2026-09-18] A forced synchronous layout runs on every frame the map ever
+  draws.** `useMapRenderer.ts` writes inline styles to `searchEl`/`booksEl`/
+  `bookEl`/`controlsEl` and then, in the same callback, calls
+  `arrowEl.getBoundingClientRect()` and `canvas.getBoundingClientRect()` -
+  reading either forces the browser to flush the layout the writes just
+  queued, before the frame's canvas drawing starts. `SearchOrbitArrow` always
+  renders (`MapView.tsx`), so `arrowEl` is never null and this never skips.
+  It costs nothing on resize/scroll, so caching both rects and refreshing
+  them from a `ResizeObserver` (one on the canvas, one on the badge, since
+  the badge's position can change from CSS alone) removes it entirely.
+  Verifiable in Chrome DevTools' performance panel ("Forced reflow") in
+  under a minute. `document.getElementById('hud')` also runs every frame in
+  the same function and can be hoisted into the effect - it returns null on
+  every call outside `?debug`.
+- **[2026-09-18] The center shelf's spines are refit from scratch every
+  frame during the zoom-out flight.** `composeSpines` (`center.ts`) calls
+  `fitFontSize` and `fitText` for all `BOOK_COUNT` spines every frame -
+  several `measureText` calls per spine, each preceded by a `ctx.font =`
+  assignment that reparses a CSS font shorthand - even though the titles
+  never change and only the scale does. A rearrangement's flight *starts*
+  at the opening view, framed on the shelf, so this runs at full cost for
+  the whole stretch until `areSpinesLegible` goes false partway through the
+  zoom-out - a cost profile that would look exactly like "the first half of
+  the zoom stutters, then smooths out." Memoize per `(text, quantized
+  spine width)`; the cache is bounded by `BOOK_COUNT` and needs clearing on
+  `document.fonts.ready` so a late-loading web font doesn't leave stale
+  sizes.
+- **[2026-09-18] Three independent rAF loops drive one frame, adding a
+  one-frame lag, and one of them checks `matchMedia` every tick for no
+  reason.** During a rearrangement, `useMapCamera.ts`'s permanent
+  flight/glide loop, `useRearrangement.ts`'s slideshow tick, and
+  `useDistillMode.ts`'s fade loop each call `requestDraw`, which schedules
+  `render` for the *next* rAF tick rather than drawing immediately - so the
+  camera advances in frame N and paints for that position in frame N+1.
+  Consolidating into one driver loop that steps every animator and then
+  draws once is a real refactor (each subsystem currently owns its own
+  motion for a documented reason - see `useMapRenderer.ts`'s own docblock).
+  The easy, safe half: `useMapCamera.ts`'s loop calls
+  `prefersReducedMotion()` (`matchMedia('(prefers-reduced-motion: reduce)')`)
+  on every tick, 60 times a second forever including in catalog mode - hoist
+  the `MediaQueryList` and listen for changes instead.
+- **[2026-09-18] The canvas backing store stays at full device pixel ratio
+  during motion.** `useMapRenderer.ts` sizes the canvas at `min(2,
+  devicePixelRatio)` at all times, so a retina display fills ~4x the pixels
+  of a `dpr=1` frame on every draw, including mid-flight and mid-slide when
+  a dropped frame is most visible and reduced resolution is least
+  perceptible. Dropping to `dpr=1` for the duration of an animation and
+  restoring it on settle needs care: resizing `canvas.width`/`height`
+  reallocates the backing store (must happen once at start/end, never per
+  frame, or it flashes), and a lower dpr changes `pickLevel`'s demand
+  width, which can trigger a pyramid level transition - this wants
+  designing together with level selection, not shipped as an isolated
+  toggle.
+- **[2026-09-18] Both renderers pay for a redundant full-screen clear every
+  frame.** `render.ts` and `slide.ts` both start with a full-viewport
+  `fillRect`, then draw a cell grid that's computed to cover the entire
+  viewport anyway (including the "blank" fallback path, which fills its own
+  rect). Cheap to remove, but the clear is genuinely load-bearing the
+  moment a future change leaves a gap in coverage - keep it behind `DEBUG`
+  or add a coverage assertion in `render.test.ts`/`slide.test.ts` rather
+  than deleting it outright.
+- **[2026-09-18] Several per-cell hot paths allocate on every call even
+  though the answer is constant.** `rankOf` (`ordering.ts`) builds a
+  `` `${x},${y}` `` template-literal string as a Map key on every call, and
+  `roomAt` returns a fresh result object every time - both are called from
+  the render loop's visible pass and its prefetch ring, so at coarse zoom
+  that's on the order of 12,500 strings and 12,500 objects per frame.
+  `genericId(i)` (`tiles.ts`) similarly builds `` `generic:${i}` `` fresh on
+  every call from every generic cell every frame; since `genericCount` is
+  known at load, those ids can just be interned into an array once (keeping
+  `genericId(-1) === CENTER`). The `roomAt`/`rankOf` fix is less trivial:
+  `RoomAtResult` is a discriminated union used well beyond the render loop,
+  so removing its per-call allocation probably wants a second
+  scalar-returning API for the hot path (e.g. `rankAt(x, y)` returning `-1`
+  for generic) rather than a shared mutable result object, which would be a
+  footgun for anything that retains it across iterations. Only matters at
+  coarse zoom / far pan, not during an ordinary rearrangement.
+- **[2026-09-18] The favorite badge draws and hits-tests with no zoom gate,
+  which is both wasted work and a real usability bug.** `render.ts`/
+  `slide.ts` call `drawFavoriteBadge` for every non-center, non-generic
+  cell regardless of zoom - at a cell width of 10px the badge draws at
+  roughly 1% of its native size, for no visible output, roughly doubling
+  the draw calls and cache lookups of a zoomed-out frame. Separately, and
+  worse, `favoriteBadge.ts`'s `favoriteHitRect` returns a real (touch-padded)
+  hit rect at any size down to sub-pixel, and `main.tsx` hit-tests against
+  it directly with no minimum - so a coarse-zoom tap can toggle a favorite
+  on an invisible target. Gating both draw and hit-test on one shared
+  legibility threshold (the center tile's controls already do this via
+  `areSpinesLegible`) fixes the live sub-pixel target and the wasted draws
+  together, at the cost of badges fading out when zoomed way out - which is
+  a design call (an at-a-glance sense of favorited rooms across a wide
+  view would need a cheaper coarse-zoom representation instead of silence,
+  if that view matters).
+- **[2026-09-18] The prefetch ring computes work it then throws away once
+  its queue is full, and the warm pass repeats the same few ids thousands
+  of times.** `render.ts`'s ring walk calls `layout.roomAt()`/`idOf()` for
+  every ring cell (at coarse zoom, several thousand extra cells beyond the
+  visible area) before calling `cache.prefetch`, which early-returns once
+  `queue.length >= QUEUE_LIMIT` (256) - everything computed after the queue
+  fills is pure waste. Separately, the warm pass iterates the whole
+  `visible` array per level even though ~80% of entries at coarse zoom are
+  one of a handful of generic ids. Checking remaining queue capacity before
+  computing an id, and deduplicating the warm pass to walk distinct ids
+  rather than cells, are both mechanical fixes - but bailing early makes
+  prefetch coverage order-dependent (the ring is walked in a fixed raster
+  order), so pair it with rotating the start point per frame or widening
+  `QUEUE_LIMIT` to avoid always warming the same corner first.
+- **[2026-09-18] The slide's non-moving field is redrawn in full every
+  frame even though it cannot change.** `slide.ts` paints every cell not in
+  a moving row/column on every frame; caching that "still field" to an
+  offscreen canvas and blitting it, drawing only the moving lines on top,
+  would help both the slide and (generalized to panning in `render.ts`) the
+  zoomed-out browsing case. This is a structural change, not a quick fix:
+  invalidation is the whole problem (a step absorption, a fade change, a
+  hover, a badge toggle, or a tile arriving via `onLoad` at an arbitrary
+  time all dirty the cache), it costs a second full-size dpr-2 backing
+  store, and it complicates the `DrawContext` abstraction `render.test.ts`
+  relies on to test the renderer without a browser. Worth doing only with a
+  real invalidation design in hand, not as a quick win.
+- **[2026-09-18] The unthrottled `pointermove` handler does several times
+  the work it needs to, every event.** `useMapRenderer.ts`'s pointermove
+  handler runs a `getBoundingClientRect`, three `querySelector` calls, two
+  polygon point-in-shape tests, and an allocating `roomAtPoint`, and can call
+  `draw.current()` up to three times - on every event, and high-rate mice/
+  trackpads fire well above 60Hz. Storing the last event and processing it
+  once per rAF, caching the three `querySelector` results in the effect,
+  and sharing a cached canvas rect (see the forced-layout item above) would
+  fix it at the cost of one imperceptible frame of hover latency.
+- **[2026-09-18] Whether level 3's sheets should also move to per-file is
+  an open question, not yet decided.** Level 2's sheets were unpacked
+  because sheets there cost a ~94x memory amplification to save a dozen
+  requests; level 3 is a less extreme but still poor trade (roughly 96MB of
+  sheets against 2.6MB per-file, for 56 requests saved at a typical
+  desktop viewport). The reason to hold off was to move one rung, measure,
+  and decide about the next rather than committing to the whole ladder at
+  once - that follow-up measurement/decision hasn't happened.
 - **WebGL is the default renderer** (`webglFlag.ts`'s `DEFAULT_WEBGL`), with
   `?webgl=0` as the Canvas2D escape hatch and a `supportsWebGL2()` probe that
   falls back automatically. Canvas2D is still a full second renderer, kept in
@@ -217,6 +366,38 @@ for that audience specifically, not things the art itself needs:
   a `flyTo` from a control does not currently do this. Confirm whether that's
   the intended reading of the invariant and, if so, wire `flyTo` to end an
   active rearrangement the same way a pointer grab does.
+- **[2026-09-18] The rearrangement's zoom-out target could go further, but
+  it's blocked on animation pacing, not on rendering cost.** The
+  rearrangement's zoom-out currently reuses `config.camera.minVisibleCells`
+  (5), which puts it at pyramid level 0 - full-resolution 1024x768 tiles.
+  Raising it to ~8 cells (level 1, 4x fewer pixels per tile) is close to
+  free: the working set drops and the planner gets slightly cheaper, at the
+  cost of stretching a 0.81s animation to about 1.43s. Going further (level
+  2, 16x smaller tiles) needs its own animation-pacing work first: measured
+  timings put a minVis-16 animation at ~3.8s and minVis-32 at ~10s, because
+  more lines cross the camera and `buildTimeline` sequences them mostly
+  sequentially - peak concurrent motions barely rises across that whole
+  range. Running more lanes concurrently could keep it near a second while
+  looking richer, but changing which stages `illusion.ts` marks `wave`
+  touches the independence guarantees documented in AGENTS.md's "The
+  reorder animation" and isn't a constant to twiddle casually. Any of this
+  also needs its own `config.slide` constant (e.g. `zoomOutCells`) rather
+  than reusing `minVisibleCells`, which is shared with the unrelated
+  return-to-center view (`Home`/`End`, the center button, double-tap-back) -
+  raising that one directly would zoom the reader out on every keypress,
+  not just during a rearrangement.
+- **[2026-09-18] Android Firefox's first rearrangement of a session still
+  shows ~1.9s of cumulative slide-phase stalling, and the cause isn't
+  understood.** This is after `prepareRearrangement` already fetches and
+  decodes every tile the animation will show before the flight starts, so
+  it isn't the fetch/decode cost measured elsewhere. The working hypothesis
+  is a GPU texture-upload cost paid at the first real `drawImage` (decode-
+  ready isn't upload-ready), but two warm-up designs were tried and neither
+  helped on either Android browser tested, so nothing shipped. A more
+  likely mechanism - compositing or paint scheduling tied to element
+  visibility rather than to the draw call itself - hasn't been
+  investigated. Needs a fresh profiling pass on Android Firefox
+  specifically, not another warm-up variant.
 - **[2026-09-17] `slide.prepareTimeoutMs` cannot be raised above 5000ms.**
   `duration()`'s `DURATION_MAX_MS` ceiling is written for animation durations -
   "past a few seconds a camera move has stopped being a transition and become a
