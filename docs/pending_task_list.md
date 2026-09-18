@@ -18,17 +18,6 @@ code and the git log are the record of what was.
   origin. Add a second ruleset (rate limit + short-TTL cache keyed on the
   query string) scoped to the app's hostname for that endpoint specifically.
 
-- **The subpath deployment's nginx config is still untracked** (noticed
-  9/14/26 while wiring up `deploy/`). Nothing in the repo names
-  `server-nginx.conf` any more - the 2026-09-17 AGENTS.md and
-  `packages/server` comment passes cleared those pointers; AGENTS.md now says
-  "the VPS's hand-managed nginx config" and cites `deploy/README.md` - and no
-  such file is tracked here or in `.gitignore`: it only ever lived on the
-  VPS. The open decision is whether to commit the real thing: it is the one
-  piece of the deployment still managed entirely by hand, and the one the
-  workflow's public health check fails on when it is wrong. Do not
-  reconstruct it from the AGENTS.md description without diffing against the
-  live file first.
 - **The CLIP weights cache inside `node_modules`.** transformers.js defaults
   `env.cacheDir` to `node_modules/@huggingface/transformers/.cache`, so any
   `npm ci` throws away a few hundred MB of downloaded model.

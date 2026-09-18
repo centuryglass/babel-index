@@ -463,6 +463,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                         definition of "the deploy worked".
   * `README.md`: the one-time VPS and repository-settings setup, and the
                  rollback path.
+  * `babel-index.nginx.conf`: reference copy of just the babel-index-relevant
+                              location blocks from the VPS's hand-managed
+                              nginx config - a snippet to diff against, not a
+                              drop-in include, and not synced automatically.
 - `.github/workflows/deploy.yml`: waits for `ci` to go green on a push to
                                   main, ships that exact sha over one ssh
                                   call, then re-checks health from outside.
