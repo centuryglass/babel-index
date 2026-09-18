@@ -407,7 +407,7 @@ export function createTileCache({
   // servableLevel's answer is immutable for a given (id, want): a shared id
   // resolves at level 0 only, so a generic cell walks the whole ladder - one
   // `locateTile` call per rung in each direction - to rediscover that same
-  // constant on every frame (see docs/performance-research.md §4.1).
+  // constant on every frame.
   // Memoized per want then id, valid for the life of this cache - a manifest
   // change gets a fresh `locateTile` and therefore a fresh cache via the
   // caller's own memoization of both.

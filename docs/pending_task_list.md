@@ -116,7 +116,6 @@ for that audience specifically, not things the art itself needs:
   confidence. `embeddings.json` already records `scale` and nothing reads it
   back — carrying it through the manifest removes the constant from the client
   entirely.
-## Search:
 - **[2026-09-18] `rankHybrid` scores the whole corpus synchronously,
   immediately before the rearrangement it triggers.** `scoring.ts`'s
   `rankHybrid` runs `embeddingScores` over the full embedding set plus
@@ -144,19 +143,20 @@ for that audience specifically, not things the art itself needs:
   under a minute. `document.getElementById('hud')` also runs every frame in
   the same function and can be hoisted into the effect - it returns null on
   every call outside `?debug`.
-- **[2026-09-18] The center shelf's spines are refit from scratch every
-  frame during the zoom-out flight.** `composeSpines` (`center.ts`) calls
+- **[2026-09-18] `render.ts`'s Canvas2D path still refits the center
+  shelf's spines from scratch every frame during the zoom-out flight - the
+  WebGL path already fixed this.** `composeSpines` (`center.ts`) calls
   `fitFontSize` and `fitText` for all `BOOK_COUNT` spines every frame -
   several `measureText` calls per spine, each preceded by a `ctx.font =`
   assignment that reparses a CSS font shorthand - even though the titles
-  never change and only the scale does. A rearrangement's flight *starts*
-  at the opening view, framed on the shelf, so this runs at full cost for
-  the whole stretch until `areSpinesLegible` goes false partway through the
-  zoom-out - a cost profile that would look exactly like "the first half of
-  the zoom stutters, then smooths out." Memoize per `(text, quantized
-  spine width)`; the cache is bounded by `BOOK_COUNT` and needs clearing on
-  `document.fonts.ready` so a late-loading web font doesn't leave stale
-  sizes.
+  never change and only the scale does. `gl/spineTexture.ts` already caches
+  this per `(slot content, hover, destination size)` bucket for the WebGL
+  renderer (the default), so this only still costs anything on the Canvas2D
+  fallback (`?webgl=0`, or an unsupported device) - low priority unless
+  Canvas2D usage turns out to be more than negligible. If it's worth fixing
+  there too, the same idea applies: memoize per `(text, quantized spine
+  width)`, clearing on `document.fonts.ready` so a late-loading web font
+  doesn't leave stale sizes.
 - **[2026-09-18] Three independent rAF loops drive one frame, adding a
   one-frame lag.** During a rearrangement, `useMapCamera.ts`'s permanent
   flight/glide loop, `useRearrangement.ts`'s slideshow tick, and
@@ -354,7 +354,7 @@ for that audience specifically, not things the art itself needs:
   "past a few seconds a camera move has stopped being a transition and become a
   wait" - and `prepareRearrangement`'s fetch budget is the one value in the
   config that *is* a wait, so the default sits exactly at the ceiling and the
-  overlay can only shorten it. A slow host that wants a longer prepare (the
-  Android Firefox tail in `docs/performance-research.md`'s "Measured findings"
-  runs well past it) has no way to ask. Lifting it is a code change and a
-  decision about whether `duration()` should take a separate ceiling for waits.
+  overlay can only shorten it. A slow host that wants a longer prepare (a real
+  `?perf` capture on Android Firefox showed a cold-cache tail running well
+  past it) has no way to ask. Lifting it is a code change and a decision
+  about whether `duration()` should take a separate ceiling for waits.

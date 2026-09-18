@@ -276,8 +276,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                               the same way `camera.ts` is.
     * `perfProbe.ts`: Rearrangement performance instrumentation behind
                       `?perf` (`?perf&perfDpr1` also forces a `dpr=1` backing
-                      store) - `docs/performance-research.md` §2's "measure
-                      first" step. Records phase-tagged frame timings, sheet
+                      store). Records phase-tagged frame timings, sheet
                       fetch/decode/first-draw gaps, and `longtask` entries;
                       `perfDump()` prints percentiles to the console once a
                       rearrangement settles (`useRearrangement.ts`).
@@ -549,13 +548,3 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                    `tools/embed/cosine-range.ts`'s last real
                                    run - the numbers `docs/search_rules.md`'s
                                    thresholds cite.
-- `docs/performance-research.md`: Survey of possible non-trivial performance
-                                  wins, aimed at the dropped frames during the
-                                  rearrangement's zoom-out and slide. §1-§8 are
-                                  hypotheses ranked by reasoning; §9 is the first
-                                  real `?perf` capture and reprioritizes them.
-                                  Most items remain unimplemented - the shipped
-                                  ones are `prepareRearrangement` (§9.7), §6's
-                                  level-2 unpack, §4.1's tile-locator
-                                  memoization, and §5.2's WebGL renderer
-                                  itself.

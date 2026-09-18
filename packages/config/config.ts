@@ -393,10 +393,10 @@ export const DEFAULTS: Defaults = {
      * plan's tiles to fetch and decode before animating with whatever is ready.
      * Proceeding on the timeout is a fallback, not a failure.
      *
-     * Sized against the cold-cache waits `docs/performance-research.md`'s
-     * "Measured findings" records: about a second on desktop Chrome and Android
-     * Chrome, with a longer tail on Android Firefox. A wait before anything moves
-     * reads as loading; the same time spent stuttering mid-slide does not.
+     * Sized against real `?perf` captures of the cold-cache case: about a
+     * second on desktop Chrome and Android Chrome, with a longer tail on
+     * Android Firefox. A wait before anything moves reads as loading; the
+     * same time spent stuttering mid-slide does not.
      *
      * Two consequences of being a wait rather than a beat: `duration()`'s
      * sub-frame warning applies here (this is the one slide timing not passed

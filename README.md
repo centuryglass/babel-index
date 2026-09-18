@@ -233,7 +233,6 @@ needs a real GPU; it isn't part of CI.
 - [`docs/accessibility-plan.md`](docs/accessibility-plan.md) — the keyboard / screen-reader plan
 - [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
 - [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
-- [`docs/performance-research.md`](docs/performance-research.md) — survey of rendering performance work, and what's shipped so far
 - [`CLAUDE.md`](CLAUDE.md) — notes for coding agents (engineering conventions and invariants)
 
 ## License
