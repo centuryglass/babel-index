@@ -101,20 +101,6 @@ for that audience specifically, not things the art itself needs:
   this actually is - worth profiling before committing to the worker move.
 
 ## Rendering:
-- **[2026-09-18] A forced synchronous layout runs on every frame the map ever
-  draws.** `useMapRenderer.ts` writes inline styles to `searchEl`/`booksEl`/
-  `bookEl`/`controlsEl` and then, in the same callback, calls
-  `arrowEl.getBoundingClientRect()` and `canvas.getBoundingClientRect()` -
-  reading either forces the browser to flush the layout the writes just
-  queued, before the frame's canvas drawing starts. `SearchOrbitArrow` always
-  renders (`MapView.tsx`), so `arrowEl` is never null and this never skips.
-  It costs nothing on resize/scroll, so caching both rects and refreshing
-  them from a `ResizeObserver` (one on the canvas, one on the badge, since
-  the badge's position can change from CSS alone) removes it entirely.
-  Verifiable in Chrome DevTools' performance panel ("Forced reflow") in
-  under a minute. `document.getElementById('hud')` also runs every frame in
-  the same function and can be hoisted into the effect - it returns null on
-  every call outside `?debug`.
 - **[2026-09-18] `render.ts`'s Canvas2D path still refits the center
   shelf's spines from scratch every frame during the zoom-out flight - the
   WebGL path already fixed this.** `composeSpines` (`center.ts`) calls
