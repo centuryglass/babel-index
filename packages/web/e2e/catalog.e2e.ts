@@ -348,6 +348,36 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     }
   });
 
+  test('a row\'s tile button is clickable even where the wrapped story runs past its bottom edge', async () => {
+    const { page } = session;
+    // Repro window from `docs/pending_task_list.md`'s catalog-tile-button bug:
+    // wide enough that `.catalog-row .catalog-tile-button` floats (not
+    // `.ultra-narrow`) but narrow enough that a room's wrapped `.story` runs
+    // taller than the float, so the story's own block box - full row width,
+    // even over the part with no glyph painted beside the float - used to win
+    // hit-testing and swallow the click. 900x700 lands inside that window
+    // against the sample corpus; the default 1280-wide session doesn't.
+    await page.setViewportSize({ width: 900, height: 700 });
+    try {
+      await openCatalog();
+      try {
+        // The first non-center row, at 900x700 against the sample corpus -
+        // room 1's own story is what was measured reproducing the bug. A
+        // plain `.click()` fails the way a real pointer would if the story is
+        // still on top - Playwright refuses rather than force it through.
+        await page.locator('.catalog-tile-button').first().click({ timeout: 5000 });
+        const overlay = page.locator('.overlay');
+        await overlay.waitFor({ timeout: 5000 });
+        await page.keyboard.press('Escape');
+        await overlay.waitFor({ state: 'detached', timeout: 5000 });
+      } finally {
+        if (await page.locator('.catalog').count()) await closeCatalog();
+      }
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+  });
+
   test('paginated, the pager sits under the rows rather than a screenful of nothing', async () => {
     const { page } = session;
     // Spacers stand in for pages a reader can scroll to. Paginated there are

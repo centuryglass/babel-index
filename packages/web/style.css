@@ -937,7 +937,19 @@ mark {
   `--paper-edge` inside the card's `.paper-sheet`, the same ink the overlay's
   divider takes.
 */
-.catalog-row:not(.catalog-center) .catalog-tile-button { position: relative; }
+/*
+  `z-index: 1`, not just `position: relative`, is load-bearing: a floated box
+  that is `position: relative` with `z-index: auto` is not promoted into the
+  positioned paint step (CSS2.1 Appendix E step 6) - it still paints as a
+  plain float (step 3), UNDER the `.story` text that wraps past its bottom
+  edge (step 5). Once the row is wide enough for the wrapped story to run
+  taller than the float, the story's own block box (full row width, even
+  where no glyph is painted beside the float) covers the float and wins
+  hit-testing, so `.catalog-tile-button` is unclickable there - confirmed
+  with `elementsFromPoint` landing on `.story` first at a repro width, fixed
+  by giving the float an explicit stack level.
+*/
+.catalog-row:not(.catalog-center) .catalog-tile-button { position: relative; z-index: 1; }
 .catalog:not(.ultra-narrow) .catalog-row:not(.catalog-center) .catalog-tile-button::after {
   content: ''; position: absolute; top: 0; bottom: 0;
   right: calc(-1 * (var(--catalog-mat, 0px) + 8px));
