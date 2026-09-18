@@ -196,8 +196,7 @@ for that audience specifically, not things the art itself needs:
   `document.fonts.ready` so a late-loading web font doesn't leave stale
   sizes.
 - **[2026-09-18] Three independent rAF loops drive one frame, adding a
-  one-frame lag, and one of them checks `matchMedia` every tick for no
-  reason.** During a rearrangement, `useMapCamera.ts`'s permanent
+  one-frame lag.** During a rearrangement, `useMapCamera.ts`'s permanent
   flight/glide loop, `useRearrangement.ts`'s slideshow tick, and
   `useDistillMode.ts`'s fade loop each call `requestDraw`, which schedules
   `render` for the *next* rAF tick rather than drawing immediately - so the
@@ -205,10 +204,12 @@ for that audience specifically, not things the art itself needs:
   Consolidating into one driver loop that steps every animator and then
   draws once is a real refactor (each subsystem currently owns its own
   motion for a documented reason - see `useMapRenderer.ts`'s own docblock).
-  The easy, safe half: `useMapCamera.ts`'s loop calls
-  `prefersReducedMotion()` (`matchMedia('(prefers-reduced-motion: reduce)')`)
-  on every tick, 60 times a second forever including in catalog mode - hoist
-  the `MediaQueryList` and listen for changes instead.
+  Low priority: it reads as latency, not as a dropped frame, so it is worth
+  knowing about before attributing a stutter to something else rather than
+  fixing on its own. (`useMapCamera.ts`'s idle-glide branch does call
+  `prefersReducedMotion()` - and so `matchMedia` - on every tick, but that
+  file's own docblock argues the cost is negligible next to what the read
+  decides; leave it unless a profile says otherwise.)
 - **[2026-09-18] The canvas backing store stays at full device pixel ratio
   during motion.** `useMapRenderer.ts` sizes the canvas at `min(2,
   devicePixelRatio)` at all times, so a retina display fills ~4x the pixels
@@ -386,18 +387,6 @@ for that audience specifically, not things the art itself needs:
   return-to-center view (`Home`/`End`, the center button, double-tap-back) -
   raising that one directly would zoom the reader out on every keypress,
   not just during a rearrangement.
-- **[2026-09-18] Android Firefox's first rearrangement of a session still
-  shows ~1.9s of cumulative slide-phase stalling, and the cause isn't
-  understood.** This is after `prepareRearrangement` already fetches and
-  decodes every tile the animation will show before the flight starts, so
-  it isn't the fetch/decode cost measured elsewhere. The working hypothesis
-  is a GPU texture-upload cost paid at the first real `drawImage` (decode-
-  ready isn't upload-ready), but two warm-up designs were tried and neither
-  helped on either Android browser tested, so nothing shipped. A more
-  likely mechanism - compositing or paint scheduling tied to element
-  visibility rather than to the draw call itself - hasn't been
-  investigated. Needs a fresh profiling pass on Android Firefox
-  specifically, not another warm-up variant.
 - **[2026-09-17] `slide.prepareTimeoutMs` cannot be raised above 5000ms.**
   `duration()`'s `DURATION_MAX_MS` ceiling is written for animation durations -
   "past a few seconds a camera move has stopped being a transition and become a

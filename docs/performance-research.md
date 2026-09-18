@@ -4,12 +4,17 @@ A read-through of the render path looking for non-trivial performance wins, with
 the dropped frames during the rearrangement's zoom-out and slide as the
 motivating case.
 
-**Status: the still-open items below (everything not marked "Implemented")
-are also tracked in `docs/pending_task_list.md`'s "Rendering", "Search" and
-"Rearrangement / camera" sections as of 2026-09-18, each restated
-standalone there rather than by section number - update both places
-together rather than letting the task list drift back out of sync with
-what's actually left here.**
+**Status: most still-open items below (sections not marked "Implemented") are
+also tracked in `docs/pending_task_list.md`'s "Rendering", "Search" and
+"Rearrangement / camera" sections as of 2026-09-18, each restated standalone
+there rather than by section number - update both places together rather than
+letting the task list drift back out of sync with what's actually left here.
+The exception is §9.7's Android Firefox slide-phase stalling: that capture
+predates the WebGL renderer (§5.2) and was not carried into the task list -
+see its own note for why. §1-§7's per-item "Implemented" notes only cover
+what has actually shipped; a change to the render path since this doc was
+last read through can silently invalidate an item that still reads as open,
+so check the current source before trusting either doc's word for it.**
 
 **Status: §1-§7 are hypotheses; §9 is measured.** §1-§7 come from reading the
 code and computing what each cost must be, not from a profile — several are
@@ -1149,13 +1154,15 @@ land: a wait before anything moves is legible as loading, the same time spent
 stuttering mid-flight or mid-slide is not. §3.1 and §3.7's "Implemented" notes
 cover the specific stalls this closed.
 
-Still open, for a future session:
-
-- **Android Firefox slide-phase stalling.** Even with every tile decoded before
-  the flight, its first rearrangement still shows ~1.9s of cumulative slide
-  stalling. The working hypothesis is a GPU texture-upload cost paid at the first
-  real `drawImage` (decode-ready is not upload-ready); two warm-up designs were
-  measured and neither helped on either Android browser, so nothing shipped for
-  it. The real mechanism — plausibly compositing/paint scheduling tied to
-  visibility rather than to the draw call — is not yet understood, and is worth a
-  fresh look rather than another warm-up variant.
+- **Android Firefox slide-phase stalling — measured against Canvas2D, before
+  WebGL shipped; not carried forward.** Even with every tile decoded before
+  the flight, its first rearrangement still showed ~1.9s of cumulative slide
+  stalling. The working hypothesis was a GPU texture-upload cost paid at the
+  first real Canvas2D `drawImage` (decode-ready is not upload-ready); two
+  warm-up designs were measured and neither helped on either Android browser,
+  so nothing shipped for it. This capture predates the WebGL renderer (landed
+  the next day, §5.2) and was never re-run against it — WebGL uploads through
+  its own long-lived texture cache rather than Canvas2D's per-`drawImage`
+  path, and per the maintainer WebGL shows no such stalling on Android
+  Firefox. Treat this finding as superseded, not as open work; a fresh
+  capture would be needed before reopening it.
