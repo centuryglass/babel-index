@@ -80,12 +80,6 @@ for that audience specifically, not things the art itself needs:
   `/api/favorites`, `/api/health` (see `packages/server/app.ts`) exist only as
   inline code — no OpenAPI spec, not even a short `docs/api.md` describing
   request/response shapes.
-- **No standalone architecture overview for humans.** `docs/concept.md` is a
-  dated design log, not a "read this in five minutes" system overview. A
-  concise `ARCHITECTURE.md` — request flow, why esbuild bundles in-process,
-  why the corpus lives in R2, why deploy is gated on `/api/health`'s reported
-  commit — would let a reviewer assess system design without reading
-  AGENTS.md end to end.
 - **No production error/metrics visibility beyond `/api/health`.** There's no
   error tracking (a Sentry-class tool) or basic request metrics — only
   `logger.ts`'s structured logs and the deploy-time health check. Possibly

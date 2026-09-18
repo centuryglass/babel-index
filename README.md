@@ -140,7 +140,9 @@ story and details.
 | `tools/curation/` | Python/Qt tools for turning generated tiles into `metadata.json` — a separate ecosystem, with its own `README.md` |
 | `assets/corpus-sample/` | a ready-to-run sample corpus |
 
-> See [`CLAUDE.md`](CLAUDE.md) for the full file-by-file layout.
+> See [`docs/architecture.md`](docs/architecture.md) for a five-minute
+> system overview, or [`docs/file_map.md`](docs/file_map.md) for the full
+> file-by-file layout.
 
 ## Running it locally
 
@@ -224,13 +226,15 @@ needs a real GPU; it isn't part of CI.
 
 ## Documentation
 
+- [`docs/architecture.md`](docs/architecture.md) — a five-minute system overview: request flow, deploy, rendering, testing
+- [`docs/file_map.md`](docs/file_map.md) — the full file-by-file layout
 - [`docs/concept.md`](docs/concept.md): Initial project concept and a dated log of design decisions
 - [`docs/pending_task_list.md`](docs/pending_task_list.md) — what is still to do
 - [`docs/accessibility-plan.md`](docs/accessibility-plan.md) — the keyboard / screen-reader plan
 - [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
 - [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
 - [`docs/performance-research.md`](docs/performance-research.md) — survey of rendering performance work, and what's shipped so far
-- [`CLAUDE.md`](CLAUDE.md) — notes for coding agents, and the full file-by-file layout
+- [`CLAUDE.md`](CLAUDE.md) — notes for coding agents (engineering conventions and invariants)
 
 ## License
 
