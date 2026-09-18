@@ -528,6 +528,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           `/api/health`'s reported commit. Start here rather
                           than `AGENTS.md` if you don't need the engineering
                           invariants.
+- `docs/user-guide.md`: Every control in the library, annotated - the two
+                        numbered screenshot walkthroughs (the index shelf, a
+                        room's detail overlay) that used to sit in `README.md`.
+                        Covers the same ground as the in-app "READ ME" dialog
+                        (`HelpDialog.tsx`); kept as browsable figures for a
+                        reader of the repo rather than a visitor to the site.
 - `docs/file_map.md`: this file.
 - `docs/concept.md`: The original project concept and a dated log of
                      significant design decisions made during implementation.
