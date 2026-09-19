@@ -82,7 +82,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       own `alphabeticalOrder`/`pageOf`/`pageCount` rather than
                       a second paging implementation.
   * `seo.ts`: Pure builders for `robots.txt` and `sitemap.xml` - every room
-             permalink, every catalog page, and `/`.
+             permalink, every catalog page, and `/`. `robots.txt` disallows
+             `/babel-book`, the generated easter egg with nothing to index.
+  * `staticPages.ts`: Pure, corpus-free SSR bodies for the one-shot
+                      `/help`/`/about` permalinks - minimal no-JS/crawler
+                      content, not a second copy of `HelpDialog`/
+                      `ArtistStatementOverlay`'s full content.
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
@@ -254,6 +259,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              spine overlay, anchored to the center tile's own
                              lower right corner
     * `catalog.ts`: Catalog pagination and geometry helpers
+    * `babelBook.ts`: `generateRandomBookText`/`paginateBookText` - a random
+                      "book" from the Library of Babel, pure and DOM-free so
+                      both `BabelBookOverlay.tsx` and `packages/server/app.ts`'s
+                      `/babel-book` route generate from one implementation.
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images
     * `rooms.ts`: Map room data in the manifest to image URLs
