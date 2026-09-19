@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.3.0...babel-index-v1.4.0) (2026-09-19)
+
+
+### Features
+
+* add an authenticated admin log viewer ([#219](https://github.com/centuryglass/babel-index/issues/219)) ([abc341f](https://github.com/centuryglass/babel-index/commit/abc341f5639b92c9d4cf2ac26ae2d2c8395590c3))
+
 ## [1.3.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.2.0...babel-index-v1.3.0) (2026-09-19)
 
 
