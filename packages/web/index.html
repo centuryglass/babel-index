@@ -42,6 +42,10 @@
     <meta name="twitter:description" content="%%DESCRIPTION%%" />
     <meta name="twitter:image" content="%%OG_IMAGE_URL%%" />
     <link rel="stylesheet" href="style.css" />
+    <!-- Empty except on /map/:slug: a no-JS visitor there gets bounced to
+         the identical content at its catalog/:slug url instead of a room
+         page with no way to browse onward - see app.ts's renderPage. -->
+    %%NOSCRIPT_REDIRECT%%
   </head>
   <body>
     <!-- The body placeholder below is real, crawlable content for the
