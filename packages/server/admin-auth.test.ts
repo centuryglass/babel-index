@@ -18,8 +18,8 @@ test('verifyPassword rejects a malformed stored hash rather than throwing', () =
   assert.equal(verifyPassword('anything', ':'), false);
 });
 
-function fakeReqRes(authorizationHeader?: string) {
-  const req = { get: (name: string) => (name === 'Authorization' ? authorizationHeader : undefined) } as any;
+function fakeReqRes(authorizationHeader?: string, ip = '127.0.0.1') {
+  const req = { ip, get: (name: string) => (name === 'Authorization' ? authorizationHeader : undefined) } as any;
   const headers: Record<string, string> = {};
   let statusCode: number | null = null;
   let body: unknown = null;
@@ -76,4 +76,31 @@ test('requireAdminAuth 401s with no Authorization header at all', () => {
   });
   assert.equal(nextCalled, false);
   assert.equal(state.statusCode, 401);
+});
+
+test('requireAdminAuth 429s a burst of attempts from one address, right or wrong password', () => {
+  const hash = hashPassword('sesame');
+  const middleware = requireAdminAuth(hash);
+  const rightAuth = `Basic ${Buffer.from('anyuser:sesame').toString('base64')}`;
+  // Spend the whole default burst (rate-buckets.ts) from one address - every
+  // one of these succeeds, since the token spend happens before the
+  // password check.
+  for (let i = 0; i < 20; i++) {
+    const state = fakeReqRes(rightAuth, '10.0.0.1');
+    middleware(state.req, state.res, () => {});
+  }
+  const overBudget = fakeReqRes(rightAuth, '10.0.0.1');
+  let nextCalled = false;
+  middleware(overBudget.req, overBudget.res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, false);
+  assert.equal(overBudget.statusCode, 429);
+
+  const other = fakeReqRes(rightAuth, '10.0.0.2');
+  nextCalled = false;
+  middleware(other.req, other.res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true, 'a different address has its own budget');
 });

@@ -119,7 +119,9 @@ Auth username is never checked.
   a lone one logs a startup warning and mounts neither route rather than
   serving unauthenticated. Same "no store, no feature" shape as favorites.
 - **Errors**: `401` with a `WWW-Authenticate` challenge on missing/wrong
-  credentials.
+  credentials, `429` past `admin-auth.ts`'s per-address rate limit
+  (`rate-buckets.ts` — every request spends a token, right password or
+  wrong, before it's checked).
 
 ## `GET /admin/logs`
 

@@ -65,7 +65,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `log-reader.ts`: Reads recent entries back out of a `log-file.ts` log
                      file, for the admin log viewer below
   * `admin-auth.ts`: HTTP Basic Auth (scrypt hash, `ADMIN_PASSWORD_HASH`)
-                     gating the admin log viewer routes
+                     gating the admin log viewer routes, rate-limited via
+                     `rate-buckets.ts`
+  * `rate-buckets.ts`: Per-key token buckets - shared by the favorite writes
+                       and `admin-auth.ts`'s login attempts
   * `logViewerPage.ts`: The `/admin/logs` HTML page and its
                         `/admin/logs/fragment` polling partial
   * `search-cache.ts`: LRU cache and concurrency limiter (with an

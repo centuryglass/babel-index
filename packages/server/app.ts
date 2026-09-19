@@ -14,6 +14,7 @@ import { availableParallelism } from 'node:os';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
+import { createRateBuckets } from './rate-buckets.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
 import { requireAdminAuth } from './admin-auth.ts';
@@ -843,43 +844,3 @@ export function stubRanking(rooms: { id: number }[], query: string): number[] {
  * input `favorites.ts` builds.
  */
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
-
-/**
- * Token buckets for the favorite writes, one per address.
- *
- * Keyed on `req.ip` by its caller, not on `X-Favorite-Client`: a client id is
- * free to mint, so bucketing on it would let a script spend a fresh burst on
- * every request by sending a new one (AGENTS.md, "Favorites"). This bounds
- * how fast one connection makes the process hash things - the set semantics
- * in favorites.ts, not this, cap what any client can do to a count. In memory
- * and never persisted: a restart forgets everyone, and no record of who
- * asked for what is kept.
- */
-const RATE_BURST = 20;
-const RATE_REFILL_MS = 1000;
-const RATE_MAX_TRACKED = 10_000;
-
-export function createRateBuckets({ burst = RATE_BURST, refillMs = RATE_REFILL_MS } = {}) {
-  const seen = new Map<string, { tokens: number; at: number }>();
-  return {
-    /** @returns whether this address may spend a token now */
-    take(key: string): boolean {
-      const now = Date.now();
-      // Bounded so a spray of forged addresses (or an honest crowd) cannot grow
-      // this map without limit. Oldest-first, which is a Map's own iteration
-      // order here since every touch rewrites its entry at the end.
-      if (seen.size >= RATE_MAX_TRACKED && !seen.has(key)) {
-        const oldest = seen.keys().next().value;
-        if (oldest !== undefined) seen.delete(oldest);
-      }
-      const entry = seen.get(key) ?? { tokens: burst, at: now };
-      entry.tokens = Math.min(burst, entry.tokens + (now - entry.at) / refillMs);
-      entry.at = now;
-      const allowed = entry.tokens >= 1;
-      if (allowed) entry.tokens -= 1;
-      seen.delete(key);
-      seen.set(key, entry);
-      return allowed;
-    },
-  };
-}

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
-import { createApp, stubRanking, hasTextModel, createRateBuckets } from './app.ts';
+import { createApp, stubRanking, hasTextModel } from './app.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import { hashPassword } from './admin-auth.ts';
 import type { CreateAppOptions } from './app.ts';
@@ -876,14 +876,6 @@ test('the counts endpoint is never cached', async () => {
       { favorites }
     );
   });
-});
-
-test('a burst of writes is rate limited rather than served without end', async () => {
-  const buckets = createRateBuckets({ burst: 2, refillMs: 60_000 });
-  assert.equal(buckets.take('10.0.0.1'), true);
-  assert.equal(buckets.take('10.0.0.1'), true);
-  assert.equal(buckets.take('10.0.0.1'), false, 'the bucket is empty');
-  assert.equal(buckets.take('10.0.0.2'), true, 'and it is per address');
 });
 
 // --- admin log viewer --------------------------------------------------------
