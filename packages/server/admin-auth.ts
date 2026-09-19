@@ -28,11 +28,23 @@
  * *addresses*, so a distributed attacker gets a fresh burst per address).
  * `hashPassword` stays sync - it's `tools/hash-admin-password`'s one-off CLI
  * call, never on a request path, so blocking there is harmless.
+ *
+ * Every attempt is logged (`ip`, path, outcome) through the same `logger`
+ * everything else writes through - so a real attack shows up in the log
+ * file this module itself gates access to, not just as user-visible
+ * slowness. Never the attempted password, right or wrong: that's worth
+ * nothing operationally and is exactly the kind of thing that shouldn't
+ * end up sitting in a log file. Rate-limited attempts log at `warn`
+ * (this is the "someone is hammering the endpoint" signal, and the bucket
+ * itself already caps how often it can fire); a wrong password also logs
+ * at `warn`; a real login logs at `info`, so the level filter in the log
+ * viewer can separate "did I get in" from "is something hammering this".
  */
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { NextFunction, Request, Response } from 'express';
 import { createRateBuckets, type RateBuckets } from './rate-buckets.ts';
+import { logger } from './logger.ts';
 
 const SCRYPT_KEYLEN = 64;
 const scryptAsync = promisify(scrypt);
@@ -87,9 +99,19 @@ function passwordFromHeader(header: string | undefined): string | null {
 export function requireAdminAuth(passwordHash: string, buckets: RateBuckets = createRateBuckets()) {
   return async (req: Request, res: Response, next: NextFunction) => {
     // req.ip is undefined only for a socket that has already gone away.
-    if (!buckets.take(req.ip ?? '')) return res.status(429).json({ error: 'too many attempts - try again in a moment' });
+    const ip = req.ip ?? '';
+    if (!buckets.take(ip)) {
+      logger.warn({ ip, path: req.path }, 'admin auth rate-limited');
+      return res.status(429).json({ error: 'too many attempts - try again in a moment' });
+    }
     const password = passwordFromHeader(req.get('Authorization'));
-    if (password !== null && (await verifyPassword(password, passwordHash))) return next();
+    if (password !== null && (await verifyPassword(password, passwordHash))) {
+      logger.info({ ip, path: req.path }, 'admin auth succeeded');
+      return next();
+    }
+    // Never log `password` itself - a rejected guess is worth nothing
+    // operationally, and logging it would just be storing credentials.
+    logger.warn({ ip, path: req.path }, 'admin auth failed');
     res.set('WWW-Authenticate', 'Basic realm="babel-index admin", charset="UTF-8"');
     res.status(401).json({ error: 'authentication required' });
   };

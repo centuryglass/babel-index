@@ -122,6 +122,10 @@ Auth username is never checked.
   credentials, `429` past `admin-auth.ts`'s per-address rate limit
   (`rate-buckets.ts` — every request spends a token, right password or
   wrong, before it's checked).
+- Every attempt against any of the three admin routes is itself logged
+  (`ip`, path, outcome) — a real login at `info`, a wrong password or a
+  rate-limited request at `warn`, never the attempted password. So this
+  route's own log ends up in the log it serves.
 
 ## `GET /admin/logs`
 
