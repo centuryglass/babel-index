@@ -14,13 +14,23 @@
  * existed: only level 0 resolves, so every lookup falls back to it.
  *
  * The shared tiles - the center and every generic tile - live OUTSIDE the
- * corpus pyramid (`manifest.shared`, served from `--shared-dir`), so they are
- * looked up here by their own ids and served flat: level 0 only, and every
- * coarser request falls back to it through the cache's `servableLevel`. There
- * are only a handful of distinct shared images and the cache keys on id, not
- * on cell, so a far-out screen of thousands of generic cells still holds just
- * those few in memory. (Giving the shared assets their own resolution pyramid
- * is a later step.)
+ * corpus pyramid (`manifest.shared`, served from `--shared-dir`), in their
+ * own pyramid: `manifest.shared.levels` is which per-file rungs the center
+ * and every generic tile actually share on disk (`scan.ts` discovers it the
+ * same way it discovers `manifest.levels`, just rooted at the shared
+ * directory - see its own comment). A level there resolves by inserting
+ * `<width>/` before the shared asset's filename, the same directory-per-level
+ * convention the corpus uses - `packages/pipeline/shared-mips.ts` is what
+ * writes it. A level `manifest.shared.levels` doesn't have falls back to null
+ * exactly like a corpus level the manifest doesn't have.
+ *
+ * Every OTHER shared id - a generic tile's distill alternate, a favorite
+ * badge, the distill toggle's faces, the "forget searches" overlay - is
+ * fixed-size app art with no pyramid of its own, and stays flat: level 0
+ * only, falling back to it through the cache's `servableLevel` for any
+ * coarser request. There are only a handful of these and the cache keys on
+ * id, not on cell, so a far-out screen of thousands of generic cells still
+ * holds just those few in memory.
  */
 import {
   CENTER, genericId, genericDistillId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
@@ -53,12 +63,24 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // local mount path - see `scan.ts`'s IMAGES_BASE.
   const imagesBase = manifest.imagesBase ?? '/images';
 
-  // Every shared-tile id to its (flat) url, so resolving one is a lookup rather
-  // than string-parsing an index back out of the id.
+  // Every shared-tile id to its (level-0) url, so resolving one is a lookup
+  // rather than string-parsing an index back out of the id.
   const shared = manifest.shared;
   const sharedUrls = new Map<number | string, string>();
-  if (shared.center?.url) sharedUrls.set(CENTER, shared.center.url);
-  shared.generic.forEach((v, i) => sharedUrls.set(genericId(i), v.url));
+  // The ids with a pyramid of their own - see this file's header. A coarser
+  // level is only ever tried for one of these.
+  const pyramidSharedIds = new Set<number | string>();
+  if (shared.center?.url) {
+    sharedUrls.set(CENTER, shared.center.url);
+    pyramidSharedIds.add(CENTER);
+  }
+  shared.generic.forEach((v, i) => {
+    sharedUrls.set(genericId(i), v.url);
+    pyramidSharedIds.add(genericId(i));
+  });
+  // Older manifests have no `shared.levels`; a flat level 0 is the honest
+  // reading, same as `manifest.levels`' own fallback above.
+  const sharedLevels = new Map((shared.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
   // Only an index whose generic tile has a matching distill alternate on disk
   // gets an entry - see `genericDistillId`'s doc for what a missing one means.
   shared.genericDistill?.forEach((v, i) => {
@@ -80,7 +102,17 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   sharedUrls.set(CLEAR_HISTORY_BOOK, `${manifest.sharedBase}/${encodeURIComponent('clear_history_book.png')}`);
 
   const resolve = (id: number | string, level: number): TileLocation | null => {
-    if (sharedUrls.has(id)) return level === 0 ? { url: sharedUrls.get(id)!, rect: null } : null;
+    if (sharedUrls.has(id)) {
+      const url = sharedUrls.get(id)!;
+      if (level === 0) return { url, rect: null };
+      if (!pyramidSharedIds.has(id)) return null;
+      const info = sharedLevels.get(level);
+      // Insert `<width>/` before the filename - the same per-level directory
+      // `shared-mips.ts` wrote it into, right beside where level 0 already sits.
+      if (!info?.dir) return null;
+      const slash = url.lastIndexOf('/');
+      return { url: `${url.slice(0, slash + 1)}${info.dir}/${url.slice(slash + 1)}`, rect: null };
+    }
 
     const info = levels.get(level);
     if (!info) return null;

@@ -58,11 +58,38 @@ test('a room id the manifest does not have resolves to null', () => {
 
 // --- shared assets ------------------------------------------------------------
 
-test('the center and generic tiles resolve flat, at level 0 only', () => {
+test('with no shared.levels, the center and generic tiles resolve flat, at level 0 only', () => {
   const locate = createTileLocator(manifest());
   assert.deepEqual(locate(CENTER, 0), { url: 'shared/center.png', rect: null });
-  assert.equal(locate(CENTER, 1), null, 'shared tiles have no coarser levels yet');
+  assert.equal(locate(CENTER, 1), null, 'no shared.levels entry means no coarser level exists');
   assert.deepEqual(locate(genericId(0), 0), { url: 'shared/generic/g1.png', rect: null });
+});
+
+test('a level in shared.levels resolves by inserting <width>/ before the filename', () => {
+  const m = manifest();
+  m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const locate = createTileLocator(m);
+  assert.deepEqual(locate(CENTER, 1), { url: 'shared/512/center.png', rect: null });
+  assert.deepEqual(locate(genericId(0), 1), { url: 'shared/generic/512/g1.png', rect: null });
+  assert.deepEqual(locate(genericId(1), 1), { url: 'shared/generic/512/g2.png', rect: null });
+});
+
+test('a level shared.levels does not have resolves to null, same as a missing corpus level', () => {
+  const m = manifest();
+  m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const locate = createTileLocator(m);
+  assert.equal(locate(CENTER, 2), null);
+});
+
+test('shared ids with no pyramid of their own never resolve past level 0, even when shared.levels has one', () => {
+  // A distill alternate, a favorite badge, the distill toggle: none of these
+  // are in shared.levels' intersection, so a coarser request must still fail
+  // rather than silently reusing the center/generic ladder.
+  const m = manifest();
+  m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const locate = createTileLocator(m);
+  assert.equal(locate(genericDistillId(0), 1), null);
+  assert.equal(locate(FAV_ON, 1), null);
 });
 
 test('a generic tile\'s distill alternate resolves only where one exists on disk', () => {

@@ -233,12 +233,6 @@ for that audience specifically, not things the art itself needs:
   eventually retire Canvas2D. Retiring it drops the parity suite, the
   `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
   only once WebGL has real production mileage and nothing has needed the hatch.
-- **[2026-09-17] The shared tiles have no pyramid.** `center_tile.png`, the
-  generic tiles, and the favorite badges are served flat at level 0, so
-  `main.tsx` must pin each shared id at level 0 - full resolution - and a
-  zoomed-out view pays a full-res download per generic tile on screen
-  (AGENTS.md, "The center tile and its generic tiles"). Generating pyramid
-  levels for the shared dir through `packages/pipeline` would close it.
 - **[2026-09-17] Two hover golds.** `.center-book.hover` (`style.css`) fills
   with `--accent-rgb` (196,150,84), while the canvas-side hover glows -
   `center.ts`'s `HOVER_GLOW_FILL`/`_STROKE`, `render.ts`'s
