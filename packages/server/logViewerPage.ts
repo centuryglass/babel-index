@@ -123,7 +123,7 @@ ${renderEntryList(entries)}
   // for both the first paint and every refresh, rather than a second one
   // reimplemented in this script from JSON.
   function refresh() {
-    var url = 'admin/logs/fragment?' + new URLSearchParams({
+    var url = 'logs/fragment?' + new URLSearchParams({
       minLevel: params.get('minLevel') || '0',
       limit: params.get('limit') || '${limit}',
     });
