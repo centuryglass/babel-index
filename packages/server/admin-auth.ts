@@ -17,12 +17,25 @@
  * bounds guesses per address rather than only reacting to wrong ones.
  * Behind a reverse proxy this needs `--trust-proxy` set (same caveat as
  * favorites - see index.ts), or every visitor shares the proxy's bucket.
+ *
+ * `verifyPassword` uses `scrypt`'s async (thread-pool) form, not
+ * `scryptSync`: a burst of login attempts still costs the same CPU, but on
+ * libuv's thread pool rather than blocking the process's one JS thread -
+ * `scryptSync` here would stall every other request (image serving,
+ * search, everything) for each hash's duration, which a rate limit alone
+ * doesn't prevent during the burst before it trips (see AGENTS.md-style
+ * reasoning: the bucket bounds *guesses per address*, not concurrent
+ * *addresses*, so a distributed attacker gets a fresh burst per address).
+ * `hashPassword` stays sync - it's `tools/hash-admin-password`'s one-off CLI
+ * call, never on a request path, so blocking there is harmless.
  */
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import type { NextFunction, Request, Response } from 'express';
 import { createRateBuckets, type RateBuckets } from './rate-buckets.ts';
 
 const SCRYPT_KEYLEN = 64;
+const scryptAsync = promisify(scrypt);
 
 /** `salt:hash`, both hex - what goes in `ADMIN_PASSWORD_HASH`. */
 export function hashPassword(password: string): string {
@@ -32,13 +45,13 @@ export function hashPassword(password: string): string {
 }
 
 /** Whether `password` matches a hash `hashPassword` produced. Constant-time once both sides are hashed, so a wrong guess can't be timed against the stored value. */
-export function verifyPassword(password: string, stored: string): boolean {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const sep = stored.indexOf(':');
   if (sep === -1) return false;
   const salt = Buffer.from(stored.slice(0, sep), 'hex');
   const expected = Buffer.from(stored.slice(sep + 1), 'hex');
   if (!salt.length || !expected.length) return false;
-  const actual = scryptSync(password, salt, expected.length);
+  const actual = (await scryptAsync(password, salt, expected.length)) as Buffer;
   return timingSafeEqual(actual, expected);
 }
 
@@ -66,17 +79,17 @@ function passwordFromHeader(header: string | undefined): string | null {
  * so the three log-viewer routes share one budget rather than one each.
  *
  * `buckets` is injectable so a test can exhaust a burst without needing 20+
- * real `scryptSync` calls to finish inside one refill window - the default
- * refill (1/second) leaves no margin against ~20 sequential password
- * hashes' own wall-clock cost, which is what made the shared default flaky
- * under CI load.
+ * real `scrypt` calls to finish inside one refill window - the default
+ * refill (1/second) leaves no margin against ~20 password hashes' own
+ * wall-clock cost (thread-pool queuing included), which is what made the
+ * shared default flaky under CI load.
  */
 export function requireAdminAuth(passwordHash: string, buckets: RateBuckets = createRateBuckets()) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     // req.ip is undefined only for a socket that has already gone away.
     if (!buckets.take(req.ip ?? '')) return res.status(429).json({ error: 'too many attempts - try again in a moment' });
     const password = passwordFromHeader(req.get('Authorization'));
-    if (password !== null && verifyPassword(password, passwordHash)) return next();
+    if (password !== null && (await verifyPassword(password, passwordHash))) return next();
     res.set('WWW-Authenticate', 'Basic realm="babel-index admin", charset="UTF-8"');
     res.status(401).json({ error: 'authentication required' });
   };
