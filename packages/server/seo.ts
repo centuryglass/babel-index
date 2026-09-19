@@ -12,7 +12,10 @@ import { roomPath } from '../map/slug.ts';
  *   it has to be absolute.
  */
 export function robotsTxt(origin: string): string {
-  return `User-agent: *\nAllow: /\nSitemap: ${origin}sitemap.xml\n`;
+  // /babel-book is infinite, generated text with nothing to index - not
+  // worth a crawler's time or an index entry (AGENTS.md, "Shareable
+  // permalinks").
+  return `User-agent: *\nAllow: /\nDisallow: /babel-book\nSitemap: ${origin}sitemap.xml\n`;
 }
 
 /**

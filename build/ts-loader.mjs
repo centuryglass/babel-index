@@ -39,6 +39,11 @@ export async function load(url, context, nextLoad) {
     sourcefile: path,
     sourcemap: 'inline',
     target: 'esnext',
+    // Must match packages/server/index.ts's client bundle and jsconfig.json's
+    // "jsx": "react-jsx" - the classic transform's implicit `React.createElement`
+    // calls would otherwise need `React` imported into scope everywhere JSX is
+    // written, which nothing in this tree does.
+    jsx: 'automatic',
   });
 
   return { format: 'module', source: code, shortCircuit: true };

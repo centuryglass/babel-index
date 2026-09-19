@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateRandomBookText, paginateBookText } from './BabelBookOverlay.tsx';
+import { generateRandomBookText, paginateBookText } from './babelBook.ts';
 
 test('generateRandomBookText produces the requested number of lines, plus paragraph breaks', () => {
   const text = generateRandomBookText(9, 5, 3);

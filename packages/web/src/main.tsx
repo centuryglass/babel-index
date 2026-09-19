@@ -448,7 +448,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // reason; ordinary catalog use (`expandRoom`, below) only ever sets it
   // while `mode === 'catalog'`, since nothing else in the map reading calls it.
   const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(() => {
-    if (!INITIAL_ROUTE?.room) return null;
+    if ((INITIAL_ROUTE?.mode !== 'catalog' && INITIAL_ROUTE?.mode !== 'map') || !INITIAL_ROUTE.room) return null;
     const room = manifest.rooms.find((r) => r.file === INITIAL_ROUTE.room);
     if (!room) return null;
     const rank = order.indexOf(room.id);
@@ -464,8 +464,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const clearCatalogSpotlight = useCallback(() => setCatalogSpotlightId(null), []);
 
   // A reserved book on the center shelf opens this instead of running a
-  // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride.
-  const [helpOpen, setHelpOpen] = useState(false);
+  // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride. Also
+  // opened on mount by a `/help` permalink (INITIAL_ROUTE.mode).
+  const [helpOpen, setHelpOpen] = useState(() => INITIAL_ROUTE?.mode === 'help');
 
   // A one-time visual nudge toward the "READ ME" book, for a reader who has
   // never opened it. The stored flag is written on this same mount, so a
@@ -479,8 +480,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The open book painted into a shelf gap - a distinct hotspot from the
   // lettered books: a tap routed through `centerBookAtPoint` on the map, an
-  // ordinary click in the catalog.
-  const [artistStatementOpen, setArtistStatementOpen] = useState(false);
+  // ordinary click in the catalog. Also opened on mount by an `/about`
+  // permalink (INITIAL_ROUTE.mode).
+  const [artistStatementOpen, setArtistStatementOpen] = useState(() => INITIAL_ROUTE?.mode === 'about');
   const openArtistStatement = useCallback(() => setArtistStatementOpen(true), []);
 
   // The open room card, from right-click or long press. A modal dialog, so
@@ -1371,16 +1373,19 @@ const RESULTS_WINDOW = 50;
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
- * `window.__INITIAL_ROUTE__` - set by `app.ts`'s `renderPage` only on the
- * SSR `/catalog`, `/catalog/:slug` and `/map/:slug` routes (see index.html's
- * `%%INITIAL_ROUTE_SCRIPT%%`), absent on plain `/`. Read once at module
- * scope, so a visitor landing on one of those urls boots straight into the
- * matching interactive view instead of watching the server-rendered content
- * vanish when `bundle.js` takes over.
+ * `window.__INITIAL_ROUTE__` - set by `app.ts`'s `renderPage` only on the SSR
+ * `/catalog`, `/catalog/:slug`, `/map/:slug`, `/help` and `/about` routes
+ * (see index.html's `%%INITIAL_ROUTE_SCRIPT%%`), absent on plain `/`. Read
+ * once at module scope, so a visitor landing on one of those urls boots
+ * straight into the matching interactive view instead of watching the
+ * server-rendered content vanish when `bundle.js` takes over. `help`/`about`
+ * only ever open their dialog over the map (see `helpOpen`/
+ * `artistStatementOpen`'s initial state below) - unlike `catalog`/`map` they
+ * never change `INITIAL_MODE`.
  */
 declare global {
   interface Window {
-    __INITIAL_ROUTE__?: { mode: 'catalog' | 'map'; room?: string };
+    __INITIAL_ROUTE__?: { mode: 'catalog' | 'map'; room?: string } | { mode: 'help' } | { mode: 'about' };
   }
 }
 const INITIAL_ROUTE = typeof window !== 'undefined' ? (window.__INITIAL_ROUTE__ ?? null) : null;

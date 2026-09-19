@@ -673,7 +673,10 @@ test('GET /robots.txt and /sitemap.xml reference every room, and work even witho
     const robots = await get('/robots.txt');
     assert.equal(robots.status, 200);
     assert.match(robots.headers.get('content-type'), /text\/plain/);
-    assert.match(await robots.text(), new RegExp(`Sitemap: http://127\\.0\\.0\\.1:${port}/sitemap\\.xml`));
+    const robotsText = await robots.text();
+    assert.match(robotsText, new RegExp(`Sitemap: http://127\\.0\\.0\\.1:${port}/sitemap\\.xml`));
+    // The generated /babel-book easter egg has nothing to index.
+    assert.match(robotsText, /^Disallow: \/babel-book$/m);
 
     const sitemap = await get('/sitemap.xml');
     assert.equal(sitemap.status, 200);
@@ -682,6 +685,47 @@ test('GET /robots.txt and /sitemap.xml reference every room, and work even witho
     assert.match(xml, /<loc>[^<]*\/catalog\/001<\/loc>/);
     assert.match(xml, /<loc>[^<]*\/catalog\/002<\/loc>/);
     assert.match(xml, /<loc>[^<]*\/catalog\/003<\/loc>/);
+  });
+});
+
+test('GET /help and /about are one-shot SSR-linkable, with an initialRoute hint for main.tsx', async () => {
+  await serving(
+    async ({ get }) => {
+      const help = await get('/help');
+      assert.equal(help.status, 200);
+      const helpHtml = await help.text();
+      assert.match(helpHtml, /<h1>Help<\/h1>/);
+      // Real prose from HelpBody.tsx, not a second SSR-only copy of it.
+      assert.match(helpHtml, /class="help-body"/);
+      assert.match(helpHtml, /zoomable, pannable map of library/);
+      assert.match(helpHtml, /window\.__INITIAL_ROUTE__ = \{"mode":"help"\}/);
+
+      const about = await get('/about');
+      assert.equal(about.status, 200);
+      const aboutHtml = await about.text();
+      assert.match(aboutHtml, /Artist/);
+      // Real prose from ArtistStatementPages.tsx, not a second SSR-only copy.
+      assert.match(aboutHtml, /class="book-page statement-page statement-story"/);
+      assert.match(aboutHtml, /Library of Babel holds every possible arrangement/);
+      // The live button becomes a plain link for a no-JS visitor, rather than
+      // dropping the easter egg it opens.
+      assert.match(aboutHtml, /<a class="statement-link" href="\/babel-book">Run the same thing here<\/a>/);
+      assert.match(aboutHtml, /window\.__INITIAL_ROUTE__ = \{"mode":"about"\}/);
+    },
+    { readIndexHtml: async () => SSR_INDEX_HTML }
+  );
+});
+
+test('GET /babel-book serves generated plain text, a fresh book on every request', async () => {
+  await serving(async ({ get }) => {
+    const res = await get('/babel-book');
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/plain/);
+    const first = await res.text();
+    assert.ok(first.length > 0);
+
+    const second = await (await get('/babel-book')).text();
+    assert.notEqual(first, second, 'each request generates its own random book');
   });
 });
 

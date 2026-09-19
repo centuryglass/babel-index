@@ -245,27 +245,6 @@ for that audience specifically, not things the art itself needs:
   `dispose()` on every cache. Either wire the path they were designed for (a
   rebuild that reuses the renderer and its caches rather than replacing them)
   or delete the methods.
-## Shareable permalinks:
-- **[2026-09-16] Add `/help` and `/about` as one-shot SSR-linkable routes,
-  same pattern as `/catalog`.** Two more `app.get` routes in `app.ts`,
-  each calling `renderPage` with a minimal `bodyHtml` (not full SSR content
-  like the catalog list - just enough for a no-JS visitor/crawler) and an
-  `initialRoute` value (`{ mode: 'help' }` / `{ mode: 'about' }`). Extend
-  `window.__INITIAL_ROUTE__`'s type in `main.tsx` and open `HelpDialog` /
-  `ArtistStatementOverlay` on mount when present, the same one-shot read
-  `INITIAL_ROUTE` already does for catalog - no live path sync while the
-  dialog is open, no back/forward handling, no router library. Motivation:
-  sharing a link straight to the help page or the artist's statement without
-  having to explain how to find them from `/`.
-  - `/about`'s `ArtistStatementOverlay` links onward to `BabelBookOverlay`
-    (a randomly generated "equivalent code" easter egg, stacked over the
-    statement). Decided: add a small `/babel-book` (or similar) endpoint that
-    serves the generated text directly rather than dropping the link, and add
-    it to `robots.txt` (`packages/server/seo.ts`) as disallowed - it's
-    infinite/generated content, not worth a crawler's time or an index entry.
-    Bundle this with the `/about` work above since it's the one piece of that
-    route with a real decision to make; the rest is mechanical.
-
 ## Rearrangement / camera:
 - **[2026-09-14] A `flyTo` from a control cannot interrupt an active
   rearrangement's own camera control.** A `flyTo` issued from the 'center'

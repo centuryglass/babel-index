@@ -14,7 +14,9 @@ import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
+import { renderHelpPage, renderAboutPage } from './staticPages.tsx';
 import { robotsTxt, renderSitemap } from './seo.ts';
+import { generateRandomBookText } from '../web/src/lib/babelBook.ts';
 import { roomPath } from '../map/slug.ts';
 import { alphabeticalOrder, pageCount } from '../web/src/lib/catalog.ts';
 import { createUrlFor } from '../web/src/lib/rooms.ts';
@@ -376,7 +378,7 @@ export function createApp({
       ogImagePath: string;
       canonicalPath: string;
       bodyHtml?: string;
-      initialRoute?: { mode: 'catalog' | 'map'; room?: string } | null;
+      initialRoute?: { mode: 'catalog' | 'map'; room?: string } | { mode: 'help' } | { mode: 'about' } | null;
       noscriptRedirectPath?: string | null;
       status?: number;
     }
@@ -550,7 +552,48 @@ export function createApp({
     };
     app.get('/catalog/:slug', handleRoomRoute('catalog'));
     app.get('/map/:slug', handleRoomRoute('map'));
+
+    /**
+     * One-shot SSR-linkable routes for the two static dialogs reachable from
+     * the center shelf - a no-JS/crawler-readable page plus an
+     * `initialRoute` hint so `main.tsx` opens the matching dialog once JS
+     * takes over (the same pattern as `/catalog` above, minimal bodyHtml
+     * rather than real per-corpus SSR content since neither page has any).
+     */
+    app.get('/help', (req, res, next) => {
+      const { title, description, bodyHtml } = renderHelpPage(base);
+      renderPage(req, res, next, {
+        title,
+        description,
+        ogImagePath: 'og-image.jpg',
+        canonicalPath: 'help',
+        bodyHtml,
+        initialRoute: { mode: 'help' },
+      });
+    });
+
+    app.get('/about', (req, res, next) => {
+      const { title, description, bodyHtml } = renderAboutPage(base);
+      renderPage(req, res, next, {
+        title,
+        description,
+        ogImagePath: 'og-image.jpg',
+        canonicalPath: 'about',
+        bodyHtml,
+        initialRoute: { mode: 'about' },
+      });
+    });
   }
+
+  /**
+   * The generated "equivalent code" easter egg the artist's statement links
+   * onward to (`ArtistStatementOverlay`'s `.statement-link` -> `BabelBookOverlay`),
+   * served as plain text for a reader who follows the link with no JS. Infinite,
+   * generated content with nothing to index, so `robots.txt` disallows it below.
+   */
+  app.get('/babel-book', (_req, res) => {
+    res.type('text/plain').send(generateRandomBookText());
+  });
 
   app.get('/robots.txt', (req, res) => {
     res.type('text/plain').send(robotsTxt(requestOrigin(req, base)));

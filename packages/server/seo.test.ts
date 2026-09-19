@@ -9,6 +9,11 @@ test('robotsTxt allows everything and points at this origin\'s sitemap', () => {
   assert.match(txt, /^Sitemap: https:\/\/example\.com\/sitemap\.xml$/m);
 });
 
+test('robotsTxt disallows the generated /babel-book easter egg', () => {
+  const txt = robotsTxt('https://example.com/');
+  assert.match(txt, /^Disallow: \/babel-book$/m);
+});
+
 test('renderSitemap lists the root, every catalog page, and every room permalink', () => {
   const xml = renderSitemap('https://example.com/', ['unparsed-light', 'sunken-tomorrows'], 3);
 
