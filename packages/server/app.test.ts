@@ -391,16 +391,17 @@ test('images are cached hard, since a room never changes under its name', async 
 
 // --- the page ---------------------------------------------------------------
 
-test('/bundle.js is served as javascript', async () => {
+test('/bundle.js is served as javascript, no-cache so a deploy is picked up on the next load', async () => {
   await serving(async ({ get }) => {
     const res = await get('/bundle.js');
     assert.equal(res.status, 200);
     assert.match(res.headers.get('content-type'), /javascript/);
     assert.equal(await res.text(), 'console.log("bundle")');
+    assert.match(res.headers.get('cache-control'), /no-cache/);
   });
 });
 
-test('/style.css is served as css, re-read each request so edits need no restart', async () => {
+test('/style.css is served as css, re-read each request so edits need no restart, no-cache for the same reason as /bundle.js', async () => {
   let reads = 0;
   await serving(
     async ({ get }) => {
@@ -408,6 +409,7 @@ test('/style.css is served as css, re-read each request so edits need no restart
       assert.equal(res.status, 200);
       assert.match(res.headers.get('content-type'), /css/);
       assert.equal(await res.text(), 'body { color: red; }');
+      assert.match(res.headers.get('cache-control'), /no-cache/);
       await get('/style.css');
       assert.equal(reads, 2);
     },
@@ -427,6 +429,16 @@ test('/ serves the page, re-read each request so edits need no restart', async (
       assert.equal(reads, 2);
     },
     { readIndexHtml: async () => (reads++, '<canvas></canvas>') }
+  );
+});
+
+test('renderPage is no-cache, so a stale copy can never point a returning visitor at a bundle.js the server has moved past', async () => {
+  await serving(
+    async ({ get }) => {
+      const res = await get('/');
+      assert.match(res.headers.get('cache-control'), /no-cache/);
+    },
+    { readIndexHtml: async () => '<canvas></canvas>' }
   );
 });
 

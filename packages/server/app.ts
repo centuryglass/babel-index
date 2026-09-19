@@ -323,15 +323,29 @@ export function createApp({
   // than let it 404 log on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
+  // `no-cache`, not `no-store`: the point is that a deploy must be picked up
+  // on a visitor's next load, not that the response is worthless to keep
+  // around. `no-cache` still lets the browser hold the bytes and revalidate
+  // with the `ETag` Express already computes on `res.send()`, so an
+  // unchanged bundle costs a 304 rather than a full re-download - it just
+  // can never be served straight from a stale disk cache the way an
+  // unheadered response can. Without this, a visitor whose browser cached
+  // `bundle.js` before a deploy keeps running the old client against the
+  // new server's SSR/API responses until whatever heuristic TTL the browser
+  // picked happens to expire - which is what "the site was broken for a few
+  // hours after deploying, then fixed itself" looks like from outside.
   app.get('/bundle.js', (_req, res) => {
+    res.set('Cache-Control', 'no-cache');
     res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
   });
 
   // Plain CSS, not part of the esbuild bundle - re-read on each request like
-  // index.html below, so a margin or color tweak needs no restart.
+  // index.html below, so a margin or color tweak needs no restart. Same
+  // `no-cache` reasoning as `/bundle.js` above.
   if (readStyleCss)
     app.get('/style.css', async (_req, res, next) => {
       try {
+        res.set('Cache-Control', 'no-cache');
         res.type('css').send(await readStyleCss());
       } catch (err) {
         next(err);
@@ -414,7 +428,11 @@ export function createApp({
         .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript)
         .replace(/%%NOSCRIPT_REDIRECT%%/g, noscriptRedirect);
       if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
-      res.status(status).type('html').send(html);
+      // Same `no-cache` reasoning as `/bundle.js`/`/style.css` above: this is
+      // the page that names `bundle.js`, so a stale cached copy of it can
+      // point a returning visitor at instructions to fetch a `bundle.js`
+      // that no longer matches the server's SSR/API responses.
+      res.set('Cache-Control', 'no-cache').status(status).type('html').send(html);
     } catch (err) {
       next(err);
     }
