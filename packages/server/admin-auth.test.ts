@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hashPassword, requireAdminAuth, verifyPassword } from './admin-auth.ts';
+import { createRateBuckets } from './rate-buckets.ts';
 
 test('verifyPassword accepts the password hashPassword hashed', () => {
   const hash = hashPassword('correct horse battery staple');
@@ -80,12 +81,19 @@ test('requireAdminAuth 401s with no Authorization header at all', () => {
 
 test('requireAdminAuth 429s a burst of attempts from one address, right or wrong password', () => {
   const hash = hashPassword('sesame');
-  const middleware = requireAdminAuth(hash);
+  // A tiny burst and a refill window far longer than a handful of real
+  // scryptSync calls could ever take, injected rather than relying on the
+  // production default (rate-buckets.ts): each of these requests runs a
+  // real password check, and with the default's 1-second refill window,
+  // ~20 sequential scryptSync calls' own wall-clock cost was enough to
+  // refill a token before the "over budget" request arrived - flaky
+  // (and CI-load-dependent) rather than reliably 429ing.
+  const buckets = createRateBuckets({ burst: 2, refillMs: 60_000 });
+  const middleware = requireAdminAuth(hash, buckets);
   const rightAuth = `Basic ${Buffer.from('anyuser:sesame').toString('base64')}`;
-  // Spend the whole default burst (rate-buckets.ts) from one address - every
-  // one of these succeeds, since the token spend happens before the
-  // password check.
-  for (let i = 0; i < 20; i++) {
+  // Spend the whole burst from one address - both of these succeed, since
+  // the token spend happens before the password check.
+  for (let i = 0; i < 2; i++) {
     const state = fakeReqRes(rightAuth, '10.0.0.1');
     middleware(state.req, state.res, () => {});
   }

@@ -20,7 +20,7 @@
  */
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
-import { createRateBuckets } from './rate-buckets.ts';
+import { createRateBuckets, type RateBuckets } from './rate-buckets.ts';
 
 const SCRYPT_KEYLEN = 64;
 
@@ -64,9 +64,14 @@ function passwordFromHeader(header: string | undefined): string | null {
  * One bucket store per call, matching `app.ts`'s `favoriteBuckets` - the
  * caller (`app.ts`) builds this once and reuses it for every admin route,
  * so the three log-viewer routes share one budget rather than one each.
+ *
+ * `buckets` is injectable so a test can exhaust a burst without needing 20+
+ * real `scryptSync` calls to finish inside one refill window - the default
+ * refill (1/second) leaves no margin against ~20 sequential password
+ * hashes' own wall-clock cost, which is what made the shared default flaky
+ * under CI load.
  */
-export function requireAdminAuth(passwordHash: string) {
-  const buckets = createRateBuckets();
+export function requireAdminAuth(passwordHash: string, buckets: RateBuckets = createRateBuckets()) {
   return (req: Request, res: Response, next: NextFunction) => {
     // req.ip is undefined only for a socket that has already gone away.
     if (!buckets.take(req.ip ?? '')) return res.status(429).json({ error: 'too many attempts - try again in a moment' });

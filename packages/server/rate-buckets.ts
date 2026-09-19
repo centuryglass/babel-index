@@ -10,6 +10,8 @@ const RATE_BURST = 20;
 const RATE_REFILL_MS = 1000;
 const RATE_MAX_TRACKED = 10_000;
 
+export type RateBuckets = ReturnType<typeof createRateBuckets>;
+
 export function createRateBuckets({ burst = RATE_BURST, refillMs = RATE_REFILL_MS } = {}) {
   const seen = new Map<string, { tokens: number; at: number }>();
   return {
