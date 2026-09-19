@@ -323,7 +323,10 @@ export function createApp({
   // than let it 404 log on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
+  // `no-cache`, not `no-store`: always revalidate against the `ETag`
+  // `res.send()` already computes, rather than skip caching outright.
   app.get('/bundle.js', (_req, res) => {
+    res.set('Cache-Control', 'no-cache');
     res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
   });
 
@@ -332,6 +335,7 @@ export function createApp({
   if (readStyleCss)
     app.get('/style.css', async (_req, res, next) => {
       try {
+        res.set('Cache-Control', 'no-cache');
         res.type('css').send(await readStyleCss());
       } catch (err) {
         next(err);
@@ -414,7 +418,9 @@ export function createApp({
         .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript)
         .replace(/%%NOSCRIPT_REDIRECT%%/g, noscriptRedirect);
       if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
-      res.status(status).type('html').send(html);
+      // Same `no-cache` as `/bundle.js`/`/style.css` above - this is the page
+      // that names them.
+      res.set('Cache-Control', 'no-cache').status(status).type('html').send(html);
     } catch (err) {
       next(err);
     }
