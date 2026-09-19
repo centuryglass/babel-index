@@ -363,14 +363,32 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // on disk (see `genericDistillId`'s doc). The set is small enough that
     // pinning all of it fits the cache budget, and pinning the distill
     // alternates up front keeps the first-ever toggle from falling to flat
-    // black while they load. Shared tiles are served flat, so pin and
-    // preload at level 0.
+    // black while they load.
+    //
+    // The center is requested at level 0: it is on screen from the first
+    // frame (the opening view is capped at 1x, see `center.ts`'s
+    // `openingZoom`), so nothing is gained by starting coarse. The generic
+    // tiles are requested at the coarsest rung `manifest.shared.levels`
+    // actually has instead - a screen at opening zoom shows only a handful
+    // of them, and preloading every one at full resolution paid for
+    // thousands of cells' worth of art before a single frame draws (AGENTS.md,
+    // "The shared tiles are served flat" - resolved once `shared.levels` has
+    // more than level 0). Never hardcode the coarsest rung as
+    // `pyramid.fallbackLevel`: an older corpus with no shared pyramid
+    // generated has no tile there. Distill's alternates have no pyramid of
+    // their own (`rooms.ts`'s header), so they stay at level 0 like the center.
+    const sharedLevelNumbers = (manifest.shared?.levels ?? []).filter((l) => l.dir).map((l) => l.level);
+    const coarsestSharedLevel = sharedLevelNumbers.length ? Math.max(...sharedLevelNumbers) : 0;
     const genericDistillIds = (manifest.shared?.genericDistill ?? [])
       .map((v, i) => (v ? genericDistillId(i) : null))
       .filter((id): id is number | string => id != null);
-    for (const id of [
-      CENTER, ...(manifest.shared?.generic ?? []).map((_, i) => genericId(i)), ...genericDistillIds,
-    ]) {
+    tiles.pin(CENTER);
+    tiles.request(CENTER, 0);
+    for (const id of (manifest.shared?.generic ?? []).map((_, i) => genericId(i))) {
+      tiles.pin(id);
+      tiles.request(id, coarsestSharedLevel);
+    }
+    for (const id of genericDistillIds) {
       tiles.pin(id);
       tiles.request(id, 0);
     }

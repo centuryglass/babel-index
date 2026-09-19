@@ -41,6 +41,7 @@ function manifest(): Manifest {
       center: { file: 'center_tile.png', url: '/shared/center_tile.png' },
       generic: [{ file: 'a.jpg', url: '/shared/generic/a.jpg' }],
       genericDistill: [{ file: 'a.jpg', url: '/shared/generic_distill/a.jpg' }],
+      levels: [{ level: 0, dir: null }],
     },
   };
 }
@@ -77,6 +78,20 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
   assert.equal(level1.local, 'corpus/512/001.jpg');
 });
 
+test('buildUploadList covers the shared tiles at every non-zero level too, mirroring the corpus loop', () => {
+  const m = manifest();
+  m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const keys = uploads.map((u) => u.key).sort();
+  assert.ok(keys.includes('shared/512/center_tile.png'));
+  assert.ok(keys.includes('shared/generic/512/a.jpg'));
+
+  const centerLevel = uploads.find((u) => u.key === 'shared/512/center_tile.png');
+  assert.equal(centerLevel.local, 'assets/512/center_tile.png');
+  const genericLevel = uploads.find((u) => u.key === 'shared/generic/512/a.jpg');
+  assert.equal(genericLevel.local, 'assets/generic/512/a.jpg');
+});
+
 test('buildUploadList uploads one entry per sheet file for a sheet-packed level, not per room', () => {
   const m = manifest();
   m.levels.push({
@@ -100,7 +115,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   m.metadata = null;
   m.tagLinks = null;
   m.embeddings = null;
-  m.shared = { center: null, generic: [], genericDistill: [] };
+  m.shared = { center: null, generic: [], genericDistill: [], levels: [{ level: 0, dir: null }] };
   const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(
     uploads.map((u) => u.key).sort(),

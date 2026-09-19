@@ -62,7 +62,7 @@ npm run test:parity                # manual Canvas2D-vs-WebGL render parity; rea
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
-npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
+npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
 npm run generate:shelf-geometry     # Recalculate diegetic control bounds from tools/center-placement/shelf_geometry.svg
@@ -355,13 +355,29 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   are served from the `/shared/` mount, not `/images/`. The one case where a
   `center.*` inside the corpus dir counts as a generic tile is `sharedDir ===
   imagesDir`.
-- **The shared tiles are served flat (level 0) for now.** `rooms.ts` resolves
-  a shared id to its url at level 0 only; every coarser request falls back
-  through `servableLevel`. Bounded, because the cache keys on id not cell,
-  but it means `main.tsx` pins each shared id at level 0 rather than at the
-  coarsest rung - so each pinned generic is a full-res download until the
-  shared assets get their own pyramid (`docs/pending_task_list.md`). Do not
-  pin a shared id at `FALLBACK_LEVEL`; there is no tile there.
+- **The center and the generic tiles have their own pyramid, generated the
+  same way the corpus is.** `npm run generate:mips -- --images <dir>
+  --shared-dir <dir> [--center <name>]` (`packages/pipeline/shared-mips.ts`)
+  writes the same per-file `<width>/<file>` ladder `mips.ts` writes for a
+  room, rooted under `--shared-dir` instead - once for the center render,
+  once per file in `generic/`. `scan.ts` discovers what each tree actually
+  has on disk (`discoverLevels`, same as it does for `manifest.levels`) and
+  intersects the two into `manifest.shared.levels`, so a level only counts
+  as available where both the center and every generic tile actually have
+  it. `rooms.ts` resolves a shared id at a level in `shared.levels` by
+  inserting `<width>/` before the asset's filename - the same per-level
+  directory `shared-mips.ts` wrote it into. There are no shared sheets: a
+  handful of files needs no packing.
+
+  Every OTHER shared id - a generic tile's distill alternate
+  (`generic_distill/`, only ever drawn up close), a favorite badge, the
+  distill toggle's faces, the "forget searches" overlay - is fixed-size app
+  art with no pyramid of its own, and stays flat at level 0, falling back to
+  it through `servableLevel` for any coarser request, same as before.
+  `main.tsx` pins the center at level 0 (on screen from the first frame) but
+  the generic tiles at the coarsest level `shared.levels` actually has -
+  never a hardcoded `FALLBACK_LEVEL`, since an older corpus with no shared
+  pyramid generated has none but level 0.
 
 ### The center room's controls
 

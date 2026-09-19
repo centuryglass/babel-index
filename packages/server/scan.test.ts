@@ -471,6 +471,76 @@ test('an unreadable source size degrades to level 0 rather than guessing', async
   ]);
 });
 
+// --- the shared tiles' own pyramid ------------------------------------------
+
+test('a flat shared directory (no pyramid generated) reports only level 0', async () => {
+  await corpus(pyramid(), async (dir) => {
+    const { shared } = await scanDirectory(dir);
+    assert.deepEqual(shared.levels.map((l) => l.level), [0]);
+  });
+});
+
+test('shared.levels is discovered off --shared-dir, and picks up a level the center has', async () => {
+  await corpus(
+    {
+      ...pyramid(),
+      '512/center.jpg': fixture.jpeg(512, 384),
+    },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.levels.map((l) => l.level), [0, 1]);
+      assert.equal(shared.levels[1].dir, '512');
+    }
+  );
+});
+
+test('a level the generic tiles do not all have is not offered, even when the center has it', async () => {
+  await corpus(
+    {
+      ...pyramid(),
+      '512/center.jpg': fixture.jpeg(512, 384),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      // no generic/512/ - the generic tree never got that level
+    },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.levels.map((l) => l.level), [0], 'the generic tree has no 512 level');
+    }
+  );
+});
+
+test('once both trees have a level, it is offered', async () => {
+  await corpus(
+    {
+      ...pyramid(),
+      '512/center.jpg': fixture.jpeg(512, 384),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      'generic/512/v1.webp': fixture.webpVp8(512, 384),
+    },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.levels.map((l) => l.level), [0, 1]);
+    }
+  );
+});
+
+test('a shared directory outside the corpus is discovered the same way', async () => {
+  await corpus(
+    {
+      'rooms/001.jpg': fixture.jpeg(1024, 768),
+      'rooms/002.jpg': fixture.jpeg(1024, 768),
+      'center_tile.png': fixture.png(1024, 768),
+      '512/center_tile.png': fixture.png(512, 384),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      'generic/512/v1.webp': fixture.webpVp8(512, 384),
+    },
+    async (dir) => {
+      const m = await scanDirectory(join(dir, 'rooms'), { sharedDir: dir });
+      assert.deepEqual(m.shared.levels.map((l) => l.level), [0, 1]);
+    }
+  );
+});
+
 // --- embeddings blob --------------------------------------------------------
 
 test('a corpus without a blob reports no embeddings', async () => {

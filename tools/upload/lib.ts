@@ -100,6 +100,26 @@ export function buildUploadList(
   for (const generic of manifest.shared?.generic ?? [])
     uploads.push({ local: join(sharedDir, 'generic', generic.file), key: `shared/generic/${generic.file}` });
 
+  // The shared tiles' own pyramid (packages/pipeline/shared-mips.ts), mirroring
+  // the manifest.levels loop above: one object per level per file, center and
+  // every generic tile, skipping level 0 (already pushed by the two loops
+  // above) and any level with no per-file dir (there is no sheet-packed shape
+  // for the shared tiles - see scan.ts's discoverLevels for why this can only
+  // ever be a dir).
+  for (const level of manifest.shared?.levels ?? []) {
+    if (level.level === 0 || !level.dir) continue;
+    if (manifest.shared.center)
+      uploads.push({
+        local: join(sharedDir, level.dir, manifest.shared.center.file),
+        key: `shared/${level.dir}/${manifest.shared.center.file}`,
+      });
+    for (const generic of manifest.shared.generic)
+      uploads.push({
+        local: join(sharedDir, 'generic', level.dir, generic.file),
+        key: `shared/generic/${level.dir}/${generic.file}`,
+      });
+  }
+
   for (const distill of manifest.shared?.genericDistill ?? [])
     if (distill)
       uploads.push({

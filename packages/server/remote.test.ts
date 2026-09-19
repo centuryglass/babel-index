@@ -41,6 +41,7 @@ function sampleManifest(): Manifest {
       center: { file: 'center.png', url: '/shared/center.png' },
       generic: [{ file: 'g1.png', url: '/shared/generic/g1.png' }],
       genericDistill: [{ file: 'g1.jpg', url: '/shared/generic_distill/g1.jpg' }, null],
+      levels: [{ level: 0, dir: null }],
     },
     rooms: [{ id: 0, file: '001.jpg', url: '/images/001.jpg', bytes: 42, w: 512, h: 512 }],
     count: 1,
@@ -81,6 +82,7 @@ test('scanRemote points every url directly at the remote host, not through this 
       assert.equal(manifest.shared.generic[0].url, `${base}/shared/generic/g1.png`);
       assert.equal(manifest.shared.genericDistill[0].url, `${base}/shared/generic_distill/g1.jpg`);
       assert.equal(manifest.shared.genericDistill[1], null);
+      assert.deepEqual(manifest.shared.levels, [{ level: 0, dir: null }], 'no urls in a level, so nothing to rebase');
     }
   );
 });
