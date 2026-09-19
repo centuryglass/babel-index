@@ -42,10 +42,6 @@ for that audience specifically, not things the art itself needs:
   description — nothing points a skimming reviewer at the interesting
   engineering (the health-check-gated deploy, the rearrangement planner, the
   favorites set-hashing design) without making them excavate this file.
-- **No API contract documentation.** `/api/manifest`, `/api/search`,
-  `/api/favorites`, `/api/health` (see `packages/server/app.ts`) exist only as
-  inline code — no OpenAPI spec, not even a short `docs/api.md` describing
-  request/response shapes.
 - **No production error/metrics visibility beyond `/api/health`.** There's no
   error tracking (a Sentry-class tool) or basic request metrics — only
   `logger.ts`'s structured logs and the deploy-time health check. Possibly
