@@ -14,7 +14,7 @@ import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
-import { renderHelpPage, renderAboutPage } from './staticPages.ts';
+import { renderHelpPage, renderAboutPage } from './staticPages.tsx';
 import { robotsTxt, renderSitemap } from './seo.ts';
 import { generateRandomBookText } from '../web/src/lib/babelBook.ts';
 import { roomPath } from '../map/slug.ts';

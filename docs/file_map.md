@@ -84,10 +84,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `seo.ts`: Pure builders for `robots.txt` and `sitemap.xml` - every room
              permalink, every catalog page, and `/`. `robots.txt` disallows
              `/babel-book`, the generated easter egg with nothing to index.
-  * `staticPages.ts`: Pure, corpus-free SSR bodies for the one-shot
-                      `/help`/`/about` permalinks - minimal no-JS/crawler
-                      content, not a second copy of `HelpDialog`/
-                      `ArtistStatementOverlay`'s full content.
+  * `staticPages.tsx`: Corpus-free SSR bodies for the one-shot `/help`/`/about`
+                       permalinks. `.tsx` because it renders `HelpBody`/
+                       `ArtistStatementPages` with `react-dom/server`'s
+                       `renderToStaticMarkup` rather than building HTML
+                       strings by hand - those components are the one source
+                       of truth for both texts, live and SSR alike.
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
@@ -153,7 +155,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph, orbiting arrow, and the
                         preload spinner ring
-    * `HelpDialog.tsx`: The "READ ME" book's dialog
+    * `HelpDialog.tsx`: The "READ ME" book's dialog - chrome, zoom controls,
+                        and the content-blocking panel (stateful, corpus- and
+                        reader-specific, so it stays out of `HelpBody.tsx`)
+                        around `HelpBody`'s prose.
+    * `HelpBody.tsx`: The help dialog's explanatory prose - pure and
+                      stateless so `packages/server/staticPages.tsx` can
+                      render the identical markup for the SSR `/help` route.
     * `BookOverlay.tsx`: The open-book overlay shell both reading dialogs are
                          built from - scrim, focus-trapped dialog (`useDialog`),
                          corner close button, and a `.book` whose two pages sit
@@ -163,14 +171,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                          spread-at-a-time reader can advance by the right amount.
     * `ArtistStatementOverlay.tsx`: The artist's statement, reached by the open
                                     book traced into the center tile's shelf gap
-                                    (`CENTER_BOOK_PATH` in `lib/center.ts`). A
-                                    `BookOverlay` of two pages: the diegetic myth
-                                    on the left, the real statement on the right,
-                                    collapsing to one stacked column when too
-                                    narrow for two. The component is the source
-                                    of truth for both texts (JSX, not a parsed
-                                    doc). Opens `BabelBookOverlay` on top of
-                                    itself.
+                                    (`CENTER_BOOK_PATH` in `lib/center.ts`). Wraps
+                                    `ArtistStatementPages` in a `BookOverlay` and
+                                    supplies the live `.statement-link` button that
+                                    opens `BabelBookOverlay` on top of itself.
+    * `ArtistStatementPages.tsx`: The artist's statement's two pages - the
+                                  diegetic myth and the real statement - as pure,
+                                  stateless JSX (the source of truth for both
+                                  texts, not a parsed doc). Takes `runBookLink` as
+                                  a prop so `packages/server/staticPages.tsx` can
+                                  render the identical markup for the SSR `/about`
+                                  route with a plain link in place of the live
+                                  button.
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel,
                              paged as the same `BookOverlay` - a spread of two
                              pages when wide, one when narrow, so next/previous

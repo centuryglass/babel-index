@@ -59,12 +59,15 @@ export default defineConfig([
     // Every .ts file outside packages/web/src and the two evaluate-in-browser
     // tool scripts below runs in Node: the server, the pure packages/map and
     // packages/config logic, the pipeline, and the offline tools.
+    // packages/server/**/*.tsx is included too: staticPages.tsx renders
+    // React elements server-side via react-dom/server, and JSX is how the
+    // components it renders are written - it never runs in a browser.
     files: [
       'build/**/*.ts',
       'packages/config/**/*.ts',
       'packages/map/**/*.ts',
       'packages/pipeline/**/*.ts',
-      'packages/server/**/*.ts',
+      'packages/server/**/*.{ts,tsx}',
       'tools/**/*.ts',
     ],
     ignores: ['tools/font-lab/render.ts', 'tools/perf-capture/capture.ts'],

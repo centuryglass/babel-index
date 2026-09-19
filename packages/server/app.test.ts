@@ -639,14 +639,21 @@ test('GET /help and /about are one-shot SSR-linkable, with an initialRoute hint 
       assert.equal(help.status, 200);
       const helpHtml = await help.text();
       assert.match(helpHtml, /<h1>Help<\/h1>/);
+      // Real prose from HelpBody.tsx, not a second SSR-only copy of it.
+      assert.match(helpHtml, /class="help-body"/);
+      assert.match(helpHtml, /zoomable, pannable map of library/);
       assert.match(helpHtml, /window\.__INITIAL_ROUTE__ = \{"mode":"help"\}/);
 
       const about = await get('/about');
       assert.equal(about.status, 200);
       const aboutHtml = await about.text();
       assert.match(aboutHtml, /Artist/);
-      // Links onward to the generated-book easter egg rather than dropping it.
-      assert.match(aboutHtml, /href="\/babel-book"/);
+      // Real prose from ArtistStatementPages.tsx, not a second SSR-only copy.
+      assert.match(aboutHtml, /class="book-page statement-page statement-story"/);
+      assert.match(aboutHtml, /Library of Babel holds every possible arrangement/);
+      // The live button becomes a plain link for a no-JS visitor, rather than
+      // dropping the easter egg it opens.
+      assert.match(aboutHtml, /<a class="statement-link" href="\/babel-book">Run the same thing here<\/a>/);
       assert.match(aboutHtml, /window\.__INITIAL_ROUTE__ = \{"mode":"about"\}/);
     },
     { readIndexHtml: async () => SSR_INDEX_HTML }
