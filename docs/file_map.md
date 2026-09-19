@@ -353,6 +353,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `mips.ts`: Generate+fill alternate image size directories
   * `sheets.ts`: Composite one level's per-file tiles into `<width>-sheets/` grids
   * `layout.ts`: Import resolution steps from pyramid.ts, define expected directory structure
+  * `shared-mips.ts`: Same per-file pyramid as `mips.ts`, rooted at `--shared-dir` for the center render and `generic/`
 
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
