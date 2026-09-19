@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.1.0...babel-index-v1.2.0) (2026-09-19)
+
+
+### Features
+
+* add /help, /about and /babel-book SSR-linkable permalinks ([#204](https://github.com/centuryglass/babel-index/issues/204)) ([9f49602](https://github.com/centuryglass/babel-index/commit/9f4960268906c1fe464974574b9e738cdae9bc09))
+* add /map/:room permalinks alongside /catalog/:room ([#203](https://github.com/centuryglass/babel-index/issues/203)) ([ad6c360](https://github.com/centuryglass/babel-index/commit/ad6c360bc1f8727d34a675f4e2502691b34f43d7))
+
+
+### Bug Fixes
+
+* deploy only on release-please's release merge ([#201](https://github.com/centuryglass/babel-index/issues/201)) ([760a3cd](https://github.com/centuryglass/babel-index/commit/760a3cd40ee8fbbaece8031eacb2faa36afd9def))
+
+
+### Performance Improvements
+
+* drop the redundant full-screen clear from both renderers ([#205](https://github.com/centuryglass/babel-index/issues/205)) ([6055159](https://github.com/centuryglass/babel-index/commit/605515958ed4706555e551c38bcedb4d57f22526))
+
 ## [1.1.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.0.0...babel-index-v1.1.0) (2026-09-18)
 
 
