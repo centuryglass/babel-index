@@ -5,6 +5,10 @@
  * file owns the endpoints. The split is so the API can be exercised with a
  * plain `fetch` against an ephemeral port - no browser, no bundler, no
  * fixtures on disk beyond the images directory under test.
+ *
+ * `docs/api.md` documents the `/api/*` routes below for a reader who isn't
+ * going to read this file - any change to a route's request/response shape
+ * must be paired with an update there.
  */
 import { availableParallelism } from 'node:os';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';

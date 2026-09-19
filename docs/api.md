@@ -1,0 +1,107 @@
+# API
+
+The HTTP surface `packages/server/app.ts` exposes under `/api/`. This is an
+internal contract between the bundled client (`packages/web`) and its own
+server, not a public integration surface — there's no versioning, no auth
+beyond the favorites client-id scheme below, and no stability guarantee to
+anyone but this repo's own client code. If you're calling it for something
+else, it'll probably work, but nothing here is designed against that use.
+
+**Keep this in sync.** A route added, removed, or reshaped in `app.ts` is
+not done until this file says so — see the note at the top of that file.
+
+All responses are JSON unless noted. Full response shapes are TypeScript
+types, not repeated here: `packages/map/manifest.ts` for the manifest, and
+the inline route handlers in `packages/server/app.ts` for search/favorites/
+health. This page describes behavior and points at the type, rather than
+duplicating a shape that would drift from it.
+
+## `GET /api/manifest`
+
+The corpus manifest, plus resolved client config and favorites-store status.
+The client blocks on this fetch before it can render anything, so it's the
+one endpoint hit unconditionally on every load.
+
+- **Response**: `ManifestResponse` (`packages/map/manifest.ts`) — room list
+  and urls, shared-tile info, pyramid levels, embedding/metadata sidecar
+  coverage, `favorites: { enabled: boolean } | null`, and `config` (the
+  server's resolved `Config` with its `notes`/`source` fields stripped).
+- Not cached by this server; nothing here changes after startup except by
+  restarting the process (the corpus is scanned once — see `AGENTS.md`,
+  "The map and its coordinates" is unrelated but "No store, no feature" and
+  the config section cover why nothing here is mutable at runtime).
+
+## `GET /api/search`
+
+Runs the CLIP text tower on a query string and returns a query vector — or,
+if there's no embedding blob for this corpus or the model fails to load, a
+deterministic stub ranking instead. Actual ranking (combining this vector
+with keyword/story matches) happens client-side against `embeddings.bin`;
+this endpoint only does the one thing that can't run in a browser.
+
+- **Query**: `q` — free text, truncated to `config.search.maxQueryLength`.
+- **Response**, one of:
+  - `{ query: string, order: null }` — empty query.
+  - `{ stub: true, query: string, order: number[] }` — no embeddings for
+    this corpus; `order` is room ids, best-first, from `stubRanking()`.
+  - `{ stub: false, query: string, vector: number[] }` — a 512-dim
+    unit-length CLIP text embedding.
+  - `{ stub: true, query: string, order: number[], note: string }` — CLIP
+    inference failed or isn't installed; same stub ranking, with `note`
+    explaining why (no model on this machine vs. a load error).
+- No auth, no rate limit of its own. `docs/pending_task_list.md`'s
+  "Hosting" section notes this is the better DoS target on this API and
+  isn't yet covered by the Cloudflare ruleset that protects asset serving.
+
+## `GET /api/favorites`
+
+Every room with at least one favorite, by filename.
+
+- **Response**: `{ counts: Record<string, number> }` — a count is the size
+  of a per-room set of hashed visitor ids, never a raw counter (see
+  `AGENTS.md`, "Favorites").
+- `Cache-Control: no-store` — a stale count reads as a favorite that didn't
+  register, which is the one thing this endpoint exists to report.
+- Only mounted when the server was started with `--favorites`; otherwise
+  none of the three favorites routes exist at all.
+
+## `POST /api/favorites/:file`
+
+This visitor favorites the named room. `:file` is the room's filename (not
+its numeric id — ids are positional and renumber when the corpus changes).
+
+- **Headers**: `X-Favorite-Client` — a random id the browser mints once per
+  visitor (`persist.ts`'s `getOrCreateFavoriteClientId`), matching
+  `/^[A-Za-z0-9_-]{8,128}$/`. Decides *whose* favorite this is; a separate
+  `req.ip`-keyed token bucket decides how fast writes can arrive (deliberately
+  different keys — see `AGENTS.md`, "Favorite writes are rate-limited by
+  `req.ip`").
+- No request body.
+- **Response**: `{ file: string, count: number, favorited: true }`.
+- **Errors**: `404` unknown `file`, `400` missing/malformed client id, `429`
+  rate-limited.
+
+## `DELETE /api/favorites/:file`
+
+The same visitor un-favorites the room. Same headers, same errors, same
+response shape with `favorited: false`.
+
+## `GET /api/health`
+
+Liveness for the deploy workflow (`AGENTS.md`, "Deploying to the VPS") —
+not meant to be polled by the client.
+
+- **Response**: `{ ok: true, commit: string | null, rooms: number,
+  uptimeSeconds: number }`. `commit` lets a health check tell the new
+  process apart from the old one still answering on the same port;
+  `rooms: 0` on the deployed commit is treated as a failed deploy rather
+  than a healthy empty library.
+- `Cache-Control: no-store` — the point is this process's current answer.
+
+## Not covered here
+
+Everything else `app.ts` serves — `/`, `/catalog`, `/catalog/:slug`,
+`/map/:slug`, `/help`, `/about`, `/robots.txt`, `/sitemap.xml`,
+`/babel-book`, `/bundle.js`, `/style.css`, static asset mounts, and the
+dev-only `/api/live-reload` — are page/asset routes serving HTML, plain
+text, or files, not a JSON API contract. See `app.ts` itself for those.

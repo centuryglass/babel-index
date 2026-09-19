@@ -547,6 +547,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
               the project.
 
 ### Docs:
+- `docs/api.md`: The `/api/*` request/response contract, for a reader who
+                 wants the shapes without reading `packages/server/app.ts`.
 - `docs/architecture.md`: A five-minute, human-facing system overview -
                           request flow, why esbuild bundles in-process, why
                           the corpus lives in R2, why deploy is gated on
