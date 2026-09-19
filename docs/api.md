@@ -98,6 +98,42 @@ not meant to be polled by the client.
   than a healthy empty library.
 - `Cache-Control: no-store` — the point is this process's current answer.
 
+## `GET /api/logs`
+
+Recent entries from the operator's own log file, for the admin log viewer at
+`/admin/logs` (see `packages/server/log-file.ts`, `log-reader.ts`,
+`admin-auth.ts`, `logViewerPage.ts`) — the "don't ssh into the VPS to read
+logs" route. Unlike everything above, this one has real auth: HTTP Basic
+Auth, checked against a scrypt hash in `ADMIN_PASSWORD_HASH`
+(`tools/hash-admin-password` prints one). There's one operator, so the Basic
+Auth username is never checked.
+
+- **Query**: `minLevel` (pino's numeric scale — 10 trace .. 60 fatal;
+  default `0`, everything), `limit` (default/max in `log-reader.ts`).
+- **Response**: `{ entries: (LogEntry | RawLogEntry)[] }`, oldest first.
+  `RawLogEntry` (`{ raw: string }`) is a line that didn't parse as JSON,
+  kept rather than dropped.
+- `Cache-Control: no-store`.
+- Only mounted when the server was started with both `LOG_FILE` and
+  `ADMIN_PASSWORD_HASH` set (env vars, not flags — the second is a secret);
+  a lone one logs a startup warning and mounts neither route rather than
+  serving unauthenticated. Same "no store, no feature" shape as favorites.
+- **Errors**: `401` with a `WWW-Authenticate` challenge on missing/wrong
+  credentials.
+
+## `GET /admin/logs`
+
+The same data as `/api/logs`, as a small server-rendered HTML page (works
+with no JS — reload to see new entries) with a level/limit form and an
+auto-refresh toggle that polls `/admin/logs/fragment`. Same query params,
+same auth, same mounting condition as `/api/logs`.
+
+## `GET /admin/logs/fragment`
+
+Just the `<ul id="entries">` markup `/admin/logs` embeds — what its own
+polling script fetches on refresh. Not meant to be visited directly; same
+query params, auth, and mounting condition as `/api/logs`.
+
 ## Not covered here
 
 Everything else `app.ts` serves — `/`, `/catalog`, `/catalog/:slug`,

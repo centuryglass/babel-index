@@ -168,7 +168,35 @@ The workflow names a `production` environment, which gives you the deployment
 record on the repo's front page and somewhere to hang a required reviewer if
 you ever want the deploy to pause for a click.
 
-### 3. Merge it
+### 3. The admin log viewer (optional)
+
+`/admin/logs` (`docs/api.md`) is a phone-usable alternative to ssh-ing in and
+reading `journalctl` directly. It needs two env vars on the unit, both unset
+by default:
+
+```sh
+npm run hash-admin-password   # prompts for a password, prints ADMIN_PASSWORD_HASH
+```
+
+Add both to whatever sets this service's environment (an `Environment=` line
+in the unit, or an `EnvironmentFile=` it points at — not
+`/etc/babel-index-deploy.conf` above, which is `deploy.sh`'s own config, not
+this process's):
+
+```
+LOG_FILE=/home/youruser/Repos/babel-index/server.log
+ADMIN_PASSWORD_HASH=<paste from hash-admin-password>
+```
+
+Then restart the service. `LOG_FILE` on its own (or `ADMIN_PASSWORD_HASH` on
+its own) logs a startup warning and mounts nothing — see `index.ts`'s own
+comment on why both are required together. Rotating the password is running
+`hash-admin-password` again and pasting the new hash in. The log file itself
+is untracked and rotates on its own past 10MB
+(`packages/server/log-file.ts`), the same as `favorites.json` survives a
+deploy without being committed.
+
+### 4. Merge it
 
 `workflow_run` and `workflow_dispatch` only exist once the workflow file is on
 the **default branch** - until `deploy.yml` is on main, nothing will fire and
@@ -209,9 +237,10 @@ left. Read which step failed:
   binaries a CPU-only host has no use for. Both make the install slower and
   neither is needed on a larger machine — if this deployment ever moves
   somewhere with room, they are the first thing to drop.
-- **Nothing here runs `git clean`,** and it must not start: `config.json` and
-  `favorites.json` are untracked, live in the checkout, and are the only
-  state this deployment owns.
+- **Nothing here runs `git clean`,** and it must not start: `config.json`,
+  `favorites.json`, and (if `LOG_FILE` points inside the checkout) the log
+  file are untracked, live in the checkout, and are the only state this
+  deployment owns.
 - **The reverse proxy has to be in front of it.** `--base-path` alone serves a
   page whose every relative url 404s (see AGENTS.md, "Deployment and the base
   path"); the nginx config that strips the prefix is a separate, hand-managed
