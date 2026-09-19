@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.2.0...babel-index-v1.3.0) (2026-09-19)
+
+
+### Features
+
+* give the shared tiles their own resolution pyramid ([#207](https://github.com/centuryglass/babel-index/issues/207)) ([1db297b](https://github.com/centuryglass/babel-index/commit/1db297bfe56b44ab5623a018595174ffd8900583))
+
+
+### Bug Fixes
+
+* mark bundle.js, style.css and SSR pages no-cache ([#206](https://github.com/centuryglass/babel-index/issues/206)) ([60c521f](https://github.com/centuryglass/babel-index/commit/60c521fbeb2f6d136ff5ff8672f0d5777b8f1384))
+
 ## [1.2.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.1.0...babel-index-v1.2.0) (2026-09-19)
 
 
