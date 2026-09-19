@@ -565,8 +565,16 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   border-radius: 4px; flex: 0 1 auto;
 }
 .room-id .card-id {
-  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding: 0; background: none; border: none; border-radius: 0;
+  flex: 0 1 auto; min-width: 0; padding: 0; background: none; border: none; border-radius: 0;
+  /*
+    A long title wraps rather than truncating - a title cut to "…" on a
+    narrow phone is unreadable and the room has no other place that shows
+    it whole. Two lines is the cap so the head still fits in the row
+    budget `card-head` reserves; anything longer still overflows into
+    ellipsis rather than pushing the head taller without bound.
+  */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; text-overflow: ellipsis; white-space: normal;
 }
 .room-id .favorite { margin: 0; flex: none; padding-left: 6px; border-left: 1px solid var(--edge); }
 .room-id .favorite-toggle {
