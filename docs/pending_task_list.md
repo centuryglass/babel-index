@@ -11,6 +11,20 @@ code and the git log are the record of what was.
   `?debug`-only. Give it a non-debug home before this
   matters for anyone relying on the lossless reading of a search.
 
+## Introducing the controls:
+- **[2026-09-18] The help dialog is one long block of text.** `HelpDialog.tsx`
+  explains every control as a run of bolded-lead paragraphs, and a reader who
+  wants one answer has to read the whole thing to find it. The map's controls
+  are diegetic and mostly unlabelled, so this is the only place a visitor
+  learns what the switches on the index shelf do — which makes "a wall of
+  prose" the weakest link in the first thirty seconds of the piece. Brainstorm
+  alternatives before committing to one: a first-visit walkthrough that points
+  at the real controls, hover/focus tooltips on the shelf itself, the annotated
+  figures from `docs/user-guide.md` rendered in the dialog, or a short section
+  index at the top. The constraint is that whatever replaces it stays
+  keyboard-reachable and screen-reader legible, and does not become the subject
+  of the site.
+
 ## Hosting:
 - The Cloudflare abuse protection in `infra/abuse-protection.tf` only scopes
   `assets_hostname` (the R2 bucket). `/api/search` is a much better DoS target
@@ -37,11 +51,6 @@ This repo is also a software engineering portfolio piece (see AGENTS.md's
 section on this), and a reviewer skimming it fast is a different audience
 than a visitor to the site. These are process/documentation gaps that matter
 for that audience specifically, not things the art itself needs:
-- **No engineering framing in `README.md`.** It has a `ci`/`codeql`/`deploy`
-  status badge row now, but otherwise still reads purely as an art
-  description — nothing points a skimming reviewer at the interesting
-  engineering (the health-check-gated deploy, the rearrangement planner, the
-  favorites set-hashing design) without making them excavate this file.
 - **No production error/metrics visibility beyond `/api/health`.** There's no
   error tracking (a Sentry-class tool) or basic request metrics — only
   `logger.ts`'s structured logs and the deploy-time health check. Possibly
