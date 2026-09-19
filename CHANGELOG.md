@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/centuryglass/babel-index/compare/babel-index-v1.4.0...babel-index-v1.4.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* correct relative fragment URL in admin log viewer polling script ([#222](https://github.com/centuryglass/babel-index/issues/222)) ([ec4e266](https://github.com/centuryglass/babel-index/commit/ec4e266fce15c8932ec7bbca44d0976932c6e1bd))
+* wrap long room titles instead of truncating in overlay header ([#221](https://github.com/centuryglass/babel-index/issues/221)) ([5e19673](https://github.com/centuryglass/babel-index/commit/5e196731f1e61077d19d44f0bed51dfdf470c4a0))
+
 ## [1.4.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.3.0...babel-index-v1.4.0) (2026-09-19)
 
 
