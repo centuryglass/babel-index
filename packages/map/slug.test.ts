@@ -121,4 +121,6 @@ test('a filename with nothing to fold still gets a unique path', () => {
 
 test('roomPath states the permalink shape once', () => {
   assert.equal(roomPath('unparsed-light'), 'catalog/unparsed-light');
+  assert.equal(roomPath('unparsed-light', 'catalog'), 'catalog/unparsed-light');
+  assert.equal(roomPath('unparsed-light', 'map'), 'map/unparsed-light');
 });

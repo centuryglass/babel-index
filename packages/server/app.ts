@@ -351,6 +351,13 @@ export function createApp({
    * content inside `#root` for crawlers/no-JS, and a hint for `main.tsx` to
    * boot straight into the matching interactive view once JS runs (see
    * index.html's own comment on `%%SSR_BODY%%`/`%%INITIAL_ROUTE_SCRIPT%%`).
+   *
+   * `noscriptRedirectPath`, when given, sends a no-JS visitor on to that
+   * path instead of leaving them on this one - a `<meta>` refresh wrapped in
+   * `<noscript>`, so it never fires once `main.tsx` takes over. `/map/:slug`
+   * is the one caller: the map reading needs JS to mean anything, so a
+   * reader without it is better served the identical `catalog/:slug` content
+   * at its real url than a room page with no way to browse onward.
    */
   const renderPage = async (
     req: Request,
@@ -363,6 +370,7 @@ export function createApp({
       canonicalPath,
       bodyHtml = '',
       initialRoute = null,
+      noscriptRedirectPath = null,
       status = 200,
     }: {
       title: string;
@@ -370,7 +378,8 @@ export function createApp({
       ogImagePath: string;
       canonicalPath: string;
       bodyHtml?: string;
-      initialRoute?: { mode: 'catalog'; room?: string } | { mode: 'help' } | { mode: 'about' } | null;
+      initialRoute?: { mode: 'catalog' | 'map'; room?: string } | { mode: 'help' } | { mode: 'about' } | null;
+      noscriptRedirectPath?: string | null;
       status?: number;
     }
   ) => {
@@ -389,6 +398,9 @@ export function createApp({
       const routeScript = initialRoute
         ? `<script>window.__INITIAL_ROUTE__ = ${JSON.stringify(initialRoute).replace(/</g, '\\u003c')};</script>`
         : '';
+      const noscriptRedirect = noscriptRedirectPath
+        ? `<noscript><meta http-equiv="refresh" content="0; url=${escapeHtml(`${base}${noscriptRedirectPath}`)}"></noscript>`
+        : '';
       // Global replaces: every occurrence of a placeholder name is
       // substituted, wherever it sits - a mention inside one of index.html's
       // comments would be rewritten just like a real tag, which is why those
@@ -399,7 +411,8 @@ export function createApp({
         .replace(/%%CANONICAL_URL%%/g, `${origin}${canonicalPath}`)
         .replace(/%%OG_IMAGE_URL%%/g, absoluteAsset(origin, ogImagePath))
         .replace(/%%SSR_BODY%%/g, bodyHtml)
-        .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript);
+        .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript)
+        .replace(/%%NOSCRIPT_REDIRECT%%/g, noscriptRedirect);
       if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
       res.status(status).type('html').send(html);
     } catch (err) {
@@ -463,7 +476,13 @@ export function createApp({
     });
 
     /**
-     * One room's permalink, keyed by its title (`packages/map/slug.ts`).
+     * One room's permalink, keyed by its title (`packages/map/slug.ts`),
+     * reachable under two path prefixes that share this one handler:
+     * `catalog/:slug` opens the room in the linear list, `map/:slug` opens
+     * the same room's overlay over the pannable map. `mode` is the only
+     * thing that differs between the two `app.get` calls below - reusing one
+     * closure is what keeps the redirect/collision/not-found handling from
+     * drifting between them.
      *
      * A room answers to its filename stem as well, and anything but the
      * canonical slug redirects to it - so a retitled room's old links still
@@ -473,8 +492,16 @@ export function createApp({
      * capitalises. Every slug in the table is already lowercase, so it can
      * only ever find the room the reader asked for, and the redirect then puts
      * them on its real url.
+     *
+     * The map reading needs JS to be anything but a copy of the catalog page,
+     * so `map/:slug` also sends a no-JS visitor on to the identical content
+     * at its real `catalog/:slug` url via `renderPage`'s `noscriptRedirectPath`
+     * (see its own comment) - a crawler that doesn't run JS lands there too.
+     * A JS-capable visitor never sees it: `main.tsx` replaces `#root` before
+     * the `<noscript>` tag could ever apply.
      */
-    app.get('/catalog/:slug', async (req, res, next) => {
+    const handleRoomRoute =
+      (mode: 'catalog' | 'map') => async (req: Request<{ slug: string }>, res: Response, next: NextFunction) => {
       try {
         const { metadata, tagLinks, slugs } = await loadRoomContent(manifest, imagesDir ?? null);
         const asked = req.params.slug;
@@ -484,7 +511,7 @@ export function createApp({
             title: `Room not found · ${DEFAULT_TITLE}`,
             description: 'No such room in this library.',
             ogImagePath: 'og-image.jpg',
-            canonicalPath: roomPath(encodeURIComponent(asked)),
+            canonicalPath: roomPath(encodeURIComponent(asked), mode),
             bodyHtml: `<div class="ssr-page"><h1>No such room</h1><p><a href="${base}catalog">Back to the catalog</a></p></div>`,
             status: 404,
           });
@@ -501,8 +528,9 @@ export function createApp({
           // `base` is the public prefix the proxy strips (AGENTS.md,
           // "Deployment and the base path"), so a root-absolute Location built
           // from it is what the browser needs: a Location resolves against the
-          // request url, never against `<base href>`.
-          res.redirect(302, `${base}${roomPath(slugs.slugs[id])}`);
+          // request url, never against `<base href>`. Stays on the same
+          // prefix (`mode`) it was asked on.
+          res.redirect(302, `${base}${roomPath(slugs.slugs[id], mode)}`);
           return;
         }
         const result = renderRoomPage({ rooms: manifest.rooms, metadata, tagLinks, id, base });
@@ -510,17 +538,20 @@ export function createApp({
           title: result.title,
           description: result.description,
           ogImagePath: result.ogImagePath,
-          canonicalPath: roomPath(slugs.slugs[id]),
+          canonicalPath: roomPath(slugs.slugs[id], mode),
           bodyHtml: result.bodyHtml,
           // The filename, not the slug: it is what `main.tsx` matches a room
           // on, so translating here is what keeps the client from building a
           // second slug table to read its own url.
-          initialRoute: { mode: 'catalog', room: manifest.rooms[id].file },
+          initialRoute: { mode, room: manifest.rooms[id].file },
+          noscriptRedirectPath: mode === 'map' ? roomPath(slugs.slugs[id], 'catalog') : null,
         });
       } catch (err) {
         next(err);
       }
-    });
+    };
+    app.get('/catalog/:slug', handleRoomRoute('catalog'));
+    app.get('/map/:slug', handleRoomRoute('map'));
 
     /**
      * One-shot SSR-linkable routes for the two static dialogs reachable from

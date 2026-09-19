@@ -441,11 +441,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // The catalog's expanded room: tile at full size and the whole story -
   // how a reader sees either without leaving the fixed-height rows (see
   // `RoomOverlay`). Seeded once at mount from `INITIAL_ROUTE.room`, so a
-  // `/catalog/<slug>` permalink opens that room's overlay directly, and
-  // `order` is already final here, so the rank it opens with is the row's
-  // real position.
+  // `/catalog/<slug>` or `/map/<slug>` permalink opens that room's overlay
+  // directly regardless of which mode it opens into (`INITIAL_MODE` decides
+  // that separately) - `order` is already final here, so the rank it opens
+  // with is the row's real position. Rendered in both readings for this
+  // reason; ordinary catalog use (`expandRoom`, below) only ever sets it
+  // while `mode === 'catalog'`, since nothing else in the map reading calls it.
   const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(() => {
-    if (INITIAL_ROUTE?.mode !== 'catalog' || !INITIAL_ROUTE.room) return null;
+    if ((INITIAL_ROUTE?.mode !== 'catalog' && INITIAL_ROUTE?.mode !== 'map') || !INITIAL_ROUTE.room) return null;
     const room = manifest.rooms.find((r) => r.file === INITIAL_ROUTE.room);
     if (!room) return null;
     const rank = order.indexOf(room.id);
@@ -1257,7 +1260,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         <span role="status">{status}</span>
       </div>
 
-      {overlay && mode === 'catalog' && (
+      {overlay && (
         <RoomOverlay
           room={overlay}
           desc={describeRoom(
@@ -1277,12 +1280,31 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           weights={config.search.weights}
           favorite={favoriteFor(overlay.id)}
           shareSlug={roomSlugs[overlay.id] ?? null}
-          view={(() => {
-            const cell = cellById.get(overlay.id);
-            return cell
-              ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
-              : null;
-          })()}
+          shareMode={mode}
+          // The reciprocal follows the ambient reading, not which UI opened
+          // this overlay - ordinarily that's the same thing (a catalog row
+          // only ever opens this while `mode === 'catalog'`), but a
+          // `/map/<slug>` permalink opens it while `mode === 'map'`, and there
+          // "show on the map" would point at the map already behind it. Same
+          // "show in the catalog" action the map's own card view offers.
+          view={
+            mode === 'map'
+              ? {
+                  label: 'show in the catalog',
+                  shortLabel: 'catalog',
+                  onClick: () => {
+                    setCatalogSpotlightId(overlay.id);
+                    enterCatalog();
+                    setOverlay(null);
+                  },
+                }
+              : (() => {
+                  const cell = cellById.get(overlay.id);
+                  return cell
+                    ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
+                    : null;
+                })()
+          }
         />
       )}
 
@@ -1315,6 +1337,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           weights={config.search.weights}
           favorite={'id' in card ? favoriteFor(card.id) : null}
           shareSlug={'id' in card ? roomSlugs[card.id] ?? null : null}
+          shareMode="map"
           view={
             'id' in card
               ? {
@@ -1351,25 +1374,28 @@ const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer:
 
 /**
  * `window.__INITIAL_ROUTE__` - set by `app.ts`'s `renderPage` only on the SSR
- * `/catalog`, `/catalog/:slug`, `/help` and `/about` routes (see index.html's
- * `%%INITIAL_ROUTE_SCRIPT%%`), absent on plain `/`. Read once at module
- * scope, so a visitor landing on one of those urls boots straight into the
- * matching interactive view instead of watching the server-rendered content
- * vanish when `bundle.js` takes over. `help`/`about` only ever open their
- * dialog over the map (see `helpOpen`/`artistStatementOpen`'s initial state
- * below) - unlike `catalog` they never change `INITIAL_MODE`.
+ * `/catalog`, `/catalog/:slug`, `/map/:slug`, `/help` and `/about` routes
+ * (see index.html's `%%INITIAL_ROUTE_SCRIPT%%`), absent on plain `/`. Read
+ * once at module scope, so a visitor landing on one of those urls boots
+ * straight into the matching interactive view instead of watching the
+ * server-rendered content vanish when `bundle.js` takes over. `help`/`about`
+ * only ever open their dialog over the map (see `helpOpen`/
+ * `artistStatementOpen`'s initial state below) - unlike `catalog`/`map` they
+ * never change `INITIAL_MODE`.
  */
 declare global {
   interface Window {
-    __INITIAL_ROUTE__?: { mode: 'catalog'; room?: string } | { mode: 'help' } | { mode: 'about' };
+    __INITIAL_ROUTE__?: { mode: 'catalog' | 'map'; room?: string } | { mode: 'help' } | { mode: 'about' };
   }
 }
 const INITIAL_ROUTE = typeof window !== 'undefined' ? (window.__INITIAL_ROUTE__ ?? null) : null;
 
 /**
  * Which reading the page opens on: `?catalog`, or `INITIAL_ROUTE.mode` on a
- * server-rendered url. Read once at module scope, read-only thereafter: the
- * toggle never writes the param back, so there are no history entries to
+ * server-rendered url. `/map/:slug` sets `INITIAL_ROUTE.mode` to `'map'`,
+ * which falls straight through to the `'map'` default below - the same
+ * default a plain `/` gets. Read once at module scope, read-only thereafter:
+ * the toggle never writes the param back, so there are no history entries to
  * design and no way for the address bar and the page to disagree.
  */
 const INITIAL_MODE =

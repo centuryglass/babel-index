@@ -52,9 +52,13 @@ type RoomSubject = { id: number; rank?: number } | { generic: true };
  * this app resolves against (see AGENTS.md's "Deployment and the base
  * path"), so the copied link is correct under a subpath deployment without
  * this file knowing what that prefix is.
+ *
+ * `mode` names which reading the link should reopen into - the caller
+ * already knows which one opened this overlay, so the button shares the
+ * same reading the reader is looking at rather than always the catalog.
  */
-function buildShareUrl(slug: string): string {
-  return new URL(roomPath(slug), document.baseURI).href;
+function buildShareUrl(slug: string, mode: 'catalog' | 'map'): string {
+  return new URL(roomPath(slug, mode), document.baseURI).href;
 }
 
 function ShareIcon() {
@@ -151,6 +155,7 @@ export function RoomOverlay({
   view = null,
   naturalSize = null,
   shareSlug = null,
+  shareMode = 'catalog',
 }: {
   room: RoomSubject;
   desc: Description;
@@ -191,13 +196,20 @@ export function RoomOverlay({
   view?: { label: string; shortLabel: string; onClick: () => void } | null;
   /**
    * This room's permalink slug, for the copy-link button - `null` for a
-   * generic cell, which has no permalink (`/catalog/:slug` only exists for a
-   * real corpus room). The url itself is built from it in `buildShareUrl`
-   * rather than passed in whole, so every caller states the one fact it
-   * actually knows (which room) instead of each re-deriving the same
-   * `catalog/...` path.
+   * generic cell, which has no permalink (`/catalog/:slug`/`/map/:slug` only
+   * exist for a real corpus room). The url itself is built from it in
+   * `buildShareUrl` rather than passed in whole, so every caller states the
+   * one fact it actually knows (which room) instead of each re-deriving the
+   * same path.
    */
   shareSlug?: string | null;
+  /**
+   * Which reading `shareSlug`'s link should reopen into - the caller states
+   * this because it already knows which one opened the overlay ('map' for a
+   * card from a right-click/long-press on the map, 'catalog' for a catalog
+   * row's expand). Ignored when `shareSlug` is null.
+   */
+  shareMode?: 'catalog' | 'map';
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -520,7 +532,7 @@ export function RoomOverlay({
             />
           </div>
 
-          {shareSlug && <ShareButton url={buildShareUrl(shareSlug)} />}
+          {shareSlug && <ShareButton url={buildShareUrl(shareSlug, shareMode)} />}
         </div>
       </div>
     </div>
