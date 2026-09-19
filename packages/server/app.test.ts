@@ -4,8 +4,9 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
-import { createApp, stubRanking, hasTextModel, createRateBuckets } from './app.ts';
+import { createApp, stubRanking, hasTextModel } from './app.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
+import { hashPassword } from './admin-auth.ts';
 import type { CreateAppOptions } from './app.ts';
 import { scanDirectory } from './scan.ts';
 import { DEFAULTS, resolveConfig } from '../config/config.ts';
@@ -877,10 +878,97 @@ test('the counts endpoint is never cached', async () => {
   });
 });
 
-test('a burst of writes is rate limited rather than served without end', async () => {
-  const buckets = createRateBuckets({ burst: 2, refillMs: 60_000 });
-  assert.equal(buckets.take('10.0.0.1'), true);
-  assert.equal(buckets.take('10.0.0.1'), true);
-  assert.equal(buckets.take('10.0.0.1'), false, 'the bucket is empty');
-  assert.equal(buckets.take('10.0.0.2'), true, 'and it is per address');
+// --- admin log viewer --------------------------------------------------------
+
+/** A request carrying valid HTTP Basic Auth for the given plaintext password. */
+const asAdmin = (password: string) => ({
+  headers: { Authorization: `Basic ${Buffer.from(`admin:${password}`).toString('base64')}` },
+});
+
+test('the log routes are absent with no logFile/adminPasswordHash configured', async () => {
+  await serving(async ({ base }) => {
+    assert.equal((await fetch(`${base}/api/logs`)).status, 404);
+    assert.equal((await fetch(`${base}/admin/logs`)).status, 404);
+  });
+});
+
+test('the log routes stay unmounted with only one of logFile/adminPasswordHash set', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-logapi-'));
+  try {
+    const logFile = join(dir, 'server.log');
+    await writeFile(logFile, '');
+    await serving(async ({ base }) => assert.equal((await fetch(`${base}/api/logs`)).status, 404), { logFile });
+    await serving(async ({ base }) => assert.equal((await fetch(`${base}/api/logs`)).status, 404), {
+      adminPasswordHash: hashPassword('sesame'),
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('/api/logs requires auth, then returns parsed entries oldest first', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-logapi-'));
+  try {
+    const logFile = join(dir, 'server.log');
+    await writeFile(
+      logFile,
+      JSON.stringify({ level: 30, msg: 'first', time: 1 }) + '\n' + JSON.stringify({ level: 50, msg: 'second', time: 2 }) + '\n'
+    );
+    await serving(
+      async ({ base }) => {
+        const noAuth = await fetch(`${base}/api/logs`);
+        assert.equal(noAuth.status, 401);
+        assert.match(noAuth.headers.get('www-authenticate') ?? '', /Basic/);
+
+        const wrongAuth = await fetch(`${base}/api/logs`, asAdmin('wrong'));
+        assert.equal(wrongAuth.status, 401);
+
+        const res = await fetch(`${base}/api/logs`, asAdmin('sesame'));
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+        const { entries } = await res.json();
+        assert.deepEqual(
+          entries.map((e: { msg?: string }) => e.msg),
+          ['first', 'second']
+        );
+      },
+      { logFile, adminPasswordHash: hashPassword('sesame') }
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('/api/logs?minLevel filters, and /admin/logs renders the same entries as HTML', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-logapi-'));
+  try {
+    const logFile = join(dir, 'server.log');
+    await writeFile(
+      logFile,
+      JSON.stringify({ level: 30, msg: 'info line', time: 1 }) + '\n' + JSON.stringify({ level: 50, msg: 'error line', time: 2 }) + '\n'
+    );
+    await serving(
+      async ({ base }) => {
+        const filtered = await (await fetch(`${base}/api/logs?minLevel=50`, asAdmin('sesame'))).json();
+        assert.deepEqual(
+          filtered.entries.map((e: { msg?: string }) => e.msg),
+          ['error line']
+        );
+
+        const page = await fetch(`${base}/admin/logs`, asAdmin('sesame'));
+        assert.equal(page.status, 200);
+        assert.match(page.headers.get('content-type') ?? '', /html/);
+        const html = await page.text();
+        assert.ok(html.includes('info line'));
+        assert.ok(html.includes('error line'));
+
+        const fragment = await (await fetch(`${base}/admin/logs/fragment`, asAdmin('sesame'))).text();
+        assert.ok(fragment.startsWith('<ul id="entries">'));
+        assert.ok(fragment.includes('info line'));
+      },
+      { logFile, adminPasswordHash: hashPassword('sesame') }
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

@@ -47,7 +47,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### Client/Server code:
 - `packages/server`: the demo server
   * `index.ts`: CLI
-  * `app.ts`: Express setup, manifest/search/favorites/images endpoints
+  * `app.ts`: Express setup, manifest/search/favorites/logs/images endpoints
   * `scan.ts`: Image tile directory loading
   * `remote.ts`: Reading a corpus manifest from a remote host (R2/Cloudflare)
                  instead of a local directory
@@ -56,7 +56,21 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                    and one JSON-file implementation (`--favorites <path>`)
   * `logger.ts`: The one leveled/structured logger every server module logs
                 through - pino, pretty-printed on a TTY, plain JSON otherwise
-                (journald, CI)
+                (journald, CI). Also writes to `LOG_FILE`, if set, through
+                `log-file.ts`
+  * `log-file.ts`: A synchronous, size-capped rotating file destination for
+                   pino - `logger.ts`'s `LOG_FILE` writes through it
+  * `log-levels.ts`: pino's numeric level scale, named - shared by
+                     `log-reader.ts` and `logViewerPage.ts`
+  * `log-reader.ts`: Reads recent entries back out of a `log-file.ts` log
+                     file, for the admin log viewer below
+  * `admin-auth.ts`: HTTP Basic Auth (scrypt hash, `ADMIN_PASSWORD_HASH`)
+                     gating the admin log viewer routes, rate-limited via
+                     `rate-buckets.ts`
+  * `rate-buckets.ts`: Per-key token buckets - shared by the favorite writes
+                       and `admin-auth.ts`'s login attempts
+  * `logViewerPage.ts`: The `/admin/logs` HTML page and its
+                        `/admin/logs/fragment` polling partial
   * `search-cache.ts`: LRU cache and concurrency limiter (with an
                         `onSaturated` hook `app.ts` logs from) backing
                         `/api/search`'s CLIP text tower calls
@@ -416,6 +430,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `upload-r2.ts`: CLI, credentials from env.
   * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
   * `README.md`: credentials setup and how to run `upload-r2.ts`.
+- `tools/hash-admin-password`: `npm run hash-admin-password` - prompts for a
+                               password and prints its `ADMIN_PASSWORD_HASH`
+                               value (`packages/server/admin-auth.ts`).
+  * `index.ts`: CLI, hidden-terminal-echo prompt.
+  * `README.md`: how to run it and where the hash goes.
 - `tools/font-lab`: Ad hoc design-exploration lab for the center shelf's spine
                     titles - not wired into any npm script, not covered by
                     tests. Run directly, e.g.

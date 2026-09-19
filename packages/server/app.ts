@@ -14,8 +14,12 @@ import { availableParallelism } from 'node:os';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
+import { createRateBuckets } from './rate-buckets.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
+import { requireAdminAuth } from './admin-auth.ts';
+import { readRecentLogs, DEFAULT_LOGS_LIMIT } from './log-reader.ts';
+import { renderEntryList, renderLogViewerPage } from './logViewerPage.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
 import { renderHelpPage, renderAboutPage } from './staticPages.tsx';
@@ -128,6 +132,16 @@ export interface CreateAppOptions {
    *  cannot name its own revision, which /api/health reports honestly rather
    *  than omitting. */
   commit?: string | null;
+  /** the log file logger.ts's LOG_FILE is writing (log-file.ts), for
+   *  /api/logs and /admin/logs to read back. Absent - the default, and every
+   *  test that doesn't ask for it - means those routes aren't mounted at
+   *  all, the same "no store, no feature" shape as favorites. Requires
+   *  adminPasswordHash too: logs with no password configured stay unmounted
+   *  rather than serving unauthenticated (see index.ts). */
+  logFile?: string | null;
+  /** admin-auth.ts's hashPassword() output, gating /api/logs and
+   *  /admin/logs. See logFile above for why both are required together. */
+  adminPasswordHash?: string | null;
 }
 
 /** Build the app. */
@@ -146,6 +160,8 @@ export function createApp({
   trustProxy = false,
   publicDir = null,
   commit = null,
+  logFile = null,
+  adminPasswordHash = null,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
@@ -198,6 +214,56 @@ export function createApp({
       uptimeSeconds: Math.round(process.uptime()),
     });
   });
+
+  /**
+   * The admin log viewer - a way to read what's in `logFile` from a phone
+   * over HTTPS instead of ssh-ing into the VPS and grepping. Mounted only
+   * when both `logFile` and `adminPasswordHash` are set (see their own
+   * option comments); index.ts warns at startup if only one is.
+   *
+   *   GET /api/logs          JSON: { entries: (LogEntry | RawLogEntry)[] }
+   *   GET /admin/logs         the HTML viewer page (server-rendered, works
+   *                           with no JS - reload to see new entries)
+   *   GET /admin/logs/fragment  just the <ul id="entries"> markup
+   *                           (logViewerPage.ts's renderEntryList) - what
+   *                           the viewer page's own polling script fetches
+   *
+   * All three read the same two query params: `minLevel` (pino's numeric
+   * scale, default 0 - everything) and `limit` (default/max in
+   * log-reader.ts). No caching: the point of this view is what's true right
+   * now.
+   */
+  if (logFile && adminPasswordHash) {
+    const auth = requireAdminAuth(adminPasswordHash);
+    const parseLogQuery = (req: Request) => {
+      const minLevel = Number(req.query.minLevel);
+      const limit = Number(req.query.limit);
+      return {
+        minLevel: Number.isFinite(minLevel) ? minLevel : 0,
+        limit: Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_LOGS_LIMIT,
+      };
+    };
+
+    app.get('/api/logs', auth, (req, res) => {
+      const { minLevel, limit } = parseLogQuery(req);
+      res.set('Cache-Control', 'no-store');
+      res.json({ entries: readRecentLogs({ path: logFile, minLevel, limit }) });
+    });
+
+    app.get('/admin/logs', auth, (req, res) => {
+      const { minLevel, limit } = parseLogQuery(req);
+      const entries = readRecentLogs({ path: logFile, minLevel, limit });
+      res.set('Cache-Control', 'no-store');
+      res.type('html').send(renderLogViewerPage({ entries, minLevel, limit }));
+    });
+
+    app.get('/admin/logs/fragment', auth, (req, res) => {
+      const { minLevel, limit } = parseLogQuery(req);
+      const entries = readRecentLogs({ path: logFile, minLevel, limit });
+      res.set('Cache-Control', 'no-store');
+      res.type('html').send(renderEntryList(entries));
+    });
+  }
 
   // Which room files exist, for the favorite routes to validate against. Fixed
   // for the process's lifetime, like the manifest it reads: the corpus is
@@ -778,43 +844,3 @@ export function stubRanking(rooms: { id: number }[], query: string): number[] {
  * input `favorites.ts` builds.
  */
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
-
-/**
- * Token buckets for the favorite writes, one per address.
- *
- * Keyed on `req.ip` by its caller, not on `X-Favorite-Client`: a client id is
- * free to mint, so bucketing on it would let a script spend a fresh burst on
- * every request by sending a new one (AGENTS.md, "Favorites"). This bounds
- * how fast one connection makes the process hash things - the set semantics
- * in favorites.ts, not this, cap what any client can do to a count. In memory
- * and never persisted: a restart forgets everyone, and no record of who
- * asked for what is kept.
- */
-const RATE_BURST = 20;
-const RATE_REFILL_MS = 1000;
-const RATE_MAX_TRACKED = 10_000;
-
-export function createRateBuckets({ burst = RATE_BURST, refillMs = RATE_REFILL_MS } = {}) {
-  const seen = new Map<string, { tokens: number; at: number }>();
-  return {
-    /** @returns whether this address may spend a token now */
-    take(key: string): boolean {
-      const now = Date.now();
-      // Bounded so a spray of forged addresses (or an honest crowd) cannot grow
-      // this map without limit. Oldest-first, which is a Map's own iteration
-      // order here since every touch rewrites its entry at the end.
-      if (seen.size >= RATE_MAX_TRACKED && !seen.has(key)) {
-        const oldest = seen.keys().next().value;
-        if (oldest !== undefined) seen.delete(oldest);
-      }
-      const entry = seen.get(key) ?? { tokens: burst, at: now };
-      entry.tokens = Math.min(burst, entry.tokens + (now - entry.at) / refillMs);
-      entry.at = now;
-      const allowed = entry.tokens >= 1;
-      if (allowed) entry.tokens -= 1;
-      seen.delete(key);
-      seen.set(key, entry);
-      return allowed;
-    },
-  };
-}
