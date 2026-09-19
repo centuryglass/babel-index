@@ -1,6 +1,6 @@
 {
   "name": "babel-index",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "private": true,
   "license": "Unlicense",
   "description": "An AI art experiment based around the Library of Babel.",
@@ -14,6 +14,7 @@
     "generate:animation": "node --import ./build/register.mjs tools/center-animation/index.ts",
     "generate:embeddings": "node --import ./build/register.mjs tools/embed/embed.ts",
     "upload:r2": "node --import ./build/register.mjs tools/upload/upload-r2.ts",
+    "hash-admin-password": "node --import ./build/register.mjs tools/hash-admin-password/index.ts",
     "test": "node --import ./build/register.mjs --test $(find packages tools -name '*.test.mjs' -o -name '*.test.ts')",
     "check:file-map": "node --import ./build/register.mjs tools/check-file-map/index.ts",
     "test:e2e": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.e2e.ts",
@@ -30,20 +31,20 @@
     "express": "^5.2.1",
     "pino": "^10.3.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react-dom": "^19.3.0",
     "wink-lemmatizer": "^3.0.4"
   },
   "optionalDependencies": {
-    "@huggingface/transformers": "^4.2.0"
+    "@huggingface/transformers": "^4.3.0"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.1128.0",
+    "@aws-sdk/client-s3": "^3.1133.0",
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.5.0",
+    "@types/node": "^26.6.1",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
+    "@types/react-dom": "^19.3.0",
     "eslint": "^10.10.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",

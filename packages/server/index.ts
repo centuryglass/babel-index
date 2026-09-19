@@ -36,6 +36,12 @@
  * X-Forwarded-For), or every visitor shares the proxy's address and every
  * count stops at one.
  *
+ * `LOG_FILE`/`ADMIN_PASSWORD_HASH` (env vars, not flags - the second is a
+ * secret) turn on the admin log viewer at /admin/logs (see app.ts,
+ * log-file.ts, admin-auth.ts). Both are required together; with only one
+ * set this process logs a warning and mounts neither route rather than
+ * serving unauthenticated.
+ *
  * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
  * the client against precomputed embeddings, so /api/search stays a text tower
@@ -50,6 +56,7 @@ import { context } from 'esbuild';
 import { scanDirectory } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
+import { loadRoomContent } from './roomContent.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
@@ -125,6 +132,15 @@ if (favoritesPath) {
   }
 }
 
+// Off unless both are set - see this file's header comment. A misconfigured
+// single env var stays unmounted (app.ts) rather than accidentally serving
+// logs with no password, but it's worth saying so at startup rather than
+// leaving that to be discovered by a 404 on /admin/logs.
+const logFile = process.env.LOG_FILE || null;
+const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH || null;
+if (logFile && !adminPasswordHash) logger.warn('LOG_FILE is set but ADMIN_PASSWORD_HASH is not - /admin/logs will not be mounted');
+if (adminPasswordHash && !logFile) logger.warn('ADMIN_PASSWORD_HASH is set but LOG_FILE is not - /admin/logs will not be mounted');
+
 // Express's `trust proxy`, verbatim - '1' and 'loopback' both mean something
 // to it, so this is not parsed into a boolean here. Unset is a direct
 // connection, where the socket address is the visitor's.
@@ -165,6 +181,11 @@ if (manifest.metadata) {
   // out loud (see scanDirectory's `metadata` note).
   if (matched === 0) logger.warn('none of the sidecar entries matched a room - are the keys the image filenames?');
 }
+
+// The sidecar is read here so roomContent.ts's duplicate-permalink warning
+// lands in the startup log, beside the rest of what this corpus turned out to
+// be. The catalog routes share this one memoized load.
+await loadRoomContent(manifest, imagesDir);
 
 // The text tower is optional - app.ts's `hasTextModel` says why. Without it
 // a search still ranks by keywords and story, so this is a note, not a
@@ -229,6 +250,8 @@ app = createApp({
   favorites,
   trustProxy,
   commit,
+  logFile,
+  adminPasswordHash,
 });
 
 const server = app.listen(port, () => {
@@ -250,6 +273,7 @@ const server = app.listen(port, () => {
     if (!trustProxy)
       logger.info('direct connections assumed for favorites - behind a reverse proxy, pass --trust-proxy 1');
   }
+  if (logFile && adminPasswordHash) logger.info({ logFile }, 'admin log viewer mounted at /admin/logs');
 });
 
 // The backstop. The check above races anything that grabs the port in the

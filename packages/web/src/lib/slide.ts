@@ -408,9 +408,11 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
   }: SlideDrawOpts): SlideDrawResult {
     cache.beginFrame();
 
-    ctx.fillStyle = '#0a0908';
-    ctx.fillRect(0, 0, w, h);
-
+    // No full-viewport clear: same reasoning as `render.ts`'s draw loop - the
+    // still field plus the moving lines' padded ranges cover the whole
+    // viewport with no gaps (`slide.test.ts`'s "every visible cell is painted
+    // in every frame, including mid-slide" asserts it), and every cell paints
+    // something.
     const cellPx = pxPerCell(cam);
     const level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, null);
 

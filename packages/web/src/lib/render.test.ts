@@ -232,6 +232,39 @@ test('a room with only a coarse tile is drawn coarse, and counted as substituted
   assert.equal(stats.substituted, stats.cells, 'and every one of them was a stand-in');
 });
 
+test('the cell grid covers the full viewport with no gaps, at any zoom or fractional pan', () => {
+  // The draw loop has no full-viewport clear behind it - the grid's own
+  // bounds (floor/ceil of the visible extent, `+1` padding on every cell) are
+  // what guarantee no pixel goes unpainted. A fractional pan is what would
+  // expose a rounding gap between cells, so it's exercised here alongside a
+  // handful of zooms.
+  const w = world();
+  w.images.settleAll();
+  const WIDTH = 1600;
+  const HEIGHT = 900;
+
+  for (const [zoom, x, y] of [
+    [MIN_ZOOM, 0, 0],
+    [400, 12.5, -7.25],
+    [MAX_ZOOM, 100.1, 50.9],
+    [900, -3.33, 8.66],
+  ]) {
+    w.images.settleAll();
+    const ctx = fakeCtx();
+    frame(w, { zoom, x, y, ctx });
+    w.images.settleAll();
+    const after = fakeCtx();
+    frame(w, { zoom, x, y, ctx: after });
+
+    const covers = [...after.drawn, ...after.fills];
+    for (let py = 0; py < HEIGHT; py += 30)
+      for (let px = 0; px < WIDTH; px += 30) {
+        const covered = covers.some((d) => px >= d.x && px < d.x + d.w && py >= d.y && py < d.y + d.h);
+        assert.ok(covered, `nothing painted under (${px}, ${py}) at zoom ${zoom}, cam (${x}, ${y})`);
+      }
+  }
+});
+
 test('a flat corpus renders exactly as it did before the pyramid', () => {
   // Only level 0 on disk. Every level resolves to it, so the map still works -
   // which is what keeps "point it at a directory of images" true.

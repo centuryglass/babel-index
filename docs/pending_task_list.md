@@ -51,10 +51,6 @@ This repo is also a software engineering portfolio piece (see AGENTS.md's
 section on this), and a reviewer skimming it fast is a different audience
 than a visitor to the site. These are process/documentation gaps that matter
 for that audience specifically, not things the art itself needs:
-- **No API contract documentation.** `/api/manifest`, `/api/search`,
-  `/api/favorites`, `/api/health` (see `packages/server/app.ts`) exist only as
-  inline code — no OpenAPI spec, not even a short `docs/api.md` describing
-  request/response shapes.
 - **No production error/metrics visibility beyond `/api/health`.** There's no
   error tracking (a Sentry-class tool) or basic request metrics — only
   `logger.ts`'s structured logs and the deploy-time health check. Possibly
@@ -110,20 +106,6 @@ for that audience specifically, not things the art itself needs:
   this actually is - worth profiling before committing to the worker move.
 
 ## Rendering:
-- **[2026-09-18] A forced synchronous layout runs on every frame the map ever
-  draws.** `useMapRenderer.ts` writes inline styles to `searchEl`/`booksEl`/
-  `bookEl`/`controlsEl` and then, in the same callback, calls
-  `arrowEl.getBoundingClientRect()` and `canvas.getBoundingClientRect()` -
-  reading either forces the browser to flush the layout the writes just
-  queued, before the frame's canvas drawing starts. `SearchOrbitArrow` always
-  renders (`MapView.tsx`), so `arrowEl` is never null and this never skips.
-  It costs nothing on resize/scroll, so caching both rects and refreshing
-  them from a `ResizeObserver` (one on the canvas, one on the badge, since
-  the badge's position can change from CSS alone) removes it entirely.
-  Verifiable in Chrome DevTools' performance panel ("Forced reflow") in
-  under a minute. `document.getElementById('hud')` also runs every frame in
-  the same function and can be hoisted into the effect - it returns null on
-  every call outside `?debug`.
 - **[2026-09-18] `render.ts`'s Canvas2D path still refits the center
   shelf's spines from scratch every frame during the zoom-out flight - the
   WebGL path already fixed this.** `composeSpines` (`center.ts`) calls
@@ -165,14 +147,6 @@ for that audience specifically, not things the art itself needs:
   width, which can trigger a pyramid level transition - this wants
   designing together with level selection, not shipped as an isolated
   toggle.
-- **[2026-09-18] Both renderers pay for a redundant full-screen clear every
-  frame.** `render.ts` and `slide.ts` both start with a full-viewport
-  `fillRect`, then draw a cell grid that's computed to cover the entire
-  viewport anyway (including the "blank" fallback path, which fills its own
-  rect). Cheap to remove, but the clear is genuinely load-bearing the
-  moment a future change leaves a gap in coverage - keep it behind `DEBUG`
-  or add a coverage assertion in `render.test.ts`/`slide.test.ts` rather
-  than deleting it outright.
 - **[2026-09-18] Several per-cell hot paths allocate on every call even
   though the answer is constant.** `rankOf` (`ordering.ts`) builds a
   `` `${x},${y}` `` template-literal string as a Map key on every call, and
@@ -256,12 +230,6 @@ for that audience specifically, not things the art itself needs:
   eventually retire Canvas2D. Retiring it drops the parity suite, the
   `?webgl=0` hatch, and the whole `render.ts`/`slide.ts` path - worth doing
   only once WebGL has real production mileage and nothing has needed the hatch.
-- **[2026-09-17] The shared tiles have no pyramid.** `center_tile.png`, the
-  generic tiles, and the favorite badges are served flat at level 0, so
-  `main.tsx` must pin each shared id at level 0 - full resolution - and a
-  zoomed-out view pays a full-res download per generic tile on screen
-  (AGENTS.md, "The center tile and its generic tiles"). Generating pyramid
-  levels for the shared dir through `packages/pipeline` would close it.
 - **[2026-09-17] Two hover golds.** `.center-book.hover` (`style.css`) fills
   with `--accent-rgb` (196,150,84), while the canvas-side hover glows -
   `center.ts`'s `HOVER_GLOW_FILL`/`_STROKE`, `render.ts`'s
@@ -276,27 +244,6 @@ for that audience specifically, not things the art itself needs:
   `dispose()` on every cache. Either wire the path they were designed for (a
   rebuild that reuses the renderer and its caches rather than replacing them)
   or delete the methods.
-## Shareable permalinks:
-- **[2026-09-16] Add `/help` and `/about` as one-shot SSR-linkable routes,
-  same pattern as `/catalog`.** Two more `app.get` routes in `app.ts`,
-  each calling `renderPage` with a minimal `bodyHtml` (not full SSR content
-  like the catalog list - just enough for a no-JS visitor/crawler) and an
-  `initialRoute` value (`{ mode: 'help' }` / `{ mode: 'about' }`). Extend
-  `window.__INITIAL_ROUTE__`'s type in `main.tsx` and open `HelpDialog` /
-  `ArtistStatementOverlay` on mount when present, the same one-shot read
-  `INITIAL_ROUTE` already does for catalog - no live path sync while the
-  dialog is open, no back/forward handling, no router library. Motivation:
-  sharing a link straight to the help page or the artist's statement without
-  having to explain how to find them from `/`.
-  - `/about`'s `ArtistStatementOverlay` links onward to `BabelBookOverlay`
-    (a randomly generated "equivalent code" easter egg, stacked over the
-    statement). Decided: add a small `/babel-book` (or similar) endpoint that
-    serves the generated text directly rather than dropping the link, and add
-    it to `robots.txt` (`packages/server/seo.ts`) as disallowed - it's
-    infinite/generated content, not worth a crawler's time or an index entry.
-    Bundle this with the `/about` work above since it's the one piece of that
-    route with a real decision to make; the rest is mechanical.
-
 ## Rearrangement / camera:
 - **[2026-09-14] A `flyTo` from a control cannot interrupt an active
   rearrangement's own camera control.** A `flyTo` issued from the 'center'

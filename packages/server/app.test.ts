@@ -4,8 +4,9 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { connect } from 'node:net';
-import { createApp, stubRanking, hasTextModel, createRateBuckets } from './app.ts';
+import { createApp, stubRanking, hasTextModel } from './app.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
+import { hashPassword } from './admin-auth.ts';
 import type { CreateAppOptions } from './app.ts';
 import { scanDirectory } from './scan.ts';
 import { DEFAULTS, resolveConfig } from '../config/config.ts';
@@ -17,7 +18,7 @@ import type { AddressInfo } from 'node:net';
  * No browser and no bundler: the endpoints are the thing under test.
  */
 async function serving(
-  run: (ctx: { base: string; dir: string; port: number; get: (p: string) => Promise<Response> }) => Promise<void>,
+  run: (ctx: { base: string; dir: string; port: number; get: (p: string, init?: RequestInit) => Promise<Response> }) => Promise<void>,
   { files, ...opts }: { files?: Record<string, Buffer | string> } & Partial<CreateAppOptions> = {}
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-api-'));
@@ -45,7 +46,7 @@ async function serving(
     // url (relative, no leading slash, since app.ts's urls resolve against
     // <base href> in the browser - see base-path.ts) without the caller
     // having to know which kind it was handed.
-    return await run({ base, dir, port, get: (p) => fetch(`${base}/${p.replace(/^\//, '')}`) });
+    return await run({ base, dir, port, get: (p, init) => fetch(`${base}/${p.replace(/^\//, '')}`, init) });
   } finally {
     await new Promise((r) => server.close(r));
     await rm(dir, { recursive: true, force: true });
@@ -391,16 +392,17 @@ test('images are cached hard, since a room never changes under its name', async 
 
 // --- the page ---------------------------------------------------------------
 
-test('/bundle.js is served as javascript', async () => {
+test('/bundle.js is served as javascript, no-cache so a deploy is picked up on the next load', async () => {
   await serving(async ({ get }) => {
     const res = await get('/bundle.js');
     assert.equal(res.status, 200);
     assert.match(res.headers.get('content-type'), /javascript/);
     assert.equal(await res.text(), 'console.log("bundle")');
+    assert.match(res.headers.get('cache-control'), /no-cache/);
   });
 });
 
-test('/style.css is served as css, re-read each request so edits need no restart', async () => {
+test('/style.css is served as css, re-read each request so edits need no restart, no-cache for the same reason as /bundle.js', async () => {
   let reads = 0;
   await serving(
     async ({ get }) => {
@@ -408,6 +410,7 @@ test('/style.css is served as css, re-read each request so edits need no restart
       assert.equal(res.status, 200);
       assert.match(res.headers.get('content-type'), /css/);
       assert.equal(await res.text(), 'body { color: red; }');
+      assert.match(res.headers.get('cache-control'), /no-cache/);
       await get('/style.css');
       assert.equal(reads, 2);
     },
@@ -427,6 +430,16 @@ test('/ serves the page, re-read each request so edits need no restart', async (
       assert.equal(reads, 2);
     },
     { readIndexHtml: async () => (reads++, '<canvas></canvas>') }
+  );
+});
+
+test('renderPage is no-cache, so a stale copy can never point a returning visitor at a bundle.js the server has moved past', async () => {
+  await serving(
+    async ({ get }) => {
+      const res = await get('/');
+      assert.match(res.headers.get('cache-control'), /no-cache/);
+    },
+    { readIndexHtml: async () => '<canvas></canvas>' }
   );
 });
 
@@ -521,6 +534,7 @@ test('the served index.html fills in an absolute og:image/og:url, since link unf
 const SSR_INDEX_HTML =
   '<head><title>%%TITLE%%</title><meta name="description" content="%%DESCRIPTION%%" />' +
   '<meta property="og:url" content="%%CANONICAL_URL%%" /><meta property="og:image" content="%%OG_IMAGE_URL%%" />' +
+  '%%NOSCRIPT_REDIRECT%%' +
   '</head><body><div id="root">%%SSR_BODY%%</div>%%INITIAL_ROUTE_SCRIPT%%</body>';
 
 test('GET /catalog lists real room links and titles, alphabetically, with correct per-page canonical/og tags', async () => {
@@ -529,9 +543,11 @@ test('GET /catalog lists real room links and titles, alphabetically, with correc
       const res = await get('/catalog');
       assert.equal(res.status, 200);
       const html = await res.text();
-      assert.match(html, /href="\/catalog\/001\.jpg"/);
-      assert.match(html, /href="\/catalog\/002\.jpg"/);
-      assert.match(html, /href="\/catalog\/003\.jpg"/);
+      // No metadata in this corpus, so every room is addressed by its stem.
+      assert.match(html, /href="\/catalog\/001"/);
+      assert.match(html, /href="\/catalog\/002"/);
+      assert.match(html, /href="\/catalog\/003"/);
+      assert.doesNotMatch(html, /href="\/catalog\/00\d\.jpg"/, 'an image extension in a page url is a lie about what it serves');
       assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/catalog"`));
       assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"catalog"\}/);
 
@@ -550,19 +566,25 @@ test('GET /catalog lists real room links and titles, alphabetically, with correc
   );
 });
 
-test('GET /catalog/:file shows that room\'s story/keywords and its own og:image; an unknown file 404s', async () => {
+test('GET /catalog/:slug is addressed by title, carries that room\'s content, and 404s an unknown slug', async () => {
   await serving(
     async ({ get, port }) => {
-      const res = await get('/catalog/001.jpg');
+      const res = await get('/catalog/reading-room');
       assert.equal(res.status, 200);
       const html = await res.text();
       assert.match(html, /A quiet reading room\./);
       assert.match(html, /gothic/);
       assert.match(html, new RegExp(`content="http://127\\.0\\.0\\.1:${port}/images/001\\.jpg"`));
+      assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/catalog/reading-room"`));
+      // The client keys rooms by filename, so the route hands it that rather
+      // than the slug it was reached by.
       assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"catalog","room":"001\.jpg"\}/);
 
-      const missing = await get('/catalog/nope.jpg');
-      assert.equal(missing.status, 404);
+      // An untitled room keeps its stem, and no url anywhere carries the
+      // image extension.
+      assert.equal((await get('/catalog/002')).status, 200);
+      assert.equal((await get('/catalog/001.jpg')).status, 404);
+      assert.equal((await get('/catalog/nope')).status, 404);
     },
     {
       files: {
@@ -578,20 +600,145 @@ test('GET /catalog/:file shows that room\'s story/keywords and its own og:image;
   );
 });
 
+test('GET /map/:slug serves the same room content, opens map mode, and no-JS-redirects to the catalog url', async () => {
+  await serving(
+    async ({ get, port }) => {
+      const res = await get('/map/reading-room');
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      // Same crawlable content as /catalog/:slug - the two routes are the
+      // same page, differing only in which mode a JS reader boots into.
+      assert.match(html, /A quiet reading room\./);
+      assert.match(html, /gothic/);
+      assert.match(html, /window\.__INITIAL_ROUTE__ = \{"mode":"map","room":"001\.jpg"\}/);
+      // og:url names this route's own url, same as every other SSR page -
+      // a link unfurler reads the meta tags straight off this response
+      // without ever running the noscript redirect below.
+      assert.match(html, new RegExp(`<meta property="og:url" content="http://127\\.0\\.0\\.1:${port}/map/reading-room"`));
+      // A no-JS visitor (or a crawler that never runs main.tsx) is bounced
+      // to that same catalog url instead of being stranded on a page with
+      // no way to browse onward.
+      assert.match(html, /<noscript><meta http-equiv="refresh" content="0; url=\/catalog\/reading-room"><\/noscript>/);
+
+      assert.equal((await get('/map/002')).status, 200);
+      assert.equal((await get('/map/nope')).status, 404);
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        '002.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({
+          '001.jpg': { title: 'Reading Room', keywords: [{ text: 'gothic', type: null }], story: 'A quiet reading room.' },
+        }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('a titled room\'s stem and a stale slug redirect and stay on the /map prefix they were asked on', async () => {
+  await serving(
+    async ({ get }) => {
+      const res = await get('/map/001', { redirect: 'manual' });
+      assert.equal(res.status, 302);
+      assert.equal(res.headers.get('location'), '/map/reading-room');
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({ '001.jpg': { title: 'Reading Room', keywords: [], story: null } }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
+test('a titled room\'s filename stem still resolves, redirecting to the title url', async () => {
+  // The stability half of the permalink scheme: a title is corpus data and can
+  // be rewritten, and the stem is what `scan.ts` reads off the directory.
+  await serving(
+    async ({ get }) => {
+      const res = await get('/catalog/001', { redirect: 'manual' });
+      assert.equal(res.status, 302, 'a permanent redirect would outlive the title it points at');
+      assert.equal(res.headers.get('location'), '/catalog/reading-room');
+
+      // Case is forgiven the same way, so a url that has been through
+      // something that capitalises still lands.
+      const shouted = await get('/catalog/Reading-Room', { redirect: 'manual' });
+      assert.equal(shouted.status, 302);
+      assert.equal(shouted.headers.get('location'), '/catalog/reading-room');
+    },
+    {
+      files: {
+        'center.png': fixture.png(1024, 1024),
+        '001.jpg': fixture.jpeg(512, 512),
+        'metadata.json': JSON.stringify({ '001.jpg': { title: 'Reading Room', keywords: [], story: null } }),
+      },
+      readIndexHtml: async () => SSR_INDEX_HTML,
+    }
+  );
+});
+
 test('GET /robots.txt and /sitemap.xml reference every room, and work even without readIndexHtml', async () => {
   await serving(async ({ get, port }) => {
     const robots = await get('/robots.txt');
     assert.equal(robots.status, 200);
     assert.match(robots.headers.get('content-type'), /text\/plain/);
-    assert.match(await robots.text(), new RegExp(`Sitemap: http://127\\.0\\.0\\.1:${port}/sitemap\\.xml`));
+    const robotsText = await robots.text();
+    assert.match(robotsText, new RegExp(`Sitemap: http://127\\.0\\.0\\.1:${port}/sitemap\\.xml`));
+    // The generated /babel-book easter egg has nothing to index.
+    assert.match(robotsText, /^Disallow: \/babel-book$/m);
 
     const sitemap = await get('/sitemap.xml');
     assert.equal(sitemap.status, 200);
     assert.match(sitemap.headers.get('content-type'), /application\/xml/);
     const xml = await sitemap.text();
-    assert.match(xml, /catalog\/001\.jpg/);
-    assert.match(xml, /catalog\/002\.jpg/);
-    assert.match(xml, /catalog\/003\.png/);
+    assert.match(xml, /<loc>[^<]*\/catalog\/001<\/loc>/);
+    assert.match(xml, /<loc>[^<]*\/catalog\/002<\/loc>/);
+    assert.match(xml, /<loc>[^<]*\/catalog\/003<\/loc>/);
+  });
+});
+
+test('GET /help and /about are one-shot SSR-linkable, with an initialRoute hint for main.tsx', async () => {
+  await serving(
+    async ({ get }) => {
+      const help = await get('/help');
+      assert.equal(help.status, 200);
+      const helpHtml = await help.text();
+      assert.match(helpHtml, /<h1>Help<\/h1>/);
+      // Real prose from HelpBody.tsx, not a second SSR-only copy of it.
+      assert.match(helpHtml, /class="help-body"/);
+      assert.match(helpHtml, /zoomable, pannable map of library/);
+      assert.match(helpHtml, /window\.__INITIAL_ROUTE__ = \{"mode":"help"\}/);
+
+      const about = await get('/about');
+      assert.equal(about.status, 200);
+      const aboutHtml = await about.text();
+      assert.match(aboutHtml, /Artist/);
+      // Real prose from ArtistStatementPages.tsx, not a second SSR-only copy.
+      assert.match(aboutHtml, /class="book-page statement-page statement-story"/);
+      assert.match(aboutHtml, /Library of Babel holds every possible arrangement/);
+      // The live button becomes a plain link for a no-JS visitor, rather than
+      // dropping the easter egg it opens.
+      assert.match(aboutHtml, /<a class="statement-link" href="\/babel-book">Run the same thing here<\/a>/);
+      assert.match(aboutHtml, /window\.__INITIAL_ROUTE__ = \{"mode":"about"\}/);
+    },
+    { readIndexHtml: async () => SSR_INDEX_HTML }
+  );
+});
+
+test('GET /babel-book serves generated plain text, a fresh book on every request', async () => {
+  await serving(async ({ get }) => {
+    const res = await get('/babel-book');
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/plain/);
+    const first = await res.text();
+    assert.ok(first.length > 0);
+
+    const second = await (await get('/babel-book')).text();
+    assert.notEqual(first, second, 'each request generates its own random book');
   });
 });
 
@@ -731,10 +878,97 @@ test('the counts endpoint is never cached', async () => {
   });
 });
 
-test('a burst of writes is rate limited rather than served without end', async () => {
-  const buckets = createRateBuckets({ burst: 2, refillMs: 60_000 });
-  assert.equal(buckets.take('10.0.0.1'), true);
-  assert.equal(buckets.take('10.0.0.1'), true);
-  assert.equal(buckets.take('10.0.0.1'), false, 'the bucket is empty');
-  assert.equal(buckets.take('10.0.0.2'), true, 'and it is per address');
+// --- admin log viewer --------------------------------------------------------
+
+/** A request carrying valid HTTP Basic Auth for the given plaintext password. */
+const asAdmin = (password: string) => ({
+  headers: { Authorization: `Basic ${Buffer.from(`admin:${password}`).toString('base64')}` },
+});
+
+test('the log routes are absent with no logFile/adminPasswordHash configured', async () => {
+  await serving(async ({ base }) => {
+    assert.equal((await fetch(`${base}/api/logs`)).status, 404);
+    assert.equal((await fetch(`${base}/admin/logs`)).status, 404);
+  });
+});
+
+test('the log routes stay unmounted with only one of logFile/adminPasswordHash set', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-logapi-'));
+  try {
+    const logFile = join(dir, 'server.log');
+    await writeFile(logFile, '');
+    await serving(async ({ base }) => assert.equal((await fetch(`${base}/api/logs`)).status, 404), { logFile });
+    await serving(async ({ base }) => assert.equal((await fetch(`${base}/api/logs`)).status, 404), {
+      adminPasswordHash: hashPassword('sesame'),
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('/api/logs requires auth, then returns parsed entries oldest first', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-logapi-'));
+  try {
+    const logFile = join(dir, 'server.log');
+    await writeFile(
+      logFile,
+      JSON.stringify({ level: 30, msg: 'first', time: 1 }) + '\n' + JSON.stringify({ level: 50, msg: 'second', time: 2 }) + '\n'
+    );
+    await serving(
+      async ({ base }) => {
+        const noAuth = await fetch(`${base}/api/logs`);
+        assert.equal(noAuth.status, 401);
+        assert.match(noAuth.headers.get('www-authenticate') ?? '', /Basic/);
+
+        const wrongAuth = await fetch(`${base}/api/logs`, asAdmin('wrong'));
+        assert.equal(wrongAuth.status, 401);
+
+        const res = await fetch(`${base}/api/logs`, asAdmin('sesame'));
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+        const { entries } = await res.json();
+        assert.deepEqual(
+          entries.map((e: { msg?: string }) => e.msg),
+          ['first', 'second']
+        );
+      },
+      { logFile, adminPasswordHash: hashPassword('sesame') }
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('/api/logs?minLevel filters, and /admin/logs renders the same entries as HTML', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'babel-logapi-'));
+  try {
+    const logFile = join(dir, 'server.log');
+    await writeFile(
+      logFile,
+      JSON.stringify({ level: 30, msg: 'info line', time: 1 }) + '\n' + JSON.stringify({ level: 50, msg: 'error line', time: 2 }) + '\n'
+    );
+    await serving(
+      async ({ base }) => {
+        const filtered = await (await fetch(`${base}/api/logs?minLevel=50`, asAdmin('sesame'))).json();
+        assert.deepEqual(
+          filtered.entries.map((e: { msg?: string }) => e.msg),
+          ['error line']
+        );
+
+        const page = await fetch(`${base}/admin/logs`, asAdmin('sesame'));
+        assert.equal(page.status, 200);
+        assert.match(page.headers.get('content-type') ?? '', /html/);
+        const html = await page.text();
+        assert.ok(html.includes('info line'));
+        assert.ok(html.includes('error line'));
+
+        const fragment = await (await fetch(`${base}/admin/logs/fragment`, asAdmin('sesame'))).text();
+        assert.ok(fragment.startsWith('<ul id="entries">'));
+        assert.ok(fragment.includes('info line'));
+      },
+      { logFile, adminPasswordHash: hashPassword('sesame') }
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

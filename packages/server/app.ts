@@ -5,16 +5,27 @@
  * file owns the endpoints. The split is so the API can be exercised with a
  * plain `fetch` against an ephemeral port - no browser, no bundler, no
  * fixtures on disk beyond the images directory under test.
+ *
+ * `docs/api.md` documents the `/api/*` routes below for a reader who isn't
+ * going to read this file - any change to a route's request/response shape
+ * must be paired with an update there.
  */
 import { availableParallelism } from 'node:os';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import { resolveConfig } from '../config/config.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
+import { createRateBuckets } from './rate-buckets.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
+import { requireAdminAuth } from './admin-auth.ts';
+import { readRecentLogs, DEFAULT_LOGS_LIMIT } from './log-reader.ts';
+import { renderEntryList, renderLogViewerPage } from './logViewerPage.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { renderCatalogList, renderRoomPage, escapeHtml } from './catalogPage.ts';
+import { renderHelpPage, renderAboutPage } from './staticPages.tsx';
 import { robotsTxt, renderSitemap } from './seo.ts';
+import { generateRandomBookText } from '../web/src/lib/babelBook.ts';
+import { roomPath } from '../map/slug.ts';
 import { alphabeticalOrder, pageCount } from '../web/src/lib/catalog.ts';
 import { createUrlFor } from '../web/src/lib/rooms.ts';
 import type { Manifest } from '../map/manifest.ts';
@@ -121,6 +132,16 @@ export interface CreateAppOptions {
    *  cannot name its own revision, which /api/health reports honestly rather
    *  than omitting. */
   commit?: string | null;
+  /** the log file logger.ts's LOG_FILE is writing (log-file.ts), for
+   *  /api/logs and /admin/logs to read back. Absent - the default, and every
+   *  test that doesn't ask for it - means those routes aren't mounted at
+   *  all, the same "no store, no feature" shape as favorites. Requires
+   *  adminPasswordHash too: logs with no password configured stay unmounted
+   *  rather than serving unauthenticated (see index.ts). */
+  logFile?: string | null;
+  /** admin-auth.ts's hashPassword() output, gating /api/logs and
+   *  /admin/logs. See logFile above for why both are required together. */
+  adminPasswordHash?: string | null;
 }
 
 /** Build the app. */
@@ -139,6 +160,8 @@ export function createApp({
   trustProxy = false,
   publicDir = null,
   commit = null,
+  logFile = null,
+  adminPasswordHash = null,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
@@ -191,6 +214,56 @@ export function createApp({
       uptimeSeconds: Math.round(process.uptime()),
     });
   });
+
+  /**
+   * The admin log viewer - a way to read what's in `logFile` from a phone
+   * over HTTPS instead of ssh-ing into the VPS and grepping. Mounted only
+   * when both `logFile` and `adminPasswordHash` are set (see their own
+   * option comments); index.ts warns at startup if only one is.
+   *
+   *   GET /api/logs          JSON: { entries: (LogEntry | RawLogEntry)[] }
+   *   GET /admin/logs         the HTML viewer page (server-rendered, works
+   *                           with no JS - reload to see new entries)
+   *   GET /admin/logs/fragment  just the <ul id="entries"> markup
+   *                           (logViewerPage.ts's renderEntryList) - what
+   *                           the viewer page's own polling script fetches
+   *
+   * All three read the same two query params: `minLevel` (pino's numeric
+   * scale, default 0 - everything) and `limit` (default/max in
+   * log-reader.ts). No caching: the point of this view is what's true right
+   * now.
+   */
+  if (logFile && adminPasswordHash) {
+    const auth = requireAdminAuth(adminPasswordHash);
+    const parseLogQuery = (req: Request) => {
+      const minLevel = Number(req.query.minLevel);
+      const limit = Number(req.query.limit);
+      return {
+        minLevel: Number.isFinite(minLevel) ? minLevel : 0,
+        limit: Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_LOGS_LIMIT,
+      };
+    };
+
+    app.get('/api/logs', auth, (req, res) => {
+      const { minLevel, limit } = parseLogQuery(req);
+      res.set('Cache-Control', 'no-store');
+      res.json({ entries: readRecentLogs({ path: logFile, minLevel, limit }) });
+    });
+
+    app.get('/admin/logs', auth, (req, res) => {
+      const { minLevel, limit } = parseLogQuery(req);
+      const entries = readRecentLogs({ path: logFile, minLevel, limit });
+      res.set('Cache-Control', 'no-store');
+      res.type('html').send(renderLogViewerPage({ entries, minLevel, limit }));
+    });
+
+    app.get('/admin/logs/fragment', auth, (req, res) => {
+      const { minLevel, limit } = parseLogQuery(req);
+      const entries = readRecentLogs({ path: logFile, minLevel, limit });
+      res.set('Cache-Control', 'no-store');
+      res.type('html').send(renderEntryList(entries));
+    });
+  }
 
   // Which room files exist, for the favorite routes to validate against. Fixed
   // for the process's lifetime, like the manifest it reads: the corpus is
@@ -320,7 +393,10 @@ export function createApp({
   // than let it 404 log on every load.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
+  // `no-cache`, not `no-store`: always revalidate against the `ETag`
+  // `res.send()` already computes, rather than skip caching outright.
   app.get('/bundle.js', (_req, res) => {
+    res.set('Cache-Control', 'no-cache');
     res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
   });
 
@@ -329,6 +405,7 @@ export function createApp({
   if (readStyleCss)
     app.get('/style.css', async (_req, res, next) => {
       try {
+        res.set('Cache-Control', 'no-cache');
         res.type('css').send(await readStyleCss());
       } catch (err) {
         next(err);
@@ -342,12 +419,19 @@ export function createApp({
    * in one place regardless of which route is served.
    *
    * `canonicalPath` is the relative-to-base suffix of the page actually
-   * being served (`''` for `/`, `'catalog'`, `'catalog/<file>'`, ...) -
+   * being served (`''` for `/`, `'catalog'`, `'catalog/<slug>'`, ...) -
    * callers already know it, so this doesn't re-derive it from `req`.
    * `bodyHtml`/`initialRoute` are what makes a route more than `/`: real
    * content inside `#root` for crawlers/no-JS, and a hint for `main.tsx` to
    * boot straight into the matching interactive view once JS runs (see
    * index.html's own comment on `%%SSR_BODY%%`/`%%INITIAL_ROUTE_SCRIPT%%`).
+   *
+   * `noscriptRedirectPath`, when given, sends a no-JS visitor on to that
+   * path instead of leaving them on this one - a `<meta>` refresh wrapped in
+   * `<noscript>`, so it never fires once `main.tsx` takes over. `/map/:slug`
+   * is the one caller: the map reading needs JS to mean anything, so a
+   * reader without it is better served the identical `catalog/:slug` content
+   * at its real url than a room page with no way to browse onward.
    */
   const renderPage = async (
     req: Request,
@@ -360,6 +444,7 @@ export function createApp({
       canonicalPath,
       bodyHtml = '',
       initialRoute = null,
+      noscriptRedirectPath = null,
       status = 200,
     }: {
       title: string;
@@ -367,7 +452,8 @@ export function createApp({
       ogImagePath: string;
       canonicalPath: string;
       bodyHtml?: string;
-      initialRoute?: { mode: 'catalog'; room?: string } | null;
+      initialRoute?: { mode: 'catalog' | 'map'; room?: string } | { mode: 'help' } | { mode: 'about' } | null;
+      noscriptRedirectPath?: string | null;
       status?: number;
     }
   ) => {
@@ -386,6 +472,9 @@ export function createApp({
       const routeScript = initialRoute
         ? `<script>window.__INITIAL_ROUTE__ = ${JSON.stringify(initialRoute).replace(/</g, '\\u003c')};</script>`
         : '';
+      const noscriptRedirect = noscriptRedirectPath
+        ? `<noscript><meta http-equiv="refresh" content="0; url=${escapeHtml(`${base}${noscriptRedirectPath}`)}"></noscript>`
+        : '';
       // Global replaces: every occurrence of a placeholder name is
       // substituted, wherever it sits - a mention inside one of index.html's
       // comments would be rewritten just like a real tag, which is why those
@@ -396,9 +485,12 @@ export function createApp({
         .replace(/%%CANONICAL_URL%%/g, `${origin}${canonicalPath}`)
         .replace(/%%OG_IMAGE_URL%%/g, absoluteAsset(origin, ogImagePath))
         .replace(/%%SSR_BODY%%/g, bodyHtml)
-        .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript);
+        .replace(/%%INITIAL_ROUTE_SCRIPT%%/g, routeScript)
+        .replace(/%%NOSCRIPT_REDIRECT%%/g, noscriptRedirect);
       if (watch) html = html.replace('</body>', `${LIVE_RELOAD_TAG}</body>`);
-      res.status(status).type('html').send(html);
+      // Same `no-cache` as `/bundle.js`/`/style.css` above - this is the page
+      // that names them.
+      res.set('Cache-Control', 'no-cache').status(status).type('html').send(html);
     } catch (err) {
       next(err);
     }
@@ -431,7 +523,7 @@ export function createApp({
     app.get('/catalog', async (req, res, next) => {
       try {
         const pageNum = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
-        const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
+        const { metadata, tagLinks, slugs } = await loadRoomContent(manifest, imagesDir ?? null);
         const order = alphabeticalOrder(manifest.rooms, metadata);
         const urlFor = createUrlFor(manifest);
         const perPage = clientConfig.catalog.perPage;
@@ -439,6 +531,7 @@ export function createApp({
           rooms: manifest.rooms,
           metadata,
           tagLinks,
+          slugs: slugs.slugs,
           order,
           page: pageNum - 1,
           perPage,
@@ -459,56 +552,139 @@ export function createApp({
     });
 
     /**
-     * One room's permalink, keyed by filename rather than id: ids are
-     * positional (AGENTS.md, "Favorites") and renumber when the corpus
-     * changes, which would silently repoint an indexed/shared url at a
-     * different room.
+     * One room's permalink, keyed by its title (`packages/map/slug.ts`),
+     * reachable under two path prefixes that share this one handler:
+     * `catalog/:slug` opens the room in the linear list, `map/:slug` opens
+     * the same room's overlay over the pannable map. `mode` is the only
+     * thing that differs between the two `app.get` calls below - reusing one
+     * closure is what keeps the redirect/collision/not-found handling from
+     * drifting between them.
+     *
+     * A room answers to its filename stem as well, and anything but the
+     * canonical slug redirects to it - so a retitled room's old links still
+     * land, and a crawler is handed one url for one page.
+     *
+     * The lowercase retry is for a url that has been through something that
+     * capitalises. Every slug in the table is already lowercase, so it can
+     * only ever find the room the reader asked for, and the redirect then puts
+     * them on its real url.
+     *
+     * The map reading needs JS to be anything but a copy of the catalog page,
+     * so `map/:slug` also sends a no-JS visitor on to the identical content
+     * at its real `catalog/:slug` url via `renderPage`'s `noscriptRedirectPath`
+     * (see its own comment) - a crawler that doesn't run JS lands there too.
+     * A JS-capable visitor never sees it: `main.tsx` replaces `#root` before
+     * the `<noscript>` tag could ever apply.
      */
-    app.get('/catalog/:file', async (req, res, next) => {
+    const handleRoomRoute =
+      (mode: 'catalog' | 'map') => async (req: Request<{ slug: string }>, res: Response, next: NextFunction) => {
       try {
-        const { metadata, tagLinks } = await loadRoomContent(manifest, imagesDir ?? null);
-        const result = renderRoomPage({
-          rooms: manifest.rooms,
-          metadata,
-          tagLinks,
-          file: req.params.file,
-          base,
-        });
-        const canonicalPath = `catalog/${encodeURIComponent(req.params.file)}`;
-        if (!result) {
+        const { metadata, tagLinks, slugs } = await loadRoomContent(manifest, imagesDir ?? null);
+        const asked = req.params.slug;
+        const id = slugs.lookup.get(asked) ?? slugs.lookup.get(asked.toLowerCase());
+        if (id === undefined) {
           await renderPage(req, res, next, {
             title: `Room not found · ${DEFAULT_TITLE}`,
             description: 'No such room in this library.',
             ogImagePath: 'og-image.jpg',
-            canonicalPath,
+            canonicalPath: roomPath(encodeURIComponent(asked), mode),
             bodyHtml: `<div class="ssr-page"><h1>No such room</h1><p><a href="${base}catalog">Back to the catalog</a></p></div>`,
             status: 404,
           });
           return;
         }
+        if (asked !== slugs.slugs[id]) {
+          // 302, not 301: a browser caches a permanent redirect forever, so a
+          // retitled room would leave a reader's own cache sending them to a
+          // url this corpus no longer has - the failure the stem alias exists
+          // to prevent. Nothing on the site links a stem, and the sitemap
+          // lists only canonical urls, so there is little for a crawler to
+          // consolidate here anyway.
+          //
+          // `base` is the public prefix the proxy strips (AGENTS.md,
+          // "Deployment and the base path"), so a root-absolute Location built
+          // from it is what the browser needs: a Location resolves against the
+          // request url, never against `<base href>`. Stays on the same
+          // prefix (`mode`) it was asked on.
+          res.redirect(302, `${base}${roomPath(slugs.slugs[id], mode)}`);
+          return;
+        }
+        const result = renderRoomPage({ rooms: manifest.rooms, metadata, tagLinks, id, base });
         await renderPage(req, res, next, {
           title: result.title,
           description: result.description,
           ogImagePath: result.ogImagePath,
-          canonicalPath,
+          canonicalPath: roomPath(slugs.slugs[id], mode),
           bodyHtml: result.bodyHtml,
-          initialRoute: { mode: 'catalog', room: req.params.file },
+          // The filename, not the slug: it is what `main.tsx` matches a room
+          // on, so translating here is what keeps the client from building a
+          // second slug table to read its own url.
+          initialRoute: { mode, room: manifest.rooms[id].file },
+          noscriptRedirectPath: mode === 'map' ? roomPath(slugs.slugs[id], 'catalog') : null,
         });
       } catch (err) {
         next(err);
       }
+    };
+    app.get('/catalog/:slug', handleRoomRoute('catalog'));
+    app.get('/map/:slug', handleRoomRoute('map'));
+
+    /**
+     * One-shot SSR-linkable routes for the two static dialogs reachable from
+     * the center shelf - a no-JS/crawler-readable page plus an
+     * `initialRoute` hint so `main.tsx` opens the matching dialog once JS
+     * takes over (the same pattern as `/catalog` above, minimal bodyHtml
+     * rather than real per-corpus SSR content since neither page has any).
+     */
+    app.get('/help', (req, res, next) => {
+      const { title, description, bodyHtml } = renderHelpPage(base);
+      renderPage(req, res, next, {
+        title,
+        description,
+        ogImagePath: 'og-image.jpg',
+        canonicalPath: 'help',
+        bodyHtml,
+        initialRoute: { mode: 'help' },
+      });
+    });
+
+    app.get('/about', (req, res, next) => {
+      const { title, description, bodyHtml } = renderAboutPage(base);
+      renderPage(req, res, next, {
+        title,
+        description,
+        ogImagePath: 'og-image.jpg',
+        canonicalPath: 'about',
+        bodyHtml,
+        initialRoute: { mode: 'about' },
+      });
     });
   }
+
+  /**
+   * The generated "equivalent code" easter egg the artist's statement links
+   * onward to (`ArtistStatementOverlay`'s `.statement-link` -> `BabelBookOverlay`),
+   * served as plain text for a reader who follows the link with no JS. Infinite,
+   * generated content with nothing to index, so `robots.txt` disallows it below.
+   */
+  app.get('/babel-book', (_req, res) => {
+    res.type('text/plain').send(generateRandomBookText());
+  });
 
   app.get('/robots.txt', (req, res) => {
     res.type('text/plain').send(robotsTxt(requestOrigin(req, base)));
   });
 
-  app.get('/sitemap.xml', (req, res) => {
-    // Every room's url is listed regardless of title, so - unlike /catalog -
-    // this needs no metadata join, only the room count and page size.
-    const pages = pageCount(manifest.rooms.length, clientConfig.catalog.perPage);
-    res.type('application/xml').send(renderSitemap(requestOrigin(req, base), manifest.rooms, pages));
+  app.get('/sitemap.xml', async (req, res, next) => {
+    try {
+      // A room's url is built from its title, so this needs the metadata join
+      // before it can name a single room.
+      const { slugs } = await loadRoomContent(manifest, imagesDir ?? null);
+      const pages = pageCount(manifest.rooms.length, clientConfig.catalog.perPage);
+      res.type('application/xml').send(renderSitemap(requestOrigin(req, base), slugs.slugs, pages));
+    } catch (err) {
+      next(err);
+    }
   });
 
   if (watch) {
@@ -668,43 +844,3 @@ export function stubRanking(rooms: { id: number }[], query: string): number[] {
  * input `favorites.ts` builds.
  */
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
-
-/**
- * Token buckets for the favorite writes, one per address.
- *
- * Keyed on `req.ip` by its caller, not on `X-Favorite-Client`: a client id is
- * free to mint, so bucketing on it would let a script spend a fresh burst on
- * every request by sending a new one (AGENTS.md, "Favorites"). This bounds
- * how fast one connection makes the process hash things - the set semantics
- * in favorites.ts, not this, cap what any client can do to a count. In memory
- * and never persisted: a restart forgets everyone, and no record of who
- * asked for what is kept.
- */
-const RATE_BURST = 20;
-const RATE_REFILL_MS = 1000;
-const RATE_MAX_TRACKED = 10_000;
-
-export function createRateBuckets({ burst = RATE_BURST, refillMs = RATE_REFILL_MS } = {}) {
-  const seen = new Map<string, { tokens: number; at: number }>();
-  return {
-    /** @returns whether this address may spend a token now */
-    take(key: string): boolean {
-      const now = Date.now();
-      // Bounded so a spray of forged addresses (or an honest crowd) cannot grow
-      // this map without limit. Oldest-first, which is a Map's own iteration
-      // order here since every touch rewrites its entry at the end.
-      if (seen.size >= RATE_MAX_TRACKED && !seen.has(key)) {
-        const oldest = seen.keys().next().value;
-        if (oldest !== undefined) seen.delete(oldest);
-      }
-      const entry = seen.get(key) ?? { tokens: burst, at: now };
-      entry.tokens = Math.min(burst, entry.tokens + (now - entry.at) / refillMs);
-      entry.at = now;
-      const allowed = entry.tokens >= 1;
-      if (allowed) entry.tokens -= 1;
-      seen.delete(key);
-      seen.set(key, entry);
-      return allowed;
-    },
-  };
-}

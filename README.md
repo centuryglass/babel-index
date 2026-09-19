@@ -300,6 +300,7 @@ is not part of CI.
 
 - [`docs/architecture.md`](docs/architecture.md) — a five-minute system overview: request flow, deploy, rendering, testing
 - [`docs/user-guide.md`](docs/user-guide.md) — every control in the library, annotated
+- [`docs/api.md`](docs/api.md) — the `/api/*` request/response contract
 - [`docs/file_map.md`](docs/file_map.md) — the full file-by-file layout
 - [`docs/concept.md`](docs/concept.md) — the initial project concept and a dated log of design decisions
 - [`docs/pending_task_list.md`](docs/pending_task_list.md) — what is still to do

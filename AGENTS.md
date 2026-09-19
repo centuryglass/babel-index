@@ -62,7 +62,7 @@ npm run test:parity                # manual Canvas2D-vs-WebGL render parity; rea
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
-npm run generate:mips -- --images <dir>    # write the resolution pyramid in place
+npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
 npm run generate:shelf-geometry     # Recalculate diegetic control bounds from tools/center-placement/shelf_geometry.svg
@@ -355,13 +355,29 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   are served from the `/shared/` mount, not `/images/`. The one case where a
   `center.*` inside the corpus dir counts as a generic tile is `sharedDir ===
   imagesDir`.
-- **The shared tiles are served flat (level 0) for now.** `rooms.ts` resolves
-  a shared id to its url at level 0 only; every coarser request falls back
-  through `servableLevel`. Bounded, because the cache keys on id not cell,
-  but it means `main.tsx` pins each shared id at level 0 rather than at the
-  coarsest rung - so each pinned generic is a full-res download until the
-  shared assets get their own pyramid (`docs/pending_task_list.md`). Do not
-  pin a shared id at `FALLBACK_LEVEL`; there is no tile there.
+- **The center and the generic tiles have their own pyramid, generated the
+  same way the corpus is.** `npm run generate:mips -- --images <dir>
+  --shared-dir <dir> [--center <name>]` (`packages/pipeline/shared-mips.ts`)
+  writes the same per-file `<width>/<file>` ladder `mips.ts` writes for a
+  room, rooted under `--shared-dir` instead - once for the center render,
+  once per file in `generic/`. `scan.ts` discovers what each tree actually
+  has on disk (`discoverLevels`, same as it does for `manifest.levels`) and
+  intersects the two into `manifest.shared.levels`, so a level only counts
+  as available where both the center and every generic tile actually have
+  it. `rooms.ts` resolves a shared id at a level in `shared.levels` by
+  inserting `<width>/` before the asset's filename - the same per-level
+  directory `shared-mips.ts` wrote it into. There are no shared sheets: a
+  handful of files needs no packing.
+
+  Every OTHER shared id - a generic tile's distill alternate
+  (`generic_distill/`, only ever drawn up close), a favorite badge, the
+  distill toggle's faces, the "forget searches" overlay - is fixed-size app
+  art with no pyramid of its own, and stays flat at level 0, falling back to
+  it through `servableLevel` for any coarser request, same as before.
+  `main.tsx` pins the center at level 0 (on screen from the first frame) but
+  the generic tiles at the coarsest level `shared.levels` actually has -
+  never a hardcoded `FALLBACK_LEVEL`, since an older corpus with no shared
+  pyramid generated has none but level 0.
 
 ### The center room's controls
 
@@ -809,12 +825,15 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   a human merges *that* PR. `package.json`'s `version` field and
   `.release-please-manifest.json` are only ever written by that merge - never
   hand-edit either.
-- **This is independent of `deploy.yml` and always will be.** Every push to
-  main deploys regardless of version state (see "Deploying to the VPS");
-  release-please's tags exist to mark what shipped when, in step with
-  `/api/health`'s commit reporting, not to gate whether it ships. Wiring
-  deploy to wait on a release tag would reintroduce exactly the release-train
-  latency this setup is meant to avoid for a single-maintainer project.
+- **`deploy.yml` deploys only that merge, not every push to main.** Its `if`
+  matches the head commit message against `chore(main): release ` - the
+  literal prefix of a release-please release-PR title, which becomes the
+  commit subject the same way any squash-merged PR's does - so an ordinary
+  merge to main builds and tests but never ships. That makes every deploy
+  correspond to a tagged, changelogged version; the tradeoff is the same lag
+  between "merged" and "live" any release-gated deploy has, kept small by not
+  leaving a release PR open once it's ready to merge. A manual
+  `workflow_dispatch` is still the hatch for an urgent fix between releases.
 
 ### The catalog, and the two modes
 
@@ -829,6 +848,18 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   catalog closes" test drags after a mode switch because every
   cheaper assertion passes under that bug. Hiding also keeps the tile cache
   and the pyramid's LRU warm, so returning is a repaint, not a rebuild.
+- **A room's permalink is its title, and `packages/map/slug.ts` decides it
+  for every caller.** `roomPath` builds `catalog/<slug>` from the room's
+  title folded to ASCII (`slugify`, over `scoring.ts`'s own `fold`), and the
+  server, the sitemap and the overlay's copy-link button all read
+  `buildSlugTable` rather than assembling a path each. A room's filename
+  stem is a permanent alias that redirects to the title url, so a retitle leaves
+  the links already shared somewhere to land; an untitled room has the stem
+  as its real url. A room id never reaches a path - ids are positional, so
+  one in a shared url comes back pointing at a different room. Unique titles
+  are the generator's to keep: two rooms claiming one path each take their
+  stem as a suffix and `roomContent.ts` warns at startup, which is the only
+  sign it happened.
 - **The catalog is not the accessibility mode.** A linear list was rejected
   as an accommodation and left open as a control for everyone. So: nothing
   detects a screen reader, nothing defaults into it, the panel's ranked

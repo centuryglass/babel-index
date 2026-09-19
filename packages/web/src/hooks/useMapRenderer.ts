@@ -198,6 +198,33 @@ export function useMapRenderer({
     // their outlines (`style.css`).
     let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
+    // `getBoundingClientRect()` on either element forces the browser to flush
+    // any layout the frame's own style writes (searchEl/booksEl/bookEl/
+    // controlsEl, above) just queued, before the canvas draw below even
+    // starts - the classic forced-reflow trap, and one every frame ever
+    // drawn used to pay for the search arrow's bearing. Neither rect changes
+    // on pan/zoom/scroll, only on an actual layout change, so both are
+    // cached here and refreshed by their own `ResizeObserver` instead of
+    // read fresh every frame. `hud` only exists under `?debug` and its
+    // presence cannot change mid-effect-lifetime, so it is looked up once
+    // here too rather than on every `render()` call.
+    const hud = document.getElementById('hud');
+    let canvasRect = canvas.getBoundingClientRect();
+    const canvasRO = new ResizeObserver(() => {
+      canvasRect = canvas.getBoundingClientRect();
+    });
+    canvasRO.observe(canvas);
+    const arrowElForObserver = searchArrowRef?.current ?? null;
+    let badgeRect: DOMRect | null = null;
+    let badgeRO: ResizeObserver | null = null;
+    if (arrowElForObserver) {
+      badgeRect = arrowElForObserver.getBoundingClientRect();
+      badgeRO = new ResizeObserver(() => {
+        badgeRect = arrowElForObserver.getBoundingClientRect();
+      });
+      badgeRO.observe(arrowElForObserver);
+    }
+
     const render = () => {
       pending = 0;
       // Hidden draws nothing and measures nothing: under `display: none` every
@@ -275,12 +302,13 @@ export function useMapRenderer({
         // absolute against `#root`), so no conversion is needed. The tile may
         // be entirely off screen - `cellRect` arbitrarily outside the
         // viewport - and the bearing must still be right; that is when the
-        // direction matters most. The badge's `getBoundingClientRect` is read
-        // fresh each frame so a CSS change to its position or size cannot
-        // leave the bearing stale.
-        if (arrowEl) {
-          const badge = arrowEl.getBoundingClientRect();
-          const root = canvas.getBoundingClientRect();
+        // direction matters most. `badgeRect`/`canvasRect` are cached above
+        // and refreshed by their own `ResizeObserver`, not read fresh here -
+        // reading `getBoundingClientRect` in this callback, right after the
+        // style writes above, forced a layout flush on every frame.
+        if (arrowEl && badgeRect) {
+          const badge = badgeRect;
+          const root = canvasRect;
           const fromX = badge.left - root.left + badge.width / 2;
           const fromY = badge.top - root.top + badge.height / 2;
           const toX = cellRect.x + cellRect.w / 2;
@@ -330,7 +358,6 @@ export function useMapRenderer({
       const stats: object = running?.board ? slideRenderer.draw(slideDrawOpts) : renderer.draw(roomDrawOpts);
       if (PERF && running) perfRecordFrame(running.board ? 'slide' : 'flight', performance.now() - t0);
 
-      const hud = document.getElementById('hud');
       if (running?.board && hud) {
         const slideStats = stats as SlideDrawResult;
         const show = running.show as NonNullable<RunningAnim['show']>;
@@ -544,6 +571,8 @@ export function useMapRenderer({
     canvas.addEventListener('pointerleave', onLeave);
     return () => {
       if (pending) cancelAnimationFrame(pending);
+      canvasRO.disconnect();
+      badgeRO?.disconnect();
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('focus', onFocus);

@@ -38,11 +38,20 @@ export interface SharedAsset extends Partial<ImageSize> {
  * filename stem in `scan.ts`'s `scanShared`. Null at an index whose generic
  * tile has no matching distill alternate on disk; the fade falls back to a
  * flat black overlay for that one rather than failing the whole corpus.
+ *
+ * `levels` is which per-file pyramid rungs the center and every generic tile
+ * actually share on disk - the intersection of what `discoverLevels` finds
+ * under the shared directory's root (the center) and its `generic/`
+ * subdirectory, so a level only appears here when both trees have it. Always
+ * at least `[{level: 0, dir: null}]`. `rooms.ts` is the one place this is
+ * read; `genericDistill` and the fixed app art (favorite badges, the distill
+ * toggle) are never in it and stay flat at level 0 (see rooms.ts's header).
  */
 export interface SharedAssets {
   center: SharedAsset | null;
   generic: SharedAsset[];
   genericDistill: (SharedAsset | null)[];
+  levels: LevelInfo[];
 }
 
 /**

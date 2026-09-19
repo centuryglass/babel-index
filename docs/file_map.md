@@ -47,7 +47,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 ### Client/Server code:
 - `packages/server`: the demo server
   * `index.ts`: CLI
-  * `app.ts`: Express setup, manifest/search/favorites/images endpoints
+  * `app.ts`: Express setup, manifest/search/favorites/logs/images endpoints
   * `scan.ts`: Image tile directory loading
   * `remote.ts`: Reading a corpus manifest from a remote host (R2/Cloudflare)
                  instead of a local directory
@@ -56,7 +56,21 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                    and one JSON-file implementation (`--favorites <path>`)
   * `logger.ts`: The one leveled/structured logger every server module logs
                 through - pino, pretty-printed on a TTY, plain JSON otherwise
-                (journald, CI)
+                (journald, CI). Also writes to `LOG_FILE`, if set, through
+                `log-file.ts`
+  * `log-file.ts`: A synchronous, size-capped rotating file destination for
+                   pino - `logger.ts`'s `LOG_FILE` writes through it
+  * `log-levels.ts`: pino's numeric level scale, named - shared by
+                     `log-reader.ts` and `logViewerPage.ts`
+  * `log-reader.ts`: Reads recent entries back out of a `log-file.ts` log
+                     file, for the admin log viewer below
+  * `admin-auth.ts`: HTTP Basic Auth (scrypt hash, `ADMIN_PASSWORD_HASH`)
+                     gating the admin log viewer routes, rate-limited via
+                     `rate-buckets.ts`
+  * `rate-buckets.ts`: Per-key token buckets - shared by the favorite writes
+                       and `admin-auth.ts`'s login attempts
+  * `logViewerPage.ts`: The `/admin/logs` HTML page and its
+                        `/admin/logs/fragment` polling partial
   * `search-cache.ts`: LRU cache and concurrency limiter (with an
                         `onSaturated` hook `app.ts` logs from) backing
                         `/api/search`'s CLIP text tower calls
@@ -76,13 +90,20 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       do this themselves; `/api/manifest` only ever ships
                       `{url, ...counts}` for either file.
   * `catalogPage.ts`: Pure HTML-fragment builders for the SSR `/catalog` list
-                      and `/catalog/:file` room permalink (`app.ts`'s
+                      and `/catalog/:slug` room permalink (`app.ts`'s
                       `renderPage` embeds the result in `index.html`'s
                       `#root`) - reuses `packages/web/src/lib/catalog.ts`'s
                       own `alphabeticalOrder`/`pageOf`/`pageCount` rather than
                       a second paging implementation.
   * `seo.ts`: Pure builders for `robots.txt` and `sitemap.xml` - every room
-             permalink, every catalog page, and `/`.
+             permalink, every catalog page, and `/`. `robots.txt` disallows
+             `/babel-book`, the generated easter egg with nothing to index.
+  * `staticPages.tsx`: Corpus-free SSR bodies for the one-shot `/help`/`/about`
+                       permalinks. `.tsx` because it renders `HelpBody`/
+                       `ArtistStatementPages` with `react-dom/server`'s
+                       `renderToStaticMarkup` rather than building HTML
+                       strings by hand - those components are the one source
+                       of truth for both texts, live and SSR alike.
 - `packages/web`: browser-side code (only place DOM is expected). `src/` is laid
   out by React convention - components, hooks, and everything else (`lib/`) -
   rather than by feature area; a hook and the `lib/` module it wraps often
@@ -91,7 +112,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `index.html`: HTML entry point, static page structure. Its `<head>`
                     carries the favicon/manifest links and the OG/Twitter card
                     meta tags; `app.ts`'s `renderPage` (shared by `/`,
-                    `/catalog`, and `/catalog/:file`) fills in
+                    `/catalog`, and `/catalog/:slug`) fills in
                     `%%TITLE%%`/`%%DESCRIPTION%%`/`%%CANONICAL_URL%%`/
                     `%%OG_IMAGE_URL%%` per request - the last two absolute,
                     since a link unfurler parses this HTML directly and never
@@ -123,7 +144,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                       from the search, wires the hooks below together, renders
                       the map and catalog views. The only file at `src/` top level.
                       Reads `window.__INITIAL_ROUTE__` once at module scope
-                      (set only by the SSR `/catalog`/`/catalog/:file` routes,
+                      (set only by the SSR `/catalog`/`/catalog/:slug` routes,
                       see `index.html`) alongside `?catalog`/`?blockTags`, so
                       a JS-capable visitor who lands on one of those urls
                       boots straight into the interactive catalog - with that
@@ -148,7 +169,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     * `SearchForm.tsx`: Shared search box component
     * `SearchIcon.tsx`: The search badge's glyph, orbiting arrow, and the
                         preload spinner ring
-    * `HelpDialog.tsx`: The "READ ME" book's dialog
+    * `HelpDialog.tsx`: The "READ ME" book's dialog - chrome, zoom controls,
+                        and the content-blocking panel (stateful, corpus- and
+                        reader-specific, so it stays out of `HelpBody.tsx`)
+                        around `HelpBody`'s prose.
+    * `HelpBody.tsx`: The help dialog's explanatory prose - pure and
+                      stateless so `packages/server/staticPages.tsx` can
+                      render the identical markup for the SSR `/help` route.
     * `BookOverlay.tsx`: The open-book overlay shell both reading dialogs are
                          built from - scrim, focus-trapped dialog (`useDialog`),
                          corner close button, and a `.book` whose two pages sit
@@ -158,14 +185,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                          spread-at-a-time reader can advance by the right amount.
     * `ArtistStatementOverlay.tsx`: The artist's statement, reached by the open
                                     book traced into the center tile's shelf gap
-                                    (`CENTER_BOOK_PATH` in `lib/center.ts`). A
-                                    `BookOverlay` of two pages: the diegetic myth
-                                    on the left, the real statement on the right,
-                                    collapsing to one stacked column when too
-                                    narrow for two. The component is the source
-                                    of truth for both texts (JSX, not a parsed
-                                    doc). Opens `BabelBookOverlay` on top of
-                                    itself.
+                                    (`CENTER_BOOK_PATH` in `lib/center.ts`). Wraps
+                                    `ArtistStatementPages` in a `BookOverlay` and
+                                    supplies the live `.statement-link` button that
+                                    opens `BabelBookOverlay` on top of itself.
+    * `ArtistStatementPages.tsx`: The artist's statement's two pages - the
+                                  diegetic myth and the real statement - as pure,
+                                  stateless JSX (the source of truth for both
+                                  texts, not a parsed doc). Takes `runBookLink` as
+                                  a prop so `packages/server/staticPages.tsx` can
+                                  render the identical markup for the SSR `/about`
+                                  route with a plain link in place of the live
+                                  button.
     * `BabelBookOverlay.tsx`: Shows a random book from the Library of Babel,
                              paged as the same `BookOverlay` - a spread of two
                              pages when wide, one when narrow, so next/previous
@@ -254,6 +285,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                              spine overlay, anchored to the center tile's own
                              lower right corner
     * `catalog.ts`: Catalog pagination and geometry helpers
+    * `babelBook.ts`: `generateRandomBookText`/`paginateBookText` - a random
+                      "book" from the Library of Babel, pure and DOM-free so
+                      both `BabelBookOverlay.tsx` and `packages/server/app.ts`'s
+                      `/babel-book` route generate from one implementation.
     * `pyramid.ts`: Manage room tile resolution options and cache budgets
     * `tiles.ts`: Load, cache, and unload room images
     * `rooms.ts`: Map room data in the manifest to image URLs
@@ -319,6 +354,9 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `ordering.ts`: Room placement, search density gradient, rank by embedding, pan resistance
   * `nextRoom.ts`: Find the next non-default room on the map in a given direction
   * `metadata.ts`: Normalizing and joining per-room keyword/story data
+  * `slug.ts`: Room permalinks - the `catalog/<slug>` path, the slug built
+              from a room's title, and the table resolving one back to a
+              room (with the filename stem as a permanent alias)
   * `manifest.ts`: The corpus manifest's type contract (`Manifest`,
                    `Room`, `SharedAssets`, `LevelInfo`, ...), type-only
   * `moves.ts`: The rearrangement animation's type contract (`Move` and its
@@ -350,6 +388,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `mips.ts`: Generate+fill alternate image size directories
   * `sheets.ts`: Composite one level's per-file tiles into `<width>-sheets/` grids
   * `layout.ts`: Import resolution steps from pyramid.ts, define expected directory structure
+  * `shared-mips.ts`: Same per-file pyramid as `mips.ts`, rooted at `--shared-dir` for the center render and `generic/`
 
 ### Associated tools:
 - `tools/center-placement`: Calculate center tile geometry for the diegetic interface
@@ -391,6 +430,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `upload-r2.ts`: CLI, credentials from env.
   * `lib.ts`: Pure upload-list/diff logic, no filesystem or network.
   * `README.md`: credentials setup and how to run `upload-r2.ts`.
+- `tools/hash-admin-password`: `npm run hash-admin-password` - prompts for a
+                               password and prints its `ADMIN_PASSWORD_HASH`
+                               value (`packages/server/admin-auth.ts`).
+  * `index.ts`: CLI, hidden-terminal-echo prompt.
+  * `README.md`: how to run it and where the hash goes.
 - `tools/font-lab`: Ad hoc design-exploration lab for the center shelf's spine
                     titles - not wired into any npm script, not covered by
                     tests. Run directly, e.g.
@@ -522,6 +566,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
               the project.
 
 ### Docs:
+- `docs/api.md`: The `/api/*` request/response contract, for a reader who
+                 wants the shapes without reading `packages/server/app.ts`.
 - `docs/architecture.md`: A five-minute, human-facing system overview -
                           request flow, why esbuild bundles in-process, why
                           the corpus lives in R2, why deploy is gated on

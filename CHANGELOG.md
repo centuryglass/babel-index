@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.4.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.3.0...babel-index-v1.4.0) (2026-09-19)
+
+
+### Features
+
+* add an authenticated admin log viewer ([#219](https://github.com/centuryglass/babel-index/issues/219)) ([abc341f](https://github.com/centuryglass/babel-index/commit/abc341f5639b92c9d4cf2ac26ae2d2c8395590c3))
+
+## [1.3.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.2.0...babel-index-v1.3.0) (2026-09-19)
+
+
+### Features
+
+* give the shared tiles their own resolution pyramid ([#207](https://github.com/centuryglass/babel-index/issues/207)) ([1db297b](https://github.com/centuryglass/babel-index/commit/1db297bfe56b44ab5623a018595174ffd8900583))
+
+
+### Bug Fixes
+
+* mark bundle.js, style.css and SSR pages no-cache ([#206](https://github.com/centuryglass/babel-index/issues/206)) ([60c521f](https://github.com/centuryglass/babel-index/commit/60c521fbeb2f6d136ff5ff8672f0d5777b8f1384))
+
+## [1.2.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.1.0...babel-index-v1.2.0) (2026-09-19)
+
+
+### Features
+
+* add /help, /about and /babel-book SSR-linkable permalinks ([#204](https://github.com/centuryglass/babel-index/issues/204)) ([9f49602](https://github.com/centuryglass/babel-index/commit/9f4960268906c1fe464974574b9e738cdae9bc09))
+* add /map/:room permalinks alongside /catalog/:room ([#203](https://github.com/centuryglass/babel-index/issues/203)) ([ad6c360](https://github.com/centuryglass/babel-index/commit/ad6c360bc1f8727d34a675f4e2502691b34f43d7))
+
+
+### Bug Fixes
+
+* deploy only on release-please's release merge ([#201](https://github.com/centuryglass/babel-index/issues/201)) ([760a3cd](https://github.com/centuryglass/babel-index/commit/760a3cd40ee8fbbaece8031eacb2faa36afd9def))
+
+
+### Performance Improvements
+
+* drop the redundant full-screen clear from both renderers ([#205](https://github.com/centuryglass/babel-index/issues/205)) ([6055159](https://github.com/centuryglass/babel-index/commit/605515958ed4706555e551c38bcedb4d57f22526))
+
+## [1.1.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.0.0...babel-index-v1.1.0) (2026-09-18)
+
+
+### Features
+
+* address room permalinks by title rather than image filename ([#197](https://github.com/centuryglass/babel-index/issues/197)) ([7ce53df](https://github.com/centuryglass/babel-index/commit/7ce53df3e92dd18d3f92471f79be3abb2e79df9c))
+
+
+### Bug Fixes
+
+* stop forcing a synchronous layout on every map frame ([#198](https://github.com/centuryglass/babel-index/issues/198)) ([a9e098d](https://github.com/centuryglass/babel-index/commit/a9e098d6f3e68f6f9425f521fac83a07d5e46906))
+
 ## 1.0.0 (2026-09-18)
 
 

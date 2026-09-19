@@ -3,8 +3,13 @@ name: release-please
 # Keeps a standing "release PR" up to date with every squash-merged PR title
 # since the last release, grouped into a CHANGELOG.md entry by type (feat,
 # fix, ...). Merging that PR is the release: it bumps package.json's version,
-# updates CHANGELOG.md, and tags/publishes a GitHub Release at that commit -
-# nothing else in the repo (deploy.yml included) waits on or triggers off it.
+# updates CHANGELOG.md, and tags/publishes a GitHub Release at that commit.
+#
+# deploy.yml watches for exactly that merge: release-please always titles its
+# release PR `chore(main): release X.Y.Z`, which - like any other PR here -
+# becomes the squash-merge commit subject on main, so deploy.yml's `if` can
+# match on `head_commit.message` alone rather than needing a second workflow
+# hook into this one. An ordinary PR merge to main does not deploy.
 #
 # The PR-title convention this reads (Conventional Commits, `!` for a
 # breaking change) is enforced by pr-title-lint.yml and documented in
@@ -22,7 +27,7 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json

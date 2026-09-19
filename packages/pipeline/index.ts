@@ -4,6 +4,7 @@
  *
  *   npm run generate:mips -- --images assets/corpus-sample
  *   npm run generate:mips -- --images <dir> --out <dir> [--quality 82]
+ *   npm run generate:mips -- --images <dir> --shared-dir assets [--center center.jpg]
  *
  * Resizes every source image to each level of the ladder and writes the result
  * to the layout `layout.ts` states. With no --out it works in place: the
@@ -13,6 +14,10 @@
  *
  * The coarse levels are then repacked into shared sheets (`sheets.ts`), and
  * every source's content hash recorded in the corpus's `metadata.json`.
+ *
+ * --shared-dir additionally pyramids the center render and every `generic/`
+ * tile found there, in place - see `shared-mips.ts`. Omitted, the shared
+ * tiles are left exactly as they were (still servable flat at level 0).
  *
  * The ladder is `LEVELS` in packages/web/src/lib/pyramid.ts, the same list the
  * client picks levels from, so what this writes and what it asks for cannot
@@ -25,12 +30,14 @@ import sharp from 'sharp';
 import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
 import { mipPlan, writeMips, sourceImages, checkSizes, updateMetadataHashes, type SourceSize } from './mips.ts';
 import { writeSheets } from './sheets.ts';
+import { writeSharedMips } from './shared-mips.ts';
 
 const argv = parseArgs(process.argv.slice(2));
 const imagesDir = resolve(process.cwd(), argv.images ?? 'assets/corpus-sample');
 const outDir = argv.out ? resolve(process.cwd(), argv.out) : imagesDir;
 const inPlace = outDir === imagesDir;
 const quality = Number(argv.quality ?? 82);
+const sharedDir = argv['shared-dir'] ? resolve(process.cwd(), argv['shared-dir']) : null;
 
 if (!existsSync(imagesDir)) {
   console.error(`no such directory: ${imagesDir}`);
@@ -116,6 +123,21 @@ if (sheetSteps.length) {
 // `updateMetadataHashes`.
 await updateMetadataHashes(imagesDir, hashes);
 console.log(`  metadata.json: ${hashes.size} content hash(es) recorded\n`);
+
+// The shared tiles - the center render and every generic/ tile - get the
+// same per-file ladder, rooted at --shared-dir instead. See shared-mips.ts.
+if (sharedDir) {
+  console.log(`  shared tiles in ${sharedDir} ...\n`);
+  const shared = await writeSharedMips({ sharedDir, center: argv.center, quality });
+  console.log(
+    shared.center
+      ? `    center: ${shared.center.file}  ${shared.center.written} written, ${shared.center.cached} unchanged`
+      : '    center: none found'
+  );
+  const genericWritten = shared.generic.reduce((n, g) => n + g.written, 0);
+  const genericCached = shared.generic.reduce((n, g) => n + g.cached, 0);
+  console.log(`    generic: ${shared.generic.length} tile(s), ${genericWritten} written, ${genericCached} unchanged\n`);
+}
 
 function parseArgs(args: string[]): Record<string, string> {
   const out: Record<string, string> = {};

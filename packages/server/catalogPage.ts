@@ -8,6 +8,7 @@
  * (`alphabeticalOrder`/`pageOf`/`pageCount`) rather than a second copy here.
  */
 import { roomTitle } from '../map/metadata.ts';
+import { roomPath } from '../map/slug.ts';
 import { pageOf, pageCount } from '../web/src/lib/catalog.ts';
 import type { Room } from '../map/manifest.ts';
 import type { RoomMeta } from '../map/metadata.ts';
@@ -76,6 +77,7 @@ export function renderCatalogList({
   rooms,
   metadata,
   tagLinks,
+  slugs,
   order,
   page,
   perPage,
@@ -85,6 +87,8 @@ export function renderCatalogList({
   rooms: Room[];
   metadata: (RoomMeta | null)[];
   tagLinks: Record<string, string> | null;
+  /** Each room's permalink slug, indexed by room id - `buildSlugTable`'s own shape. */
+  slugs: string[];
   order: number[];
   page: number;
   perPage: number;
@@ -100,7 +104,7 @@ export function renderCatalogList({
       const room = rooms[id];
       const meta = metadata[id] ?? null;
       const title = escapeHtml(roomTitle(meta, id));
-      const href = `${base}catalog/${encodeURIComponent(room.file)}`;
+      const href = `${base}${roomPath(slugs[id])}`;
       const alt = escapeHtml(meta?.alt ?? title);
       return `<li class="ssr-row">
         <a class="ssr-thumb" href="${href}"><img src="${escapeHtml(thumbUrl(room, urlFor))}" alt="${alt}" loading="lazy" width="256" /></a>
@@ -139,25 +143,26 @@ export function renderCatalogList({
 }
 
 /**
- * One room's permalink page: title, full image, keywords, story. Returns
- * null when `file` doesn't name a room in this corpus, so `app.ts` can 404.
+ * One room's permalink page: title, full image, keywords, story.
+ *
+ * Takes a room id, already resolved from the request's slug by `app.ts`
+ * against `buildSlugTable`'s lookup - which is also what decides a 404, so
+ * there is no second idea here of whether a room exists.
  */
 export function renderRoomPage({
   rooms,
   metadata,
   tagLinks,
-  file,
+  id,
   base,
 }: {
   rooms: Room[];
   metadata: (RoomMeta | null)[];
   tagLinks: Record<string, string> | null;
-  file: string;
+  id: number;
   base: string;
-}): RoomPageResult | null {
-  const room = rooms.find((r) => r.file === file);
-  if (!room) return null;
-
+}): RoomPageResult {
+  const room = rooms[id];
   const meta = metadata[room.id] ?? null;
   const title = roomTitle(meta, room.id);
   const alt = meta?.alt ?? title;

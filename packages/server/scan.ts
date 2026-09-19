@@ -193,13 +193,28 @@ async function describeShared(sharedDir: string, sub: string, file: string): Pro
 }
 
 /**
+ * Which file among `files` is the center render: `center`, else
+ * `center_tile.*`, else `center.*`, else none. Exported so
+ * `packages/pipeline/shared-mips.ts` can find the same file to pyramid
+ * without restating the naming rule.
+ */
+export function resolveCenterFile(files: string[], center?: string): string | null {
+  return (
+    (center && files.find((f) => f === center || basename(f, extname(f)) === center)) ??
+    files.find((f) => basename(f, extname(f)).toLowerCase() === 'center_tile') ??
+    files.find((f) => basename(f, extname(f)).toLowerCase() === 'center') ??
+    null
+  );
+}
+
+/**
  * Discover the shared tiles: the blank center and the generic tiles.
  *
  * The center is served at cell (0, 0) and reserved for the search box and
- * controls, so it is always the plain center render: `--center`, else
- * `center_tile.*`, else `center.*`. `allowFirst` covers the case where the
- * shared assets live in the corpus directory itself: with nothing named
- * center present, the first image stands in.
+ * controls, so it is always the plain center render - see `resolveCenterFile`.
+ * `allowFirst` covers the case where the shared assets live in the corpus
+ * directory itself: with nothing named center present, the first image
+ * stands in.
  *
  * The generic tiles are every image in the `generic/` subdirectory, sorted.
  * There may be none (an empty or absent folder), which is the "only the
@@ -209,17 +224,16 @@ async function describeShared(sharedDir: string, sub: string, file: string): Pro
  * filename stem: `genericDistill[i]` is `generic[i]`'s match, or null where
  * the stem has none, so the arrays run parallel even if the folder is
  * missing entries or absent entirely.
+ *
+ * `levels` is filled in by the caller (`scanDirectory`), once it has settled
+ * on the corpus's reference size - see that function's own comment.
  */
 async function scanShared(
   sharedDir: string,
   { center, allowFirst = false }: { center?: string; allowFirst?: boolean } = {}
-): Promise<SharedAssets> {
+): Promise<Omit<SharedAssets, 'levels'>> {
   const files = await listImages(sharedDir).catch(() => []);
-  const centerFile =
-    (center && files.find((f) => f === center || basename(f, extname(f)) === center)) ??
-    files.find((f) => basename(f, extname(f)).toLowerCase() === 'center_tile') ??
-    files.find((f) => basename(f, extname(f)).toLowerCase() === 'center') ??
-    (allowFirst ? files[0] : null);
+  const centerFile = resolveCenterFile(files, center) ?? (allowFirst ? files[0] : null);
 
   const centerAsset = centerFile ? await describeShared(sharedDir, '', centerFile) : null;
 
@@ -298,6 +312,29 @@ export async function scanDirectory(
     rooms.length
   );
 
+  // The shared tiles' pyramid, off the same reference size: `packages/pipeline/
+  // shared-mips.ts` writes it the same per-file way `mips.ts` writes a room's,
+  // once rooted at `sharedDir` (the center) and once at `sharedDir/generic`
+  // (every generic tile) - two separate trees, so a level only counts as
+  // shared.levels if both actually have it. `shared.genericDistill` and the
+  // fixed app art (favorite badges, the distill toggle) never get a pyramid -
+  // see rooms.ts's header for why - so they are not part of this discovery.
+  const sharedSize = source && source.w && source.h ? { w: source.w, h: source.h } : null;
+  const [centerLevels, genericLevels] = await Promise.all([
+    discoverLevels(sharedDir, sharedSize),
+    discoverLevels(join(sharedDir, GENERIC_DIR), sharedSize),
+  ]);
+  // Only intersect against a tree that actually has something to pyramid -
+  // a corpus with generic tiles but no separate center (or vice versa) must
+  // not have its real levels vetoed by the other tree's untouched level 0.
+  const genericLevelNumbers = new Set(genericLevels.map((l) => l.level));
+  const sharedLevels =
+    sharedAssets.center && sharedAssets.generic.length
+      ? centerLevels.filter((l) => genericLevelNumbers.has(l.level))
+      : sharedAssets.generic.length
+        ? genericLevels
+        : centerLevels;
+
   // If tools/embed has left a blob alongside the images, surface its metadata
   // so the client can fetch it and rank in the browser. A stale blob - one
   // whose count no longer matches the corpus - is ignored rather than
@@ -356,7 +393,7 @@ export async function scanDirectory(
      * `generic` array the generic tiles are drawn from. Served from `/shared/`,
      * which the demo points at `--shared-dir`.
      */
-    shared: sharedAssets,
+    shared: { ...sharedAssets, levels: sharedLevels },
     rooms,
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */

@@ -1,12 +1,20 @@
 name: deploy
 
-# Ship main to the VPS, and prove it actually shipped.
+# Ship a tagged release to the VPS, and prove it actually shipped.
 #
 # This runs AFTER `ci`, not alongside it: `workflow_run` fires on the ci
 # workflow's completion and carries the sha ci ran against, so what gets
 # deployed is exactly the revision that went green rather than whatever the
-# tip of main happens to be by the time this starts. A merge, two minutes,
-# and it is live.
+# tip of main happens to be by the time this starts.
+#
+# It only fires for the push that merges release-please's standing release
+# PR, never for an ordinary merge to main - the job's `if` matches the head
+# commit message against release-please's own PR title convention
+# (`chore(main): release X.Y.Z`, see release-please.yml), since that PR
+# title becomes the squash-merge commit subject on main the same way any
+# other PR's does. That merge is also the one point release-please tags and
+# writes to CHANGELOG.md, so a deploy always corresponds to a released,
+# changelogged version - never a change nobody outside the repo can name.
 #
 # The deploy itself is one ssh call. Everything it does on the far side lives
 # in `deploy/deploy.sh` - reviewed like any other code in this repo, rather
@@ -18,7 +26,9 @@ name: deploy
 #
 # Redeploy or roll back by hand from the Actions tab ("Run workflow"), passing
 # a sha - anything that has been on main is accepted, which is what makes the
-# rollback path a button rather than an ssh session.
+# rollback path a button rather than an ssh session. A manual dispatch is the
+# one way to deploy something other than a tagged release, e.g. an urgent
+# fix between releases.
 on:
   workflow_run:
     workflows: [ci]
@@ -46,17 +56,21 @@ jobs:
   deploy:
     name: deploy to production
     # A dispatch is a person choosing; everything else has to be a successful
-    # PUSH to main. `workflow_run`'s branch filter matches the HEAD branch of
-    # the run that triggered it, which for a pull request is the PR's own
-    # branch - a fork branch named `main` would otherwise satisfy it. The
-    # event and branch checks here, and deploy.sh's own "must be an ancestor
-    # of origin/main" check on the far side, are the same rule stated on both
-    # sides of the ssh connection.
+    # PUSH to main whose head commit is release-please's own release commit.
+    # `workflow_run`'s branch filter matches the HEAD branch of the run that
+    # triggered it, which for a pull request is the PR's own branch - a fork
+    # branch named `main` would otherwise satisfy it. The event and branch
+    # checks here, and deploy.sh's own "must be an ancestor of origin/main"
+    # check on the far side, are the same rule stated on both sides of the
+    # ssh connection. The commit-message check is what keeps an ordinary
+    # merge to main from deploying at all - release-please.yml's header has
+    # the PR-title-to-commit-subject reasoning.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main')
+       github.event.workflow_run.head_branch == 'main' &&
+       startsWith(github.event.workflow_run.head_commit.message, 'chore(main): release '))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:

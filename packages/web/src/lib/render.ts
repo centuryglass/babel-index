@@ -252,9 +252,11 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
   }: DrawOpts): DrawResult {
     cache.beginFrame();
 
-    ctx.fillStyle = '#0a0908';
-    ctx.fillRect(0, 0, w, h);
-
+    // No full-viewport clear: the cell grid below is computed to cover the
+    // whole viewport with no gaps (`render.test.ts`'s "the cell grid covers
+    // the full viewport with no gaps, at any zoom or fractional pan" asserts
+    // it), and every cell paints something - a tile or rule 1's blank
+    // fallback rect. A clear here would only ever be painted over.
     const { x: cx, y: cy, zoom } = cam;
     // Pixels per cell on each axis. The cell is the world's base unit and is
     // not square, so every size below comes from here rather than from `zoom`.
