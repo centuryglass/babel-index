@@ -142,14 +142,6 @@ for that audience specifically, not things the art itself needs:
   width, which can trigger a pyramid level transition - this wants
   designing together with level selection, not shipped as an isolated
   toggle.
-- **[2026-09-18] Both renderers pay for a redundant full-screen clear every
-  frame.** `render.ts` and `slide.ts` both start with a full-viewport
-  `fillRect`, then draw a cell grid that's computed to cover the entire
-  viewport anyway (including the "blank" fallback path, which fills its own
-  rect). Cheap to remove, but the clear is genuinely load-bearing the
-  moment a future change leaves a gap in coverage - keep it behind `DEBUG`
-  or add a coverage assertion in `render.test.ts`/`slide.test.ts` rather
-  than deleting it outright.
 - **[2026-09-18] Several per-cell hot paths allocate on every call even
   though the answer is constant.** `rankOf` (`ordering.ts`) builds a
   `` `${x},${y}` `` template-literal string as a Map key on every call, and
