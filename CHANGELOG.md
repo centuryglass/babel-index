@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1](https://github.com/centuryglass/babel-index/compare/babel-index-v1.4.0...babel-index-v1.4.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* correct relative fragment URL in admin log viewer polling script ([#222](https://github.com/centuryglass/babel-index/issues/222)) ([ec4e266](https://github.com/centuryglass/babel-index/commit/ec4e266fce15c8932ec7bbca44d0976932c6e1bd))
+* match multi-word tags typed plainly, and report match strength ([#234](https://github.com/centuryglass/babel-index/issues/234)) ([f71a7dc](https://github.com/centuryglass/babel-index/commit/f71a7dc5a48ebcad05758b188665ddbaaca616c6))
+* suppress the compatibility click after a touch tap on the canvas ([#233](https://github.com/centuryglass/babel-index/issues/233)) ([02b4968](https://github.com/centuryglass/babel-index/commit/02b4968ea1b65a891369b3bcb62417d0c83985c4))
+* wrap long room titles instead of truncating in overlay header ([#221](https://github.com/centuryglass/babel-index/issues/221)) ([5e19673](https://github.com/centuryglass/babel-index/commit/5e196731f1e61077d19d44f0bed51dfdf470c4a0))
+
 ## [1.4.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.3.0...babel-index-v1.4.0) (2026-09-19)
 
 
