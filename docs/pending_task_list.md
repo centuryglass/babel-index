@@ -75,6 +75,66 @@ for that audience specifically, not things the art itself needs:
   `FavoriteStore` rather than a lock on the file.
 
 ## Search:
+- **[2026-09-20] A full critique of the search system lives in
+  [`docs/search_critique.md`](search_critique.md).** It is the reasoning
+  behind the six entries below, with reproductions and measured numbers
+  against `assets/corpus-sample/`; each entry here names the decision, the
+  critique names the options. The one bug it fixed in place was a stale
+  comment in `main.tsx` about which sort modes rebuild the layout.
+- **[2026-09-20] A multi-word tag typed verbatim is not an exact tag match.**
+  `rankHybrid` classifies term by term, so `outsider art` against a room
+  tagged `outsider art` scores 0.206 where `"outsider art"` scores 5.000, and
+  the room reports 45.80% certainty against its own tag. 34 of the sample
+  corpus's 78 keywords (43.6%) are multi-word, and `searchKeyword`
+  (`main.tsx`) runs a chip's text unquoted, so this is roughly two chip
+  clicks in five rather than an edge case. Two fixes, independent: quote a
+  multi-word chip at the call site, and restore the whole-query-against-one-
+  keyword reading in `rankHybrid`. Ruled out: that this was ever intended -
+  `keywordScore`'s docstring and `scoring.test.ts`'s "an exact keyword match
+  scores 1, including a multi-word keyword" both specify the behavior that is
+  missing.
+- **[2026-09-20] `keywordScore` has no caller, six passing tests, and two
+  comments claiming it is live.** `rankHybrid` uses `classifyTagTerm` per
+  term instead, and `ParsedQuery.folded` is computed but never read.
+  `classifyTagTerm`'s doc comment and `ParsedQuery.folded`'s both describe it
+  as the rule in force. Resolve with the entry above - it becomes the
+  implementation of the whole-query reading, or it and its tests go. Left in
+  place rather than deleted because which of the two is right is the open
+  design question, not a cleanup.
+- **[2026-09-20] A room's printed certainty and its placement can disagree.**
+  Rooms sort on `score` and cluster on `certainty`, which are different
+  computations, so `densityRamp` takes a running minimum to force
+  monotonicity. On `verdigris green smear across the walls` the #1 result (an
+  exact tag match) reports 20.00% while #2 reports 75.00% on its card and is
+  placed as 20.00%. The card and the map give different answers about the
+  same room. Fix is structural (rank on the absolute number, drop
+  `clipNorm` to a tiebreak) - see the critique's R4.
+- **[2026-09-20] Certainty falls as the query grows, for a room that has not
+  changed.** `tagCoverage` is the mean over query terms, so a room tagged
+  `verdigris` reads 1.000 for `verdigris` and 0.200 for `verdigris green
+  smear across the walls`. Coverage is a ranking concern (`tagExact` already
+  counts) and is being reported as match strength. Taking the max over terms
+  instead is the fix, alongside renaming the number.
+- **[2026-09-20] Only CLIP can produce a negative certainty, and the UI
+  words it as a claim about the room.** `matchCertainty` reaches `-Cneg`
+  only when every text signal is zero, so a corpus without `embeddings.bin`
+  has no negative range at all - a room the text search is sure did not match
+  reads as "no opinion". `RoomDetails`'s "73.00% certain this does not match"
+  reads as a claim about the room where it is only ever about the picture.
+- **[2026-09-20] A `config.json` can falsify every ranking guarantee
+  silently.** `docs/search_rules.md` states each cross-signal rule as an
+  inequality over the seven weights and `scoring.test.ts` asserts them
+  against `DEFAULTS`; `config.ts` validates each weight with `nonNegative`
+  and nothing else. `search.weights.tagExact: 0.1` loads clean and pushes no
+  note. Either check the inequalities where the config loads, the way every
+  other suspicious value is handled, or stop stating them as guarantees.
+- **[2026-09-20] A favorite sort and a search compete for the density axis.**
+  `favoriteSort` composes them as `max(searchCertainty, favorited ? 1 : 0)`,
+  so a favorited room the search scored 0 is placed identically to a perfect
+  match and distance from the center means two things at once. Also here:
+  `effectiveSortMode` reads `'random'` as `'relevance'` during a search, so
+  the center tile's switch shows lit and inert. Whether favorites should be
+  a placement input at all is a product decision, not a code one.
 - **The int8 quantisation scale is stated twice, once on each side of
   `embeddings.bin`** — `QUANT_SCALE` in `tools/embed/embed.ts` writes it,
   `EMBEDDING_SCALE` in `packages/map/ordering.ts` reads it, both 127, with no

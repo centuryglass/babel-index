@@ -974,9 +974,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setSortMode('relevance');
     clearSearch();
   }, [requestAnimation, clearSearch]);
-  // A sort change is a re-rank, not a rebuild: it swaps `order` and lets
-  // the sliding-tile animation carry the map over. Only a search may rebuild
-  // the layout, because only a search has a certainty profile to place by.
+  // A sort change swaps `order` and lets the sliding-tile animation carry the
+  // map over. Whether the layout also rebuilds depends on the mode: 'mine' and
+  // 'count' are placement inputs and carry a certainty profile of their own
+  // (`favoriteSort`, packages/map/favorites.ts), so those rebuild the same way
+  // a search does; 'relevance' and 'random' carry none and stay a pure re-rank.
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;
