@@ -296,7 +296,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     assert.equal(after.zoom, wheeled.zoom, `the flight flew on under the wheel: ${wheeled.zoom} -> ${after.zoom}`);
   });
 
-  test('a search reorders the library around wherever the camera already is', async () => {
+  test('a search reorders the library around wherever the camera already is [SR-31]', async () => {
     const { page, flightMs } = session;
     // Park at the center and record the view, because a search both zooms the
     // camera out (to give the slide a wall of rooms) and reorders the rooms.
@@ -374,7 +374,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     );
   });
 
-  test('right-clicking a room opens its card, and a chip searches for it', async () => {
+  test('right-clicking a room opens its card, and a chip searches for it [SR-07]', async () => {
     const { page, flightMs } = session;
     // The gesture is the part no unit test can reach: `picking.ts` proves what
     // is under a point, but only a browser proves that a right-click reaches it

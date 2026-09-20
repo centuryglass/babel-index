@@ -262,7 +262,7 @@ const graded = (certainty: Float32Array | null, opts: Partial<CreateLayoutOption
 /** Slots within a given radius - the measurement local density is read from. */
 const within = (L, r) => L.slots.filter((s) => s.d <= r).length;
 
-test('no certainty is the uniform map, cell for cell', () => {
+test('no certainty is the uniform map, cell for cell [SR-26] [SR-29] [SR-30]', () => {
   // The property the whole design leans on: clearing the search restores the
   // old layout exactly, so there is no second code path to keep in step.
   const uniform = graded(null);
@@ -275,7 +275,7 @@ test('no certainty is the uniform map, cell for cell', () => {
   assert.equal(graded(hunch).gradedCount, 0);
 });
 
-test('certain ranks take the cells nearest the center', () => {
+test('certain ranks take the cells nearest the center [SR-23]', () => {
   // Five exact matches, at peak density: they should land in the five nearest
   // cells there are, not the five nearest cells the hash allows.
   const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 5 ? 1 : 0));
@@ -294,7 +294,7 @@ test('certain ranks take the cells nearest the center', () => {
   assert.equal(L.gradedCount, 5);
 });
 
-test('a hard-edged match clusters, and everything after it does not', () => {
+test('a hard-edged match clusters, and everything after it does not [SR-23] [SR-29]', () => {
   // "yuiop": a handful of rooms tagged with it, and nothing else means a
   // thing. The cluster is dense; past it the map is the baseline scatter.
   const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0));
@@ -313,7 +313,7 @@ test('a hard-edged match clusters, and everything after it does not', () => {
   );
 });
 
-test('a gradual certainty spreads the packing out gradually', () => {
+test('a gradual certainty spreads the packing out gradually [SR-23] [SR-29]', () => {
   // "red": CLIP's confidence falls off smoothly, so the density should too -
   // measurably tighter than the hard-edged case at every radius past the core.
   const hard = graded(Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0)));
@@ -349,7 +349,7 @@ test('the peak is how much wallpaper survives the surest cluster', () => {
   assert.ok(half.slots[19].d < graded(null).slots[19].d, 'but still tighter than no gradient');
 });
 
-test('a sparser map makes the same search more legible, not less', () => {
+test('a sparser map makes the same search more legible, not less [SR-23]', () => {
   // The cluster is the same size whatever the ratio, so the sparser the
   // wallpaper, the more the cluster stands out against it.
   const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 10 ? 1 : 0));

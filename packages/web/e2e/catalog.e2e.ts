@@ -63,7 +63,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     }
   });
 
-  test('a search from the catalog ranks it, explains it, and marks what matched', async () => {
+  test('a search from the catalog ranks it, explains it, and marks what matched [SR-32] [SR-34] [SR-38]', async () => {
     const { page } = session;
     await openCatalog();
     try {
@@ -100,7 +100,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     }
   });
 
-  test('a slow search cannot overwrite the one that came after it', async () => {
+  test('a slow search cannot overwrite the one that came after it [SR-45]', async () => {
     const { page } = session;
     // `search` awaits the server, and two queries can be in the air at once: a
     // book on the shelf is one click, and the first request of a session pays
@@ -178,7 +178,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     }
   });
 
-  test('a search the server cannot answer says so and leaves the library alone', async () => {
+  test('a search the server cannot answer says so and leaves the library alone [SR-46]', async () => {
     const { page } = session;
     await page.route('**/api/search*', (route) => route.fulfill({ status: 500, body: 'no' }));
     await openCatalog();
@@ -402,7 +402,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     }
   });
 
-  test('an over-long query is cut to the cap instead of taking the page down', async () => {
+  test('an over-long query is cut to the cap instead of taking the page down [SR-44]', async () => {
     const { page, origin } = session;
     // Scoring is O(tokens x keywords) per room. A pasted tag list is tens of
     // millions of substring tests on the main thread, which does not degrade -

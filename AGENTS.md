@@ -62,6 +62,9 @@ npm run test:parity                # manual Canvas2D-vs-WebGL render parity; rea
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
+npm run check:requirements         # docs/search_requirements.md vs the tests' [SR-nn] tags, a required check
+npm run check:requirements -- --list              # ... and print every requirement with the tests covering it
+npm run check:requirements -- --update-baseline   # ... lower the allowed-uncovered list once a gap is closed
 npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
@@ -1007,6 +1010,18 @@ two in step - see *Testing and CI*.
 
 ### Testing and CI
 
+- **`npm run check:requirements` is a required check, run from the `lint` CI
+  job.** A test names the requirement it covers in its own name
+  (`test('... [SR-18]', ...)`), and the checker rebuilds the whole mapping
+  from `git ls-files` on every run - so `docs/search_requirements.md` names
+  no tests, nothing is kept in sync, and a renumbered requirement id would
+  break every citation at once (which is why an `SR-nn` is permanent; that
+  file's header states the rule). It fails on a tag naming a requirement
+  that does not exist, and on a requirement losing coverage the committed
+  `baseline.json` says it had. Gaining coverage never fails - it prints the
+  command that lowers the baseline. A requirement marked `_(judged)_` in the
+  document has no assertion that could fail and is counted apart from the
+  gaps rather than sitting in them forever.
 - **`npm run check:file-map` is a required check, run from the `lint` CI
   job.** It diffs `docs/file_map.md` against `git ls-files`, failing on a
   path the map lists that no longer exists or a tracked file (other than a
@@ -1088,6 +1103,29 @@ two in step - see *Testing and CI*.
   trusting one `landed()` read. Whether a control-issued `flyTo` should end
   an active rearrangement the way a pointer grab does is the open question
   recorded in `docs/pending_task_list.md`.
+
+## Tracking open work
+
+- **Open work is moving to GitHub issues, one area at a time.** An area is
+  migrated the next time it is worked in; `docs/pending_task_list.md` says
+  which have moved and which have not, and is still the destination for
+  anything in an unmigrated area. *Search* has moved and is the pilot.
+- **A found bug in a migrated area opens an issue** rather than a dated
+  entry, carrying the same content the task list asked for: what was
+  observed, how to reproduce it, and what is already ruled out. The trivial
+  same-pass fix rule is unchanged - it decides whether anything gets filed
+  at all, not where.
+- **A fact worth knowing is not a task.** It belongs in the owning module's
+  comment, or in this file, not in either tracker. See "This file is for
+  facts that cross files".
+- **`.claude/scripts/issues.mjs` compiles the issues into a local
+  directory** (`index.md` plus one file per issue) for when a file on disk
+  is cheaper to read than the API. `--fetch` uses `gh` where it exists;
+  otherwise pipe issue JSON in, which is how a session with the GitHub MCP
+  tools and no `gh` binary feeds it. The cache is generated and gitignored -
+  never edit it, and never treat it as the source of truth.
+- **A PR closing an issue says so in its description** (`Closes #NN`), which
+  is what makes merging the status update.
 
 ## Working with GitHub
 

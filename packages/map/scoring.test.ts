@@ -48,14 +48,14 @@ const indexOf = (...rooms: RoomFixture[]) =>
 
 // --- folding and tokenising -------------------------------------------------
 
-test('folding removes case and diacritics', () => {
+test('folding removes case and diacritics [SR-02]', () => {
   assert.equal(fold('  Art NOUVEAU  '), 'art nouveau');
   assert.equal(fold('rosé'), 'rose');
   assert.equal(fold('Jugendstil'), 'jugendstil');
   assert.equal(fold(null), '');
 });
 
-test('folding transliterates letters NFD cannot decompose', () => {
+test('folding transliterates letters NFD cannot decompose [SR-02]', () => {
   // ł, unlike é, is a letter in its own right rather than a base plus a
   // combining mark, so NFD leaves it untouched - any-ascii is what closes
   // the gap between "Zdzisław" and "Zdzislaw".
@@ -63,7 +63,7 @@ test('folding transliterates letters NFD cannot decompose', () => {
   assert.equal(fold('Zdzisław'), 'zdzislaw');
 });
 
-test('tokenising drops short words and stopwords', () => {
+test('tokenising drops short words and stopwords [SR-06]', () => {
   assert.deepEqual(tokenise('The Room of Wet Collodion'), ['room', 'wet', 'collodion']);
   assert.deepEqual(tokenise('a to at'), [], 'nothing survives the length floor');
   assert.deepEqual(tokenise('art', { minLength: 4 }), [], 'the floor is configurable');
@@ -135,20 +135,20 @@ test('longer query tokens carry more weight than short ones', () => {
   assert.equal(storyScore(['cartographer', 'oil'], story('An oil lamp.')), 3 / 15);
 });
 
-test('a token matches a story word by lemma, both directions', () => {
+test('a token matches a story word by lemma, both directions [SR-04]', () => {
   assert.equal(storyScore(['room'], story('The rooms are numbered.')), 1);
   assert.equal(storyScore(['survey'], story('It was surveyed once.')), 1);
   // Lemma matching is two-way: either word of the pair can come from the query.
   assert.equal(storyScore(['surveyed'], story('A survey.')), 1, 'lemmatising is two-way');
 });
 
-test('a lemma match is a word match, not a prefix match', () => {
+test('a lemma match is a word match, not a prefix match [SR-04]', () => {
   // The motivating case: "cat" must not be dragged in by "catalogue".
   assert.equal(storyScore(['cat'], story('The cats slept on the shelf.')), 1);
   assert.equal(storyScore(['cat'], story('An intricate catalogue of rooms.')), 0);
 });
 
-test('a lemma match does not collide across unrelated word families', () => {
+test('a lemma match does not collide across unrelated word families [SR-04]', () => {
   // A suffix stemmer collapses "animation" and "animal" to one stem; lemma
   // lookup keeps the families apart.
   assert.equal(storyScore(['animation'], story('A short animation played on loop.')), 1);
@@ -207,7 +207,7 @@ test('a quoted phrase matches the story only as an ordered run', () => {
   assert.equal(storyPhraseRun(s.sequence, reversed), 0, 'reversed is not the same phrase');
 });
 
-test('a phrase run must be truly consecutive, not just present', () => {
+test('a phrase run must be truly consecutive, not just present [SR-05]', () => {
   const s = story('A room, entirely walled in oak, then glass.');
   // "room" and "glass" both occur, far apart - not a phrase match.
   assert.equal(storyPhraseRun(s.sequence, ['room', 'glass'].map(lemmatise)), 0);
@@ -222,7 +222,7 @@ test('an unquoted query splits into one term per word', () => {
   assert.deepEqual(terms.map((t) => t.words), [['art'], ['nouveau'], ['oak']]);
 });
 
-test('a quoted phrase is one term, not one per word inside it', () => {
+test('a quoted phrase is one term, not one per word inside it [SR-05]', () => {
   const { terms } = parseQuery('"art nouveau" oak');
   assert.equal(terms.length, 2);
   assert.equal(terms[0].quoted, true);
@@ -260,7 +260,7 @@ test('an empty or whitespace-only query parses to no terms', () => {
 
 // --- classifying one term against a room's keywords ---------------------------
 
-test('an exact term match is exact, not a 1.0 partial', () => {
+test('an exact term match is exact, not a 1.0 partial [SR-12]', () => {
   const { terms } = parseQuery('oak');
   assert.deepEqual(classifyTagTerm(terms[0], ['oak', 'art nouveau']), { exact: true, partial: 0 });
 });
@@ -270,7 +270,7 @@ test('a partial term match is the fraction of the keyword it covers', () => {
   assert.deepEqual(classifyTagTerm(terms[0], ['art nouveau']), { exact: false, partial: 3 / 11 });
 });
 
-test('a quoted phrase is classified as one whole-phrase match, not per word', () => {
+test('a quoted phrase is classified as one whole-phrase match, not per word [SR-05]', () => {
   const { terms } = parseQuery('"art nouveau"');
   assert.deepEqual(classifyTagTerm(terms[0], ['art nouveau', 'oak']), { exact: true, partial: 0 });
 
@@ -306,7 +306,7 @@ test('a flat signal normalises to zero, not to one', () => {
   assert.deepEqual(Array.from(normaliseScores([])), []);
 });
 
-test('normalisation is what makes a narrow CLIP band comparable to a keyword', () => {
+test('normalisation is what makes a narrow CLIP band comparable to a keyword [SR-11]', () => {
   // The real shape of the problem: cosines on this corpus sit in a narrow band,
   // so before normalising, the *whole spread* of CLIP is worth less than the
   // smallest keyword partial. After, its best is worth exactly its weight.
@@ -319,7 +319,7 @@ test('normalisation is what makes a narrow CLIP band comparable to a keyword', (
 
 // --- the blend --------------------------------------------------------------
 
-test('an exact keyword match outranks the best possible CLIP score', () => {
+test('an exact keyword match outranks the best possible CLIP score [SR-10]', () => {
   // The design's headline property, and the reason the weights are what they
   // are. Room 1 is CLIP's favourite; room 0 merely has the keyword.
   const embeddings = Int8Array.from([0, 127, 127, 0]);
@@ -335,7 +335,7 @@ test('an exact keyword match outranks the best possible CLIP score', () => {
   assert.deepEqual(order, [0, 1]);
 });
 
-test('CLIP still orders everything the text signals are silent about', () => {
+test('CLIP still orders everything the text signals are silent about [SR-11]', () => {
   // Most of the corpus, for most queries. Rooms 1 and 2 have no keyword match,
   // so their relative order is CLIP's to decide.
   const embeddings = Int8Array.from([0, 0, 40, 0, 127, 0]);
@@ -351,7 +351,7 @@ test('CLIP still orders everything the text signals are silent about', () => {
   assert.deepEqual(order, [0, 2, 1], 'keyword first, then the two by CLIP');
 });
 
-test('a weak partial tag does not beat a room CLIP is certain about', () => {
+test('a weak partial tag does not beat a room CLIP is certain about [SR-12]', () => {
   // This is the difference between blending and tiering, and the reason the
   // design blends. Room 0 matches "art" against a long keyword - a small
   // fraction of it - while room 1 is CLIP's clear favourite and matches no
@@ -402,7 +402,7 @@ test('keywords outrank story text', () => {
   assert.deepEqual(order, [1, 0]);
 });
 
-test('the whole corpus is sorted, not just the matches', () => {
+test('the whole corpus is sorted, not just the matches [SR-08]', () => {
   // The property the map depends on: every room has a place in the new order,
   // so the library rearranges rather than splicing a few results to the front.
   const count = 6;
@@ -416,7 +416,7 @@ test('the whole corpus is sorted, not just the matches', () => {
   assert.deepEqual([...order].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5], 'a permutation');
 });
 
-test('rooms nothing matched keep their id order rather than shuffling', () => {
+test('rooms nothing matched keep their id order rather than shuffling [SR-15]', () => {
   const { order } = rankHybrid({
     query: 'copper',
     count: 4,
@@ -426,7 +426,7 @@ test('rooms nothing matched keep their id order rather than shuffling', () => {
   assert.deepEqual(order, [0, 1, 2, 3]);
 });
 
-test('text-only ranking works with no embeddings at all', () => {
+test('text-only ranking works with no embeddings at all [SR-21]', () => {
   const { order, signals } = rankHybrid({
     query: 'collodion',
     count: 3,
@@ -438,7 +438,7 @@ test('text-only ranking works with no embeddings at all', () => {
   assert.equal(signals.keyword, true);
 });
 
-test('CLIP-only ranking works with no metadata at all', () => {
+test('CLIP-only ranking works with no metadata at all [SR-21]', () => {
   const { order, signals } = rankHybrid({
     query: 'anything',
     count: 2,
@@ -453,7 +453,7 @@ test('CLIP-only ranking works with no metadata at all', () => {
   assert.equal(signals.keyword, false);
 });
 
-test('signals report what matched, not what was available', () => {
+test('signals report what matched, not what was available [SR-01] [SR-21]', () => {
   // A corpus full of keywords that this query missed must not be reported as a
   // keyword-driven ranking.
   const { signals } = rankHybrid({
@@ -476,7 +476,7 @@ test('a zero weight silences a signal without removing it', () => {
   assert.deepEqual(order, [1, 0], 'story decides once tags are switched off');
 });
 
-test('rooms without metadata are ranked, not dropped', () => {
+test('rooms without metadata are ranked, not dropped [SR-08]', () => {
   const { order } = rankHybrid({
     query: 'oak',
     count: 3,
@@ -498,7 +498,7 @@ test('an empty index behaves like no index', () => {
 // silently reordering results (docs/search_rules.md "Balancing signals
 // against each other").
 
-test('E clears the combined ceiling of every other non-exact signal', () => {
+test('E clears the combined ceiling of every other non-exact signal [SR-10]', () => {
   const { tagExact, tagPartial, titlePartial, story, storyLong, clip } = WEIGHTS;
   assert.ok(
     tagExact > tagPartial + titlePartial + story + storyLong + clip,
@@ -506,7 +506,7 @@ test('E clears the combined ceiling of every other non-exact signal', () => {
   );
 });
 
-test('T (an exact title match) clears the same ceiling, and clears E slightly', () => {
+test('T (an exact title match) clears the same ceiling, and clears E slightly [SR-10]', () => {
   const { tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip } = WEIGHTS;
   assert.ok(
     titleExact > tagPartial + titlePartial + story + storyLong + clip,
@@ -574,7 +574,7 @@ test('a reasonably certain CLIP match (gate >= 0.5) clears the partial-tag budge
   assert.ok(WEIGHTS.clip * 0.5 >= WEIGHTS.tagPartial);
 });
 
-test('more exact tag matches always beat fewer', () => {
+test('more exact tag matches always beat fewer [SR-13]', () => {
   const { order } = rankHybrid({
     query: 'alien impasto',
     count: 2,
@@ -584,7 +584,7 @@ test('more exact tag matches always beat fewer', () => {
   assert.deepEqual(order, [1, 0], 'both tags beat one');
 });
 
-test('more partial tag matches beat fewer, for the same number of exact matches', () => {
+test('more partial tag matches beat fewer, for the same number of exact matches [SR-13]', () => {
   const { order } = rankHybrid({
     query: 'art deco moderne',
     count: 2,
@@ -606,7 +606,7 @@ test('a quoted phrase credits one match, not one per word it contains', () => {
   assert.deepEqual(classifyTagTerm(phraseTerm, splitRoom.keywords), { exact: false, partial: 0 });
 });
 
-test('a long contiguous story match outranks CLIP and a maxed partial tag together', () => {
+test('a long contiguous story match outranks CLIP and a maxed partial tag together [SR-10]', () => {
   // A whole matched clause outranks a room that is at once CLIP's top,
   // fully-confident pick and a maxed-out partial tag match - the property L's
   // margin (L > clip + tagPartial + titlePartial) exists to guarantee. The
@@ -693,7 +693,7 @@ test('a single matched story word sits at the moderate STORY_FLOOR, a full claus
   assert.equal(matchCertainty({ storyMatched: false, storyLongChars: 0 }), 0);
 });
 
-test('CLIP certainty is read off the raw cosine, against the three-anchor band', () => {
+test('CLIP certainty is read off the raw cosine, against the three-anchor band [SR-16] [SR-19]', () => {
   const { centre, high, low } = CLIP_CERTAINTY;
   assert.equal(matchCertainty({ cosine: centre }), 0, 'at the no-opinion centre it says nothing');
   assert.equal(matchCertainty({ cosine: high + 0.05 }), 1, 'above the high extreme, as sure as it gets');
@@ -704,7 +704,7 @@ test('CLIP certainty is read off the raw cosine, against the three-anchor band',
   assert.ok(Math.abs(negMid + 0.5) < 1e-6, `halfway to the low extreme is ${negMid}`);
 });
 
-test('signedClipCertainty is a monotone signed curve across all three anchors', () => {
+test('signedClipCertainty is a monotone signed curve across all three anchors [SR-16]', () => {
   const { centre, high, low } = CLIP_CERTAINTY;
   assert.equal(signedClipCertainty(centre), 0, 'the no-opinion centre');
   assert.equal(signedClipCertainty(high + 1), 1, 'saturates at the high extreme');
@@ -714,7 +714,7 @@ test('signedClipCertainty is a monotone signed curve across all three anchors', 
   assert.ok(signedClipCertainty((centre + low) / 2) < 0, 'below centre reads negative');
 });
 
-test('a query nothing matches clusters nothing, and does not even decide the order', () => {
+test('a query nothing matches clusters nothing, and does not even decide the order [SR-19]', () => {
   // The case the whole absolute reading exists for. Min-max normalisation
   // gives *some* room a score of 1 for any query, so relative CLIP alone
   // cannot tell "cghjj" from "art nouveau", and a gradient driven by it
@@ -746,7 +746,7 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
   assert.deepEqual(order, [0, 1, 2], 'no signal cleared the gate, so nothing decided the order');
 });
 
-test('a cosine that clears the gate still leads once some of the corpus does not', () => {
+test('a cosine that clears the gate still leads once some of the corpus does not [SR-11]', () => {
   // The gate is continuous, not all-or-nothing across a corpus - once at
   // least one room clears it, the relative CLIP term differentiates the rest
   // exactly as before.
@@ -762,7 +762,7 @@ test('a cosine that clears the gate still leads once some of the corpus does not
   assert.equal(order[0], 0, 'the room that actually cleared the gate still leads');
 });
 
-test('a strong cosine is certain on its own', () => {
+test('a strong cosine is certain on its own [SR-16]', () => {
   // "red", against rooms planted past the high anchor, halfway to it, and at
   // the no-opinion centre: certainty falls off gradually with the cosine,
   // which is what makes the density falloff gradual. `atCosines` round-trips
@@ -867,7 +867,7 @@ test('foldWithMap agrees with fold, and maps every folded unit to its source', (
   }
 });
 
-test('a range lands on the original text even when folding changed its length', () => {
+test('a range lands on the original text even when folding changed its length [SR-34]', () => {
   // Decomposed: five UTF-16 units for four folded ones. A folded index used as
   // a source index would slice one character short of the accent.
   const story = 'the cafe\u0301 was surveyed';
@@ -875,7 +875,7 @@ test('a range lands on the original text even when folding changed its length', 
   assert.deepEqual(marked(story, storyMatchRanges(story, ['cafe'])), ['cafe\u0301']);
 });
 
-test('a story marks the whole matched word, by lemma, and only real tokens', () => {
+test('a story marks the whole matched word, by lemma, and only real tokens [SR-34]', () => {
   // `with` is the only place `wit` occurs, and `with` is a stopword.
   const story = 'They surveyed the room with care.';
 
@@ -893,7 +893,7 @@ test('a story marks the whole matched word, by lemma, and only real tokens', () 
   assert.deepEqual(marked(story, storyMatchRanges(story, ['survey', 'surveyed'])), ['surveyed']);
 });
 
-test('a keyword marks by substring, where a story would have needed a lemma', () => {
+test('a keyword marks by substring, where a story would have needed a lemma [SR-34]', () => {
   // `nouveau` is neither the lemma nor the start of `art nouveau`, but
   // keywordScore matches it by substring - so it must mark, and the story rule
   // must not be used here. The asymmetry between the two is the point.
@@ -907,7 +907,7 @@ test('a keyword marks by substring, where a story would have needed a lemma', ()
   );
 });
 
-test('anything marked scored, and anything that scored is marked', () => {
+test('anything marked scored, and anything that scored is marked [SR-35]', () => {
   const keywords = ['art nouveau', 'gilt', 'oak panelling'];
   const story = 'A surveyed hall of gilded oak, catalogued by an unnamed cartographer.';
   // Built by `buildSearchIndex`, not by hand: the index is lemmatised, and a
@@ -950,7 +950,7 @@ test('rankHybrid reports the components it sorted on, by rank', () => {
   for (const arr of Object.values(breakdown)) assert.equal(arr.length, 3);
 });
 
-test('ranks/ties are independent per-signal sorts, parallel to order like breakdown', () => {
+test('ranks/ties are independent per-signal sorts, parallel to order like breakdown [SR-33]', () => {
   // Room 0: a weak partial tag hit, nothing else. Room 1: no text at all, but
   // the corpus's strongest CLIP cosine (weights.clip's full value clears
   // weights.tagPartial's ceiling outright, whatever the partial fraction is) -
@@ -982,7 +982,7 @@ test('ranks/ties are independent per-signal sorts, parallel to order like breakd
   assert.equal(tiesOfRoom('tag', 2), 1);
 });
 
-test('a tie on one axis is reported as tied, even when the composite score is not', () => {
+test('a tie on one axis is reported as tied, even when the composite score is not [SR-33]', () => {
   // Same tag signal (one exact match each), different CLIP cosines - so the
   // composite order separates them, but the tag axis must call it a tie.
   const { order, ranks, ties } = rankHybrid({
@@ -1012,7 +1012,7 @@ test('a tie on one axis is reported as tied, even when the composite score is no
   assert.equal(rankOfRoom('clip', 2), 3, 'lowest cosine (-0.5)');
 });
 
-test('explainRanking omits an axis that found nothing, and returns null when nothing at all did', () => {
+test('explainRanking omits an axis that found nothing, and returns null when nothing at all did [SR-32]', () => {
   const { breakdown, certainty, ranks, ties } = rankHybrid({
     query: 'oak',
     count: 2,
@@ -1049,7 +1049,7 @@ test('explainRanking reports an exact vs. a partial title match', () => {
   assert.ok(partial.title.partial > 0 && partial.title.partial < 1);
 });
 
-test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosine underneath it', () => {
+test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosine underneath it [SR-32] [SR-36]', () => {
   // Every cosine is below `CLIP_CERTAINTY.low`: CLIP reads all of these as a
   // confident mismatch, not merely "no opinion". Min-maxing still puts the
   // best of them at 1.00 (`breakdown.clip`), which is the trap - a line

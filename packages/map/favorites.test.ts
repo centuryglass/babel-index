@@ -78,13 +78,13 @@ test('favoriteSort in relevance mode passes certainty through by identity', () =
   assert.equal(result.certainty, certainty);
 });
 
-test('favoriteSort in relevance mode with no search returns null certainty', () => {
+test('favoriteSort in relevance mode with no search returns null certainty [SR-26]', () => {
   const base = [3, 1, 0, 2];
   const result = favoriteSort(base, { mode: 'relevance', files, counts: {}, mine: new Set() });
   assert.equal(result.certainty, null);
 });
 
-test('favoriteSort with no search boosts favorites to 1 and leaves the rest at 0', () => {
+test('favoriteSort with no search boosts favorites to 1 and leaves the rest at 0 [SR-28]', () => {
   const base = [3, 1, 0, 2];
   const result = favoriteSort(base, {
     mode: 'mine',
