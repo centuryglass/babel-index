@@ -75,6 +75,10 @@ for that audience specifically, not things the art itself needs:
   `FavoriteStore` rather than a lock on the file.
 
 ## Search:
+- **[2026-09-20] What search is for is stated in
+  [`docs/search_requirements.md`](search_requirements.md)** - 49 numbered
+  requirements, maintainer-set, no mechanism named. It is what the entries
+  below are measured against, and a change to it is a change of intent.
 - **[2026-09-20] A full critique of the search system lives in
   [`docs/search_critique.md`](search_critique.md).** It is the reasoning
   behind the six entries below, with reproductions and measured numbers
@@ -133,8 +137,12 @@ for that audience specifically, not things the art itself needs:
   so a favorited room the search scored 0 is placed identically to a perfect
   match and distance from the center means two things at once. Also here:
   `effectiveSortMode` reads `'random'` as `'relevance'` during a search, so
-  the center tile's switch shows lit and inert. Whether favorites should be
-  a placement input at all is a product decision, not a code one.
+  the center tile's switch shows lit and inert. **Decided [2026-09-20]: the
+  two are mutually exclusive, and starting either ends the other**
+  (`docs/search_requirements.md`, 41). `favoriteSort` collapses back into
+  `favoriteOrder`, a favorite sort stops carrying a certainty profile, and
+  every sort switch reads unavailable while a search runs rather than lit and
+  inert.
 - **The int8 quantisation scale is stated twice, once on each side of
   `embeddings.bin`** — `QUANT_SCALE` in `tools/embed/embed.ts` writes it,
   `EMBEDDING_SCALE` in `packages/map/ordering.ts` reads it, both 127, with no

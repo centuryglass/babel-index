@@ -595,6 +595,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           (`packages/map/scoring.ts`); update this file
                           alongside a scoring change rather than letting it
                           drift back into a target/code gap.
+- `docs/search_requirements.md`: What search has to accomplish for a reader,
+                                as numbered requirements. The target the
+                                other two search docs answer to: no formula,
+                                no weight, no data structure. Maintainer-set,
+                                so a change here is a change of intent rather
+                                than a correction.
 - `docs/search_critique.md`: A review of the search system as built - what
                             works, where ranking and certainty disagree, and
                             an ordered set of recommendations. Analysis, not

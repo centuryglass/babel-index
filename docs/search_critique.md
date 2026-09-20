@@ -11,6 +11,11 @@ they buy against what they cost, and several of them are decisions to make
 rather than fixes to apply. `docs/pending_task_list.md` carries the entries
 that came out of it.
 
+What search is *for* is stated separately, in
+[`docs/search_requirements.md`](search_requirements.md). Where a finding
+below names a requirement broken rather than a mechanism disliked, that file
+is the one it is measured against.
+
 Every number below was measured against `assets/corpus-sample/`
 (26 rooms, text signals only - the CLIP text tower is an optional install
 and was not present).
@@ -346,8 +351,18 @@ holding it today.
 
 ### R6. Take favorites off the density axis
 
-Recommendation: `favoriteSort` collapses back into `favoriteOrder`, and a
-favorite sort stops producing a certainty profile.
+**Decided: a search and a favorite sort are mutually exclusive.** Starting
+either one ends the other (`docs/search_requirements.md`, 41). The reported
+failure was a reader's own: results that did not match expectations because a
+favorite sort had been left on and forgotten. The two combinations are also
+not worth preserving - a search narrowed to the reader's own favorites
+organises a set small enough to read by hand, and a search crossed with
+global counts combines two unrelated orderings once real favoriting exists.
+Requirements 24-28 follow from the same decision: the axis carries one
+meaning at a time, and which one is showing has to be visible.
+
+What that leaves for the code: `favoriteSort` collapses back into
+`favoriteOrder`, and a favorite sort stops producing a certainty profile.
 
 Distance from the center means match strength, and nothing else. A favorite
 sort still reorders - favorites arrive first, in whatever order the search
@@ -358,12 +373,14 @@ re-rank, never a rebuild" becomes true as `main.tsx` already claims, and the
 question of what a favorite sort means during a search stops needing an
 answer because the two no longer share a channel.
 
-If favorites must stay a placement input, then the alternative is to give
-them a *separate* channel - a ring, a tint, a distinct badge state - rather
-than borrowing the one that already means something else.
+Mutual exclusivity makes the question of what a favorite sort means during a
+search stop needing an answer, and makes "a re-sort is a re-rank, never a
+rebuild" true as `main.tsx` already claims. Favorites keep their own visual
+channel on the map: the badge.
 
-Separately: make the `'random'` switch visibly unavailable during a search
-rather than lit and inert.
+Separately, and now under the same rule: make the `'random'` switch, and both
+favorite switches, visibly unavailable during a search rather than lit and
+inert.
 
 ### R7. Check the weight inequalities where the weights are loaded
 
@@ -375,7 +392,9 @@ specification being a guarantee and being a comment about the defaults.
 
 ### R8. Split the documentation by audience
 
-Three documents out of one, each with a single job:
+`docs/search_requirements.md` now sits above all of these and states what
+search is for. Three documents out of the remaining one, each with a single
+job:
 
 - **`docs/search.md`, short.** What a reader experiences: the four signals,
   what the map is showing them, what quoting does, what the numbers on a
@@ -395,10 +414,10 @@ deleted rather than rewritten - the distinction it explains stops existing.
 
 R1 and R7 are independent and small. R2 and R3 together fix the findings a
 reader actually hits, without restructuring anything. R4 is the one that
-makes the system explainable, and R5 follows from it. R6 is a product
-decision the code cannot make. R8 is worth doing last, when there is a
-settled design to describe - documenting the current one again would repeat
-the mistake this file is about.
+makes the system explainable, and R5 follows from it. R6's product decision
+is made, so it is now implementation work like the rest. R8 is worth doing
+last, when there is a settled design to describe - documenting the current
+one again would repeat the mistake this file is about.
 
 ## Changes made in this pass
 
