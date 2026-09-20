@@ -276,7 +276,7 @@ const TEXT_MIN = TEXT_CHROME_PX + CHIP_LINES_MAX_NARROW * CHIP_LINE_PX + STORY_L
  * under the image rather than crossing it, and it always gets the card's
  * full width - no inset stealing room from the columns.
  *
- * It is a full-width "match certainty" composite line plus up to
+ * It is a full-width "match strength" composite line plus up to
  * `SCORE_DETAIL_LINES` per-axis detail lines (tag, title, story, clip).
  * Those flow into columns that are content-sized and left-aligned (not
  * stretched to fill), and once the row is wide enough to give every detail
@@ -306,7 +306,7 @@ const SCORE_GAP_PX = 22;
  * possible line.
  */
 const SCORE_DETAIL_COL_PX = 200;
-/** About how wide the composite "match certainty" line is - its own column in the one-row layout. */
+/** About how wide the composite "match strength" line is - its own column in the one-row layout. */
 const SCORE_COMPOSITE_PX = 225;
 /**
  * The score strip's column layout for a given strip width: how many columns the

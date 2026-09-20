@@ -61,7 +61,7 @@ import {
   ZOOM_LIMITS,
   ZOOM_STEP_FACTOR,
 } from '../web/src/lib/camera.ts';
-import { CERTAINTY_FLOOR } from '../map/ordering.ts';
+import { STRENGTH_FLOOR } from '../map/ordering.ts';
 import { CLIP_CERTAINTY } from '../map/scoring.ts';
 
 export interface ZoomLimits {
@@ -519,7 +519,7 @@ export const DEFAULTS: Defaults = {
     clipTextDtype: 'fp32',
 
     /**
-     * How a search's certainty becomes map density - see the gradient section of
+     * How a search's strength becomes map density - see the gradient section of
      * `packages/map/ordering.ts`. `map.contentRatio` is the baseline these numbers
      * lift the middle of the map away from.
      */
@@ -533,13 +533,13 @@ export const DEFAULTS: Defaults = {
       peak: 1,
 
       /**
-       * Certainty under this clusters nothing at all. `CERTAINTY_FLOOR`
+       * Strength under this clusters nothing at all. `STRENGTH_FLOOR`
        * (`packages/map/ordering.ts`) is where the reasoning is written down.
        */
-      floor: CERTAINTY_FLOOR,
+      floor: STRENGTH_FLOOR,
 
       /**
-       * The three anchors of CLIP's signed certainty curve: `clipCentre` is the
+       * The three anchors of CLIP's signed strength curve: `clipCentre` is the
        * no-opinion point (0), `clipHigh` a genuine match's typical confidence
        * (+1), `clipLow` a genuinely irrelevant query's (-1). The one part of the
        * gradient that is a measurement rather than a preference - `CLIP_CERTAINTY`
@@ -772,7 +772,7 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
  * treats the baseline as a floor anyway - a gradient may add density, never
  * remove it - so the worst such a config can do is switch the effect off. An
  * inverted cosine band gets a note and falls back: `clipHigh <= clipLow` means
- * CLIP contributes no certainty at all, which from the map looks like a corpus
+ * CLIP contributes no strength at all, which from the map looks like a corpus
  * with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {

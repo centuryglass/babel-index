@@ -248,21 +248,21 @@ test('growing the corpus still keeps existing slots, at any cell shape', () => {
 
 // --- the search density gradient -------------------------------------------
 
-/** A layout with a certainty profile, holding everything else steady. */
-const graded = (certainty: Float32Array | null, opts: Partial<CreateLayoutOptions> = {}) =>
+/** A layout with a strength profile, holding everything else steady. */
+const graded = (strength: Float32Array | null, opts: Partial<CreateLayoutOptions> = {}) =>
   createLayout({
     roomCount: 200,
     contentRatio: 0.1,
     seed: 17,
     aspect: ASPECT,
     ...opts,
-    density: certainty ? { certainty, ...(opts.density ?? {}) } : null,
+    density: strength ? { strength, ...(opts.density ?? {}) } : null,
   });
 
 /** Slots within a given radius - the measurement local density is read from. */
 const within = (L, r) => L.slots.filter((s) => s.d <= r).length;
 
-test('no certainty is the uniform map, cell for cell [SR-26] [SR-29] [SR-30]', () => {
+test('no strength is the uniform map, cell for cell [SR-26] [SR-29] [SR-30]', () => {
   // The property the whole design leans on: clearing the search restores the
   // old layout exactly, so there is no second code path to keep in step.
   const uniform = graded(null);
@@ -278,8 +278,8 @@ test('no certainty is the uniform map, cell for cell [SR-26] [SR-29] [SR-30]', (
 test('certain ranks take the cells nearest the center [SR-23]', () => {
   // Five exact matches, at peak density: they should land in the five nearest
   // cells there are, not the five nearest cells the hash allows.
-  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 5 ? 1 : 0));
-  const L = graded(certainty, { aspect: 1 });
+  const strength = Float32Array.from({ length: 200 }, (_, i) => (i < 5 ? 1 : 0));
+  const L = graded(strength, { aspect: 1 });
 
   const nearest = [];
   for (let y = -3; y <= 3; y++)
@@ -297,8 +297,8 @@ test('certain ranks take the cells nearest the center [SR-23]', () => {
 test('a hard-edged match clusters, and everything after it does not [SR-23] [SR-29]', () => {
   // "yuiop": a handful of rooms tagged with it, and nothing else means a
   // thing. The cluster is dense; past it the map is the baseline scatter.
-  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0));
-  const L = graded(certainty);
+  const strength = Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0));
+  const L = graded(strength);
   const uniform = graded(null);
 
   const core = L.slots[7].d;
@@ -313,7 +313,7 @@ test('a hard-edged match clusters, and everything after it does not [SR-23] [SR-
   );
 });
 
-test('a gradual certainty spreads the packing out gradually [SR-23] [SR-29]', () => {
+test('a gradual strength spreads the packing out gradually [SR-23] [SR-29]', () => {
   // "red": CLIP's confidence falls off smoothly, so the density should too -
   // measurably tighter than the hard-edged case at every radius past the core.
   const hard = graded(Float32Array.from({ length: 200 }, (_, i) => (i < 8 ? 1 : 0)));
@@ -333,7 +333,7 @@ test('a gradual certainty spreads the packing out gradually [SR-23] [SR-29]', ()
   assert.ok(hard.boundaryRadius <= uniform.boundaryRadius);
 });
 
-test('certainty cannot rise with rank', () => {
+test('strength cannot rise with rank', () => {
   // The ordering claims to be best-first, so a rank more certain than the one
   // above it is a contradiction; the running minimum is which to believe.
   const rising = Float32Array.from([1, 0.2, 0.9, 0.9, 0.9, ...new Array(195).fill(0)]);
@@ -342,9 +342,9 @@ test('certainty cannot rise with rank', () => {
 });
 
 test('the peak is how much wallpaper survives the surest cluster', () => {
-  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 20 ? 1 : 0));
-  const full = graded(certainty, { density: { peak: 1 } });
-  const half = graded(certainty, { density: { peak: 0.5 } });
+  const strength = Float32Array.from({ length: 200 }, (_, i) => (i < 20 ? 1 : 0));
+  const full = graded(strength, { density: { peak: 1 } });
+  const half = graded(strength, { density: { peak: 0.5 } });
   assert.ok(full.slots[19].d < half.slots[19].d, 'a lower peak packs the same rooms less tightly');
   assert.ok(half.slots[19].d < graded(null).slots[19].d, 'but still tighter than no gradient');
 });
@@ -352,8 +352,8 @@ test('the peak is how much wallpaper survives the surest cluster', () => {
 test('a sparser map makes the same search more legible, not less [SR-23]', () => {
   // The cluster is the same size whatever the ratio, so the sparser the
   // wallpaper, the more the cluster stands out against it.
-  const certainty = Float32Array.from({ length: 200 }, (_, i) => (i < 10 ? 1 : 0));
-  const radii = [0.05, 0.2, 0.6].map((contentRatio) => graded(certainty, { contentRatio }).slots[9].d);
+  const strength = Float32Array.from({ length: 200 }, (_, i) => (i < 10 ? 1 : 0));
+  const radii = [0.05, 0.2, 0.6].map((contentRatio) => graded(strength, { contentRatio }).slots[9].d);
   for (let i = 1; i < radii.length; i++)
     assert.ok(Math.abs(radii[i] - radii[0]) < 1e-9, `cluster moved with the ratio: ${radii}`);
 });
@@ -362,9 +362,9 @@ test('growing the corpus still keeps existing slots under a gradient', () => {
   // The slider property, re-checked with a profile in play: acceptance for a
   // rank depends only on that rank and the cells before it, so a longer corpus
   // extends the walk rather than redoing it.
-  const certainty = Float32Array.from({ length: 400 }, (_, i) => Math.exp(-i / 40));
-  const small = graded(certainty.slice(0, 100), { roomCount: 100 });
-  const large = graded(certainty, { roomCount: 400 });
+  const strength = Float32Array.from({ length: 400 }, (_, i) => Math.exp(-i / 40));
+  const small = graded(strength.slice(0, 100), { roomCount: 100 });
+  const large = graded(strength, { roomCount: 400 });
   assert.deepEqual(large.slots.slice(0, 100), small.slots);
 });
 
@@ -383,15 +383,15 @@ test('the pruned sweep places rooms exactly where an unpruned walk would', () =>
     const seed = Math.floor(rand() * 50);
     const peak = [1, 0.9, 0.4][Math.floor(rand() * 3)];
     const shape = Math.floor(rand() * 4);
-    const certainty = Float32Array.from({ length: roomCount }, (_, i) =>
+    const strength = Float32Array.from({ length: roomCount }, (_, i) =>
       shape === 0 ? (i < 3 ? 1 : 0)
       : shape === 1 ? Math.exp(-i / (2 + rand() * 30))
       : shape === 2 ? rand()
       : Math.max(0, 1 - i / roomCount)
     );
     const opts = { roomCount, contentRatio, seed, aspect };
-    const got = createLayout({ ...opts, density: { certainty, peak } }).slots;
-    const want = unprunedWalk({ ...opts, certainty, peak });
+    const got = createLayout({ ...opts, density: { strength, peak } }).slots;
+    const want = unprunedWalk({ ...opts, strength, peak });
     assert.deepEqual(
       got.map((s) => `${s.x},${s.y}`),
       want,
@@ -405,11 +405,11 @@ test('the pruned sweep places rooms exactly where an unpruned walk would', () =>
  * rank being placed at that rank's own threshold. The definition the optimised
  * sweep has to agree with, written the slow obvious way.
  */
-function unprunedWalk({ roomCount, contentRatio, seed, aspect, certainty, peak, floor = 0.05 }) {
+function unprunedWalk({ roomCount, contentRatio, seed, aspect, strength, peak, floor = 0.05 }) {
   const ramp = [];
   let cap = 1;
   for (let i = 0; i < roomCount; i++) {
-    cap = Math.min(cap, Math.max(0, Math.min(1, certainty[i])));
+    cap = Math.min(cap, Math.max(0, Math.min(1, strength[i])));
     ramp.push(cap < floor ? contentRatio : contentRatio + (Math.max(peak, contentRatio) - contentRatio) * cap);
   }
 

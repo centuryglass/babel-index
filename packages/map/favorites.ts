@@ -10,14 +10,14 @@
  * term, sort by favorites, and the favorited rooms arrive in the order that
  * search put them in.
  *
- * An active favorite sort is also a certainty signal, the way a search is.
+ * An active favorite sort is also a strength signal, the way a search is.
  * `favoriteSort` folds it in: every room the sort lifts to the front gets
- * certainty 1, composed with (not replacing) whatever certainty a running
+ * strength 1, composed with (not replacing) whatever strength a running
  * search already gave it. `'mine'` with no search is a tight cluster of the
  * reader's favorites against the center at baseline everywhere else; with a
  * search it enriches the search's own cluster. A relevance re-sort, the
  * shuffle button, and `'random'` are not placement inputs and pass a
- * search's certainty through untouched.
+ * search's strength through untouched.
  *
  * ### Sorting to the front, not filtering
  *
@@ -90,57 +90,57 @@ export function favoriteOrder(base: number[], input: FavoriteSortInput): number[
 }
 
 /**
- * A search's own ranking and certainty - the `order`/`certainty` pair
+ * A search's own ranking and strength - the `order`/`strength` pair
  * `useSearch`'s `result` carries, narrowed to the two fields a favorite
  * boost folds into.
  */
-export interface SearchCertainty {
+export interface SearchStrength {
   /** room ids, best first - the search's own order, before blocking/favorites */
   order: number[];
   /** per rank of `order`, in [0, 1] */
-  certainty: ArrayLike<number>;
+  strength: ArrayLike<number>;
 }
 
 export interface FavoriteSortResult {
   order: number[];
   /** per rank, aligned to `order`; null when nothing drives density */
-  certainty: Float32Array | null;
+  strength: Float32Array | null;
 }
 
 /**
- * `favoriteOrder` plus the certainty profile an active sort drives - see the
+ * `favoriteOrder` plus the strength profile an active sort drives - see the
  * preamble.
  *
- * `search` carries the running search's own order/certainty pair, aligned to
+ * `search` carries the running search's own order/strength pair, aligned to
  * each other and not to `base` (which may already be filtered for blocked
- * tags), so this module does the id -> certainty crossing itself, the way
+ * tags), so this module does the id -> strength crossing itself, the way
  * `liftKey` crosses id -> filename.
  */
 export function favoriteSort(
   base: number[],
   input: FavoriteSortInput,
-  search: SearchCertainty | null = null
+  search: SearchStrength | null = null
 ): FavoriteSortResult {
   const order = favoriteOrder(base, input);
 
   if (input.mode === 'relevance' || input.mode === 'random') {
-    // Certainty passes through with the same array identity `favoriteOrder`
+    // Strength passes through with the same array identity `favoriteOrder`
     // keeps for `'relevance'`, so a caller memoising on identity sees no
     // change. `'random'` shares the branch because a shuffle carries no
     // confidence claim - see the preamble.
-    return { order, certainty: (search?.certainty as Float32Array | undefined) ?? null };
+    return { order, strength: (search?.strength as Float32Array | undefined) ?? null };
   }
 
   const byRoom = new Map<number, number>();
-  if (search) search.order.forEach((id, i) => byRoom.set(id, Number(search.certainty[i])));
+  if (search) search.order.forEach((id, i) => byRoom.set(id, Number(search.strength[i])));
 
   const key = liftKey(input);
-  const certainty = new Float32Array(order.length);
+  const strength = new Float32Array(order.length);
   for (let i = 0; i < order.length; i++) {
     const id = order[i];
-    certainty[i] = Math.max(byRoom.get(id) ?? 0, key(id) > 0 ? 1 : 0);
+    strength[i] = Math.max(byRoom.get(id) ?? 0, key(id) > 0 ? 1 : 0);
   }
-  return { order, certainty };
+  return { order, strength };
 }
 
 /** The per-room sort key `favoriteOrder` sorts by and `favoriteSort` lifts on. */

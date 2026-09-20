@@ -16,10 +16,10 @@ with style keywords used for generation and a brief story text based on the
 image and keywords.
 
 Tiles can be searched, with CLIP embeddings, keyword matching, and story
-matching used to calculate ranking and match certainty for all tiles. A set of
+matching used to calculate ranking and match strength for all tiles. A set of
 generic "default" tiles are mixed in with the unique ones, with their
 distribution adjusted during searches so they serve as a way to visibly gauge
-search certainty. Diegetic controls for the search interface are embedded into
+search strength. Diegetic controls for the search interface are embedded into
 the center tile, placed using geometry calculated from a reference SVG.
 
 An alternate catalog interface can be used to maximize discoverability. This
@@ -326,7 +326,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   favorite sort first - a reorder that left one of them in place would
   rescatter everything except the thing already pinning the layout.
   A search, or an active favorite sort (`'mine'`/`'count'`), may also rebuild
-  the layout: both are placement inputs (the certainty claim each makes is
+  the layout: both are placement inputs (the strength claim each makes is
   under *Favorites*). `favoriteSort` (`packages/map/favorites.ts`) composes
   the two rather than letting one override the other. That rebuild is the
   same O(slots) the ratio slider does on every drag. Nothing else recomputes
@@ -469,17 +469,25 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   signal is normalised to [0, 1] before weighting, and the CLIP term is
   min-maxed across the corpus for that query - bucketing keyword hits ahead of
   everything would let one weak partial beat a room CLIP is certain about.
+- **A query is matched term by term AND as one whole string, and the better
+  reading wins.** `rankHybrid` classifies each term against a room's keywords
+  and title, then classifies the whole folded query the same way, so a
+  multi-word tag typed plainly (`outsider art`) is an exact match without the
+  reader quoting it - which matters because a keyword chip searches its text
+  unquoted and nearly half a real corpus's keywords are multi-word. An exact
+  whole-query match counts as one exact match, never more, so two separate
+  exact tags still outrank one matched phrase.
 - **Keyword partials divide by the keyword; story matches divide by the query.**
   Opposite on purpose - `art` matched only 3/11 of `art nouveau`, but a hit in a
   long story isn't worth less than the same hit in a short one.
 - **The density gradient is one formula** (`contentRatio + (peak - contentRatio)
-  * certainty`, walking outward), not three special cases for cluster/falloff/
-  no-match. Certainty must stay non-increasing with rank, and anything under
-  `CERTAINTY_FLOOR` snaps to the baseline - both asserted.
-- **Certainty is absolute; ranking is relative. Don't feed one the other's
+  * strength`, walking outward), not three special cases for cluster/falloff/
+  no-match. Strength must stay non-increasing with rank, and anything under
+  `STRENGTH_FLOOR` snaps to the baseline - both asserted.
+- **Strength is absolute; ranking is relative. Don't feed one the other's
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
   for *any* query - driving the gradient off that clusters nonsense as
-  confidently as an exact match. `matchCertainty` reads raw cosines against
+  confidently as an exact match. `matchStrength` reads raw cosines against
   absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.** The
   blob is positional (`scan.ts` rejects a drifted count); the sidecar is
@@ -549,7 +557,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   path, animation included) and must never rebuild the layout. An active
   favorite sort (`'mine'`/`'count'`) is the exception - it is a placement
   input, exactly as a search is, because "sorted to the front" is itself a
-  certainty claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
+  strength claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
   catalog row is a fixed height, so the row's favorite control sits beside
   "show on the map" rather than inside `RoomDetails` where the card and the
   overlay put it; in the text column it would have to be reserved for in
@@ -880,7 +888,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   score breakdown uses a `strip` layout rather than the card's taller
   `table`. A row is two stacked pieces, a fixed-height flow area
   (`--catalog-flow-h`) and the score strip below it (`scoreStripHeight`),
-  so match certainty can never get pushed off the card; the center room's
+  so match strength can never get pushed off the card; the center room's
   row is the one exception, sized to its own content since it sits outside
   the paging arithmetic. `catalog.ts`, `CatalogView.tsx` and `style.css`'s
   `.catalog-flow`/`.score-strip` comments carry the layout mechanics.
@@ -935,7 +943,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
 - **`rankHybrid` returns the components it sorted on, and the CLIP row must show
   its raw cosine.** `breakdown.clip` is min-maxed for the query, so some room
   scores 1.00 for `cghjj` too. `explainRanking` keeps the raw cosine beside it and
-  certainty on its own line; printing the relative number alone claims a
+  strength on its own line; printing the relative number alone claims a
   confidence the library does not have. Asserted.
 - **Namespace catalog CSS.** `.row` already belongs to the dev panel, so an
   unprefixed `.row` rule for catalog rows reaches in and turns every slider

@@ -58,7 +58,7 @@ export interface Term {
 export interface ParsedQuery {
   /** the query exactly as typed */
   raw: string;
-  /** fold(raw) - the whole query, used for `keywordScore`'s whole-query-against-one-keyword reading */
+  /** fold(raw) - the whole query, which `rankHybrid` classifies as one term against a whole keyword */
   folded: string;
   terms: Term[];
 }
@@ -91,9 +91,9 @@ export interface ScoreBreakdown {
   storyLongChars: Float32Array;
   /** `clipNorm` - min-max normalised across the corpus for this query */
   clip: Float32Array;
-  /** the positive half of the signed CLIP certainty curve, in [0, 1] */
+  /** the positive half of the signed CLIP strength curve, in [0, 1] */
   clipCertaintyGate: Float32Array;
-  /** the full signed CLIP certainty curve, in [-1, 1] - what the CLIP row's reported percentage reads */
+  /** the full signed CLIP strength curve, in [-1, 1] - what the CLIP row's reported percentage reads */
   clipSigned: Float32Array;
   cosine: Float32Array;
 }
@@ -117,7 +117,7 @@ export interface RankHybridResult {
   /** Room ids, best first. */
   order: number[];
   /** Parallel to `order` (by rank, not id) - what the density gradient reads. */
-  certainty: Float32Array;
+  strength: Float32Array;
   breakdown: ScoreBreakdown;
   ranks: SignalRanks;
   ties: SignalRanks;
@@ -126,13 +126,13 @@ export interface RankHybridResult {
 
 /**
  * `useSearch.ts`'s `result` state: a ranking bound to the term it was run
- * for, or the no-signal stub (`certainty`/`breakdown`/`signals`/`ranks`/`ties`
+ * for, or the no-signal stub (`strength`/`breakdown`/`signals`/`ranks`/`ties`
  * all `null`) when the corpus has neither embeddings nor keywords to rank
  * with.
  */
 export interface SearchResult {
   order: number[];
-  certainty: Float32Array | null;
+  strength: Float32Array | null;
   breakdown: ScoreBreakdown | null;
   ranks: SignalRanks | null;
   ties: SignalRanks | null;
@@ -199,7 +199,7 @@ export interface ClipRankingSummary {
   /** the raw cosine - absolute, not relative to this query's corpus */
   cosine: number;
   /**
-   * the signed certainty curve as a clamped percentage (docs/search_rules.md
+   * the signed strength curve as a clamped percentage (docs/search_rules.md
    * "Reporting") - positive is confidence the image matches, negative is
    * confidence it does not.
    */
@@ -217,7 +217,7 @@ export interface RankingExplanation {
   rank: number;
   /** corpus size - the "of 2048" in "#4 of 2048" */
   total: number;
-  /** the composite `certainty`, as a signed clamped percentage */
+  /** the composite `strength`, as a signed clamped percentage */
   percent: number;
   contributions: ContributionShare[];
   tag: TagRankingSummary | null;

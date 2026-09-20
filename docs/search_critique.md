@@ -5,11 +5,21 @@ A review of the search system as it stands (`packages/map/scoring.ts`,
 `docs/search_rules.md`), written to answer one question: the search works,
 so why is it so hard to hold in your head?
 
-This is analysis, not a change. Nothing here has been implemented. The
-findings each carry a reproduction; the recommendations are ordered by what
-they buy against what they cost, and several of them are decisions to make
-rather than fixes to apply. `docs/pending_task_list.md` carries the entries
-that came out of it.
+This is the analysis as first written; the findings each carry a
+reproduction, and the recommendations are ordered by what they buy against
+what they cost. It is a record rather than a live status board - GitHub
+issues track what is fixed, and the *Findings* below are left as they were
+observed so a reproduction still reads as one.
+
+Closed since: Findings 1, 2 and 4, by
+[#224](https://github.com/centuryglass/babel-index/issues/224),
+[#225](https://github.com/centuryglass/babel-index/issues/225) and
+[#227](https://github.com/centuryglass/babel-index/issues/227) - R1 turned
+out to be unnecessary once R3 landed (a chip needs no quoting when a plain
+multi-word query matches), R2's rename shipped with R3, and `keywordScore`
+was deleted rather than adopted, since `classifyTagTerm` is the live rule
+and `tagTermsOf` now states it once for the scorer and the highlighter
+alike. Findings 3, 5, 6 and 7 are open.
 
 What search is *for* is stated separately, in
 [`docs/search_requirements.md`](search_requirements.md). Where a finding

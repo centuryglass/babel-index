@@ -86,13 +86,13 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       for (const m of marks)
         assert.match(m.toLowerCase(), new RegExp(term.toLowerCase().slice(0, 4)), 'a mark that is not the match');
 
-      // And the composite line names both the rank and the certainty behind
-      // it - measured against absolute bounds rather than against this
-      // query's corpus, the number that keeps a min-maxed 1.00 from reading
-      // as confidence.
+      // And the composite line names both the rank and the match strength
+      // behind it - measured against absolute bounds rather than against
+      // this query's corpus, the number that keeps a min-maxed 1.00 from
+      // reading as a strong match.
       const strip = await top.locator('.score-strip').textContent();
       assert.match(strip, /^#\d+ of \d+,/);
-      assert.match(strip, /certain/);
+      assert.match(strip, /match strength/);
     } finally {
       await page.locator('.catalog-search input').fill('');
       await page.locator('.catalog-search input').press('Enter');
