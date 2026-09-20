@@ -19,7 +19,8 @@
 import { useMemo, useRef, useState, type FormEventHandler } from 'react';
 import {
   rankHybrid,
-  fold,
+  parseQuery,
+  tagTermsOf,
   tokenise,
   keywordMatchRanges,
   storyMatchRanges,
@@ -54,7 +55,7 @@ export function useSearch({
   setStatus,
 }: UseSearchOpts) {
   const [query, setQuery] = useState('');
-  // One piece of state, not two: the ranking and its certainty profile
+  // One piece of state, not two: the ranking and its strength profile
   // describe the same search, and a frame that paired one search's order with
   // another's densities would put the wrong rooms in the cluster.
   const [result, setResult] = useState<SearchResult | null>(null);
@@ -119,7 +120,7 @@ export function useSearch({
     // than implying more than the corpus can support.
     const blob = res.vector ? embeddings.current : null;
     if (blob || searchIndex) {
-      const { order, certainty, breakdown, ranks, ties, signals } = rankHybrid({
+      const { order, strength, breakdown, ranks, ties, signals } = rankHybrid({
         query: term,
         count: total,
         weights: searchConfig.weights,
@@ -139,14 +140,14 @@ export function useSearch({
       // the ranking does not, so anything derived from "what was searched for"
       // - the highlight ranges especially - has to read the submitted term or
       // it would mark text against a query nobody has run yet.
-      setResult({ order, certainty, breakdown, ranks, ties, signals, term });
+      setResult({ order, strength, breakdown, ranks, ties, signals, term });
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
       requestAnimationRef.current('stub ranking — no embeddings and no keywords in this corpus');
       // No breakdown: a hash-ordered stub has no signals to explain, and an
       // explanation of a ranking nothing decided would be an invented one.
-      setResult({ order: res.order, certainty: null, breakdown: null, ranks: null, ties: null, signals: null, term });
+      setResult({ order: res.order, strength: null, breakdown: null, ranks: null, ties: null, signals: null, term });
     }
   };
 
@@ -176,9 +177,15 @@ export function useSearch({
   const highlight = useMemo(() => {
     const term = result?.term?.trim();
     if (!term) return null;
-    const foldedQuery = fold(term);
     const tokens = tokenise(term, { minLength: searchConfig.minTokenLength });
-    if (!foldedQuery && !tokens.length) return null;
+    // The whole-query reading marks only where it also scores, which is what
+    // `tagTermsOf` decides for both (docs/search_requirements.md SR-35). A
+    // query with no eligible term - `a`, `the` - scores nothing and so marks
+    // nothing, where the raw folded query would have substring-matched most
+    // of the corpus.
+    const { terms, whole } = tagTermsOf(parseQuery(term), tokens, searchConfig.minTokenLength);
+    const foldedQuery = whole?.folded ?? '';
+    if (!terms.length && !tokens.length) return null;
     return {
       keyword: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, tokens),
       // A title matches by the same substring rule a keyword does (see

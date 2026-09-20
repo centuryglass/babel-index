@@ -29,17 +29,17 @@
  * onto the front of an unchanged order instead of rearranging the whole
  * library, best in the middle and worst at the edge.
  *
- * ### Ranking is relative; certainty is not
+ * ### Ranking is relative; strength is not
  *
  * The blend answers "which room is most like the query". The map's density
- * gradient (`ordering.ts`) asks a different question - "how sure are we at
- * all" - and the blended score cannot answer it: min-max normalisation
- * destroys the very information required, since some room always scores 1
- * whether the query was `art nouveau` or `cghjj`. Certainty is therefore
- * computed from the *absolute* form of each signal, alongside the ranking and
- * from the same pass:
+ * gradient (`ordering.ts`) asks a different question - "how good is this
+ * room's match, on its own terms" - and the blended score cannot answer it:
+ * min-max normalisation destroys the very information required, since some
+ * room always scores 1 whether the query was `art nouveau` or `cghjj`.
+ * Strength is therefore computed from the *absolute* form of each signal,
+ * alongside the ranking and from the same pass:
  *
- *   - keyword and story ratios are already absolute. An exact keyword match
+ *   - keyword and story readings are already absolute. An exact keyword match
  *     is 1 because it is a match, not because it beat the corpus.
  *   - CLIP contributes its raw cosine against a pair of thresholds. This is
  *     the only place the raw number is used rather than the normalised one,
@@ -77,7 +77,7 @@ import type {
 
 const { noun, verb, adjective } = winkLemmatizer;
 
-/** The three-anchor band `signedClipCertainty`/`matchCertainty` read a raw cosine against. */
+/** The three-anchor band `signedClipCertainty`/`matchStrength` read a raw cosine against. */
 export interface ClipBand {
   centre: number;
   high: number;
@@ -100,8 +100,8 @@ export function lemmatise(word: string): string {
 }
 
 /**
- * The three anchors of CLIP's signed certainty curve (docs/search_rules.md
- * "Image-content (CLIP) matching" + "Computing certainty"): `centre` is the
+ * The three anchors of CLIP's signed strength curve (docs/search_rules.md
+ * "Image-content (CLIP) matching" + "Computing strength"): `centre` is the
  * no-opinion point (0), `high` is a genuine match's typical confidence (+1),
  * `low` is a genuinely-irrelevant query's typical confidence (-1). Continuous
  * and monotone between them - see `signedClipCertainty`.
@@ -233,7 +233,7 @@ export function tokenise(text: unknown, { minLength = 3, stopwords = true }: Tok
  * side of it to pair with, so the rest of the query reads as ordinary words.
  *
  * The stopword/`minTokenLength` floor is not applied here - it still happens
- * per word for scoring (`tokenise` inside `keywordScore`/`storyScore`).
+ * per word for scoring (`tokenise` inside `storyScore`).
  * Quoting changes how a term is matched, not the vocabulary floor.
  */
 export function parseQuery(raw: unknown): ParsedQuery {
@@ -269,10 +269,12 @@ export function parseQuery(raw: unknown): ParsedQuery {
  * How one term matches a room's keywords - exact, partial, or neither - as
  * one classification, whether the term is a single word or a quoted phrase.
  *
- * This is `keywordScore`'s substring rule, read per term rather than blended
- * across the whole query: a quoted phrase is tested as its whole `folded`
+ * The one substring rule every tag and title match is read through: a term
+ * matches a keyword exactly when it equals it, partially by the fraction of
+ * the keyword it covers. A quoted phrase is tested as its whole `folded`
  * text against each keyword, the same way an unquoted single-word term
- * already is. So "quoting an unquoted-equivalent single word changes nothing"
+ * already is - and so is the whole query, which `rankHybrid` passes here as
+ * one synthetic term (docs/search_rules.md "Tag matching"). So "quoting an unquoted-equivalent single word changes nothing"
  * (docs/search_rules.md, "Feature additions") holds by construction - the two
  * cases share this one code path.
  *
@@ -280,6 +282,40 @@ export function parseQuery(raw: unknown): ParsedQuery {
  * @returns `partial` is the best substring fraction found, 0 when there is no
  *   match at all (exact implies `partial` is meaningless and left at 0)
  */
+/**
+ * The terms the tag and title rules classify for one query, and the
+ * whole-query reading that sits beside them.
+ *
+ * One home for "what does this query offer a keyword", because two of them
+ * drift silently: `rankHybrid` scores from this, and `useSearch`'s
+ * highlighter marks from it, so a term that cannot score cannot mark
+ * (docs/search_requirements.md SR-35).
+ *
+ * Stopwords and the `minTokenLength` floor apply per word, as they do for
+ * `queryTokens`. Quoting changes how a term is matched, not the vocabulary
+ * floor (docs/search_rules.md "The parsed query"), so a quoted phrase is
+ * always eligible regardless of its own length.
+ *
+ * `whole` is the entire folded query as one candidate against one whole
+ * keyword - what makes a multi-word tag typed plainly an exact match
+ * (docs/search_rules.md "Tag matching"). It exists only for a query of more
+ * than one eligible term; with one, it would be that term.
+ */
+export function tagTermsOf(
+  parsed: ParsedQuery,
+  queryTokens: string[] = [],
+  minTokenLength = 3
+): { terms: Term[]; whole: Term | null } {
+  const terms = parsed.terms.filter(
+    (t) => t.quoted || (t.folded.length >= minTokenLength && !STOPWORDS.has(t.folded))
+  );
+  const whole =
+    terms.length > 1 && parsed.folded
+      ? { text: parsed.raw, folded: parsed.folded, quoted: true, words: queryTokens }
+      : null;
+  return { terms, whole };
+}
+
 export function classifyTagTerm(
   term: Term | null | undefined,
   keywords: string[] | null | undefined
@@ -372,56 +408,6 @@ export function buildSearchIndex(joined: (SearchIndexSource | null)[] | null | u
 }
 
 /**
- * How well a query matches a room's keywords, in [0, 1].
- *
- * Two readings, and the better one wins:
- *
- *   - the whole query against the whole keyword, which is what makes an exact
- *     match score exactly 1 even when the keyword is two words long;
- *   - the mean over query tokens of each token's best keyword match, which is
- *     what lets a partial or reordered query score at all.
- *
- * A partial match is `matched length / keyword length`, so `art` against
- * `art nouveau` scores 3/11 and against `art` scores 1. The divisor is the
- * keyword, not the query - a short query matching a long keyword has matched
- * less of it, and should say so.
- *
- * The mean rather than the sum keeps the result in [0, 1] without clamping,
- * and rewards matching more *of the query* rather than longer queries.
- */
-export function keywordScore(foldedQuery: string, queryTokens: string[], keywords: string[] | null | undefined): number {
-  if (!keywords?.length) return 0;
-
-  let whole = 0;
-  if (foldedQuery)
-    for (const k of keywords) {
-      if (!k) continue;
-      if (k === foldedQuery) {
-        whole = 1;
-        break;
-      }
-      if (k.includes(foldedQuery)) whole = Math.max(whole, foldedQuery.length / k.length);
-    }
-
-  let sum = 0;
-  for (const token of queryTokens) {
-    let best = 0;
-    for (const k of keywords) {
-      if (!k) continue;
-      if (k === token) {
-        best = 1;
-        break;
-      }
-      if (k.includes(token)) best = Math.max(best, token.length / k.length);
-    }
-    sum += best;
-  }
-  const byToken = queryTokens.length ? sum / queryTokens.length : 0;
-
-  return Math.max(whole, byToken);
-}
-
-/**
  * How well a query matches a room's story, in [0, 1].
  *
  * Normalised by the query, not by the text - the opposite of the keyword
@@ -456,7 +442,7 @@ export function storyScore(queryTokens: string[], storyIndex: StoryIndex | null 
 /**
  * The character span of the longest *contiguous* run of story words whose
  * lemma is one of `matchLemmas` - what tells "cat" (one word, moderate
- * certainty) from "a room walled in glass" (a whole matched clause,
+ * strength) from "a room walled in glass" (a whole matched clause,
  * saturating).
  *
  * "Contiguous" means adjacent in the story's own filtered token sequence,
@@ -514,8 +500,8 @@ export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined
 //
 // Two range finders, one per match rule, shadowing the two scorers above
 // them. A keyword matches by substring and a story word by lemma; one
-// highlighter over both would mark text `keywordScore` never looked at and
-// miss text `storyScore` credited. They live here rather than in a component
+// highlighter over both would mark text `classifyTagTerm` never looked at
+// and miss text `storyScore` credited. They live here rather than in a component
 // for one reason: a view that re-derives "what matched" drifts from the
 // thing that ranked, silently - marked text that scored nothing, or a ranked
 // room with nothing marked.
@@ -568,7 +554,7 @@ function occurrences(hay: string, needle: string): MatchRange[] {
 }
 
 /**
- * Where a query matched one keyword, mirroring `keywordScore`'s substring rule.
+ * Where a query matched one keyword, mirroring `classifyTagTerm`'s substring rule.
  *
  * The union of both of that function's readings - the whole query as a
  * substring, and each query token as a substring - not only whichever won
@@ -679,26 +665,27 @@ const clamp01 = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.ma
 export const TAG_PARTIAL_SATURATION = 2;
 export const STORY_LONG_RANGE = { low: 16, high: 40 };
 
-/** The saturating curve `storyLongChars` feeds, shared by the ranking bonus and certainty's `S` term. */
+/** The saturating curve `storyLongChars` feeds, shared by the ranking bonus and strength's `S` term. */
 function storyLongBonus01(chars: number): number {
   const { low, high } = STORY_LONG_RANGE;
   return clamp01((chars - low) / (high - low));
 }
 
 /**
- * Certainty floor for a single matched story word - "cat" found once in a
- * story is real evidence, but not the near-certainty a whole matched clause
- * is. Unlike `CLIP_CERTAINTY`, there is no corpus distribution to measure this
+ * Strength floor for a single matched story word - "cat" found once in a
+ * story is real evidence, but not the near-certain reading a whole matched
+ * clause earns. Unlike `CLIP_CERTAINTY`, there is no corpus distribution to measure this
  * against; it is a judgement call, same as `map.contentRatio` or the slide
  * timings in `packages/config/config.ts`.
  */
 export const STORY_FLOOR = 0.5;
 
-/** The named parts `matchCertainty` combines into one signed reading. */
-export interface CertaintyParts {
-  tagCoverage?: number;
-  /** coverage-scaled, same shape as `tagCoverage` but read against the title - `Kt` in docs/search_rules.md */
-  titleCoverage?: number;
+/** The named parts `matchStrength` combines into one signed reading. */
+export interface StrengthParts {
+  /** best per-term tag reading, in [0, 1] - `K` in docs/search_rules.md */
+  tagStrength?: number;
+  /** the same best reading against the room's one title - `Kt` in docs/search_rules.md */
+  titleStrength?: number;
   storyLongChars?: number;
   storyMatched?: boolean;
   cosine?: number | null;
@@ -706,7 +693,7 @@ export interface CertaintyParts {
 
 /**
  * CLIP's raw cosine placed against the three-anchor band, as a signed
- * certainty in [-1, 1] (docs/search_rules.md "Computing certainty" and
+ * strength in [-1, 1] (docs/search_rules.md "Computing strength" and
  * "Image-content (CLIP) matching"): 0 at `band.centre` (the no-opinion
  * point), rising to +1 at `band.high` (a genuine match's typical
  * confidence), falling to -1 at `band.low` (a genuinely-irrelevant query's
@@ -715,7 +702,7 @@ export interface CertaintyParts {
  * `clipCertaintyGate` - the ranking term docs/search_rules.md calls for - is
  * this function's output clamped to its positive half: `Math.max(0, ...)`,
  * done by the caller (`rankHybrid`) rather than here, because
- * `matchCertainty` needs the same call's negative half too.
+ * `matchStrength` needs the same call's negative half too.
  *
  * @returns in [-1, 1]
  */
@@ -733,10 +720,10 @@ export function signedClipCertainty(cosine: number | null | undefined, band: Cli
 }
 
 /**
- * A signed `[-1, 1]` certainty as a percentage, magnitude clamped to
+ * A signed `[-1, 1]` strength as a percentage, magnitude clamped to
  * 0.01-99.99. Nothing reads as completely certain in either direction, not
  * even at the anchor cosines themselves: this covers both CLIP's own signed
- * curve and the composite `certainty` `explainRanking` reports up top
+ * curve and the composite `strength` `explainRanking` reports up top
  * (docs/search_rules.md "Reporting").
  *
  * @param signed in [-1, 1]
@@ -750,18 +737,20 @@ export function signedPercent(signed: number): number {
 /**
  * How sure the search is that one room is a match - one signed number in
  * [-1, 1], positive is confidence the room matches, 0 is no opinion, negative
- * is confidence it does NOT (docs/search_rules.md, "Computing certainty").
+ * is confidence it does NOT (docs/search_rules.md, "Computing strength").
  *
  * A signed soft-OR of absolute readings, each computed from the room's raw
  * evidence rather than anything normalised across the corpus. This is the
  * number `ordering.ts`'s density gradient reads, not the ranking score:
  *
- *   - `K` (tags): coverage-scaled - the mean, over every query term, of 1 for
- *     an exact match, the substring fraction for a partial one, 0 for none.
- *     Computed by the caller (mean of `classifyTagTerm` over the query's
- *     terms), since certainty and ranking read the same per-term
- *     classification.
- *   - `Kt` (title): the same coverage-scaled mean as K, against the room's one
+ *   - `K` (tags): the room's BEST reading over the query's terms - 1 for an
+ *     exact match, the substring fraction for a partial one, 0 for none.
+ *     Computed by the caller, since this and ranking read the same per-term
+ *     classification. A maximum rather than a mean over the terms: a room
+ *     whose tag the reader typed is a match whatever else the query asked
+ *     about, and how much of the query a room explains is what ranking's
+ *     `tagExact` count already decides (docs/search_requirements.md SR-17).
+ *   - `Kt` (title): the same best reading as K, against the room's one
  *     title (a one-keyword index) - computed by the caller alongside K.
  *   - `S` (story): from absolute matched length, not the query-relative
  *     ratio the ranking uses. A single matched word sits at the moderate
@@ -769,15 +758,15 @@ export function signedPercent(signed: number): number {
  *     would make a one-word query that matches read as 100% certain.
  *   - `Cpos`/`Cneg`: the positive and negative halves of the signed CLIP curve.
  *
- * Positive certainty is `1 - (1-K)(1-Kt)(1-S)(1-Cpos)` - any one signal can
+ * Positive strength is `1 - (1-K)(1-Kt)(1-S)(1-Cpos)` - any one signal can
  * carry it alone, and two weak agreeing signals count for more than either
  * alone. The signed result is that value when any positive signal fired,
  * else `-Cneg`: a room with real text evidence is never reported as a
  * mismatch just because CLIP is cool on its picture.
  *
- * @param parts.tagCoverage K, already in [0, 1]
- * @param parts.titleCoverage Kt, already in [0, 1] - the same coverage-scaled
- *   reading as K, against the room's title instead of its keywords
+ * @param parts.tagStrength K, already in [0, 1]
+ * @param parts.titleStrength Kt, already in [0, 1] - the same best reading as
+ *   K, against the room's title instead of its keywords
  * @param parts.storyLongChars longest contiguous matched run, chars
  * @param parts.storyMatched did any story word match at all - a single
  *   matched word's `storyLongChars` can sit under the ramp's floor and read
@@ -786,12 +775,12 @@ export function signedPercent(signed: number): number {
  * @param clip raw-cosine anchors
  * @returns signed, in [-1, 1]
  */
-export function matchCertainty(
-  { tagCoverage = 0, titleCoverage = 0, storyLongChars = 0, storyMatched = false, cosine = null }: CertaintyParts = {},
+export function matchStrength(
+  { tagStrength = 0, titleStrength = 0, storyLongChars = 0, storyMatched = false, cosine = null }: StrengthParts = {},
   clip: ClipBand = CLIP_CERTAINTY
 ): number {
-  const K = clamp01(tagCoverage);
-  const Kt = clamp01(titleCoverage);
+  const K = clamp01(tagStrength);
+  const Kt = clamp01(titleStrength);
   const S = storyMatched ? STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01(storyLongChars) : 0;
   const signed = signedClipCertainty(cosine, clip);
   const Cpos = Math.max(0, signed);
@@ -799,7 +788,7 @@ export function matchCertainty(
 
   const pos = 1 - (1 - K) * (1 - Kt) * (1 - S) * (1 - Cpos);
   // When nothing fired, `-Cneg` would return `-0`: it compares equal to 0,
-  // but a sign on a zero certainty reads as a negative claim. `Cneg` is
+  // but a sign on a zero strength reads as a negative claim. `Cneg` is
   // already 0 in that case, so the explicit `0` only avoids IEEE 754's
   // negative zero.
   return pos > 0 ? pos : Cneg > 0 ? -Cneg : 0;
@@ -822,7 +811,7 @@ interface ScoredRow {
   clipCertaintyGate: number;
   clipSigned: number;
   cosine: number | null;
-  certainty: number;
+  strength: number;
 }
 
 /** Ascending per-room comparators `rankAxis` sorts by - one per independent axis. */
@@ -891,8 +880,8 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
  * @param opts.weights        `config.search.weights`
  * @param opts.embeddings the blob, roomCount * dim row-major
  * @param opts.vector the query vector, L2-normalised
- * @param opts.clipCertainty raw-cosine anchors for CLIP's share of certainty
- * @returns `certainty` is parallel to `order`, i.e. by rank, which is how the map's
+ * @param opts.clipCertainty raw-cosine anchors for CLIP's share of strength
+ * @returns `strength` is parallel to `order`, i.e. by rank, which is how the map's
  *   density gradient wants it - and `breakdown` follows the same convention,
  *   every array indexed by rank rather than by room id.
  *
@@ -939,18 +928,11 @@ export function rankHybrid({
   // `storyPhraseRun`.
   const phraseLemmas = parsed.terms.filter((t) => t.quoted && t.words.length > 1).map((t) => t.words.map(lemmatise));
 
-  // Stopwords and the minTokenLength floor still apply per word for tag
-  // scoring, as they do for `queryTokens`. Quoting changes how a term is
-  // matched, not the vocabulary floor (docs/search_rules.md "The parsed
-  // query"). A quoted phrase is one already-formed unit rather than a word,
-  // so it is always eligible regardless of its own length.
-  const tagTerms = parsed.terms.filter(
-    (t) => t.quoted || (t.folded.length >= minTokenLength && !STOPWORDS.has(t.folded))
-  );
+  const { terms: tagTerms, whole: wholeQueryTerm } = tagTermsOf(parsed, queryTokens, minTokenLength);
 
   // CLIP twice over, from one pass of dot products: raw cosines for
-  // certainty, and the same column min-maxed for the blend. Two questions,
-  // two scalings - see *Ranking is relative; certainty is not* above.
+  // strength, and the same column min-maxed for the blend. Two questions,
+  // two scalings - see *Ranking is relative; strength is not* above.
   let cosines = null;
   let clipNormAll = null;
   if (embeddings && dim > 0 && vector) {
@@ -970,10 +952,10 @@ export function rankHybrid({
     let tagExact = 0;
     let tagPartialSum = 0;
     let tagPartialCount = 0;
-    let tagCoverageSum = 0;
+    let tagBest = 0;
     let titleExact = 0;
     let titlePartial = 0;
-    let titleCoverageSum = 0;
+    let titleBest = 0;
     let storyRatio = 0;
     let storyLongChars = 0;
     let storyMatched = false;
@@ -984,7 +966,7 @@ export function rankHybrid({
         const titleKeywords = entry.title ? [entry.title] : null;
         for (const term of tagTerms) {
           const { exact, partial } = classifyTagTerm(term, entry.keywords);
-          tagCoverageSum += exact ? 1 : partial;
+          tagBest = Math.max(tagBest, exact ? 1 : partial);
           if (exact) tagExact++;
           else if (partial > 0) {
             tagPartialSum += partial;
@@ -993,7 +975,29 @@ export function rankHybrid({
 
           if (titleKeywords) {
             const t = classifyTagTerm(term, titleKeywords);
-            titleCoverageSum += t.exact ? 1 : t.partial;
+            titleBest = Math.max(titleBest, t.exact ? 1 : t.partial);
+            if (t.exact) titleExact = 1;
+            else if (t.partial > titlePartial) titlePartial = t.partial;
+          }
+        }
+
+        // Two readings, and the better one wins - the whole query against
+        // one whole keyword, beside the per-term pass above. An exact whole
+        // match is worth one exact match, never more: `brutalism mezzotint`
+        // hitting two separate keywords already scored 2 up there, and this
+        // must not pull that down.
+        if (wholeQueryTerm) {
+          const whole = classifyTagTerm(wholeQueryTerm, entry.keywords);
+          tagBest = Math.max(tagBest, whole.exact ? 1 : whole.partial);
+          if (whole.exact) tagExact = Math.max(tagExact, 1);
+          else if (whole.partial > 0 && tagExact === 0 && tagPartialCount === 0) {
+            tagPartialSum = whole.partial;
+            tagPartialCount = 1;
+          }
+
+          if (titleKeywords) {
+            const t = classifyTagTerm(wholeQueryTerm, titleKeywords);
+            titleBest = Math.max(titleBest, t.exact ? 1 : t.partial);
             if (t.exact) titleExact = 1;
             else if (t.partial > titlePartial) titlePartial = t.partial;
           }
@@ -1016,8 +1020,8 @@ export function rankHybrid({
     const clipSigned = signedClipCertainty(cosine, clipCertainty);
     const clipCertaintyGate = Math.max(0, clipSigned);
     const storyLongBonus = storyLongBonus01(storyLongChars);
-    const tagCoverage = hasTerms ? tagCoverageSum / tagTerms.length : 0;
-    const titleCoverage = hasTerms ? titleCoverageSum / tagTerms.length : 0;
+    const tagStrength = hasTerms ? tagBest : 0;
+    const titleStrength = hasTerms ? titleBest : 0;
 
     const score =
       weights.tagExact * tagExact +
@@ -1042,8 +1046,8 @@ export function rankHybrid({
       clipCertaintyGate,
       clipSigned,
       cosine,
-      certainty: matchCertainty(
-        { tagCoverage, titleCoverage, storyLongChars, storyMatched, cosine },
+      strength: matchStrength(
+        { tagStrength, titleStrength, storyLongChars, storyMatched, cosine },
         clipCertainty
       ),
     };
@@ -1063,7 +1067,7 @@ export function rankHybrid({
   // order rather than shuffling.
   scored.sort((a, b) => b.score - a.score);
 
-  const certainty = new Float32Array(count);
+  const strength = new Float32Array(count);
   const breakdown: ScoreBreakdown = {
     score: new Float32Array(count),
     tagExact: new Float32Array(count),
@@ -1092,7 +1096,7 @@ export function rankHybrid({
   };
   for (let rank = 0; rank < count; rank++) {
     const row = scored[rank];
-    certainty[rank] = row.certainty;
+    strength[rank] = row.strength;
     breakdown.score[rank] = row.score;
     breakdown.tagExact[rank] = row.tagExact;
     breakdown.tagPartialSum[rank] = row.tagPartialSum;
@@ -1117,7 +1121,7 @@ export function rankHybrid({
 
   return {
     order: scored.map((s) => s.id),
-    certainty,
+    strength,
     breakdown,
     ranks,
     ties,
@@ -1130,14 +1134,14 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 
 
 /**
  * One room's ranking, as a reader reads it rather than as the sum computed
- * it: one composite line ("#4 of 2,048, 73% match certainty"), and one line
+ * it: one composite line ("#4 of 2,048, 73% match strength"), and one line
  * per axis that actually found something for this room - tag, title, story,
  * and CLIP whenever the corpus has embeddings at all - each carrying its own
  * independent rank/tie count from `rankHybrid`'s `ranks`/`ties`, not the
  * composite's.
  *
- * `certainty` is the only number here computed against absolute bounds
- * (docs/search_rules.md "Computing certainty") rather than read straight off
+ * `strength` is the only number here computed against absolute bounds
+ * (docs/search_rules.md "Computing strength") rather than read straight off
  * `breakdown.score`. `contributions` exists so a reader can still ask "why"
  * without confusing that absolute number for one of the terms that produced
  * it: each is that axis's weighted term as a share of `breakdown.score`,
@@ -1146,7 +1150,7 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 
  *
  * @param rank position in `order`
  * @param opts.breakdown from `rankHybrid`
- * @param opts.certainty from `rankHybrid`
+ * @param opts.strength from `rankHybrid`
  * @param opts.ranks from `rankHybrid`
  * @param opts.ties from `rankHybrid`
  * @param opts.weights `config.search.weights`
@@ -1155,7 +1159,7 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 
  */
 export interface ExplainRankingOpts {
   breakdown: ScoreBreakdown;
-  certainty: Float32Array;
+  strength: Float32Array;
   ranks: SignalRanks;
   ties: SignalRanks;
   weights: Config['search']['weights'];
@@ -1164,7 +1168,7 @@ export interface ExplainRankingOpts {
 
 export function explainRanking(
   rank: number,
-  { breakdown, certainty, ranks, ties, weights, total }: ExplainRankingOpts
+  { breakdown, strength, ranks, ties, weights, total }: ExplainRankingOpts
 ): RankingExplanation | null {
   const at = (arr: ArrayLike<number> | null | undefined): number => (arr && rank < arr.length ? arr[rank] : 0);
 
@@ -1203,7 +1207,7 @@ export function explainRanking(
   return {
     rank: rank + 1,
     total,
-    percent: signedPercent(at(certainty)),
+    percent: signedPercent(at(strength)),
     contributions,
     tag: hasTag
       ? { rank: ranks.tag[rank], ties: ties.tag[rank], exact: tagExact, partial: tagPartialCount }

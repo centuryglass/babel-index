@@ -128,7 +128,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     assert.doesNotMatch(next, /edge of the library/, 'the boundary sentence must not repeat on every step');
   });
 
-  test('Home and ctrl+Home fly the cursor, and Enter opens what it lands on', async () => {
+  test('Home and ctrl+Home fly the cursor, and Enter opens what it lands on [SR-48]', async () => {
     const { page } = session;
     const canvas = page.locator('canvas');
     const live = page.locator('[role=status]');
@@ -514,7 +514,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await landed(page, session.flightMs);
   });
 
-  test('/ reaches the search field from the map keyboard', async () => {
+  test('/ reaches the search field from the map keyboard [SR-38]', async () => {
     const { page } = session;
     const canvas = page.locator('canvas');
     await canvas.focus();

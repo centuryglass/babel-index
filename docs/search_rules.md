@@ -24,23 +24,30 @@ hold onto while reading the rest of this document:
 - **Ranking** answers "which rooms are the best matches, relative to each other,
   for this query on this corpus". It sorts the whole corpus into one order. A
   weighted sum, not a tiered bucket sort - see "One sort, not tiers" below.
-- **Certainty** answers "how sure are we that this is a real match, in absolute
-  terms, independent of what anything else in the corpus scored". One signed
-  number in `[-1, 1]`: positive is confidence the room matches, `0` is no
-  opinion, negative is confidence it does *not*. It drives the map's density
-  gradient (rooms the search is sure about cluster near the center; rooms it
-  isn't stay scattered at the baseline - only the positive side clusters) and
-  the percentages the UI reports. Its full definition is "Computing certainty".
+- **Strength** answers "how good is this room's match, in absolute terms,
+  independent of what anything else in the corpus scored". One signed
+  number in `[-1, 1]`: positive is how strong the match is, `0` is no
+  opinion, negative is confidence it does *not* match. It drives the map's
+  density gradient (rooms that match strongly cluster near the center; rooms
+  that do not stay scattered at the baseline - only the positive side
+  clusters) and the percentages the UI reports. Its full definition is
+  "Computing strength".
 
 These can't be answered from the same number, because ranking is *relative* -
 some room is always the best match for any query, including a nonsense one - and
-certainty needs to be able to say "none of these are good" when that's true. A
-raw CLIP cosine that is merely the best of a bad lot must not read as certain.
+strength needs to be able to say "none of these are good" when that's true. A
+raw CLIP cosine that is merely the best of a bad lot must not read as a strong
+match.
 Both computations happen in the same pass over the corpus (there's no reason to
 score twice), but they read different halves of the data: ranking reads scores
-normalised *within this query's results*, certainty reads raw scores against
+normalised *within this query's results*, strength reads raw scores against
 *fixed, corpus-measured bounds*. Whenever a rule below says "reasonably certain"
-or "highly certain", it means the absolute reading, never the relative one.
+or "highly certain", it is describing CLIP's own calibrated reading, never the
+relative one.
+
+Strength is not coverage. A room that matched one term of a five-term query
+exactly is a strong match for that term, and says so; how much of the query a
+room explains is what ranking's counts decide. See "Computing strength".
 
 ### One sort, not tiers
 
@@ -110,7 +117,7 @@ RoomIndex = {
 ### 3. One room's evaluation against one query
 
 This is what the scoring pass computes for every room, and what `explainRanking`
-reads to build the display. Ranking, certainty, and every reporting number in
+reads to build the display. Ranking, strength, and every reporting number in
 this document all come out of this one structure - nothing downstream
 recomputes any of it independently.
 
@@ -128,10 +135,10 @@ RoomMatch = {
                                   // against the title - a MAX, not a sum, because
                                   // every term is testing the SAME one string
   storyRatio: number,          // matched story chars / query chars, in [0, 1] -
-                                // a RANKING input; certainty reads the length below
+                                // a RANKING input; strength reads the length below
   storyLongChars: number,       // longest CONTIGUOUS run of matched query words,
                                  // in chars - what tells "cat" (short, moderate
-                                 // certainty) from a whole matched clause (100%)
+                                 // strength) from a whole matched clause (100%)
   clipCosine: number | null,     // raw cosine against this room's image, or null
   clipNorm: number,                // clipCosine min-max normalised across every
                                      // room FOR THIS QUERY - always 1 for the
@@ -140,10 +147,10 @@ RoomMatch = {
                                      // in [0, 1] - the positive half of the signed
                                      // certainty curve, see "Image-content" below
   score: number,                     // the one weighted sum ranking sorts by
-  certainty: number,                  // the one absolute [-1, 1] the density
-}                                      // gradient and the UI's "how sure" reads -
+  strength: number,                   // the one absolute [-1, 1] the density
+}                                      // gradient and the UI's percentage read -
                                        // negative is "sure it does NOT match", see
-                                       // "Computing certainty"
+                                       // "Computing strength"
 ```
 
 ### 4. The corpus-wide result
@@ -151,7 +158,7 @@ RoomMatch = {
 ```
 SearchResult = {
   order: number[],           // room ids, best RoomMatch.score first
-  certainty: Float32Array,    // parallel to order: RoomMatch.certainty per rank
+  strength: Float32Array,     // parallel to order: RoomMatch.strength per rank
   breakdown: {                 // parallel to order, one array per RoomMatch field,
     ...RoomMatch fields          // so a display can read "rank 4's tagExact" etc.
   },
@@ -265,6 +272,21 @@ contributes at least `0.5` points, which already clears `0.45`.
 partially-matching term. A sum can only grow as matches are added; an average
 can fall when a weaker match joins a stronger one, which would rank a room with
 *more* evidence lower - backwards from what this rule asks for.
+
+**A multi-word tag typed plainly is an exact match, without quotes.** A room
+tagged `outsider art` is found exactly by the query `outsider art`, not only by
+`"outsider art"`. Quoting narrows what a phrase may match (see Feature
+additions); it is not the only way to reach a phrase.
+*Enforcement:* the whole folded query is classified against the room's keywords
+as one more candidate beside the per-term pass, and the better reading wins -
+`keywordScore`'s two-readings rule, applied per room in `rankHybrid`. An exact
+whole-query match counts as **one** exact match, never more, so
+`brutalism mezzotint` hitting two separate keywords (two exact matches, `2E`)
+still outranks one room tagged with the whole phrase (`E`). The reading is only
+built for a query of more than one term; with one term, it is the term. This
+matters because a keyword chip searches its text unquoted and multi-word
+keywords are common in a real corpus, so without it the commonest search a
+reader makes cannot reach the tag it names.
 
 **A quoted phrase is one match, not one match per word it contains.**
 Searching `"art nouveau"` credits at most one exact or one partial match for
@@ -389,7 +411,7 @@ real signal has every raw cosine sitting low against those bounds, so
 corpus's cosine DISTRIBUTION, not guessed.** These phrases appear in the tag
 and story rules above and need one precise meaning.
 *Enforcement:* they read off the same signed certainty curve "Computing
-certainty" defines - two linear segments meeting at `centre`, `0` there, `+1`
+strength" defines - two linear segments meeting at `centre`, `0` there, `+1`
 at `high`, `-1` at `low`. `clipCertaintyGate` is the positive half of that
 curve read back into `[0, 1]`, and "reasonably/highly certain" means
 `clipCertaintyGate >= 0.5`. All three anchors are measured by
@@ -430,57 +452,61 @@ hold. Each was chosen so its rule's inequality holds with real margin, not
 just at the boundary, so re-tuning any one requires re-checking the others'
 margins rather than eyeballing it alone.
 
-### Computing certainty
+### Computing strength
 
-Ranking asked "which room is most like the query"; certainty asks the different
-question the overview names - "how sure are we this is a real match, in absolute
-terms" - and the density gradient and the "how sure" UI both read its answer.
-It is one signed number in `[-1, 1]`: positive is confidence the room matches,
-`0` is no opinion, negative is confidence it does *not*. It is built from the
-same evaluation ranking uses, but from each signal's *absolute* reading, never
-the query-normalised one.
+Ranking asked "which room is most like the query"; strength asks the different
+question the overview names - "how good is this room's match, in absolute
+terms" - and the density gradient and the UI's percentage both read its answer.
+It is one signed number in `[-1, 1]`: positive is how strong the match is,
+`0` is no opinion, negative is confidence it does *not* match. It is built from
+the same evaluation ranking uses, but from each signal's *absolute* reading,
+never the query-normalised one.
 
-**Certainty is a signed soft-OR of the absolute readings.** Any one signal
-can carry it alone - an exact tag is certain whatever CLIP thinks of the picture -
-and two weak agreeing signals count for more than either alone.
+**Strength is a signed soft-OR of the absolute readings.** Any one signal
+can carry it alone - an exact tag is a full-strength match whatever CLIP thinks
+of the picture - and two weak agreeing signals count for more than either alone.
 *Enforcement:* four inputs, each in `[0, 1]`, plus CLIP's negative half:
-- `K` (tags), **coverage-scaled**: each query term contributes `1` if it exactly
-  equals a keyword, its substring fraction if it only partially matches, or `0`,
-  and `K` is the mean of those over the query's terms. So a query wholly covered
-  by exact tags is `1`, one exact term among several is high but not `1`, and a
-  lone partial match is moderate - which is what "an exact tag pushes certainty
-  to 100%" has to mean once a query can have terms an exact tag does not cover.
-- `Kt` (title), the same coverage-scaled mean as `K`, but against the room's
+- `K` (tags), the room's **best** reading over the query's terms: each term
+  contributes `1` if it exactly equals a keyword, its substring fraction if it
+  only partially matches, or `0`, and `K` is the **maximum** of those, taken
+  over the query's terms and the whole-query reading alike. A maximum, not a
+  mean: a room whose tag the reader typed is a full-strength match for that
+  tag whatever else the query asked about, so adding unrelated words to a
+  query must not weaken a room that has not changed. How much of the query a
+  room explains is real information, and it is what ranking's `tagExact`
+  count already decides - `n * E` ranks a room matching more terms higher
+  without claiming the one-term match is weaker than it is.
+- `Kt` (title), the same best reading as `K`, but against the room's
   one title instead of its list of keywords - each query term contributes `1`
   for an exact title match, its substring fraction for a partial one, `0`
-  otherwise, meaned over the query's terms. A room with no title contributes
-  `Kt = 0` and drops out of the soft-OR below exactly as a room with no
-  metadata drops out of `K`.
+  otherwise, maxed over the query's terms and the whole query. A room with no
+  title contributes `Kt = 0` and drops out of the soft-OR below exactly as a
+  room with no metadata drops out of `K`.
 - `S` (story), from **absolute matched length**, not the query-relative
   `storyRatio` ranking uses: `S = STORY_FLOOR + (1 - STORY_FLOOR) x storyLongBonus01`
   when any story word matched, where `storyLongBonus01 = clamp01((storyLongChars
   - 16) / (40 - 16))` is the same contiguous-run curve the ranking bonus reads.
   A single matched word sits at the moderate `STORY_FLOOR`; a full matched clause
   reaches `1`. Using `storyRatio` here instead would make a one-word query that
-  matches read as 100% certain, which is the bug this rule exists to avoid.
+  matches read as a 100% match, which is the bug this rule exists to avoid.
 - `Cpos` / `Cneg` (CLIP), the positive and negative halves of the signed curve
   below: `Cpos = max(0, signedClip)`, `Cneg = max(0, -signedClip)`.
 
-The positive certainty is the soft-OR
+The positive strength is the soft-OR
 `pos = 1 - (1 - K)(1 - Kt)(1 - S)(1 - Cpos)`, and the signed result is `pos`
 when any positive signal fired, else `-Cneg`. A room with real text evidence is
 never reported as a mismatch just because CLIP is cool on its picture - the
 negative reading is only reached when nothing positive contradicts it. With no
-embedding blob `Cpos = Cneg = 0` and certainty is text-only; with no metadata
-`K = Kt = S = 0` and certainty is CLIP-only, free to go negative; with no title
-`Kt = 0` alone and certainty falls back to tags/story/CLIP exactly as it does
+embedding blob `Cpos = Cneg = 0` and strength is text-only; with no metadata
+`K = Kt = S = 0` and strength is CLIP-only, free to go negative; with no title
+`Kt = 0` alone and strength falls back to tags/story/CLIP exactly as it does
 today.
 
-**Certainty need not be monotone with rank; the map makes it so.** The blend
-above can hand back a later rank a higher certainty than an earlier one (they
+**Strength need not be monotone with rank; the map makes it so.** The blend
+above can hand back a later rank a higher strength than an earlier one (they
 sort on `score`, not on this). `ordering.ts`'s density ramp takes the running
-minimum down the ranks and snaps anything under `CERTAINTY_FLOOR` to the
-baseline, so density still falls monotonically outward - certainty does not have
+minimum down the ranks and snaps anything under `STRENGTH_FLOOR` to the
+baseline, so density still falls monotonically outward - strength does not have
 to arrive that way. Only the positive part feeds the gradient: a mismatch is not
 a reason to cluster a room toward the center.
 
@@ -508,10 +534,10 @@ A cosine below the no-opinion centre is shown as a compact phrase like "73%
 certain the image content does not match the text", in a visually distinct style
 (a different color, and either italics or bold - resolved during implementation)
 so it is not confused with a positive, if weaker, match. Internally this is the
-negative certainty value (e.g. `-0.73`); the phrasing is how it is surfaced.
+negative strength value (e.g. `-0.73`); the phrasing is how it is surfaced.
 
-**Tags, titles, and story report counts, not percentages - certainty isn't the
-right question for them.** A tag match is either exact, partial, or absent; a
+**Tags, titles, and story report counts, not percentages - a percentage isn't
+the right question for them.** A tag match is either exact, partial, or absent; a
 title match is the same, once per room; a story match is a run of characters.
 There's no meaningful "73% sure" reading for any of them.
 *Enforcement:* the tag row shows `tagExact` and however many terms matched

@@ -128,7 +128,7 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
  *
  * A first read off the shape of the corpus, not what the app ships: the anchors
  * in `CLIP_CERTAINTY` are read off a known-outcome list instead. Do not promote
- * `clipLow` to a certainty floor on its own - a high percentile of `overall`
+ * `clipLow` to a strength floor on its own - a high percentile of `overall`
  * assumes most pairs are unrelated, and a common word that is genuinely true of
  * many rooms (`book`) scores below such a cutoff on correct matches.
  *

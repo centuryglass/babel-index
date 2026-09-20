@@ -239,7 +239,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The map's order and its density profile, from one sort: a favorite sort
   // is a placement input exactly as a search is, so `favoriteSort` composes
-  // the two - a search's own certainty, boosted to 1 for whatever the sort
+  // the two - a search's own strength, boosted to 1 for whatever the sort
   // lifted to the front - and `layout` reads one number per room instead of
   // two that could disagree.
   //
@@ -250,7 +250,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     return favoriteSort(
       filterBlockedIds(base, metadata, blockedTagSet),
       { mode: effectiveSortMode, randomSeed: randomSortSeed, ...favorites.sortInput },
-      result?.certainty ? { order: result.order, certainty: result.certainty } : null
+      result?.strength ? { order: result.order, strength: result.strength } : null
     );
   }, [total, orderSeed, result, metadata, blockedTagSet, effectiveSortMode, randomSortSeed, favorites.sortInput]);
 
@@ -260,7 +260,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // touches no downloaded image bytes. `aspect` makes the library round on
   // screen rather than in the index - cells are not square, so those differ,
   // and the edge should be equally far whichever way you drag. `density`
-  // carries the search's certainty profile, which is what clusters matches
+  // carries the search's strength profile, which is what clusters matches
   // toward the center; no search means no profile means the uniform map, so
   // clearing the box restores the baseline layout without a second code path.
   const layout = useMemo(
@@ -272,8 +272,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         aspect: CELL_ASPECT,
         genericCount,
         genericSeed,
-        density: sortResult.certainty
-          ? { ...config.search.density, certainty: sortResult.certainty }
+        density: sortResult.strength
+          ? { ...config.search.density, strength: sortResult.strength }
           : null,
       }),
     [roomCount, contentRatio, seed, total, sortResult, config, genericCount, genericSeed]
@@ -553,7 +553,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The ranked listbox: the `gradedCount` ranks the search's gradient
   // lifted above baseline - the cluster's size, and 0 for a uniform map.
-  // This is the lossless channel: map position encodes rank and certainty
+  // This is the lossless channel: map position encodes rank and strength
   // but not adjacency; the ranking encodes everything.
   //
   // Bounded twice: by `RESULTS_WINDOW` (a DOM budget) and by `cellOfRank` -
@@ -974,9 +974,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setSortMode('relevance');
     clearSearch();
   }, [requestAnimation, clearSearch]);
-  // A sort change is a re-rank, not a rebuild: it swaps `order` and lets
-  // the sliding-tile animation carry the map over. Only a search may rebuild
-  // the layout, because only a search has a certainty profile to place by.
+  // A sort change swaps `order` and lets the sliding-tile animation carry the
+  // map over. Whether the layout also rebuilds depends on the mode: 'mine' and
+  // 'count' are placement inputs and carry a strength profile of their own
+  // (`favoriteSort`, packages/map/favorites.ts), so those rebuild the same way
+  // a search does; 'relevance' and 'random' carry none and stay a pure re-rank.
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;

@@ -50,14 +50,20 @@ export function Highlight({ text, ranges }: { text: string; ranges?: MatchRange[
 }
 
 /**
- * A signed certainty as the compact phrase docs/search_rules.md "Reporting"
- * describes - the negative reading says "does not match" outright rather
- * than leaving a minus sign to interpret.
+ * The composite line's phrase, both signs, as docs/search_rules.md
+ * "Reporting" describes it.
+ *
+ * The negative reading says "does not match" outright rather than leaving a
+ * minus sign to interpret, and is worded as a confidence claim because that
+ * is what it is: only CLIP reaches the negative half, off its calibrated
+ * band. The positive reading is match strength, which is not a confidence
+ * claim and does not borrow the word.
  */
-function signedCertaintyText(percent: number, subject: string): { mismatch: boolean; text: string } {
-  const mismatch = percent < 0;
+function compositeStrengthText(percent: number): { mismatch: boolean; text: string } {
   const magnitude = Math.abs(percent).toFixed(2);
-  return { mismatch, text: `${magnitude}% certain ${subject} ${mismatch ? 'does not match' : 'matches'}` };
+  return percent < 0
+    ? { mismatch: true, text: `${magnitude}% certain this does not match` }
+    : { mismatch: false, text: `${magnitude}% match strength` };
 }
 
 /**
@@ -116,7 +122,7 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
  * The lines `ScoreBreakdown` shows, identically whether it is a card or a
  * catalog row - only the wrapping element's class differs between the two.
  *
- * One composite line - "#4 of 2048, 73% match certainty" - whose tooltip
+ * One composite line - "#4 of 2048, 73% match strength" - whose tooltip
  * breaks the percentage into each signal's share of the total score,
  * greatest first, omitting anything that contributed nothing
  * (`contributions`, docs/search_rules.md "Reporting"). Then one visible
@@ -132,10 +138,8 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
 function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
   const { contributions, tag, title, story, clip } = explanation;
   const compositeTooltip = contributions.map((c) => `${c.percent}% by ${c.label}`).join(', ');
-  const composite = signedCertaintyText(explanation.percent, 'this');
-  const compositeText = composite.mismatch
-    ? `#${explanation.rank} of ${explanation.total}, ${composite.text}.`
-    : `#${explanation.rank} of ${explanation.total}, ${Math.abs(explanation.percent).toFixed(2)}% match certainty.`;
+  const composite = compositeStrengthText(explanation.percent);
+  const compositeText = `#${explanation.rank} of ${explanation.total}, ${composite.text}.`;
   const tagText = tagLine(tag);
   const titleText = titleLine(title);
   const storyText = storyLine(story);
@@ -148,7 +152,7 @@ function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
       {/*
         The per-axis lines are wrapped so they can flow into columns
         (`.score-details` in style.css) while the composite "match
-        certainty" line above stays full width. The catalog row picks a
+        strength" line above stays full width. The catalog row picks a
         column count from its width (`--score-cols`, `scoreLayoutFor`);
         the overlay's stacked layout takes two, and its side-by-side
         split keeps one, where there is no room for more (both rules live
@@ -188,7 +192,7 @@ export function ScoreBreakdown({
   if (!result?.breakdown || !result.ranks || !result.ties || rank == null || rank < 0) return null;
   const explanation = explainRanking(rank, {
     breakdown: result.breakdown,
-    certainty: result.certainty,
+    strength: result.strength,
     ranks: result.ranks,
     ties: result.ties,
     weights,

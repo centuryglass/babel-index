@@ -16,10 +16,10 @@ with style keywords used for generation and a brief story text based on the
 image and keywords.
 
 Tiles can be searched, with CLIP embeddings, keyword matching, and story
-matching used to calculate ranking and match certainty for all tiles. A set of
+matching used to calculate ranking and match strength for all tiles. A set of
 generic "default" tiles are mixed in with the unique ones, with their
 distribution adjusted during searches so they serve as a way to visibly gauge
-search certainty. Diegetic controls for the search interface are embedded into
+search strength. Diegetic controls for the search interface are embedded into
 the center tile, placed using geometry calculated from a reference SVG.
 
 An alternate catalog interface can be used to maximize discoverability. This
@@ -62,6 +62,9 @@ npm run test:parity                # manual Canvas2D-vs-WebGL render parity; rea
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
+npm run check:requirements         # docs/search_requirements.md vs the tests' [SR-nn] tags, a required check
+npm run check:requirements -- --list              # ... and print every requirement with the tests covering it
+npm run check:requirements -- --update-baseline   # ... lower the allowed-uncovered list once a gap is closed
 npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
@@ -323,7 +326,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   favorite sort first - a reorder that left one of them in place would
   rescatter everything except the thing already pinning the layout.
   A search, or an active favorite sort (`'mine'`/`'count'`), may also rebuild
-  the layout: both are placement inputs (the certainty claim each makes is
+  the layout: both are placement inputs (the strength claim each makes is
   under *Favorites*). `favoriteSort` (`packages/map/favorites.ts`) composes
   the two rather than letting one override the other. That rebuild is the
   same O(slots) the ratio slider does on every drag. Nothing else recomputes
@@ -466,17 +469,25 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   signal is normalised to [0, 1] before weighting, and the CLIP term is
   min-maxed across the corpus for that query - bucketing keyword hits ahead of
   everything would let one weak partial beat a room CLIP is certain about.
+- **A query is matched term by term AND as one whole string, and the better
+  reading wins.** `rankHybrid` classifies each term against a room's keywords
+  and title, then classifies the whole folded query the same way, so a
+  multi-word tag typed plainly (`outsider art`) is an exact match without the
+  reader quoting it - which matters because a keyword chip searches its text
+  unquoted and nearly half a real corpus's keywords are multi-word. An exact
+  whole-query match counts as one exact match, never more, so two separate
+  exact tags still outrank one matched phrase.
 - **Keyword partials divide by the keyword; story matches divide by the query.**
   Opposite on purpose - `art` matched only 3/11 of `art nouveau`, but a hit in a
   long story isn't worth less than the same hit in a short one.
 - **The density gradient is one formula** (`contentRatio + (peak - contentRatio)
-  * certainty`, walking outward), not three special cases for cluster/falloff/
-  no-match. Certainty must stay non-increasing with rank, and anything under
-  `CERTAINTY_FLOOR` snaps to the baseline - both asserted.
-- **Certainty is absolute; ranking is relative. Don't feed one the other's
+  * strength`, walking outward), not three special cases for cluster/falloff/
+  no-match. Strength must stay non-increasing with rank, and anything under
+  `STRENGTH_FLOOR` snaps to the baseline - both asserted.
+- **Strength is absolute; ranking is relative. Don't feed one the other's
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
   for *any* query - driving the gradient off that clusters nonsense as
-  confidently as an exact match. `matchCertainty` reads raw cosines against
+  confidently as an exact match. `matchStrength` reads raw cosines against
   absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.** The
   blob is positional (`scan.ts` rejects a drifted count); the sidecar is
@@ -546,7 +557,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   path, animation included) and must never rebuild the layout. An active
   favorite sort (`'mine'`/`'count'`) is the exception - it is a placement
   input, exactly as a search is, because "sorted to the front" is itself a
-  certainty claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
+  strength claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
   catalog row is a fixed height, so the row's favorite control sits beside
   "show on the map" rather than inside `RoomDetails` where the card and the
   overlay put it; in the text column it would have to be reserved for in
@@ -877,7 +888,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   score breakdown uses a `strip` layout rather than the card's taller
   `table`. A row is two stacked pieces, a fixed-height flow area
   (`--catalog-flow-h`) and the score strip below it (`scoreStripHeight`),
-  so match certainty can never get pushed off the card; the center room's
+  so match strength can never get pushed off the card; the center room's
   row is the one exception, sized to its own content since it sits outside
   the paging arithmetic. `catalog.ts`, `CatalogView.tsx` and `style.css`'s
   `.catalog-flow`/`.score-strip` comments carry the layout mechanics.
@@ -932,7 +943,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
 - **`rankHybrid` returns the components it sorted on, and the CLIP row must show
   its raw cosine.** `breakdown.clip` is min-maxed for the query, so some room
   scores 1.00 for `cghjj` too. `explainRanking` keeps the raw cosine beside it and
-  certainty on its own line; printing the relative number alone claims a
+  strength on its own line; printing the relative number alone claims a
   confidence the library does not have. Asserted.
 - **Namespace catalog CSS.** `.row` already belongs to the dev panel, so an
   unprefixed `.row` rule for catalog rows reaches in and turns every slider
@@ -1007,6 +1018,18 @@ two in step - see *Testing and CI*.
 
 ### Testing and CI
 
+- **`npm run check:requirements` is a required check, run from the `lint` CI
+  job.** A test names the requirement it covers in its own name
+  (`test('... [SR-18]', ...)`), and the checker rebuilds the whole mapping
+  from `git ls-files` on every run - so `docs/search_requirements.md` names
+  no tests, nothing is kept in sync, and a renumbered requirement id would
+  break every citation at once (which is why an `SR-nn` is permanent; that
+  file's header states the rule). It fails on a tag naming a requirement
+  that does not exist, and on a requirement losing coverage the committed
+  `baseline.json` says it had. Gaining coverage never fails - it prints the
+  command that lowers the baseline. A requirement marked `_(judged)_` in the
+  document has no assertion that could fail and is counted apart from the
+  gaps rather than sitting in them forever.
 - **`npm run check:file-map` is a required check, run from the `lint` CI
   job.** It diffs `docs/file_map.md` against `git ls-files`, failing on a
   path the map lists that no longer exists or a tracked file (other than a
@@ -1088,6 +1111,29 @@ two in step - see *Testing and CI*.
   trusting one `landed()` read. Whether a control-issued `flyTo` should end
   an active rearrangement the way a pointer grab does is the open question
   recorded in `docs/pending_task_list.md`.
+
+## Tracking open work
+
+- **Open work is moving to GitHub issues, one area at a time.** An area is
+  migrated the next time it is worked in; `docs/pending_task_list.md` says
+  which have moved and which have not, and is still the destination for
+  anything in an unmigrated area. *Search* has moved and is the pilot.
+- **A found bug in a migrated area opens an issue** rather than a dated
+  entry, carrying the same content the task list asked for: what was
+  observed, how to reproduce it, and what is already ruled out. The trivial
+  same-pass fix rule is unchanged - it decides whether anything gets filed
+  at all, not where.
+- **A fact worth knowing is not a task.** It belongs in the owning module's
+  comment, or in this file, not in either tracker. See "This file is for
+  facts that cross files".
+- **`.claude/scripts/issues.mjs` compiles the issues into a local
+  directory** (`index.md` plus one file per issue) for when a file on disk
+  is cheaper to read than the API. `--fetch` uses `gh` where it exists;
+  otherwise pipe issue JSON in, which is how a session with the GitHub MCP
+  tools and no `gh` binary feeds it. The cache is generated and gitignored -
+  never edit it, and never treat it as the source of truth.
+- **A PR closing an issue says so in its description** (`Closes #NN`), which
+  is what makes merging the status update.
 
 ## Working with GitHub
 

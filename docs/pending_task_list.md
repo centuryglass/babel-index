@@ -3,6 +3,12 @@
 What is still to do, and nothing else. Remove a task as it is completed — the
 code and the git log are the record of what was.
 
+**Open work is migrating to GitHub issues**, a section at a time, as each
+area is next worked in (`AGENTS.md`, "Tracking open work"). *Search* has
+moved and is the pilot; everything still listed below is still tracked here.
+`.claude/scripts/issues.mjs` compiles the issues into a local directory when
+a file is easier to read than the API.
+
 ## A11y:
 - No actual screen reader testing has happened yet. Learn orca and test
   manually. See accessibility-plan.md for more details on what to check, and
@@ -75,26 +81,32 @@ for that audience specifically, not things the art itself needs:
   `FavoriteStore` rather than a lock on the file.
 
 ## Search:
-- **The int8 quantisation scale is stated twice, once on each side of
-  `embeddings.bin`** — `QUANT_SCALE` in `tools/embed/embed.ts` writes it,
-  `EMBEDDING_SCALE` in `packages/map/ordering.ts` reads it, both 127, with no
-  import binding them. Ranking is immune to a drift between them (a monotone
-  factor cannot reorder), so the symptom would be `matchCertainty` reading the
-  wrong absolute cosine and the density gradient clustering at the wrong
-  confidence. `embeddings.json` already records `scale` and nothing reads it
-  back — carrying it through the manifest removes the constant from the client
-  entirely.
-- **[2026-09-18] `rankHybrid` scores the whole corpus synchronously,
-  immediately before the rearrangement it triggers.** `scoring.ts`'s
-  `rankHybrid` runs `embeddingScores` over the full embedding set plus
-  per-room tokenization/lemmatization on the main thread, and whatever it
-  costs lands as a single stall right at the start of the animation - the
-  moment a dropped frame is most visible. The scoring functions are already
-  pure and browser-free, which is most of the work a worker would need
-  done; the complication is `useSearch` already juggles an async server
-  round trip for the CLIP text tower, so adding a second async boundary
-  needs care about ordering and cancellation. Not yet measured how large
-  this actually is - worth profiling before committing to the worker move.
+
+Open search work is tracked in GitHub issues, not here - this section was
+the pilot for that move (see `AGENTS.md`, "Tracking open work"):
+[#224](https://github.com/centuryglass/babel-index/issues/224) multi-word
+tag not an exact match,
+[#225](https://github.com/centuryglass/babel-index/issues/225) `keywordScore`
+has no caller,
+[#226](https://github.com/centuryglass/babel-index/issues/226) printed
+certainty disagrees with map placement,
+[#227](https://github.com/centuryglass/babel-index/issues/227) certainty
+falls as the query grows,
+[#228](https://github.com/centuryglass/babel-index/issues/228) the negative
+half is CLIP-only,
+[#229](https://github.com/centuryglass/babel-index/issues/229) a config can
+falsify the ranking guarantees,
+[#230](https://github.com/centuryglass/babel-index/issues/230) search and
+favorite sort made mutually exclusive,
+[#231](https://github.com/centuryglass/babel-index/issues/231) the int8
+scale is stated twice,
+[#232](https://github.com/centuryglass/babel-index/issues/232) `rankHybrid`
+scores synchronously.
+
+What search is for is `docs/search_requirements.md`; the analysis behind
+those issues is `docs/search_critique.md`. Neither is a task list, and
+neither tracks status - `npm run check:requirements` does, for the half that
+is coverage.
 
 ## Rendering:
 - **[2026-09-18] `render.ts`'s Canvas2D path still refits the center

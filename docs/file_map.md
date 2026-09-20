@@ -33,9 +33,18 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `.gitignore`: local/generated paths kept out of the repo - see its own
                comments for what each entry is and why.
 - `.claude`: Claude Code session config for this repo, not part of the app.
-            `settings.json` wires `hooks/session-start.sh`, which runs
-            `npm install` once at the start of a Claude Code Remote session
-            (a no-op everywhere else, gated on `CLAUDE_CODE_REMOTE`).
+  * `settings.json`: Wires the session-start hook below.
+  * `hooks/session-start.sh`: Runs `npm install` once at the start of a
+                              Claude Code Remote session - a no-op
+                              everywhere else, gated on
+                              `CLAUDE_CODE_REMOTE`.
+  * `scripts/issues.mjs`: Compiles the repo's GitHub issues into
+                          `.claude/cache/issues/` (gitignored) - an
+                          `index.md` plus one file per issue, for when a
+                          file on disk is cheaper to read than the API.
+                          `--fetch` where `gh` exists, otherwise issue JSON
+                          on stdin. `.mjs` rather than `.ts` because it has
+                          to run before `npm install` has; see its header.
 
 ### Build:
 - `build`: the Node-side TypeScript hook (see `AGENTS.md`'s *Commands*) - not
@@ -464,6 +473,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * `index.ts`: CLI - reads this file, walks `git ls-files`, reports drift.
   * `lib.ts`: Pure parsing of this file's bullet list into resolved paths,
              no filesystem access.
+- `tools/check-requirements`: `npm run check:requirements` - cross-references
+                             `docs/search_requirements.md` against the
+                             `[SR-nn]` tags in the test tree; see its own
+                             header for the ratchet.
+  * `index.ts`: CLI - reads the requirements, walks `git ls-files` for
+               tags, reports coverage and drift.
+  * `lib.ts`: Pure parsing of requirement ids and coverage tags, plus the
+             baseline comparison. No filesystem access.
+  * `baseline.json`: The requirements known to be uncovered. A ratchet, not
+                    a target - losing coverage fails the check, gaining it
+                    only prints the command that lowers this list.
 - `tools/curation`: Python/Qt tools for turning a batch of generated tiles
                     into `metadata.json` - keyword extraction, story
                     generation/review, alt text, titles, sensitive-content
@@ -595,6 +615,19 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                           (`packages/map/scoring.ts`); update this file
                           alongside a scoring change rather than letting it
                           drift back into a target/code gap.
+- `docs/search_requirements.md`: What search has to accomplish for a reader,
+                                as numbered requirements. The target the
+                                other two search docs answer to: no formula,
+                                no weight, no data structure. Maintainer-set,
+                                so a change here is a change of intent rather
+                                than a correction.
+- `docs/search_critique.md`: A review of the search system as built - what
+                            works, where ranking and certainty disagree, and
+                            an ordered set of recommendations. Analysis, not
+                            a specification: `search_rules.md` says what the
+                            code does, this says what is wrong with it. Its
+                            findings are entered in
+                            `docs/pending_task_list.md` under *Search*.
 - `docs/cosine-range-report.json`: A checked-in snapshot of
                                    `tools/embed/cosine-range.ts`'s last real
                                    run - the numbers `docs/search_rules.md`'s

@@ -29,7 +29,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     await closeLibrary(session, 'library-shelf.png');
   });
 
-  test('the shelf is a real control surface: one tab stop in, arrows within, a book searches', async () => {
+  test('the shelf is a real control surface: one tab stop in, arrows within, a book searches [SR-38]', async () => {
     const { page } = session;
     // Fly to the opening view first: the buttons exist exactly while the
     // titles are legible, so this is also the state a sighted reader would be
@@ -149,7 +149,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     }
   });
 
-  test('a rearrangement says what it did and what is now under the cursor', async () => {
+  test('a rearrangement says what it did and what is now under the cursor [SR-47]', async () => {
     const { page } = session;
     // Standing still while the library reorders around you and hearing
     // nothing is not an accessible rearrangement, whatever the animation
