@@ -3,9 +3,10 @@
 Notes for coding agents working in this repo. Human-facing docs are
 [`README.md`](README.md) (how to run it),
 [`docs/architecture.md`](docs/architecture.md) (a five-minute system
-overview), [`docs/concept.md`](docs/concept.md) (what it is meant to
-become), and [`docs/pending_task_list.md`](docs/pending_task_list.md)
-(what is still to do).
+overview), and [`docs/concept.md`](docs/concept.md) (what it is meant to
+become). What is still to do lives in
+[GitHub issues](https://github.com/centuryglass/babel-index/issues), not a
+file in this repo - see "Tracking open work" below.
 
 ## What this is
 
@@ -46,9 +47,8 @@ Practically, this means: when a change is ambiguous between "what the art
 needs" and "what a portfolio needs," default to keeping both in mind rather
 than silently picking one - flag the tension instead of quietly resolving it
 in the art's favor. Process/documentation gaps that exist purely for
-portfolio value (not required by the art itself) belong in
-`docs/pending_task_list.md` like any other open task, not bundled invisibly
-into unrelated work.
+portfolio value (not required by the art itself) get a GitHub issue like any
+other open task, not bundled invisibly into unrelated work.
 
 ## Commands
 
@@ -255,17 +255,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   wrong assertion, an off-by-one, a stale comment) - fix it in the same pass,
   same as any other cleanup a task turns up. Real investigation or design work
   - a race condition whose root cause isn't yet nailed down, a fix that
-    touches code you weren't already changing - gets a dated entry in
-  `docs/pending_task_list.md` instead: what was observed, how to reproduce
-  it, and what's already been ruled out, so the next pass starts from
-  evidence rather than re-discovering the bug from scratch. Either way, the
-  bug does not just get silently noticed and left. "Unrelated to what I was
-  asked" is not a reason to leave a found bug undocumented and unfixed.
-  "Trivial" is about the fix, not the effort spent finding it - if closing
-  it out needs more than one e2e run to confirm (a live-instrumented repro,
-  several rounds of re-running a browser suite to chase a race), that is a
-  sign it belongs in `docs/pending_task_list.md`, not a same-pass fix -
-  unless the user has explicitly asked for exactly that investigation.
+    touches code you weren't already changing - gets a GitHub issue instead
+  (see "Tracking open work"): what was observed, how to reproduce it, and
+  what's already been ruled out, so the next pass starts from evidence rather
+  than re-discovering the bug from scratch. Either way, the bug does not just
+  get silently noticed and left. "Unrelated to what I was asked" is not a
+  reason to leave a found bug undocumented and unfixed. "Trivial" is about
+  the fix, not the effort spent finding it - if closing it out needs more
+  than one e2e run to confirm (a live-instrumented repro, several rounds of
+  re-running a browser suite to chase a race), that is a sign it belongs in
+  an issue, not a same-pass fix - unless the user has explicitly asked for
+  exactly that investigation.
 - **`CLAUDE.md` is a symlink to this file.** Edit `AGENTS.md`; `CLAUDE.md`
   exists only so a tool that looks for that filename finds the same content.
 - **This file is for facts that cross files, not single-file trivia.**
@@ -1110,28 +1110,43 @@ two in step - see *Testing and CI*.
   - its own comment explains why it waits out and retries rather than
   trusting one `landed()` read. Whether a control-issued `flyTo` should end
   an active rearrangement the way a pointer grab does is the open question
-  recorded in `docs/pending_task_list.md`.
+  recorded in issue #265.
 
 ## Tracking open work
 
-- **Open work is moving to GitHub issues, one area at a time.** An area is
-  migrated the next time it is worked in; `docs/pending_task_list.md` says
-  which have moved and which have not, and is still the destination for
-  anything in an unmigrated area. *Search* has moved and is the pilot.
-- **A found bug in a migrated area opens an issue** rather than a dated
-  entry, carrying the same content the task list asked for: what was
-  observed, how to reproduce it, and what is already ruled out. The trivial
-  same-pass fix rule is unchanged - it decides whether anything gets filed
-  at all, not where.
+- **Open work lives entirely in GitHub issues.** There is no task-list file
+  in this repo anymore - `docs/pending_task_list.md` and
+  `docs/accessibility-plan.md` were mirrored into issues and removed (see
+  [#236](https://github.com/centuryglass/babel-index/issues/236)). *Search*
+  moved first, as the pilot, and every other area followed in the same pass.
+- **A found bug opens an issue**, carrying the same content the old task
+  list asked for: what was observed, how to reproduce it, and what is
+  already ruled out. The trivial same-pass fix rule is unchanged - it
+  decides whether anything gets filed at all, not where.
 - **A fact worth knowing is not a task.** It belongs in the owning module's
-  comment, or in this file, not in either tracker. See "This file is for
-  facts that cross files".
+  comment, or in this file, not in an issue. See "This file is for facts
+  that cross files".
 - **`.claude/scripts/issues.mjs` compiles the issues into a local
   directory** (`index.md` plus one file per issue) for when a file on disk
   is cheaper to read than the API. `--fetch` uses `gh` where it exists;
   otherwise pipe issue JSON in, which is how a session with the GitHub MCP
   tools and no `gh` binary feeds it. The cache is generated and gitignored -
   never edit it, and never treat it as the source of truth.
+- **The `SessionStart` hook (`.claude/hooks/session-start.sh`) runs this
+  automatically where it can.** When `gh` is on `PATH` and authenticated -
+  true on the maintainer's own machine, never true in a Claude Code Remote
+  session - it refreshes the cache and prints `index.md` to stdout, which
+  Claude Code folds into session context, so every open issue's title is
+  already in view at the start of a session without a tool call.
+- **When the hook doesn't fire, apply it by hand before relying on "no open
+  issue mentions this."** That's every Claude Code Remote session (no
+  `gh`), and any other agent system - OpenCode included - that doesn't run
+  this repo's Claude Code hooks. Fetch the issue list through whatever tool
+  is available (the GitHub MCP tools' `list_issues`, or `gh issue list
+  --json ...` if present) and pipe the JSON into the script:
+  `node .claude/scripts/issues.mjs --from-json <path>` or `... < issues.json`.
+  Then read `.claude/cache/issues/index.md` the same way the hook's stdout
+  would have surfaced it.
 - **A PR closing an issue says so in its description** (`Closes #NN`), which
   is what makes merging the status update.
 
@@ -1142,4 +1157,4 @@ two in step - see *Testing and CI*.
 
 ## Next up
 
-See `docs/pending_task_list.md`
+See [GitHub issues](https://github.com/centuryglass/babel-index/issues).

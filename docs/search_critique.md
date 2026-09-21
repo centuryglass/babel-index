@@ -434,5 +434,6 @@ one again would repeat the mistake this file is about.
 One stale comment, per `AGENTS.md`'s rule that a trivial bug found during
 other work gets fixed rather than filed: `main.tsx`'s claim that only a
 search rebuilds the layout, corrected to match `favoriteSort` and
-`AGENTS.md`. Everything else here is recorded in
-`docs/pending_task_list.md` and left for a decision.
+`AGENTS.md`. Everything else here is filed as GitHub issues
+[#224](https://github.com/centuryglass/babel-index/issues/224)-[#235](https://github.com/centuryglass/babel-index/issues/235)
+and left for a decision.

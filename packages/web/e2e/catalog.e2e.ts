@@ -350,7 +350,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
   test('a row\'s tile button is clickable even where the wrapped story runs past its bottom edge', async () => {
     const { page } = session;
-    // Repro window from `docs/pending_task_list.md`'s catalog-tile-button bug:
+    // Repro window for the now-fixed catalog-tile-button bug:
     // wide enough that `.catalog-row .catalog-tile-button` floats (not
     // `.ultra-narrow`) but narrow enough that a room's wrapped `.story` runs
     // taller than the float, so the story's own block box - full row width,

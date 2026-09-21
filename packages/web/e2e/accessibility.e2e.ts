@@ -140,7 +140,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // full rather than guessing from an empty read - so this can only check
       // that the DOM carries the values, not that a real screen reader's
       // platform API receives them the way it receives the button's name
-      // checked below. Left as an open question in accessibility-plan.md
+      // checked below. Left as an open question in issue #243
       // rather than a claim this test does not back up.
       assert.equal(posinset, '1');
       assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);

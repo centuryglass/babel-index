@@ -328,7 +328,7 @@ export async function landed(page, flightMs, timeoutMs = 5000) {
  * rearrangement's own camera control keeps driving x/y/zoom and the button
  * click has no visible effect at all, so `landed()` alone can report a
  * "settled" camera that never actually recentred (confirmed by direct
- * reproduction - see docs/pending_task_list.md's note on this). Waiting
+ * reproduction - see issue #265). Waiting
  * out any rearrangement before clicking narrows the race but does not close
  * it, so this also checks the outcome and retries the click if it didn't
  * land at (0.5, 0.5), rather than trusting one `landed()` read.
