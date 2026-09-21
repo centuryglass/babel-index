@@ -10,12 +10,22 @@
  * truth back into the repo - the cache is generated, gitignored, and always
  * a copy.
  *
- * Two front ends, one compiler, because the two callers have different
+ * Three front ends, one compiler, because the callers have different
  * GitHub access:
  *   - `--fetch` shells out to `gh`, which the maintainer has locally.
- *   - stdin (or `--from-json`) takes an already-fetched JSON array, which
- *     is how an agent feeds it: a Claude Code Remote session has the GitHub
- *     MCP tools but no `gh` binary and no token.
+ *   - `--fetch-api` calls the REST API directly with Node's built-in
+ *     `fetch`, authenticated with `GH_TOKEN`/`GITHUB_TOKEN` from the
+ *     environment - no `gh` binary needed. `GH_TOKEN`/`GITHUB_TOKEN` are
+ *     present in a Claude Code Remote session's environment, but as
+ *     observed there that value 401s against `api.github.com` - it looks
+ *     scoped for git's own credential flow (smart-HTTP/askpass) or an
+ *     internal proxy, not for direct REST bearer auth. This path is real
+ *     and works wherever a genuine PAT is exported under one of those two
+ *     names; `session-start.sh` calls it best-effort (failure doesn't
+ *     block the rest of session start) because that isn't guaranteed.
+ *   - stdin (or `--from-json`) takes an already-fetched JSON array, the
+ *     fallback for an agent with the GitHub MCP tools but no usable token
+ *     in its environment at all - see AGENTS.md's "Tracking open work".
  *
  * Plain `.mjs` rather than the `.ts` AGENTS.md defaults to: this has to run
  * before `npm install` has necessarily happened, and the TypeScript loader
@@ -46,6 +56,56 @@ function fetchWithGh() {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
   });
+}
+
+/** Parsed from `origin` rather than hardcoded, so a fork queries its own issues. */
+function originRepo() {
+  const url = execFileSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf8' }).trim();
+  const match = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(\.git)?$/);
+  if (!match) throw new Error(`origin remote is not a github.com url: ${url}`);
+  return { owner: match[1], repo: match[2] };
+}
+
+/**
+ * The REST issues endpoint also returns pull requests (flagged with a
+ * `pull_request` key) and paginates at 100/page regardless of what's asked
+ * for, so both need handling `gh issue list` does internally.
+ */
+async function fetchWithApi() {
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  if (!token) throw new Error('GH_TOKEN/GITHUB_TOKEN not set');
+  const { owner, repo } = originRepo();
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'babel-index-issues-cache',
+  };
+
+  const issues = [];
+  for (let page = 1; ; page++) {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+    const batch = await res.json();
+    for (const issue of batch) {
+      if (issue.pull_request) continue;
+      issues.push({
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        labels: (issue.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name)),
+        body: issue.body,
+        created_at: issue.created_at,
+        updated_at: issue.updated_at,
+        url: issue.html_url,
+      });
+    }
+    if (batch.length < 100) break;
+  }
+  return JSON.stringify(issues);
 }
 
 /** Tolerant of the two shapes the front ends produce: a bare array, or `{issues: [...]}`. */
@@ -85,18 +145,20 @@ function issueFile(issue) {
   return `${head.join('\n')}${issue.body ?? '_no description_'}\n`;
 }
 
-function main() {
+async function main() {
   const out = arg('--out', DEFAULT_OUT);
   const fromJson = arg('--from-json');
 
   let raw;
   if (process.argv.includes('--fetch')) raw = fetchWithGh();
+  else if (process.argv.includes('--fetch-api')) raw = await fetchWithApi();
   else if (fromJson) raw = readFileSync(fromJson, 'utf8');
   else raw = readStdin();
 
   if (!raw.trim()) {
     console.error(
-      'no input. Pipe issue JSON in, pass --from-json <path>, or use --fetch where `gh` is available.'
+      'no input. Pipe issue JSON in, pass --from-json <path>, use --fetch where `gh` is ' +
+      'available, or use --fetch-api where GH_TOKEN/GITHUB_TOKEN is set.'
     );
     process.exit(1);
   }
@@ -142,4 +204,7 @@ function main() {
   console.log(`${issues.length} issues written to ${out} (${open.length} open)`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err.message);
+  process.exit(1);
+});

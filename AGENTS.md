@@ -1137,17 +1137,25 @@ two in step - see *Testing and CI*.
   tools and no `gh` binary feeds it. The cache is generated and gitignored -
   never edit it, and never treat it as the source of truth.
 - **The `SessionStart` hook (`.claude/hooks/session-start.sh`) runs this
-  automatically where it can.** When `gh` is on `PATH` and authenticated -
-  true on the maintainer's own machine, never true in a Claude Code Remote
-  session - it refreshes the cache and prints `index.md` to stdout, which
-  Claude Code folds into session context, so every open issue's title is
-  already in view at the start of a session without a tool call.
-- **When the hook doesn't fire, apply it by hand before relying on "no open
-  issue mentions this."** That's every Claude Code Remote session (no
-  `gh`), and any other agent system - OpenCode included - that doesn't run
-  this repo's Claude Code hooks. Fetch the issue list through whatever tool
-  is available (the GitHub MCP tools' `list_issues`, or `gh issue list
-  --json ...` if present) and pipe the JSON into the script:
+  automatically where it can, in two ways.** When `gh` is on `PATH` and
+  authenticated - true on the maintainer's own machine, never true in a
+  Claude Code Remote session - it runs `issues.mjs --fetch`. Otherwise, if
+  `GH_TOKEN`/`GITHUB_TOKEN` is set (present in a Claude Code Remote
+  session's environment even without `gh`), it tries `issues.mjs
+  --fetch-api`, which hits the REST API directly with Node's built-in
+  `fetch` - best-effort, since that env var is not guaranteed to be a plain
+  REST bearer token (see the script's own comment; as observed in a Claude
+  Code Remote session it 401s). Either way, on success it prints
+  `index.md` to stdout, which Claude Code folds into session context, so
+  every open issue's title is already in view at the start of a session
+  without a tool call.
+- **When neither hook path produces output, apply it by hand before relying
+  on "no open issue mentions this."** That covers a Claude Code Remote
+  session whose token doesn't work for `--fetch-api`, and any other agent
+  system - OpenCode included - that doesn't run this repo's Claude Code
+  hooks at all. Fetch the issue list through whatever tool is available
+  (the GitHub MCP tools' `list_issues`, or `gh issue list --json ...` if
+  present) and pipe the JSON into the script:
   `node .claude/scripts/issues.mjs --from-json <path>` or `... < issues.json`.
   Then read `.claude/cache/issues/index.md` the same way the hook's stdout
   would have surfaced it.
