@@ -1,0 +1,70 @@
+name: docker build
+
+# Builds the Dockerfile against the exact revision deploy.yml just shipped -
+# no push, no registry, build-only (issue #246). The image itself is a
+# frivolous convenience (the VPS deploy in deploy.sh never touches Docker),
+# but it will drift out of step with package.json/packages layout unnoticed
+# otherwise, so something has to build it occasionally.
+#
+# This is deliberately its own workflow rather than a job inside deploy.yml:
+# a red job in deploy.yml would make that run's overall conclusion "failure"
+# and read as "the deploy failed" from the Actions tab, when nothing about
+# the deployment itself is wrong. Kept separate, a failure here is exactly
+# what it looks like - the Dockerfile doesn't build - and never blocks or
+# delays the actual deploy, which does not wait on this workflow at all.
+#
+# No bespoke notification wiring: GitHub emails a failed-workflow-run
+# notification to anyone watching this repo (Settings > Notifications), which
+# is the "email if it fails" the Dockerfile is worth. A green run posts
+# nothing.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit to build (default: the tip of main)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    name: build Dockerfile
+    # Same trigger as deploy.yml's own job - fires once per release, not on
+    # every push to main that merely goes green - so a drifted Dockerfile is
+    # reported at the same cadence a real deploy would have caught it.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       startsWith(github.event.workflow_run.head_commit.message, 'chore(main): release '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: which commit
+        id: target
+        env:
+          REQUESTED: ${{ inputs.sha }}
+          TESTED: ${{ github.event.workflow_run.head_sha }}
+          FALLBACK: ${{ github.sha }}
+        run: |
+          sha="${REQUESTED:-${TESTED:-$FALLBACK}}"
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::not a full 40-character commit sha: '$sha'"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "building $sha"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+
+      - name: docker build
+        run: docker build -t babel-index:ci .

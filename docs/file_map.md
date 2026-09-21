@@ -536,6 +536,12 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                   call, then re-checks health from outside.
                                   Manually dispatchable with a sha, which is
                                   the rollback button.
+- `.github/workflows/docker-build.yml`: fires on the same release cadence as
+                                        `deploy.yml` and builds the Dockerfile
+                                        against the shipped sha, no push, no
+                                        registry - a separate workflow so a
+                                        failure here never touches deploy's
+                                        own run status (issue #246).
 - `release-please-config.json` / `.release-please-manifest.json`: what
   `.github/workflows/release-please.yml` reads/writes - see AGENTS.md's
   "Release discipline" below. `CHANGELOG.md` doesn't exist until that
