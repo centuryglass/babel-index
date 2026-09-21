@@ -225,6 +225,15 @@ export function useMapRenderer({
       badgeRO.observe(arrowElForObserver);
     }
 
+    // The favorites-sort switch and reorder button's three children - looked
+    // up once here instead of on every `pointermove`. The container is
+    // mounted (hidden, not unmounted) for the whole effect lifetime whether
+    // or not its cell is on screen, so these don't change underneath the cache.
+    const controlsContainerEl = controlsRef?.current ?? null;
+    const shuffleEl = controlsContainerEl?.querySelector<HTMLElement>('[data-control="shuffle"]') ?? null;
+    const mineEl = controlsContainerEl?.querySelector<HTMLElement>('[data-control="mine"]') ?? null;
+    const countEl = controlsContainerEl?.querySelector<HTMLElement>('[data-control="count"]') ?? null;
+
     const render = () => {
       pending = 0;
       // Hidden draws nothing and measures nothing: under `display: none` every
@@ -459,8 +468,19 @@ export function useMapRenderer({
     // sitting behind it. `hoveredBook` instead feeds `composeSpines` (via
     // `render()`), which paints the glow first and the backdrop plate over
     // it, on the title's own canvas layer.
-    const onMove = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
+    // A high-poll-rate mouse or trackpad fires `pointermove` well above the
+    // display's refresh rate; nothing here needs finer than one read per
+    // frame, so only the latest event survives and processing is deferred to
+    // a single rAF - `hoverRaf` collapses however many arrived meanwhile into
+    // one pass over the hit tests below.
+    let pendingMove: PointerEvent | null = null;
+    let hoverRaf = 0;
+    const processMove = (e: PointerEvent) => {
+      // `canvasRect` is the same cache `render()`'s arrow bearing uses,
+      // refreshed by `canvasRO` on an actual layout change rather than
+      // re-read here - a `getBoundingClientRect` call is a forced-reflow risk
+      // on every one of these, same as it is in `render()`.
+      const rect = canvasRect;
       const viewportRect = { width: canvas.clientWidth, height: canvas.clientHeight };
       const cellRect = centerCellRect(cam.current, viewportRect);
       const px = e.clientX - rect.left;
@@ -471,19 +491,11 @@ export function useMapRenderer({
 
       // The favorites-sort switch and reorder button - DOM `.hover` classes
       // like the open book's: neither paints text, so a CSS overlay is the
-      // whole highlight.
-      const controls = controlsRef?.current;
-      if (controls) {
-        controls
-          .querySelector('[data-control="shuffle"]')
-          ?.classList.toggle('hover', shuffleButtonAtPoint(px, py, cellRect));
-        controls
-          .querySelector('[data-control="mine"]')
-          ?.classList.toggle('hover', mineToggleAtPoint(px, py, cellRect));
-        controls
-          .querySelector('[data-control="count"]')
-          ?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
-      }
+      // whole highlight. `shuffleEl`/`mineEl`/`countEl` are looked up once
+      // above rather than queried here on every move.
+      shuffleEl?.classList.toggle('hover', shuffleButtonAtPoint(px, py, cellRect));
+      mineEl?.classList.toggle('hover', mineToggleAtPoint(px, py, cellRect));
+      countEl?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
 
       // The distill toggle - painted onto the center tile with no element of
       // its own (the `favTooltipRef` situation), so highlight and tooltip are
@@ -547,7 +559,24 @@ export function useMapRenderer({
         }
       }
     };
+    const onMove = (e: PointerEvent) => {
+      pendingMove = e;
+      if (hoverRaf) return;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = 0;
+        const move = pendingMove;
+        pendingMove = null;
+        if (move) processMove(move);
+      });
+    };
     const onLeave = () => {
+      // A leave cancels whatever move was still queued - processing it after
+      // would re-set every `hovered*` var this clears right back on.
+      if (hoverRaf) {
+        cancelAnimationFrame(hoverRaf);
+        hoverRaf = 0;
+      }
+      pendingMove = null;
       centerBookRef?.current?.classList.remove('hover');
       controlsRef?.current
         ?.querySelectorAll('.hover')
@@ -571,6 +600,7 @@ export function useMapRenderer({
     canvas.addEventListener('pointerleave', onLeave);
     return () => {
       if (pending) cancelAnimationFrame(pending);
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
       canvasRO.disconnect();
       badgeRO?.disconnect();
       window.removeEventListener('resize', onResize);
