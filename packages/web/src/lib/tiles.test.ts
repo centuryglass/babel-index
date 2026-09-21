@@ -332,6 +332,33 @@ test('prefetching something already here is free', () => {
   assert.equal(images.made.length, before, 'a resident tile must not be re-requested');
 });
 
+test('hasPrefetchCapacity reports the cap so a caller can stop before computing an id it cannot use', () => {
+  // concurrency 0: nothing ever dequeues, so the queue fills by exactly one
+  // per genuinely new prefetch() call - the deterministic way to reach
+  // QUEUE_LIMIT without racing `pump()`'s own draining of the queue.
+  const { cache } = build({ concurrency: 0 });
+  assert.ok(cache.hasPrefetchCapacity());
+  for (let id = 0; id < 256; id++) cache.prefetch(id, 1);
+  assert.equal(cache.hasPrefetchCapacity(), false, 'the queue is now at QUEUE_LIMIT');
+});
+
+test('a resident tile past the queue cap still resolves for free, not lost to the cap', () => {
+  // The cap gates genuinely new work, not every candidate: `prefetch()` must
+  // check `entry()`/`locateTile()` before `queue.length`, or an
+  // already-cached id queued late in a frame bails on the cap for no reason,
+  // even though answering it costs nothing.
+  const { images, cache } = build({ concurrency: 1 });
+  cache.get(999, 1);
+  images.settleAll();
+
+  for (let id = 0; id < 300; id++) cache.prefetch(id, 1);
+  assert.equal(cache.hasPrefetchCapacity(), false);
+
+  const beforeRecheck = images.made.length;
+  cache.prefetch(999, 1);
+  assert.equal(images.made.length, beforeRecheck, 'the already-cached id must not have been treated as new work');
+});
+
 test('clear drops everything', () => {
   const { images, cache } = build();
   for (let id = 0; id < 3; id++) cache.get(id, 0);

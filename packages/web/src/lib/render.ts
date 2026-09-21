@@ -245,6 +245,8 @@ export interface DrawResult {
 export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts) {
   // Survives across frames purely so hysteresis has something to compare to.
   let level: number | null = null;
+  // Cycles the prefetch ring's starting corner across frames - see its use below.
+  let ringFrame = 0;
 
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, centreSlots = null,
@@ -374,14 +376,33 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
     }
 
     // --- rule 2, strictly after every visible cell has been asked for -------
+    // The walk stops as soon as `hasPrefetchCapacity()` says the queue is
+    // full, before computing that cell's id - a coarse-zoom ring can be tens
+    // of thousands of cells, and `roomAt()`/`idOf()` for whatever is past the
+    // cap would only be thrown away (`tiles.ts`'s `prefetch()` already
+    // resolves an already-cached or nonexistent id for free, ahead of the
+    // cap, so this never cuts off work that would have cost nothing anyway).
+    // The starting corner rotates across four frames so a region with more
+    // distinct uncached ids than the queue can hold in one frame does not
+    // always lose the same corner while the camera sits still.
     const ring = prefetchBounds(bounds);
-    for (let gy = ring.y0; gy <= ring.y1; gy++)
-      for (let gx = ring.x0; gx <= ring.x1; gx++) {
+    ringFrame = (ringFrame + 1) % 4;
+    const flipY = (ringFrame & 1) !== 0;
+    const flipX = (ringFrame & 2) !== 0;
+    const ringHeight = ring.y1 - ring.y0;
+    const ringWidth = ring.x1 - ring.x0;
+    ringWalk:
+    for (let iy = 0; iy <= ringHeight; iy++) {
+      const gy = flipY ? ring.y1 - iy : ring.y0 + iy;
+      for (let ix = 0; ix <= ringWidth; ix++) {
+        if (!cache.hasPrefetchCapacity()) break ringWalk;
+        const gx = flipX ? ring.x1 - ix : ring.x0 + ix;
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
         cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
       }
+    }
 
     // Zooming out needs ~4x as many tiles at once and has nothing to show until
     // they land; zooming in has the coarse tile on screen already and it
