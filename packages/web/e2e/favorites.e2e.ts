@@ -125,60 +125,69 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
     }
   );
 
-  test(
-    'a search and a favorite sort are mutually exclusive: starting either one ends the other [SR-41]',
-    async () => {
-      const { page } = session;
+  // Both favorite-sort modes go through the same exclusivity code in
+  // `main.tsx` (`onSearchStart`, `changeSort`) - neither is special-cased on
+  // `'mine'` vs `'count'` - but the two are functionally distinct enough
+  // (`'mine'` reads the reader's own set, `'count'` the global store) that a
+  // fix landing for one and not the other is a real failure mode, not a
+  // hypothetical one. Run the same check against both rather than trusting
+  // that symmetry in the source carries over to the browser.
+  for (const mode of ['mine', 'count']) {
+    test(
+      `a search and 'sort by ${mode}' are mutually exclusive: starting either one ends the other [SR-41]`,
+      async () => {
+        const { page } = session;
 
-      // Reached through the catalog rather than the diegetic switches: the
-      // select's `value` is a plain, unambiguous read of `sortMode`, where the
-      // center-tile switches would need pixel-diffing the canvas.
-      await page.locator('.panel .mode-toggle').click();
-      await page.locator('.catalog').waitFor({ timeout: 5000 });
-      const sortSelect = page.locator('.catalog-sort select');
-      const searchBox = page.locator('.catalog-search input');
-      try {
-        // Start a favorite sort, then start a search - the search must end it.
-        await sortSelect.selectOption('mine');
-        assert.equal(await sortSelect.inputValue(), 'mine');
+        // Reached through the catalog rather than the diegetic switches: the
+        // select's `value` is a plain, unambiguous read of `sortMode`, where
+        // the center-tile switches would need pixel-diffing the canvas.
+        await page.locator('.panel .mode-toggle').click();
+        await page.locator('.catalog').waitFor({ timeout: 5000 });
+        const sortSelect = page.locator('.catalog-sort select');
+        const searchBox = page.locator('.catalog-search input');
+        try {
+          // Start a favorite sort, then start a search - the search must end it.
+          await sortSelect.selectOption(mode);
+          assert.equal(await sortSelect.inputValue(), mode);
 
-        const term = await page.locator('.catalog-row:not(.catalog-center) .chip').first().textContent();
-        await searchBox.fill(term);
-        await searchBox.press('Enter');
-        await waitFor(
-          async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
-          SEARCH_TIMEOUT,
-          'a search from the catalog never re-ranked it'
-        );
-        assert.equal(
-          await sortSelect.inputValue(),
-          'relevance',
-          'starting a search left a favorite sort switch lit'
-        );
+          const term = await page.locator('.catalog-row:not(.catalog-center) .chip').first().textContent();
+          await searchBox.fill(term);
+          await searchBox.press('Enter');
+          await waitFor(
+            async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
+            SEARCH_TIMEOUT,
+            'a search from the catalog never re-ranked it'
+          );
+          assert.equal(
+            await sortSelect.inputValue(),
+            'relevance',
+            `starting a search left the '${mode}' sort switch lit`
+          );
 
-        // Now the other direction: starting a favorite sort while that search
-        // is still running must clear it.
-        await sortSelect.selectOption('mine');
-        await waitFor(
-          async () => (await searchBox.inputValue()) === '',
-          5000,
-          'starting a favorite sort left the search box populated'
-        );
-        assert.doesNotMatch(
-          (await page.locator('.catalog-count').textContent()) ?? '',
-          /ranked for/,
-          'starting a favorite sort left the search active'
-        );
-      } finally {
-        await sortSelect.selectOption('relevance');
-        await searchBox.fill('');
-        await searchBox.press('Enter');
-        await page.locator('.catalog .mode-toggle').click();
-        await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
-        await settled(page);
+          // Now the other direction: starting a favorite sort while that search
+          // is still running must clear it.
+          await sortSelect.selectOption(mode);
+          await waitFor(
+            async () => (await searchBox.inputValue()) === '',
+            5000,
+            `starting the '${mode}' sort left the search box populated`
+          );
+          assert.doesNotMatch(
+            (await page.locator('.catalog-count').textContent()) ?? '',
+            /ranked for/,
+            `starting the '${mode}' sort left the search active`
+          );
+        } finally {
+          await sortSelect.selectOption('relevance');
+          await searchBox.fill('');
+          await searchBox.press('Enter');
+          await page.locator('.catalog .mode-toggle').click();
+          await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
+          await settled(page);
+        }
       }
-    }
-  );
+    );
+  }
 
   test('nothing logged to the console', () => {
     assert.deepEqual(session.consoleErrors, []);
