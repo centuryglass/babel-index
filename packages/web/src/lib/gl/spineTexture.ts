@@ -1,10 +1,14 @@
 /**
  * The center tile's composited spine text (`center.ts`'s `composeSpines`),
  * rendered once to an offscreen 2D canvas and cached as a GL texture.
- * `render.ts` re-runs `composeSpines` on its live context every frame -
- * refitting every spine's font via `measureText` even though only the scale
- * has changed - which this cache avoids for the GL path; the Canvas2D path
- * still carries that per-frame cost, uncached.
+ * `render.ts` still re-runs `composeSpines` on its live context every frame -
+ * this is what turns that back into "paint the same bitmap" for the GL path
+ * whenever the cache key hasn't moved. `composeSpines`'s own `fitSpineText`
+ * cache (`center.ts`) covers the per-spine `measureText` cost this cache
+ * doesn't reach - a GL cache hit skips calling `composeSpines` at all, but a
+ * miss (a new zoom bucket, say) still benefits from that inner cache, and it's
+ * the only relief the Canvas2D path gets since it has no bitmap cache of its
+ * own.
  *
  * `composeSpines` is called unmodified against the offscreen canvas's own 2D
  * context, which satisfies `SpineContext` natively - it is a real
