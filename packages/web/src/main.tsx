@@ -31,6 +31,7 @@ import {
   shuffleButtonAtPoint,
   mineToggleAtPoint,
   countToggleAtPoint,
+  clearSpineFitCache,
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
 import {
@@ -336,6 +337,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   useEffect(() => {
     let cancelled = false;
     loadSpineFont().then(() => {
+      clearSpineFitCache();
       if (!cancelled) draw.current();
     });
     return () => {
