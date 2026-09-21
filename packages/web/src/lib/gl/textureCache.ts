@@ -31,9 +31,7 @@ export interface GLTextureCache {
   /** Call once per frame, before any `get()` - bumps the eviction clock. */
   beginFrame(): void;
   get(gl: GLContext, drawable: unknown): GLTexture | null;
-  /** Drops every texture without freeing GPU state - the right shape for a lost context, whose handles are already invalid. Nothing calls it: `useMapRendererGL.ts`'s lost-context handling drops the whole renderer, caches included. See `dispose()` for the teardown that does have a caller. */
-  reset(): void;
-  /** Frees every resident texture via `gl.deleteTexture`, then drops them - for a context still alive (unlike `reset()`, which assumes it is not). */
+  /** Frees every resident texture via `gl.deleteTexture`, then drops them. */
   dispose(gl: WebGL2RenderingContext): void;
 }
 
@@ -101,14 +99,10 @@ export function createGLTextureCache(budget = DEFAULT_BUDGET): GLTextureCache {
     return entry;
   }
 
-  function reset(): void {
-    cache.clear();
-  }
-
   function dispose(gl: WebGL2RenderingContext): void {
     for (const entry of cache.values()) gl.deleteTexture(entry.texture);
     cache.clear();
   }
 
-  return { beginFrame, get, reset, dispose };
+  return { beginFrame, get, dispose };
 }
