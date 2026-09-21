@@ -230,6 +230,8 @@ export interface TileCache {
   /** How far past their budgets the visible working set is forcing the levels. */
   overBudget: () => number;
   pendingPrefetch: () => number;
+  /** Whether `prefetch()` still has queue room this frame - see `render.ts`'s ring walk. */
+  hasPrefetchCapacity: () => boolean;
   clear: () => void;
 }
 
@@ -574,12 +576,17 @@ export function createTileCache({
    * at where the camera used to be.
    */
   function prefetch(id: RoomId, level: number): void {
+    // Resolved-for-free candidates (already cached, or nothing to fetch) are
+    // checked before the cap, not after - they cost nothing and must not
+    // count against the budget below. Checking the cap first would let a
+    // frame full of already-warm ids (the common case once a region has been
+    // seen) starve the genuinely new ones later in the same walk.
+    if (entry(id, level) || locateTile(id, level) == null) return;
     // The queue is emptied every frame, so anything past what `concurrency`
     // could plausibly start before the next one is stale before it is reached.
     // A zoomed-out frame offers thousands of candidates; taking them all would
     // be a large allocation per frame to throw away.
     if (queue.length >= QUEUE_LIMIT) return;
-    if (entry(id, level) || locateTile(id, level) == null) return;
     queue.push([id, level]);
     pump();
   }
@@ -692,6 +699,7 @@ export function createTileCache({
         0
       ),
     pendingPrefetch: () => queue.length,
+    hasPrefetchCapacity: () => queue.length < QUEUE_LIMIT,
     clear: () => {
       for (const store of levels.values()) {
         for (const e of store.values()) if (!isSheetBacked(e)) e.img.close?.();

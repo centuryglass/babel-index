@@ -250,6 +250,8 @@ export function createGLRenderer({
   cache, pyramid = PYRAMID, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
 }: CreateGLRendererOpts) {
   let level: number | null = null;
+  // Cycles the prefetch ring's starting corner across frames - see its use below.
+  let ringFrame = 0;
   const spineTextures: SpineTextureCache = createSpineTextureCache();
 
   function draw({
@@ -378,15 +380,26 @@ export function createGLRenderer({
     }
 
     // Same "rule 2" as `render.ts`: prefetch the ring, then warm one level
-    // coarser - pure cache calls, no drawing, unchanged from the 2D path.
+    // coarser - pure cache calls, no drawing, unchanged from the 2D path,
+    // including the capacity check and rotating start corner (see there).
     const ring = prefetchBounds(bounds);
-    for (let gy = ring.y0; gy <= ring.y1; gy++)
-      for (let gx = ring.x0; gx <= ring.x1; gx++) {
+    ringFrame = (ringFrame + 1) % 4;
+    const flipY = (ringFrame & 1) !== 0;
+    const flipX = (ringFrame & 2) !== 0;
+    const ringHeight = ring.y1 - ring.y0;
+    const ringWidth = ring.x1 - ring.x0;
+    ringWalk:
+    for (let iy = 0; iy <= ringHeight; iy++) {
+      const gy = flipY ? ring.y1 - iy : ring.y0 + iy;
+      for (let ix = 0; ix <= ringWidth; ix++) {
+        if (!cache.hasPrefetchCapacity()) break ringWalk;
+        const gx = flipX ? ring.x1 - ix : ring.x0 + ix;
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
         cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
       }
+    }
     for (const coarser of pyramid.warmLevels(level))
       for (const id of visible) cache.prefetch(id, coarser);
 
