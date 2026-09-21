@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
-import { favoriteOrder, favoriteSort, favoriteCount, type SortMode } from '../../map/favorites.ts';
+import { favoriteOrder, favoriteStrength, favoriteCount, type SortMode } from '../../map/favorites.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
 import { buildSlugTable } from '../../map/slug.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
@@ -209,6 +209,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // ref and it is filled in below once useRearrangement has returned.
   // See useSearch.ts's file comment.
   const requestAnimationRef = useRef<(note: string) => void>(() => {});
+  // A search and a favorite sort are mutually exclusive (SR-41): starting a
+  // real search ends whatever sort was active, synchronously and before the
+  // fetch even lands, so the sort's own controls never sit lit while a
+  // search silently overrides them. useSearch calls this once it knows the
+  // term is non-empty - clearing the box takes the other path (`clearSearch`)
+  // and must not touch the sort at all.
+  const onSearchStart = useCallback(() => setSortMode('relevance'), []);
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
     searchConfig: config.search,
@@ -217,6 +224,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     requestAnimationRef,
     pushHistory,
     setStatus,
+    onSearchStart,
   });
 
   // The reader's own favorites and the library's global counts
@@ -231,28 +239,25 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
-  // A running search wins over 'random': a reshuffle would bury the ranking
-  // the reader just asked for, so 'random' reads as 'relevance' while a
-  // search is active. `changeSort` clears the search when entering 'random',
-  // but a new search can start while 'random' is already chosen.
-  const effectiveSortMode: SortMode = sortMode === 'random' && result ? 'relevance' : sortMode;
-
-  // The map's order and its density profile, from one sort: a favorite sort
-  // is a placement input exactly as a search is, so `favoriteSort` composes
-  // the two - a search's own strength, boosted to 1 for whatever the sort
-  // lifted to the front - and `layout` reads one number per room instead of
-  // two that could disagree.
+  // The map's order and its density profile. A search and a favorite sort
+  // are mutually exclusive (SR-41, enforced by `changeSort` and
+  // `onSearchStart` above), so `sortMode` is never 'mine'/'count' while
+  // `result` holds a search - distance from the center means match strength
+  // alone while one runs (SR-27, `result.strength`) or favorite status alone
+  // while a favorite sort does (SR-28, `favoriteStrength`), never both, and
+  // there is nothing left to compose. `order` and `strength` are two
+  // separate calls rather than one composed result, per `favorites.ts`.
   //
   // Rooms are blocked before sorting, not after: filtering last would let a
   // favorite bring a blocked room back onto the map.
   const sortResult = useMemo(() => {
     const base = result ? result.order : shuffledOrder(total, orderSeed);
-    return favoriteSort(
-      filterBlockedIds(base, metadata, blockedTagSet),
-      { mode: effectiveSortMode, randomSeed: randomSortSeed, ...favorites.sortInput },
-      result?.strength ? { order: result.order, strength: result.strength } : null
-    );
-  }, [total, orderSeed, result, metadata, blockedTagSet, effectiveSortMode, randomSortSeed, favorites.sortInput]);
+    const blocked = filterBlockedIds(base, metadata, blockedTagSet);
+    const sortInput = { mode: sortMode, randomSeed: randomSortSeed, ...favorites.sortInput };
+    const order = favoriteOrder(blocked, sortInput);
+    const strength = result?.strength ?? favoriteStrength(order, sortInput);
+    return { order, strength };
+  }, [total, orderSeed, result, metadata, blockedTagSet, sortMode, randomSortSeed, favorites.sortInput]);
 
   const order = sortResult.order;
 
@@ -260,9 +265,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // touches no downloaded image bytes. `aspect` makes the library round on
   // screen rather than in the index - cells are not square, so those differ,
   // and the edge should be equally far whichever way you drag. `density`
-  // carries the search's strength profile, which is what clusters matches
-  // toward the center; no search means no profile means the uniform map, so
-  // clearing the box restores the baseline layout without a second code path.
+  // carries the strength profile above, which is what clusters matches
+  // toward the center; no search and no favorite sort means no profile means
+  // the uniform map, so clearing either restores the baseline layout without
+  // a second code path.
   const layout = useMemo(
     () =>
       createLayout({
@@ -297,11 +303,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const catalogOrder = useMemo(
     () =>
       favoriteOrder(catalogBase, {
-        mode: effectiveSortMode,
+        mode: sortMode,
         randomSeed: randomSortSeed,
         ...favorites.sortInput,
       }),
-    [catalogBase, effectiveSortMode, randomSortSeed, favorites.sortInput]
+    [catalogBase, sortMode, randomSortSeed, favorites.sortInput]
   );
 
   // Which cell a room id sits in on the map right now. Keyed by id, not
@@ -977,18 +983,18 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // A sort change swaps `order` and lets the sliding-tile animation carry the
   // map over. Whether the layout also rebuilds depends on the mode: 'mine' and
   // 'count' are placement inputs and carry a strength profile of their own
-  // (`favoriteSort`, packages/map/favorites.ts), so those rebuild the same way
-  // a search does; 'relevance' and 'random' carry none and stay a pure re-rank.
+  // (`favoriteStrength`, packages/map/favorites.ts), so those rebuild the same
+  // way a search does; 'relevance' and 'random' carry none and stay a pure
+  // re-rank.
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;
-      // Entering 'random' draws a fresh shuffle, and clears an active
-      // search: while one runs, `effectiveSortMode` reads 'random' as
-      // 'relevance', so the shuffle would look like a no-op.
-      if (next === 'random') {
-        setRandomSortSeed(Date.now());
-        if (result) clearSearch();
-      }
+      // Entering 'random' draws a fresh shuffle.
+      if (next === 'random') setRandomSortSeed(Date.now());
+      // A search and a favorite sort are mutually exclusive (SR-41):
+      // starting any sort ends an active search, the other half of
+      // `onSearchStart` above.
+      if (next !== 'relevance' && result) clearSearch();
       requestAnimation(describeSort(next, favoriteCount(manifest.rooms, favorites.mine)));
       setSortMode(next);
     },

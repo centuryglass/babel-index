@@ -1,23 +1,22 @@
 /**
  * The favorite sort modes, as a stable re-sort of an order that already
- * exists - and, for the two favorite-based ones, as a placement input
- * alongside a search.
+ * exists - and, for the two favorite-based ones, as a placement input in
+ * their own right.
  *
  * A sort mode moves rooms within whatever ranking is already in force - the
  * search's `order` on the map, alphabetical in the catalog - which is why this
  * is a stable re-sort of a base array rather than a ranking of its own.
- * Everything the base order decided survives inside each group: search a
- * term, sort by favorites, and the favorited rooms arrive in the order that
- * search put them in.
+ * Everything the base order decided survives inside each group.
  *
- * An active favorite sort is also a strength signal, the way a search is.
- * `favoriteSort` folds it in: every room the sort lifts to the front gets
- * strength 1, composed with (not replacing) whatever strength a running
- * search already gave it. `'mine'` with no search is a tight cluster of the
- * reader's favorites against the center at baseline everywhere else; with a
- * search it enriches the search's own cluster. A relevance re-sort, the
- * shuffle button, and `'random'` are not placement inputs and pass a
- * search's strength through untouched.
+ * A search and a favorite sort are mutually exclusive: starting either one
+ * ends the other (`docs/search_requirements.md` SR-41, enforced by
+ * `main.tsx`'s `changeSort` and its search-start callback). So `'mine'`/
+ * `'count'` never run alongside a search's own strength profile, and
+ * `favoriteStrength` never has one to compose with - it states the favorite
+ * sort's own claim on its own, distance from the center meaning favorite
+ * status alone while one is active (SR-28). A relevance re-sort, the shuffle
+ * button, and `'random'` are not placement inputs at all and drive no
+ * strength.
  *
  * ### Sorting to the front, not filtering
  *
@@ -90,60 +89,22 @@ export function favoriteOrder(base: number[], input: FavoriteSortInput): number[
 }
 
 /**
- * A search's own ranking and strength - the `order`/`strength` pair
- * `useSearch`'s `result` carries, narrowed to the two fields a favorite
- * boost folds into.
- */
-export interface SearchStrength {
-  /** room ids, best first - the search's own order, before blocking/favorites */
-  order: number[];
-  /** per rank of `order`, in [0, 1] */
-  strength: ArrayLike<number>;
-}
-
-export interface FavoriteSortResult {
-  order: number[];
-  /** per rank, aligned to `order`; null when nothing drives density */
-  strength: Float32Array | null;
-}
-
-/**
- * `favoriteOrder` plus the strength profile an active sort drives - see the
- * preamble.
+ * The density profile an active favorite sort drives, aligned to `order` -
+ * see the preamble. 1 for whatever the sort lifted to the front, 0 for
+ * everything else; null for `'relevance'`/`'random'`, which claim nothing.
  *
- * `search` carries the running search's own order/strength pair, aligned to
- * each other and not to `base` (which may already be filtered for blocked
- * tags), so this module does the id -> strength crossing itself, the way
- * `liftKey` crosses id -> filename.
+ * Takes `order` (`favoriteOrder`'s own output) rather than recomputing it,
+ * so a caller that already has the order does not sort twice.
  */
-export function favoriteSort(
-  base: number[],
-  input: FavoriteSortInput,
-  search: SearchStrength | null = null
-): FavoriteSortResult {
-  const order = favoriteOrder(base, input);
-
-  if (input.mode === 'relevance' || input.mode === 'random') {
-    // Strength passes through with the same array identity `favoriteOrder`
-    // keeps for `'relevance'`, so a caller memoising on identity sees no
-    // change. `'random'` shares the branch because a shuffle carries no
-    // confidence claim - see the preamble.
-    return { order, strength: (search?.strength as Float32Array | undefined) ?? null };
-  }
-
-  const byRoom = new Map<number, number>();
-  if (search) search.order.forEach((id, i) => byRoom.set(id, Number(search.strength[i])));
-
+export function favoriteStrength(order: number[], input: FavoriteSortInput): Float32Array | null {
+  if (input.mode !== 'mine' && input.mode !== 'count') return null;
   const key = liftKey(input);
   const strength = new Float32Array(order.length);
-  for (let i = 0; i < order.length; i++) {
-    const id = order[i];
-    strength[i] = Math.max(byRoom.get(id) ?? 0, key(id) > 0 ? 1 : 0);
-  }
-  return { order, strength };
+  for (let i = 0; i < order.length; i++) strength[i] = key(order[i]) > 0 ? 1 : 0;
+  return strength;
 }
 
-/** The per-room sort key `favoriteOrder` sorts by and `favoriteSort` lifts on. */
+/** The per-room sort key `favoriteOrder` sorts by and `favoriteStrength` lifts on. */
 function liftKey({ mode, files, counts, mine, randomSeed }: FavoriteSortInput): (id: number) => number {
   if (mode === 'mine') return (id: number) => (mine.has(files[id]?.file ?? '') ? 1 : 0);
   if (mode === 'random') return (id: number) => prng(seedFrom(`${randomSeed ?? 0}:${id}`))();

@@ -335,10 +335,13 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   rescatter everything except the thing already pinning the layout.
   A search, or an active favorite sort (`'mine'`/`'count'`), may also rebuild
   the layout: both are placement inputs (the strength claim each makes is
-  under *Favorites*). `favoriteSort` (`packages/map/favorites.ts`) composes
-  the two rather than letting one override the other. That rebuild is the
-  same O(slots) the ratio slider does on every drag. Nothing else recomputes
-  placement.
+  under *Favorites*), each carrying its own strength profile
+  (`packages/map/favorites.ts`'s `favoriteStrength` for the sort's).
+  A search and a favorite sort are mutually exclusive - starting either one
+  ends the other (`docs/search_requirements.md` SR-41) - so the two profiles
+  never need to compose; `main.tsx`'s `sortResult` just picks whichever one
+  is active. That rebuild is the same O(slots) the ratio slider does on
+  every drag. Nothing else recomputes placement.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 
 ### The center tile and its generic tiles
@@ -492,6 +495,21 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   * strength`, walking outward), not three special cases for cluster/falloff/
   no-match. Strength must stay non-increasing with rank, and anything under
   `STRENGTH_FLOOR` snaps to the baseline - both asserted.
+- **Distance from the center carries one meaning at a time, and a search and
+  a favorite sort are mutually exclusive because of it** (`docs/search_requirements.md`
+  SR-24, SR-27, SR-28, SR-41). Starting a real (non-empty) search ends an
+  active favorite sort - `useSearch.ts`'s `search` calls `onSearchStart`
+  (`main.tsx`'s `() => setSortMode('relevance')`) before the fetch, so the
+  switch never sits lit while a search silently overrides it. Starting a
+  favorite sort - or `'random'` - ends an active search the same way, from
+  the other side: `changeSort` calls `clearSearch()` for any mode but
+  `'relevance'` while `result` holds one. Because the two never run at once,
+  `packages/map/favorites.ts` never composes a favorite sort's strength with
+  a search's - `main.tsx`'s `sortResult` just reads whichever one is active
+  (`result.strength`, or `favoriteStrength` for `'mine'`/`'count'`, or
+  neither for `'relevance'`/`'random'`, which claim nothing and leave the
+  map uniform). Clearing the search box (the clear-x, an empty submit) is
+  not "starting a search" and must not touch the sort - only a real term does.
 - **Strength is absolute; ranking is relative. Don't feed one the other's
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
   for *any* query - driving the gradient off that clusters nonsense as
@@ -565,11 +583,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   path, animation included) and must never rebuild the layout. An active
   favorite sort (`'mine'`/`'count'`) is the exception - it is a placement
   input, exactly as a search is, because "sorted to the front" is itself a
-  strength claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
-  catalog row is a fixed height, so the row's favorite control sits beside
-  "show on the map" rather than inside `RoomDetails` where the card and the
-  overlay put it; in the text column it would have to be reserved for in
-  `TEXT_MIN`/`TEXT_CHROME_PX` and would cost two lines of story on every row.
+  strength claim; see `packages/map/favorites.ts`'s `favoriteStrength`. A
+  search and a favorite sort are mutually exclusive (SR-41, "Search and the
+  density gradient" below), so the two never contend for the same claim at
+  once. And a catalog row is a fixed height, so the row's favorite control
+  sits beside "show on the map" rather than inside `RoomDetails` where the
+  card and the overlay put it; in the text column it would have to be
+  reserved for in `TEXT_MIN`/`TEXT_CHROME_PX` and would cost two lines of
+  story on every row.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` (`tiles.ts`'s
   `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase` directly rather than

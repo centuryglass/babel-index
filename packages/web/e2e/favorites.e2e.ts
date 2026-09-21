@@ -10,7 +10,7 @@
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { closeLibrary, fingerprint, landed, openLibrary, settled, waitFor } from './support.ts';
+import { SEARCH_TIMEOUT, closeLibrary, fingerprint, landed, openLibrary, settled, waitFor } from './support.ts';
 
 describe('the library, in a browser: favorites', { concurrency: false }, () => {
   let session;
@@ -122,6 +122,61 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
         5000,
         'toggling a favorite while sorted by favorites never rearranged the map'
       );
+    }
+  );
+
+  test(
+    'a search and a favorite sort are mutually exclusive: starting either one ends the other [SR-41]',
+    async () => {
+      const { page } = session;
+
+      // Reached through the catalog rather than the diegetic switches: the
+      // select's `value` is a plain, unambiguous read of `sortMode`, where the
+      // center-tile switches would need pixel-diffing the canvas.
+      await page.locator('.panel .mode-toggle').click();
+      await page.locator('.catalog').waitFor({ timeout: 5000 });
+      const sortSelect = page.locator('.catalog-sort select');
+      const searchBox = page.locator('.catalog-search input');
+      try {
+        // Start a favorite sort, then start a search - the search must end it.
+        await sortSelect.selectOption('mine');
+        assert.equal(await sortSelect.inputValue(), 'mine');
+
+        const term = await page.locator('.catalog-row:not(.catalog-center) .chip').first().textContent();
+        await searchBox.fill(term);
+        await searchBox.press('Enter');
+        await waitFor(
+          async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
+          SEARCH_TIMEOUT,
+          'a search from the catalog never re-ranked it'
+        );
+        assert.equal(
+          await sortSelect.inputValue(),
+          'relevance',
+          'starting a search left a favorite sort switch lit'
+        );
+
+        // Now the other direction: starting a favorite sort while that search
+        // is still running must clear it.
+        await sortSelect.selectOption('mine');
+        await waitFor(
+          async () => (await searchBox.inputValue()) === '',
+          5000,
+          'starting a favorite sort left the search box populated'
+        );
+        assert.doesNotMatch(
+          (await page.locator('.catalog-count').textContent()) ?? '',
+          /ranked for/,
+          'starting a favorite sort left the search active'
+        );
+      } finally {
+        await sortSelect.selectOption('relevance');
+        await searchBox.fill('');
+        await searchBox.press('Enter');
+        await page.locator('.catalog .mode-toggle').click();
+        await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
+        await settled(page);
+      }
     }
   );
 
