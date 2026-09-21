@@ -1199,6 +1199,14 @@ two in step - see *Testing and CI*.
 
 - **Don't ask whether to subscribe to a PR you just opened.** The answer is
   effectively always no; if the user wants it watched they'll say so.
+- **An issue or comment an AI agent writes under the maintainer's own account
+  carries a footer marking it as AI-generated** - e.g. `_Drafted with AI
+  assistance._` - so it doesn't read as the maintainer arguing with
+  themselves. Keep the wording tool-agnostic (say "AI assistance," never a
+  specific product name): the maintainer doesn't use only one coding agent,
+  and a product-specific footer would misattribute work done by another
+  tool. This applies going forward only - an existing issue or comment
+  without one does not need editing.
 
 ## Next up
 
