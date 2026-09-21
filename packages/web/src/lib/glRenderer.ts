@@ -401,8 +401,11 @@ export function createGLRenderer({
         cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
       }
     }
+    // Deduped once here: see `render.ts`'s matching comment for why (repeated
+    // generic ids at coarse zoom, `prefetch()` already a no-op on a hit).
+    const distinctVisible = new Set(visible);
     for (const coarser of pyramid.warmLevels(level))
-      for (const id of visible) cache.prefetch(id, coarser);
+      for (const id of distinctVisible) cache.prefetch(id, coarser);
 
     // The keyboard cursor's ring - drawn last, over everything, same gate as
     // `render.ts`. `drawStrokeQuad` strokes inside the given rect rather than

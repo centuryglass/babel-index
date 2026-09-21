@@ -460,6 +460,37 @@ test('the ring walk stops computing ids once the prefetch queue is full', () => 
   );
 });
 
+test('the coarser-level warm pass dedupes repeated ids before prefetching (issue #296)', () => {
+  // At coarse zoom most of `visible` is one of a handful of repeated generic
+  // ids (`genericIndexAt`); the warm pass must ask for each of them once per
+  // frame, not once per occurrence in `visible`.
+  const images = fakeImages();
+  const calls: { id: RoomId; level: number }[] = [];
+  const base = createTileCache({
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
+    createImage: images.createImage,
+    concurrency: 4,
+  });
+  base.pin(CENTER);
+  const cache: TileCache = {
+    ...base,
+    prefetch: (id, level) => { calls.push({ id, level }); base.prefetch(id, level); },
+  };
+  const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.02, seed: 1, aspect: CELL_ASPECT });
+  const order = shuffledOrder(ROOMS, 1);
+  const renderer = createRenderer({ cache });
+  const stats = renderer.draw({
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
+  });
+
+  const warmLevel = stats.level + 1;
+  const warmCalls = calls.filter((c) => c.level === warmLevel);
+  const distinctIds = new Set(warmCalls.map((c) => c.id));
+  assert.ok(warmCalls.length > 0, 'sanity: the warm pass ran');
+  assert.equal(warmCalls.length, distinctIds.size, 'the warm pass prefetched the same id twice in one frame');
+  assert.ok(distinctIds.size < stats.cells, 'expected far fewer distinct ids than visible cells');
+});
+
 test('the prefetch ring rotates its starting corner across frames', () => {
   // With the queue filling long before the ring is fully walked (as in the
   // test above), a fixed raster order would compute the exact same leading

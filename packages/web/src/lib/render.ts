@@ -406,9 +406,14 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 
     // Zooming out needs ~4x as many tiles at once and has nothing to show until
     // they land; zooming in has the coarse tile on screen already and it
-    // upscales acceptably. Hence warming outward only.
+    // upscales acceptably. Hence warming outward only. Deduped once here: at
+    // coarse zoom most of `visible` is a handful of repeated generic ids
+    // (`packages/map/ordering.ts`'s `genericIndexAt`), and `prefetch()` is a
+    // no-op for anything already cached or in flight, so walking the raw
+    // array re-checks the same id once per occurrence for nothing.
+    const distinctVisible = new Set(visible);
     for (const coarser of pyramid.warmLevels(level))
-      for (const id of visible) cache.prefetch(id, coarser);
+      for (const id of distinctVisible) cache.prefetch(id, coarser);
 
     const cells = (bounds.x1 - bounds.x0 + 1) * (bounds.y1 - bounds.y0 + 1);
     // The keyboard cursor's ring, drawn last and over everything, and only
