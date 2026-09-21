@@ -48,4 +48,7 @@ that id, so a wrong order would rank the wrong rooms with no error. Pass the sam
 `--center` you run the demo server with.
 
 Vectors are L2-normalised and quantised to int8 at scale 127, so an int8 dot
-product approximates cosine similarity. Dequantise as `v / 127`.
+product approximates cosine similarity. Dequantise as `v / 127`. The client
+never assumes that 127: `scan.ts` reads `embeddings.json`'s own `scale` field
+into `manifest.embeddings.scale`, and that is what `embeddingScores()`
+(`packages/map/ordering.ts`) dequantises with.

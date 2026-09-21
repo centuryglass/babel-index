@@ -36,7 +36,7 @@ function manifest(): Manifest {
     ],
     metadata: { url: '/images/metadata.json', matched: 2, entries: 2 },
     tagLinks: { url: '/images/tagLinks.json', count: 3 },
-    embeddings: { url: '/images/embeddings.bin', dim: 512, count: 2, model: 'x' },
+    embeddings: { url: '/images/embeddings.bin', dim: 512, count: 2, model: 'x', scale: 127 },
     shared: {
       center: { file: 'center_tile.png', url: '/shared/center_tile.png' },
       generic: [{ file: 'a.jpg', url: '/shared/generic/a.jpg' }],

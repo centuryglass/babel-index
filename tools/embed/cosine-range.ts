@@ -62,6 +62,7 @@ interface EmbeddingSet {
   dim: number;
   count: number;
   model: string;
+  scale: number;
 }
 
 /** The JSON written to `--out`, and the shape the console summary reads. */
@@ -127,7 +128,7 @@ async function loadEmbeddings(dir: string): Promise<EmbeddingSet> {
       `${dir}/embeddings.bin has ${embeddings.length} bytes, expected ${expected} ` +
         `(count ${json.count} x dim ${json.dim}) - stale or mismatched blob?`
     );
-  return { embeddings, dim: json.dim, count: json.count, model: json.model };
+  return { embeddings, dim: json.dim, count: json.count, model: json.model, scale: json.scale };
 }
 
 /** One trimmed, non-empty, de-duplicated keyword per line. */
@@ -208,6 +209,7 @@ async function scoreList(
   textModel: any,
   embeddings: Int8Array,
   dim: number,
+  scale: number,
   count: number,
   list: string[],
   label: string
@@ -219,7 +221,7 @@ async function scoreList(
     const vectors = await embedBatch(tokenizer, textModel, chunk);
     vectors.forEach((vector, i) => {
       const k = start + i;
-      const cosines = embeddingScores(embeddings, dim, vector);
+      const cosines = embeddingScores(embeddings, dim, scale, vector);
       overall.set(cosines, k * count);
       perKeyword[k] = { keyword: chunk[i], ...summarize(cosines) };
     });
@@ -325,7 +327,7 @@ async function main() {
   const lowPercentile = argv['low-percentile'] !== undefined ? Number(argv['low-percentile']) : undefined;
   const highPercentile = argv['high-percentile'] !== undefined ? Number(argv['high-percentile']) : undefined;
 
-  const { embeddings, dim, count, model } = await loadEmbeddings(embeddingsDir);
+  const { embeddings, dim, scale, count, model } = await loadEmbeddings(embeddingsDir);
   const keywords = await loadKeywords(keywordsFile);
   if (!keywords.length) throw new Error(`no keywords found in ${keywordsFile}`);
   const universalWords = argv.universal ? await loadKeywords(argv.universal) : [];
@@ -341,7 +343,9 @@ async function main() {
 
   const { tokenizer, textModel } = await loadTextTower(model);
 
-  const { perKeyword, overall } = await scoreList(tokenizer, textModel, embeddings, dim, count, keywords, 'keywords');
+  const { perKeyword, overall } = await scoreList(
+    tokenizer, textModel, embeddings, dim, scale, count, keywords, 'keywords'
+  );
 
   const keywordMax = Float64Array.from(perKeyword, (k) => k.max);
   const keywordMean = Float64Array.from(perKeyword, (k) => k.mean);
@@ -352,7 +356,7 @@ async function main() {
   let universal: UniversalCalibration | null = null;
   if (universalWords.length) {
     const { perKeyword: universalPerKeyword } = await scoreList(
-      tokenizer, textModel, embeddings, dim, count, universalWords, 'universal'
+      tokenizer, textModel, embeddings, dim, scale, count, universalWords, 'universal'
     );
     universal = summarizeUniversal(universalPerKeyword);
   }
@@ -360,7 +364,7 @@ async function main() {
   let irrelevant: UniversalCalibration | null = null;
   if (irrelevantWords.length) {
     const { perKeyword: irrelevantPerKeyword } = await scoreList(
-      tokenizer, textModel, embeddings, dim, count, irrelevantWords, 'irrelevant'
+      tokenizer, textModel, embeddings, dim, scale, count, irrelevantWords, 'irrelevant'
     );
     irrelevant = summarizeUniversal(irrelevantPerKeyword);
   }
@@ -368,7 +372,7 @@ async function main() {
   let nonsense: Summary | null = null;
   if (nonsenseWords.length) {
     const { overall: nonsenseOverall } = await scoreList(
-      tokenizer, textModel, embeddings, dim, count, nonsenseWords, 'nonsense'
+      tokenizer, textModel, embeddings, dim, scale, count, nonsenseWords, 'nonsense'
     );
     nonsense = summarize(nonsenseOverall);
   }

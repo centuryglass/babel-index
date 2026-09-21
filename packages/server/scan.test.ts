@@ -555,7 +555,7 @@ test('an embeddings sidecar is surfaced with a servable url', async () => {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       '002.jpg': fixture.jpeg(8, 8),
-      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2 }),
+      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2, scale: 127 }),
     },
     async (dir) => {
       const { embeddings } = await scanDirectory(dir);
@@ -564,7 +564,25 @@ test('an embeddings sidecar is surfaced with a servable url', async () => {
         dim: 512,
         count: 2,
         model: 'Xenova/clip-vit-base-patch32',
+        scale: 127,
       });
+    }
+  );
+});
+
+test('an embeddings sidecar with no scale is treated as no blob', async () => {
+  // `tools/embed/embed.ts` always writes `scale` (issue #231); a sidecar
+  // missing it is unreadable rather than guessed at - a wrong scale would
+  // misreport the density gradient's absolute confidence silently.
+  await corpus(
+    {
+      'center.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      '002.jpg': fixture.jpeg(8, 8),
+      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2 }),
+    },
+    async (dir) => {
+      assert.equal((await scanDirectory(dir)).embeddings, null);
     }
   );
 });

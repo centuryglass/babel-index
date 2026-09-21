@@ -904,6 +904,8 @@ export interface RankHybridOpts {
   minTokenLength?: number;
   embeddings?: Int8Array | null;
   dim?: number;
+  /** The int8 half-range `embeddings` was quantised at (`manifest.embeddings.scale`) - see `embeddingScores`. */
+  scale?: number;
   vector?: Float32Array | number[] | null;
   index?: SearchIndex | null;
   clipCertainty?: ClipBand;
@@ -916,6 +918,7 @@ export function rankHybrid({
   minTokenLength = 3,
   embeddings = null,
   dim = 0,
+  scale = 0,
   vector = null,
   index = null,
   clipCertainty = CLIP_CERTAINTY,
@@ -935,8 +938,8 @@ export function rankHybrid({
   // two scalings - see *Ranking is relative; strength is not* above.
   let cosines = null;
   let clipNormAll = null;
-  if (embeddings && dim > 0 && vector) {
-    cosines = embeddingScores(embeddings, dim, Float32Array.from(vector));
+  if (embeddings && dim > 0 && scale > 0 && vector) {
+    cosines = embeddingScores(embeddings, dim, scale, Float32Array.from(vector));
     clipNormAll = normaliseScores(cosines);
   }
 

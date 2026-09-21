@@ -90,6 +90,10 @@ export interface EmbeddingsInfo {
   dim: number;
   count: number;
   model: string | null;
+  /** The int8 half-range the blob's rows were quantised at (see `embeddingScores`
+   * in `packages/map/ordering.ts`) - read from `embeddings.json`'s own `scale`
+   * rather than assumed, so the client can never drift from what wrote the blob. */
+  scale: number;
 }
 
 /**

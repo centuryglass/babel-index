@@ -344,8 +344,14 @@ export async function scanDirectory(
   let embeddings: Manifest['embeddings'] = null;
   try {
     const meta = JSON.parse(await readFile(join(dir, 'embeddings.json'), 'utf8'));
-    if (meta.count === rooms.length && meta.dim > 0)
-      embeddings = { url: `${IMAGES_BASE}/embeddings.bin`, dim: meta.dim, count: meta.count, model: meta.model ?? null };
+    if (meta.count === rooms.length && meta.dim > 0 && typeof meta.scale === 'number' && meta.scale > 0)
+      embeddings = {
+        url: `${IMAGES_BASE}/embeddings.bin`,
+        dim: meta.dim,
+        count: meta.count,
+        model: meta.model ?? null,
+        scale: meta.scale,
+      };
   } catch {
     // no blob, unreadable, or malformed - leave embeddings null
   }

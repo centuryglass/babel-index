@@ -24,14 +24,19 @@ export function useCorpus(manifest: ManifestResponse) {
   // million int8 multiply-adds against it (rankByEmbedding), well under a
   // frame, so a search - and every re-rank off the same vector - stays on the
   // client.
-  const embeddings = useRef<{ data: Int8Array; dim: number } | null>(null);
+  const embeddings = useRef<{ data: Int8Array; dim: number; scale: number } | null>(null);
   useEffect(() => {
     if (!manifest.embeddings) return;
     let cancelled = false;
     fetch(manifest.embeddings.url)
       .then((r) => r.arrayBuffer())
       .then((buf) => {
-        if (!cancelled) embeddings.current = { data: new Int8Array(buf), dim: manifest.embeddings!.dim };
+        if (!cancelled)
+          embeddings.current = {
+            data: new Int8Array(buf),
+            dim: manifest.embeddings!.dim,
+            scale: manifest.embeddings!.scale,
+          };
       })
       .catch(() => {});
     return () => {
