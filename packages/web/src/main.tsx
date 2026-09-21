@@ -188,7 +188,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The corpus itself: metadata sidecar, embedding blob, and the search
   // index built over both - see useCorpus.ts.
-  const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
+  const { metadata, embeddings, searchIndex, described, tagLinks, corpusErrors } = useCorpus(manifest);
 
   // availableTags: only the sensitive tags this corpus actually has, so a
   // corpus with none renders no blocking panel at all. blockedCount: rooms
@@ -1175,6 +1175,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         manifest={manifest}
         total={total}
         described={described}
+        corpusErrors={corpusErrors}
         status={status}
         query={query}
         setQuery={setQuery}
