@@ -34,7 +34,7 @@ interface UseSearchOpts {
   /** `config.search` */
   searchConfig: Config['search'];
   searchIndex: SearchIndex | null;
-  embeddings: { current: { data: Int8Array; dim: number } | null };
+  embeddings: { current: { data: Int8Array; dim: number; scale: number } | null };
   /** filled in by `main.tsx` once `useRearrangement` exists - see the file
    * comment above. */
   requestAnimationRef: { current: (note: string) => void };
@@ -127,6 +127,7 @@ export function useSearch({
         minTokenLength: searchConfig.minTokenLength,
         embeddings: blob?.data,
         dim: blob?.dim,
+        scale: blob?.scale,
         vector: res.vector,
         index: searchIndex,
         clipCertainty: {

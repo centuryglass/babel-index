@@ -287,6 +287,7 @@ test('an exact keyword match outranks the best possible CLIP score [SR-10]', () 
     weights: WEIGHTS,
     embeddings,
     dim: 2,
+    scale: 127,
     vector: Float32Array.from([0, 1]),
     index: indexOf([['brutalism'], null], [['oak'], null]),
   });
@@ -303,6 +304,7 @@ test('CLIP still orders everything the text signals are silent about [SR-11]', (
     weights: WEIGHTS,
     embeddings,
     dim: 2,
+    scale: 127,
     vector: Float32Array.from([1, 0]),
     index: indexOf([['brutalism'], null], [['oak'], null], [['pine'], null]),
   });
@@ -328,6 +330,7 @@ test('a weak partial tag does not beat a room CLIP is certain about [SR-12]', ()
     weights: WEIGHTS,
     embeddings: Int8Array.from([0, 0, 127, 0]),
     dim: 2,
+    scale: 127,
     vector: Float32Array.from([1, 0]),
     index: indexOf([['art nouveau and gilded rosewood'], null], [['oak'], null]),
   });
@@ -344,6 +347,7 @@ test('an undescribed room still outranks a described one CLIP likes less', () =>
     weights: WEIGHTS,
     embeddings: Int8Array.from([0, 0, 127, 0]),
     dim: 2,
+    scale: 127,
     vector: Float32Array.from([1, 0]),
     index: indexOf([['oak'], 'A room of oak.'], null),
   });
@@ -403,6 +407,7 @@ test('CLIP-only ranking works with no metadata at all [SR-21]', () => {
     weights: WEIGHTS,
     embeddings: Int8Array.from([0, 127, 127, 0]),
     dim: 2,
+    scale: 127,
     vector: Float32Array.from([1, 0]),
     index: null,
   });
@@ -671,6 +676,7 @@ test('a long contiguous story match outranks CLIP and a maxed partial tag togeth
     weights: WEIGHTS,
     embeddings: Int8Array.from([0, 0, 127, 0]),
     dim: 2,
+    scale: 127,
     vector: Float32Array.from([1, 0]),
     index: indexOf([clauseRoom.keywords, clauseRoom.story], [rivalRoom.keywords, rivalRoom.story]),
   });
@@ -706,7 +712,7 @@ const atCosines = (...cosines) =>
 const CLIP_QUERY = Float32Array.from([1, 0]);
 
 const strengthOf = (opts) =>
-  rankHybrid({ count: 3, weights: WEIGHTS, dim: 2, vector: CLIP_QUERY, ...opts }).strength;
+  rankHybrid({ count: 3, weights: WEIGHTS, dim: 2, scale: 127, vector: CLIP_QUERY, ...opts }).strength;
 
 test('a soft OR: any signal can carry strength, and two weak ones agree', () => {
   assert.equal(matchStrength({ tagStrength: 1 }), 1, 'a tag matched whole needs no help');
@@ -774,6 +780,7 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
     weights: WEIGHTS,
     embeddings: atCosines(...cosines),
     dim: 2,
+    scale: 127,
     vector: CLIP_QUERY,
   });
   assert.deepEqual(order, [0, 1, 2], 'no signal cleared the gate, so nothing decided the order');
@@ -790,6 +797,7 @@ test('a cosine that clears the gate still leads once some of the corpus does not
     weights: WEIGHTS,
     embeddings: atCosines(...cosines),
     dim: 2,
+    scale: 127,
     vector: CLIP_QUERY,
   });
   assert.equal(order[0], 0, 'the room that actually cleared the gate still leads');
@@ -856,7 +864,7 @@ test('strength is indexed by rank, not by room', () => {
 test('the strength bounds are configurable', () => {
   // They are the one part of the gradient that wants measuring against a real
   // corpus, which is why they are config rather than a constant in the blend.
-  const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, vector: CLIP_QUERY };
+  const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, scale: 127, vector: CLIP_QUERY };
   assert.equal(
     rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).strength[0],
     -1,
@@ -1023,6 +1031,7 @@ test('ranks/ties are independent per-signal sorts, parallel to order like breakd
     index: indexOf([['oakenwood'], null], null, null),
     embeddings: atCosines(0.05, 0.3, -0.5),
     dim: 2,
+    scale: 127,
     vector: CLIP_QUERY,
   });
 
@@ -1050,6 +1059,7 @@ test('a tie on one axis is reported as tied, even when the composite score is no
     index: indexOf([['oak'], null], [['oak'], null], null),
     embeddings: atCosines(0.3, 0.1, -0.5),
     dim: 2,
+    scale: 127,
     vector: CLIP_QUERY,
   });
 
@@ -1120,6 +1130,7 @@ test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosin
     count: 3,
     weights: WEIGHTS,
     dim: 2,
+    scale: 127,
     vector: CLIP_QUERY,
     embeddings: atCosines(...cosines),
   });

@@ -437,17 +437,28 @@ test('embedding ranking sorts by cosine similarity', () => {
   // Room 1 is the exact match, room 0 orthogonal, room 2 opposed.
   const emb = Int8Array.from([0, 127, 0, 0, 127, 0, 0, 0, -127, 0, 0, 0]);
   const query = Float32Array.from([1, 0, 0, 0]);
-  assert.deepEqual(rankByEmbedding(emb, dim, query), [1, 0, 2]);
+  assert.deepEqual(rankByEmbedding(emb, dim, 127, query), [1, 0, 2]);
 });
 
 test('embedding scores are cosines, not quantised dot products', () => {
   // The density gradient reads these against absolute thresholds, so the int8
   // scale has to be divided back out here rather than assumed away downstream.
   const emb = Int8Array.from([127, 0, 0, 127, -127, 0]);
-  const scores = embeddingScores(emb, 2, Float32Array.from([1, 0]));
+  const scores = embeddingScores(emb, 2, 127, Float32Array.from([1, 0]));
   assert.ok(Math.abs(scores[0] - 1) < 1e-6, `a unit match must be 1, got ${scores[0]}`);
   assert.ok(Math.abs(scores[1]) < 1e-6);
   assert.ok(Math.abs(scores[2] + 1) < 1e-6);
+});
+
+test('the scale argument is what undoes the quantisation, not an assumed constant [#231]', () => {
+  // A blob quantised at half the usual half-range: the same raw dot product
+  // must dequantise to a different cosine depending on which scale is passed
+  // in, proving the caller's scale is actually used rather than a baked-in
+  // 127 that happens to agree with it.
+  const emb = Int8Array.from([64, 0]);
+  const query = Float32Array.from([1, 0]);
+  assert.ok(Math.abs(embeddingScores(emb, 2, 64, query)[0] - 1) < 1e-6);
+  assert.ok(Math.abs(embeddingScores(emb, 2, 127, query)[0] - 64 / 127) < 1e-6);
 });
 
 test('shuffledOrder is a permutation and is seed-stable', () => {

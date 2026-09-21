@@ -495,17 +495,6 @@ export function shuffledOrder(n: number, seed = 1): number[] {
 }
 
 /**
- * The int8 half-range `tools/embed` quantises rows at; dequantise as v / 127.
- * Declared here because this is where the blob is read.
- *
- * Ranking never cared about the scale - a monotone factor cannot reorder
- * anything, and the blend min-maxes the column anyway - but the density
- * gradient asks how sure CLIP is *in absolute terms*, and 0.3 is only a
- * cosine once the quantisation is divided back out.
- */
-export const EMBEDDING_SCALE = 127;
-
-/**
  * Score every room against a query vector: one cosine per room, indexed by id.
  * Embeddings are int8-quantized and stored contiguously; scoring the whole
  * corpus is a few million multiply-adds, well under a frame at this size.
@@ -515,9 +504,18 @@ export const EMBEDDING_SCALE = 127;
  * ordering built on top, so the dot product has one implementation.
  *
  * @param embeddings  roomCount * dim, row-major
+ * @param dim      row width
+ * @param scale    the int8 half-range `tools/embed` quantised these rows at
+ *   (`embeddings.json`'s `scale`, carried in `manifest.embeddings.scale`).
+ *   Ranking never cared about it - a monotone factor cannot reorder anything,
+ *   and the blend min-maxes the column anyway - but the density gradient asks
+ *   how sure CLIP is *in absolute terms*, and 0.3 is only a cosine once the
+ *   quantisation is divided back out. Taken as a parameter rather than a
+ *   constant here so this side can never drift from what `tools/embed/embed.ts`
+ *   actually wrote (issue #231).
  * @param query    length dim, already L2-normalised
  */
-export function embeddingScores(embeddings: Int8Array, dim: number, query: Float32Array): Float32Array {
+export function embeddingScores(embeddings: Int8Array, dim: number, scale: number, query: Float32Array): Float32Array {
   const n = Math.floor(embeddings.length / dim);
   const scores = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -527,7 +525,7 @@ export function embeddingScores(embeddings: Int8Array, dim: number, query: Float
     // Both sides are unit vectors, so this is a cosine once the row's
     // quantisation is undone - and it has to come out as a real cosine,
     // because `scoring.ts` compares these against absolute thresholds.
-    scores[i] = dot / EMBEDDING_SCALE;
+    scores[i] = dot / scale;
   }
   return scores;
 }
@@ -536,11 +534,13 @@ export function embeddingScores(embeddings: Int8Array, dim: number, query: Float
  * Rank rooms against a query vector, best first.
  *
  * @param embeddings  roomCount * dim, row-major
+ * @param dim      row width
+ * @param scale    see `embeddingScores`
  * @param query    length dim, already L2-normalised
  * @returns room ids, best first
  */
-export function rankByEmbedding(embeddings: Int8Array, dim: number, query: Float32Array): number[] {
-  const scores = embeddingScores(embeddings, dim, query);
+export function rankByEmbedding(embeddings: Int8Array, dim: number, scale: number, query: Float32Array): number[] {
+  const scores = embeddingScores(embeddings, dim, scale, query);
   const scored = Array.from(scores, (score, id) => ({ id, score }));
   scored.sort((a, b) => b.score - a.score);
   return scored.map((s) => s.id);
