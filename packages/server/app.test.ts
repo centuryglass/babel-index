@@ -886,6 +886,55 @@ test('the counts endpoint is never cached', async () => {
   });
 });
 
+// --- metrics ------------------------------------------------------------------
+
+/** A fake UsageMetrics that records which method was called, and how often. */
+function fakeMetrics() {
+  const calls: Record<string, number> = { recordVisit: 0, recordSearch: 0, recordFavoriteAdd: 0, recordFavoriteRemove: 0 };
+  return {
+    calls,
+    metrics: {
+      recordVisit: () => void calls.recordVisit++,
+      recordSearch: () => void calls.recordSearch++,
+      recordFavoriteAdd: () => void calls.recordFavoriteAdd++,
+      recordFavoriteRemove: () => void calls.recordFavoriteRemove++,
+      flush: () => {},
+      stop: () => {},
+    },
+  };
+}
+
+test('/api/manifest counts a visit; /api/search counts only a non-empty query', async () => {
+  const { calls, metrics } = fakeMetrics();
+  await serving(
+    async ({ get }) => {
+      await get('/api/manifest');
+      await get('/api/manifest');
+      await get('/api/search?q=');
+      await get('/api/search?q=%20');
+      await get('/api/search?q=fox');
+      assert.deepEqual(calls, { recordVisit: 2, recordSearch: 1, recordFavoriteAdd: 0, recordFavoriteRemove: 0 });
+    },
+    { metrics }
+  );
+});
+
+test('favorite writes count adds and removes separately, and only when accepted', async () => {
+  const { calls, metrics } = fakeMetrics();
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ base }) => {
+        // Rejected: no client id. Must not count as a favorite either way.
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST' });
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST', ...asClient('client-aaaaaaaa') });
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'DELETE', ...asClient('client-aaaaaaaa') });
+        assert.deepEqual(calls, { recordVisit: 0, recordSearch: 0, recordFavoriteAdd: 1, recordFavoriteRemove: 1 });
+      },
+      { favorites, metrics }
+    );
+  });
+});
+
 // --- admin log viewer --------------------------------------------------------
 
 /** A request carrying valid HTTP Basic Auth for the given plaintext password. */

@@ -140,6 +140,13 @@ Just the `<ul id="entries">` markup `/admin/logs` embeds — what its own
 polling script fetches on refresh. Not meant to be visited directly; same
 query params, auth, and mounting condition as `/api/logs`.
 
+## Usage metrics
+
+`GET /api/manifest`, `GET /api/search` (non-empty query only), and the two
+favorite-write routes above each also count toward an hourly, in-memory
+usage log — no response shape changes, no new route. See `metrics.ts` for
+what is counted and why nothing per-visitor survives an hour.
+
 ## Not covered here
 
 Everything else `app.ts` serves — `/`, `/catalog`, `/catalog/:slug`,

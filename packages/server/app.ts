@@ -31,6 +31,7 @@ import { createUrlFor } from '../web/src/lib/rooms.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
 import type { FavoriteStore } from './favorites.ts';
+import type { UsageMetrics } from './metrics.ts';
 
 /** A resolved config as `loadConfig()` (packages/config/load.ts) returns it -
  *  `Config` plus where it came from, if anywhere. */
@@ -142,6 +143,11 @@ export interface CreateAppOptions {
   /** admin-auth.ts's hashPassword() output, gating /api/logs and
    *  /admin/logs. See logFile above for why both are required together. */
   adminPasswordHash?: string | null;
+  /** where hourly usage counts are recorded (see metrics.ts). Absent - the
+   *  default, and every test that doesn't ask for it - means visits,
+   *  searches and favorite writes are simply not counted, the same
+   *  "no store, no feature" shape as favorites. */
+  metrics?: UsageMetrics | null;
 }
 
 /** Build the app. */
@@ -162,6 +168,7 @@ export function createApp({
   commit = null,
   logFile = null,
   adminPasswordHash = null,
+  metrics = null,
 }: CreateAppOptions): Express {
   const app = express();
   const base = normalizeBasePath(basePath);
@@ -186,9 +193,13 @@ export function createApp({
   // on its own schedule.
   const favoritesInfo = favorites ? { enabled: true } : null;
 
-  app.get('/api/manifest', (_req, res) =>
-    res.json({ ...manifest, favorites: favoritesInfo, config: clientConfig })
-  );
+  app.get('/api/manifest', (req, res) => {
+    // The one request every page load makes exactly once, so it stands in
+    // for "a visit" for metrics.ts's unique-visitor count - see its own
+    // header for why the count itself never sees a raw address.
+    metrics?.recordVisit(req.ip ?? '');
+    res.json({ ...manifest, favorites: favoritesInfo, config: clientConfig });
+  });
 
   /**
    * Liveness, for the deploy workflow to check a release against
@@ -291,6 +302,7 @@ export function createApp({
       .trim()
       .slice(0, clientConfig.search.maxQueryLength);
     if (!q) return res.json({ query: q, order: null });
+    metrics?.recordSearch();
 
     if (!manifest.embeddings)
       return res.json({ stub: true, query: q, order: stubRanking(manifest.rooms, q) });
@@ -361,6 +373,8 @@ export function createApp({
       if (!favoriteBuckets.take(ip))
         return res.status(429).json({ error: 'too many favorites at once - try again in a moment' });
       const count = favorites[method](file, clientId);
+      if (method === 'add') metrics?.recordFavoriteAdd();
+      else metrics?.recordFavoriteRemove();
       res.json({ file, count, favorited: method === 'add' });
     };
 
