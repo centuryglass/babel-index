@@ -36,8 +36,6 @@ export interface SpineTextureCache {
     hoveredBook: number | null,
     fontLimits: SpineFontLimits
   ): GLSpineTexture | null;
-  /** Drops the cached texture without freeing GPU state - the right shape for a lost context, whose handles are already invalid. `useMapRendererGL.ts`'s lost-context handling drops the whole cache instead of calling this. */
-  reset(): void;
   /** Frees the resident texture via `gl.deleteTexture`, if any, then drops it. */
   dispose(gl: WebGL2RenderingContext): void;
 }
@@ -89,14 +87,10 @@ export function createSpineTextureCache(): SpineTextureCache {
     return entry;
   }
 
-  function reset(): void {
-    cached = null;
-  }
-
   function dispose(gl: WebGL2RenderingContext): void {
     if (cached) gl.deleteTexture(cached.entry.texture);
     cached = null;
   }
 
-  return { get, reset, dispose };
+  return { get, dispose };
 }
