@@ -816,6 +816,16 @@ async function embedQuery(q: string, dtype: string): Promise<number[]> {
 }
 
 /**
+ * Hard ceiling on how much of `query` {@link stubRanking} hashes, independent
+ * of `clientConfig.search.maxQueryLength` - a config value CodeQL cannot see
+ * is already capped by the time it reaches this loop. Callers already slice
+ * to `maxQueryLength` (256 by default) before calling in; this is a second,
+ * unconfigurable bound so a compromised or misconfigured `maxQueryLength`
+ * can't turn the loop unbounded.
+ */
+const STUB_RANKING_MAX_QUERY_LENGTH = 2048;
+
+/**
  * The stub ranking: a hash of the query mixed with each room id.
  *
  * The only properties that matter are that the same query always gives the
@@ -826,7 +836,8 @@ async function embedQuery(q: string, dtype: string): Promise<number[]> {
  */
 export function stubRanking(rooms: { id: number }[], query: string): number[] {
   let h = 2166136261;
-  for (let i = 0; i < query.length; i++) h = Math.imul(h ^ query.charCodeAt(i), 16777619);
+  const len = Math.min(query.length, STUB_RANKING_MAX_QUERY_LENGTH);
+  for (let i = 0; i < len; i++) h = Math.imul(h ^ query.charCodeAt(i), 16777619);
 
   const scored = rooms.map((room) => {
     let s = Math.imul(room.id + 1, h >>> 0) >>> 0;

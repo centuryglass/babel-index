@@ -339,6 +339,14 @@ test('queries that differ by one character produce different orders', async () =
   assert.equal(seen.size, 7, 'the hash is collapsing distinct queries');
 });
 
+test('stubRanking hashes at most 2048 characters, regardless of query length', async () => {
+  // Guards against CodeQL's loop-bound-injection finding: the hashing loop
+  // must stay bounded even if a caller passes an unbounded string.
+  const rooms = Array.from({ length: 16 }, (_, id) => ({ id }));
+  const base = 'x'.repeat(2048);
+  assert.deepEqual(stubRanking(rooms, base), stubRanking(rooms, base + 'y'.repeat(10000)));
+});
+
 // --- static images ----------------------------------------------------------
 
 test('/images serves the corpus and 404s the rest', async () => {
