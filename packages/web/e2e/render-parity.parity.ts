@@ -21,8 +21,15 @@
  *     `packages/web/e2e/artifacts/` so a human can read what the number meant.
  *
  * Not part of `npm test` OR `npm run test:e2e` - the `.parity.ts` suffix
- * matches neither glob. It needs a real GPU and boots two servers and two
- * browsers, so it is a thing you run on purpose:
+ * matches neither glob, so it never gates a pull request. It boots two
+ * servers and two browsers and is slower than either of those suites, which
+ * is why `deploy.yml` is the only workflow that runs it: gating every PR
+ * was ruled out as too slow for how low a priority full parity is, but
+ * gating a deploy - the one place a broken renderer would actually reach
+ * readers - costs only the minute or so a deploy already budgets for.
+ * Headless Chromium's software WebGL2 (SwiftShader) is enough to run it;
+ * no real GPU is required, on a CI runner or otherwise. Run it by hand
+ * after touching either draw loop, same as before:
  *
  *   npx playwright install chromium   # once
  *   npm run test:parity

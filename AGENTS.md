@@ -58,7 +58,7 @@ npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--po
 npm run demo -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
-npm run test:parity                # manual Canvas2D-vs-WebGL render parity; real GPU, not a merge gate
+npm run test:parity                # Canvas2D-vs-WebGL render parity; deploy gate, not a merge gate
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
@@ -1052,13 +1052,21 @@ two in step - see *Testing and CI*.
   GL canvas doesn't have. GL behaviour is covered by `webgl-map.e2e.ts`
   (`webgl: true`) and the parity suite. Leaving a spec unpinned would let
   the production default silently switch its renderer and break those reads.
-- **`render-parity.parity.ts` (`npm run test:parity`) is a separate manual
-  suite, not a merge gate.** The `.parity.ts` suffix matches neither `npm test`
-  nor `npm run test:e2e`'s glob - it needs a real GPU and boots two
-  sessions (Canvas2D + WebGL) to check the renderers draw the same map. Run it
-  by hand when touching either draw loop; it is the check behind the lockstep
-  invariant in "The WebGL renderer". See its header for the scene design (why
-  there's no far-zoom scene, why the pixel bounds are where they are).
+- **`render-parity.parity.ts` (`npm run test:parity`) is a deploy gate, not a
+  merge gate.** The `.parity.ts` suffix matches neither `npm test` nor `npm
+  run test:e2e`'s glob, so it never runs on a PR - it boots two sessions
+  (Canvas2D + WebGL) to check the renderers draw the same map, which is too
+  slow to ask of every push. `deploy.yml` runs it against the revision being
+  deployed instead, ahead of the ssh call, and a failure stops the deploy
+  before anything ships - the tradeoff the maintainer chose over gating PRs
+  is a broken renderer costing a deploy's worth of runtime to catch, not a
+  push's. It runs fine on a CI runner's headless, GPU-less Chromium
+  (SwiftShader software WebGL2); "real GPU" in its own header is about local
+  runs, not a CI requirement. Run it by hand too when touching either draw
+  loop, for a faster read than waiting for a deploy; it is the check behind
+  the lockstep invariant in "The WebGL renderer". See its header for the
+  scene design (why there's no far-zoom scene, why the pixel bounds are
+  where they are).
 - **Running `npm run test:e2e` is slow in a cloud agent container** (the
   pinned Chromium isn't preinstalled the way it is in CI, and each spec
   launches its own browser). There, if a change doesn't touch
