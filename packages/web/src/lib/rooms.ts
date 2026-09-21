@@ -13,24 +13,25 @@
  * never been through the pipeline - behave exactly as it did before the pyramid
  * existed: only level 0 resolves, so every lookup falls back to it.
  *
- * The shared tiles - the center and every generic tile - live OUTSIDE the
- * corpus pyramid (`manifest.shared`, served from `--shared-dir`), in their
- * own pyramid: `manifest.shared.levels` is which per-file rungs the center
- * and every generic tile actually share on disk (`scan.ts` discovers it the
- * same way it discovers `manifest.levels`, just rooted at the shared
- * directory - see its own comment). A level there resolves by inserting
+ * The shared tiles - the center, every generic tile, and every generic
+ * tile's distill alternate - live OUTSIDE the corpus pyramid
+ * (`manifest.shared`, served from `--shared-dir`), each in its own pyramid:
+ * `manifest.shared.levels` is which per-file rungs the center and every
+ * generic tile actually share on disk, and `manifest.shared.distillLevels` is
+ * the same discovery rooted at `generic_distill/` instead (`scan.ts`
+ * discovers both the same way it discovers `manifest.levels`, just rooted at
+ * the shared directory - see its own comment). A level resolves by inserting
  * `<width>/` before the shared asset's filename, the same directory-per-level
  * convention the corpus uses - `packages/pipeline/shared-mips.ts` is what
- * writes it. A level `manifest.shared.levels` doesn't have falls back to null
- * exactly like a corpus level the manifest doesn't have.
+ * writes it. A level the relevant `levels`/`distillLevels` array doesn't have
+ * falls back to null exactly like a corpus level the manifest doesn't have.
  *
- * Every OTHER shared id - a generic tile's distill alternate, a favorite
- * badge, the distill toggle's faces, the "forget searches" overlay - is
- * fixed-size app art with no pyramid of its own, and stays flat: level 0
- * only, falling back to it through the cache's `servableLevel` for any
- * coarser request. There are only a handful of these and the cache keys on
- * id, not on cell, so a far-out screen of thousands of generic cells still
- * holds just those few in memory.
+ * Every OTHER shared id - a favorite badge, the distill toggle's faces, the
+ * "forget searches" overlay - is fixed-size app art with no pyramid of its
+ * own, and stays flat: level 0 only, falling back to it through the cache's
+ * `servableLevel` for any coarser request. There are only a handful of these
+ * and the cache keys on id, not on cell, so a far-out screen of thousands of
+ * generic cells still holds just those few in memory.
  */
 import {
   CENTER, genericId, genericDistillId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
@@ -81,10 +82,20 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // Older manifests have no `shared.levels`; a flat level 0 is the honest
   // reading, same as `manifest.levels`' own fallback above.
   const sharedLevels = new Map((shared.levels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
+  // `generic_distill/`'s own pyramid, kept in a separate map rather than
+  // merged into `sharedLevels` - see manifest.ts's `SharedAssets` doc for why
+  // the two trees are never intersected.
+  const distillLevels = new Map((shared.distillLevels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
   // Only an index whose generic tile has a matching distill alternate on disk
   // gets an entry - see `genericDistillId`'s doc for what a missing one means.
+  const distillSharedIds = new Set<number | string>();
   shared.genericDistill?.forEach((v, i) => {
-    if (v) sharedUrls.set(genericDistillId(i), v.url);
+    if (v) {
+      const id = genericDistillId(i);
+      sharedUrls.set(id, v.url);
+      pyramidSharedIds.add(id);
+      distillSharedIds.add(id);
+    }
   });
   // The favorite badge's two faces are fixed app art, not part of a scanned
   // corpus, so they are not in `manifest.shared` - but they live in the same
@@ -106,7 +117,7 @@ export function createTileLocator(manifest: Manifest): LocateTile {
       const url = sharedUrls.get(id)!;
       if (level === 0) return { url, rect: null };
       if (!pyramidSharedIds.has(id)) return null;
-      const info = sharedLevels.get(level);
+      const info = (distillSharedIds.has(id) ? distillLevels : sharedLevels).get(level);
       // Insert `<width>/` before the filename - the same per-level directory
       // `shared-mips.ts` wrote it into, right beside where level 0 already sits.
       if (!info?.dir) return null;

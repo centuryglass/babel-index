@@ -16,8 +16,9 @@
  * every source's content hash recorded in the corpus's `metadata.json`.
  *
  * --shared-dir additionally pyramids the center render and every `generic/`
- * tile found there, in place - see `shared-mips.ts`. Omitted, the shared
- * tiles are left exactly as they were (still servable flat at level 0).
+ * and `generic_distill/` tile found there, in place - see `shared-mips.ts`.
+ * Omitted, the shared tiles are left exactly as they were (still servable
+ * flat at level 0).
  *
  * The ladder is `LEVELS` in packages/web/src/lib/pyramid.ts, the same list the
  * client picks levels from, so what this writes and what it asks for cannot
@@ -136,7 +137,12 @@ if (sharedDir) {
   );
   const genericWritten = shared.generic.reduce((n, g) => n + g.written, 0);
   const genericCached = shared.generic.reduce((n, g) => n + g.cached, 0);
-  console.log(`    generic: ${shared.generic.length} tile(s), ${genericWritten} written, ${genericCached} unchanged\n`);
+  console.log(`    generic: ${shared.generic.length} tile(s), ${genericWritten} written, ${genericCached} unchanged`);
+  const distillWritten = shared.genericDistill.reduce((n, g) => n + g.written, 0);
+  const distillCached = shared.genericDistill.reduce((n, g) => n + g.cached, 0);
+  console.log(
+    `    generic_distill: ${shared.genericDistill.length} tile(s), ${distillWritten} written, ${distillCached} unchanged\n`
+  );
 }
 
 function parseArgs(args: string[]): Record<string, string> {

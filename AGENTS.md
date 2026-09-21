@@ -369,29 +369,38 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   are served from the `/shared/` mount, not `/images/`. The one case where a
   `center.*` inside the corpus dir counts as a generic tile is `sharedDir ===
   imagesDir`.
-- **The center and the generic tiles have their own pyramid, generated the
-  same way the corpus is.** `npm run generate:mips -- --images <dir>
-  --shared-dir <dir> [--center <name>]` (`packages/pipeline/shared-mips.ts`)
-  writes the same per-file `<width>/<file>` ladder `mips.ts` writes for a
-  room, rooted under `--shared-dir` instead - once for the center render,
-  once per file in `generic/`. `scan.ts` discovers what each tree actually
-  has on disk (`discoverLevels`, same as it does for `manifest.levels`) and
-  intersects the two into `manifest.shared.levels`, so a level only counts
-  as available where both the center and every generic tile actually have
-  it. `rooms.ts` resolves a shared id at a level in `shared.levels` by
-  inserting `<width>/` before the asset's filename - the same per-level
-  directory `shared-mips.ts` wrote it into. There are no shared sheets: a
-  handful of files needs no packing.
+- **The center, the generic tiles, and the generic tiles' distill alternates
+  each have their own pyramid, generated the same way the corpus is.**
+  `npm run generate:mips -- --images <dir> --shared-dir <dir> [--center
+  <name>]` (`packages/pipeline/shared-mips.ts`) writes the same per-file
+  `<width>/<file>` ladder `mips.ts` writes for a room, rooted under
+  `--shared-dir` instead - once for the center render, once per file in
+  `generic/`, once per file in `generic_distill/`. `scan.ts` discovers what
+  each tree actually has on disk (`discoverLevels`, same as it does for
+  `manifest.levels`) and intersects the center and generic trees into
+  `manifest.shared.levels`, so a level only counts as available there where
+  both the center and every generic tile actually have it. `generic_distill/`
+  is discovered the same way but kept in its own field,
+  `manifest.shared.distillLevels`, never intersected with `levels`: not every
+  generic tile has a distill alternate at all, so gating it on the base
+  trees' rungs would silently veto a level the distill tree actually has.
+  `rooms.ts` resolves a shared id at a level in whichever of the two arrays
+  applies to it by inserting `<width>/` before the asset's filename - the
+  same per-level directory `shared-mips.ts` wrote it into. There are no
+  shared sheets: a handful of files needs no packing.
 
-  Every OTHER shared id - a generic tile's distill alternate
-  (`generic_distill/`, only ever drawn up close), a favorite badge, the
-  distill toggle's faces, the "forget searches" overlay - is fixed-size app
-  art with no pyramid of its own, and stays flat at level 0, falling back to
-  it through `servableLevel` for any coarser request, same as before.
-  `main.tsx` pins the center at level 0 (on screen from the first frame) but
-  the generic tiles at the coarsest level `shared.levels` actually has -
-  never a hardcoded `FALLBACK_LEVEL`, since an older corpus with no shared
-  pyramid generated has none but level 0.
+  Every OTHER shared id - a favorite badge, the distill toggle's faces, the
+  "forget searches" overlay - is fixed-size app art with no pyramid of its
+  own, and stays flat at level 0, falling back to it through `servableLevel`
+  for any coarser request, same as before. `main.tsx` pins the center at
+  level 0 (on screen from the first frame) but the generic tiles and their
+  distill alternates each at the coarsest level their own array (`shared.levels`/
+  `shared.distillLevels`) actually has - never a hardcoded `FALLBACK_LEVEL`,
+  since an older corpus with no shared pyramid generated has none but level
+  0. `render.ts`'s `drawGenericFade` (and its WebGL/slide counterparts) draws
+  a distill alternate at the same level the base generic tile draws at, not a
+  hardcoded level 0 - distill mode's crossfade is a toggle, not a
+  proximity effect, so it is visible at any zoom.
 
 ### The center room's controls
 

@@ -105,7 +105,7 @@ export function createGLSlideRenderer({
       const distillId = value === BOARD_GENERIC ? genericDistillId(genericIndexAt(homeMx, homeMy)) : null;
 
       if (value === BOARD_GENERIC && genericFade >= 1) {
-        drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
+        drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         wanted.push(id);
         return;
       }
@@ -122,7 +122,7 @@ export function createGLSlideRenderer({
         blank++;
       }
       if (value === BOARD_GENERIC && genericFade)
-        drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
+        drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
       if (favorites && typeof value === 'number')
         drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(value), cellPx, sx, sy, false, glowTextures);
       wanted.push(id);

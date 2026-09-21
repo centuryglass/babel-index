@@ -114,11 +114,12 @@ export function drawGenericFadeGL(
   textures: GLTextureCache,
   distillId: RoomId,
   fade: number,
-  dst: Rect
+  dst: Rect,
+  level = 0
 ): void {
   if (fade <= 0) return;
   const alpha = Math.min(1, fade);
-  const hit = cache.get(distillId, 0);
+  const hit = cache.get(distillId, level);
   const tex = hit ? textures.get(gl, hit.img) : null;
   if (hit && tex) {
     const src: Rect = hit.rect ? toGLRect(hit.rect) : { x: 0, y: 0, w: tex.width, h: tex.height };
@@ -303,7 +304,7 @@ export function createGLRenderer({
         const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
         if (cell.generic && genericFade >= 1) {
-          drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
+          drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         } else {
           const hit = cache.get(id, level);
           const tex = hit ? textures.get(gl, hit.img) : null;
@@ -324,7 +325,7 @@ export function createGLRenderer({
           }
 
           if (cell.generic && genericFade)
-            drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
+            drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         }
 
         // The favorite badge - every real room, never the center or a
