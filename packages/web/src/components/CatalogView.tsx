@@ -835,9 +835,11 @@ export function CatalogView({
             Sorting is a re-rank, not a search: it moves rooms within the
             ranking already in force (see `favoriteOrder`), so a term stays
             searched and the row a room sits in stays the row the map would
-            fly to. Picking 'random' while a search is running clears it
-            first (`main.tsx`'s `changeSort`) - reshuffling underneath a
-            search's own order would look like the sort did nothing.
+            fly to. A search and a favorite sort are mutually exclusive
+            (`docs/search_requirements.md` SR-41): picking any mode other
+            than 'relevance' while a search is running clears it first
+            (`main.tsx`'s `changeSort`) - reshuffling or resorting underneath
+            a search's own order would look like the sort did nothing.
           */}
           <label className="catalog-sort">
             {/*

@@ -43,6 +43,14 @@ interface UseSearchOpts {
    * `requestAnimation`'s announcement: a fetch that fails rearranges
    * nothing, so it has to speak for itself. */
   setStatus: (message: string) => void;
+  /**
+   * Called once a real (non-empty) search term is about to run, before the
+   * fetch - a search and a favorite sort are mutually exclusive
+   * (`docs/search_requirements.md` SR-41), and `main.tsx` is what owns the
+   * sort, so this is the one hook this module knows nothing more about.
+   * Not called for the clear-x, which ends a search rather than starting one.
+   */
+  onSearchStart: () => void;
 }
 
 export function useSearch({
@@ -53,6 +61,7 @@ export function useSearch({
   requestAnimationRef,
   pushHistory,
   setStatus,
+  onSearchStart,
 }: UseSearchOpts) {
   const [query, setQuery] = useState('');
   // One piece of state, not two: the ranking and its strength profile
@@ -91,8 +100,11 @@ export function useSearch({
     }
     // A real search is a history entry, and the frontmost book from now on.
     // Done before the fetch, so a click on that book is remembered even if
-    // the ranking that follows is a stub.
+    // the ranking that follows is a stub. Ending an active favorite sort
+    // happens here too, for the same reason: both survive a search that
+    // never resolves.
     pushHistory(term.trim());
+    onSearchStart();
 
     let res;
     try {
