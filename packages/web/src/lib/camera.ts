@@ -100,7 +100,7 @@ export function pxPerCell(cam: Camera): { x: number; y: number } {
  * benefit.
  *
  * Raise it once the center tile earns a finer-than-level-0 pyramid rung (see
- * `docs/pending_task_list.md`). The page-load view is capped at 1x separately,
+ * issue #268). The page-load view is capped at 1x separately,
  * by `openingZoom` in `center.ts`, so a load is never already upscaled while a
  * reader may still zoom to this ceiling by hand.
  */

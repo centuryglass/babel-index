@@ -230,8 +230,7 @@ needs a real GPU; it isn't part of CI.
 - [`docs/api.md`](docs/api.md) — the `/api/*` request/response contract
 - [`docs/file_map.md`](docs/file_map.md) — the full file-by-file layout
 - [`docs/concept.md`](docs/concept.md): Initial project concept and a dated log of design decisions
-- [`docs/pending_task_list.md`](docs/pending_task_list.md) — what is still to do
-- [`docs/accessibility-plan.md`](docs/accessibility-plan.md) — the keyboard / screen-reader plan
+- [GitHub issues](https://github.com/centuryglass/babel-index/issues) — what is still to do, including open accessibility questions
 - [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
 - [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
 - [`CLAUDE.md`](CLAUDE.md) — notes for coding agents (engineering conventions and invariants)

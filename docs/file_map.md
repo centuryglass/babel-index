@@ -599,13 +599,6 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                      significant design decisions made during implementation.
                      A record of intent, not a spec - it is not kept in sync
                      with the code and should not be edited to match it.
-- `docs/pending_task_list.md`: What is still to do - open tasks, known bugs
-                               not yet chased down, and decisions deferred.
-                               Not a design doc: a task leaves by being done.
-- `docs/accessibility-plan.md`: The still-open accessibility questions - what
-                                needs real screen reader testing, in order of
-                                doubt. The landed key-by-key spec is
-                                `docs/keyboard-controls.md`.
 - `docs/keyboard-controls.md`: The spec for every key the map view handles,
                                state by state - tab order, focus targets, what
                                each key does in each one.
@@ -626,8 +619,8 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                             an ordered set of recommendations. Analysis, not
                             a specification: `search_rules.md` says what the
                             code does, this says what is wrong with it. Its
-                            findings are entered in
-                            `docs/pending_task_list.md` under *Search*.
+                            findings are filed as GitHub issues (see
+                            AGENTS.md, "Tracking open work").
 - `docs/cosine-range-report.json`: A checked-in snapshot of
                                    `tools/embed/cosine-range.ts`'s last real
                                    run - the numbers `docs/search_rules.md`'s

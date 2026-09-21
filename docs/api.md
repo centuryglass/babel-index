@@ -49,9 +49,9 @@ this endpoint only does the one thing that can't run in a browser.
   - `{ stub: true, query: string, order: number[], note: string }` — CLIP
     inference failed or isn't installed; same stub ranking, with `note`
     explaining why (no model on this machine vs. a load error).
-- No auth, no rate limit of its own. `docs/pending_task_list.md`'s
-  "Hosting" section notes this is the better DoS target on this API and
-  isn't yet covered by the Cloudflare ruleset that protects asset serving.
+- No auth, no rate limit of its own. This is the better DoS target on this
+  API and isn't yet covered by the Cloudflare ruleset that protects asset
+  serving - see issue #244.
 
 ## `GET /api/favorites`
 
