@@ -384,10 +384,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // "The shared tiles are served flat" - resolved once `shared.levels` has
     // more than level 0). Never hardcode the coarsest rung as
     // `pyramid.fallbackLevel`: an older corpus with no shared pyramid
-    // generated has no tile there. Distill's alternates have no pyramid of
-    // their own (`rooms.ts`'s header), so they stay at level 0 like the center.
-    const sharedLevelNumbers = (manifest.shared?.levels ?? []).filter((l) => l.dir).map((l) => l.level);
-    const coarsestSharedLevel = sharedLevelNumbers.length ? Math.max(...sharedLevelNumbers) : 0;
+    // generated has no tile there. Distill's alternates get the same
+    // treatment off `manifest.shared.distillLevels` instead, since that tree
+    // may not share the base tiles' rungs (`manifest.ts`'s `SharedAssets`
+    // doc).
+    const coarsestOf = (levels: { dir: string | null; level: number }[] | undefined) => {
+      const numbers = (levels ?? []).filter((l) => l.dir).map((l) => l.level);
+      return numbers.length ? Math.max(...numbers) : 0;
+    };
+    const coarsestSharedLevel = coarsestOf(manifest.shared?.levels);
+    const coarsestDistillLevel = coarsestOf(manifest.shared?.distillLevels);
     const genericDistillIds = (manifest.shared?.genericDistill ?? [])
       .map((v, i) => (v ? genericDistillId(i) : null))
       .filter((id): id is number | string => id != null);
@@ -399,7 +405,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     }
     for (const id of genericDistillIds) {
       tiles.pin(id);
-      tiles.request(id, 0);
+      tiles.request(id, coarsestDistillLevel);
     }
     // The favorite badge's two faces and the center tile's sort-switch art,
     // pinned the same way - tiny images, gated on the store existing.

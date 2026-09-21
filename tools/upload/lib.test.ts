@@ -42,6 +42,7 @@ function manifest(): Manifest {
       generic: [{ file: 'a.jpg', url: '/shared/generic/a.jpg' }],
       genericDistill: [{ file: 'a.jpg', url: '/shared/generic_distill/a.jpg' }],
       levels: [{ level: 0, dir: null }],
+      distillLevels: [{ level: 0, dir: null }],
     },
   };
 }
@@ -92,6 +93,19 @@ test('buildUploadList covers the shared tiles at every non-zero level too, mirro
   assert.equal(genericLevel.local, 'assets/generic/512/a.jpg');
 });
 
+test('buildUploadList covers the distill tiles at every non-zero level too, off shared.distillLevels independently of shared.levels', () => {
+  const m = manifest();
+  // shared.levels stays flat: distillLevels having a rung must not depend on it.
+  m.shared.distillLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const keys = uploads.map((u) => u.key).sort();
+  assert.ok(keys.includes('shared/generic_distill/512/a.jpg'));
+  assert.ok(!keys.includes('shared/512/center_tile.png'), 'shared.levels stayed flat');
+
+  const distillLevel = uploads.find((u) => u.key === 'shared/generic_distill/512/a.jpg');
+  assert.equal(distillLevel.local, 'assets/generic_distill/512/a.jpg');
+});
+
 test('buildUploadList uploads one entry per sheet file for a sheet-packed level, not per room', () => {
   const m = manifest();
   m.levels.push({
@@ -115,7 +129,10 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   m.metadata = null;
   m.tagLinks = null;
   m.embeddings = null;
-  m.shared = { center: null, generic: [], genericDistill: [], levels: [{ level: 0, dir: null }] };
+  m.shared = {
+    center: null, generic: [], genericDistill: [],
+    levels: [{ level: 0, dir: null }], distillLevels: [{ level: 0, dir: null }],
+  };
   const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(
     uploads.map((u) => u.key).sort(),

@@ -76,6 +76,7 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
       genericDistill: (manifest.shared?.genericDistill ?? []).map((g) => g && { ...g, url: toShared(g.url) }),
       // No urls to rewrite - a level names a width, not a location.
       levels: manifest.shared?.levels ?? [{ level: 0, dir: null }],
+      distillLevels: manifest.shared?.distillLevels ?? [{ level: 0, dir: null }],
     },
   };
 }

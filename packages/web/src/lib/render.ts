@@ -194,10 +194,10 @@ export interface DrawOpts {
  */
 export function drawGenericFade(
   ctx: DrawContext, cache: TileCache, distillId: RoomId, fade: number,
-  sx: number, sy: number, w: number, h: number
+  sx: number, sy: number, w: number, h: number, level = 0
 ): void {
   if (fade <= 0) return;
-  const hit = cache.get(distillId, 0);
+  const hit = cache.get(distillId, level);
   ctx.globalAlpha = Math.min(1, fade);
   if (hit) {
     if (hit.rect) {
@@ -306,7 +306,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // and zoomed out, generic cells are the majority. The prefetch pass
         // still warms the base, so toggling distill off again does not pop.
         if (cell.generic && genericFade >= 1) {
-          drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
+          drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         } else {
           const hit = cache.get(id, level);
 
@@ -328,7 +328,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             blank++;
           }
 
-          if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
+          if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         }
 
         // The favorite badge: every real room, never the center (it is the

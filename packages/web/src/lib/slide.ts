@@ -448,7 +448,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       // fade the base tile's art is never seen, so it is not drawn - though
       // the prefetch pass still warms it.
       if (value === BOARD_GENERIC && genericFade >= 1) {
-        drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
+        drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         wanted.push(id);
         return;
       }
@@ -466,7 +466,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
         ctx.fillRect(sx, sy, cw, ch);
         blank++;
       }
-      if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
+      if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
       // The favorite badge rides along with a sliding tile. Only real rooms
       // carry one - which is when `value` is a numeric id rather than one of
       // the two shared board values.

@@ -81,14 +81,13 @@ test('a level shared.levels does not have resolves to null, same as a missing co
   assert.equal(locate(CENTER, 2), null);
 });
 
-test('shared ids with no pyramid of their own never resolve past level 0, even when shared.levels has one', () => {
-  // A distill alternate, a favorite badge, the distill toggle: none of these
-  // are in shared.levels' intersection, so a coarser request must still fail
-  // rather than silently reusing the center/generic ladder.
+test('a shared id with no pyramid of its own never resolves past level 0, even when shared.levels has one', () => {
+  // The favorite badge, the distill toggle: neither is in shared.levels'
+  // intersection, so a coarser request must still fail rather than silently
+  // reusing the center/generic ladder.
   const m = manifest();
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const locate = createTileLocator(m);
-  assert.equal(locate(genericDistillId(0), 1), null);
   assert.equal(locate(FAV_ON, 1), null);
 });
 
@@ -96,6 +95,22 @@ test('a generic tile\'s distill alternate resolves only where one exists on disk
   const locate = createTileLocator(manifest());
   assert.deepEqual(locate(genericDistillId(0), 0), { url: 'shared/generic_distill/g1.jpg', rect: null });
   assert.equal(locate(genericDistillId(1), 0), null, 'index 1 has no matching distill alternate');
+});
+
+test('a level in shared.distillLevels resolves by inserting <width>/ before the filename', () => {
+  const m = manifest();
+  m.shared.distillLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const locate = createTileLocator(m);
+  assert.deepEqual(locate(genericDistillId(0), 1), { url: 'shared/generic_distill/512/g1.jpg', rect: null });
+});
+
+test('shared.distillLevels is independent of shared.levels - the base ladder having a level says nothing about the distill tree', () => {
+  const m = manifest();
+  m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  // No m.shared.distillLevels set: falls back to level 0 only, same as an
+  // older manifest with neither field.
+  const locate = createTileLocator(m);
+  assert.equal(locate(genericDistillId(0), 1), null, 'shared.levels having a rung does not lend it to distill');
 });
 
 test('the favorite badge faces resolve flat off sharedBase, even absent from manifest.shared', () => {

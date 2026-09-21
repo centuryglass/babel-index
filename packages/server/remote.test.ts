@@ -42,6 +42,7 @@ function sampleManifest(): Manifest {
       generic: [{ file: 'g1.png', url: '/shared/generic/g1.png' }],
       genericDistill: [{ file: 'g1.jpg', url: '/shared/generic_distill/g1.jpg' }, null],
       levels: [{ level: 0, dir: null }],
+      distillLevels: [{ level: 0, dir: null }],
     },
     rooms: [{ id: 0, file: '001.jpg', url: '/images/001.jpg', bytes: 42, w: 512, h: 512 }],
     count: 1,

@@ -22,12 +22,14 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-test('pyramids the center render and every generic tile, in place', async () => {
+test('pyramids the center render, every generic tile, and every distill alternate, in place', async () => {
   await withTempDir(async (dir) => {
     await makeImage(join(dir, 'center_tile.png'), 256, 256);
     await mkdir(join(dir, 'generic'), { recursive: true });
     await makeImage(join(dir, 'generic', 'g1.jpg'), 256, 256);
     await makeImage(join(dir, 'generic', 'g2.jpg'), 256, 256);
+    await mkdir(join(dir, 'generic_distill'), { recursive: true });
+    await makeImage(join(dir, 'generic_distill', 'g1.jpg'), 256, 256);
 
     const result = await writeSharedMips({ sharedDir: dir });
 
@@ -35,12 +37,16 @@ test('pyramids the center render and every generic tile, in place', async () => 
     assert.ok(result.center!.written > 0, 'the center gets levels below 0');
     assert.deepEqual(result.generic.map((g) => g.file), ['g1.jpg', 'g2.jpg']);
     for (const g of result.generic) assert.ok(g.written > 0);
+    assert.deepEqual(result.genericDistill.map((g) => g.file), ['g1.jpg']);
+    for (const g of result.genericDistill) assert.ok(g.written > 0);
 
     // Written beside the source, the same per-file layout mips.ts uses.
     const centerLevel = (await sharp(join(dir, '128', 'center_tile.png')).metadata());
     assert.equal(centerLevel.width, 128);
     const genericLevel = await sharp(join(dir, 'generic', '128', 'g1.jpg')).metadata();
     assert.equal(genericLevel.width, 128);
+    const distillLevel = await sharp(join(dir, 'generic_distill', '128', 'g1.jpg')).metadata();
+    assert.equal(distillLevel.width, 128);
   });
 });
 
@@ -82,6 +88,16 @@ test('an absent generic directory yields no generic results, not a throw', async
     await makeImage(join(dir, 'center.jpg'), 128, 128);
     const result = await writeSharedMips({ sharedDir: dir });
     assert.deepEqual(result.generic, []);
+  });
+});
+
+test('an absent generic_distill directory yields no distill results, not a throw', async () => {
+  await withTempDir(async (dir) => {
+    await makeImage(join(dir, 'center.jpg'), 128, 128);
+    await mkdir(join(dir, 'generic'), { recursive: true });
+    await makeImage(join(dir, 'generic', 'g1.jpg'), 128, 128);
+    const result = await writeSharedMips({ sharedDir: dir });
+    assert.deepEqual(result.genericDistill, []);
   });
 });
 

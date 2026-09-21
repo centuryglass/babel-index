@@ -127,6 +127,20 @@ export function buildUploadList(
         key: `shared/generic_distill/${distill.file}`,
       });
 
+  // `generic_distill/`'s own pyramid, mirroring the loop above - a separate
+  // tree from `shared.levels` (manifest.ts's `SharedAssets` doc), so it walks
+  // `shared.distillLevels` and only the tiles that actually have a distill
+  // alternate.
+  for (const level of manifest.shared?.distillLevels ?? []) {
+    if (level.level === 0 || !level.dir) continue;
+    for (const distill of manifest.shared?.genericDistill ?? [])
+      if (distill)
+        uploads.push({
+          local: join(sharedDir, 'generic_distill', level.dir, distill.file),
+          key: `shared/generic_distill/${level.dir}/${distill.file}`,
+        });
+  }
+
   // Fixed app art, not part of any corpus's manifest.shared: the badges and
   // toggles resolve off `manifest.sharedBase` in packages/web/src/lib/rooms.ts,
   // the leather texture behind the dark chrome via a relative `url(shared/...)`
