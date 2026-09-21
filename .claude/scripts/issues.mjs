@@ -84,8 +84,25 @@ function originRepo() {
  *
  * The REST issues endpoint also returns pull requests (flagged with a
  * `pull_request` key) and paginates at 100/page regardless of what's asked
- * for, so both need handling `gh issue list` does internally.
+ * for, so both need handling `gh issue list` does internally. Comments are
+ * a separate endpoint per issue - `fetchIssueComments` is only called for
+ * an issue whose `comments` count is nonzero, to avoid a wasted request per
+ * commentless issue against the same rate budget.
  */
+async function fetchIssueComments(commentsUrl, headers) {
+  const comments = [];
+  for (let page = 1; ; page++) {
+    const res = await fetch(`${commentsUrl}?per_page=100&page=${page}`, { headers });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+    const batch = await res.json();
+    for (const c of batch) {
+      comments.push({ author: c.user?.login ?? null, body: c.body ?? '', createdAt: c.created_at ?? null });
+    }
+    if (batch.length < 100) break;
+  }
+  return comments;
+}
+
 async function fetchWithApi() {
   const token = process.env.BABEL_INDEX_ISSUES_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
   const { owner, repo } = originRepo();
@@ -115,6 +132,7 @@ async function fetchWithApi() {
         created_at: issue.created_at,
         updated_at: issue.updated_at,
         url: issue.html_url,
+        comments: issue.comments > 0 ? await fetchIssueComments(issue.comments_url, headers) : [],
       });
     }
     if (batch.length < 100) break;
@@ -134,6 +152,19 @@ const labelsOf = (issue) =>
   (issue.labels ?? []).map((l) => (typeof l === 'string' ? l : (l?.name ?? ''))).filter(Boolean);
 
 const stateOf = (issue) => String(issue.state ?? 'OPEN').toUpperCase();
+
+/**
+ * Tolerant of `gh issue list --json comments`' shape (`author: {login}`,
+ * `createdAt`) and `fetchIssueComments`' shape (`author` already a login
+ * string, `createdAt`), and defaults to none for `--from-json`/stdin input
+ * that predates this field.
+ */
+const commentsOf = (issue) =>
+  (Array.isArray(issue.comments) ? issue.comments : []).map((c) => ({
+    author: (typeof c.author === 'string' ? c.author : c.author?.login) ?? null,
+    body: c.body ?? '',
+    createdAt: c.createdAt ?? c.created_at ?? null,
+  }));
 
 function slug(title) {
   return String(title ?? '')
@@ -156,7 +187,25 @@ function issueFile(issue) {
     '---',
     '',
   ].filter((l) => l !== null);
-  return `${head.join('\n')}${issue.body ?? '_no description_'}\n`;
+
+  const comments = commentsOf(issue);
+  const commentsBlock = comments.length
+    ? [
+        '',
+        '---',
+        '',
+        '## Comments',
+        '',
+        ...comments.flatMap((c) => [
+          `### @${c.author ?? 'unknown'} - ${c.createdAt ?? 'unknown date'}`,
+          '',
+          c.body || '_no comment body_',
+          '',
+        ]),
+      ].join('\n')
+    : '';
+
+  return `${head.join('\n')}${issue.body ?? '_no description_'}\n${commentsBlock}`;
 }
 
 async function main() {
