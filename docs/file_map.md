@@ -269,6 +269,11 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   - `src/lib/`: pure/DOM-adjacent logic with no JSX - state management,
                geometry, and rendering
     * `center.ts`: Geometry and content management for the center tile interface
+    * `cssVars.ts`: The one declaration point for style values shared between
+                    canvas-drawn chrome and plain CSS - today, the hover glow
+                    color both `center.ts`/`render.ts`/`gl/glowTexture.ts` and
+                    style.css's `--hover-glow-rgb` draw with. `applyCssVars`,
+                    called once from `main.tsx`, is the only DOM access.
     * `spineFont.ts`: The center shelf's spine typeface (Roboto Slab) - the
                       pure `SPINE_FONT_FAMILY` constant `composeSpines` puts
                       in `ctx.font`, and `loadSpineFont`, the DOM half that

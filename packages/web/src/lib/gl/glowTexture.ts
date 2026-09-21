@@ -25,7 +25,7 @@
  * file is imported there through `glRenderer.ts`).
  */
 import { tracePathCommands } from '../svgPath.ts';
-import { HOVER_GLOW_FILL as FILL, HOVER_GLOW_STROKE as STROKE } from '../center.ts';
+import { HOVER_GLOW_FILL as FILL, HOVER_GLOW_STROKE as STROKE } from '../cssVars.ts';
 
 /** Bake resolution - see this file's doc for why any value is geometrically valid. */
 const BAKE_SIZE = 256;

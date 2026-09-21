@@ -32,6 +32,7 @@ import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH 
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { areSpinesLegible, BOOK_COUNT } from './center.ts';
+import { HOVER_GLOW_RGB } from './cssVars.ts';
 import { toGLRect, type GLContext, type Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createSpineTextureCache, type SpineTextureCache } from './gl/spineTexture.ts';
@@ -63,12 +64,14 @@ const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255
 /** `#15120f`, `render.ts`'s blank-cell fallback fill, as float RGB. */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 /**
- * `center.ts`'s `HOVER_GLOW_FILL`, as a flat quad. Used only when
+ * `cssVars.ts`'s `HOVER_GLOW_RGB`, as a flat quad. Used only when
  * `gl/glowTexture.ts` has no offscreen canvas to bake with - a headless
  * environment such as `npm test`, which never exercises a hover state
  * anyway. The real treatment is `drawGlow`'s textured case.
  */
-const FAVORITE_HOVER_GLOW: [number, number, number, number] = [200 / 255, 169 / 255, 95 / 255, 0.28];
+const FAVORITE_HOVER_GLOW: [number, number, number, number] = [
+  HOVER_GLOW_RGB[0] / 255, HOVER_GLOW_RGB[1] / 255, HOVER_GLOW_RGB[2] / 255, 0.28,
+];
 
 /**
  * Composite a hover-glow silhouette over a tile's full screen rect. `d`'s

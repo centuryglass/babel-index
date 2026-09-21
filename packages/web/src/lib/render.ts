@@ -31,9 +31,10 @@ import {
   genericId, genericDistillId, type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import {
-  composeSpines, areSpinesLegible, BOOK_COUNT, HOVER_GLOW_FILL, HOVER_GLOW_STROKE,
+  composeSpines, areSpinesLegible, BOOK_COUNT,
   type Slot, type SpineContext, type SpineFontLimits,
 } from './center.ts';
+import { HOVER_GLOW_FILL, HOVER_GLOW_STROKE } from './cssVars.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
