@@ -78,6 +78,10 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                      `rate-buckets.ts`
   * `rate-buckets.ts`: Per-key token buckets - shared by the favorite writes
                        and `admin-auth.ts`'s login attempts
+  * `metrics.ts`: Hourly, privacy-preserving usage counts (unique visitors,
+                 searches, favorite adds/removes) logged through `logger.ts` -
+                 no per-visitor data survives a flush, and nothing here is
+                 persisted to disk
   * `logViewerPage.ts`: The `/admin/logs` HTML page and its
                         `/admin/logs/fragment` polling partial
   * `search-cache.ts`: LRU cache and concurrency limiter (with an
