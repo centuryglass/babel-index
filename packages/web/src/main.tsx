@@ -45,6 +45,7 @@ import { favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from './lib/distillToggle.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
+import { applyCssVars } from './lib/cssVars.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
@@ -1445,6 +1446,8 @@ const URL_BLOCKED_TAGS: string[] =
     ?.split(',')
     .map((t) => t.trim())
     .filter(Boolean) ?? [];
+
+applyCssVars();
 
 const rootEl = document.getElementById('root');
 if (rootEl) createRoot(rootEl).render(<App />);

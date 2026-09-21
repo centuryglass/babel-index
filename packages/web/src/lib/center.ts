@@ -34,6 +34,7 @@ import { BASE_TILE } from './pyramid.ts';
 import type { DrawContext } from './render.ts';
 import { SPINE_FONT_FAMILY } from './spineFont.ts';
 import { flattenPath, pointInPolygon } from './svgPath.ts';
+import { HOVER_GLOW_FILL, HOVER_GLOW_STROKE } from './cssVars.ts';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
@@ -203,19 +204,6 @@ const INK = 'rgba(238,230,214,0.92)';
 const HALO = 'rgba(12,9,6,0.85)';
 /** The hovered book's plate fill, in place of the usual stroked halo. */
 const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
-/**
- * The hovered book's glow, across the whole spine: the same gold the favorite
- * badge and the distill toggle hover with. This is the one definition -
- * `render.ts` and `gl/glowTexture.ts` both import it rather than restating the
- * colour, so the WebGL-renderer lockstep rule (AGENTS.md, "The WebGL
- * renderer") cannot drift here by one file changing a literal and the other two
- * being missed.
- *
- * Painted on the canvas rather than as a CSS overlay, for the reason on
- * `useMapRenderer.ts`'s `onMove`.
- */
-export const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
-export const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
 /**
  * The auto-fit range a spine title's font is sized within, per title:
