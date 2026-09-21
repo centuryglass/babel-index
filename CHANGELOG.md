@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.4.1...babel-index-v1.5.0) (2026-09-21)
+
+
+### Features
+
+* auto-pull GitHub issues in cloud sessions without gh or a token ([#272](https://github.com/centuryglass/babel-index/issues/272)) ([ed0fd4c](https://github.com/centuryglass/babel-index/commit/ed0fd4cb8eb1b65cd399e33b6e3e9f27c794cb51))
+
+
+### Bug Fixes
+
+* bound stubRanking's hashing loop independently of config ([#281](https://github.com/centuryglass/babel-index/issues/281)) ([4bf31dd](https://github.com/centuryglass/babel-index/commit/4bf31ddf608a224f146b60e8a2040169af61ea2f)), closes [#276](https://github.com/centuryglass/babel-index/issues/276)
+* carry the int8 quantisation scale through the manifest ([#285](https://github.com/centuryglass/babel-index/issues/285)) ([ada38c6](https://github.com/centuryglass/babel-index/commit/ada38c66323fb0e52c61e83c4f00f2a170e91bae)), closes [#231](https://github.com/centuryglass/babel-index/issues/231)
+* import comments into the GitHub issues cache ([#280](https://github.com/centuryglass/babel-index/issues/280)) ([53cffcf](https://github.com/centuryglass/babel-index/commit/53cffcf3d540c6578dadf98b6f64ed1e1f80f0f2)), closes [#279](https://github.com/centuryglass/babel-index/issues/279)
+* remove unreachable reset() from the GL texture caches ([#271](https://github.com/centuryglass/babel-index/issues/271)) ([aa077d2](https://github.com/centuryglass/babel-index/commit/aa077d22bdde23963d6e35d3b46dab4daf256199)), closes [#264](https://github.com/centuryglass/babel-index/issues/264)
+* surface a corpus fetch failure in the debug HUD ([#284](https://github.com/centuryglass/babel-index/issues/284)) ([db62b64](https://github.com/centuryglass/babel-index/commit/db62b645a7bfc7700f8400091f1e294d7d1d38d5)), closes [#250](https://github.com/centuryglass/babel-index/issues/250)
+
 ## [1.4.1](https://github.com/centuryglass/babel-index/compare/babel-index-v1.4.0...babel-index-v1.4.1) (2026-09-20)
 
 
