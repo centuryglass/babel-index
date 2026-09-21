@@ -10,15 +10,30 @@
  *
  * `tagLinks` is a flat keyword -> url object, small enough (a few dozen
  * entries at most) to be React state directly.
+ *
+ * Each of the three fetches the manifest advertises can fail on its own - an
+ * interrupted `tools/upload` sync is a plausible way to end up with a
+ * manifest naming a `metadata.json` or `embeddings.bin` that 404s - and the
+ * corpus still renders in that state, just with degraded search. `corpusErrors`
+ * names which of them did, for the HUD line in `MapView.tsx` (`described`'s
+ * neighbor) rather than a `.catch(() => {})` a maintainer can only find by
+ * opening the network tab.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinMetadata, type RoomMeta } from '../../../map/metadata.ts';
 import { buildSearchIndex } from '../../../map/scoring.ts';
 import type { ManifestResponse } from '../../../map/manifest.ts';
 
+/** A fetch the manifest advertised that came back non-ok or threw, named for the HUD line in `MapView.tsx`. */
+export type CorpusErrorSource = 'metadata' | 'embeddings' | 'tagLinks';
+
 export function useCorpus(manifest: ManifestResponse) {
   const [metadata, setMetadata] = useState<(RoomMeta | null)[] | null>(null);
   const [tagLinks, setTagLinks] = useState<Record<string, string> | null>(null);
+  const [corpusErrors, setCorpusErrors] = useState<CorpusErrorSource[]>([]);
+
+  const addError = (source: CorpusErrorSource) =>
+    setCorpusErrors((prev) => (prev.includes(source) ? prev : [...prev, source]));
 
   // The embedding blob, fetched once if the corpus has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a
@@ -29,11 +44,16 @@ export function useCorpus(manifest: ManifestResponse) {
     if (!manifest.embeddings) return;
     let cancelled = false;
     fetch(manifest.embeddings.url)
-      .then((r) => r.arrayBuffer())
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.arrayBuffer();
+      })
       .then((buf) => {
         if (!cancelled) embeddings.current = { data: new Int8Array(buf), dim: manifest.embeddings!.dim };
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) addError('embeddings');
+      });
     return () => {
       cancelled = true;
     };
@@ -47,11 +67,16 @@ export function useCorpus(manifest: ManifestResponse) {
     if (!manifest.metadata) return;
     let cancelled = false;
     fetch(manifest.metadata.url)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
       .then((sidecar) => {
         if (!cancelled) setMetadata(joinMetadata(manifest.rooms, sidecar));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) addError('metadata');
+      });
     return () => {
       cancelled = true;
     };
@@ -64,11 +89,16 @@ export function useCorpus(manifest: ManifestResponse) {
     if (!manifest.tagLinks) return;
     let cancelled = false;
     fetch(manifest.tagLinks.url)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
       .then((map) => {
         if (!cancelled) setTagLinks(map);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) addError('tagLinks');
+      });
     return () => {
       cancelled = true;
     };
@@ -80,5 +110,5 @@ export function useCorpus(manifest: ManifestResponse) {
   // megabyte of string work.
   const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
 
-  return { metadata, embeddings, searchIndex, described, tagLinks };
+  return { metadata, embeddings, searchIndex, described, tagLinks, corpusErrors };
 }

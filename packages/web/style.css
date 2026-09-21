@@ -308,6 +308,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 .panel h1 { margin: 0 0 2px; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
 .panel .sub { margin: 0 0 14px; color: var(--dim); font-size: 11px; }
+.panel .sub.corpus-error { color: #e08a7a; margin-top: -10px; }
 .row { margin-bottom: 12px; }
 .row label { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 4px; }
 .row label b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
