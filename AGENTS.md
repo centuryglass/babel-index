@@ -225,9 +225,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     is scaffolding left in the wall: that reasoning is worth doing, but in
     your thinking, not the file - once the change lands, the version it
     argues against exists only in git. The tell is prose about a prior
-    implementation rather than the code as it stands. End a change with a
-    narrow sweep over the lines you touched, flagging "used to / instead of /
-    rather than / would only," to catch the residue.
+    implementation rather than the code as it stands. This is not only a
+    code-comment habit: a doc section rewritten after a migration ("there is
+    no longer a file for this," "X used to live in Y before it moved here")
+    has the same tell and the same fix - a reader arriving fresh has no prior
+    state to be told they're free of, so describe only the state that exists.
+    Keep a history note only where it resolves something a reader would
+    otherwise trip on (a redirect, a permanent alias, a link that still
+    points at an old name) - not as scene-setting for a change that already
+    landed. End a change with a narrow sweep over the lines and sections you
+    touched, flagging "used to / instead of / rather than / would only / no
+    longer / anymore / was migrated / previously," to catch the residue.
   - **Length tracks risk, and terse has a floor.** A few lines is the
     default; more is earned only where deleting a clause would let a careful
     reader introduce a real bug - in genuinely subtle code (`illusion.ts`,
@@ -1114,15 +1122,11 @@ two in step - see *Testing and CI*.
 
 ## Tracking open work
 
-- **Open work lives entirely in GitHub issues.** There is no task-list file
-  in this repo anymore - `docs/pending_task_list.md` and
-  `docs/accessibility-plan.md` were mirrored into issues and removed (see
-  [#236](https://github.com/centuryglass/babel-index/issues/236)). *Search*
-  moved first, as the pilot, and every other area followed in the same pass.
-- **A found bug opens an issue**, carrying the same content the old task
-  list asked for: what was observed, how to reproduce it, and what is
-  already ruled out. The trivial same-pass fix rule is unchanged - it
-  decides whether anything gets filed at all, not where.
+- **Open work lives entirely in [GitHub issues](https://github.com/centuryglass/babel-index/issues).**
+  Nothing in this repo tracks tasks; the issue tracker is the only list.
+- **A found bug opens an issue**: what was observed, how to reproduce it,
+  and what is already ruled out. The trivial same-pass fix rule is
+  unchanged - it decides whether anything gets filed at all, not where.
 - **A fact worth knowing is not a task.** It belongs in the owning module's
   comment, or in this file, not in an issue. See "This file is for facts
   that cross files".
