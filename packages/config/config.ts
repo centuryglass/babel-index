@@ -62,7 +62,7 @@ import {
   ZOOM_STEP_FACTOR,
 } from '../web/src/lib/camera.ts';
 import { STRENGTH_FLOOR } from '../map/ordering.ts';
-import { CLIP_CERTAINTY } from '../map/scoring.ts';
+import { CLIP_STRENGTH } from '../map/scoring.ts';
 
 export interface ZoomLimits {
   min: number;
@@ -542,12 +542,12 @@ export const DEFAULTS: Defaults = {
        * The three anchors of CLIP's signed strength curve: `clipCentre` is the
        * no-opinion point (0), `clipHigh` a genuine match's typical confidence
        * (+1), `clipLow` a genuinely irrelevant query's (-1). The one part of the
-       * gradient that is a measurement rather than a preference - `CLIP_CERTAINTY`
+       * gradient that is a measurement rather than a preference - `CLIP_STRENGTH`
        * (`packages/map/scoring.ts`) is where they were measured.
        */
-      clipCentre: CLIP_CERTAINTY.centre,
-      clipHigh: CLIP_CERTAINTY.high,
-      clipLow: CLIP_CERTAINTY.low,
+      clipCentre: CLIP_STRENGTH.centre,
+      clipHigh: CLIP_STRENGTH.high,
+      clipLow: CLIP_STRENGTH.low,
     },
   },
 };

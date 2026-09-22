@@ -386,7 +386,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                        `result`, and the match ranges/explanation rows built
                        from either. Type-only, imported through JSDoc the
                        same way `manifest.ts` is.
-  * `scoring.ts`: Find room rank and match certainty for a search, search tokenization
+  * `scoring.ts`: Find room rank and match strength for a search, search tokenization
   * `favorites.ts`: The favorite sort modes, as a stable re-sort of an order
                     that already exists
   * `illusion.ts`: Build a convincing sliding-tile animation for `packages/web/src/lib/slide.ts`
@@ -434,7 +434,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - `tools/embed/README.md`: how to run `embed.ts`/`cosine-range.ts` and what
                            each flag does.
 - `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
-                                 corpus - the source of `CLIP_CERTAINTY`/
+                                 corpus - the source of `CLIP_STRENGTH`/
                                  `search.density.clipCentre/clipHigh/clipLow`'s
                                  calibration and of `docs/search_rules.md`'s
                                  thresholds. `--universal`/`--irrelevant` probe
@@ -624,7 +624,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                state by state - tab order, focus targets, what
                                each key does in each one.
 - `docs/search_rules.md`: The full specification of what a search does -
-                          parsing, scoring, ranking-vs-certainty, and every
+                          parsing, scoring, ranking-vs-strength, and every
                           reporting rule. Matches the implementation
                           (`packages/map/scoring.ts`); update this file
                           alongside a scoring change rather than letting it
@@ -636,7 +636,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                                 so a change here is a change of intent rather
                                 than a correction.
 - `docs/search_critique.md`: A review of the search system as built - what
-                            works, where ranking and certainty disagree, and
+                            works, where ranking and strength disagree, and
                             an ordered set of recommendations. Analysis, not
                             a specification: `search_rules.md` says what the
                             code does, this says what is wrong with it. Its

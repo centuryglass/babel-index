@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildSearchIndex,
   classifyTagTerm,
-  CLIP_CERTAINTY,
+  CLIP_STRENGTH,
   explainRanking,
   fold,
   foldWithMap,
@@ -14,7 +14,7 @@ import {
   normaliseScores,
   parseQuery,
   rankHybrid,
-  signedClipCertainty,
+  signedClipStrength,
   STORY_FLOOR,
   STORY_LONG_RANGE,
   storyMatchRanges,
@@ -733,7 +733,7 @@ test('a single matched story word sits at the moderate STORY_FLOOR, a full claus
 });
 
 test('CLIP strength is read off the raw cosine, against the three-anchor band [SR-16] [SR-19]', () => {
-  const { centre, high, low } = CLIP_CERTAINTY;
+  const { centre, high, low } = CLIP_STRENGTH;
   assert.equal(matchStrength({ cosine: centre }), 0, 'at the no-opinion centre it says nothing');
   assert.equal(matchStrength({ cosine: high + 0.05 }), 1, 'above the high extreme, as sure as it gets');
   assert.equal(matchStrength({ cosine: low - 0.05 }), -1, 'below the low extreme, as sure it does NOT match');
@@ -743,14 +743,14 @@ test('CLIP strength is read off the raw cosine, against the three-anchor band [S
   assert.ok(Math.abs(negMid + 0.5) < 1e-6, `halfway to the low extreme is ${negMid}`);
 });
 
-test('signedClipCertainty is a monotone signed curve across all three anchors [SR-16]', () => {
-  const { centre, high, low } = CLIP_CERTAINTY;
-  assert.equal(signedClipCertainty(centre), 0, 'the no-opinion centre');
-  assert.equal(signedClipCertainty(high + 1), 1, 'saturates at the high extreme');
-  assert.equal(signedClipCertainty(low - 1), -1, 'saturates at the low extreme');
-  assert.equal(signedClipCertainty(null), 0);
-  assert.ok(signedClipCertainty((centre + high) / 2) > 0, 'above centre reads positive');
-  assert.ok(signedClipCertainty((centre + low) / 2) < 0, 'below centre reads negative');
+test('signedClipStrength is a monotone signed curve across all three anchors [SR-16]', () => {
+  const { centre, high, low } = CLIP_STRENGTH;
+  assert.equal(signedClipStrength(centre), 0, 'the no-opinion centre');
+  assert.equal(signedClipStrength(high + 1), 1, 'saturates at the high extreme');
+  assert.equal(signedClipStrength(low - 1), -1, 'saturates at the low extreme');
+  assert.equal(signedClipStrength(null), 0);
+  assert.ok(signedClipStrength((centre + high) / 2) > 0, 'above centre reads positive');
+  assert.ok(signedClipStrength((centre + low) / 2) < 0, 'below centre reads negative');
 });
 
 test('a query nothing matches clusters nothing, and does not even decide the order [SR-19]', () => {
@@ -759,15 +759,15 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
   // cannot tell "cghjj" from "art nouveau", and a gradient driven by it
   // would cluster noise and claim a find. The raw cosines say what is
   // happening: every one of these sits below the low extreme, so
-  // `clipCertaintyGate` - the ranking term, clamped to its positive half -
+  // `clipStrengthGate` - the ranking term, clamped to its positive half -
   // is 0 for all three, and the ranking's CLIP term,
-  // `clip * clipNorm * clipCertaintyGate`, is silenced right along with any
+  // `clip * clipNorm * clipStrengthGate`, is silenced right along with any
   // positive strength. Ranking falls back to stable id order, as if there
   // were no signal at all. Strength itself reads these as a confident
   // mismatch (negative) - a separate question, which the density gradient
   // floors again.
   const cosines = [-0.2, -0.15, -0.1];
-  assert.ok(cosines.every((c) => c <= CLIP_CERTAINTY.low));
+  assert.ok(cosines.every((c) => c <= CLIP_STRENGTH.low));
   const strength = strengthOf({ query: 'cghjj', embeddings: atCosines(...cosines) });
 
   assert.ok(Math.max(...strength) <= 0, `expected no positive strength, got ${[...strength]}`);
@@ -810,7 +810,7 @@ test('a strong cosine is certain on its own [SR-16]', () => {
   // every cosine through int8 quantisation, so these land close to but not
   // on the anchors - the assertions tolerate that, rather than checking
   // exact equality.
-  const { centre, high } = CLIP_CERTAINTY;
+  const { centre, high } = CLIP_STRENGTH;
   const midHigh = centre + (high - centre) / 2;
   const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, centre) });
   assert.equal(strength[0], 1);
@@ -822,7 +822,7 @@ test('an exact keyword match is certain whatever the picture looks like', () => 
   // "lora:yuiop" tagged on a room CLIP genuinely has no opinion about (cosine
   // at the no-opinion centre). The tag is the answer; the cosine has no say in
   // whether it is one.
-  const { centre } = CLIP_CERTAINTY;
+  const { centre } = CLIP_STRENGTH;
   const strength = strengthOf({
     query: 'yuiop',
     embeddings: atCosines(centre, centre, centre),
@@ -874,7 +874,7 @@ test('the strength bounds are configurable', () => {
     count: 3,
     weights: WEIGHTS,
     ...opts,
-    clipCertainty: { centre: -0.2, high: -0.15, low: -0.3 },
+    clipStrength: { centre: -0.2, high: -0.15, low: -0.3 },
   });
   assert.equal(loosened.strength[0], 1, 'a shifted band makes the same cosine certain');
 });
@@ -1118,12 +1118,12 @@ test('explainRanking reports an exact vs. a partial title match', () => {
 });
 
 test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosine underneath it [SR-32] [SR-36]', () => {
-  // Every cosine is below `CLIP_CERTAINTY.low`: CLIP reads all of these as a
+  // Every cosine is below `CLIP_STRENGTH.low`: CLIP reads all of these as a
   // confident mismatch, not merely "no opinion". Min-maxing still puts the
   // best of them at 1.00 (`breakdown.clip`), which is the trap - a line
   // printing that relative number alone would claim a confident match.
   const cosines = [-0.1, -0.15, -0.2];
-  assert.ok(cosines.every((c) => c < CLIP_CERTAINTY.low));
+  assert.ok(cosines.every((c) => c < CLIP_STRENGTH.low));
 
   const { breakdown, strength, ranks, ties } = rankHybrid({
     query: 'cghjj',
@@ -1139,7 +1139,7 @@ test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosin
 
   assert.equal(breakdown.clip[0], 1, 'relative score is the top of the range');
   assert.ok(Math.abs(explanation.clip.cosine - cosines[0]) < 0.01, 'the clip summary carries the RAW cosine');
-  assert.ok(explanation.clip.cosine < CLIP_CERTAINTY.low, 'which is below the low extreme');
+  assert.ok(explanation.clip.cosine < CLIP_STRENGTH.low, 'which is below the low extreme');
   assert.equal(explanation.clip.percent, -99.99, 'reported as a clamped signed percentage');
   assert.equal(explanation.percent, -99.99, 'and the composite reading agrees it is a confident mismatch');
 });

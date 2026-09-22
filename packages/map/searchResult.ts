@@ -92,7 +92,7 @@ export interface ScoreBreakdown {
   /** `clipNorm` - min-max normalised across the corpus for this query */
   clip: Float32Array;
   /** the positive half of the signed CLIP strength curve, in [0, 1] */
-  clipCertaintyGate: Float32Array;
+  clipStrengthGate: Float32Array;
   /** the full signed CLIP strength curve, in [-1, 1] - what the CLIP row's reported percentage reads */
   clipSigned: Float32Array;
   cosine: Float32Array;
