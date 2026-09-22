@@ -400,7 +400,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   resize, and they only go down to tile width 128: a level with no
   generated badge art draws nothing at all (issue #257) rather than falling
   back to a different rung, because the badge's on-screen size already
-  tracks the tile's own scale (`favoriteIconScreenRect`) regardless of which
+  tracks the tile's scale (`favoriteIconScreenRect`) regardless of which
   rung's pixels back it - a coarser substitute would only be softer, never
   smaller, defeating the reason the rungs exist. `render.ts`/`glRenderer.ts`'s
   `drawFavoriteBadge`/`drawFavoriteBadgeGL` enforce this by requiring an
@@ -626,7 +626,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` (`tiles.ts`'s
   `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase` directly rather than
   a manifest listing, since `scan.ts` never discovers them - though it does
-  discover the scaled files' own pyramid (`manifest.shared.favoriteLevels`,
+  discover the scaled files' pyramid (`manifest.shared.favoriteLevels`,
   "The center, the generic tiles..." above) the same way it discovers the
   center tile's. Drawn by both `render.ts` and `slide.ts` on every
   non-center, non-generic cell - `favoriteBadge.ts` is the pure

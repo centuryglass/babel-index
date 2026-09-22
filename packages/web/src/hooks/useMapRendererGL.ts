@@ -76,7 +76,7 @@ interface UseMapRendererGLOpts {
   centreOverlay: (w: number, h: number) => CentreOverlay;
   blockedCount?: number;
   favorites?: { isFavorite: (id: number) => boolean } | null;
-  /** See `useMapRenderer.ts`'s own `minFavoriteInteractiveWidth`. */
+  /** See `useMapRenderer.ts`'s `minFavoriteInteractiveWidth`. */
   minFavoriteInteractiveWidth?: number;
   favTooltipRef?: { current: HTMLElement | null };
   sortMode?: SortMode;

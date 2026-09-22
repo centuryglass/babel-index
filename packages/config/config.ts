@@ -465,14 +465,12 @@ export const DEFAULTS: Defaults = {
   favorites: {
     /**
      * Below this many CSS pixels of cell width, the on-tile favorite badge
-     * stops responding to a tap or a hover - the tile it sits on is too
-     * small for the target to mean anything (issue #257). Drawing has its
-     * own, separate cutoff: below tile width 128 there is no scaled badge
-     * art at all (`manifest.shared.favoriteLevels`), so the badge already
-     * stops appearing there; this threshold governs interactivity only, and
-     * intentionally sits at the same width the art runs out at rather than
-     * one more level coarser, so a badge is never tappable a frame after it
-     * has stopped being legible.
+     * stops responding to a tap or a hover - the tile it sits on is too small
+     * for the target to mean anything (issue #257). Interactivity only;
+     * drawing has a separate cutoff (`render.ts`'s
+     * `drawFavoriteBadge`). This value is kept at the same tile width the
+     * scaled badge art runs out at (`manifest.shared.favoriteLevels`), so a
+     * badge is never tappable after it has stopped being legible.
      */
     minInteractiveTileWidth: 128,
   },

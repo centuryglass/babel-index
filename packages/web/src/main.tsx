@@ -415,12 +415,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     }
     // The favorite badge's two faces and the center tile's sort-switch art,
     // pinned the same way - tiny images, gated on the store existing. Only
-    // level 0 is warmed up front, same as the center: `FAV_ON`/`FAV_OFF` do
-    // have their own pyramid now (`manifest.shared.favoriteLevels`), but
-    // every other level of it is requested lazily by `render.ts`'s draw loop
-    // as the zoom actually calls for it - there is no "which level is on
-    // screen at opening zoom" question here worth precomputing the way the
-    // generic tiles' `coarsestSharedLevel` answers one.
+    // level 0 is warmed here; the badge's coarser `manifest.shared.favoriteLevels`
+    // rungs are requested lazily by `render.ts`'s draw loop as the zoom needs
+    // them, so there is no opening-zoom level to precompute for them here.
     if (favorites.enabled) {
       for (const id of [FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON]) {
         tiles.pin(id);

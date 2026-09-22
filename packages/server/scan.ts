@@ -55,11 +55,10 @@ export const GENERIC_DISTILL_DIR = 'generic_distill';
 
 /**
  * The favorite badge's two faces - fixed app art, not scanned corpus content,
- * but `discoverFavoriteLevels` checks for these two exact names to find its
- * own pyramid. Mirrors the literal filenames `rooms.ts` resolves the badge's
- * level-0 urls from; kept as a separate copy rather than a shared import
- * because the two modules run in different packages and the fact is a name,
- * not behaviour (the same reasoning `METADATA_FILE`'s neighbour comment gives).
+ * but `discoverFavoriteLevels` checks for these two exact names to find the
+ * badge's pyramid. Mirrors the literal filenames `rooms.ts` resolves the
+ * badge's level-0 urls from; kept as a separate copy because the two modules
+ * run in different packages and the fact is a name, not behaviour.
  */
 const FAV_ON_FILE = 'fav_on.png';
 const FAV_OFF_FILE = 'fav_off.png';
@@ -192,10 +191,10 @@ export async function discoverLevels(dir: string, source: ImageSize | null, room
 }
 
 /**
- * Which of the favorite badge's own pyramid levels have actually been
- * generated - `fav_on.png`/`fav_off.png` scaled into the same per-level
- * `<width>/` directories `discoverLevels` walks for the center tile, off the
- * same reference size (a storage convenience, not a shared discovery - see
+ * Which of the favorite badge's pyramid levels are generated -
+ * `fav_on.png`/`fav_off.png` scaled into the same per-level `<width>/`
+ * directories `discoverLevels` walks for the center tile, off the same
+ * reference size (a storage convenience, not a shared discovery - see
  * `SharedAssets.favoriteLevels`'s doc). A level counts only when both faces
  * are present; the badge is never sheet-packed, so this only ever checks the
  * per-file shape `discoverLevels` does for a level below `SHEETS.fromLevel`.
@@ -364,7 +363,7 @@ export async function scanDirectory(
   // treatment but its own field (`distillLevels`, see manifest.ts) rather than
   // being folded into this intersection - not every generic tile has a distill
   // alternate, so gating it on the base trees' rungs would veto levels the
-  // distill tree actually has. The favorite badge's own pyramid
+  // distill tree actually has. The favorite badge's pyramid
   // (`favoriteLevels`) is discovered the same way, off the same reference
   // size, but checked directly rather than intersected with any of these -
   // see `discoverFavoriteLevels`'s doc. The rest of the fixed app art (the

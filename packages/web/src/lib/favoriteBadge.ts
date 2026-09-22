@@ -6,20 +6,15 @@
  * scaled by a cell's pixels-per-cell-width over the reference width the
  * loaded art was itself scaled to match - the same factor `render.ts`/
  * `slide.ts` draw the tile itself at, and the one factor covers both axes
- * because both assets share the tile's aspect. The badge now has its own
- * pyramid (`manifest.shared.favoriteLevels`, issue #257): `fav_on.png`'s
- * level-1 `512/` variant is already scaled to half its level-0 size, to
- * match a tile drawn at half its level-0 size - so the reference width for
- * `iconSize * cellPx.x / reference` must be `pyramid.sizeOf(level).w` for
- * the level that art actually came from, never a flat `BASE_TILE.w`. Using
- * `BASE_TILE.w` for every level double-shrinks a coarser rung's art (it is
- * already smaller on disk, then divided by the same denominator as the
- * full-size level-0 art), which is the bug issue #257's follow-up caught.
+ * because both assets share the tile's aspect. The badge has a pyramid
+ * (`manifest.shared.favoriteLevels`, issue #257), so the scale denominator is
+ * not a flat `BASE_TILE.w` - `favoriteIconScreenRect` is the one home for that
+ * rule and the double-shrink it prevents.
  *
  * Hit-testing and drawing read different size sources: the hit test works
  * in traced tile fractions (`FAVORITE_TOGGLE_BBOX`/`FAVORITE_TOGGLE_PATH`)
  * and needs no native pixel size, while the drawn icon is placed from the
- * decoded art's own pixels - see `favoriteIconScreenRect`.
+ * decoded art's pixels - see `favoriteIconScreenRect`.
  *
  * No DOM - this is the pure geometry/hit-test half, split out the same way
  * `picking.ts` and `center.ts` are.
@@ -81,18 +76,18 @@ const TOUCH_HIT_AREA_CAP = 0.1;
  * The badge's full screen rect for a tile whose top left corner is at
  * `(sx, sy)` and whose width is `cellPx.x`, anchored to the tile's upper
  * right corner and scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the decoded art's own pixel size, read by `render.ts`'s
+ * `iconSize` is the decoded art's pixel size, read by `render.ts`'s
  * `drawFavoriteBadge` once the tile cache reports it loaded - unrelated to
  * `FAVORITE_TOGGLE_BBOX`, which sizes the tap target instead.
  *
- * `level` is which pyramid rung `iconSize` actually came from - the badge's
- * own pyramid (`manifest.shared.favoriteLevels`), not necessarily the room
- * tile's. The scale factor is `cellPx.x` over THAT level's own reference
- * width (`pyramid.sizeOf(level).w`), not a flat `BASE_TILE.w`: a coarser
+ * `level` is which pyramid rung `iconSize` came from - the badge's
+ * pyramid (`manifest.shared.favoriteLevels`), not necessarily the room
+ * tile's. The scale factor is `cellPx.x` over that level's reference
+ * width (`pyramid.sizeOf(level).w`), never a flat `BASE_TILE.w`: a coarser
  * rung's art is already scaled down on disk to match a tile drawn at that
  * level's width, so dividing it by the full-size level-0 width would shrink
- * it twice. Level 0's reference width is `BASE_TILE.w` itself, so this
- * still matches the pre-pyramid behaviour there.
+ * it twice. Level 0's reference width is `BASE_TILE.w`, so level 0 is
+ * unchanged.
  */
 export function favoriteIconScreenRect(
   cellPx: { x: number; y: number },

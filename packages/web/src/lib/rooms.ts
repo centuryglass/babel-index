@@ -104,13 +104,15 @@ export function createTileLocator(manifest: Manifest): LocateTile {
       distillSharedIds.add(id);
     }
   });
-  // The favorite badge's own pyramid, same treatment as `distillLevels` - a
+  // The favorite badge's pyramid, same treatment as `distillLevels` - a
   // third map, never intersected with the other two (see manifest.ts's doc).
   const favoriteLevels = new Map((shared.favoriteLevels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
   const favoriteSharedIds = new Set<number | string>([FAV_ON, FAV_OFF]);
-  // The favorite badge's two faces are fixed app art, not part of a scanned
-  // corpus, so they are not in `manifest.shared` - but they live in the same
-  // `--shared-dir` and are served flat from it exactly like the center tile.
+  // The badge's level-0 urls: fixed app art, not part of a scanned corpus, so
+  // not listed in `manifest.shared.center`/`generic` - but they live in the
+  // same `--shared-dir` and are served from its base like the center tile's
+  // level 0. Only their per-level widths are discovered, in
+  // `SharedAssets.favoriteLevels`.
   sharedUrls.set(FAV_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_on.png')}`);
   sharedUrls.set(FAV_OFF, `${manifest.sharedBase}/${encodeURIComponent('fav_off.png')}`);
   pyramidSharedIds.add(FAV_ON);

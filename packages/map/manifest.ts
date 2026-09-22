@@ -52,8 +52,8 @@ export interface SharedAsset extends Partial<ImageSize> {
  * overlay) is in none of them and stays flat at level 0 (see rooms.ts's
  * header).
  *
- * `favoriteLevels` is the favorite badge's own pyramid - `fav_on.png`/
- * `fav_off.png` scaled to the tile's own per-level widths, checked for
+ * `favoriteLevels` is the favorite badge's pyramid - `fav_on.png`/
+ * `fav_off.png` scaled to the tile's per-level widths, checked for
  * directly (`scan.ts`'s `discoverFavoriteLevels`) rather than intersected
  * with `levels`: the scaled badge files happen to live in the same
  * `<width>/` directories the center tile's pyramid does (a convenient home

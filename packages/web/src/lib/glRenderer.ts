@@ -131,8 +131,8 @@ export function drawGenericFadeGL(
 
 /**
  * GL twin of `render.ts`'s `drawFavoriteBadge`: rule 1 does not apply, and
- * neither does a fallback to a different pyramid rung - only the tile's own
- * draw level (`level`) is ever requested, and anything else (still loading,
+ * neither does a fallback to a different pyramid rung - only the tile's draw
+ * level (`level`) is ever requested, and anything else (still loading,
  * or a level with no generated badge art at all below tile width 128) draws
  * nothing this frame. See `drawFavoriteBadge`'s doc for why no fallback is
  * the correct behaviour here, not a gap. The hover glow is the baked

@@ -673,15 +673,15 @@ test('the badge follows the same zoom scale as the tile it sits on, within one p
 });
 
 test('the badge stays proportional to the tile across a level change, once the loaded art is proportionally scaled like the real assets', () => {
-  // issue #257's follow-up: naturalIconSize(hit) is per-level art (level 1's
-  // fav_on.png is scaled to half level 0's), so favoriteIconScreenRect must
-  // divide by THAT level's own reference width, not BASE_TILE.w - otherwise
-  // a coarser level's already-shrunk art gets shrunk a second time. Exercised
-  // directly against `favoriteIconScreenRect` since `world()`'s fake loader
-  // does not vary its icon size by level the way real scaled art does.
+  // naturalIconSize(hit) is per-level art (level 1's fav_on.png is scaled to
+  // half level 0's), so favoriteIconScreenRect must divide by that level's
+  // reference width, not BASE_TILE.w - otherwise a coarser level's
+  // already-shrunk art gets shrunk a second time. Exercised directly against
+  // `favoriteIconScreenRect` since `world()`'s fake loader does not vary its
+  // icon size by level the way real scaled art does.
   const level0 = favoriteIconScreenRect({ x: 1024, y: 768 }, 0, 0, { w: 92, h: 198 }, 0);
-  // Half the tile's own pixels-per-cell, and half the icon's own pixels -
-  // exactly what a real level-1 draw looks like (both the tile and the
+  // Half the tile's pixels-per-cell, and half the icon's pixels - what a
+  // real level-1 draw looks like (both the tile and the
   // badge's `512/fav_on.png` are half of level 0's).
   const level1 = favoriteIconScreenRect({ x: 512, y: 384 }, 0, 0, { w: 46, h: 99 }, 1);
   assert.ok(
@@ -692,7 +692,7 @@ test('the badge stays proportional to the tile across a level change, once the l
 
 test('drawFavoriteBadge never substitutes a different level - a resident coarser rung is not drawn undersized', () => {
   // issue #257: unlike a room tile (which happily upscales a coarser
-  // resident level while its own loads), the badge's own size already
+  // resident level while its own loads), the badge's size already
   // tracks the tile's scale regardless of which rung's pixels back it, so a
   // substitute would only be softer, never smaller - drawing one would
   // defeat the reason the badge has multiple rungs at all. Level 3 is

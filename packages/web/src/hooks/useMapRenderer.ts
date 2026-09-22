@@ -553,7 +553,7 @@ export function useMapRenderer({
       // (`favoriteToggleAtPoint`) with no padding - the tap hit test pads out
       // for touch (`favoriteHitRect`), but a mouse hover should track the
       // art exactly. Below `minFavoriteInteractiveWidth`, the badge is too
-      // small to fairly hit (issue #257) and hover is skipped entirely.
+      // small to fairly hit (issue #257) and hover is skipped.
       let nextFavorite: { x: number; y: number; id: number } | null = null;
       if (favorites) {
         const cellPx = pxPerCell(cam.current);
