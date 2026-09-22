@@ -114,10 +114,9 @@ jobs:
       - run: npm ci
 
       # `npm run test:parity` (`render-parity.parity.ts`) checks the
-      # WebGL/Canvas2D lockstep invariant in AGENTS.md - previously a
-      # manual-only suite nothing ran on a PR, since it boots two browser
-      # sessions and was considered too slow to gate every push. A bad deploy
-      # is worse than a slow one, so it gates here instead: a revision that
+      # WebGL/Canvas2D lockstep invariant in AGENTS.md. It boots two browser
+      # sessions, too slow to gate every push, so it gates deploys instead:
+      # a revision that
       # breaks parity between the two renderers never reaches production, at
       # the cost of the minute or so this and the browser install below add
       # to every deploy. `chromium.launch()` in `support.ts` takes no

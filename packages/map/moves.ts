@@ -6,11 +6,9 @@
  * `Move` is a discriminated union because its three variants carry different
  * fields: every consumer - `slide.ts`'s `pushMove`, the renderers' `applyMove`,
  * `illusion.test.ts`'s independent replay - switches on `type` before reading
- * one. `tsc --noEmit` (`npm run typecheck`) is what checks it at every
- * `@type`/`@param` that names the type.
+ * one.
  *
- * Type-only, imported through JSDoc (`@type {import('./moves.ts').Move}`), the
- * pure-contract convention AGENTS.md describes for this and `manifest.ts`.
+ * Types only, reached through `import type`, like `manifest.ts`.
  */
 
 /** A board cell's coordinate, in board-local units (not map coordinates). */

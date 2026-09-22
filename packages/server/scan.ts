@@ -45,7 +45,7 @@ export const GENERIC_DIR = 'generic';
 
 /**
  * The subdirectory holding distill mode's paired alternates for the
- * `GENERIC_DIR` tiles - AGENTS.md's `assets/generic_distill` entry says what
+ * `GENERIC_DIR` tiles - `docs/file_map.md`'s `assets/generic_distill` entry says what
  * they are for. Matched to generic tiles by filename stem (extension may
  * differ, e.g. `generic1.webp` <-> `generic1.jpg`), never by directory sort
  * order: the two folders need not use the same image format, nor agree on

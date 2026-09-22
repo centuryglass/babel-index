@@ -11,7 +11,7 @@
  * dpr `resize()` was last called with.
  *
  * `createGLContext` must be called exactly once per canvas element's
- * lifetime; AGENTS.md's "GL setup happens exactly once per canvas element's
+ * lifetime; AGENTS.md's "GL setup happens once per canvas element's
  * lifetime" bullet carries the rule and what a second call leaks.
  * `dispose()` frees the GL objects this context owns, and nothing else
  * does - the unmount cleanup calls it. A lost context is not discarded this

@@ -33,8 +33,9 @@
  * JSON file (see favorites.ts). Without it the favorite routes are not
  * mounted and the client offers no favorite control. Behind a reverse proxy
  * it must be paired with `--trust-proxy 1` (and an nginx that sets
- * X-Forwarded-For), or every visitor shares the proxy's address and every
- * count stops at one.
+ * X-Forwarded-For), or every visitor shares the proxy's address and one
+ * rate-limit bucket (AGENTS.md, "Favorite writes are rate-limited by
+ * `req.ip`").
  *
  * `LOG_FILE`/`ADMIN_PASSWORD_HASH` (env vars, not flags - the second is a
  * secret) turn on the admin log viewer at /admin/logs (see app.ts,

@@ -47,11 +47,9 @@ export default defineConfig([
     extends: [tseslint.configs.recommended],
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', UNUSED_VARS_OPTIONS],
-      // The codebase leans on `any` in a few deliberately loose spots
-      // (AGENTS.md's TypeScript convention: "a strict type that fights the
-      // code's actual tolerance is worse than an honest `object`/JSDoc") -
-      // not worth an error-level rule the existing tree hasn't been triaged
-      // against.
+      // The codebase leans on `any` in a few loose spots (AGENTS.md, "Loose
+      // data gets an honest type") - not worth an error-level rule the
+      // existing tree hasn't been triaged against.
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },

@@ -13,8 +13,7 @@ import { roomPath } from '../map/slug.ts';
  */
 export function robotsTxt(origin: string): string {
   // /babel-book is infinite, generated text with nothing to index - not
-  // worth a crawler's time or an index entry (AGENTS.md, "Shareable
-  // permalinks").
+  // worth a crawler's time or an index entry.
   return `User-agent: *\nAllow: /\nDisallow: /babel-book\nSitemap: ${origin}sitemap.xml\n`;
 }
 

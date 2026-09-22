@@ -1,6 +1,6 @@
 /**
  * The center shelf's spine typeface - Roboto Slab, chosen after the
- * `tools/font-lab` sweep (see that tool's AGENTS.md entry).
+ * `tools/font-lab` sweep (see that tool's `docs/file_map.md` entry).
  *
  * Split from `center.ts`: `center.ts` composites titles but touches
  * no DOM (its own doc comment says so, and `center.test.ts` asserts it browser-

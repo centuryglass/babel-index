@@ -42,14 +42,12 @@ jobs:
           changed="$(git diff --name-only "$BASE" "$HEAD")"
           echo "$changed"
           # Everything the demo server bundles or serves, plus the corpus
-          # it's served from and the workflows that run it. See AGENTS.md's
-          # Layout section for why each of these is (or is deliberately not)
-          # on the browser's import graph - `tools/center-placement/lib` is
-          # imported by `packages/web/src/center.js` directly, and
-          # `packages/pipeline/layout.mjs` is imported by
-          # `packages/server/scan.ts`, so both count even though "tools" and
-          # "pipeline" sound offline. `tools/embed` and `tools/upload` are
-          # genuinely offline (see AGENTS.md) and stay out on purpose.
+          # it's served from and the workflows that run it.
+          # `tools/center-placement/lib` is imported by
+          # `packages/web/src/lib/center.ts`, and `packages/pipeline/layout.ts`
+          # by `packages/server/scan.ts`, so both count even though "tools"
+          # and "pipeline" sound offline. `tools/embed` and `tools/upload` are
+          # offline-only (docs/file_map.md) and stay out.
           pattern='^(packages/(web|server|config|map|pipeline)/|tools/center-placement/lib/|assets/|package(-lock)?\.json$|\.github/workflows/(ci|e2e)\.yml$)'
           if echo "$changed" | grep -qE "$pattern"; then
             echo "browser=true" >> "$GITHUB_OUTPUT"
@@ -128,7 +126,7 @@ jobs:
       - name: npm run check:requirements
         run: npm run check:requirements
 
-  # TypeScript is the default for every new file (AGENTS.md), so `tsc
+  # Every file is TypeScript (AGENTS.md), so `tsc
   # --noEmit` is what makes that mean anything rather than sitting red
   # between the times someone runs it by hand. Doesn't vary by Node version
   # (types, not runtime), so it runs once like lint.

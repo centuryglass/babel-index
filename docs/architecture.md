@@ -150,8 +150,8 @@ viewport, so visible cost never scales with corpus size.
 - `npm run test:e2e` (Playwright) is the browser-level merge gate, run as
   a required check (`e2e.yml`) alongside the unit tests across the Node
   20/22/24 matrix.
-- `npm run test:parity` is real-GPU check that the two renderers
-  draw the same map.
+- `npm run test:parity` checks that the two renderers draw the same map;
+  it gates deploys rather than merges.
 - `npm run typecheck` / `npm run lint` are the type and style gates; see
   `AGENTS.md`'s *Commands* for why `typescript` is pinned below `^7`.
   

@@ -387,8 +387,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // actually has instead - a screen at opening zoom shows only a handful
     // of them, and preloading every one at full resolution paid for
     // thousands of cells' worth of art before a single frame draws (AGENTS.md,
-    // "The shared tiles are served flat" - resolved once `shared.levels` has
-    // more than level 0). Never hardcode the coarsest rung as
+    // "Shared art has its own pyramids"). Never hardcode the coarsest rung as
     // `pyramid.fallbackLevel`: an older corpus with no shared pyramid
     // generated has no tile there. Distill's alternates get the same
     // treatment off `manifest.shared.distillLevels` instead, since that tree
@@ -559,7 +558,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The card's tile image: a real room by id, a generic cell by the same
   // positional face `render.ts` draws for its cell (`layout.genericIndexAt`
-  // must not depend on rank - see AGENTS.md). Level 0, the only level
+  // must not depend on rank - see AGENTS.md's "Which generic tile a cell
+  // shows depends only on its coordinate"). Level 0, the only level
   // `urlFor` can give an `<img src>`.
   const cardSrc = useMemo(() => {
     if (!card) return null;

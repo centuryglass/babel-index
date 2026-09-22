@@ -362,8 +362,7 @@ input[type="search"]:focus { border-color: var(--accent); }
 .results-list li + li { margin-top: 3px; }
 /*
   Paper chrome for the panel: buttons and the ranked results both read as
-  cream chips on the dark panel rather than the gold-on-dark wash the rest
-  of the app used to use everywhere - see AGENTS.md's "Paper-chrome pass".
+  cream chips on the dark panel.
   Scoped to `.panel` so nothing outside the map-mode debug panel is touched
   here; the catalog's own controls get the same look independently below.
 */
