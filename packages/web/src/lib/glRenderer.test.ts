@@ -217,7 +217,11 @@ test('the favorite badge draws on every room cell, and only room cells', () => {
     }
   assert.ok(rooms > 0, 'expected at least one room cell in view');
 
-  const badgeDraws = gl.textured.filter((d) => /^\/l0\/fav-(on|off)\.jpg$/.test((d.img as { src?: string }).src ?? ''));
+  // The badge draws at the tile's own level, like every other cell - not
+  // hardcoded to level 0, now that it has its own pyramid (issue #257).
+  const badgeDraws = gl.textured.filter((d) =>
+    new RegExp(`^/l${stats.level}/fav-(on|off)\\.jpg$`).test((d.img as { src?: string }).src ?? '')
+  );
   assert.equal(badgeDraws.length, rooms, 'one badge per room cell, none for center/generic');
 });
 

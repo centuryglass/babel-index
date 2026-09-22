@@ -26,12 +26,19 @@
  * writes it. A level the relevant `levels`/`distillLevels` array doesn't have
  * falls back to null exactly like a corpus level the manifest doesn't have.
  *
- * Every OTHER shared id - a favorite badge, the distill toggle's faces, the
- * "forget searches" overlay - is fixed-size app art with no pyramid of its
- * own, and stays flat: level 0 only, falling back to it through the cache's
- * `servableLevel` for any coarser request. There are only a handful of these
- * and the cache keys on id, not on cell, so a far-out screen of thousands of
- * generic cells still holds just those few in memory.
+ * The favorite badge's two faces (`FAV_ON`/`FAV_OFF`) get the same per-level
+ * treatment, off `manifest.shared.favoriteLevels` - a pyramid of their own,
+ * independent of `levels`/`distillLevels` even though the scaled files live
+ * in the same `<width>/` directories the center tile's do (see
+ * `SharedAssets.favoriteLevels`'s doc for why that's a storage detail, not a
+ * shared discovery).
+ *
+ * Every OTHER shared id - the distill toggle's faces, the "forget searches"
+ * overlay - is fixed-size app art with no pyramid of its own, and stays flat:
+ * level 0 only, falling back to it through the cache's `servableLevel` for
+ * any coarser request. There are only a handful of these and the cache keys
+ * on id, not on cell, so a far-out screen of thousands of generic cells still
+ * holds just those few in memory.
  */
 import {
   CENTER, genericId, genericDistillId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
@@ -97,11 +104,17 @@ export function createTileLocator(manifest: Manifest): LocateTile {
       distillSharedIds.add(id);
     }
   });
+  // The favorite badge's own pyramid, same treatment as `distillLevels` - a
+  // third map, never intersected with the other two (see manifest.ts's doc).
+  const favoriteLevels = new Map((shared.favoriteLevels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
+  const favoriteSharedIds = new Set<number | string>([FAV_ON, FAV_OFF]);
   // The favorite badge's two faces are fixed app art, not part of a scanned
   // corpus, so they are not in `manifest.shared` - but they live in the same
   // `--shared-dir` and are served flat from it exactly like the center tile.
   sharedUrls.set(FAV_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_on.png')}`);
   sharedUrls.set(FAV_OFF, `${manifest.sharedBase}/${encodeURIComponent('fav_off.png')}`);
+  pyramidSharedIds.add(FAV_ON);
+  pyramidSharedIds.add(FAV_OFF);
   // The center tile's favorites-sort switch art - same fixed-app-art treatment.
   sharedUrls.set(FAV_CENTER_SWITCH_BASE, `${manifest.sharedBase}/${encodeURIComponent('fav_center_switch_base.png')}`);
   sharedUrls.set(FAV_MINE_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_mine_on.png')}`);
@@ -117,7 +130,8 @@ export function createTileLocator(manifest: Manifest): LocateTile {
       const url = sharedUrls.get(id)!;
       if (level === 0) return { url, rect: null };
       if (!pyramidSharedIds.has(id)) return null;
-      const info = (distillSharedIds.has(id) ? distillLevels : sharedLevels).get(level);
+      const levelMap = distillSharedIds.has(id) ? distillLevels : favoriteSharedIds.has(id) ? favoriteLevels : sharedLevels;
+      const info = levelMap.get(level);
       // Insert `<width>/` before the filename - the same per-level directory
       // `shared-mips.ts` wrote it into, right beside where level 0 already sits.
       if (!info?.dir) return null;

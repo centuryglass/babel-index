@@ -12,10 +12,16 @@
  * `discoverLevels` is what turns this back into `manifest.shared.levels`/
  * `manifest.shared.distillLevels` at scan time - see its own comment.
  *
- * Only these three get a pyramid. The favorite badges, the distill toggle
- * and the rest of the fixed app art are tiny icons drawn at a fixed size
+ * Only these three are generated here. The favorite badge has its own
+ * pyramid too (`manifest.shared.favoriteLevels`, `scan.ts`'s
+ * `discoverFavoriteLevels`) but this tool does not write it - the scaled
+ * `fav_on.png`/`fav_off.png` are hand-tuned for visibility at small sizes
+ * rather than mechanically resized, so they are committed directly into the
+ * same `<width>/` directories this writes for the center render, not
+ * produced by a `sharp` resize. The rest of the fixed app art (the distill
+ * toggle and everything else) is a tiny icon drawn at a fixed size
  * regardless of zoom (same file, always `cache.get(id, 0)`) - a pyramid for
- * them would be dead weight nothing ever asks for.
+ * it would be dead weight nothing ever asks for.
  */
 import { join, extname } from 'node:path';
 import { readdir } from 'node:fs/promises';

@@ -336,7 +336,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         if (favorites && !cell.center && !cell.generic) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
           drawFavoriteBadge(
-            ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
+            ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, level, hovered
           );
         }
         // The "forget searches" book's black spine, claimed whenever history
@@ -481,9 +481,18 @@ function traceFavoriteToggle(ctx: PathContext, cellPx: { x: number; y: number },
 }
 
 /**
- * Draw one tile's favorite badge if its art has landed: rule 1 does not
- * apply, a missing badge simply does not draw. `slide.ts` calls this too, so
- * a sliding room wears the same badge in the same corner.
+ * Draw one tile's favorite badge at the tile's own draw level (`level`,
+ * `render.ts`'s per-frame pick), if that exact level's art has landed: rule 1
+ * does not apply, and there is no fallback to a different rung either. A
+ * still-loading level draws nothing this frame rather than a mismatched
+ * size, and a level with no generated badge art at all (`FAV_ON`/`FAV_OFF`
+ * only go down to tile width 128 - see `manifest.shared.favoriteLevels`)
+ * draws nothing ever, on purpose (issue #257): the badge's own final screen
+ * size always tracks `cellPx.x` regardless of which rung's pixels back it
+ * (`favoriteIconScreenRect`), so a coarser asset shown at a fine cell would
+ * only be a softer badge, not a smaller one - falling back would defeat the
+ * whole reason multiple rungs exist. `slide.ts` calls this too, so a sliding
+ * room wears the same badge in the same corner.
  *
  * `hovered` paints the gold glow in the badge's own traced silhouette
  * (`FAVORITE_TOGGLE_PATH`) - shape, not box, like the shelf's open book.
@@ -498,11 +507,12 @@ export function drawFavoriteBadge(
   cellPx: { x: number; y: number },
   sx: number,
   sy: number,
+  level: number,
   hovered = false
 ): void {
-  const hit = cache.get(id, 0);
-  if (hit) {
-    const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy, naturalIconSize(hit));
+  const hit = cache.get(id, level);
+  if (hit && hit.level === level) {
+    const { x, y, w, h } = favoriteIconScreenRect(cellPx, sx, sy, naturalIconSize(hit), level);
     if (hit.rect) {
       const { sx: rx, sy: ry, sw, sh } = hit.rect;
       ctx.drawImage(hit.img, rx, ry, sw, sh, x, y, w, h);

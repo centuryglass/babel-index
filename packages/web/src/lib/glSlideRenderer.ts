@@ -124,7 +124,7 @@ export function createGLSlideRenderer({
       if (value === BOARD_GENERIC && genericFade)
         drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
       if (favorites && typeof value === 'number')
-        drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(value), cellPx, sx, sy, false, glowTextures);
+        drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(value), cellPx, sx, sy, level, false, glowTextures);
       wanted.push(id);
     };
 

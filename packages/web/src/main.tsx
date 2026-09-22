@@ -414,7 +414,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       tiles.request(id, coarsestDistillLevel);
     }
     // The favorite badge's two faces and the center tile's sort-switch art,
-    // pinned the same way - tiny images, gated on the store existing.
+    // pinned the same way - tiny images, gated on the store existing. Only
+    // level 0 is warmed up front, same as the center: `FAV_ON`/`FAV_OFF` do
+    // have their own pyramid now (`manifest.shared.favoriteLevels`), but
+    // every other level of it is requested lazily by `render.ts`'s draw loop
+    // as the zoom actually calls for it - there is no "which level is on
+    // screen at opening zoom" question here worth precomputing the way the
+    // generic tiles' `coarsestSharedLevel` answers one.
     if (favorites.enabled) {
       for (const id of [FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON]) {
         tiles.pin(id);
@@ -874,14 +880,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     canvasRef: WEBGL ? inertCanvasRef : canvasRef,
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
-    favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+    favorites: favoritesOverlay, minFavoriteInteractiveWidth: config.favorites.minInteractiveTileWidth,
+    favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
     loadingAnim, cancelSearchPreload,
   });
   useMapRendererGL({
     canvasRef: WEBGL ? canvasRef : inertCanvasRef,
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
-    favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
+    favorites: favoritesOverlay, minFavoriteInteractiveWidth: config.favorites.minInteractiveTileWidth,
+    favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
     warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs, loadingAnim, cancelSearchPreload,
   });
 
@@ -1095,11 +1103,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
     // A tap on a room's favorite badge toggles it - an ordinary room tile
     // has no other tap behaviour. `roomAtPoint` already excludes the center
-    // cell (null) and generic cells, which have no badge.
+    // cell (null) and generic cells, which have no badge. Below
+    // `config.favorites.minInteractiveTileWidth`, the badge is too small to
+    // fairly hit (issue #257) and the whole check is skipped.
     if (favorites.enabled) {
-      const hit = roomAtPoint(px, py, camera, rect, layout, order);
+      const cellPx = pxPerCell(camera);
+      const hit = cellPx.x > config.favorites.minInteractiveTileWidth
+        ? roomAtPoint(px, py, camera, rect, layout, order)
+        : null;
       if (hit && !('generic' in hit)) {
-        const cellPx = pxPerCell(camera);
         const { x: sx, y: sy } = worldToScreen(hit.x, hit.y, camera, rect);
         const hitRect = favoriteHitRect(cellPx, sx, sy, COARSE_POINTER);
         if (hitRect && pointInRect(px, py, hitRect)) favoriteFor(hit.id)?.toggle();

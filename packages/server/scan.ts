@@ -54,6 +54,17 @@ export const GENERIC_DIR = 'generic';
 export const GENERIC_DISTILL_DIR = 'generic_distill';
 
 /**
+ * The favorite badge's two faces - fixed app art, not scanned corpus content,
+ * but `discoverFavoriteLevels` checks for these two exact names to find its
+ * own pyramid. Mirrors the literal filenames `rooms.ts` resolves the badge's
+ * level-0 urls from; kept as a separate copy rather than a shared import
+ * because the two modules run in different packages and the fact is a name,
+ * not behaviour (the same reasoning `METADATA_FILE`'s neighbour comment gives).
+ */
+const FAV_ON_FILE = 'fav_on.png';
+const FAV_OFF_FILE = 'fav_off.png';
+
+/**
  * Read pixel dimensions from a file header, without decoding the image.
  * Returns null for anything unrecognised - the client falls back to the
  * natural size once the image loads, so this is an optimisation, not a
@@ -180,6 +191,39 @@ export async function discoverLevels(dir: string, source: ImageSize | null, room
   return found;
 }
 
+/**
+ * Which of the favorite badge's own pyramid levels have actually been
+ * generated - `fav_on.png`/`fav_off.png` scaled into the same per-level
+ * `<width>/` directories `discoverLevels` walks for the center tile, off the
+ * same reference size (a storage convenience, not a shared discovery - see
+ * `SharedAssets.favoriteLevels`'s doc). A level counts only when both faces
+ * are present; the badge is never sheet-packed, so this only ever checks the
+ * per-file shape `discoverLevels` does for a level below `SHEETS.fromLevel`.
+ *
+ * @param source the corpus's reference tile size, same as `discoverLevels` gets
+ */
+async function discoverFavoriteLevels(sharedDir: string, source: ImageSize | null): Promise<LevelInfo[]> {
+  if (!source?.w || !source?.h) return [{ level: 0, w: null, h: null, dir: null }];
+
+  const plan = mipPlan(source);
+  const found: LevelInfo[] = [];
+  for (const step of plan) {
+    if (step.level === 0) {
+      found.push({ ...step, dir: null });
+      continue;
+    }
+    const path = join(sharedDir, step.dir);
+    const has = await readdir(path)
+      .then((names) => {
+        const files = new Set(names);
+        return files.has(FAV_ON_FILE) && files.has(FAV_OFF_FILE);
+      })
+      .catch(() => false);
+    if (has) found.push(step);
+  }
+  return found;
+}
+
 /** Image filenames in a directory, sorted. Rejects if the directory is missing. */
 async function listImages(dir: string): Promise<string[]> {
   const entries = await readdir(dir);
@@ -231,7 +275,7 @@ export function resolveCenterFile(files: string[], center?: string): string | nu
 async function scanShared(
   sharedDir: string,
   { center, allowFirst = false }: { center?: string; allowFirst?: boolean } = {}
-): Promise<Omit<SharedAssets, 'levels' | 'distillLevels'>> {
+): Promise<Omit<SharedAssets, 'levels' | 'distillLevels' | 'favoriteLevels'>> {
   const files = await listImages(sharedDir).catch(() => []);
   const centerFile = resolveCenterFile(files, center) ?? (allowFirst ? files[0] : null);
 
@@ -320,14 +364,18 @@ export async function scanDirectory(
   // treatment but its own field (`distillLevels`, see manifest.ts) rather than
   // being folded into this intersection - not every generic tile has a distill
   // alternate, so gating it on the base trees' rungs would veto levels the
-  // distill tree actually has. The fixed app art (favorite badges, the distill
-  // toggle) never gets a pyramid - see rooms.ts's header for why - so it is
-  // not part of this discovery.
+  // distill tree actually has. The favorite badge's own pyramid
+  // (`favoriteLevels`) is discovered the same way, off the same reference
+  // size, but checked directly rather than intersected with any of these -
+  // see `discoverFavoriteLevels`'s doc. The rest of the fixed app art (the
+  // distill toggle, the "forget searches" overlay) never gets a pyramid at
+  // all and is not part of this discovery.
   const sharedSize = source && source.w && source.h ? { w: source.w, h: source.h } : null;
-  const [centerLevels, genericLevels, distillLevels] = await Promise.all([
+  const [centerLevels, genericLevels, distillLevels, favoriteLevels] = await Promise.all([
     discoverLevels(sharedDir, sharedSize),
     discoverLevels(join(sharedDir, GENERIC_DIR), sharedSize),
     discoverLevels(join(sharedDir, GENERIC_DISTILL_DIR), sharedSize),
+    discoverFavoriteLevels(sharedDir, sharedSize),
   ]);
   // Only intersect against a tree that actually has something to pyramid -
   // a corpus with generic tiles but no separate center (or vice versa) must
@@ -404,7 +452,7 @@ export async function scanDirectory(
      * `generic` array the generic tiles are drawn from. Served from `/shared/`,
      * which the demo points at `--shared-dir`.
      */
-    shared: { ...sharedAssets, levels: sharedLevels, distillLevels },
+    shared: { ...sharedAssets, levels: sharedLevels, distillLevels, favoriteLevels },
     rooms,
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */

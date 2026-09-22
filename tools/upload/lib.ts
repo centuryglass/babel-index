@@ -155,6 +155,17 @@ export function buildUploadList(
   ])
     uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
 
+  // The favorite badge's own pyramid (`manifest.shared.favoriteLevels`,
+  // `scan.ts`'s `discoverFavoriteLevels`) - unlike the rest of the fixed app
+  // art above, `fav_on.png`/`fav_off.png` are scaled per tile-width level
+  // too, and this DOES have a manifest field to gate on. Mirrors the
+  // `shared.levels` loop below, but for exactly these two files.
+  for (const level of manifest.shared?.favoriteLevels ?? []) {
+    if (level.level === 0 || !level.dir) continue;
+    for (const file of ['fav_on.png', 'fav_off.png'])
+      uploads.push({ local: join(sharedDir, level.dir, file), key: `shared/${level.dir}/${file}` });
+  }
+
   // The animation files (see animationKeys), mapped from the
   // `shared/animation/...` key to a path under sharedDir, like the
   // center/generic entries.

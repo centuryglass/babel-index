@@ -384,17 +384,39 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `manifest.shared.distillLevels`, never intersected with `levels`: not every
   generic tile has a distill alternate at all, so gating it on the base
   trees' rungs would silently veto a level the distill tree actually has.
-  `rooms.ts` resolves a shared id at a level in whichever of the two arrays
-  applies to it by inserting `<width>/` before the asset's filename - the
-  same per-level directory `shared-mips.ts` wrote it into. There are no
+  `rooms.ts` resolves a shared id at a level in whichever of the three
+  arrays applies to it by inserting `<width>/` before the asset's filename -
+  the same per-level directory `shared-mips.ts` wrote it into. There are no
   shared sheets: a handful of files needs no packing.
 
-  Every OTHER shared id - a favorite badge, the distill toggle's faces, the
-  "forget searches" overlay - is fixed-size app art with no pyramid of its
-  own, and stays flat at level 0, falling back to it through `servableLevel`
-  for any coarser request, same as before. `main.tsx` pins the center at
-  level 0 (on screen from the first frame) but the generic tiles and their
-  distill alternates each at the coarsest level their own array (`shared.levels`/
+  The favorite badge's two faces (`FAV_ON`/`FAV_OFF`) have their own pyramid
+  too, off a fourth array, `manifest.shared.favoriteLevels`
+  (`scan.ts`'s `discoverFavoriteLevels`) - independent of `levels`, not
+  intersected with it, even though the scaled `fav_on.png`/`fav_off.png`
+  happen to live in the same `<width>/` directories the center tile's mips
+  do (a convenient shared home, not a shared discovery). Unlike the center
+  and generic tiles, the badge's scaled files are hand-tuned for visibility
+  at small sizes rather than written by `shared-mips.ts`'s mechanical
+  resize, and they only go down to tile width 128: a level with no
+  generated badge art draws nothing at all (issue #257) rather than falling
+  back to a different rung, because the badge's on-screen size already
+  tracks the tile's own scale (`favoriteIconScreenRect`) regardless of which
+  rung's pixels back it - a coarser substitute would only be softer, never
+  smaller, defeating the reason the rungs exist. `render.ts`/`glRenderer.ts`'s
+  `drawFavoriteBadge`/`drawFavoriteBadgeGL` enforce this by requiring an
+  exact level match rather than using the cache's normal coarser-then-finer
+  substitution. Below `config.favorites.minInteractiveTileWidth`, the badge
+  also stops responding to a tap or hover at all (`main.tsx`'s tap handler,
+  `useMapRenderer.ts`/`useMapRendererGL.ts`'s hover) - a separate cutoff from
+  the drawing one, since a badge can still be legible past the point it is
+  worth making tappable.
+
+  Every OTHER shared id - the distill toggle's faces, the "forget searches"
+  overlay - is fixed-size app art with no pyramid of its own, and stays flat
+  at level 0, falling back to it through `servableLevel` for any coarser
+  request, same as before. `main.tsx` pins the center at level 0 (on screen
+  from the first frame) but the generic tiles and their distill alternates
+  each at the coarsest level their own array (`shared.levels`/
   `shared.distillLevels`) actually has - never a hardcoded `FALLBACK_LEVEL`,
   since an older corpus with no shared pyramid generated has none but level
   0. `render.ts`'s `drawGenericFade` (and its WebGL/slide counterparts) draws
@@ -603,13 +625,20 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` (`tiles.ts`'s
   `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase` directly rather than
-  a manifest listing, since `scan.ts` never discovers them. Drawn by both
-  `render.ts` and `slide.ts` on every non-center, non-generic cell -
-  `favoriteBadge.ts` is the pure geometry/hit-test half. The tap hit-test
-  has no minimum-size gate: `favoriteHitRect` returns the badge's scaled
-  traced bounds at any zoom, padded up to `MIN_FAVORITE_HIT_TOUCH` on a
-  coarse pointer (`main.tsx` hit-tests that rect directly) - only a trace
-  with no region at all is decoration rather than a dead control.
+  a manifest listing, since `scan.ts` never discovers them - though it does
+  discover the scaled files' own pyramid (`manifest.shared.favoriteLevels`,
+  "The center, the generic tiles..." above) the same way it discovers the
+  center tile's. Drawn by both `render.ts` and `slide.ts` on every
+  non-center, non-generic cell - `favoriteBadge.ts` is the pure
+  geometry/hit-test half. Both drawing and interactivity are zoom-gated
+  (issue #257): drawing stops below tile width 128, where there is no
+  scaled art at all, and `favoriteHitRect`'s tap target - padded up to
+  `MIN_FAVORITE_HIT_TOUCH` on a coarse pointer (`main.tsx` hit-tests that
+  rect directly) - is only reachable above
+  `config.favorites.minInteractiveTileWidth`, checked before either the tap
+  or the hover path (`useMapRenderer.ts`/`useMapRendererGL.ts`) ever calls
+  `roomAtPoint`. Only a trace with no region at all is decoration rather
+  than a dead control.
 
 ### The reorder animation
 

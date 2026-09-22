@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
-import { createRenderer, drawFavoriteSwitch, type DrawContext, type DrawResult } from './render.ts';
-import { createTileCache, CENTER, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, type Drawable, type LoadableImage, type RoomId, type TileCache, type TileHit } from './tiles.ts';
+import { createRenderer, drawFavoriteBadge, drawFavoriteSwitch, type DrawContext, type DrawResult } from './render.ts';
+import { createTileCache, CENTER, FAV_ON, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, type Drawable, type LoadableImage, type RoomId, type TileCache, type TileHit } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
+import { favoriteIconScreenRect } from './favoriteBadge.ts';
 
 interface DrawnCall {
   img: LoadableImage;
@@ -636,28 +637,86 @@ test('no favorites option means no badge at all', () => {
   for (const d of ctx.drawn) assert.ok(d.w > 100 || d.h > 300, 'unexpected small draw with no favorites option');
 });
 
-test('the badge follows the same zoom scale as the tile it sits on', () => {
+test('the badge follows the same zoom scale as the tile it sits on, within one pyramid level', () => {
+  // 150 and 220 both land on level 2 (idealLevel(150) === idealLevel(220) ===
+  // 2, sizeOf(2).w === 256) - picked so both draws resolve the same badge
+  // rung and the test measures the scale factor `favoriteIconScreenRect`
+  // applies, not a level switch. (The fake harness's `naturalIconSize` is a
+  // flat 96x96 regardless of level, unlike the real hand-scaled art, so a
+  // cross-level comparison here would not mean what it does for real assets.)
   const w = world();
   const isFavorite = () => false;
-  w.renderer.draw({
-    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
-    cam: { x: 0.5, y: 0.5, zoom: 220 }, layout: w.layout, order: w.order, favorites: { isFavorite },
-  });
-  w.images.settleAll();
 
   const at = (zoom: number) => {
-    const ctx = fakeCtx();
     w.renderer.draw({
+      ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
+      cam: { x: 0.5, y: 0.5, zoom }, layout: w.layout, order: w.order, favorites: { isFavorite },
+    });
+    w.images.settleAll();
+    const ctx = fakeCtx();
+    const stats = w.renderer.draw({
       ctx, width: 1600, height: 900, dpr: 1,
       cam: { x: 0.5, y: 0.5, zoom }, layout: w.layout, order: w.order, favorites: { isFavorite },
     });
     const badge = ctx.drawn.find((d) => d.w < 100 && d.h < 300);
-    return badge!;
+    return { badge: badge!, level: stats.level };
   };
 
-  const small = at(110);
+  const small = at(150);
   const big = at(220);
-  assert.ok(Math.abs(big.w / small.w - 2) < 0.05, `badge did not scale with zoom: ${small.w} -> ${big.w}`);
+  assert.equal(small.level, big.level, 'both zooms must exercise the same pyramid level for this comparison to mean anything');
+  const ratio = 220 / 150;
+  assert.ok(
+    Math.abs(big.badge.w / small.badge.w - ratio) < 0.05,
+    `badge did not scale with zoom: ${small.badge.w} -> ${big.badge.w}, expected ratio ${ratio.toFixed(2)}`
+  );
+});
+
+test('the badge stays proportional to the tile across a level change, once the loaded art is proportionally scaled like the real assets', () => {
+  // issue #257's follow-up: naturalIconSize(hit) is per-level art (level 1's
+  // fav_on.png is scaled to half level 0's), so favoriteIconScreenRect must
+  // divide by THAT level's own reference width, not BASE_TILE.w - otherwise
+  // a coarser level's already-shrunk art gets shrunk a second time. Exercised
+  // directly against `favoriteIconScreenRect` since `world()`'s fake loader
+  // does not vary its icon size by level the way real scaled art does.
+  const level0 = favoriteIconScreenRect({ x: 1024, y: 768 }, 0, 0, { w: 92, h: 198 }, 0);
+  // Half the tile's own pixels-per-cell, and half the icon's own pixels -
+  // exactly what a real level-1 draw looks like (both the tile and the
+  // badge's `512/fav_on.png` are half of level 0's).
+  const level1 = favoriteIconScreenRect({ x: 512, y: 384 }, 0, 0, { w: 46, h: 99 }, 1);
+  assert.ok(
+    Math.abs(level1.w / level0.w - 0.5) < 1e-9,
+    `a half-size tile with a half-size (already-scaled) icon must draw a half-size badge, got ${level0.w} -> ${level1.w}`
+  );
+});
+
+test('drawFavoriteBadge never substitutes a different level - a resident coarser rung is not drawn undersized', () => {
+  // issue #257: unlike a room tile (which happily upscales a coarser
+  // resident level while its own loads), the badge's own size already
+  // tracks the tile's scale regardless of which rung's pixels back it, so a
+  // substitute would only be softer, never smaller - drawing one would
+  // defeat the reason the badge has multiple rungs at all. Level 3 is
+  // resident (simulating "loaded, but for a different zoom, or a level with
+  // no generated badge art") while level 2 is being asked for.
+  const cache: TileCache = {
+    beginFrame: () => {},
+    request: () => null,
+    get: (_id: RoomId, want: number): TileHit | null =>
+      want === 3 ? { img: {} as unknown as Drawable, rect: null, level: 3 } : null,
+    isReady: () => false,
+    prefetch: () => {},
+    pin: () => {},
+    size: () => 0,
+    sizeOf: () => 0,
+    sheetCount: () => 0,
+    overBudget: () => 0,
+    pendingPrefetch: () => 0,
+    hasPrefetchCapacity: () => true,
+    clear: () => {},
+  };
+  const ctx = fakeCtx();
+  drawFavoriteBadge(ctx, cache, FAV_ON, { x: 100, y: 75 }, 0, 0, 2);
+  assert.equal(ctx.drawn.length, 0, 'a non-exact-level hit must not be drawn');
 });
 
 test('the favorites-sort switch sizes each piece off its OWN decoded pixels, not the base plate\'s', () => {
