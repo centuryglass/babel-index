@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.5.0...babel-index-v1.6.0) (2026-09-22)
+
+
+### Features
+
+* build the Dockerfile as a non-blocking post-release check ([#287](https://github.com/centuryglass/babel-index/issues/287)) ([757705e](https://github.com/centuryglass/babel-index/commit/757705eb5e89905fa7b1482f6444dca843959971)), closes [#246](https://github.com/centuryglass/babel-index/issues/246)
+* give generic_distill its own resolution pyramid ([#299](https://github.com/centuryglass/babel-index/issues/299)) ([ad5092a](https://github.com/centuryglass/babel-index/commit/ad5092af64c64d1065af795e79ef514c2f975cbd)), closes [#293](https://github.com/centuryglass/babel-index/issues/293)
+* log hourly usage metrics without persisting visitor data ([#290](https://github.com/centuryglass/babel-index/issues/290)) ([9c31042](https://github.com/centuryglass/babel-index/commit/9c31042e4ccd80d519763018146cf4ad0b649af4)), closes [#282](https://github.com/centuryglass/babel-index/issues/282)
+
+
+### Bug Fixes
+
+* make a search and a favorite sort mutually exclusive ([#292](https://github.com/centuryglass/babel-index/issues/292)) ([d72a38f](https://github.com/centuryglass/babel-index/commit/d72a38f0dd6d3bbce53e27fd1d2b27aaa9a0f06f))
+* stop the prefetch ring computing ids past its queue cap ([#297](https://github.com/centuryglass/babel-index/issues/297)) ([807c640](https://github.com/centuryglass/babel-index/commit/807c640f4c3396adb10804f2d0326f03aa340f65))
+* unify hover-glow gold between the open book, shelf controls, and canvas ([#294](https://github.com/centuryglass/babel-index/issues/294)) ([f566e12](https://github.com/centuryglass/babel-index/commit/f566e128e4ef5d6538d6c1786dafa5fdae370218)), closes [#263](https://github.com/centuryglass/babel-index/issues/263)
+
+
+### Performance Improvements
+
+* batch pointermove hit-testing to once per animation frame ([#295](https://github.com/centuryglass/babel-index/issues/295)) ([ef50345](https://github.com/centuryglass/babel-index/commit/ef5034523c52dc40bc4d605f7a115b99e86feb4e)), closes [#260](https://github.com/centuryglass/babel-index/issues/260)
+* cache the center shelf's spine font fit on the Canvas2D path ([#288](https://github.com/centuryglass/babel-index/issues/288)) ([4040c13](https://github.com/centuryglass/babel-index/commit/4040c1383bdfdeb33319ca18cb46858867dc0e19)), closes [#253](https://github.com/centuryglass/babel-index/issues/253)
+* dedupe the coarser-level warm pass to distinct ids ([#301](https://github.com/centuryglass/babel-index/issues/301)) ([e390e25](https://github.com/centuryglass/babel-index/commit/e390e25332c7a126f44a27f577bb4d6838a45ae7)), closes [#296](https://github.com/centuryglass/babel-index/issues/296)
+
 ## [1.5.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.4.1...babel-index-v1.5.0) (2026-09-21)
 
 
