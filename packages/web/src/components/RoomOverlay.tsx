@@ -422,7 +422,7 @@ export function RoomOverlay({
           <div className="room-id">
             <span className="card-id">
               {'generic' in room ? (
-                'a Babel shelf'
+                'a library wall'
               ) : (
                 // The visible id leads with the title (`roomTitle` falls
                 // back to "Room N" for a room the corpus has not
