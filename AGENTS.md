@@ -1204,6 +1204,70 @@ two in step - see *Testing and CI*.
 - **A PR closing an issue says so in its description** (`Closes #NN`), which
   is what makes merging the status update.
 
+## Comment and documentation audits
+
+When the maintainer asks for a comment or documentation audit - "run a comment
+style audit on this change", "spot-check these comments" - the house rules and
+the code-preservation tool are not on `main`. They live on the
+`qwen3.8-flash-comment-fix` branch, a home dedicated to them; ordinary branches
+carry none of them. Pull the files in, do the pass, then remove them again so
+they never reach a commit on `main`.
+
+That branch holds three things (fetch it first if it is not local:
+`git fetch origin qwen3.8-flash-comment-fix`):
+
+- `docs/comment-refactor-plan.md` - the *process*: the tell-and-move table to
+  audit against, the spot-check workflow (§3 of that file), and the verifier's
+  contract (§4). Read this first; it is self-contained enough to work from.
+- `docs/claude_critique.md` - the *diagnosis* those tells come from, with
+  line-referenced evidence. Read it when a judgment call needs the reasoning.
+- `tools/comment-check/check.mjs` and `strip.mjs` - the code-preservation gate.
+
+Pull them to their real paths, so the plan's `see X` cross-references
+resolve against files that exist:
+
+```sh
+git show qwen3.8-flash-comment-fix:docs/comment-refactor-plan.md > docs/comment-refactor-plan.md
+git show qwen3.8-flash-comment-fix:docs/claude_critique.md > docs/claude_critique.md
+git show qwen3.8-flash-comment-fix:tools/comment-check/check.mjs > tools/comment-check/check.mjs
+git show qwen3.8-flash-comment-fix:tools/comment-check/strip.mjs > tools/comment-check/strip.mjs
+```
+
+Do not pull the rest of that directory by default. `strip.test.mjs` matches
+`npm test`'s `tools/` discovery and errors unless the nested classic-TypeScript
+install is present, and `check.mjs` itself needs that install to run: it imports
+`typescript-classic`, which lives in a gitignored `tools/comment-check/node_modules`.
+If `check.mjs` cannot load TypeScript, either pull `package.json` and run
+`npm --prefix tools/comment-check install` once, or fall back to the esbuild
+one-liner in the plan's §4 (weaker: esbuild erases types, so a type-only slip
+passes it).
+
+Then audit the touched comment sections per the plan's §3: read each section,
+rewrite **comment text only**, and prove no code moved:
+
+```sh
+node tools/comment-check/check.mjs <file>...              # working tree vs HEAD
+node tools/comment-check/check.mjs --base <rev> <file>...  # vs another revision
+```
+
+- Every edited file must report `OK (comment-only)` or `clean (unchanged)`. A
+  `-/+` listing of code lines means a code line moved inside the rewrite - fix
+  it before committing. This is the same gate the plan calls non-optional.
+- `check.mjs` parses JS/TS/CSS/HTML only. It cannot verify `.md` edits
+  (`AGENTS.md`, the pulled docs themselves): for those, confirm from `git diff`
+  that only prose lines changed.
+- The usual gates still apply - `npm test` and `npm run typecheck`, plus
+  `npm run lint` where `typescript-eslint` is installed.
+- Audit `AGENTS.md` and the docs when the change touched them, not just code
+  comments; the same tells appear there.
+- Scope the pass to the sections a change (or a review request) touched, plus
+  adjacent comments a fix makes untrue - it is a spot-check, not a rescan.
+
+When the session ends, delete the four pulled files (and revert any nested
+`tools/comment-check/install`) before committing, and stage only the real edits
+by explicit path. The audit's scaffolding belongs to no branch but the one it
+came from.
+
 ## Working with GitHub
 
 - **Don't ask whether to subscribe to a PR you just opened.** The answer is
