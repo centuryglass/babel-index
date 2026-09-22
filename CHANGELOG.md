@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.6.0...babel-index-v1.7.0) (2026-09-22)
+
+
+### Features
+
+* start the loading indicator when a search is submitted, not once it resolves ([#308](https://github.com/centuryglass/babel-index/issues/308)) ([cb6f83c](https://github.com/centuryglass/babel-index/commit/cb6f83c175ea43d02f3b0de91e62c9c90b097574))
+
+
+### Bug Fixes
+
+* gate the favorite badge's draw and interactivity by zoom ([#311](https://github.com/centuryglass/babel-index/issues/311)) ([622dc23](https://github.com/centuryglass/babel-index/commit/622dc23349b9550e57b2317713340a2d14ddbef5))
+* reconcile the two names for a generic cell to "a library wall" ([#305](https://github.com/centuryglass/babel-index/issues/305)) ([09cffb3](https://github.com/centuryglass/babel-index/commit/09cffb362f129e2531c8c2ee0e59b7b5bea0c2f1)), closes [#249](https://github.com/centuryglass/babel-index/issues/249)
+
+
+### Performance Improvements
+
+* stop allocating a string key, object, or id string on every rendered cell ([#309](https://github.com/centuryglass/babel-index/issues/309)) ([0c4f390](https://github.com/centuryglass/babel-index/commit/0c4f390894b666261903a38b10b5ccfad555cdd1)), closes [#256](https://github.com/centuryglass/babel-index/issues/256)
+
 ## [1.6.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.5.0...babel-index-v1.6.0) (2026-09-22)
 
 
