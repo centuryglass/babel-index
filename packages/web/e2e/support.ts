@@ -219,15 +219,19 @@ export function parseHud(text) {
   const gl = text.startsWith('[gl] ');
   const body = gl ? text.slice('[gl] '.length) : text;
   // `over` is only printed when a screen needs more than the level's cache
-  // budget, and `clustered` only when a search's density gradient actually
-  // lifted some ranks above the baseline (`layout.gradedCount > 0` - main.tsx)
-  // - both optional here, but parsed rather than skipped, because both are
-  // numbers a test might need.
+  // budget, `clustered` only when a search's density gradient actually
+  // lifted some ranks above the baseline (`layout.gradedCount > 0` -
+  // main.tsx), and `anim` only while the center-tile loading indicator is
+  // playing (`loadingAnim.current.activeName()`, both renderers) - all
+  // optional here, but parsed rather than skipped, because a test can land
+  // on a read mid-indicator (a search starts it before its own fetch
+  // resolves - see `useRearrangement.ts`'s `beginSearchPreload`, #235) and
+  // needs a name to assert against rather than a parse failure.
   const m = body.match(
-    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?(?: · (\d+) blocked)? · fav hit ([\d.]+)×([\d.]+)px \((touch-padded|mouse)\)$/
+    /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?(?: · (\d+) blocked)? · fav hit ([\d.]+)×([\d.]+)px \((touch-padded|mouse)\)(?: · anim (\S+))?$/
   );
   assert.ok(m, `could not read the hud: ${JSON.stringify(text)}`);
-  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered, blocked, favHitW, favHitH, favHitMode] = m;
+  const [, cells, drawn, level, tilePx, substituted, blank, cached, over, zoom, x, y, edge, clustered, blocked, favHitW, favHitH, favHitMode, anim] = m;
   return {
     gl,
     cells: +cells, drawn: +drawn, level: +level, tilePx: +tilePx,
@@ -237,6 +241,7 @@ export function parseHud(text) {
     clustered: clustered === undefined ? 0 : +clustered,
     blocked: blocked === undefined ? 0 : +blocked,
     favHit: { w: +favHitW, h: +favHitH, mode: favHitMode },
+    anim: anim ?? null,
   };
 }
 
