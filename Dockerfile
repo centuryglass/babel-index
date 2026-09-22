@@ -36,7 +36,7 @@ COPY build ./build
 COPY packages ./packages
 COPY assets ./assets
 # packages/web imports tile geometry straight out of tools/center-placement/lib
-# at bundle time (AGENTS.md: "no second copy to drift") - the client build
+# at bundle time (AGENTS.md, "`center.ts` is the pure half") - the client build
 # fails without it even though nothing else here runs the tools/ CLIs.
 COPY tools/center-placement/lib ./tools/center-placement/lib
 # /api/health reports which revision is running, and this image carries no

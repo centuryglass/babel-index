@@ -2,7 +2,7 @@
  * The modal-dialog machinery every overlay shares: focus in on open and back
  * out on close, Escape to dismiss, and a Tab-trap that keeps focus inside.
  * Which dialogs have adopted it and which still inline their own copy is
- * recorded in AGENTS.md's `useDialog` entry.
+ * recorded in `docs/file_map.md`'s `useDialog.ts` entry.
  *
  * The part a per-dialog copy cannot get right is the dialog stack: overlays
  * can sit on top of each other (the artist statement opens the Babel book

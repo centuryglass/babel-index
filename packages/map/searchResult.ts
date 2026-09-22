@@ -3,12 +3,7 @@
  * what `useSearch.ts` stores as `result`, and the match ranges/explanation
  * rows built from either.
  *
- * Type-only, imported through JSDoc (`@type {import('./searchResult.ts').X}`)
- * the same way `manifest.ts` is - see AGENTS.md's TypeScript bullet. This
- * file types the shapes that cross `scoring.ts`'s boundary - heavy
- * duck-typing, data computed almost entirely from arrays keyed by rank
- * rather than a fixed record shape - rather than converting the module
- * itself.
+ * Types only, reached through `import type`, like `manifest.ts`.
  */
 
 /** One story word, lemmatised, keeping its span into the folded story text. */

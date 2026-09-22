@@ -4,12 +4,8 @@
  * serves with `config` and `favorites` added, and what every consumer in
  * `packages/web` and `packages/map` reads.
  *
- * A pure type contract, the shape AGENTS.md's "A pure type contract" bullet
- * names this file as: exported interfaces only, imported through JSDoc
- * (`@type {import('./manifest.ts').Manifest}`) and never by `.js`/`.mjs`/
- * `.jsx` at runtime, so it never needs esbuild's client bundle or Node's
- * loader. `tsc --noEmit` (`npm run typecheck`) is what checks it against
- * every `@type`/`@param` that names it.
+ * Types only: every consumer reaches it through `import type`, so it has no
+ * runtime presence in the client bundle or under Node.
  */
 
 export interface ImageSize {

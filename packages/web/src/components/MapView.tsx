@@ -376,7 +376,7 @@ export function MapView({
       </button>
       {/*
         The favorites-sort switch and the reorder button - diegetic
-        controls of the center tile (AGENTS.md's "Favorites"), in one
+        controls of the center tile (AGENTS.md's "The center room's controls"), in one
         container sized to the whole cell like `.center-books`, so a pan
         costs one style write regardless of how many buttons are inside.
         Each button is positioned in percentages of that container
@@ -553,8 +553,8 @@ export function MapView({
 
         {/*
           Only `rescatter` and `center` remain debug-only; the rest of this
-          row's actions have diegetic homes on the center tile now (the
-          shuffle control, the sort switches; see AGENTS.md's "Favorites").
+          row's actions have diegetic homes on the center tile (the
+          shuffle control, the sort switches).
           Those two stay because neither has a diegetic equivalent:
           `rescatter` reseeds which cells hold a room at all, not the
           ranking, and `center` is a plain camera reset. Distill mode's own

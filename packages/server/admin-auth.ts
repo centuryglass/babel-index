@@ -23,8 +23,7 @@
  * libuv's thread pool rather than blocking the process's one JS thread -
  * `scryptSync` here would stall every other request (image serving,
  * search, everything) for each hash's duration, which a rate limit alone
- * doesn't prevent during the burst before it trips (see AGENTS.md-style
- * reasoning: the bucket bounds *guesses per address*, not concurrent
+ * doesn't prevent during the burst before it trips (the bucket bounds *guesses per address*, not concurrent
  * *addresses*, so a distributed attacker gets a fresh burst per address).
  * `hashPassword` stays sync - it's `tools/hash-admin-password`'s one-off CLI
  * call, never on a request path, so blocking there is harmless.

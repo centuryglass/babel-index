@@ -90,7 +90,7 @@ export function useContentZoom(viewportRef: RefObject<HTMLElement | null>, reset
   );
 
   // Buttons/keyboard: the non-pinch path a mouse-and-keyboard reader needs
-  // (AGENTS.md, "`ZoomControls.tsx`"). Always anchored at the viewport's own
+  // (`docs/file_map.md`, "`ZoomControls.tsx`"). Always anchored at the viewport's own
   // center rather than a gesture midpoint.
   const zoomIn = useCallback(() => applyZoom(1.5), [applyZoom]);
   const zoomOut = useCallback(() => applyZoom(1 / 1.5), [applyZoom]);

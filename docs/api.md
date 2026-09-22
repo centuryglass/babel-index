@@ -27,9 +27,7 @@ one endpoint hit unconditionally on every load.
   coverage, `favorites: { enabled: boolean } | null`, and `config` (the
   server's resolved `Config` with its `notes`/`source` fields stripped).
 - Not cached by this server; nothing here changes after startup except by
-  restarting the process (the corpus is scanned once — see `AGENTS.md`,
-  "The map and its coordinates" is unrelated but "No store, no feature" and
-  the config section cover why nothing here is mutable at runtime).
+  restarting the process (the corpus is scanned once, at startup).
 
 ## `GET /api/search`
 

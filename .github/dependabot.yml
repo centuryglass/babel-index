@@ -9,7 +9,7 @@ updates:
         dependency-type: development
     ignore:
       # typescript is pinned to ^6.0.3 until typescript-eslint supports TS 7
-      # (see AGENTS.md's TypeScript convention section).
+      # (see AGENTS.md's *Commands*).
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
