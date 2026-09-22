@@ -275,8 +275,16 @@ export function createLayout({
   const slots = collectSlots(roomCount, contentRatio, seed, aspect, ramp);
 
   // Reverse index: cell -> rank position. Bounded by roomCount, so small.
-  const rankAt = new Map<string, number>();
-  slots.forEach((s, i) => rankAt.set(key(s.x, s.y), i));
+  // Nested by x then y rather than a `${x},${y}` string key - `rankOf` is
+  // called from the render loop's visible pass and its prefetch ring, so a
+  // string allocation per lookup would run to tens of thousands per frame at
+  // coarse zoom.
+  const rankAt = new Map<number, Map<number, number>>();
+  slots.forEach((s, i) => {
+    let col = rankAt.get(s.x);
+    if (!col) rankAt.set(s.x, (col = new Map()));
+    col.set(s.y, i);
+  });
 
   // Radius of the outermost occupied slot: the edge the user is discouraged
   // from crossing, since there is nothing but generic rooms beyond it.
@@ -311,7 +319,7 @@ export function createLayout({
 
     /** Rank position of a cell, or -1 if it holds a generic room. */
     rankOf(x, y) {
-      const r = rankAt.get(key(x, y));
+      const r = rankAt.get(x)?.get(y);
       return r === undefined ? -1 : r;
     },
 
@@ -476,8 +484,6 @@ function gradedRadius(
   for (let k = 0; k <= rings; k++) if (ramp(reached[k]) <= contentRatio) return k;
   return rings + 1;
 }
-
-const key = (x: number, y: number): string => `${x},${y}`;
 
 /** A shuffled ordering, for the "reorder the library" control. */
 export function shuffledOrder(n: number, seed = 1): number[] {

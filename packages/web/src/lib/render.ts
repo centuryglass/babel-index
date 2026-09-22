@@ -41,7 +41,7 @@ import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { tracePathCommands } from './svgPath.ts';
 import { perfRecordSheetFirstDraw } from './perfProbe.ts';
 import type { LoadingFrame } from './loadingAnimation.ts';
-import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
+import { isCenter, type MapLayout } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
 /**
@@ -86,13 +86,23 @@ export interface DrawContext {
 }
 
 /**
- * The cache id for whatever a cell holds: the center cell takes the blank
- * center tile, a generic cell one of the generic tiles chosen by
+ * The cache id for whatever cell (gx, gy) holds: the center cell takes the
+ * blank center tile, a generic cell one of the generic tiles chosen by
  * `layout.genericIndexAt`, a content cell its room. `genericId(-1)` is
  * `CENTER`, the fallback for a corpus with no generic tiles at all.
+ *
+ * Built from `layout.rankOf`/`isCenter` directly rather than
+ * `layout.roomAt()`, which allocates a fresh `RoomAtResult` object on every
+ * call - this runs once per cell in the visible pass and the prefetch ring,
+ * tens of thousands of times a frame at coarse zoom (issue #256).
  */
-const idOf = (cell: RoomAtResult, layout: MapLayout, gx: number, gy: number): RoomId =>
-  cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
+const idOf = (layout: MapLayout, order: number[], gx: number, gy: number): RoomId => {
+  if (isCenter(gx, gy)) return CENTER;
+  const rank = layout.rankOf(gx, gy);
+  return rank === -1 || rank >= order.length
+    ? genericId(layout.genericIndexAt(gx, gy))
+    : order[rank];
+};
 
 /**
  * The largest tile-to-cell downscale ratio at which bilinear filtering still
@@ -294,18 +304,22 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
 
     for (let gy = bounds.y0; gy <= bounds.y1; gy++) {
       for (let gx = bounds.x0; gx <= bounds.x1; gx++) {
-        const cell = layout.roomAt(gx, gy, order);
-        const id = idOf(cell, layout, gx, gy);
+        // Scalar reads rather than `layout.roomAt()`, which allocates a fresh
+        // `RoomAtResult` object per cell - see `idOf`'s comment.
+        const isCtr = isCenter(gx, gy);
+        const rank = isCtr ? -1 : layout.rankOf(gx, gy);
+        const isGeneric = !isCtr && (rank === -1 || rank >= order.length);
+        const id: RoomId = isCtr ? CENTER : isGeneric ? genericId(layout.genericIndexAt(gx, gy)) : order[rank];
         visible.push(id);
 
         const [sx, sy] = toScreen(gx, gy);
-        const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
+        const distillId = isGeneric ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
         // A generic cell fully faded to its distill alternate shows none of the
         // base tile's art, so drawing the base beneath the fade is pure waste -
         // and zoomed out, generic cells are the majority. The prefetch pass
         // still warms the base, so toggling distill off again does not pop.
-        if (cell.generic && genericFade >= 1) {
+        if (isGeneric && genericFade >= 1) {
           drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         } else {
           const hit = cache.get(id, level);
@@ -328,15 +342,15 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             blank++;
           }
 
-          if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
+          if (isGeneric && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         }
 
         // The favorite badge: every real room, never the center (it is the
         // controls, not a room) and never a generic cell (nothing to favorite).
-        if (favorites && !cell.center && !cell.generic) {
+        if (favorites && !isCtr && !isGeneric) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
           drawFavoriteBadge(
-            ctx, cache, favorites.isFavorite(cell.id) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
+            ctx, cache, favorites.isFavorite(order[rank]) ? FAV_ON : FAV_OFF, cellPx, sx, sy, hovered
           );
         }
         // The "forget searches" book's black spine, claimed whenever history
@@ -344,12 +358,12 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // override `useCenterShelf.ts` reserves the slot with - so there is no
         // second "is there history" flag to drift. Drawn before the shelf's
         // titles so the gilt text composites on top.
-        if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
+        if (isCtr && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
           drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
         // The center room's spines carry the search history; `composeSpines`
         // gates on legible spine width, so far out it draws nothing. The cast
         // is the `DrawContext` note's wider-surface case.
-        if (cell.center && centreSlots && spineFontLimits)
+        if (isCtr && centreSlots && spineFontLimits)
           composeSpines(
             ctx as SpineContext, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, centreSlots, hoveredBook, spineFontLimits
           );
@@ -357,7 +371,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // the favorite badge's upper-right mirror. Gated on a favorite store
         // existing and on `areSpinesLegible`, the same zoom gate the shelf's
         // titles use.
-        if (cell.center && favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
+        if (isCtr && favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
           drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
         // The distill toggle, in the center tile's lower right corner -
         // ungated by `favorites`, since distill mode needs no favorite store.
@@ -365,12 +379,12 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // mode at all (a test asserting on level selection, say), and the
         // toggle then draws nothing rather than requesting art nobody asked
         // for.
-        if (cell.center && distillMode !== undefined)
+        if (isCtr && distillMode !== undefined)
           drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
         // The loading indicator's frame, over the center book's page. Its
         // region is disjoint from everything above, so the order among them is
         // cosmetic; last matches the GL draw loop's order (glRenderer.ts).
-        if (cell.center && loadingFrame)
+        if (isCtr && loadingFrame)
           drawLoadingFrame(ctx, loadingFrame, { x: sx, y: sy, w: cellPx.x, h: cellPx.y });
       }
     }
@@ -378,7 +392,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
     // --- rule 2, strictly after every visible cell has been asked for -------
     // The walk stops as soon as `hasPrefetchCapacity()` says the queue is
     // full, before computing that cell's id - a coarse-zoom ring can be tens
-    // of thousands of cells, and `roomAt()`/`idOf()` for whatever is past the
+    // of thousands of cells, and `idOf()` for whatever is past the
     // cap would only be thrown away (`tiles.ts`'s `prefetch()` already
     // resolves an already-cached or nonexistent id for free, ahead of the
     // cap, so this never cuts off work that would have cost nothing anyway).
@@ -400,7 +414,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
-        cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
+        cache.prefetch(idOf(layout, order, gx, gy), level);
       }
     }
 
