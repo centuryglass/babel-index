@@ -47,9 +47,19 @@ export interface SharedAsset extends Partial<ImageSize> {
  * rooted at `generic_distill/` instead, kept separate rather than intersected
  * with `levels`: not every generic tile has a distill alternate at all, so
  * requiring the base tree's rungs would silently veto a level the distill
- * tree actually has. `rooms.ts` is the one place either is read; the fixed
- * app art (favorite badges, the distill toggle) is never in either and stays
- * flat at level 0 (see rooms.ts's header).
+ * tree actually has. `rooms.ts` is the one place any of the three is read;
+ * the rest of the fixed app art (the distill toggle, the "forget searches"
+ * overlay) is in none of them and stays flat at level 0 (see rooms.ts's
+ * header).
+ *
+ * `favoriteLevels` is the favorite badge's pyramid - `fav_on.png`/
+ * `fav_off.png` scaled to the tile's per-level widths, checked for
+ * directly (`scan.ts`'s `discoverFavoriteLevels`) rather than intersected
+ * with `levels`: the scaled badge files happen to live in the same
+ * `<width>/` directories the center tile's pyramid does (a convenient home
+ * for shared art with no style variants), but that is a storage detail, not
+ * a shared discovery - a level counts here only when both badge faces are
+ * actually present, regardless of what the center/generic trees have.
  */
 export interface SharedAssets {
   center: SharedAsset | null;
@@ -57,6 +67,7 @@ export interface SharedAssets {
   genericDistill: (SharedAsset | null)[];
   levels: LevelInfo[];
   distillLevels: LevelInfo[];
+  favoriteLevels: LevelInfo[];
 }
 
 /**

@@ -120,6 +120,10 @@ interface CenterConfig {
   spineMaxPx: number;
 }
 
+interface FavoritesConfig {
+  minInteractiveTileWidth: number;
+}
+
 interface SearchWeights {
   tagExact: number;
   tagPartial: number;
@@ -152,6 +156,7 @@ interface Defaults {
   slide: SlideConfig;
   catalog: CatalogConfig;
   center: CenterConfig;
+  favorites: FavoritesConfig;
   search: SearchDefaults;
 }
 
@@ -173,6 +178,7 @@ export interface Config {
   catalog: CatalogConfig;
   map: MapConfig;
   center: CenterConfig;
+  favorites: FavoritesConfig;
   search: SearchDefaults;
   notes: string[];
 }
@@ -456,6 +462,19 @@ export const DEFAULTS: Defaults = {
     spineMaxPx: 30,
   },
 
+  favorites: {
+    /**
+     * Below this many CSS pixels of cell width, the on-tile favorite badge
+     * stops responding to a tap or a hover - the tile it sits on is too small
+     * for the target to mean anything (issue #257). Interactivity only;
+     * drawing has a separate cutoff (`render.ts`'s
+     * `drawFavoriteBadge`). This value is kept at the same tile width the
+     * scaled badge art runs out at (`manifest.shared.favoriteLevels`), so a
+     * badge is never tappable after it has stopped being legible.
+     */
+    minInteractiveTileWidth: 128,
+  },
+
   search: {
     /**
      * The seven constants `docs/search_rules.md` "Balancing signals against each
@@ -631,6 +650,7 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     slide: slideTiming(asSection(src.slide, 'slide', notes), notes),
     catalog: catalog(asSection(src.catalog, 'catalog', notes), notes),
     center: center(asSection(src.center, 'center', notes), notes),
+    favorites: favorites(asSection(src.favorites, 'favorites', notes), notes),
     map: {
       contentRatio: ratio(mapIn.contentRatio, DEFAULTS.map.contentRatio, 'map.contentRatio', notes),
       slotSeed: integer(mapIn.slotSeed, DEFAULTS.map.slotSeed, 'map.slotSeed', notes),
@@ -731,6 +751,17 @@ function center(src: Section, notes: string[]): CenterConfig {
     return { spineMinPx: d.spineMinPx, spineMaxPx: d.spineMaxPx };
   }
   return { spineMinPx, spineMaxPx };
+}
+
+/** The favorite badge's interactivity cutoff - `favorites` in the overlay. */
+function favorites(src: Section, notes: string[]): FavoritesConfig {
+  const d = DEFAULTS.favorites;
+  return {
+    minInteractiveTileWidth: atLeast(
+      integer(src.minInteractiveTileWidth, d.minInteractiveTileWidth, 'favorites.minInteractiveTileWidth', notes),
+      0, 'favorites.minInteractiveTileWidth', notes
+    ),
+  };
 }
 
 /**

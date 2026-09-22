@@ -471,7 +471,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
       // carry one - which is when `value` is a numeric id rather than one of
       // the two shared board values.
       if (favorites && typeof value === 'number')
-        drawFavoriteBadge(ctx, cache, favorites.isFavorite(value) ? FAV_ON : FAV_OFF, cellPx, sx, sy);
+        drawFavoriteBadge(ctx, cache, favorites.isFavorite(value) ? FAV_ON : FAV_OFF, cellPx, sx, sy, level);
       wanted.push(id);
     };
 

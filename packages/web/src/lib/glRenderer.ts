@@ -130,10 +130,14 @@ export function drawGenericFadeGL(
 }
 
 /**
- * GL twin of `render.ts`'s `drawFavoriteBadge`: rule 1 does not apply, a
- * badge with no resident texture yet draws nothing. The hover glow is the
- * baked silhouette (`gl/glowTexture.ts`). Shared with `glSlideRenderer.ts`
- * so the badge rides along with sliding tiles.
+ * GL twin of `render.ts`'s `drawFavoriteBadge`: rule 1 does not apply, and
+ * neither does a fallback to a different pyramid rung - only the tile's draw
+ * level (`level`) is ever requested, and anything else (still loading,
+ * or a level with no generated badge art at all below tile width 128) draws
+ * nothing this frame. See `drawFavoriteBadge`'s doc for why no fallback is
+ * the correct behaviour here, not a gap. The hover glow is the baked
+ * silhouette (`gl/glowTexture.ts`). Shared with `glSlideRenderer.ts` so the
+ * badge rides along with sliding tiles.
  */
 export function drawFavoriteBadgeGL(
   gl: GLContext,
@@ -143,14 +147,15 @@ export function drawFavoriteBadgeGL(
   cellPx: { x: number; y: number },
   sx: number,
   sy: number,
+  level: number,
   hovered: boolean,
   glowTextures: GlowTextureCache
 ): void {
-  const hit = cache.get(isFavorite ? FAV_ON : FAV_OFF, 0);
-  const tex = hit ? textures.get(gl, hit.img) : null;
-  if (!hit || !tex) return;
+  const hit = cache.get(isFavorite ? FAV_ON : FAV_OFF, level);
+  const tex = hit && hit.level === level ? textures.get(gl, hit.img) : null;
+  if (!hit || hit.level !== level || !tex) return;
   const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
-  const rect: Rect = favoriteIconScreenRect(cellPx, sx, sy, iconSize);
+  const rect: Rect = favoriteIconScreenRect(cellPx, sx, sy, iconSize, level);
   const src = hit.rect
     ? toGLRect(hit.rect)
     : { x: 0, y: 0, w: tex.width, h: tex.height };
@@ -334,7 +339,7 @@ export function createGLRenderer({
         // generic cell, same gate as `render.ts`.
         if (favorites && !cell.center && !cell.generic) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
-          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(cell.id), cellPx, sx, sy, hovered, glowTextures);
+          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(cell.id), cellPx, sx, sy, level, hovered, glowTextures);
         }
 
         // The "forget searches" book's black spine overlay - same gate as

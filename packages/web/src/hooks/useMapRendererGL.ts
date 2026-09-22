@@ -44,6 +44,7 @@ import { createGLSlideRenderer, type GLSlideDrawResult } from '../lib/glSlideRen
 import type { RunningAnim } from './useMapRenderer.ts';
 import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
+import { DEFAULTS } from '../../../config/config.ts';
 
 /** Coarse-pointer hit padding, same check and reason as `useMapRenderer.ts`'s `COARSE_POINTER`. */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -75,6 +76,8 @@ interface UseMapRendererGLOpts {
   centreOverlay: (w: number, h: number) => CentreOverlay;
   blockedCount?: number;
   favorites?: { isFavorite: (id: number) => boolean } | null;
+  /** See `useMapRenderer.ts`'s `minFavoriteInteractiveWidth`. */
+  minFavoriteInteractiveWidth?: number;
   favTooltipRef?: { current: HTMLElement | null };
   sortMode?: SortMode;
   genericFade?: { current: number };
@@ -113,7 +116,9 @@ interface Latest {
 export function useMapRendererGL({
   canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef,
   draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
-  centreOverlay, blockedCount = 0, favorites = null, favTooltipRef, sortMode = 'relevance',
+  centreOverlay, blockedCount = 0, favorites = null,
+  minFavoriteInteractiveWidth = DEFAULTS.favorites.minInteractiveTileWidth,
+  favTooltipRef, sortMode = 'relevance',
   genericFade, distillMode = false, distillTooltipRef, warmTexturesRef,
   warmTimeoutMs, loadingAnim, cancelSearchPreload,
 }: UseMapRendererGLOpts) {
@@ -391,11 +396,16 @@ export function useMapRendererGL({
         draw.current();
       }
 
+      // Below `minFavoriteInteractiveWidth`, the badge is too small to
+      // fairly hit (issue #257) and hover is skipped - see
+      // `useMapRenderer.ts`'s twin comment.
       let nextFavorite: { x: number; y: number; id: number } | null = null;
       if (favs) {
-        const hit = roomAtPoint(px, py, cam.current, viewportRect, lay, ord);
+        const cellPx = pxPerCell(cam.current);
+        const hit = cellPx.x > minFavoriteInteractiveWidth
+          ? roomAtPoint(px, py, cam.current, viewportRect, lay, ord)
+          : null;
         if (hit && !('generic' in hit)) {
-          const cellPx = pxPerCell(cam.current);
           const { x: bsx, y: bsy } = worldToScreen(hit.x, hit.y, cam.current, viewportRect);
           if (favoriteToggleAtPoint(px, py, cellPx, bsx, bsy))
             nextFavorite = { x: hit.x, y: hit.y, id: hit.id };
