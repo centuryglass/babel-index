@@ -71,7 +71,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       `one arrow press must move exactly one cell: ${home.x} -> ${afterOneStep.x}`
     );
     await waitFor(
-      async () => /Room \d+|a Babel shelf/.test((await live.textContent()) ?? ''),
+      async () => /Room \d+|a library wall/.test((await live.textContent()) ?? ''),
       2000,
       'an arrow press must announce something about the new cursor cell'
     );
