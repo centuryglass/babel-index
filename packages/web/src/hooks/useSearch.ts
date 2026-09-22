@@ -38,6 +38,15 @@ interface UseSearchOpts {
   /** filled in by `main.tsx` once `useRearrangement` exists - see the file
    * comment above. */
   requestAnimationRef: { current: (note: string) => void };
+  /**
+   * Same forward-ref cycle as `requestAnimationRef`, for
+   * `useRearrangement.ts`'s `beginSearchPreload`/`cancelSearchPreload` - the
+   * indicator and search-badge spinner start as soon as a real search is
+   * submitted, not once `rankHybrid` finishes and a rearrangement is
+   * actually requested for it (#235).
+   */
+  beginSearchPreloadRef: { current: () => void };
+  cancelSearchPreloadRef: { current: () => void };
   pushHistory: (term: string) => void;
   /** the live region, for the one path a search cannot route through
    * `requestAnimation`'s announcement: a fetch that fails rearranges
@@ -59,6 +68,8 @@ export function useSearch({
   searchIndex,
   embeddings,
   requestAnimationRef,
+  beginSearchPreloadRef,
+  cancelSearchPreloadRef,
   pushHistory,
   setStatus,
   onSearchStart,
@@ -105,6 +116,10 @@ export function useSearch({
     // never resolves.
     pushHistory(term.trim());
     onSearchStart();
+    // Start the indicator/badge spinner now, ahead of the fetch and the
+    // ranking that follows - see `beginSearchPreloadRef`'s own doc for why
+    // that beat would otherwise go unfilled.
+    beginSearchPreloadRef.current();
 
     let res;
     try {
@@ -117,7 +132,8 @@ export function useSearch({
       if (seq !== searchSeq.current) return;
       // Nothing rearranged - no `requestAnimation` was ever made for this
       // search - so this is the one path that has to write the live region
-      // itself.
+      // itself, and to hand the preload it started back.
+      cancelSearchPreloadRef.current();
       setStatus(`the search could not be run - ${(e as Error).message}. The library is unchanged.`);
       return;
     }

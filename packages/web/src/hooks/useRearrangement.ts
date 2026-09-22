@@ -151,6 +151,54 @@ export function useRearrangement({
     []
   );
 
+  // Whether a search has claimed the indicator ahead of any rearrangement
+  // plan existing for it - see `beginSearchPreload`. Distinct from
+  // `anim.current`: that only exists once a plan is being prepared, which
+  // for a search is well after its network fetch and `rankHybrid` have both
+  // finished (#235). `startRearrangement` clears this the moment it runs,
+  // transferring ownership to its own `playingLoad`/`onPreparingChange`
+  // bookkeeping; every path that runs instead is responsible for calling
+  // `cancelSearchPreload`.
+  const searchPreloading = useRef(false);
+
+  /**
+   * Start the center-tile indicator and the search badge's spinner as soon
+   * as a real search is submitted (`useSearch.ts`), rather than waiting for
+   * `rankHybrid` to finish and a rearrangement to be requested for it - the
+   * gap #235 closes. Gated on center-book visibility exactly as
+   * `startRearrangement`'s own indicator start is (below); the badge
+   * spinner is not, for the same far-field reason `onPreparingChange`'s doc
+   * gives.
+   */
+  const beginSearchPreload = useCallback(() => {
+    searchPreloading.current = true;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const cellRect = centerCellRect(cam.current, { width: canvas.clientWidth, height: canvas.clientHeight });
+      if (overlapsViewport(cellRect, canvas.clientWidth, canvas.clientHeight) && areSpinesLegible(cellRect)) {
+        loadingAnim?.current?.play(requestDraw);
+      }
+    }
+    onPreparingChange?.(true);
+  }, [canvasRef, cam, loadingAnim, requestDraw, onPreparingChange]);
+
+  /**
+   * The release valve for every path that does not end in
+   * `startRearrangement` claiming `beginSearchPreload`'s indicator: a failed
+   * fetch, a search submitted while in catalog mode (whose rearrangement
+   * effect never runs), a plan that turns out not to be animatable, or a
+   * pointer grab before any of those happen (the render hooks' `onDown`). A
+   * no-op once something already has - including once
+   * `startRearrangement` itself has claimed it - so every caller can call it
+   * unconditionally.
+   */
+  const cancelSearchPreload = useCallback(() => {
+    if (!searchPreloading.current) return;
+    searchPreloading.current = false;
+    loadingAnim?.current?.cancel();
+    onPreparingChange?.(false);
+  }, [loadingAnim, onPreparingChange]);
+
   /**
    * Prepare a rearrangement completely - the plan AND every tile the
    * animation will show - before the camera moves at all, rather than
@@ -298,7 +346,10 @@ export function useRearrangement({
       onSettled: (() => void) | null
     ): Promise<boolean> => {
       const canvas = canvasRef.current;
-      if (!canvas) return false;
+      if (!canvas) {
+        cancelSearchPreload();
+        return false;
+      }
 
       // Someone who asked for less motion gets the library rebuilt at once.
       // Returning false here is not a special case: it is the same answer
@@ -310,7 +361,10 @@ export function useRearrangement({
       // Before the flight, deliberately: the zoom-out exists to set up the
       // animation, so with no animation to set up there is no reason to move
       // the camera - and moving it unasked is itself the thing being avoided.
-      if (prefersReducedMotion()) return false;
+      if (prefersReducedMotion()) {
+        cancelSearchPreload();
+        return false;
+      }
 
       // Hold the old arrangement on screen for the flight. `layout` and
       // `order` already describe the new one, and without this the map would
@@ -339,6 +393,12 @@ export function useRearrangement({
       // The search badge's own spinner (`onPreparingChange`, below) is not
       // gated on that - it is the far-field affordance for exactly the case
       // where the center book isn't visible to show anything.
+      // A search already claimed the indicator before this plan existed
+      // (`beginSearchPreload`, #235) - ownership transfers here rather than
+      // restarting `play()`, which would reset the cycle a reader has
+      // already been watching partway through.
+      const alreadyLoading = searchPreloading.current;
+      searchPreloading.current = false;
       const cellRect = centerCellRect(cam.current, {
         width: canvas.clientWidth,
         height: canvas.clientHeight,
@@ -346,7 +406,7 @@ export function useRearrangement({
       const showLoading =
         overlapsViewport(cellRect, canvas.clientWidth, canvas.clientHeight) &&
         areSpinesLegible(cellRect);
-      const playingLoad = showLoading ? loadingAnim?.current?.play(requestDraw) ?? false : false;
+      const playingLoad = alreadyLoading || (showLoading ? loadingAnim?.current?.play(requestDraw) ?? false : false);
       onPreparingChange?.(true);
 
       // Everything the animation will need - the plan and every tile it will
@@ -447,7 +507,7 @@ export function useRearrangement({
       requestAnimationFrame(tick);
       return true;
     },
-    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement, loadingAnim, onPreparingChange]
+    [flyTo, isFlying, cam, config, requestDraw, canvasRef, searchFormRef, anim, prepareRearrangement, loadingAnim, onPreparingChange, cancelSearchPreload]
   );
 
   // Every change to what is on the map arrives here. Only the ones a control
@@ -472,6 +532,9 @@ export function useRearrangement({
     // legally. `announce` speaks for it in whatever voice the current reading
     // uses.
     if (mode !== 'map') {
+      // No map on screen to rearrange, so nothing below will ever claim a
+      // preload a search already started.
+      cancelSearchPreload();
       animateNext.current = false;
       const note = pendingNote.current;
       pendingNote.current = '';
@@ -480,6 +543,7 @@ export function useRearrangement({
     }
 
     if (!animateNext.current || !previous) {
+      cancelSearchPreload();
       requestDraw();
       return;
     }
@@ -504,7 +568,7 @@ export function useRearrangement({
         announce(note);
       }
     });
-  }, [layout, order, mode, startRearrangement, requestDraw, announce]);
+  }, [layout, order, mode, startRearrangement, requestDraw, announce, cancelSearchPreload]);
 
-  return { requestAnimation, rearranging: () => anim.current != null };
+  return { requestAnimation, beginSearchPreload, cancelSearchPreload, rearranging: () => anim.current != null };
 }

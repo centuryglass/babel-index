@@ -139,6 +139,13 @@ interface UseMapRendererOpts {
    * not rebuilt when it changes.
    */
   loadingAnim?: { current: LoadingAnimation | null };
+  /**
+   * Release a search's indicator/spinner claim (`useRearrangement.ts`'s
+   * `beginSearchPreload`) when the map is grabbed before any rearrangement
+   * plan exists to own it - the window `anim.current` alone cannot see
+   * (#235). A no-op when nothing claimed it.
+   */
+  cancelSearchPreload?: () => void;
 }
 
 export function useMapRenderer({
@@ -168,6 +175,7 @@ export function useMapRenderer({
   distillMode = false,
   distillTooltipRef,
   loadingAnim,
+  cancelSearchPreload,
 }: UseMapRendererOpts) {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -422,7 +430,13 @@ export function useMapRenderer({
     // Touching the map ends a rearrangement rather than fighting it.
     const onDown = () => {
       const running = anim.current;
-      if (!running) return;
+      if (!running) {
+        // No rearrangement plan exists yet, but a search may already have
+        // claimed the indicator ahead of one (`beginSearchPreload`, #235) -
+        // that has nothing else to hand it back.
+        cancelSearchPreload?.();
+        return;
+      }
       // A grab mid-preload ends the whole rearrangement, so the loading
       // indicator stops with it: its `finish()` await in
       // `useRearrangement.ts` resolves off this cancel.
@@ -614,6 +628,6 @@ export function useMapRenderer({
     canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
     blockedCount, favorites, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
-    loadingAnim,
+    loadingAnim, cancelSearchPreload,
   ]);
 }

@@ -92,6 +92,8 @@ interface UseMapRendererGLOpts {
   warmTimeoutMs: number;
   /** The center-tile loading indicator, a ref - see `useMapRenderer.ts`'s own `loadingAnim`. */
   loadingAnim?: { current: LoadingAnimation | null };
+  /** See `useMapRenderer.ts`'s own `cancelSearchPreload`. */
+  cancelSearchPreload?: () => void;
 }
 
 /** What `render()` and the pointer handlers read that changes on almost every search or toggle - see this file's doc for the `latestRef` arrangement. */
@@ -113,7 +115,7 @@ export function useMapRendererGL({
   draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null, favTooltipRef, sortMode = 'relevance',
   genericFade, distillMode = false, distillTooltipRef, warmTexturesRef,
-  warmTimeoutMs, loadingAnim,
+  warmTimeoutMs, loadingAnim, cancelSearchPreload,
 }: UseMapRendererGLOpts) {
   // Assigned during the render body, not inside an effect, so it is current
   // before either effect runs - whatever their declaration order. See this
@@ -309,7 +311,13 @@ export function useMapRendererGL({
     const onResize = () => draw.current();
     const onDown = () => {
       const running = anim.current;
-      if (!running) return;
+      if (!running) {
+        // No rearrangement plan exists yet, but a search may already have
+        // claimed the indicator ahead of one - see `useMapRenderer.ts`'s
+        // own onDown.
+        cancelSearchPreload?.();
+        return;
+      }
       // Stop the loading indicator with the rearrangement it belongs to - see
       // `useMapRenderer.ts`'s own onDown.
       loadingAnim?.current?.cancel();
