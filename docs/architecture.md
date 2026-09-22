@@ -1,11 +1,9 @@
 # Architecture
 
-A five-minute system overview for a human reader - a reviewer, a hiring
-manager, another engineer - who wants to assess how this is built without
-reading the source or `AGENTS.md` end to end. See `README.md` for what the
+A five-minute system overview. See `README.md` for what the
 project is and how to run it, [`docs/concept.md`](concept.md) for the
 design intent behind it, and [`docs/file_map.md`](file_map.md) for the
-exhaustive file-by-file layout. `AGENTS.md` is the engineering rulebook -
+exhaustive file-by-file layout. `AGENTS.md` is the engineering rulebook,
 the invariants and gotchas behind the decisions summarized here.
 
 ## Shape of the system
@@ -77,14 +75,13 @@ result from memory, and `build/`'s Node-side loader hook runs every
 in memory, on import - so the whole tree runs as TypeScript on the Node 20
 floor without a compile step anywhere. The tradeoff: a client edit needs a
 server restart (there is no watch-and-hot-reload loop), which is an
-acceptable cost for a project with one active maintainer and no CI-built
-release artifact to keep in sync with a `dist/` directory.
+acceptable cost for a project of this scale.
 
 ## Where the corpus lives
 
 The server has two mutually exclusive modes, chosen by CLI flag:
 
-- **Local mode** (`--images <dir>`): the directory *is* the corpus -
+- **Local mode** (`--images <dir>`): use a directory as the corpus,
   `scan.ts` walks it directly. This is what `npm run demo` uses by
   default, against `assets/corpus-sample/`, so a clone works with zero
   external dependencies.
@@ -96,53 +93,49 @@ The server has two mutually exclusive modes, chosen by CLI flag:
 
 The real deployment runs in remote mode. The corpus - thousands of room
 images across multiple resolution levels, plus embeddings - is large,
-static, and read-heavy: exactly what an object store with a CDN in front
-of it is for, and keeping it off the app server means a redeploy of the
-app never touches the (much larger, much slower to move) image data.
+static, and read-heavy. Keeping it off the app server means a redeploy of the
+app never touches the (much larger, much slower to move) image data, and 
+hosting the image data on CloudFlare cuts bandwidth costs to effectively zero.
 `infra/` holds the Terraform for that bucket, applied by hand rather than
 from CI since it's independent of any release cadence.
 
 ## Deploying to the VPS
 
-Every push to `main` that passes CI triggers `.github/workflows/deploy.yml`,
-which ships that exact commit to the VPS over one SSH call constrained to
-run only `deploy/deploy.sh` (a forced command, not a login shell) -
-`deploy.sh` refuses any sha that isn't already an ancestor of
-`origin/main`, so the narrow key can redeploy or roll back to something
-that was already `main`, never run arbitrary code.
+Release tagging and versioning (`release-please.yml`) are the primary
+mechanism for deployment. Every automatic release-please PR merged to
+`main` that passes CI triggers `.github/workflows/deploy.yml` after
+the version update is applied. Deployment ships that exact commit to
+a Debian VPS over one SSH call, constrained to run only `deploy/deploy.sh`
+(a forced command, not a login shell). `deploy.sh` refuses any sha that isn't
+already an ancestor of `origin/main`, so the narrow key can redeploy or roll
+back to something that was already `main`, never run arbitrary code.
 
-The interesting design point is what counts as success. A plain HTTP 200
-from the health endpoint doesn't prove the deploy worked - the old process
-could still be running after a failed restart, or a misconfigured unit
-could be serving a stale checkout, and either would answer 200 looking
-perfectly healthy. So `/api/health` reports the git commit the running
-process actually loaded (`version.ts`, read once at startup, never
-re-derived per request), and `deploy/health-check.mjs` polls until that
-reported commit matches the sha being deployed - checked once from
-`deploy.sh` itself (against localhost, "did the unit come back on the new
-code?") and again from the GitHub Actions workflow (against the public
-URL, "can anyone actually reach it?"). A release that comes up on the
+Deployment validation checks server health, reported version, and the presence
+of real data to confirm success. A plain HTTP 200 from the health endpoint
+doesn't prove the deploy worked. The old process could still be running after
+a failed restart, or a misconfigured unit could be serving a stale checkout,
+and either would answer 200 looking perfectly healthy. So `/api/health`
+reports the git commit the running process actually loaded, and
+`deploy/health-check.mjs` polls until that reported commit matches the sha
+being deployed. This is checked once from `deploy.sh` itself and again from
+the GitHub Actions workflow, to confirm the release both started successfully
+and is fully available online. A release that comes up on the
 right commit but reports zero rooms also fails fast rather than waiting
 out a timeout, since retrying can't change that answer.
 
-A failed deploy is not automatically rolled back - it stops with the
+A failed deploy is not automatically rolled back. It stops with the
 previous sha printed, and the same workflow can be manually dispatched
-with any sha as the rollback button. Release tagging
-(`release-please.yml`) is entirely independent of this pipeline: every
-push to `main` deploys regardless of version state, and a release is a
-separate, human-merged PR that only updates `CHANGELOG.md`/`package.json`.
+with any sha as the rollback button.
 
 ## Rendering
 
-The map is a virtualized canvas, not thousands of DOM nodes. There are two
+The map is a virtualized canvas. There are two
 parallel renderers sharing one set of per-cell decisions (which pyramid
 resolution to draw, favorite-badge placement, prefetch order): a Canvas2D
 implementation (`render.ts`/`slide.ts`) and a WebGL2 one
 (`glRenderer.ts`/`glSlideRenderer.ts`), the latter the default when the
-browser supports it. They are two independent implementations kept in
-lockstep by hand plus a manual parity test
-(`npm run test:parity`) rather than one implementation behind an
-abstraction - see `AGENTS.md`'s *The WebGL renderer* for why.
+browser supports it. A parity test(`npm run test:parity`) runs as part of
+the release pipeline, and must pass before a deploy.
 
 Room rearrangements (re-sorting the map after a search) are staged as a
 sliding-tile illusion rather than an instant relayout: `packages/map/
@@ -157,11 +150,47 @@ viewport, so visible cost never scales with corpus size.
 - `npm run test:e2e` (Playwright) is the browser-level merge gate, run as
   a required check (`e2e.yml`) alongside the unit tests across the Node
   20/22/24 matrix.
-- `npm run test:parity` is a manual, real-GPU check that the two renderers
-  draw the same map - not a merge gate, run by hand when touching either
-  draw loop.
+- `npm run test:parity` is real-GPU check that the two renderers
+  draw the same map.
 - `npm run typecheck` / `npm run lint` are the type and style gates; see
   `AGENTS.md`'s *Commands* for why `typescript` is pinned below `^7`.
+  
+## Agentic development
+
+Most of this codebase is written with AI coding agents, and the workflow
+around them is itself part of what the repo is meant to demonstrate. The
+practices below exist to keep an AI-assisted process producing code a human
+would sign off on, reviewed, tested, and documented.
+
+Every session is human-triggered and scoped to a task; nothing runs
+unattended against `main`. Agents work on branches, changes go through the
+same CI gates as any other (`npm test`, e2e, typecheck, lint), and every
+diff is reviewed before it lands. A PR is opened only when asked for.
+Open work is tracked in GitHub issues rather than a file in the
+repo, so the task list has one home and can't drift from what's actually
+been done. `AGENTS.md` (symlinked as `CLAUDE.md`) is the standing rulebook
+every session reads: the conventions, invariants, and the "things that will
+bite you" that a fresh context wouldn't otherwise know.
+
+**Keeping documentation honest.** An agent left to its own habits tends
+toward comments that argue with the previous version of the code,
+scaffolding that restates a fact three files away from where it's defined,
+and prose that inflates rather than informs. `AGENTS.md` codifies rules
+against these - lead with the invariant, state each fact in exactly one
+place, describe the code as it stands rather than the change that produced
+it, keep hazards and drop the ghosts of prior implementations. Because a
+single model applying its own rules is a weak check on its own tendencies,
+the comment discipline is periodically re-swept by a *different* model - the
+`qwen3.8-flash-comment-fix` branch is one such pass - so drift one model is
+blind to gets caught by another with different biases.
+
+**Issue context at session start.** A `SessionStart` hook compiles the
+project's open GitHub issues into a local cache and folds their titles
+straight into the agent's context, so every open task is already in view
+without a tool call. The full text of each issue sits in the cache
+(`.claude/cache/issues/`) for the session to read on demand. The hook
+degrades gracefully across environments: it uses the `gh` CLI where it's
+authenticated, falls back to the unauthenticated REST API otherwise.
 
 ## Further reading
 
