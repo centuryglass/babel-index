@@ -316,6 +316,23 @@ export function useMapCamera({
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
 
+      // Touch only: suppress the compatibility mouse events (and the trailing
+      // `click`) the browser would otherwise synthesize from this pointer
+      // sequence. Without this, a tap that fires `onTap` synchronously - e.g.
+      // the shelf's catalog book, which calls `enterCatalog` and swaps the
+      // whole DOM before that synthesized click is dispatched - can have the
+      // click land on whatever now sits at those screen coordinates in the
+      // new view instead of the element actually touched. Firefox for
+      // Android is where this has been observed; mouse and pen dispatch
+      // their events natively rather than as a synthesized follow-up, so
+      // they are unaffected either way. Preventing default here also
+      // suppresses the focus a tap would otherwise give the canvas (normally
+      // part of that same synthesized mousedown), so it is restored below.
+      if (e.pointerType === 'touch') {
+        e.preventDefault();
+        canvas.focus();
+      }
+
       // A hand on the map beats anything the map was doing to itself. Dropped
       // here rather than on the first move so that even a press that never
       // becomes a drag stops the flight - reaching for a room that is still

@@ -3,9 +3,10 @@
 Notes for coding agents working in this repo. Human-facing docs are
 [`README.md`](README.md) (how to run it),
 [`docs/architecture.md`](docs/architecture.md) (a five-minute system
-overview), [`docs/concept.md`](docs/concept.md) (what it is meant to
-become), and [`docs/pending_task_list.md`](docs/pending_task_list.md)
-(what is still to do).
+overview), and [`docs/concept.md`](docs/concept.md) (what it is meant to
+become). What is still to do lives in
+[GitHub issues](https://github.com/centuryglass/babel-index/issues), not a
+file in this repo - see "Tracking open work" below.
 
 ## What this is
 
@@ -16,10 +17,10 @@ with style keywords used for generation and a brief story text based on the
 image and keywords.
 
 Tiles can be searched, with CLIP embeddings, keyword matching, and story
-matching used to calculate ranking and match certainty for all tiles. A set of
+matching used to calculate ranking and match strength for all tiles. A set of
 generic "default" tiles are mixed in with the unique ones, with their
 distribution adjusted during searches so they serve as a way to visibly gauge
-search certainty. Diegetic controls for the search interface are embedded into
+search strength. Diegetic controls for the search interface are embedded into
 the center tile, placed using geometry calculated from a reference SVG.
 
 An alternate catalog interface can be used to maximize discoverability. This
@@ -46,9 +47,8 @@ Practically, this means: when a change is ambiguous between "what the art
 needs" and "what a portfolio needs," default to keeping both in mind rather
 than silently picking one - flag the tension instead of quietly resolving it
 in the art's favor. Process/documentation gaps that exist purely for
-portfolio value (not required by the art itself) belong in
-`docs/pending_task_list.md` like any other open task, not bundled invisibly
-into unrelated work.
+portfolio value (not required by the art itself) get a GitHub issue like any
+other open task, not bundled invisibly into unrelated work.
 
 ## Commands
 
@@ -58,10 +58,13 @@ npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--po
 npm run demo -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
-npm run test:parity                # manual Canvas2D-vs-WebGL render parity; real GPU, not a merge gate
+npm run test:parity                # Canvas2D-vs-WebGL render parity; deploy gate, not a merge gate
 npm run lint                       # config in eslint.config.js
 npm run typecheck                  # tsc --noEmit -p jsconfig.json, checkJs over the JSDoc
 npm run check:file-map             # docs/file_map.md vs the real tree, a required check (see its own header)
+npm run check:requirements         # docs/search_requirements.md vs the tests' [SR-nn] tags, a required check
+npm run check:requirements -- --list              # ... and print every requirement with the tests covering it
+npm run check:requirements -- --update-baseline   # ... lower the allowed-uncovered list once a gap is closed
 npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
@@ -222,9 +225,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
     is scaffolding left in the wall: that reasoning is worth doing, but in
     your thinking, not the file - once the change lands, the version it
     argues against exists only in git. The tell is prose about a prior
-    implementation rather than the code as it stands. End a change with a
-    narrow sweep over the lines you touched, flagging "used to / instead of /
-    rather than / would only," to catch the residue.
+    implementation rather than the code as it stands. This is not only a
+    code-comment habit: a doc section rewritten after a migration ("there is
+    no longer a file for this," "X used to live in Y before it moved here")
+    has the same tell and the same fix - a reader arriving fresh has no prior
+    state to be told they're free of, so describe only the state that exists.
+    Keep a history note only where it resolves something a reader would
+    otherwise trip on (a redirect, a permanent alias, a link that still
+    points at an old name) - not as scene-setting for a change that already
+    landed. End a change with a narrow sweep over the lines and sections you
+    touched, flagging "used to / instead of / rather than / would only / no
+    longer / anymore / was migrated / previously," to catch the residue.
   - **Length tracks risk, and terse has a floor.** A few lines is the
     default; more is earned only where deleting a clause would let a careful
     reader introduce a real bug - in genuinely subtle code (`illusion.ts`,
@@ -252,17 +263,17 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   wrong assertion, an off-by-one, a stale comment) - fix it in the same pass,
   same as any other cleanup a task turns up. Real investigation or design work
   - a race condition whose root cause isn't yet nailed down, a fix that
-    touches code you weren't already changing - gets a dated entry in
-  `docs/pending_task_list.md` instead: what was observed, how to reproduce
-  it, and what's already been ruled out, so the next pass starts from
-  evidence rather than re-discovering the bug from scratch. Either way, the
-  bug does not just get silently noticed and left. "Unrelated to what I was
-  asked" is not a reason to leave a found bug undocumented and unfixed.
-  "Trivial" is about the fix, not the effort spent finding it - if closing
-  it out needs more than one e2e run to confirm (a live-instrumented repro,
-  several rounds of re-running a browser suite to chase a race), that is a
-  sign it belongs in `docs/pending_task_list.md`, not a same-pass fix -
-  unless the user has explicitly asked for exactly that investigation.
+    touches code you weren't already changing - gets a GitHub issue instead
+  (see "Tracking open work"): what was observed, how to reproduce it, and
+  what's already been ruled out, so the next pass starts from evidence rather
+  than re-discovering the bug from scratch. Either way, the bug does not just
+  get silently noticed and left. "Unrelated to what I was asked" is not a
+  reason to leave a found bug undocumented and unfixed. "Trivial" is about
+  the fix, not the effort spent finding it - if closing it out needs more
+  than one e2e run to confirm (a live-instrumented repro, several rounds of
+  re-running a browser suite to chase a race), that is a sign it belongs in
+  an issue, not a same-pass fix - unless the user has explicitly asked for
+  exactly that investigation.
 - **`CLAUDE.md` is a symlink to this file.** Edit `AGENTS.md`; `CLAUDE.md`
   exists only so a tool that looks for that filename finds the same content.
 - **This file is for facts that cross files, not single-file trivia.**
@@ -323,11 +334,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   favorite sort first - a reorder that left one of them in place would
   rescatter everything except the thing already pinning the layout.
   A search, or an active favorite sort (`'mine'`/`'count'`), may also rebuild
-  the layout: both are placement inputs (the certainty claim each makes is
-  under *Favorites*). `favoriteSort` (`packages/map/favorites.ts`) composes
-  the two rather than letting one override the other. That rebuild is the
-  same O(slots) the ratio slider does on every drag. Nothing else recomputes
-  placement.
+  the layout: both are placement inputs (the strength claim each makes is
+  under *Favorites*), each carrying its own strength profile
+  (`packages/map/favorites.ts`'s `favoriteStrength` for the sort's).
+  A search and a favorite sort are mutually exclusive - starting either one
+  ends the other (`docs/search_requirements.md` SR-41) - so the two profiles
+  never need to compose; `main.tsx`'s `sortResult` just picks whichever one
+  is active. That rebuild is the same O(slots) the ratio slider does on
+  every drag. Nothing else recomputes placement.
 - **The map is virtualized canvas.** Do not mount thousands of DOM nodes.
 
 ### The center tile and its generic tiles
@@ -355,29 +369,38 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   are served from the `/shared/` mount, not `/images/`. The one case where a
   `center.*` inside the corpus dir counts as a generic tile is `sharedDir ===
   imagesDir`.
-- **The center and the generic tiles have their own pyramid, generated the
-  same way the corpus is.** `npm run generate:mips -- --images <dir>
-  --shared-dir <dir> [--center <name>]` (`packages/pipeline/shared-mips.ts`)
-  writes the same per-file `<width>/<file>` ladder `mips.ts` writes for a
-  room, rooted under `--shared-dir` instead - once for the center render,
-  once per file in `generic/`. `scan.ts` discovers what each tree actually
-  has on disk (`discoverLevels`, same as it does for `manifest.levels`) and
-  intersects the two into `manifest.shared.levels`, so a level only counts
-  as available where both the center and every generic tile actually have
-  it. `rooms.ts` resolves a shared id at a level in `shared.levels` by
-  inserting `<width>/` before the asset's filename - the same per-level
-  directory `shared-mips.ts` wrote it into. There are no shared sheets: a
-  handful of files needs no packing.
+- **The center, the generic tiles, and the generic tiles' distill alternates
+  each have their own pyramid, generated the same way the corpus is.**
+  `npm run generate:mips -- --images <dir> --shared-dir <dir> [--center
+  <name>]` (`packages/pipeline/shared-mips.ts`) writes the same per-file
+  `<width>/<file>` ladder `mips.ts` writes for a room, rooted under
+  `--shared-dir` instead - once for the center render, once per file in
+  `generic/`, once per file in `generic_distill/`. `scan.ts` discovers what
+  each tree actually has on disk (`discoverLevels`, same as it does for
+  `manifest.levels`) and intersects the center and generic trees into
+  `manifest.shared.levels`, so a level only counts as available there where
+  both the center and every generic tile actually have it. `generic_distill/`
+  is discovered the same way but kept in its own field,
+  `manifest.shared.distillLevels`, never intersected with `levels`: not every
+  generic tile has a distill alternate at all, so gating it on the base
+  trees' rungs would silently veto a level the distill tree actually has.
+  `rooms.ts` resolves a shared id at a level in whichever of the two arrays
+  applies to it by inserting `<width>/` before the asset's filename - the
+  same per-level directory `shared-mips.ts` wrote it into. There are no
+  shared sheets: a handful of files needs no packing.
 
-  Every OTHER shared id - a generic tile's distill alternate
-  (`generic_distill/`, only ever drawn up close), a favorite badge, the
-  distill toggle's faces, the "forget searches" overlay - is fixed-size app
-  art with no pyramid of its own, and stays flat at level 0, falling back to
-  it through `servableLevel` for any coarser request, same as before.
-  `main.tsx` pins the center at level 0 (on screen from the first frame) but
-  the generic tiles at the coarsest level `shared.levels` actually has -
-  never a hardcoded `FALLBACK_LEVEL`, since an older corpus with no shared
-  pyramid generated has none but level 0.
+  Every OTHER shared id - a favorite badge, the distill toggle's faces, the
+  "forget searches" overlay - is fixed-size app art with no pyramid of its
+  own, and stays flat at level 0, falling back to it through `servableLevel`
+  for any coarser request, same as before. `main.tsx` pins the center at
+  level 0 (on screen from the first frame) but the generic tiles and their
+  distill alternates each at the coarsest level their own array (`shared.levels`/
+  `shared.distillLevels`) actually has - never a hardcoded `FALLBACK_LEVEL`,
+  since an older corpus with no shared pyramid generated has none but level
+  0. `render.ts`'s `drawGenericFade` (and its WebGL/slide counterparts) draws
+  a distill alternate at the same level the base generic tile draws at, not a
+  hardcoded level 0 - distill mode's crossfade is a toggle, not a
+  proximity effect, so it is visible at any zoom.
 
 ### The center room's controls
 
@@ -466,17 +489,40 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   signal is normalised to [0, 1] before weighting, and the CLIP term is
   min-maxed across the corpus for that query - bucketing keyword hits ahead of
   everything would let one weak partial beat a room CLIP is certain about.
+- **A query is matched term by term AND as one whole string, and the better
+  reading wins.** `rankHybrid` classifies each term against a room's keywords
+  and title, then classifies the whole folded query the same way, so a
+  multi-word tag typed plainly (`outsider art`) is an exact match without the
+  reader quoting it - which matters because a keyword chip searches its text
+  unquoted and nearly half a real corpus's keywords are multi-word. An exact
+  whole-query match counts as one exact match, never more, so two separate
+  exact tags still outrank one matched phrase.
 - **Keyword partials divide by the keyword; story matches divide by the query.**
   Opposite on purpose - `art` matched only 3/11 of `art nouveau`, but a hit in a
   long story isn't worth less than the same hit in a short one.
 - **The density gradient is one formula** (`contentRatio + (peak - contentRatio)
-  * certainty`, walking outward), not three special cases for cluster/falloff/
-  no-match. Certainty must stay non-increasing with rank, and anything under
-  `CERTAINTY_FLOOR` snaps to the baseline - both asserted.
-- **Certainty is absolute; ranking is relative. Don't feed one the other's
+  * strength`, walking outward), not three special cases for cluster/falloff/
+  no-match. Strength must stay non-increasing with rank, and anything under
+  `STRENGTH_FLOOR` snaps to the baseline - both asserted.
+- **Distance from the center carries one meaning at a time, and a search and
+  a favorite sort are mutually exclusive because of it** (`docs/search_requirements.md`
+  SR-24, SR-27, SR-28, SR-41). Starting a real (non-empty) search ends an
+  active favorite sort - `useSearch.ts`'s `search` calls `onSearchStart`
+  (`main.tsx`'s `() => setSortMode('relevance')`) before the fetch, so the
+  switch never sits lit while a search silently overrides it. Starting a
+  favorite sort - or `'random'` - ends an active search the same way, from
+  the other side: `changeSort` calls `clearSearch()` for any mode but
+  `'relevance'` while `result` holds one. Because the two never run at once,
+  `packages/map/favorites.ts` never composes a favorite sort's strength with
+  a search's - `main.tsx`'s `sortResult` just reads whichever one is active
+  (`result.strength`, or `favoriteStrength` for `'mine'`/`'count'`, or
+  neither for `'relevance'`/`'random'`, which claim nothing and leave the
+  map uniform). Clearing the search box (the clear-x, an empty submit) is
+  not "starting a search" and must not touch the sort - only a real term does.
+- **Strength is absolute; ranking is relative. Don't feed one the other's
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
   for *any* query - driving the gradient off that clusters nonsense as
-  confidently as an exact match. `matchCertainty` reads raw cosines against
+  confidently as an exact match. `matchStrength` reads raw cosines against
   absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.** The
   blob is positional (`scan.ts` rejects a drifted count); the sidecar is
@@ -546,11 +592,14 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   path, animation included) and must never rebuild the layout. An active
   favorite sort (`'mine'`/`'count'`) is the exception - it is a placement
   input, exactly as a search is, because "sorted to the front" is itself a
-  certainty claim; see `packages/map/favorites.ts`'s `favoriteSort`. And a
-  catalog row is a fixed height, so the row's favorite control sits beside
-  "show on the map" rather than inside `RoomDetails` where the card and the
-  overlay put it; in the text column it would have to be reserved for in
-  `TEXT_MIN`/`TEXT_CHROME_PX` and would cost two lines of story on every row.
+  strength claim; see `packages/map/favorites.ts`'s `favoriteStrength`. A
+  search and a favorite sort are mutually exclusive (SR-41, "Search and the
+  density gradient" below), so the two never contend for the same claim at
+  once. And a catalog row is a fixed height, so the row's favorite control
+  sits beside "show on the map" rather than inside `RoomDetails` where the
+  card and the overlay put it; in the text column it would have to be
+  reserved for in `TEXT_MIN`/`TEXT_CHROME_PX` and would cost two lines of
+  story on every row.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` (`tiles.ts`'s
   `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase` directly rather than
@@ -877,7 +926,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
   score breakdown uses a `strip` layout rather than the card's taller
   `table`. A row is two stacked pieces, a fixed-height flow area
   (`--catalog-flow-h`) and the score strip below it (`scoreStripHeight`),
-  so match certainty can never get pushed off the card; the center room's
+  so match strength can never get pushed off the card; the center room's
   row is the one exception, sized to its own content since it sits outside
   the paging arithmetic. `catalog.ts`, `CatalogView.tsx` and `style.css`'s
   `.catalog-flow`/`.score-strip` comments carry the layout mechanics.
@@ -932,7 +981,7 @@ Full setup and the rollback path are in `deploy/README.md`. The invariants:
 - **`rankHybrid` returns the components it sorted on, and the CLIP row must show
   its raw cosine.** `breakdown.clip` is min-maxed for the query, so some room
   scores 1.00 for `cghjj` too. `explainRanking` keeps the raw cosine beside it and
-  certainty on its own line; printing the relative number alone claims a
+  strength on its own line; printing the relative number alone claims a
   confidence the library does not have. Asserted.
 - **Namespace catalog CSS.** `.row` already belongs to the dev panel, so an
   unprefixed `.row` rule for catalog rows reaches in and turns every slider
@@ -1007,6 +1056,18 @@ two in step - see *Testing and CI*.
 
 ### Testing and CI
 
+- **`npm run check:requirements` is a required check, run from the `lint` CI
+  job.** A test names the requirement it covers in its own name
+  (`test('... [SR-18]', ...)`), and the checker rebuilds the whole mapping
+  from `git ls-files` on every run - so `docs/search_requirements.md` names
+  no tests, nothing is kept in sync, and a renumbered requirement id would
+  break every citation at once (which is why an `SR-nn` is permanent; that
+  file's header states the rule). It fails on a tag naming a requirement
+  that does not exist, and on a requirement losing coverage the committed
+  `baseline.json` says it had. Gaining coverage never fails - it prints the
+  command that lowers the baseline. A requirement marked `_(judged)_` in the
+  document has no assertion that could fail and is counted apart from the
+  gaps rather than sitting in them forever.
 - **`npm run check:file-map` is a required check, run from the `lint` CI
   job.** It diffs `docs/file_map.md` against `git ls-files`, failing on a
   path the map lists that no longer exists or a tracked file (other than a
@@ -1021,13 +1082,21 @@ two in step - see *Testing and CI*.
   GL canvas doesn't have. GL behaviour is covered by `webgl-map.e2e.ts`
   (`webgl: true`) and the parity suite. Leaving a spec unpinned would let
   the production default silently switch its renderer and break those reads.
-- **`render-parity.parity.ts` (`npm run test:parity`) is a separate manual
-  suite, not a merge gate.** The `.parity.ts` suffix matches neither `npm test`
-  nor `npm run test:e2e`'s glob - it needs a real GPU and boots two
-  sessions (Canvas2D + WebGL) to check the renderers draw the same map. Run it
-  by hand when touching either draw loop; it is the check behind the lockstep
-  invariant in "The WebGL renderer". See its header for the scene design (why
-  there's no far-zoom scene, why the pixel bounds are where they are).
+- **`render-parity.parity.ts` (`npm run test:parity`) is a deploy gate, not a
+  merge gate.** The `.parity.ts` suffix matches neither `npm test` nor `npm
+  run test:e2e`'s glob, so it never runs on a PR - it boots two sessions
+  (Canvas2D + WebGL) to check the renderers draw the same map, which is too
+  slow to ask of every push. `deploy.yml` runs it against the revision being
+  deployed instead, ahead of the ssh call, and a failure stops the deploy
+  before anything ships - the tradeoff the maintainer chose over gating PRs
+  is a broken renderer costing a deploy's worth of runtime to catch, not a
+  push's. It runs fine on a CI runner's headless, GPU-less Chromium
+  (SwiftShader software WebGL2); "real GPU" in its own header is about local
+  runs, not a CI requirement. Run it by hand too when touching either draw
+  loop, for a faster read than waiting for a deploy; it is the check behind
+  the lockstep invariant in "The WebGL renderer". See its header for the
+  scene design (why there's no far-zoom scene, why the pixel bounds are
+  where they are).
 - **Running `npm run test:e2e` is slow in a cloud agent container** (the
   pinned Chromium isn't preinstalled the way it is in CI, and each spec
   launches its own browser). There, if a change doesn't touch
@@ -1087,13 +1156,67 @@ two in step - see *Testing and CI*.
   - its own comment explains why it waits out and retries rather than
   trusting one `landed()` read. Whether a control-issued `flyTo` should end
   an active rearrangement the way a pointer grab does is the open question
-  recorded in `docs/pending_task_list.md`.
+  recorded in issue #265.
+
+## Tracking open work
+
+- **Open work lives entirely in [GitHub issues](https://github.com/centuryglass/babel-index/issues).**
+  Nothing in this repo tracks tasks; the issue tracker is the only list.
+- **A found bug opens an issue**: what was observed, how to reproduce it,
+  and what is already ruled out. The trivial same-pass fix rule is
+  unchanged - it decides whether anything gets filed at all, not where.
+- **A fact worth knowing is not a task.** It belongs in the owning module's
+  comment, or in this file, not in an issue. See "This file is for facts
+  that cross files".
+- **`.claude/scripts/issues.mjs` compiles the issues into a local
+  directory** (`index.md` plus one file per issue) for when a file on disk
+  is cheaper to read than the API. `--fetch` uses `gh` where it exists;
+  otherwise pipe issue JSON in, which is how a session with the GitHub MCP
+  tools and no `gh` binary feeds it. The cache is generated and gitignored -
+  never edit it, and never treat it as the source of truth.
+- **The `SessionStart` hook (`.claude/hooks/session-start.sh`) runs this
+  automatically where it can, in two ways.** When `gh` is on `PATH` and
+  authenticated - true on the maintainer's own machine, never true in a
+  Claude Code Remote session - it runs `issues.mjs --fetch`. Otherwise it
+  tries `issues.mjs --fetch-api`, which hits the REST API directly with
+  Node's built-in `fetch`. This repo is public, so that needs no token at
+  all - it just runs against the unauthenticated 60/hr-per-IP rate limit,
+  which a Claude Code Remote container's shared egress IP was observed to
+  have already exhausted. `BABEL_INDEX_ISSUES_TOKEN` (a fine-grained,
+  read-only, issues-only PAT - safe to set as a plain env var, not a
+  secret, since it can do nothing an unauthenticated request couldn't) is
+  the fix for that; see `--fetch-api`'s own comment in `issues.mjs` for the
+  full token lookup order. Either way, on success the hook prints
+  `index.md` to stdout, which Claude Code folds into session context, so
+  every open issue's title is already in view at the start of a session
+  without a tool call; a failed or rate-limited call is best-effort and
+  does not block the rest of session start.
+- **When neither hook path produces output, apply it by hand before relying
+  on "no open issue mentions this."** That covers a Claude Code Remote
+  session that is both rate-limited and has no working token, and any
+  other agent system - OpenCode included - that doesn't run this repo's
+  Claude Code hooks at all. Fetch the issue list through whatever tool is
+  available (the GitHub MCP tools' `list_issues`, or `gh issue list --json
+  ...` if present) and pipe the JSON into the script:
+  `node .claude/scripts/issues.mjs --from-json <path>` or `... < issues.json`.
+  Then read `.claude/cache/issues/index.md` the same way the hook's stdout
+  would have surfaced it.
+- **A PR closing an issue says so in its description** (`Closes #NN`), which
+  is what makes merging the status update.
 
 ## Working with GitHub
 
 - **Don't ask whether to subscribe to a PR you just opened.** The answer is
   effectively always no; if the user wants it watched they'll say so.
+- **An issue or comment an AI agent writes under the maintainer's own account
+  carries a footer marking it as AI-generated** - e.g. `_Drafted with AI
+  assistance._` - so it doesn't read as the maintainer arguing with
+  themselves. Keep the wording tool-agnostic (say "AI assistance," never a
+  specific product name): the maintainer doesn't use only one coding agent,
+  and a product-specific footer would misattribute work done by another
+  tool. This applies going forward only - an existing issue or comment
+  without one does not need editing.
 
 ## Next up
 
-See `docs/pending_task_list.md`
+See [GitHub issues](https://github.com/centuryglass/babel-index/issues).

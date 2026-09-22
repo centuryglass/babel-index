@@ -40,6 +40,7 @@ import type { RoomMeta } from '../../../map/metadata.ts';
 import type { MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 import type { SortMode } from '../../../map/favorites.ts';
+import type { CorpusErrorSource } from '../hooks/useCorpus.ts';
 
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
@@ -84,6 +85,7 @@ export function MapView({
   manifest,
   total,
   described,
+  corpusErrors,
   status,
   query,
   setQuery,
@@ -140,6 +142,7 @@ export function MapView({
   manifest: Manifest;
   total: number;
   described: number;
+  corpusErrors: CorpusErrorSource[];
   status: string;
   query: string;
   setQuery: (query: string) => void;
@@ -463,6 +466,11 @@ export function MapView({
           offline · {total} rooms in {manifest.directory?.split('/').slice(-1)[0]}
           {described > 0 && <> · {described} described</>}
         </p>
+        {corpusErrors.length > 0 && (
+          <p className="sub corpus-error">
+            failed to load {corpusErrors.join(', ')} - search is running degraded
+          </p>
+        )}
 
         {/*
           The ranked list: the lossless reading of a search, next to the

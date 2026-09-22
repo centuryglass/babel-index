@@ -43,15 +43,20 @@ export interface SharedAsset extends Partial<ImageSize> {
  * actually share on disk - the intersection of what `discoverLevels` finds
  * under the shared directory's root (the center) and its `generic/`
  * subdirectory, so a level only appears here when both trees have it. Always
- * at least `[{level: 0, dir: null}]`. `rooms.ts` is the one place this is
- * read; `genericDistill` and the fixed app art (favorite badges, the distill
- * toggle) are never in it and stay flat at level 0 (see rooms.ts's header).
+ * at least `[{level: 0, dir: null}]`. `distillLevels` is the same discovery
+ * rooted at `generic_distill/` instead, kept separate rather than intersected
+ * with `levels`: not every generic tile has a distill alternate at all, so
+ * requiring the base tree's rungs would silently veto a level the distill
+ * tree actually has. `rooms.ts` is the one place either is read; the fixed
+ * app art (favorite badges, the distill toggle) is never in either and stays
+ * flat at level 0 (see rooms.ts's header).
  */
 export interface SharedAssets {
   center: SharedAsset | null;
   generic: SharedAsset[];
   genericDistill: (SharedAsset | null)[];
   levels: LevelInfo[];
+  distillLevels: LevelInfo[];
 }
 
 /**
@@ -90,6 +95,10 @@ export interface EmbeddingsInfo {
   dim: number;
   count: number;
   model: string | null;
+  /** The int8 half-range the blob's rows were quantised at (see `embeddingScores`
+   * in `packages/map/ordering.ts`) - read from `embeddings.json`'s own `scale`
+   * rather than assumed, so the client can never drift from what wrote the blob. */
+  scale: number;
 }
 
 /**

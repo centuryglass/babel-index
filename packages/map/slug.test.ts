@@ -33,7 +33,7 @@ test('fileStem drops the final extension and leaves a dotfile alone', () => {
   assert.equal(fileStem('.webp'), '.webp');
 });
 
-test('a titled room is addressed by its title, and its stem still resolves', () => {
+test('a titled room is addressed by its title, and its stem still resolves [SR-42]', () => {
   const rooms = [room(0, '00121.webp'), room(1, '00122.webp')];
   const { slugs, lookup, collisions } = buildSlugTable(rooms, [meta('Unparsed Light'), meta('Sunken Tomorrows')]);
 
@@ -56,7 +56,7 @@ test('an untitled room is addressed by its stem, with no id anywhere in the path
   assert.equal(buildSlugTable(rooms, null).slugs[0], '00121', 'no sidecar at all is the same answer');
 });
 
-test('two rooms sharing a title keep both permalinks, and the collision is reported', () => {
+test('two rooms sharing a title keep both permalinks, and the collision is reported [SR-42]', () => {
   const rooms = [room(0, '00121.webp'), room(1, '00122.webp')];
   const table = buildSlugTable(rooms, [meta('Unparsed Light'), meta('Unparsed Light')]);
 

@@ -129,10 +129,10 @@ test('an arrangement says how big the map is and whether the search clustered', 
 
   // A confident search lifts the leading ranks above the baseline, and that
   // count is the cluster the animation is drawing.
-  const certainty = Array.from({ length: 40 }, (_, i) => Math.max(0, 1 - i / 8));
+  const strength = Array.from({ length: 40 }, (_, i) => Math.max(0, 1 - i / 8));
   const clustered = createLayout({
     roomCount: 40, contentRatio: 0.3, seed: 1, aspect: ASPECT,
-    density: { certainty, peak: 1, floor: 0.05 },
+    density: { strength, peak: 1, floor: 0.05 },
   });
   assert.ok(clustered.gradedCount > 0);
   assert.match(describeArrangement(clustered), new RegExp(`${clustered.gradedCount} clustered`));

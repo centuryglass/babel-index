@@ -541,6 +541,41 @@ test('a shared directory outside the corpus is discovered the same way', async (
   );
 });
 
+test('a flat generic_distill directory (no pyramid generated) reports only level 0', async () => {
+  await corpus(
+    { ...pyramid(), 'generic/v1.webp': fixture.webpVp8(1024, 768), 'generic_distill/v1.jpg': fixture.jpeg(1024, 768) },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.distillLevels.map((l) => l.level), [0]);
+    }
+  );
+});
+
+test('distillLevels is discovered off generic_distill/, independent of shared.levels', async () => {
+  await corpus(
+    {
+      ...pyramid(),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      'generic_distill/v1.jpg': fixture.jpeg(1024, 768),
+      'generic_distill/512/v1.jpg': fixture.jpeg(512, 384),
+      // no generic/512/ or 512/center - the base trees never got that level
+    },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.levels.map((l) => l.level), [0], 'the base trees have no 512 level');
+      assert.deepEqual(shared.distillLevels.map((l) => l.level), [0, 1], 'the distill tree does');
+      assert.equal(shared.distillLevels[1].dir, '512');
+    }
+  );
+});
+
+test('no generic_distill directory at all reports only level 0, not a throw', async () => {
+  await corpus(pyramid(), async (dir) => {
+    const { shared } = await scanDirectory(dir);
+    assert.deepEqual(shared.distillLevels.map((l) => l.level), [0]);
+  });
+});
+
 // --- embeddings blob --------------------------------------------------------
 
 test('a corpus without a blob reports no embeddings', async () => {
@@ -555,7 +590,7 @@ test('an embeddings sidecar is surfaced with a servable url', async () => {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
       '002.jpg': fixture.jpeg(8, 8),
-      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2 }),
+      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2, scale: 127 }),
     },
     async (dir) => {
       const { embeddings } = await scanDirectory(dir);
@@ -564,7 +599,25 @@ test('an embeddings sidecar is surfaced with a servable url', async () => {
         dim: 512,
         count: 2,
         model: 'Xenova/clip-vit-base-patch32',
+        scale: 127,
       });
+    }
+  );
+});
+
+test('an embeddings sidecar with no scale is treated as no blob', async () => {
+  // `tools/embed/embed.ts` always writes `scale` (issue #231); a sidecar
+  // missing it is unreadable rather than guessed at - a wrong scale would
+  // misreport the density gradient's absolute confidence silently.
+  await corpus(
+    {
+      'center.png': fixture.png(8, 8),
+      '001.jpg': fixture.jpeg(8, 8),
+      '002.jpg': fixture.jpeg(8, 8),
+      'embeddings.json': JSON.stringify({ model: 'Xenova/clip-vit-base-patch32', dim: 512, count: 2 }),
+    },
+    async (dir) => {
+      assert.equal((await scanDirectory(dir)).embeddings, null);
     }
   );
 });

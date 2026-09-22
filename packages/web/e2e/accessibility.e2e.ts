@@ -48,7 +48,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.deepEqual(summary, [], `axe reported violations:\n  ${summary.join('\n  ')}`);
   });
 
-  test('the ranked listbox is honestly counted, reachable with no arrow keys, and axe-clean', async () => {
+  test('the ranked listbox is honestly counted, reachable with no arrow keys, and axe-clean [SR-48]', async () => {
     const { page } = session;
     // The "non-generic" slider defaults short of maxed, and at anything less
     // than 100% the density gradient can show a cluster - `gradedCount` counts
@@ -140,7 +140,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // full rather than guessing from an empty read - so this can only check
       // that the DOM carries the values, not that a real screen reader's
       // platform API receives them the way it receives the button's name
-      // checked below. Left as an open question in accessibility-plan.md
+      // checked below. Left as an open question in issue #243
       // rather than a claim this test does not back up.
       assert.equal(posinset, '1');
       assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
@@ -340,7 +340,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     );
   });
 
-  test('what the map just did is announced politely', async () => {
+  test('what the map just did is announced politely [SR-47]', async () => {
     const { page } = session;
     // The hint must stay out of the live region - a node that falls back to
     // the instructions would read them aloud again every time a status
@@ -356,7 +356,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.doesNotMatch(await live.textContent(), /drag to pan/, 'the hint must not be announced');
   });
 
-  test('reduced motion rebuilds the library instead of sliding it', async () => {
+  test('reduced motion rebuilds the library instead of sliding it [SR-31]', async () => {
     const { page } = session;
     // Asserted through the camera rather than by watching for the absence of an
     // animation, which would be a race dressed up as a test. A normal

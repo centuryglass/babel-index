@@ -49,9 +49,9 @@ this endpoint only does the one thing that can't run in a browser.
   - `{ stub: true, query: string, order: number[], note: string }` — CLIP
     inference failed or isn't installed; same stub ranking, with `note`
     explaining why (no model on this machine vs. a load error).
-- No auth, no rate limit of its own. `docs/pending_task_list.md`'s
-  "Hosting" section notes this is the better DoS target on this API and
-  isn't yet covered by the Cloudflare ruleset that protects asset serving.
+- No auth, no rate limit of its own. This is the better DoS target on this
+  API and isn't yet covered by the Cloudflare ruleset that protects asset
+  serving - see issue #244.
 
 ## `GET /api/favorites`
 
@@ -139,6 +139,13 @@ same auth, same mounting condition as `/api/logs`.
 Just the `<ul id="entries">` markup `/admin/logs` embeds — what its own
 polling script fetches on refresh. Not meant to be visited directly; same
 query params, auth, and mounting condition as `/api/logs`.
+
+## Usage metrics
+
+`GET /api/manifest`, `GET /api/search` (non-empty query only), and the two
+favorite-write routes above each also count toward an hourly, in-memory
+usage log — no response shape changes, no new route. See `metrics.ts` for
+what is counted and why nothing per-visitor survives an hour.
 
 ## Not covered here
 

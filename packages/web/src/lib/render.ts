@@ -31,9 +31,10 @@ import {
   genericId, genericDistillId, type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import {
-  composeSpines, areSpinesLegible, BOOK_COUNT, HOVER_GLOW_FILL, HOVER_GLOW_STROKE,
+  composeSpines, areSpinesLegible, BOOK_COUNT,
   type Slot, type SpineContext, type SpineFontLimits,
 } from './center.ts';
+import { HOVER_GLOW_FILL, HOVER_GLOW_STROKE } from './cssVars.ts';
 import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
@@ -193,10 +194,10 @@ export interface DrawOpts {
  */
 export function drawGenericFade(
   ctx: DrawContext, cache: TileCache, distillId: RoomId, fade: number,
-  sx: number, sy: number, w: number, h: number
+  sx: number, sy: number, w: number, h: number, level = 0
 ): void {
   if (fade <= 0) return;
-  const hit = cache.get(distillId, 0);
+  const hit = cache.get(distillId, level);
   ctx.globalAlpha = Math.min(1, fade);
   if (hit) {
     if (hit.rect) {
@@ -244,6 +245,8 @@ export interface DrawResult {
 export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts) {
   // Survives across frames purely so hysteresis has something to compare to.
   let level: number | null = null;
+  // Cycles the prefetch ring's starting corner across frames - see its use below.
+  let ringFrame = 0;
 
   function draw({
     ctx, width: w, height: h, dpr, cam, layout, order, centreSlots = null,
@@ -303,7 +306,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
         // and zoomed out, generic cells are the majority. The prefetch pass
         // still warms the base, so toggling distill off again does not pop.
         if (cell.generic && genericFade >= 1) {
-          drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
+          drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         } else {
           const hit = cache.get(id, level);
 
@@ -325,7 +328,7 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             blank++;
           }
 
-          if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch);
+          if (cell.generic && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
         }
 
         // The favorite badge: every real room, never the center (it is the
@@ -373,20 +376,44 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
     }
 
     // --- rule 2, strictly after every visible cell has been asked for -------
+    // The walk stops as soon as `hasPrefetchCapacity()` says the queue is
+    // full, before computing that cell's id - a coarse-zoom ring can be tens
+    // of thousands of cells, and `roomAt()`/`idOf()` for whatever is past the
+    // cap would only be thrown away (`tiles.ts`'s `prefetch()` already
+    // resolves an already-cached or nonexistent id for free, ahead of the
+    // cap, so this never cuts off work that would have cost nothing anyway).
+    // The starting corner rotates across four frames so a region with more
+    // distinct uncached ids than the queue can hold in one frame does not
+    // always lose the same corner while the camera sits still.
     const ring = prefetchBounds(bounds);
-    for (let gy = ring.y0; gy <= ring.y1; gy++)
-      for (let gx = ring.x0; gx <= ring.x1; gx++) {
+    ringFrame = (ringFrame + 1) % 4;
+    const flipY = (ringFrame & 1) !== 0;
+    const flipX = (ringFrame & 2) !== 0;
+    const ringHeight = ring.y1 - ring.y0;
+    const ringWidth = ring.x1 - ring.x0;
+    ringWalk:
+    for (let iy = 0; iy <= ringHeight; iy++) {
+      const gy = flipY ? ring.y1 - iy : ring.y0 + iy;
+      for (let ix = 0; ix <= ringWidth; ix++) {
+        if (!cache.hasPrefetchCapacity()) break ringWalk;
+        const gx = flipX ? ring.x1 - ix : ring.x0 + ix;
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
         cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
       }
+    }
 
     // Zooming out needs ~4x as many tiles at once and has nothing to show until
     // they land; zooming in has the coarse tile on screen already and it
-    // upscales acceptably. Hence warming outward only.
+    // upscales acceptably. Hence warming outward only. Deduped once here: at
+    // coarse zoom most of `visible` is a handful of repeated generic ids
+    // (`packages/map/ordering.ts`'s `genericIndexAt`), and `prefetch()` is a
+    // no-op for anything already cached or in flight, so walking the raw
+    // array re-checks the same id once per occurrence for nothing.
+    const distinctVisible = new Set(visible);
     for (const coarser of pyramid.warmLevels(level))
-      for (const id of visible) cache.prefetch(id, coarser);
+      for (const id of distinctVisible) cache.prefetch(id, coarser);
 
     const cells = (bounds.x1 - bounds.x0 + 1) * (bounds.y1 - bounds.y0 + 1);
     // The keyboard cursor's ring, drawn last and over everything, and only

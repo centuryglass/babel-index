@@ -42,6 +42,10 @@
  * set this process logs a warning and mounts neither route rather than
  * serving unauthenticated.
  *
+ * Hourly usage counts (unique visitors, searches, favorite adds/removes) are
+ * always logged, with no flag to turn them off - see metrics.ts for why that
+ * is safe to leave on by default.
+ *
  * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
  * the client against precomputed embeddings, so /api/search stays a text tower
@@ -58,6 +62,7 @@ import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
+import { createUsageMetrics } from './metrics.ts';
 import { loadConfig } from '../config/load.ts';
 import { portInUse } from './port.ts';
 import { normalizeBasePath } from './base-path.ts';
@@ -131,6 +136,11 @@ if (favoritesPath) {
     process.exit(1);
   }
 }
+
+// Always on: unlike favorites, there is no file to create and nothing
+// persisted (see metrics.ts) - just an hourly log line, so there is no
+// "off by default" case to design for.
+const metrics = createUsageMetrics();
 
 // Off unless both are set - see this file's header comment. A misconfigured
 // single env var stays unmounted (app.ts) rather than accidentally serving
@@ -252,6 +262,7 @@ app = createApp({
   commit,
   logFile,
   adminPasswordHash,
+  metrics,
 });
 
 const server = app.listen(port, () => {

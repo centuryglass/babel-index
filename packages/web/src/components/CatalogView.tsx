@@ -276,7 +276,7 @@ const TEXT_MIN = TEXT_CHROME_PX + CHIP_LINES_MAX_NARROW * CHIP_LINE_PX + STORY_L
  * under the image rather than crossing it, and it always gets the card's
  * full width - no inset stealing room from the columns.
  *
- * It is a full-width "match certainty" composite line plus up to
+ * It is a full-width "match strength" composite line plus up to
  * `SCORE_DETAIL_LINES` per-axis detail lines (tag, title, story, clip).
  * Those flow into columns that are content-sized and left-aligned (not
  * stretched to fill), and once the row is wide enough to give every detail
@@ -306,7 +306,7 @@ const SCORE_GAP_PX = 22;
  * possible line.
  */
 const SCORE_DETAIL_COL_PX = 200;
-/** About how wide the composite "match certainty" line is - its own column in the one-row layout. */
+/** About how wide the composite "match strength" line is - its own column in the one-row layout. */
 const SCORE_COMPOSITE_PX = 225;
 /**
  * The score strip's column layout for a given strip width: how many columns the
@@ -835,9 +835,11 @@ export function CatalogView({
             Sorting is a re-rank, not a search: it moves rooms within the
             ranking already in force (see `favoriteOrder`), so a term stays
             searched and the row a room sits in stays the row the map would
-            fly to. Picking 'random' while a search is running clears it
-            first (`main.tsx`'s `changeSort`) - reshuffling underneath a
-            search's own order would look like the sort did nothing.
+            fly to. A search and a favorite sort are mutually exclusive
+            (`docs/search_requirements.md` SR-41): picking any mode other
+            than 'relevance' while a search is running clears it first
+            (`main.tsx`'s `changeSort`) - reshuffling or resorting underneath
+            a search's own order would look like the sort did nothing.
           */}
           <label className="catalog-sort">
             {/*

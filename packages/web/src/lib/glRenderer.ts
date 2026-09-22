@@ -32,6 +32,7 @@ import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH 
 import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
 import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
 import { areSpinesLegible, BOOK_COUNT } from './center.ts';
+import { HOVER_GLOW_RGB } from './cssVars.ts';
 import { toGLRect, type GLContext, type Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createSpineTextureCache, type SpineTextureCache } from './gl/spineTexture.ts';
@@ -63,12 +64,14 @@ const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255
 /** `#15120f`, `render.ts`'s blank-cell fallback fill, as float RGB. */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 /**
- * `center.ts`'s `HOVER_GLOW_FILL`, as a flat quad. Used only when
+ * `cssVars.ts`'s `HOVER_GLOW_RGB`, as a flat quad. Used only when
  * `gl/glowTexture.ts` has no offscreen canvas to bake with - a headless
  * environment such as `npm test`, which never exercises a hover state
  * anyway. The real treatment is `drawGlow`'s textured case.
  */
-const FAVORITE_HOVER_GLOW: [number, number, number, number] = [200 / 255, 169 / 255, 95 / 255, 0.28];
+const FAVORITE_HOVER_GLOW: [number, number, number, number] = [
+  HOVER_GLOW_RGB[0] / 255, HOVER_GLOW_RGB[1] / 255, HOVER_GLOW_RGB[2] / 255, 0.28,
+];
 
 /**
  * Composite a hover-glow silhouette over a tile's full screen rect. `d`'s
@@ -111,11 +114,12 @@ export function drawGenericFadeGL(
   textures: GLTextureCache,
   distillId: RoomId,
   fade: number,
-  dst: Rect
+  dst: Rect,
+  level = 0
 ): void {
   if (fade <= 0) return;
   const alpha = Math.min(1, fade);
-  const hit = cache.get(distillId, 0);
+  const hit = cache.get(distillId, level);
   const tex = hit ? textures.get(gl, hit.img) : null;
   if (hit && tex) {
     const src: Rect = hit.rect ? toGLRect(hit.rect) : { x: 0, y: 0, w: tex.width, h: tex.height };
@@ -247,6 +251,8 @@ export function createGLRenderer({
   cache, pyramid = PYRAMID, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
 }: CreateGLRendererOpts) {
   let level: number | null = null;
+  // Cycles the prefetch ring's starting corner across frames - see its use below.
+  let ringFrame = 0;
   const spineTextures: SpineTextureCache = createSpineTextureCache();
 
   function draw({
@@ -300,7 +306,7 @@ export function createGLRenderer({
         const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
         if (cell.generic && genericFade >= 1) {
-          drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
+          drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         } else {
           const hit = cache.get(id, level);
           const tex = hit ? textures.get(gl, hit.img) : null;
@@ -321,7 +327,7 @@ export function createGLRenderer({
           }
 
           if (cell.generic && genericFade)
-            drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst);
+            drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         }
 
         // The favorite badge - every real room, never the center or a
@@ -375,17 +381,31 @@ export function createGLRenderer({
     }
 
     // Same "rule 2" as `render.ts`: prefetch the ring, then warm one level
-    // coarser - pure cache calls, no drawing, unchanged from the 2D path.
+    // coarser - pure cache calls, no drawing, unchanged from the 2D path,
+    // including the capacity check and rotating start corner (see there).
     const ring = prefetchBounds(bounds);
-    for (let gy = ring.y0; gy <= ring.y1; gy++)
-      for (let gx = ring.x0; gx <= ring.x1; gx++) {
+    ringFrame = (ringFrame + 1) % 4;
+    const flipY = (ringFrame & 1) !== 0;
+    const flipX = (ringFrame & 2) !== 0;
+    const ringHeight = ring.y1 - ring.y0;
+    const ringWidth = ring.x1 - ring.x0;
+    ringWalk:
+    for (let iy = 0; iy <= ringHeight; iy++) {
+      const gy = flipY ? ring.y1 - iy : ring.y0 + iy;
+      for (let ix = 0; ix <= ringWidth; ix++) {
+        if (!cache.hasPrefetchCapacity()) break ringWalk;
+        const gx = flipX ? ring.x1 - ix : ring.x0 + ix;
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
         cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
       }
+    }
+    // Deduped once here: see `render.ts`'s matching comment for why (repeated
+    // generic ids at coarse zoom, `prefetch()` already a no-op on a hit).
+    const distinctVisible = new Set(visible);
     for (const coarser of pyramid.warmLevels(level))
-      for (const id of visible) cache.prefetch(id, coarser);
+      for (const id of distinctVisible) cache.prefetch(id, coarser);
 
     // The keyboard cursor's ring - drawn last, over everything, same gate as
     // `render.ts`. `drawStrokeQuad` strokes inside the given rect rather than

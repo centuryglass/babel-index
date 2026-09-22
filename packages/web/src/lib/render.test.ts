@@ -424,6 +424,112 @@ test('prefetching cannot outrun the visible pass', () => {
   );
 });
 
+test('the ring walk stops computing ids once the prefetch queue is full', () => {
+  // At a coarse zoom the ring is thousands of cells - most of it must never
+  // reach `roomAt()`/`idOf()` once `cache.hasPrefetchCapacity()` says no more
+  // of it can be queued this frame (issue #258).
+  const images = fakeImages();
+  const cache = createTileCache({
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
+    createImage: images.createImage,
+    concurrency: 1,
+  });
+  cache.pin(CENTER);
+  // contentRatio 1 (no generic cells) so the ring cannot fall back to a
+  // handful of pinned/shared ids - every cell wants a distinct, uncached one.
+  const layout = createLayout({ roomCount: 5000, contentRatio: 1, seed: 1, aspect: CELL_ASPECT });
+  const order = shuffledOrder(5000, 1);
+  let calls = 0;
+  const spiedLayout = { ...layout, roomAt: (x: number, y: number, o: number[]) => { calls++; return layout.roomAt(x, y, o); } };
+
+  const renderer = createRenderer({ cache });
+  const stats = renderer.draw({
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout: spiedLayout, order,
+  });
+
+  const visibleCells = (stats.bounds.x1 - stats.bounds.x0 + 1) * (stats.bounds.y1 - stats.bounds.y0 + 1);
+  const ringCallsMade = calls - visibleCells;
+  // Some ring cells fall outside the layout's occupied radius and resolve to
+  // the pinned CENTER fallback (`roomAt`'s generic branch, `genericCount: 0`)
+  // - cheap, and correctly uncounted against QUEUE_LIMIT (256) - so the total
+  // lands a bit above 256, well under the ~1944-cell ring this viewport has.
+  assert.ok(ringCallsMade > 0, 'sanity: the ring was walked at all');
+  assert.ok(
+    ringCallsMade < 700,
+    `expected the walk to stop well short of the full ring, computed ids for ${ringCallsMade} of it`
+  );
+});
+
+test('the coarser-level warm pass dedupes repeated ids before prefetching (issue #296)', () => {
+  // At coarse zoom most of `visible` is one of a handful of repeated generic
+  // ids (`genericIndexAt`); the warm pass must ask for each of them once per
+  // frame, not once per occurrence in `visible`.
+  const images = fakeImages();
+  const calls: { id: RoomId; level: number }[] = [];
+  const base = createTileCache({
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
+    createImage: images.createImage,
+    concurrency: 4,
+  });
+  base.pin(CENTER);
+  const cache: TileCache = {
+    ...base,
+    prefetch: (id, level) => { calls.push({ id, level }); base.prefetch(id, level); },
+  };
+  const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.02, seed: 1, aspect: CELL_ASPECT });
+  const order = shuffledOrder(ROOMS, 1);
+  const renderer = createRenderer({ cache });
+  const stats = renderer.draw({
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
+  });
+
+  const warmLevel = stats.level + 1;
+  const warmCalls = calls.filter((c) => c.level === warmLevel);
+  const distinctIds = new Set(warmCalls.map((c) => c.id));
+  assert.ok(warmCalls.length > 0, 'sanity: the warm pass ran');
+  assert.equal(warmCalls.length, distinctIds.size, 'the warm pass prefetched the same id twice in one frame');
+  assert.ok(distinctIds.size < stats.cells, 'expected far fewer distinct ids than visible cells');
+});
+
+test('the prefetch ring rotates its starting corner across frames', () => {
+  // With the queue filling long before the ring is fully walked (as in the
+  // test above), a fixed raster order would compute the exact same leading
+  // slice of the ring every single frame while the camera sits still -
+  // permanently starving whatever is past it. Rotating the start corner
+  // (render.ts's `ringFrame`) is what keeps that from happening.
+  const images = fakeImages();
+  const base = createTileCache({
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
+    createImage: images.createImage,
+    concurrency: 1,
+  });
+  base.pin(CENTER);
+  const seenPerFrame: RoomId[][] = [];
+  const cache: TileCache = {
+    ...base,
+    prefetch: (id, level) => {
+      seenPerFrame[seenPerFrame.length - 1]?.push(id);
+      base.prefetch(id, level);
+    },
+  };
+  const layout = createLayout({ roomCount: 5000, contentRatio: 1, seed: 1, aspect: CELL_ASPECT });
+  const order = shuffledOrder(5000, 1);
+  const renderer = createRenderer({ cache });
+
+  for (let i = 0; i < 4; i++) {
+    seenPerFrame.push([]);
+    renderer.draw({ ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order });
+  }
+
+  const first = new Set(seenPerFrame[0]);
+  const second = new Set(seenPerFrame[1]);
+  const onlyInFirst = [...first].filter((id) => !second.has(id));
+  assert.ok(
+    onlyInFirst.length > first.size * 0.5,
+    'a rotated corner must reach substantially different cells than the last frame, not just re-push the same ones in a new order'
+  );
+});
+
 test('the tile size the level implies actually matches the cell on screen', () => {
   // The selection contract, end to end: the chosen tile is never smaller than
   // the cell it is stretched over, at any zoom the camera allows.
@@ -579,6 +685,7 @@ test('the favorites-sort switch sizes each piece off its OWN decoded pixels, not
     sheetCount: () => 0,
     overBudget: () => 0,
     pendingPrefetch: () => 0,
+    hasPrefetchCapacity: () => true,
     clear: () => {},
   };
 

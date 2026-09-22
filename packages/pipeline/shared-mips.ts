@@ -4,21 +4,23 @@
  *
  * Same ladder, same per-file `<width>/<file>` layout `mips.ts` writes for a
  * room (`writeMips`), just rooted at the shared directory instead: once for
- * the center render found there, and once per file in its `generic/`
- * subdirectory. `scan.ts`'s `discoverLevels` is what turns this back into
- * `manifest.shared.levels` at scan time - see its own comment.
+ * the center render found there, once per file in its `generic/`
+ * subdirectory, and once per file in its `generic_distill/` subdirectory -
+ * distill mode's crossfade for each generic tile draws at whatever level the
+ * base tile draws at (`render.ts`'s `drawGenericFade`), not just up close,
+ * so it needs the same ladder the generic tiles get. `scan.ts`'s
+ * `discoverLevels` is what turns this back into `manifest.shared.levels`/
+ * `manifest.shared.distillLevels` at scan time - see its own comment.
  *
- * Only these two get a pyramid. `generic_distill/`'s alternates are only
- * ever drawn up close (`render.ts`'s `drawGenericFade` always asks the cache
- * for level 0), and the favorite badges, the distill toggle and the rest of
- * the fixed app art are tiny icons drawn at a fixed size regardless of zoom
- * (same file, always `cache.get(id, 0)`) - a pyramid for either would be
- * dead weight nothing ever asks for.
+ * Only these three get a pyramid. The favorite badges, the distill toggle
+ * and the rest of the fixed app art are tiny icons drawn at a fixed size
+ * regardless of zoom (same file, always `cache.get(id, 0)`) - a pyramid for
+ * them would be dead weight nothing ever asks for.
  */
 import { join, extname } from 'node:path';
 import { readdir } from 'node:fs/promises';
 import { writeMips, type WriteMipsResult } from './mips.ts';
-import { GENERIC_DIR, resolveCenterFile } from '../server/scan.ts';
+import { GENERIC_DIR, GENERIC_DISTILL_DIR, resolveCenterFile } from '../server/scan.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
@@ -36,6 +38,7 @@ export interface SharedMipsResult {
   /** null when no center file was found - nothing to pyramid. */
   center: ({ file: string } & WriteMipsResult) | null;
   generic: ({ file: string } & WriteMipsResult)[];
+  genericDistill: ({ file: string } & WriteMipsResult)[];
 }
 
 /**
@@ -67,5 +70,14 @@ export async function writeSharedMips({
     }))
   );
 
-  return { center: centerResult, generic };
+  const distillDir = join(sharedDir, GENERIC_DISTILL_DIR);
+  const distillFiles = await listImages(distillDir);
+  const genericDistill = await Promise.all(
+    distillFiles.map(async (file) => ({
+      file,
+      ...(await writeMips({ file: join(distillDir, file), outDir: distillDir, inPlace: true, quality })),
+    }))
+  );
+
+  return { center: centerResult, generic, genericDistill };
 }

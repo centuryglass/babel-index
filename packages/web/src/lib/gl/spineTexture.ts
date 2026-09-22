@@ -1,10 +1,14 @@
 /**
  * The center tile's composited spine text (`center.ts`'s `composeSpines`),
  * rendered once to an offscreen 2D canvas and cached as a GL texture.
- * `render.ts` re-runs `composeSpines` on its live context every frame -
- * refitting every spine's font via `measureText` even though only the scale
- * has changed - which this cache avoids for the GL path; the Canvas2D path
- * still carries that per-frame cost, uncached.
+ * `render.ts` still re-runs `composeSpines` on its live context every frame -
+ * this is what turns that back into "paint the same bitmap" for the GL path
+ * whenever the cache key hasn't moved. `composeSpines`'s own `fitSpineText`
+ * cache (`center.ts`) covers the per-spine `measureText` cost this cache
+ * doesn't reach - a GL cache hit skips calling `composeSpines` at all, but a
+ * miss (a new zoom bucket, say) still benefits from that inner cache, and it's
+ * the only relief the Canvas2D path gets since it has no bitmap cache of its
+ * own.
  *
  * `composeSpines` is called unmodified against the offscreen canvas's own 2D
  * context, which satisfies `SpineContext` natively - it is a real
@@ -36,8 +40,6 @@ export interface SpineTextureCache {
     hoveredBook: number | null,
     fontLimits: SpineFontLimits
   ): GLSpineTexture | null;
-  /** Drops the cached texture without freeing GPU state - the right shape for a lost context, whose handles are already invalid. `useMapRendererGL.ts`'s lost-context handling drops the whole cache instead of calling this. */
-  reset(): void;
   /** Frees the resident texture via `gl.deleteTexture`, if any, then drops it. */
   dispose(gl: WebGL2RenderingContext): void;
 }
@@ -89,14 +91,10 @@ export function createSpineTextureCache(): SpineTextureCache {
     return entry;
   }
 
-  function reset(): void {
-    cached = null;
-  }
-
   function dispose(gl: WebGL2RenderingContext): void {
     if (cached) gl.deleteTexture(cached.entry.texture);
     cached = null;
   }
 
-  return { get, reset, dispose };
+  return { get, dispose };
 }

@@ -24,6 +24,9 @@ import {
   BOOK_RECTS,
   minZoomForSearchBox,
   openingZoom,
+  composeSpines,
+  clearSpineFitCache,
+  type SpineContext,
 } from './center.ts';
 import { CELL_ASPECT } from './camera.ts';
 
@@ -344,4 +347,60 @@ test('overlapsViewport is an overlap, not containment', () => {
   assert.equal(overlapsViewport({ x: -10, y: -10, w: 20, h: 20 }, 100, 100), true);
   assert.equal(overlapsViewport({ x: 100, y: 0, w: 20, h: 20 }, 100, 100), false);
   assert.equal(overlapsViewport({ x: 0, y: -30, w: 20, h: 20 }, 100, 100), false);
+});
+
+/**
+ * A 2d context stand-in that only implements what `composeSpines` reads, with
+ * `measureText` counted so the fit cache's hit/miss behaviour is observable.
+ */
+function fakeSpineCtx(): SpineContext & { measureCalls: number } {
+  let font = '';
+  const ctx = {
+    fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1, imageSmoothingEnabled: true,
+    textAlign: 'center' as CanvasTextAlign, textBaseline: 'middle' as CanvasTextBaseline, lineJoin: 'round' as CanvasLineJoin,
+    measureCalls: 0,
+    get font() { return font; },
+    set font(v: string) { font = v; },
+    drawImage: () => {},
+    fillRect: () => {},
+    strokeRect: () => {},
+    fillText: () => {},
+    save: () => {},
+    restore: () => {},
+    translate: () => {},
+    rotate: () => {},
+    strokeText: () => {},
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    stroke: () => {},
+    roundRect: () => {},
+    fill: () => {},
+    measureText(text: string) {
+      this.measureCalls++;
+      const size = Number(font.match(/^(\d+)px/)?.[1] ?? 10);
+      return { width: text.length * size * 0.6 };
+    },
+  };
+  return ctx;
+}
+
+test('composeSpines caches a spine fit across frames and drops it once the webfont clears the cache', () => {
+  const slots = assignTitles({ history: ['a long story about brass and spiral staircases'], tags: [] });
+  const cell = { x: 0, y: 0, w: 4000, h: 3000 };
+  const limits = { minPx: 10, maxPx: 30 };
+
+  clearSpineFitCache();
+  const first = fakeSpineCtx();
+  composeSpines(first, cell, slots, null, limits);
+  assert.ok(first.measureCalls > 0, 'first draw measures at least once');
+
+  const second = fakeSpineCtx();
+  composeSpines(second, cell, slots, null, limits);
+  assert.equal(second.measureCalls, 0, 'an unchanged frame reuses the cached fit');
+
+  clearSpineFitCache();
+  const third = fakeSpineCtx();
+  composeSpines(third, cell, slots, null, limits);
+  assert.equal(third.measureCalls, first.measureCalls, 'clearing the cache re-measures exactly as the first draw did');
 });

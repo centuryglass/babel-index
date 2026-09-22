@@ -339,6 +339,14 @@ test('queries that differ by one character produce different orders', async () =
   assert.equal(seen.size, 7, 'the hash is collapsing distinct queries');
 });
 
+test('stubRanking hashes at most 2048 characters, regardless of query length', async () => {
+  // Guards against CodeQL's loop-bound-injection finding: the hashing loop
+  // must stay bounded even if a caller passes an unbounded string.
+  const rooms = Array.from({ length: 16 }, (_, id) => ({ id }));
+  const base = 'x'.repeat(2048);
+  assert.deepEqual(stubRanking(rooms, base), stubRanking(rooms, base + 'y'.repeat(10000)));
+});
+
 // --- static images ----------------------------------------------------------
 
 test('/images serves the corpus and 404s the rest', async () => {
@@ -874,6 +882,55 @@ test('the counts endpoint is never cached', async () => {
         assert.match((await get('/api/favorites')).headers.get('cache-control'), /no-store/);
       },
       { favorites }
+    );
+  });
+});
+
+// --- metrics ------------------------------------------------------------------
+
+/** A fake UsageMetrics that records which method was called, and how often. */
+function fakeMetrics() {
+  const calls: Record<string, number> = { recordVisit: 0, recordSearch: 0, recordFavoriteAdd: 0, recordFavoriteRemove: 0 };
+  return {
+    calls,
+    metrics: {
+      recordVisit: () => void calls.recordVisit++,
+      recordSearch: () => void calls.recordSearch++,
+      recordFavoriteAdd: () => void calls.recordFavoriteAdd++,
+      recordFavoriteRemove: () => void calls.recordFavoriteRemove++,
+      flush: () => {},
+      stop: () => {},
+    },
+  };
+}
+
+test('/api/manifest counts a visit; /api/search counts only a non-empty query', async () => {
+  const { calls, metrics } = fakeMetrics();
+  await serving(
+    async ({ get }) => {
+      await get('/api/manifest');
+      await get('/api/manifest');
+      await get('/api/search?q=');
+      await get('/api/search?q=%20');
+      await get('/api/search?q=fox');
+      assert.deepEqual(calls, { recordVisit: 2, recordSearch: 1, recordFavoriteAdd: 0, recordFavoriteRemove: 0 });
+    },
+    { metrics }
+  );
+});
+
+test('favorite writes count adds and removes separately, and only when accepted', async () => {
+  const { calls, metrics } = fakeMetrics();
+  await withStore(async (favorites) => {
+    await serving(
+      async ({ base }) => {
+        // Rejected: no client id. Must not count as a favorite either way.
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST' });
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'POST', ...asClient('client-aaaaaaaa') });
+        await fetch(`${base}/api/favorites/001.jpg`, { method: 'DELETE', ...asClient('client-aaaaaaaa') });
+        assert.deepEqual(calls, { recordVisit: 0, recordSearch: 0, recordFavoriteAdd: 1, recordFavoriteRemove: 1 });
+      },
+      { favorites, metrics }
     );
   });
 });

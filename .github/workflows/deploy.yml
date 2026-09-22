@@ -72,7 +72,9 @@ jobs:
        github.event.workflow_run.head_branch == 'main' &&
        startsWith(github.event.workflow_run.head_commit.message, 'chore(main): release '))
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 was enough for the ssh call and health check alone; the parity gate
+    # (npm ci, a Chromium install, two browser sessions) needs more room.
+    timeout-minutes: 20
     environment:
       name: production
       url: ${{ vars.PUBLIC_URL }}
@@ -98,13 +100,35 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "deploying $sha"
 
-      # For `deploy/health-check.mjs`, at the revision being deployed - so the
-      # runner checks health the same way the box does, by the same rules.
-      # Nothing here is installed or built: that script is dependency-free
-      # plain Node on purpose (see its header).
+      # At the revision being deployed, so both `deploy/health-check.mjs` and
+      # the parity gate below check the same commit the box is about to run.
       - uses: actions/checkout@v7
         with:
           ref: ${{ steps.target.outputs.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run test:parity` (`render-parity.parity.ts`) checks the
+      # WebGL/Canvas2D lockstep invariant in AGENTS.md - previously a
+      # manual-only suite nothing ran on a PR, since it boots two browser
+      # sessions and was considered too slow to gate every push. A bad deploy
+      # is worse than a slow one, so it gates here instead: a revision that
+      # breaks parity between the two renderers never reaches production, at
+      # the cost of the minute or so this and the browser install below add
+      # to every deploy. `chromium.launch()` in `support.ts` takes no
+      # GPU-specific args, so this runs on the runner's headless, GPU-less
+      # Chromium the same way `webgl-map.e2e.ts` already does in `e2e.yml` -
+      # software (SwiftShader) WebGL2 is enough.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: npm run test:parity
+        run: npm run test:parity
 
       - name: authorize the runner
         env:

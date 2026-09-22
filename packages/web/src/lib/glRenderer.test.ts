@@ -76,7 +76,6 @@ function fakeTextureCache(): GLTextureCache {
       if (!d) return null;
       return { texture: drawable as unknown as WebGLTexture, width: d.width ?? 0, height: d.height ?? 0 };
     },
-    reset: () => {},
     dispose: () => {},
   };
 }
@@ -314,6 +313,37 @@ test('warming reaches one level coarser, never finer', () => {
   assert.ok(levels.has(stats.level), 'the visible level must be fetched');
   assert.ok(levels.has(stats.level + 1), 'the next level out must be warmed');
   assert.ok(!levels.has(stats.level - 1), 'nothing finer than the visible level');
+});
+
+test('the coarser-level warm pass dedupes repeated ids before prefetching (issue #296)', () => {
+  // Same guard as render.test.ts's matching test: at coarse zoom most of
+  // `visible` is a handful of repeated generic ids, and the warm pass must
+  // ask for each one once per frame.
+  const images = fakeImages();
+  const calls: { id: RoomId; level: number }[] = [];
+  const base = createTileCache({
+    locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
+    createImage: images.createImage,
+    concurrency: 1000,
+  });
+  base.pin(CENTER);
+  const cache = {
+    ...base,
+    prefetch: (id: RoomId, level: number) => { calls.push({ id, level }); base.prefetch(id, level); },
+  };
+  const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.02, seed: 1, aspect: CELL_ASPECT });
+  const order = shuffledOrder(ROOMS, 1);
+  const renderer = createGLRenderer({ cache, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
+  const stats = renderer.draw({
+    gl: fakeGLContext(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
+  } as GLDrawOpts);
+
+  const warmLevel = stats.level + 1;
+  const warmCalls = calls.filter((c) => c.level === warmLevel);
+  const distinctIds = new Set(warmCalls.map((c) => c.id));
+  assert.ok(warmCalls.length > 0, 'sanity: the warm pass ran');
+  assert.equal(warmCalls.length, distinctIds.size, 'the warm pass prefetched the same id twice in one frame');
+  assert.ok(distinctIds.size < stats.cells, 'expected far fewer distinct ids than visible cells');
 });
 
 test('prefetching cannot outrun the visible pass', () => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
-import { favoriteOrder, favoriteSort, favoriteCount, type SortMode } from '../../map/favorites.ts';
+import { favoriteOrder, favoriteStrength, favoriteCount, type SortMode } from '../../map/favorites.ts';
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
 import { buildSlugTable } from '../../map/slug.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
@@ -31,6 +31,7 @@ import {
   shuffleButtonAtPoint,
   mineToggleAtPoint,
   countToggleAtPoint,
+  clearSpineFitCache,
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
 import {
@@ -44,6 +45,7 @@ import { favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from './lib/distillToggle.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
+import { applyCssVars } from './lib/cssVars.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
@@ -188,7 +190,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The corpus itself: metadata sidecar, embedding blob, and the search
   // index built over both - see useCorpus.ts.
-  const { metadata, embeddings, searchIndex, described, tagLinks } = useCorpus(manifest);
+  const { metadata, embeddings, searchIndex, described, tagLinks, corpusErrors } = useCorpus(manifest);
 
   // availableTags: only the sensitive tags this corpus actually has, so a
   // corpus with none renders no blocking panel at all. blockedCount: rooms
@@ -209,6 +211,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // ref and it is filled in below once useRearrangement has returned.
   // See useSearch.ts's file comment.
   const requestAnimationRef = useRef<(note: string) => void>(() => {});
+  // A search and a favorite sort are mutually exclusive (SR-41): starting a
+  // real search ends whatever sort was active, synchronously and before the
+  // fetch even lands, so the sort's own controls never sit lit while a
+  // search silently overrides them. useSearch calls this once it knows the
+  // term is non-empty - clearing the box takes the other path (`clearSearch`)
+  // and must not touch the sort at all.
+  const onSearchStart = useCallback(() => setSortMode('relevance'), []);
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
     searchConfig: config.search,
@@ -217,6 +226,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     requestAnimationRef,
     pushHistory,
     setStatus,
+    onSearchStart,
   });
 
   // The reader's own favorites and the library's global counts
@@ -231,28 +241,25 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const genericCount = manifest.shared?.generic?.length ?? 0;
   const genericSeed = config.map.genericSeed;
 
-  // A running search wins over 'random': a reshuffle would bury the ranking
-  // the reader just asked for, so 'random' reads as 'relevance' while a
-  // search is active. `changeSort` clears the search when entering 'random',
-  // but a new search can start while 'random' is already chosen.
-  const effectiveSortMode: SortMode = sortMode === 'random' && result ? 'relevance' : sortMode;
-
-  // The map's order and its density profile, from one sort: a favorite sort
-  // is a placement input exactly as a search is, so `favoriteSort` composes
-  // the two - a search's own certainty, boosted to 1 for whatever the sort
-  // lifted to the front - and `layout` reads one number per room instead of
-  // two that could disagree.
+  // The map's order and its density profile. A search and a favorite sort
+  // are mutually exclusive (SR-41, enforced by `changeSort` and
+  // `onSearchStart` above), so `sortMode` is never 'mine'/'count' while
+  // `result` holds a search - distance from the center means match strength
+  // alone while one runs (SR-27, `result.strength`) or favorite status alone
+  // while a favorite sort does (SR-28, `favoriteStrength`), never both, and
+  // there is nothing left to compose. `order` and `strength` are two
+  // separate calls rather than one composed result, per `favorites.ts`.
   //
   // Rooms are blocked before sorting, not after: filtering last would let a
   // favorite bring a blocked room back onto the map.
   const sortResult = useMemo(() => {
     const base = result ? result.order : shuffledOrder(total, orderSeed);
-    return favoriteSort(
-      filterBlockedIds(base, metadata, blockedTagSet),
-      { mode: effectiveSortMode, randomSeed: randomSortSeed, ...favorites.sortInput },
-      result?.certainty ? { order: result.order, certainty: result.certainty } : null
-    );
-  }, [total, orderSeed, result, metadata, blockedTagSet, effectiveSortMode, randomSortSeed, favorites.sortInput]);
+    const blocked = filterBlockedIds(base, metadata, blockedTagSet);
+    const sortInput = { mode: sortMode, randomSeed: randomSortSeed, ...favorites.sortInput };
+    const order = favoriteOrder(blocked, sortInput);
+    const strength = result?.strength ?? favoriteStrength(order, sortInput);
+    return { order, strength };
+  }, [total, orderSeed, result, metadata, blockedTagSet, sortMode, randomSortSeed, favorites.sortInput]);
 
   const order = sortResult.order;
 
@@ -260,9 +267,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // touches no downloaded image bytes. `aspect` makes the library round on
   // screen rather than in the index - cells are not square, so those differ,
   // and the edge should be equally far whichever way you drag. `density`
-  // carries the search's certainty profile, which is what clusters matches
-  // toward the center; no search means no profile means the uniform map, so
-  // clearing the box restores the baseline layout without a second code path.
+  // carries the strength profile above, which is what clusters matches
+  // toward the center; no search and no favorite sort means no profile means
+  // the uniform map, so clearing either restores the baseline layout without
+  // a second code path.
   const layout = useMemo(
     () =>
       createLayout({
@@ -272,8 +280,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         aspect: CELL_ASPECT,
         genericCount,
         genericSeed,
-        density: sortResult.certainty
-          ? { ...config.search.density, certainty: sortResult.certainty }
+        density: sortResult.strength
+          ? { ...config.search.density, strength: sortResult.strength }
           : null,
       }),
     [roomCount, contentRatio, seed, total, sortResult, config, genericCount, genericSeed]
@@ -297,11 +305,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const catalogOrder = useMemo(
     () =>
       favoriteOrder(catalogBase, {
-        mode: effectiveSortMode,
+        mode: sortMode,
         randomSeed: randomSortSeed,
         ...favorites.sortInput,
       }),
-    [catalogBase, effectiveSortMode, randomSortSeed, favorites.sortInput]
+    [catalogBase, sortMode, randomSortSeed, favorites.sortInput]
   );
 
   // Which cell a room id sits in on the map right now. Keyed by id, not
@@ -336,6 +344,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   useEffect(() => {
     let cancelled = false;
     loadSpineFont().then(() => {
+      clearSpineFitCache();
       if (!cancelled) draw.current();
     });
     return () => {
@@ -375,10 +384,16 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // "The shared tiles are served flat" - resolved once `shared.levels` has
     // more than level 0). Never hardcode the coarsest rung as
     // `pyramid.fallbackLevel`: an older corpus with no shared pyramid
-    // generated has no tile there. Distill's alternates have no pyramid of
-    // their own (`rooms.ts`'s header), so they stay at level 0 like the center.
-    const sharedLevelNumbers = (manifest.shared?.levels ?? []).filter((l) => l.dir).map((l) => l.level);
-    const coarsestSharedLevel = sharedLevelNumbers.length ? Math.max(...sharedLevelNumbers) : 0;
+    // generated has no tile there. Distill's alternates get the same
+    // treatment off `manifest.shared.distillLevels` instead, since that tree
+    // may not share the base tiles' rungs (`manifest.ts`'s `SharedAssets`
+    // doc).
+    const coarsestOf = (levels: { dir: string | null; level: number }[] | undefined) => {
+      const numbers = (levels ?? []).filter((l) => l.dir).map((l) => l.level);
+      return numbers.length ? Math.max(...numbers) : 0;
+    };
+    const coarsestSharedLevel = coarsestOf(manifest.shared?.levels);
+    const coarsestDistillLevel = coarsestOf(manifest.shared?.distillLevels);
     const genericDistillIds = (manifest.shared?.genericDistill ?? [])
       .map((v, i) => (v ? genericDistillId(i) : null))
       .filter((id): id is number | string => id != null);
@@ -390,7 +405,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     }
     for (const id of genericDistillIds) {
       tiles.pin(id);
-      tiles.request(id, 0);
+      tiles.request(id, coarsestDistillLevel);
     }
     // The favorite badge's two faces and the center tile's sort-switch art,
     // pinned the same way - tiny images, gated on the store existing.
@@ -553,7 +568,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The ranked listbox: the `gradedCount` ranks the search's gradient
   // lifted above baseline - the cluster's size, and 0 for a uniform map.
-  // This is the lossless channel: map position encodes rank and certainty
+  // This is the lossless channel: map position encodes rank and strength
   // but not adjacency; the ranking encodes everything.
   //
   // Bounded twice: by `RESULTS_WINDOW` (a DOM budget) and by `cellOfRank` -
@@ -974,19 +989,21 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setSortMode('relevance');
     clearSearch();
   }, [requestAnimation, clearSearch]);
-  // A sort change is a re-rank, not a rebuild: it swaps `order` and lets
-  // the sliding-tile animation carry the map over. Only a search may rebuild
-  // the layout, because only a search has a certainty profile to place by.
+  // A sort change swaps `order` and lets the sliding-tile animation carry the
+  // map over. Whether the layout also rebuilds depends on the mode: 'mine' and
+  // 'count' are placement inputs and carry a strength profile of their own
+  // (`favoriteStrength`, packages/map/favorites.ts), so those rebuild the same
+  // way a search does; 'relevance' and 'random' carry none and stay a pure
+  // re-rank.
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;
-      // Entering 'random' draws a fresh shuffle, and clears an active
-      // search: while one runs, `effectiveSortMode` reads 'random' as
-      // 'relevance', so the shuffle would look like a no-op.
-      if (next === 'random') {
-        setRandomSortSeed(Date.now());
-        if (result) clearSearch();
-      }
+      // Entering 'random' draws a fresh shuffle.
+      if (next === 'random') setRandomSortSeed(Date.now());
+      // A search and a favorite sort are mutually exclusive (SR-41):
+      // starting any sort ends an active search, the other half of
+      // `onSearchStart` above.
+      if (next !== 'relevance' && result) clearSearch();
       requestAnimation(describeSort(next, favoriteCount(manifest.rooms, favorites.mine)));
       setSortMode(next);
     },
@@ -1173,6 +1190,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         manifest={manifest}
         total={total}
         described={described}
+        corpusErrors={corpusErrors}
         status={status}
         query={query}
         setQuery={setQuery}
@@ -1434,6 +1452,8 @@ const URL_BLOCKED_TAGS: string[] =
     ?.split(',')
     .map((t) => t.trim())
     .filter(Boolean) ?? [];
+
+applyCssVars();
 
 const rootEl = document.getElementById('root');
 if (rootEl) createRoot(rootEl).render(<App />);

@@ -34,6 +34,7 @@ import { BASE_TILE } from './pyramid.ts';
 import type { DrawContext } from './render.ts';
 import { SPINE_FONT_FAMILY } from './spineFont.ts';
 import { flattenPath, pointInPolygon } from './svgPath.ts';
+import { HOVER_GLOW_FILL, HOVER_GLOW_STROKE } from './cssVars.ts';
 
 const GEOMETRY = layout({ width: 1, height: 1 });
 
@@ -203,19 +204,6 @@ const INK = 'rgba(238,230,214,0.92)';
 const HALO = 'rgba(12,9,6,0.85)';
 /** The hovered book's plate fill, in place of the usual stroked halo. */
 const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
-/**
- * The hovered book's glow, across the whole spine: the same gold the favorite
- * badge and the distill toggle hover with. This is the one definition -
- * `render.ts` and `gl/glowTexture.ts` both import it rather than restating the
- * colour, so the WebGL-renderer lockstep rule (AGENTS.md, "The WebGL
- * renderer") cannot drift here by one file changing a literal and the other two
- * being missed.
- *
- * Painted on the canvas rather than as a CSS overlay, for the reason on
- * `useMapRenderer.ts`'s `onMove`.
- */
-export const HOVER_GLOW_FILL = 'rgba(200,169,95,0.28)';
-export const HOVER_GLOW_STROKE = 'rgba(200,169,95,0.55)';
 
 /**
  * The auto-fit range a spine title's font is sized within, per title:
@@ -676,9 +664,8 @@ export function composeSpines(
     const inset = Math.min(4, r.h * 0.1);
     const available = r.h - inset * 2;
     const mid = r.h / 2;
-    const fontPx = fitFontSize(ctx, slot.text, available, minPx, ceilingPx);
+    const { fontPx, text } = fitSpineText(ctx, slot.text, available, minPx, ceilingPx);
     ctx.font = `${fontPx}px ${SPINE_FONT_FAMILY}`;
-    const text = fitText(ctx, slot.text, available);
 
     if (i === hoveredBook) {
       const padX = Math.max(1.5, fontPx * 0.14);
@@ -718,6 +705,59 @@ export function composeSpines(
     ctx.restore();
   }
   ctx.restore();
+}
+
+/** A spine title's fitted size and, once truncated, its final text. */
+interface SpineFit {
+  fontPx: number;
+  text: string;
+}
+
+/**
+ * `composeSpines`'s per-spine cache: a title's fitted font size and truncated
+ * text depend only on the text and the fit inputs below, not on which frame is
+ * being drawn, so a camera move that keeps every spine at the same rounded
+ * scale reuses the previous `measureText` search instead of repeating it.
+ * `clearSpineFitCache` drops it once `loadSpineFont` swaps the real webfont in
+ * for the Georgia fallback, since that changes the metrics `measureText`
+ * would return for the same text.
+ */
+const spineFitCache = new Map<string, SpineFit>();
+
+/** Quantizes `available` to 4 device px, coarse enough that a fitted size rarely moves between buckets. */
+const fitBucket = (n: number): number => Math.round(n / 4) * 4;
+
+/**
+ * Cached `fitFontSize` + `fitText` for one spine title. `ctx.font` is left set
+ * to whatever the last measurement used - the caller always reassigns it
+ * from the returned `fontPx` before drawing, cache hit or not.
+ */
+function fitSpineText(
+  ctx: Pick<SpineContext, 'font' | 'measureText'>,
+  text: string,
+  available: number,
+  minPx: number,
+  ceilingPx: number
+): SpineFit {
+  const key = `${text}\u0000${fitBucket(available)}\u0000${minPx}\u0000${ceilingPx}`;
+  const cached = spineFitCache.get(key);
+  if (cached) return cached;
+  const fontPx = fitFontSize(ctx, text, available, minPx, ceilingPx);
+  ctx.font = `${fontPx}px ${SPINE_FONT_FAMILY}`;
+  const fitted: SpineFit = { fontPx, text: fitText(ctx, text, available) };
+  spineFitCache.set(key, fitted);
+  return fitted;
+}
+
+/**
+ * Drops every memoized spine fit. Call once the webfont in `spineFont.ts`
+ * finishes loading and swaps in for the Georgia fallback `composeSpines` used
+ * until then - the same text can fit a different font size once its real
+ * metrics are available, and a stale cache entry would leave it sized for
+ * Georgia until something else evicts it.
+ */
+export function clearSpineFitCache(): void {
+  spineFitCache.clear();
 }
 
 /**

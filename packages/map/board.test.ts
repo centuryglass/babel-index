@@ -17,8 +17,8 @@ const arrangement = (roomCount, order, density = null) => ({
   order,
 });
 
-/** A certainty profile shaped like a search that found something. */
-const certaintyFor = (n, reach) => Array.from({ length: n }, (_, i) => Math.max(0, 1 - i / reach));
+/** A strength profile shaped like a search that found something. */
+const strengthFor = (n, reach) => Array.from({ length: n }, (_, i) => Math.max(0, 1 - i / reach));
 
 /**
  * Plan a rearrangement and check the only thing that finally matters: after
@@ -58,13 +58,13 @@ test('a shuffle is animatable, and lands the visible cells exactly', () => {
 });
 
 test('a search moves the slots themselves, and that is still animatable', () => {
-  // The density gradient makes certainty an input to placement, so this is not
+  // The density gradient makes strength an input to placement, so this is not
   // a permutation over fixed slots: cells that were wallpaper become rooms and
   // the other way round.
   const n = 200;
   const before = arrangement(n, shuffledOrder(n, 1));
   const after = arrangement(n, shuffledOrder(n, 7), {
-    certainty: certaintyFor(n, 30),
+    strength: strengthFor(n, 30),
     peak: 1,
     floor: 0.05,
   });
@@ -82,7 +82,7 @@ test('the board holds every slot of both layouts', () => {
   const n = 400;
   const before = arrangement(n, shuffledOrder(n, 1));
   const after = arrangement(n, shuffledOrder(n, 2), {
-    certainty: certaintyFor(n, 40), peak: 1, floor: 0.05,
+    strength: strengthFor(n, 40), peak: 1, floor: 0.05,
   });
   const built = buildRearrangement({ before, after, view: VIEW, aspect: ASPECT });
 

@@ -169,7 +169,7 @@ test('isBlocked matches a tag against the blocked set', () => {
   assert.equal(isBlocked(null, new Set(['gore'])), false);
 });
 
-test('filterBlockedIds drops ids whose room carries a blocked tag, keeping order', () => {
+test('filterBlockedIds drops ids whose room carries a blocked tag, keeping order [SR-40]', () => {
   const metadata = [
     normaliseEntry({ story: 'a', sensitive_content_tags: ['gore'] }),
     normaliseEntry({ story: 'b' }),

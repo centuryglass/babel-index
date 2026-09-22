@@ -56,7 +56,6 @@ function fakeTextureCache(): GLTextureCache {
       if (!d) return null;
       return { texture: drawable as unknown as WebGLTexture, width: d.width ?? 0, height: d.height ?? 0 };
     },
-    reset: () => {},
     dispose: () => {},
   };
 }

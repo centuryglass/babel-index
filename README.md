@@ -297,6 +297,7 @@ and is not part of CI.
 
 ## Documentation
 
+<<<<<<< HEAD
 * [`docs/architecture.md`](docs/architecture.md) - a five-minute system overview: request flow, deploy, rendering, testing
 * [`docs/user-guide.md`](docs/user-guide.md) - every control in the library, annotated
 * [`docs/api.md`](docs/api.md) - the `/api/*` request/response contract
@@ -308,6 +309,16 @@ and is not part of CI.
 * [`docs/search_rules.md`](docs/search_rules.md) - the full specification of what a search does
 * [`deploy/README.md`](deploy/README.md) - the one-time VPS setup and the rollback path
 * [`AGENTS.md`](AGENTS.md) - notes for coding agents (engineering conventions and invariants)
+=======
+- [`docs/architecture.md`](docs/architecture.md) — a five-minute system overview: request flow, deploy, rendering, testing
+- [`docs/api.md`](docs/api.md) — the `/api/*` request/response contract
+- [`docs/file_map.md`](docs/file_map.md) — the full file-by-file layout
+- [`docs/concept.md`](docs/concept.md): Initial project concept and a dated log of design decisions
+- [GitHub issues](https://github.com/centuryglass/babel-index/issues) — what is still to do, including open accessibility questions
+- [`docs/keyboard-controls.md`](docs/keyboard-controls.md) — the full keyboard spec for the map view
+- [`docs/search_rules.md`](docs/search_rules.md) — the full specification of what a search does
+- [`CLAUDE.md`](CLAUDE.md) — notes for coding agents (engineering conventions and invariants)
+>>>>>>> main
 
 ## License
 

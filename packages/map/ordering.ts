@@ -21,12 +21,12 @@
  * ### The density gradient
  *
  * `contentRatio` is a *baseline*, not a constant. A search may hand in a
- * `density.certainty` array - one number per rank, in [0, 1] - and the
+ * `density.strength` array - one number per rank, in [0, 1] - and the
  * acceptance threshold for the rank being placed becomes
- * `contentRatio + (peak - contentRatio) * certainty`, so a rank the search is
+ * `contentRatio + (peak - contentRatio) * strength`, so a rank the search is
  * sure about is admitted into nearly every cell it passes and a rank it knows
  * nothing about is scattered at the baseline. Walking outward with that
- * threshold turns a certainty profile directly into a density profile: certain
+ * threshold turns a strength profile directly into a density profile: certain
  * matches pack tight against the center, and the packing loosens back to the
  * user's chosen sparseness as the search's confidence falls off.
  *
@@ -38,7 +38,7 @@
  * fill the innermost cells and everything after them falls straight back to
  * the baseline (a hard edge); a signal that decays gradually spreads the
  * packing out gradually; and a query nothing is confident about produces
- * certainty 0 everywhere, which is the uniform layout, cell for cell.
+ * strength 0 everywhere, which is the uniform layout, cell for cell.
  * Clearing the search drops the profile and restores it.
  *
  * A search recomputes placement, at the same O(slots) the ratio slider
@@ -117,47 +117,47 @@ export const genericIndexAt = (
 ): number => (count > 0 ? Math.min(count - 1, Math.floor(cellHash(x, y, seed) * count)) : -1);
 
 /**
- * Certainty below this is a hunch rather than a match, and clusters nothing.
+ * Strength below this is a hunch rather than a match, and clusters nothing.
  *
  * A query the corpus has no answer to still produces a faint ranking - some
  * room has to come first - and without a floor the faintest gradient would
  * pull it toward the center, claiming a find in noise. The floor is what
  * makes "no match" and "no search" the same picture.
  */
-export const CERTAINTY_FLOOR = 0.05;
+export const STRENGTH_FLOOR = 0.05;
 
 /**
- * Turn a per-rank certainty into a per-rank acceptance threshold.
+ * Turn a per-rank strength into a per-rank acceptance threshold.
  *
  * Two adjustments to the profile as it is read:
  *
- *   - certainty is made non-increasing with rank. The ordering is best-first
+ *   - strength is made non-increasing with rank. The ordering is best-first
  *     by definition, so a rank more certain than the one above it is a
  *     contradiction; the running minimum is which of the two to believe.
  *     Density then falls monotonically outward whatever shape the blend had.
  *   - anything under `floor` becomes the baseline itself, not a value slightly
- *     above it. See `CERTAINTY_FLOOR`.
+ *     above it. See `STRENGTH_FLOOR`.
  *
- * @param certainty per rank, in [0, 1]
+ * @param strength per rank, in [0, 1]
  * @param contentRatio the baseline density
- * @param peak         density offered to a rank of certainty 1
+ * @param peak         density offered to a rank of strength 1
  * @returns threshold for the rank being placed
  */
 function densityRamp(
-  certainty: ArrayLike<number> | null | undefined,
+  strength: ArrayLike<number> | null | undefined,
   contentRatio: number,
   peak: number,
   floor: number
 ): (rank: number) => number {
-  if (!certainty?.length) return () => contentRatio;
+  if (!strength?.length) return () => contentRatio;
 
   // Never below the baseline: the gradient adds density near the center, it
   // does not take any away from a map the user has already set the sparseness of.
   const top = Math.max(peak, contentRatio);
-  const ramp = new Float64Array(certainty.length);
+  const ramp = new Float64Array(strength.length);
   let cap = 1;
-  for (let i = 0; i < certainty.length; i++) {
-    const raw = Number(certainty[i]);
+  for (let i = 0; i < strength.length; i++) {
+    const raw = Number(strength[i]);
     const c = Math.min(cap, Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0);
     cap = c;
     ramp[i] = c < floor ? contentRatio : contentRatio + (top - contentRatio) * c;
@@ -184,10 +184,10 @@ export interface Slot {
 /** The search's density gradient, if a search is running. */
 export interface DensityOptions {
   /** per rank, in [0, 1] */
-  certainty?: ArrayLike<number>;
-  /** density offered to a rank of certainty 1 */
+  strength?: ArrayLike<number>;
+  /** density offered to a rank of strength 1 */
   peak?: number;
-  /** certainty under which nothing clusters */
+  /** strength under which nothing clusters */
   floor?: number;
 }
 
@@ -242,7 +242,7 @@ export interface CreateLayoutOptions {
   genericCount?: number;
   /** salt for the generic tile choice, kept separate from `seed` - see `genericIndexAt`. */
   genericSeed?: number;
-  /** absent - or with no certainty in it - is the uniform map, cell for cell. */
+  /** absent - or with no strength in it - is the uniform map, cell for cell. */
   density?: DensityOptions | null;
 }
 
@@ -266,10 +266,10 @@ export function createLayout({
     throw new RangeError('aspect must be a positive, finite ratio');
 
   const ramp = densityRamp(
-    density?.certainty,
+    density?.strength,
     contentRatio,
     density?.peak ?? 1,
-    density?.floor ?? CERTAINTY_FLOOR
+    density?.floor ?? STRENGTH_FLOOR
   );
 
   const slots = collectSlots(roomCount, contentRatio, seed, aspect, ramp);
@@ -495,17 +495,6 @@ export function shuffledOrder(n: number, seed = 1): number[] {
 }
 
 /**
- * The int8 half-range `tools/embed` quantises rows at; dequantise as v / 127.
- * Declared here because this is where the blob is read.
- *
- * Ranking never cared about the scale - a monotone factor cannot reorder
- * anything, and the blend min-maxes the column anyway - but the density
- * gradient asks how sure CLIP is *in absolute terms*, and 0.3 is only a
- * cosine once the quantisation is divided back out.
- */
-export const EMBEDDING_SCALE = 127;
-
-/**
  * Score every room against a query vector: one cosine per room, indexed by id.
  * Embeddings are int8-quantized and stored contiguously; scoring the whole
  * corpus is a few million multiply-adds, well under a frame at this size.
@@ -515,9 +504,18 @@ export const EMBEDDING_SCALE = 127;
  * ordering built on top, so the dot product has one implementation.
  *
  * @param embeddings  roomCount * dim, row-major
+ * @param dim      row width
+ * @param scale    the int8 half-range `tools/embed` quantised these rows at
+ *   (`embeddings.json`'s `scale`, carried in `manifest.embeddings.scale`).
+ *   Ranking never cared about it - a monotone factor cannot reorder anything,
+ *   and the blend min-maxes the column anyway - but the density gradient asks
+ *   how sure CLIP is *in absolute terms*, and 0.3 is only a cosine once the
+ *   quantisation is divided back out. Taken as a parameter rather than a
+ *   constant here so this side can never drift from what `tools/embed/embed.ts`
+ *   actually wrote (issue #231).
  * @param query    length dim, already L2-normalised
  */
-export function embeddingScores(embeddings: Int8Array, dim: number, query: Float32Array): Float32Array {
+export function embeddingScores(embeddings: Int8Array, dim: number, scale: number, query: Float32Array): Float32Array {
   const n = Math.floor(embeddings.length / dim);
   const scores = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -527,7 +525,7 @@ export function embeddingScores(embeddings: Int8Array, dim: number, query: Float
     // Both sides are unit vectors, so this is a cosine once the row's
     // quantisation is undone - and it has to come out as a real cosine,
     // because `scoring.ts` compares these against absolute thresholds.
-    scores[i] = dot / EMBEDDING_SCALE;
+    scores[i] = dot / scale;
   }
   return scores;
 }
@@ -536,11 +534,13 @@ export function embeddingScores(embeddings: Int8Array, dim: number, query: Float
  * Rank rooms against a query vector, best first.
  *
  * @param embeddings  roomCount * dim, row-major
+ * @param dim      row width
+ * @param scale    see `embeddingScores`
  * @param query    length dim, already L2-normalised
  * @returns room ids, best first
  */
-export function rankByEmbedding(embeddings: Int8Array, dim: number, query: Float32Array): number[] {
-  const scores = embeddingScores(embeddings, dim, query);
+export function rankByEmbedding(embeddings: Int8Array, dim: number, scale: number, query: Float32Array): number[] {
+  const scores = embeddingScores(embeddings, dim, scale, query);
   const scored = Array.from(scores, (score, id) => ({ id, score }));
   scored.sort((a, b) => b.score - a.score);
   return scored.map((s) => s.id);
