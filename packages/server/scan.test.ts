@@ -576,6 +576,49 @@ test('no generic_distill directory at all reports only level 0, not a throw', as
   });
 });
 
+test('favoriteLevels is discovered off fav_on.png/fav_off.png in the tile-width directories, independent of shared.levels or distillLevels', async () => {
+  await corpus(
+    {
+      ...pyramid(),
+      'generic/v1.webp': fixture.webpVp8(1024, 768),
+      // no generic/512/ - the generic tree never got that level, so shared.levels stays at 0
+      'fav_on.png': fixture.png(92, 198),
+      'fav_off.png': fixture.png(92, 198),
+      '512/fav_on.png': fixture.png(46, 99),
+      '512/fav_off.png': fixture.png(46, 99),
+    },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.levels.map((l) => l.level), [0], 'the generic tree has no 512 level');
+      assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0, 1], 'the badge tree does');
+      assert.equal(shared.favoriteLevels[1].dir, '512');
+    }
+  );
+});
+
+test('a level directory with only one of the two badge faces is not a favorite level', async () => {
+  await corpus(
+    {
+      ...pyramid(),
+      'fav_on.png': fixture.png(92, 198),
+      'fav_off.png': fixture.png(92, 198),
+      '512/fav_on.png': fixture.png(46, 99),
+      // no 512/fav_off.png - an incomplete pair
+    },
+    async (dir) => {
+      const { shared } = await scanDirectory(dir);
+      assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0]);
+    }
+  );
+});
+
+test('no scaled favorite art at all reports only level 0, not a throw', async () => {
+  await corpus(pyramid(), async (dir) => {
+    const { shared } = await scanDirectory(dir);
+    assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0]);
+  });
+});
+
 // --- embeddings blob --------------------------------------------------------
 
 test('a corpus without a blob reports no embeddings', async () => {

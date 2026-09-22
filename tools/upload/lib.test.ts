@@ -43,6 +43,7 @@ function manifest(): Manifest {
       genericDistill: [{ file: 'a.jpg', url: '/shared/generic_distill/a.jpg' }],
       levels: [{ level: 0, dir: null }],
       distillLevels: [{ level: 0, dir: null }],
+      favoriteLevels: [{ level: 0, dir: null }],
     },
   };
 }
@@ -132,6 +133,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   m.shared = {
     center: null, generic: [], genericDistill: [],
     levels: [{ level: 0, dir: null }], distillLevels: [{ level: 0, dir: null }],
+    favoriteLevels: [{ level: 0, dir: null }],
   };
   const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(

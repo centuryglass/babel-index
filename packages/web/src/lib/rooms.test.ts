@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTileLocator, createUrlFor } from './rooms.ts';
-import { CENTER, FAV_ON, FAV_OFF, genericId, genericDistillId } from './tiles.ts';
+import { CENTER, FAV_ON, FAV_OFF, DISTILL_OFF, genericId, genericDistillId } from './tiles.ts';
 
 function manifest(extraLevels: any[] = []): any {
   return {
@@ -82,13 +82,14 @@ test('a level shared.levels does not have resolves to null, same as a missing co
 });
 
 test('a shared id with no pyramid of its own never resolves past level 0, even when shared.levels has one', () => {
-  // The favorite badge, the distill toggle: neither is in shared.levels'
-  // intersection, so a coarser request must still fail rather than silently
-  // reusing the center/generic ladder.
+  // The distill toggle, the "forget searches" overlay: neither is in
+  // shared.levels' intersection, and neither has an array of its own the way
+  // the favorite badge does, so a coarser request must fail rather than
+  // silently reusing the center/generic ladder.
   const m = manifest();
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const locate = createTileLocator(m);
-  assert.equal(locate(FAV_ON, 1), null);
+  assert.equal(locate(DISTILL_OFF, 1), null);
 });
 
 test('a generic tile\'s distill alternate resolves only where one exists on disk', () => {
@@ -113,13 +114,43 @@ test('shared.distillLevels is independent of shared.levels - the base ladder hav
   assert.equal(locate(genericDistillId(0), 1), null, 'shared.levels having a rung does not lend it to distill');
 });
 
-test('the favorite badge faces resolve flat off sharedBase, even absent from manifest.shared', () => {
+test('the favorite badge faces resolve off sharedBase at level 0, even absent from manifest.shared', () => {
   // Fixed app art, not a scanned corpus asset - so unlike the center and the
-  // generic tiles, there is nothing describing them in `manifest.shared`.
+  // generic tiles, `manifest.shared.center`/`generic` never describe them.
+  // They still have their own pyramid (`favoriteLevels`), so with no
+  // `m.shared.favoriteLevels` set this falls back to level 0 only, same as
+  // an older manifest with none of the three arrays.
   const locate = createTileLocator(manifest());
   assert.deepEqual(locate(FAV_ON, 0), { url: 'shared/fav_on.png', rect: null });
   assert.deepEqual(locate(FAV_OFF, 0), { url: 'shared/fav_off.png', rect: null });
-  assert.equal(locate(FAV_ON, 1), null, 'the badge has no coarser levels either');
+  assert.equal(locate(FAV_ON, 1), null, 'no favoriteLevels entry means no coarser level exists');
+});
+
+test('a level in shared.favoriteLevels resolves by inserting <width>/ before the filename', () => {
+  const m = manifest();
+  m.shared.favoriteLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const locate = createTileLocator(m);
+  assert.deepEqual(locate(FAV_ON, 1), { url: 'shared/512/fav_on.png', rect: null });
+  assert.deepEqual(locate(FAV_OFF, 1), { url: 'shared/512/fav_off.png', rect: null });
+});
+
+test('shared.favoriteLevels is independent of shared.levels and shared.distillLevels', () => {
+  const m = manifest();
+  m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  m.shared.distillLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  // No m.shared.favoriteLevels set: falls back to level 0 only, regardless
+  // of what the other two arrays have.
+  const locate = createTileLocator(m);
+  assert.equal(locate(FAV_ON, 1), null, 'shared.levels/distillLevels having a rung does not lend it to the badge');
+});
+
+test('a favoriteLevels entry does not lend a level to the center/generic tiles or vice versa', () => {
+  const m = manifest();
+  m.shared.favoriteLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  // No m.shared.levels set: the center/generic ladder stays flat.
+  const locate = createTileLocator(m);
+  assert.equal(locate(CENTER, 1), null);
+  assert.deepEqual(locate(FAV_ON, 1), { url: 'shared/512/fav_on.png', rect: null });
 });
 
 // --- sheet-packed levels -----------------------------------------------------

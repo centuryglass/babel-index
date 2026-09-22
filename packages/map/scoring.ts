@@ -77,7 +77,7 @@ import type {
 
 const { noun, verb, adjective } = winkLemmatizer;
 
-/** The three-anchor band `signedClipCertainty`/`matchStrength` read a raw cosine against. */
+/** The three-anchor band `signedClipStrength`/`matchStrength` read a raw cosine against. */
 export interface ClipBand {
   centre: number;
   high: number;
@@ -104,7 +104,7 @@ export function lemmatise(word: string): string {
  * "Image-content (CLIP) matching" + "Computing strength"): `centre` is the
  * no-opinion point (0), `high` is a genuine match's typical confidence (+1),
  * `low` is a genuinely-irrelevant query's typical confidence (-1). Continuous
- * and monotone between them - see `signedClipCertainty`.
+ * and monotone between them - see `signedClipStrength`.
  *
  * All three are measured against a real corpus via
  * `tools/embed/cosine-range.ts` (CLIP ViT-B/32), read off
@@ -125,7 +125,7 @@ export function lemmatise(word: string): string {
  * that is actively dissimilar to library imagery - where gibberish just
  * embeds near the corpus mean. So `low` is measured, not mirrored from `high`.
  */
-export const CLIP_CERTAINTY: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
+export const CLIP_STRENGTH: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -674,7 +674,7 @@ function storyLongBonus01(chars: number): number {
 /**
  * Strength floor for a single matched story word - "cat" found once in a
  * story is real evidence, but not the near-certain reading a whole matched
- * clause earns. Unlike `CLIP_CERTAINTY`, there is no corpus distribution to measure this
+ * clause earns. Unlike `CLIP_STRENGTH`, there is no corpus distribution to measure this
  * against; it is a judgement call, same as `map.contentRatio` or the slide
  * timings in `packages/config/config.ts`.
  */
@@ -699,14 +699,14 @@ export interface StrengthParts {
  * confidence), falling to -1 at `band.low` (a genuinely-irrelevant query's
  * typical confidence). Two linear segments, continuous at the centre.
  *
- * `clipCertaintyGate` - the ranking term docs/search_rules.md calls for - is
+ * `clipStrengthGate` - the ranking term docs/search_rules.md calls for - is
  * this function's output clamped to its positive half: `Math.max(0, ...)`,
  * done by the caller (`rankHybrid`) rather than here, because
  * `matchStrength` needs the same call's negative half too.
  *
  * @returns in [-1, 1]
  */
-export function signedClipCertainty(cosine: number | null | undefined, band: ClipBand = CLIP_CERTAINTY): number {
+export function signedClipStrength(cosine: number | null | undefined, band: ClipBand = CLIP_STRENGTH): number {
   if (cosine === null || cosine === undefined || !Number.isFinite(cosine)) return 0;
   const { centre, high, low } = band;
   if (cosine >= centre) {
@@ -777,12 +777,12 @@ export function signedPercent(signed: number): number {
  */
 export function matchStrength(
   { tagStrength = 0, titleStrength = 0, storyLongChars = 0, storyMatched = false, cosine = null }: StrengthParts = {},
-  clip: ClipBand = CLIP_CERTAINTY
+  clip: ClipBand = CLIP_STRENGTH
 ): number {
   const K = clamp01(tagStrength);
   const Kt = clamp01(titleStrength);
   const S = storyMatched ? STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01(storyLongChars) : 0;
-  const signed = signedClipCertainty(cosine, clip);
+  const signed = signedClipStrength(cosine, clip);
   const Cpos = Math.max(0, signed);
   const Cneg = Math.max(0, -signed);
 
@@ -808,7 +808,7 @@ interface ScoredRow {
   storyRatio: number;
   storyLongChars: number;
   clipNorm: number;
-  clipCertaintyGate: number;
+  clipStrengthGate: number;
   clipSigned: number;
   cosine: number | null;
   strength: number;
@@ -867,7 +867,7 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
  * signals against each other" names: `E` per exact tag, `P` for the
  * saturating partial-tag budget, `T` for an exact title match, `Pt` for the
  * partial-title budget, `S` for a short story match, `L` for the saturating
- * long-story bonus, `C` for CLIP (`clipNorm * clipCertaintyGate` - relative
+ * long-story bonus, `C` for CLIP (`clipNorm * clipStrengthGate` - relative
  * rank position times absolute confidence, so a query CLIP has no opinion
  * about cannot look confident just because it produced *some* top result).
  * Missing signals are omitted rather than substituted: no embedding blob
@@ -880,7 +880,7 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
  * @param opts.weights        `config.search.weights`
  * @param opts.embeddings the blob, roomCount * dim row-major
  * @param opts.vector the query vector, L2-normalised
- * @param opts.clipCertainty raw-cosine anchors for CLIP's share of strength
+ * @param opts.clipStrength raw-cosine anchors for CLIP's share of strength
  * @returns `strength` is parallel to `order`, i.e. by rank, which is how the map's
  *   density gradient wants it - and `breakdown` follows the same convention,
  *   every array indexed by rank rather than by room id.
@@ -908,7 +908,7 @@ export interface RankHybridOpts {
   scale?: number;
   vector?: Float32Array | number[] | null;
   index?: SearchIndex | null;
-  clipCertainty?: ClipBand;
+  clipStrength?: ClipBand;
 }
 
 export function rankHybrid({
@@ -921,7 +921,7 @@ export function rankHybrid({
   scale = 0,
   vector = null,
   index = null,
-  clipCertainty = CLIP_CERTAINTY,
+  clipStrength = CLIP_STRENGTH,
 }: RankHybridOpts): RankHybridResult {
   const parsed = parseQuery(query);
   const queryTokens = tokenise(query, { minLength: minTokenLength });
@@ -1020,8 +1020,8 @@ export function rankHybrid({
 
     const cosine = cosines ? (cosines[id] ?? null) : null;
     const clipNorm = clipNormAll ? (clipNormAll[id] ?? 0) : 0;
-    const clipSigned = signedClipCertainty(cosine, clipCertainty);
-    const clipCertaintyGate = Math.max(0, clipSigned);
+    const clipSigned = signedClipStrength(cosine, clipStrength);
+    const clipStrengthGate = Math.max(0, clipSigned);
     const storyLongBonus = storyLongBonus01(storyLongChars);
     const tagStrength = hasTerms ? tagBest : 0;
     const titleStrength = hasTerms ? titleBest : 0;
@@ -1033,7 +1033,7 @@ export function rankHybrid({
       weights.titlePartial * titlePartial +
       weights.story * storyRatio +
       weights.storyLong * storyLongBonus +
-      weights.clip * clipNorm * clipCertaintyGate;
+      weights.clip * clipNorm * clipStrengthGate;
 
     scored[id] = {
       id,
@@ -1046,12 +1046,12 @@ export function rankHybrid({
       storyRatio,
       storyLongChars,
       clipNorm,
-      clipCertaintyGate,
+      clipStrengthGate,
       clipSigned,
       cosine,
       strength: matchStrength(
         { tagStrength, titleStrength, storyLongChars, storyMatched, cosine },
-        clipCertainty
+        clipStrength
       ),
     };
   }
@@ -1081,7 +1081,7 @@ export function rankHybrid({
     story: new Float32Array(count),
     storyLongChars: new Float32Array(count),
     clip: new Float32Array(count),
-    clipCertaintyGate: new Float32Array(count),
+    clipStrengthGate: new Float32Array(count),
     clipSigned: new Float32Array(count),
     cosine: new Float32Array(count),
   };
@@ -1109,7 +1109,7 @@ export function rankHybrid({
     breakdown.story[rank] = row.storyRatio;
     breakdown.storyLongChars[rank] = row.storyLongChars;
     breakdown.clip[rank] = row.clipNorm;
-    breakdown.clipCertaintyGate[rank] = row.clipCertaintyGate;
+    breakdown.clipStrengthGate[rank] = row.clipStrengthGate;
     breakdown.clipSigned[rank] = row.clipSigned;
     breakdown.cosine[rank] = row.cosine ?? NaN;
     ranks.tag[rank] = tagRanking.rank[row.id];
@@ -1193,7 +1193,7 @@ export function explainRanking(
   const tagWeighted = weights.tagExact * tagExact + weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION);
   const titleWeighted = weights.titleExact * titleExact + weights.titlePartial * titlePartial;
   const storyWeighted = weights.story * storyRatio + weights.storyLong * storyLongBonus01(storyLongChars);
-  const clipWeighted = hasClip ? weights.clip * at(breakdown?.clip) * at(breakdown?.clipCertaintyGate) : 0;
+  const clipWeighted = hasClip ? weights.clip * at(breakdown?.clip) * at(breakdown?.clipStrengthGate) : 0;
   const totalScore = at(breakdown?.score);
 
   const contributionTerms: { key: 'clip' | 'tag' | 'title' | 'story'; weighted: number }[] = [

@@ -682,8 +682,8 @@ mark {
   mismatch, not a bare minus sign, so it gets a visually distinct style -
   a different color plus italics - never confused with a positive match.
 */
-.clip-certainty { color: var(--dim); }
-.clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
+.clip-strength { color: var(--dim); }
+.clip-strength.mismatch { color: var(--mismatch); font-style: italic; }
 /*
   Set apart from the sum above it on purpose: every row in that sum is
   relative to this query's corpus, and this one is measured against
@@ -898,8 +898,8 @@ mark {
 */
 .catalog-body.paper-sheet .catalog-rank,
 .catalog-body.paper-sheet .catalog-more { color: var(--paper-accent); }
-.catalog-body.paper-sheet .clip-certainty { color: var(--paper-dim); }
-.catalog-body.paper-sheet .clip-certainty.mismatch { color: var(--mismatch); }
+.catalog-body.paper-sheet .clip-strength { color: var(--paper-dim); }
+.catalog-body.paper-sheet .clip-strength.mismatch { color: var(--mismatch); }
 /*
   "Show in the catalog" (`RoomOverlay`'s view toggle) lands a reader on a
   row that otherwise looks like any other - this is what actually picks
@@ -1254,7 +1254,7 @@ mark {
   the text sits below the image and has the full dialog width - a fixed two
   content-sized columns, not one per detail line. The side-by-side split
   keeps one column: its text page is a narrow reading column with no room
-  for a second (see the layout notes). The composite certainty line stays
+  for a second (see the layout notes). The composite strength line stays
   full width in both.
 */
 .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
@@ -1609,7 +1609,7 @@ mark {
   overflow: hidden; align-content: flex-start;
 }
 /*
-  The score, as a full-width composite certainty line plus up to four SHORT
+  The score, as a full-width composite strength line plus up to four SHORT
   per-axis lines (tag, title, story, clip) flowed into columns -
   `CatalogView.tsx`'s `scoreStripHeight` reserves room for the worst case on
   every row, whether or not this room's own search found that many, so
@@ -1624,15 +1624,15 @@ mark {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .score-strip .score-composite { color: var(--ink); font-weight: 500; }
-.score-strip .clip-certainty { color: #6a5f4c; }
-.score-strip .clip-certainty.mismatch { color: var(--mismatch); font-style: italic; }
+.score-strip .clip-strength { color: #6a5f4c; }
+.score-strip .clip-strength.mismatch { color: var(--mismatch); font-style: italic; }
 /*
   The detail lines are laid out in a grid whose columns are CONTENT-sized and
   LEFT-aligned (`justify-content: start`), not stretched to fill the row - just
   enough gap between them to read as distinct. `grid-auto-flow: row` fills the
   first row of `--score-cols` columns, then the next, so a fixed row count
   (from CatalogView's `scoreLayoutFor`) gives a fixed height. The composite
-  "match certainty" line spans all columns on its own line above them...
+  "match strength" line spans all columns on its own line above them...
 */
 .score-details {
   display: grid; grid-template-columns: repeat(var(--score-cols, 2), max-content);

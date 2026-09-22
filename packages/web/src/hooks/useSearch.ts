@@ -158,7 +158,7 @@ export function useSearch({
         scale: blob?.scale,
         vector: res.vector,
         index: searchIndex,
-        clipCertainty: {
+        clipStrength: {
           centre: searchConfig.density.clipCentre,
           high: searchConfig.density.clipHigh,
           low: searchConfig.density.clipLow,

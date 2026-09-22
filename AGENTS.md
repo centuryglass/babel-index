@@ -384,17 +384,39 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   `manifest.shared.distillLevels`, never intersected with `levels`: not every
   generic tile has a distill alternate at all, so gating it on the base
   trees' rungs would silently veto a level the distill tree actually has.
-  `rooms.ts` resolves a shared id at a level in whichever of the two arrays
-  applies to it by inserting `<width>/` before the asset's filename - the
-  same per-level directory `shared-mips.ts` wrote it into. There are no
+  `rooms.ts` resolves a shared id at a level in whichever of the three
+  arrays applies to it by inserting `<width>/` before the asset's filename -
+  the same per-level directory `shared-mips.ts` wrote it into. There are no
   shared sheets: a handful of files needs no packing.
 
-  Every OTHER shared id - a favorite badge, the distill toggle's faces, the
-  "forget searches" overlay - is fixed-size app art with no pyramid of its
-  own, and stays flat at level 0, falling back to it through `servableLevel`
-  for any coarser request, same as before. `main.tsx` pins the center at
-  level 0 (on screen from the first frame) but the generic tiles and their
-  distill alternates each at the coarsest level their own array (`shared.levels`/
+  The favorite badge's two faces (`FAV_ON`/`FAV_OFF`) have their own pyramid
+  too, off a fourth array, `manifest.shared.favoriteLevels`
+  (`scan.ts`'s `discoverFavoriteLevels`) - independent of `levels`, not
+  intersected with it, even though the scaled `fav_on.png`/`fav_off.png`
+  happen to live in the same `<width>/` directories the center tile's mips
+  do (a convenient shared home, not a shared discovery). Unlike the center
+  and generic tiles, the badge's scaled files are hand-tuned for visibility
+  at small sizes rather than written by `shared-mips.ts`'s mechanical
+  resize, and they only go down to tile width 128: a level with no
+  generated badge art draws nothing at all (issue #257) rather than falling
+  back to a different rung, because the badge's on-screen size already
+  tracks the tile's scale (`favoriteIconScreenRect`) regardless of which
+  rung's pixels back it - a coarser substitute would only be softer, never
+  smaller, defeating the reason the rungs exist. `render.ts`/`glRenderer.ts`'s
+  `drawFavoriteBadge`/`drawFavoriteBadgeGL` enforce this by requiring an
+  exact level match rather than using the cache's normal coarser-then-finer
+  substitution. Below `config.favorites.minInteractiveTileWidth`, the badge
+  also stops responding to a tap or hover at all (`main.tsx`'s tap handler,
+  `useMapRenderer.ts`/`useMapRendererGL.ts`'s hover) - a separate cutoff from
+  the drawing one, since a badge can still be legible past the point it is
+  worth making tappable.
+
+  Every OTHER shared id - the distill toggle's faces, the "forget searches"
+  overlay - is fixed-size app art with no pyramid of its own, and stays flat
+  at level 0, falling back to it through `servableLevel` for any coarser
+  request, same as before. `main.tsx` pins the center at level 0 (on screen
+  from the first frame) but the generic tiles and their distill alternates
+  each at the coarsest level their own array (`shared.levels`/
   `shared.distillLevels`) actually has - never a hardcoded `FALLBACK_LEVEL`,
   since an older corpus with no shared pyramid generated has none but level
   0. `render.ts`'s `drawGenericFade` (and its WebGL/slide counterparts) draws
@@ -523,7 +545,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
   for *any* query - driving the gradient off that clusters nonsense as
   confidently as an exact match. `matchStrength` reads raw cosines against
-  absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`).
+  absolute bounds (`CLIP_STRENGTH`, config `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.** The
   blob is positional (`scan.ts` rejects a drifted count); the sidecar is
   joined per file, so a partial match is just partial. `matched: 0` against a
@@ -603,13 +625,20 @@ inpainting pipeline, and isn't touched anywhere else in the project.
 - **The on-map badge is the third favorite control, and it is fixed art, not a
   scanned corpus asset.** `assets/fav_on.png`/`fav_off.png` (`tiles.ts`'s
   `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase` directly rather than
-  a manifest listing, since `scan.ts` never discovers them. Drawn by both
-  `render.ts` and `slide.ts` on every non-center, non-generic cell -
-  `favoriteBadge.ts` is the pure geometry/hit-test half. The tap hit-test
-  has no minimum-size gate: `favoriteHitRect` returns the badge's scaled
-  traced bounds at any zoom, padded up to `MIN_FAVORITE_HIT_TOUCH` on a
-  coarse pointer (`main.tsx` hit-tests that rect directly) - only a trace
-  with no region at all is decoration rather than a dead control.
+  a manifest listing, since `scan.ts` never discovers them - though it does
+  discover the scaled files' pyramid (`manifest.shared.favoriteLevels`,
+  "The center, the generic tiles..." above) the same way it discovers the
+  center tile's. Drawn by both `render.ts` and `slide.ts` on every
+  non-center, non-generic cell - `favoriteBadge.ts` is the pure
+  geometry/hit-test half. Both drawing and interactivity are zoom-gated
+  (issue #257): drawing stops below tile width 128, where there is no
+  scaled art at all, and `favoriteHitRect`'s tap target - padded up to
+  `MIN_FAVORITE_HIT_TOUCH` on a coarse pointer (`main.tsx` hit-tests that
+  rect directly) - is only reachable above
+  `config.favorites.minInteractiveTileWidth`, checked before either the tap
+  or the hover path (`useMapRenderer.ts`/`useMapRendererGL.ts`) ever calls
+  `roomAtPoint`. Only a trace with no region at all is decoration rather
+  than a dead control.
 
 ### The reorder animation
 
@@ -1203,6 +1232,70 @@ two in step - see *Testing and CI*.
   would have surfaced it.
 - **A PR closing an issue says so in its description** (`Closes #NN`), which
   is what makes merging the status update.
+
+## Comment and documentation audits
+
+When the maintainer asks for a comment or documentation audit - "run a comment
+style audit on this change", "spot-check these comments" - the house rules and
+the code-preservation tool are not on `main`. They live on the
+`qwen3.8-flash-comment-fix` branch, a home dedicated to them; ordinary branches
+carry none of them. Pull the files in, do the pass, then remove them again so
+they never reach a commit on `main`.
+
+That branch holds three things (fetch it first if it is not local:
+`git fetch origin qwen3.8-flash-comment-fix`):
+
+- `docs/comment-refactor-plan.md` - the *process*: the tell-and-move table to
+  audit against, the spot-check workflow (§3 of that file), and the verifier's
+  contract (§4). Read this first; it is self-contained enough to work from.
+- `docs/claude_critique.md` - the *diagnosis* those tells come from, with
+  line-referenced evidence. Read it when a judgment call needs the reasoning.
+- `tools/comment-check/check.mjs` and `strip.mjs` - the code-preservation gate.
+
+Pull them to their real paths, so the plan's `see X` cross-references
+resolve against files that exist:
+
+```sh
+git show qwen3.8-flash-comment-fix:docs/comment-refactor-plan.md > docs/comment-refactor-plan.md
+git show qwen3.8-flash-comment-fix:docs/claude_critique.md > docs/claude_critique.md
+git show qwen3.8-flash-comment-fix:tools/comment-check/check.mjs > tools/comment-check/check.mjs
+git show qwen3.8-flash-comment-fix:tools/comment-check/strip.mjs > tools/comment-check/strip.mjs
+```
+
+Do not pull the rest of that directory by default. `strip.test.mjs` matches
+`npm test`'s `tools/` discovery and errors unless the nested classic-TypeScript
+install is present, and `check.mjs` itself needs that install to run: it imports
+`typescript-classic`, which lives in a gitignored `tools/comment-check/node_modules`.
+If `check.mjs` cannot load TypeScript, either pull `package.json` and run
+`npm --prefix tools/comment-check install` once, or fall back to the esbuild
+one-liner in the plan's §4 (weaker: esbuild erases types, so a type-only slip
+passes it).
+
+Then audit the touched comment sections per the plan's §3: read each section,
+rewrite **comment text only**, and prove no code moved:
+
+```sh
+node tools/comment-check/check.mjs <file>...              # working tree vs HEAD
+node tools/comment-check/check.mjs --base <rev> <file>...  # vs another revision
+```
+
+- Every edited file must report `OK (comment-only)` or `clean (unchanged)`. A
+  `-/+` listing of code lines means a code line moved inside the rewrite - fix
+  it before committing. This is the same gate the plan calls non-optional.
+- `check.mjs` parses JS/TS/CSS/HTML only. It cannot verify `.md` edits
+  (`AGENTS.md`, the pulled docs themselves): for those, confirm from `git diff`
+  that only prose lines changed.
+- The usual gates still apply - `npm test` and `npm run typecheck`, plus
+  `npm run lint` where `typescript-eslint` is installed.
+- Audit `AGENTS.md` and the docs when the change touched them, not just code
+  comments; the same tells appear there.
+- Scope the pass to the sections a change (or a review request) touched, plus
+  adjacent comments a fix makes untrue - it is a spot-check, not a rescan.
+
+When the session ends, delete the four pulled files (and revert any nested
+`tools/comment-check/install`) before committing, and stage only the real edits
+by explicit path. The audit's scaffolding belongs to no branch but the one it
+came from.
 
 ## Working with GitHub
 

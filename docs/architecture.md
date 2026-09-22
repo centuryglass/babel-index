@@ -56,9 +56,9 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
 4. A search: the client scores keyword and story matches locally, and
    sends only the query text to `/api/search`, which runs CLIP's text
    tower (the one piece of ranking that can't happen in the browser) and
-   returns embeddings for the client to blend into one ranked, cached
-   result (`packages/server/search-cache.ts` bounds concurrency and caches
-   repeat queries). `docs/search_rules.md` is the full scoring spec.
+   returns the query's text vector for the client to blend into one ranked,
+   cached result (`packages/server/search-cache.ts` bounds concurrency and
+   caches repeat queries). `docs/search_rules.md` is the full scoring spec.
 5. Favoriting: the client mints a random per-visitor token once
    (`localStorage`) and calls `/api/favorites/:file`; the server stores a
    *set* of HMACs (client token + filename), not a counter, so double-

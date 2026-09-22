@@ -343,3 +343,25 @@ test('a non-positive spine bound is floored at 1px, not rejected', () => {
   for (const key of ['center.spineMinPx', 'center.spineMaxPx'])
     assert.ok(notes.some((n) => n.startsWith(key)), `a note for ${key}`);
 });
+
+// --- the favorite badge's interactivity cutoff -------------------------------
+
+test('the favorites block defaults, and an override replaces it', () => {
+  const { favorites } = resolveConfig({});
+  assert.deepEqual(favorites, DEFAULTS.favorites);
+
+  const overridden = resolveConfig({ favorites: { minInteractiveTileWidth: 64 } }).favorites;
+  assert.deepEqual(overridden, { minInteractiveTileWidth: 64 });
+});
+
+test('a negative minInteractiveTileWidth is floored at 0, not rejected - 0 means always interactive', () => {
+  const { favorites, notes } = resolveConfig({ favorites: { minInteractiveTileWidth: -5 } });
+  assert.equal(favorites.minInteractiveTileWidth, 0);
+  assert.ok(notes.some((n) => n.startsWith('favorites.minInteractiveTileWidth')));
+});
+
+test('a non-integer minInteractiveTileWidth is rounded, with a note', () => {
+  const { favorites, notes } = resolveConfig({ favorites: { minInteractiveTileWidth: 100.4 } });
+  assert.equal(favorites.minInteractiveTileWidth, 100);
+  assert.ok(notes.some((n) => n.startsWith('favorites.minInteractiveTileWidth')));
+});
