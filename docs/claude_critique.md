@@ -127,7 +127,11 @@ generalization that these comments are half decoration — which devalues the
 half that is hazard warnings. The same failure at smaller scale: the
 hedge/intensifier adverbs (`exactly`, `really`, `deliberately`, `precisely`,
 `never`, `only ever`, `on purpose`) that mark the writer's conviction rather
-than the fact's content.
+than the fact's content. A cousin of these is the possessive `own` — "the
+badge's **own** pyramid", "the tile's **own** scale" — where the genitive `'s`
+already owns the noun and `own` only pads; the exception that stays is the real
+idiom "X has **its own** Y" (and the existentials "a Y **of its own**" / "no Y
+**of its own**"), which say exclusive possession the bare possessive cannot.
 
 ### 7. Comments painted on regions, not pinned to declarations
 

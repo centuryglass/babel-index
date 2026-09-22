@@ -7,7 +7,7 @@ re-derived each time.
 
 Companion doc: [`claude_critique.md`](claude_critique.md) — the *diagnosis*.
 This file is the *process*: what we're doing, the problems to fix and how, the
-running list of files, the verification tool, and gotchas.
+verification tool, and gotchas.
 
 ## 1. What we're doing, and why
 
@@ -17,37 +17,37 @@ design to a skeptic — when a reader needs reference — signage stating what i
 true, fast. It sabotages skimming in specific, nameable ways (catalogued in
 `claude_critique.md`).
 
-The fix is a second pass over every code file that **rewrites comment text
-only and never touches code**, moving each comment toward: rule first, one
-fact one home, pinned to a declaration, plain declaratives, length
-proportional to risk. Two passes are committed as exemplars:
+The work is a comment pass that **rewrites comment text only and never touches
+code**, moving each comment toward: rule first, one fact one home, pinned to a
+declaration, plain declaratives, length proportional to risk. Two passes are
+committed as exemplars of the two dominant modes:
 
 - `main.tsx` (db67cbe) — the archetype: every failure mode present.
 - `illusion.ts` (10bf4c8) — the nuance: a file where heavy commentary is
   *mostly earned*, so the pass is narrower (dedup + de-shout, not compress).
 
-167 code files total (107 sources + 60 tests/specs), plus two CSS/HTML files
-tracked separately since neither has a test to pair with; the running checklist
-in §4 is the source of truth for how many are done. That is far more than one
-session, so it proceeds in batches. This document tracks the queue and the
-method.
+The tree-wide rewrite is done: every code file was passed once (see the git
+history and the AGENTS.md pass notes). What remains is *spot-checks* — a
+section flagged in review, the comments a change just touched, or a file you're
+already in for another reason. Each spot-check runs the §3 workflow over that
+one section rather than a whole batch, and the §4 verifier proves the same way
+that no code moved. Bug-fixing and deep code analysis stay out of scope: a
+comment pass reads code closely enough to *notice* a bug, and the rule is to
+record it in `docs/pending_task_list.md`, not fix it in the same commit.
 
 Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests,
-plus `packages/web/index.html` and `packages/web/style.css` - §5's verifier
+plus `packages/web/index.html` and `packages/web/style.css` - §4's verifier
 covers all four via `tools/comment-check/strip.mjs`'s per-extension dispatch
 (a real parser for JS/TS, a hand-rolled comment scan for CSS/HTML).
-
-Bug-fixing and deep code analysis are outside of the scope of this plan, but
-a pass of this breadth is likely to incidentally find bugs, design oversights,
-code smells, and other problems that will need to be resolved eventually. Any
-such discoveries should be recorded in docs/pending_task_list.md.
 
 ## 2. Common problems and how to fix each
 
 Distilled from `claude_critique.md`'s eight mechanisms, the two committed
 passes, and five other models' independent critiques (folded into §2b). Each is
 a **tell** (how to spot it) and a **move** (what to do), listed in the order that
-tends to pay off.
+tends to pay off. In a spot-check, apply every one of them to the comment
+lines under your hand — they are a checklist to read against, not a queue to
+work through file by file.
 
 **P1 — A fact told many times (mechanism 5).** *Tell:* the same rationale, in
 slightly different words, in ≥2 places; you finish a sentence before you start
@@ -93,7 +93,8 @@ dashes doing honest parenthetical work are fine.
 
 **P7 — Narrator voice (mechanism 6).** *Tell:* phrasings whose job is style
 ("a bounded handful," "without admitting that…," "robbed," "cannibalized") and
-conviction adverbs (`exactly`, `really`, `precisely`, `never`, `on purpose`).
+conviction adverbs (`really`, `precisely`, `never`, `on purpose`; the word-level
+keeps-and-cuts for `exactly` and possessive `own` are P9's).
 *Move:* rewrite as plain declaratives, keeping the concept the flourish was
 decorating. This is the lowest-priority fix — it costs reader trust slowly —
 but it's cheap when you're already in the sentence.
@@ -108,11 +109,39 @@ careful reader introduce a real bug?" If yes, the length stays. The main.tsx
 pass compressed aggressively; the illusion.ts pass mostly did not — same rules,
 opposite dominant move. Know which file you're in (§3, step 2).
 
+**P9 — Redundant emphasis words: `own` and `exactly`.** Two single-word
+emphasis tells, both stating the writer's confidence rather than a fact. They
+were not in the eight original mechanisms; they surfaced in later spot-checks
+(favorite-badge issue #257) and are cheap to grep.
+
+*Tell — `own`:* it sits between a possessive and the noun it already owns —
+"the badge's **own** pyramid", "the tile's **own** scale", "that level's **own**
+reference width." Native English does not say these; it says "the badge's
+pyramid." The possessive `'s` carries ownership, so `own` only adds length and
+awkwardness. *Move:* drop it from the possessive form. Two cases are *not*
+this tell and must survive:
+- The idiom "X **has/have** its/their own Y" ("the badge has its own pyramid")
+  is the ordinary way to state exclusive possession — keep it.
+- `own` doing real disambiguation — "no pyramid **of its own**", "a pyramid **of
+  their own**", "see its **own** comment" (which comment? this function's) -
+  marks the exclusive-vs-shared or self-referent reading. Keep it, or replace
+  with the plainer "exclusive"/"respective" if the contrast is genuinely
+  load-bearing; do not keep the bare possessive form as the compromise.
+
+*Tell — `exactly`:* it is a confidence signal, not information — "for
+**exactly** these two files", "**exactly** what a real draw looks like." *Move:*
+delete it unless a reader would otherwise draw a wrong conclusion — where it is
+load-bearing it is usually contrasting two values ("the hover tracks the art
+exactly" is real, because the tap target is padded, so without "exactly" the
+reader assumes both paths use the padded box). The test is P8's, applied to one
+word: would a careful reader do the wrong thing if `exactly` were gone? If not,
+cut it.
+
 ## 2b. Extra patterns from the model bake-off
 
 `docs/comment-revision-tests/` holds five other models' critiques + main.tsx
 revisions plus a meta-analysis. Their diagnoses converge with the eight
-mechanisms above, so nothing replaces P1–P8 — but a few sharpen them, and one
+mechanisms above, so nothing replaces P1–P9 — but a few sharpen them, and one
 formatting idea (union-alpha's) is worth adopting because it is *already* a
 house convention. These are folded into the same pass; the source model is named
 where it is the clearest articulation.
@@ -257,24 +286,26 @@ device *not* adopted: the repo states hazards as the main clause of the sentence
 and half-adopting a tag vocabulary is worse than none. Revisit only as a
 repo-wide convention if a future pass ever has the appetite.
 
-## 3. The per-pass workflow (definition of done)
+## 3. The spot-check workflow (definition of done)
 
-Run this every session. Steps 4, 6 and 7 are what make a pass trustworthy.
+Run this on each section you touch. Steps 4, 6 and 7 are what make a pass
+trustworthy.
 
-1. **Pick a batch** from §4 (follow the recommended order; keep
-   cross-referencing files in one batch). Announce which files, and check the
-   box for each when done.
-2. **Read the file end-to-end first.** Note where the ledes are, where facts
+1. **Pick the section** — the comments one change or one review flagged, not a
+   batch. A section is usually a single declaration's comment (or a file
+   header, or one test's rationale), plus any adjacent comment the change
+   makes untrue.
+2. **Read the section in full first.** Note where the ledes are, where facts
    repeat, and — critically — which long comments are earned hazards (P8).
    Re-read the relevant `AGENTS.md` "Things that will bite you" bullets; those
    invariants must survive the rewrite verbatim in substance.
-3. **Edit comments only.** Apply P1–P8 and the §2b sharpenings; reach for the
-   §2c formatting devices (preamble, section dividers) where a file needs a map.
-   Preserve every fact and hazard; never delete information to save space —
+3. **Edit comments only.** Apply P1–P9 and the §2b sharpenings; reach for the
+   §2c formatting devices (preamble, section dividers) where a section needs
+   one. Preserve every fact and hazard; never delete information to save space —
    relocate or condense it. Never touch a functional comment (an
    `eslint-disable`, `@ts-*`, `@license`, or a directive the toolchain reads) —
    those are code, not prose.
-4. **Verify no code changed** — §5's tool, `check.mjs`, on every file touched.
+4. **Verify no code changed** — §4's tool, `check.mjs`, on every file touched.
    Must report `OK (comment-only)` or `clean (unchanged)` for all of them.
    This is not optional; it caught a dropped `rows.sort(...)` line during the
    illusion.ts pass that hand-review had missed. It is also what catches a
@@ -282,400 +313,22 @@ Run this every session. Steps 4, 6 and 7 are what make a pass trustworthy.
 5. **Run the gates:** `npm test`, `npm run lint`, `npm run typecheck`. (These
    also catch a comment edit that broke a `@example`-style fenced block or an
    unused-var reference from a removed doc line.)
-6. **Check every cross-reference resolves.** Grep the file for `see \``,
+6. **Check every cross-reference resolves.** Grep the section for `see \``,
    "see <Name>", literal claims ("the two things", a raw count), and doc
    pointers (`§[0-9]`, `\.md`) — then confirm each named symbol/file still exists
    (`grep -rn`), each literal was replaced by a symbol reference, and each doc
    still has the section cited. Union-alpha's otherwise-best revision shipped a
    dead `positionSearchBox` pointer; this step is the net for that, and for the
    `accessibility-plan.md §4.2a` class of rot that outlives its doc's last cull.
-7. **Self-check the diff** — read `git diff` for the file once more; confirm
-   every changed line is a comment line and the prose follows the house rules
-   (ASCII hyphens in comments, single quotes, two-space indent, no "used to").
+7. **Self-check the diff** — read `git diff` once more; confirm every changed
+   line is a comment line and the prose follows the house rules (ASCII hyphens
+   in comments, single quotes, two-space indent, no "used to"). Sweep the lines
+   you touched for the P9 words (`own` after a possessive, `exactly`), since
+   they survive an otherwise-careful edit.
 8. **Commit** — comments-only in the message, name the dominant moves, cite
-   that the verifier showed byte-identical code. Update §4 boxes in the same
-   commit.
+   that the verifier showed byte-identical code.
 
-## 4. Running list of files to pass
-
-Legend: `[x]` = comment pass done · `[ ]` = not yet · indentation shows a source
-file's paired test(s), to be passed in the same batch as the source.
-
-**Recommended order** (batches), roughly hardest-clustered-first so the
-rearrangement/geometry vocabulary that many files share gets a single canonical
-home early — see §6 for the rationale:
-
-1. `packages/map` — the pure spatial/algorithm core. Done (2026-09-17, across
-   parallel checkouts): the rearrangement half (`illusion.ts` and its test,
-   `board.ts` and its test, `moves.ts`, plus the small shared `prng.ts` and
-   `nextRoom.ts`), then the search half (`ordering.ts`/`scoring.ts`/
-   `searchResult.ts` and the two paired tests; they cross-reference each
-   other heavily, so they went as one batch), then the remainder
-   (`describe.ts`, `favorites.ts`, `metadata.ts`, `manifest.ts` and the
-   paired tests). The remainder's pass found live instances of the §2b
-   rot classes: five `.js`/`.mjs` filename citations, four dead
-   `accessibility-plan.md` section/phase pointers, a `fetchRemoteManifest`
-   pointer whose real name is `scanRemote`, a quote attributed to the
-   curation prompt that the prompt does not contain, a "1.2 seconds" claim
-   the config's viewport-sized durations make unfalsifiable-by-reading, and
-   two claims the code does not have (`roomTitle` as "the one place the
-   `Room {id}` fallback is written", `/api/manifest` serving the scan
-   "verbatim plus a `config` field").
-2. `packages/config` — done (2026-09-17). One file (`config.ts`) is the single
-   densest comment block in the repo (480 comment lines); it took its own pass,
-   and most of that block's bulk was P1 (facts AGENTS.md, `camera.ts`,
-   `ordering.ts` and `search_rules.md` already own) and rotting literals.
-3. The renderers as **one cluster**: `lib/render.ts` + `lib/glRenderer.ts` +
-   `lib/slide.ts` + `lib/glSlideRenderer.ts` + the two `useMapRenderer*` hooks
-   + their paired tests (done 2026-09-17).
-   AGENTS.md's WebGL lockstep rule means their comments describe the same
-   per-frame decisions twice — dedup across them, don't let one file's wording
-   drift from its twin's.
-4. `packages/server` — `app.ts` first (largest, and many other files cite it).
-   Done (2026-09-17, out of order and in parallel).
-5. `packages/web/src/lib` (geometry/DOM-adjacent) → `hooks/` → `components/`.
-   `center.ts` + `tools/center-placement` are coupled; batch them. The
-   `tools/center-placement` half went alone on 2026-09-17, out of order and in
-   parallel, so that pairing note now applies to `center.ts` by itself. The
-   `lib/gl` cluster also went alone on 2026-09-17, out of order and in
-   parallel; the renderer cluster it is the WebGL counterpart of had passed
-   first, so its wording (the lockstep rule, the per-cell loop, the headless
-   flat-quad fallback) is the canonical home the gl/ files were deduped
-   toward. `webglFlag.ts` went with `webgl-map.e2e.ts` the same day, which
-   closes the WebGL set that orders 3, 5 and 7 each held a piece of. The
-   `components/` batch also went on 2026-09-17, out of order and
-   in parallel, ahead of `lib/` and `hooks/`; what it left those two batches
-   to collect is recorded in `docs/pending_task_list.md`.
- 6. `packages/pipeline`, then the `tools/*` trees, then `build/`. Pipeline is
-   done (2026-09-17, out of order and in parallel), and so are `tools/embed`
-   and `tools/upload`.
-7. e2e/parity/bundle specs last (their comments are lower-stakes and they change
-   most often — doing them late avoids churn).
-
-Progress: §4's checklist is the whole record — tick boxes as you go, and do not
-maintain a count here, because a tally that every pass has to re-derive is a
-number that is wrong the moment two passes run at once. `packages/map`,
-`packages/server`, `packages/pipeline`, `packages/config`, the renderer
-cluster, `tools/center-placement`, `tools/embed`, `tools/upload`,
-`tools/perf-capture`, `tools/font-lab`, `packages/web/src/lib/gl` and
-`packages/web/src/lib` (camera, catalog, center) were taken on 2026-09-17 in
-parallel across checkouts, out of the recommended order. `main.tsx` passed first, and passed again after fresh changes from another
-branch went in (2026-09-17). Order is a deduping aid within a cluster, not a
-rule between clusters, so a batch can be taken from any package no other checkout
-is in.
-
-`tools/center-placement` went without `center.ts`, which order 5 pairs it with;
-`center.ts` passed alongside `camera.ts` and `catalog.ts` on 2026-09-17, also in
-parallel. What those three owed, and the pass took: the extension rot
-(`main.jsx`, `geometry.js`, `render.js`, `picking.js`, `center.js`, `rooms.js`,
-`scan.mjs`, `pyramid.js`, `camera.test.mjs`, `pyramid.test.mjs`), two dead
-`accessibility-plan.md` section pointers of which one cited a quoted phrase no
-doc contains, five positional "see `RUNS` below" pointers, and camera.ts's
-"imported into `packages/config` as `camera.x`" rationale, which each of its five
-by-feel constants re-derived and `packages/config` already states once.
-
-Three claims the code does not have were corrected in place: `assignTitles` said
-slots "remain null" for a corpus with no tags (it fills them with
-`kind: 'empty'`), `panByCells` said a scale of 1 "preserves whatever offset it
-picked up" once back inside the region (the snap discards it), and `glideToRest`
-priced "five hundred" iterations against a `GLIDE_REST_MAX_STEPS` of 20,000. Two
-"no test pins this value" claims were simply false: `camera.test.ts` brackets
-`CURSOR_GRANULARITY_PX` at its own default, and `center.test.ts` brackets
-`MIN_SPINE_PX` either side of 5. The rest went to
-`docs/pending_task_list.md`.
-
-Order 7's e2e fleet went one file early - `webgl-map.e2e.ts` passed on
-2026-09-17 alongside `webglFlag.ts` - and the rest of the order (`support.ts`
-plus the eight remaining specs) went as one batch the same day. All ten
-report comment-only via check.mjs; all 785 tests pass; lint and typecheck
-clean. What it took, on top of the run-block dedup (`map-gestures.e2e.ts`
-is the one home for "how to run the suite"; the other specs point there):
-the "one of five files split out of `smoke.e2e.mjs`" claim went entirely
-with its dead `pending_task_list.md` citation (split-history prose is what
-git history is for), as did the "used to"/"an earlier fix"/"written after
-shipping" provenance throughout; four `.js`/`.jsx` citations were corrected
-(`picking`, `center`, `debug`, `main`); two comments were re-stated around
-`DEFAULT_WEBGL`'s shipped default instead of its flip (`render-parity`'s
-header, `support.ts`'s `openLibrary` doc); `catalog.e2e.ts` lost its
-citation of the deleted `docs/catalog-plan.md` and two unsourceable quotes;
-a "one of the two things that do" count and a "five times as likely" went;
-and roughly forty single-word caps promotions were demoted across the
-fleet. Two comments stated behaviour the code does not have and were
-corrected in place: `render-parity.parity.ts`'s header counted the shared
-tile cache's occupancy among the HUD fields that "must agree", which
-`PARITY_FIELDS` deliberately excludes, and `map-gestures.e2e.ts` said "a
-search no longer recenters" where the code simply does not recenter. Dead
-`accessibility-plan.md` § pointers came out of five files, and the doc's
-own surviving `§4.3`/`§3.7`/`§5` self-references and `render.js` citation
-were fixed in the same pass.
-
-`packages/web/src/hooks/` went on 2026-09-17, out of order and in parallel:
-ten files (useCenterShelf, useContentZoom, useCorpus, useDialog + test,
-useDistillMode, useFavorites, useMapCamera, useMapCursor, useModeTransition,
-useRearrangement, useSearch). All ten report comment-only via check.mjs; all
-785 tests pass; lint and typecheck clean. What it found: dead section references
-from deleted accessibility-plan.md (§4.2a, §4.2b, §4.3, §8 item 4) in three
-files (`useMapCursor.ts`, `useRearrangement.ts`) plus perf-research.md pointers
-(§3.1, §3.7, §9) in one file, ghost PR references ("used to provide for free",
-"ghost PR review") in one file, outdated mentions of `imageZoom.ts` /
-`useImageZoom.ts` (now `contentZoomCamera.ts`) in two files, and remaining
-`.jsx` filename citations across several files. The dialog stack header was
-rewritten from copy-paste history into an AGENTS.md pointer; distill mode's
-"fade to black" language was corrected to match `render.ts`'s crossfade wording.
-
-The next `packages/web/src/lib/` batch went on 2026-09-17, out of order and in
-parallel: clearHistoryBook + test, contentZoomCamera + test, debug,
-debugActions + test. All seven report comment-only via check.mjs; all 785 tests
-pass; lint and typecheck clean. What it found: five dead `imageZoom.ts`
-citations inside `contentZoomCamera.ts` and its test (the file that replaced
-that one still cited its predecessor), a past-tense ghost in
-`clearHistoryBook.ts` ("an earlier version anchored to the book's own bounding
-box") now rewritten as a standing hazard, a dead pointer in `debugActions.ts`
-(`DebugStep.args` named a switch in `runSequence` that lives in `dispatch`),
-and one comment stating behaviour the code does not have: `debug.ts` claimed
-the panel's results list and sliders had moved diegetic and that a session
-without the flag compiles the panel out of the tree, when `MapView.tsx` still
-renders them behind a runtime `DEBUG &&` — the comment now lists the panel's
-actual contents and describes the gate as it is.
-
-The next `packages/web/src/lib` batch went the same day: loadingAnimation +
-test, svgPath + test, persist + test. What it found: `persist.ts`'s header
-carried a `main.jsx` citation, a six-thing count, and a per-key story
-paragraph the `KEYS` entries and `main.tsx` already own (the whys moved down
-to each key), a dated provenance cite into `docs/concept.md`, and a client-id
-comment reasoned from the IP address it replaced; `svgPath.ts`'s
-`flattenPath` repeated the importer's since-corrected false claim ("the same
-restriction the importer itself enforces on import") and now states the code's
-actual behaviour - non-canonical letters and their numbers drop silently;
-`loadingAnimation.ts` priced the preload at "a couple of seconds" and stated
-the stop-at-a-boundary guarantee three times over. Found-bug fixes in the
-same pass: AGENTS.md's "History is session-only React state" (history is
-persisted, `KEYS.history`), three `main.jsx` citations in `infra/`
-(`README.md`, `variables.tf`, `terraform.tfvars.example`), and
-`touchDebug.ts`'s own `main.jsx` citation - that file still owes its full
-pass.
-
-The last non-e2e batch went the same day: tiles + test, perfProbe + test,
-spineFont, touchDebug, assets.d.ts, bundle.test.ts, and main.tsx's remainder
-after the branch merge. All seven touched files report comment-only via
-check.mjs; all 785 tests pass; lint and typecheck clean; assets.d.ts and
-perfProbe.test.ts reviewed with no edits needed. What it found: two dead
-`accessibility-plan.md` section pointers in `main.tsx` (`§3.2`, `§4.2b` - the
-doc's cull left no numbered sections to resolve to), a wrong count ("five
-resolutions" against pyramid.ts's six-rung ladder) and a ladder-derived literal
-("up to eleven `locateTile` calls") in `tiles.ts`, a stale `pyramid.test.mjs`
-citation, a `perfSetPhase` doc pointer whose target does not discuss phase lag
-(rewritten to performance-research.md's "Instrumentation caveats" section
-title), a dead "the plan" pointer in `bundle.test.ts`, and a `TileHit.sheetUrl`
-doc citing "perfProbe.ts's §2.3" when the § numbering belongs to
-performance-research.md, not that file. `touchDebug.ts`'s "the whole feature
-compiles out" claim was corrected to what the gate actually does: nothing
-renders, and `useMapCamera` is handed no callback.
-
-### Source files and their tests
-
-#### packages/map
-- [x] packages/map/board.ts
-  - [x] packages/map/board.test.ts
-- [x] packages/map/describe.ts
-  - [x] packages/map/describe.test.ts
-- [x] packages/map/favorites.ts
-  - [x] packages/map/favorites.test.ts
-- [x] packages/map/illusion.ts
-  - [x] packages/map/illusion.test.ts
-- [x] packages/map/manifest.ts  — no unit test
-- [x] packages/map/metadata.ts
-  - [x] packages/map/metadata.test.ts
-- [x] packages/map/moves.ts  — no unit test
-- [x] packages/map/nextRoom.ts
-  - [x] packages/map/nextRoom.test.ts
-- [x] packages/map/ordering.ts
-  - [x] packages/map/ordering.test.ts
-- [x] packages/map/prng.ts  — no unit test
-- [x] packages/map/scoring.ts
-  - [x] packages/map/scoring.test.ts
-- [x] packages/map/searchResult.ts  — no unit test
-
-#### packages/config
-- [x] packages/config/config.ts
-  - [x] packages/config/config.test.ts
-- [x] packages/config/load.ts
-  - [x] packages/config/load.test.ts
-
-#### packages/pipeline
-- [x] packages/pipeline/index.ts  — no unit test
-- [x] packages/pipeline/layout.ts  — no unit test
-- [x] packages/pipeline/mips.ts
-  - [x] packages/pipeline/mips.test.ts
-- [x] packages/pipeline/sheets.ts
-  - [x] packages/pipeline/sheets.test.ts
-
-#### packages/server
-- [x] packages/server/app.ts
-  - [x] packages/server/app.test.ts
-- [x] packages/server/base-path.ts
-  - [x] packages/server/base-path.test.ts
-- [x] packages/server/catalogPage.ts
-  - [x] packages/server/catalogPage.test.ts
-- [x] packages/server/favorites.ts
-  - [x] packages/server/favorites.test.ts
-- [x] packages/server/image-fixtures.ts  — no unit test
-- [x] packages/server/index.ts  — no unit test
-- [x] packages/server/logger.ts
-  - [x] packages/server/logger.test.ts
-- [x] packages/server/port.ts
-  - [x] packages/server/port.test.ts
-- [x] packages/server/remote.ts
-  - [x] packages/server/remote.test.ts
-- [x] packages/server/roomContent.ts
-  - [x] packages/server/roomContent.test.ts
-- [x] packages/server/scan.ts
-  - [x] packages/server/scan.test.ts
-- [x] packages/server/search-cache.ts
-  - [x] packages/server/search-cache.test.ts
-- [x] packages/server/seo.ts
-  - [x] packages/server/seo.test.ts
-- [x] packages/server/version.ts
-  - [x] packages/server/version.test.ts
-
-#### packages/web
-- [x] packages/web/index.html  — no unit test, checked by `stripHtml`
-- [x] packages/web/style.css  — no unit test, checked by `stripCss`
-- [x] packages/web/e2e/support.ts  — no unit test
-- [x] packages/web/src/components/ArtistStatementOverlay.tsx  — no unit test
-- [x] packages/web/src/components/BabelBookOverlay.tsx
-  - [x] packages/web/src/components/BabelBookOverlay.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/components/BookOverlay.tsx  — no unit test
-- [x] packages/web/src/components/CatalogView.tsx  — no unit test
-- [x] packages/web/src/components/HelpDialog.tsx  — no unit test
-- [x] packages/web/src/components/MapView.tsx  — no unit test
-- [x] packages/web/src/components/RoomDetails.tsx  — no unit test
-- [x] packages/web/src/components/RoomOverlay.tsx  — no unit test
-- [x] packages/web/src/components/SearchForm.tsx  — no unit test
-- [x] packages/web/src/components/SearchIcon.tsx  — no unit test
-- [x] packages/web/src/components/ZoomControls.tsx  — no unit test
-- [x] packages/web/src/hooks/useCenterShelf.ts  — no unit test
-- [x] packages/web/src/hooks/useContentZoom.ts  — no unit test
-- [x] packages/web/src/hooks/useCorpus.ts  — no unit test
-- [x] packages/web/src/hooks/useDialog.ts
-  - [x] packages/web/src/hooks/useDialog.test.ts
-- [x] packages/web/src/hooks/useDistillMode.ts  — no unit test
-- [x] packages/web/src/hooks/useFavorites.ts  — no unit test
-- [x] packages/web/src/hooks/useMapCamera.ts  — no unit test
-- [x] packages/web/src/hooks/useMapCursor.ts  — no unit test
-- [x] packages/web/src/hooks/useMapRenderer.ts  — no unit test
-- [x] packages/web/src/hooks/useMapRendererGL.ts  — no unit test
-- [x] packages/web/src/hooks/useModeTransition.ts  — no unit test
-- [x] packages/web/src/hooks/useRearrangement.ts  — no unit test
-- [x] packages/web/src/hooks/useSearch.ts  — no unit test
-- [x] packages/web/src/lib/camera.ts
-  - [x] packages/web/src/lib/camera.test.ts
-- [x] packages/web/src/lib/catalog.ts
-  - [x] packages/web/src/lib/catalog.test.ts
-- [x] packages/web/src/lib/center.ts
-  - [x] packages/web/src/lib/center.test.ts
-- [x] packages/web/src/lib/clearHistoryBook.ts
-  - [x] packages/web/src/lib/clearHistoryBook.test.ts
-- [x] packages/web/src/lib/contentZoomCamera.ts
-  - [x] packages/web/src/lib/contentZoomCamera.test.ts
-- [x] packages/web/src/lib/debug.ts  — no unit test
-- [x] packages/web/src/lib/debugActions.ts
-  - [x] packages/web/src/lib/debugActions.test.ts
-- [x] packages/web/src/lib/distillToggle.ts
-  - [x] packages/web/src/lib/distillToggle.test.ts
-- [x] packages/web/src/lib/favoriteBadge.ts
-  - [x] packages/web/src/lib/favoriteBadge.test.ts
-- [x] packages/web/src/lib/gl/context.ts  — no unit test
-- [x] packages/web/src/lib/gl/glowTexture.ts  — no unit test
-- [x] packages/web/src/lib/gl/shaders.ts  — no unit test
-- [x] packages/web/src/lib/gl/spineTexture.ts  — no unit test
-- [x] packages/web/src/lib/gl/textureCache.ts  — no unit test
-- [x] packages/web/src/lib/gl/warm.ts  — no unit test
-- [x] packages/web/src/lib/glRenderer.ts
-  - [x] packages/web/src/lib/glRenderer.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/glSlideRenderer.ts
-  - [x] packages/web/src/lib/glSlideRenderer.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/loadingAnimation.ts
-  - [x] packages/web/src/lib/loadingAnimation.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/perfProbe.ts
-  - [x] packages/web/src/lib/perfProbe.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/persist.ts
-  - [x] packages/web/src/lib/persist.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/picking.ts
-  - [x] packages/web/src/lib/picking.test.ts
-- [x] packages/web/src/lib/pyramid.ts
-  - [x] packages/web/src/lib/pyramid.test.ts
-- [x] packages/web/src/lib/render.ts
-  - [x] packages/web/src/lib/render.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/rooms.ts
-  - [x] packages/web/src/lib/rooms.test.ts
-- [x] packages/web/src/lib/slide.ts
-  - [x] packages/web/src/lib/slide.test.ts
-- [x] packages/web/src/lib/spineFont.ts  — no unit test
-- [x] packages/web/src/lib/svgPath.ts
-  - [x] packages/web/src/lib/svgPath.test.ts  (reviewed; no edits needed)
-- [x] packages/web/src/lib/tiles.ts
-  - [x] packages/web/src/lib/tiles.test.ts
-- [x] packages/web/src/lib/touchDebug.ts  — no unit test (stale `main.jsx`
-  citation fixed 2026-09-17 alongside the persist batch; the rest of its pass
-  went with the last non-e2e batch the same day)
-- [x] packages/web/src/lib/webglFlag.ts  — no unit test
-- [x] packages/web/src/main.tsx  — no unit test (re-passed end to end
-  2026-09-17 after the branch merge; what remained was the two dead
-  `accessibility-plan.md` section pointers)
-- [x] packages/web/src/assets.d.ts  — no unit test (reviewed; no edits needed)
-_Standalone specs/helpers (no same-name source):_
-- [x] packages/web/bundle.test.ts
-- [x] packages/web/e2e/accessibility.e2e.ts
-- [x] packages/web/e2e/artist-statement.e2e.ts
-- [x] packages/web/e2e/catalog.e2e.ts
-- [x] packages/web/e2e/favorites.e2e.ts
-- [x] packages/web/e2e/keyboard-cursor.e2e.ts
-- [x] packages/web/e2e/map-gestures.e2e.ts
-- [x] packages/web/e2e/render-parity.parity.ts
-- [x] packages/web/e2e/shelf.e2e.ts
-- [x] packages/web/e2e/webgl-map.e2e.ts
-
-#### tools/center-placement
-- [x] tools/center-placement/import-shelf-svg.ts  — no unit test
-- [x] tools/center-placement/lib/geometry.ts  — no unit test
-- [x] tools/center-placement/lib/measured.ts  — GENERATED: prose fixed in the
-  generator's `body` template and re-run (`npm run generate:shelf-geometry`), so
-  the artifact itself still verifies comment-only
-- [x] tools/center-placement/lib/svg.ts  — no unit test
-_Standalone specs/helpers (no same-name source):_
-- [x] tools/center-placement/geometry.test.ts
-
-#### tools/center-animation
-- [x] tools/center-animation/index.ts  — no unit test
-- [x] tools/center-animation/lib.ts
-  - [x] tools/center-animation/lib.test.ts  (reviewed; no edits needed)
-
-#### tools/embed
-- [x] tools/embed/cosine-range.ts  — no unit test
-- [x] tools/embed/cosine-stats.ts
-  - [x] tools/embed/cosine-stats.test.ts
-- [x] tools/embed/embed.ts  — no unit test
-
-#### tools/upload
-- [x] tools/upload/lib.ts
-  - [x] tools/upload/lib.test.ts
-- [x] tools/upload/upload-r2.ts  — no unit test
-
-#### tools/perf-capture
-- [x] tools/perf-capture/capture.ts  — no unit test
-
-#### tools/font-lab
-- [x] tools/font-lab/download-fonts.ts  — no unit test (reviewed; no edits needed)
-- [x] tools/font-lab/fonts.ts  — no unit test
-- [x] tools/font-lab/render.ts  — no unit test
-- [x] tools/font-lab/variants.ts  — no unit test
-
-#### build
-- [x] build/register.mjs  — no unit test
-- [x] build/ts-loader.mjs  — no unit test
-
-## 5. Verification: "no code changed"
+## 4. Verification: "no code changed"
 
 A comment pass must be provably code-free. Two independent checks, both cheap:
 
@@ -734,7 +387,7 @@ console.log(go("/path/before.ts")===go("/path/after.ts")?"IDENTICAL-CODE":"CODE-
 (Both were used on the illusion.ts pass; the esbuild check is what first flagged
 the dropped `rows.sort(...)`. They agree.)
 
-## 6. Tips that will save you
+## 5. Tips that will save you
 
 - **Never `git add -A`/`git add .` to commit a pass.** This working tree
   routinely carries untracked scratch that must not be committed
@@ -746,16 +399,12 @@ the dropped `rows.sort(...)`. They agree.)
   docs/claude_critique.md docs/comment-refactor-plan.md`).
 - **A dropped code line is the real risk, not a mangled sentence.** The illusion.ts
   pass accidentally deleted `rows.sort(...)` inside a comment rewrite and
-  hand-review missed it — only the verifier caught it. Run §5 before you trust
+  hand-review missed it — only the verifier caught it. Run §4 before you trust
   your own eyes, every time.
 - **Delete any scratch file before committing.** A temp `.mjs` at the repo root
   or a helper dropped under `tools/` gets picked up by `eslint .` (and any
   `*.test.*` scratch by `npm test`). Remove scaffolding used to build or test a
   tool; commit only the tool's real files.
-- **Batch by cross-reference, not by folder size.** When file A's comment points
-  at file B ("see `board.ts`"), deduping (P1) needs you to see both at once, so
-  A and B go in one batch. The renderer cluster and the center/geometry cluster
-  exist for this reason.
 - **Comments use ASCII hyphens; this plan and the critique use em dashes.**
   AGENTS.md rule: prose comments in `.ts`/`.tsx` use `" - "`, not —. Match the
   file you're editing, not this document.
@@ -790,9 +439,10 @@ the dropped `rows.sort(...)`. They agree.)
   lines once as a human after the verifier passes — it's the last net for P4/P7
   prose slips and for catching a "comment-only" edit that quietly reordered two
   statements.
-- **The plan itself is not exempt.** If you find a worse pattern than anything in
-  §2, add it here (with the file that showed it) rather than only fixing the one
-  file. And if a batch reveals the ordering here is wrong, update §4.
+- **The plan itself is not exempt.** If a spot-check turns up a worse pattern
+  than anything in §2, add it there (with the comment that showed it) rather
+  than only fixing that one comment. P9's `own`/`exactly` tells entered this
+  way — caught checking the favorite-badge section, not on a scheduled pass.
 - **AGENTS.md got the same pass (2026-09-17).** Its Conventions section now
   carries the distilled house rules — lead with the rule, one fact one home,
   pin to declarations, keep hazards and drop ghosts, length proportional to
