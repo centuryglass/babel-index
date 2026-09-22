@@ -182,6 +182,93 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     await settled(page);
   });
 
+  test('the search badge shows preparing before the fetch resolves, and releases it once a reduced-motion change lands with nothing to animate [#235]', async () => {
+    const { page } = session;
+    // Reduced motion means `startRearrangement` declines before ever
+    // claiming the indicator (see `useRearrangement.ts`'s early
+    // `prefersReducedMotion()` return) - the case #235's
+    // `cancelSearchPreload` exists for: without it, this search would leave
+    // the badge spinning forever.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    let release;
+    const held = new Promise((r) => (release = r));
+    await page.route('**/api/search*', async (route) => {
+      await held;
+      await route.fulfill({ response: await route.fetch() });
+    });
+    const badge = page.locator('button.search-trigger');
+    const preparing = async () => ((await badge.getAttribute('class')) ?? '').includes('preparing');
+    try {
+      await badge.click();
+      await landed(page, session.flightMs);
+      await page.locator('input[type=search]').fill('clockwork');
+      await page.locator('input[type=search]').press('Enter');
+
+      // The badge is already spinning while the fetch is still held - the
+      // whole point of #235: feedback starts at submission, not once the
+      // ranking lands.
+      await waitFor(preparing, 2000, 'the search badge never showed preparing while the fetch was in flight');
+
+      release();
+      await waitFor(
+        async () => !(await preparing()),
+        SEARCH_TIMEOUT,
+        'the search badge stayed "preparing" after a reduced-motion change landed with nothing to animate'
+      );
+    } finally {
+      await page.unroute('**/api/search*');
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.locator('input[type=search]').fill('');
+      await page.locator('input[type=search]').press('Enter');
+      await page.locator('canvas').focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(session.flightMs + 200);
+      await settled(page);
+    }
+  });
+
+  test('a search the server cannot answer hands the badge spinner back rather than leaving it stuck', async () => {
+    const { page } = session;
+    let release;
+    const held = new Promise((r) => (release = r));
+    await page.route('**/api/search*', async (route) => {
+      await held;
+      await route.fulfill({ status: 500, body: 'no' });
+    });
+    const badge = page.locator('button.search-trigger');
+    const preparing = async () => ((await badge.getAttribute('class')) ?? '').includes('preparing');
+    try {
+      await badge.click();
+      await landed(page, session.flightMs);
+      await page.locator('input[type=search]').fill('clockwork');
+      await page.locator('input[type=search]').press('Enter');
+
+      await waitFor(preparing, 2000, 'the search badge never showed preparing while the fetch was in flight');
+
+      release();
+      await waitFor(
+        async () => /could not be run/.test((await page.locator('[role=status]').textContent()) ?? ''),
+        SEARCH_TIMEOUT,
+        'a failed search never reported itself'
+      );
+      assert.equal(await preparing(), false, 'the search badge stayed "preparing" after a failed search');
+    } finally {
+      await page.unroute('**/api/search*');
+      // Chromium logs the forced 500 on its own, and Playwright relays it -
+      // this test's own noise rather than the app's (see catalog.e2e.ts's
+      // matching test for the same forced-500 cleanup).
+      const forced = /Failed to load resource[\s\S]*\b500\b/;
+      for (let i = session.consoleErrors.length - 1; i >= 0; i--)
+        if (forced.test(session.consoleErrors[i])) session.consoleErrors.splice(i, 1);
+      await page.locator('input[type=search]').fill('');
+      await page.locator('input[type=search]').press('Enter');
+      await page.locator('canvas').focus();
+      await page.keyboard.press('Home');
+      await page.waitForTimeout(session.flightMs + 200);
+      await settled(page);
+    }
+  });
+
   test('nothing was logged to the console', () => {
     assert.deepEqual(session.consoleErrors, []);
   });
