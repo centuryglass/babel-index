@@ -427,7 +427,7 @@ test('prefetching cannot outrun the visible pass', () => {
 
 test('the ring walk stops computing ids once the prefetch queue is full', () => {
   // At a coarse zoom the ring is thousands of cells - most of it must never
-  // reach `roomAt()`/`idOf()` once `cache.hasPrefetchCapacity()` says no more
+  // reach `rankOf()`/`idOf()` once `cache.hasPrefetchCapacity()` says no more
   // of it can be queued this frame (issue #258).
   const images = fakeImages();
   const cache = createTileCache({
@@ -441,7 +441,7 @@ test('the ring walk stops computing ids once the prefetch queue is full', () => 
   const layout = createLayout({ roomCount: 5000, contentRatio: 1, seed: 1, aspect: CELL_ASPECT });
   const order = shuffledOrder(5000, 1);
   let calls = 0;
-  const spiedLayout = { ...layout, roomAt: (x: number, y: number, o: number[]) => { calls++; return layout.roomAt(x, y, o); } };
+  const spiedLayout = { ...layout, rankOf: (x: number, y: number) => { calls++; return layout.rankOf(x, y); } };
 
   const renderer = createRenderer({ cache });
   const stats = renderer.draw({
@@ -451,7 +451,7 @@ test('the ring walk stops computing ids once the prefetch queue is full', () => 
   const visibleCells = (stats.bounds.x1 - stats.bounds.x0 + 1) * (stats.bounds.y1 - stats.bounds.y0 + 1);
   const ringCallsMade = calls - visibleCells;
   // Some ring cells fall outside the layout's occupied radius and resolve to
-  // the pinned CENTER fallback (`roomAt`'s generic branch, `genericCount: 0`)
+  // the pinned CENTER fallback (`idOf`'s generic branch, `genericCount: 0`)
   // - cheap, and correctly uncounted against QUEUE_LIMIT (256) - so the total
   // lands a bit above 256, well under the ~1944-cell ring this viewport has.
   assert.ok(ringCallsMade > 0, 'sanity: the ring was walked at all');

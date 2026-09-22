@@ -38,12 +38,22 @@ import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts'
 import { createSpineTextureCache, type SpineTextureCache } from './gl/spineTexture.ts';
 import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
 import type { DrawOpts, DrawResult } from './render.ts';
-import type { MapLayout, RoomAtResult } from '../../../map/ordering.ts';
+import { isCenter, type MapLayout } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
-/** Same rule as `render.ts`'s `idOf`; the twins mirror each other rather than share an abstraction - see AGENTS.md's "The WebGL renderer". */
-const idOf = (cell: RoomAtResult, layout: MapLayout, gx: number, gy: number): RoomId =>
-  cell.center ? CENTER : cell.generic ? genericId(layout.genericIndexAt(gx, gy)) : cell.id;
+/**
+ * Same rule as `render.ts`'s `idOf`; the twins mirror each other rather than
+ * share an abstraction - see AGENTS.md's "The WebGL renderer". Built from
+ * `layout.rankOf`/`isCenter` rather than `layout.roomAt()` for the same
+ * per-frame allocation reason (issue #256).
+ */
+const idOf = (layout: MapLayout, order: number[], gx: number, gy: number): RoomId => {
+  if (isCenter(gx, gy)) return CENTER;
+  const rank = layout.rankOf(gx, gy);
+  return rank === -1 || rank >= order.length
+    ? genericId(layout.genericIndexAt(gx, gy))
+    : order[rank];
+};
 
 export interface CreateGLRendererOpts {
   cache: TileCache;
@@ -302,15 +312,18 @@ export function createGLRenderer({
 
     for (let gy = bounds.y0; gy <= bounds.y1; gy++) {
       for (let gx = bounds.x0; gx <= bounds.x1; gx++) {
-        const cell = layout.roomAt(gx, gy, order);
-        const id = idOf(cell, layout, gx, gy);
+        // Scalar reads rather than `layout.roomAt()` - see `idOf`'s comment.
+        const isCtr = isCenter(gx, gy);
+        const rank = isCtr ? -1 : layout.rankOf(gx, gy);
+        const isGeneric = !isCtr && (rank === -1 || rank >= order.length);
+        const id: RoomId = isCtr ? CENTER : isGeneric ? genericId(layout.genericIndexAt(gx, gy)) : order[rank];
         visible.push(id);
 
         const [sx, sy] = toScreen(gx, gy);
         const dst = { x: sx, y: sy, w: cw, h: ch };
-        const distillId = cell.generic ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
+        const distillId = isGeneric ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
 
-        if (cell.generic && genericFade >= 1) {
+        if (isGeneric && genericFade >= 1) {
           drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         } else {
           const hit = cache.get(id, level);
@@ -331,28 +344,28 @@ export function createGLRenderer({
             blank++;
           }
 
-          if (cell.generic && genericFade)
+          if (isGeneric && genericFade)
             drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
         }
 
         // The favorite badge - every real room, never the center or a
         // generic cell, same gate as `render.ts`.
-        if (favorites && !cell.center && !cell.generic) {
+        if (favorites && !isCtr && !isGeneric) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
-          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(cell.id), cellPx, sx, sy, level, hovered, glowTextures);
+          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(order[rank]), cellPx, sx, sy, level, hovered, glowTextures);
         }
 
         // The "forget searches" book's black spine overlay - same gate as
         // `render.ts`, drawn before the spine texture so the gilt text still
         // composites on top.
-        if (cell.center && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
+        if (isCtr && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
           drawClearHistoryBookOverlayGL(gl, cache, textures, cellPx, sx, sy);
 
         // The center room's spines - a separately-cached texture
         // (`gl/spineTexture.ts`) rather than text drawn straight into this
         // frame, same content-gated re-render `composeSpines` itself already
         // does for legibility (`areSpinesLegible`, called inside it).
-        if (cell.center && centreSlots && spineFontLimits) {
+        if (isCtr && centreSlots && spineFontLimits) {
           const spine = spineTextures.get(gl.gl, cw, ch, centreSlots, hoveredBook, spineFontLimits);
           if (spine) gl.drawTexturedQuad(spine.texture, { x: 0, y: 0, w: spine.width, h: spine.height }, spine.width, spine.height, dst);
         }
@@ -361,16 +374,16 @@ export function createGLRenderer({
         // `areSpinesLegible` only reads the rect's width, so the CSS-pixel
         // `cellPxCss` (not the device-pixel `cellPx` used to draw) is what
         // keeps the threshold matching `render.ts`'s own gate.
-        if (cell.center && favorites && areSpinesLegible({ x: 0, y: 0, w: cellPxCss.x, h: cellPxCss.y }))
+        if (isCtr && favorites && areSpinesLegible({ x: 0, y: 0, w: cellPxCss.x, h: cellPxCss.y }))
           drawFavoriteSwitchGL(gl, cache, textures, sortMode, cellPx, sx, sy);
         // The distill toggle - independent of `favorites`, same `undefined`
         // opt-out as `render.ts`.
-        if (cell.center && distillMode !== undefined)
+        if (isCtr && distillMode !== undefined)
           drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy, glowTextures);
         // The loading indicator's current frame - the WebGL counterpart of
         // `render.ts`'s `drawLoadingFrame`. Same disjoint region, same last-in
         // ordering; the sheet uploads through the ordinary texture cache.
-        if (cell.center && loadingFrame) {
+        if (isCtr && loadingFrame) {
           const tex = textures.get(gl, loadingFrame.image);
           if (tex) {
             const r = loadingFrame.rect;
@@ -403,7 +416,7 @@ export function createGLRenderer({
         const inside =
           gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
         if (inside) continue;
-        cache.prefetch(idOf(layout.roomAt(gx, gy, order), layout, gx, gy), level);
+        cache.prefetch(idOf(layout, order, gx, gy), level);
       }
     }
     // Deduped once here: see `render.ts`'s matching comment for why (repeated

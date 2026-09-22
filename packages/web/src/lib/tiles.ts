@@ -80,7 +80,18 @@ import { perfRecordSheetStart, perfRecordSheetLoaded } from './perfProbe.ts';
  * `genericId(-1)` is `CENTER` rather than an id that resolves to nothing.
  */
 export const CENTER = 'center';
-export const genericId = (i: number): number | string => (i < 0 ? CENTER : `generic:${i}`);
+
+// Interned rather than templated fresh each call - every generic cell on
+// screen resolves its id every frame (the render loop's visible pass and
+// its prefetch ring), and `genericCount` is fixed at load, so there is a
+// small, bounded set of strings worth building once.
+const genericIdCache = new Map<number, string>();
+export const genericId = (i: number): number | string => {
+  if (i < 0) return CENTER;
+  let id = genericIdCache.get(i);
+  if (id === undefined) genericIdCache.set(i, (id = `generic:${i}`));
+  return id;
+};
 
 /**
  * Distill mode's paired alternate for generic tile `i` - the art a generic
@@ -91,7 +102,12 @@ export const genericId = (i: number): number | string => (i < 0 ? CENTER : `gene
  * entry in `createTileLocator`'s url map, and `drawGenericFade`
  * (`render.ts`) falls back to flat black when the cache has nothing for it.
  */
-export const genericDistillId = (i: number): number | string => `generic-distill:${i}`;
+const genericDistillIdCache = new Map<number, string>();
+export const genericDistillId = (i: number): number | string => {
+  let id = genericDistillIdCache.get(i);
+  if (id === undefined) genericDistillIdCache.set(i, (id = `generic-distill:${i}`));
+  return id;
+};
 
 /** The favorite badge's two faces - see `favoriteBadge.ts`. Shared ids, like `CENTER`. */
 export const FAV_ON = 'fav-on';
