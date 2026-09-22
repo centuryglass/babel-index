@@ -27,7 +27,7 @@
  * known negative. Either list's own distribution measures what a genuine match
  * or a genuine miss looks like, rather than where a mixed pool thins out.
  *
- * The shipped anchors are `CLIP_CERTAINTY`'s three numbers; its docblock in
+ * The shipped anchors are `CLIP_STRENGTH`'s three numbers; its docblock in
  * packages/map/scoring.ts says which of these measurements each one reads.
  * `docs/search_rules.md` "Image-content (CLIP) matching" is where they are used.
  */
@@ -62,7 +62,7 @@ export interface KeywordSummary extends Summary {
 
 /**
  * The two bands `summarizeUniversal` reports for a known-outcome keyword list.
- * The anchors the app ships are ceilings - see `CLIP_CERTAINTY`; the floor is
+ * The anchors the app ships are ceilings - see `CLIP_STRENGTH`; the floor is
  * reported alongside, as the low end of the same measurement.
  */
 export interface UniversalCalibration {
@@ -127,7 +127,7 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
  * `keywordMax` as a typical best match.
  *
  * A first read off the shape of the corpus, not what the app ships: the anchors
- * in `CLIP_CERTAINTY` are read off a known-outcome list instead. Do not promote
+ * in `CLIP_STRENGTH` are read off a known-outcome list instead. Do not promote
  * `clipLow` to a strength floor on its own - a high percentile of `overall`
  * assumes most pairs are unrelated, and a common word that is genuinely true of
  * many rooms (`book`) scores below such a cutoff on correct matches.

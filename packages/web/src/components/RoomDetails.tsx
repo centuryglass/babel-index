@@ -111,7 +111,7 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
   return (
     <p className="score-line" title={`${clip.cosine.toFixed(3)} cosine between CLIP text and image vectors`}>
       #{clip.rank} by image:{' '}
-      <span className={mismatch ? 'clip-certainty mismatch' : 'clip-certainty'}>
+      <span className={mismatch ? 'clip-strength mismatch' : 'clip-strength'}>
         {pct}% {mismatch ? 'mismatch' : 'match'}
       </span>
     </p>

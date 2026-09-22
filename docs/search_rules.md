@@ -9,7 +9,7 @@ behavior that the implementation (`packages/map/scoring.ts`, `packages/map/order
 This describes the finished behavior, and matches the implementation
 (`packages/map/scoring.ts`, `packages/map/ordering.ts`,
 `packages/config/config.ts`) as of this writing. Keep it that way: a change
-to a weight, a matching rule, or a certainty anchor updates this file in the
+to a weight, a matching rule, or a strength anchor updates this file in the
 same commit, rather than letting it drift back into being a target the code
 no longer implements.
 
@@ -143,9 +143,9 @@ RoomMatch = {
   clipNorm: number,                // clipCosine min-max normalised across every
                                      // room FOR THIS QUERY - always 1 for the
                                      // best-matching room, whatever the query was
-  clipCertaintyGate: number,        // clipCosine placed against the match band,
+  clipStrengthGate: number,          // clipCosine placed against the match band,
                                      // in [0, 1] - the positive half of the signed
-                                     // certainty curve, see "Image-content" below
+                                     // strength curve, see "Image-content" below
   score: number,                     // the one weighted sum ranking sorts by
   strength: number,                   // the one absolute [-1, 1] the density
 }                                      // gradient and the UI's percentage read -
@@ -264,7 +264,7 @@ something, but a room CLIP is genuinely confident about should still win.
 many terms partially match or how strong any one fraction is (summed fractions
 are clamped against a saturation constant, `TAG_PARTIAL_SATURATION = 2`, so it
 can't be inflated by a long query). A "reasonably certain" CLIP match - defined
-below as `clipCertaintyGate >= 0.5` on the room CLIP is most confident about -
+below as `clipStrengthGate >= 0.5` on the room CLIP is most confident about -
 contributes at least `0.5` points, which already clears `0.45`.
 
 **More partial tag matches beat fewer, for the same number of exact matches.**
@@ -366,7 +366,7 @@ unusually sure of itself.
 *Enforcement:* a single-term query that fully matches always reaches
 `storyRatio = 1` (the ratio is against the *query's* length, not the story's),
 contributing the full `S = 0.4`. Since a "highly certain" CLIP match
-contributes at least `0.5` (`clip * clipCertaintyGate >= 1 * 0.5`), it still
+contributes at least `0.5` (`clip * clipStrengthGate >= 1 * 0.5`), it still
 wins - but nothing short of that threshold (roughly the top of the corpus's
 ordinary cosine range, see "Image-content (CLIP) matching" below) can beat the bare word
 match. This is the same inequality as the partial-tag rule above, from the
@@ -400,21 +400,21 @@ construction of relative ranking (min-max normalisation always gives the top
 result exactly `1.0`) - that must not read as a strong match for a query like
 `cghjj`.
 *Enforcement:* CLIP's contribution to the ranking sum is
-`clip * clipNorm * clipCertaintyGate` - the *relative* rank position
-(`clipNorm`) multiplied by the *absolute* confidence (`clipCertaintyGate`,
+`clip * clipNorm * clipStrengthGate` - the *relative* rank position
+(`clipNorm`) multiplied by the *absolute* confidence (`clipStrengthGate`,
 read off the raw cosine against fixed, corpus-measured bounds). A query with no
 real signal has every raw cosine sitting low against those bounds, so
-`clipCertaintyGate` is near zero and the whole term contributes almost nothing
+`clipStrengthGate` is near zero and the whole term contributes almost nothing
 - whatever `clipNorm` says.
 
 **"Reasonably certain" and "highly certain" are calibrated against this
 corpus's cosine DISTRIBUTION, not guessed.** These phrases appear in the tag
 and story rules above and need one precise meaning.
-*Enforcement:* they read off the same signed certainty curve "Computing
+*Enforcement:* they read off the same signed strength curve "Computing
 strength" defines - two linear segments meeting at `centre`, `0` there, `+1`
-at `high`, `-1` at `low`. `clipCertaintyGate` is the positive half of that
+at `high`, `-1` at `low`. `clipStrengthGate` is the positive half of that
 curve read back into `[0, 1]`, and "reasonably/highly certain" means
-`clipCertaintyGate >= 0.5`. All three anchors are measured by
+`clipStrengthGate >= 0.5`. All three anchors are measured by
 `tools/embed/cosine-range.ts` against this corpus, not chosen: whole-list
 percentiles silently assumed "most pairs are unrelated", which turned out
 wrong for common, genuinely-true words (`book` scored below the naive
@@ -512,7 +512,7 @@ a reason to cluster a room toward the center.
 
 ### Reporting
 
-**CLIP's reported certainty is a signed percentage anchored on the
+**CLIP's reported strength is a signed percentage anchored on the
 distribution's no-opinion centre.** The number shown to a reader is the signed
 curve above rendered as a percentage: `0` at the cosine an unrelated query lands
 at, rising toward `+100%` at the high extreme a genuine match reaches, and - for
@@ -544,7 +544,7 @@ There's no meaningful "73% sure" reading for any of them.
 partially (derived from `tagPartialSum`'s contributing terms); the title row
 shows whether `titleExact` fired, or that the title matched partially; the
 story row shows `storyLongChars`. None of the three reads from the CLIP
-certainty curve - the distribution anchors exist only for the CLIP row.
+strength curve - the distribution anchors exist only for the CLIP row.
 
 **Every room can be read on each axis independently, including how it compares
 only on that axis.** A reader should be able to see "this room ranks #4 by tag

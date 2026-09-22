@@ -523,7 +523,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
   numbers.** The blend min-maxes CLIP across the corpus, so some room scores 1
   for *any* query - driving the gradient off that clusters nonsense as
   confidently as an exact match. `matchStrength` reads raw cosines against
-  absolute bounds (`CLIP_CERTAINTY`, config `search.density.clipLow/High`).
+  absolute bounds (`CLIP_STRENGTH`, config `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.** The
   blob is positional (`scan.ts` rejects a drifted count); the sidecar is
   joined per file, so a partial match is just partial. `matched: 0` against a
