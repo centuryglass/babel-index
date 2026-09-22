@@ -211,6 +211,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // ref and it is filled in below once useRearrangement has returned.
   // See useSearch.ts's file comment.
   const requestAnimationRef = useRef<(note: string) => void>(() => {});
+  // Same forward-ref cycle, for the indicator/spinner's early start - see
+  // useSearch.ts's UseSearchOpts doc.
+  const beginSearchPreloadRef = useRef<() => void>(() => {});
+  const cancelSearchPreloadRef = useRef<() => void>(() => {});
   // A search and a favorite sort are mutually exclusive (SR-41): starting a
   // real search ends whatever sort was active, synchronously and before the
   // fetch even lands, so the sort's own controls never sit lit while a
@@ -224,6 +228,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     searchIndex,
     embeddings,
     requestAnimationRef,
+    beginSearchPreloadRef,
+    cancelSearchPreloadRef,
     pushHistory,
     setStatus,
     onSearchStart,
@@ -829,7 +835,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // Closes the useSearch <-> useRearrangement cycle discussed at
   // `requestAnimationRef`'s declaration.
-  const { requestAnimation } = useRearrangement({
+  const { requestAnimation, beginSearchPreload, cancelSearchPreload } = useRearrangement({
     layout,
     order,
     mode,
@@ -848,6 +854,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     onPreparingChange: setPreparingRearrangement,
   });
   requestAnimationRef.current = requestAnimation;
+  beginSearchPreloadRef.current = beginSearchPreload;
+  cancelSearchPreloadRef.current = cancelSearchPreload;
 
   // --- distill mode ------------------------------------------------------------
   //
@@ -867,14 +875,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
-    loadingAnim,
+    loadingAnim, cancelSearchPreload,
   });
   useMapRendererGL({
     canvasRef: WEBGL ? canvasRef : inertCanvasRef,
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
     mode, layout, order, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
-    warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs, loadingAnim,
+    warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs, loadingAnim, cancelSearchPreload,
   });
 
   // After a favorite-triggered resort lands: if the room just favorited is
