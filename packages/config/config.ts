@@ -82,7 +82,7 @@ interface GestureConfig {
 interface CameraDefaults {
   minZoom: number | null;
   maxZoom: number | null;
-  minVisibleCells: number;
+  overviewCellsPerAxis: number;
   flightMs: number;
   keyboardMoveMs: number;
   wheelZoomRate: number;
@@ -164,7 +164,7 @@ export interface Config {
   camera: {
     minZoom: number;
     maxZoom: number;
-    minVisibleCells: number;
+    overviewCellsPerAxis: number;
     flightMs: number;
     keyboardMoveMs: number;
     wheelZoomRate: number;
@@ -214,7 +214,7 @@ export const DEFAULTS: Defaults = {
      * the same thing on either. AGENTS.md's "Two opening views" is what this
      * value belongs to; the page-load view is fitted to the display instead.
      */
-    minVisibleCells: 5,
+    overviewCellsPerAxis: 5,
 
     /**
      * How long a camera flight takes, in milliseconds: the "center" button, and
@@ -614,10 +614,10 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     maxZoomResolved = zoomLimits.max;
   }
 
-  const minVisibleCells = atLeast(
-    integer(camIn.minVisibleCells, DEFAULTS.camera.minVisibleCells, 'camera.minVisibleCells', notes),
+  const overviewCellsPerAxis = atLeast(
+    integer(camIn.overviewCellsPerAxis, DEFAULTS.camera.overviewCellsPerAxis, 'camera.overviewCellsPerAxis', notes),
     1,
-    'camera.minVisibleCells',
+    'camera.overviewCellsPerAxis',
     notes
   );
 
@@ -625,7 +625,7 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     camera: {
       minZoom: minZoomResolved,
       maxZoom: maxZoomResolved,
-      minVisibleCells,
+      overviewCellsPerAxis,
       flightMs: duration(camIn.flightMs, DEFAULTS.camera.flightMs, 'camera.flightMs', notes),
       keyboardMoveMs: duration(
         camIn.keyboardMoveMs, DEFAULTS.camera.keyboardMoveMs, 'camera.keyboardMoveMs', notes

@@ -384,7 +384,7 @@ export function useRearrangement({
       const returnZoom = cam.current.zoom;
       const target = Math.min(
         returnZoom,
-        overviewZoom(canvas, config.camera.minVisibleCells, cam.current)
+        overviewZoom(canvas, config.camera.overviewCellsPerAxis, cam.current)
       );
 
       // The center-tile indicator plays over the book's page while the

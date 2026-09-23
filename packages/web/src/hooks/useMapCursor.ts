@@ -322,7 +322,7 @@ export function useMapCursor({
 
       if (e.key === 'Home') {
         e.preventDefault();
-        const zoom = overviewZoom(canvasRef.current, camera.minVisibleCells, cam.current);
+        const zoom = overviewZoom(canvasRef.current, camera.overviewCellsPerAxis, cam.current);
         if (e.ctrlKey || e.metaKey) {
           const best = layout.cellOfRank(0);
           if (!best) {
@@ -350,7 +350,7 @@ export function useMapCursor({
           setStatus('no ranked rooms to jump to');
           return;
         }
-        flyTo(best.x, best.y, overviewZoom(canvasRef.current, camera.minVisibleCells, cam.current)).then(
+        flyTo(best.x, best.y, overviewZoom(canvasRef.current, camera.overviewCellsPerAxis, cam.current)).then(
           (landed) => landed && announceCursorMove(best)
         );
         return;

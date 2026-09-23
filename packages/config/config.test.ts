@@ -74,20 +74,20 @@ test('an inverted range falls back to the full one rather than locking the camer
   assert.match(c.notes.join('\n'), /above/);
 });
 
-test('minVisibleCells accepts a whole number, unrelated to the zoom range', () => {
-  const c = resolveConfig({ camera: { minVisibleCells: 8 } }, { zoomLimits: LIMITS });
-  assert.equal(c.camera.minVisibleCells, 8);
+test('overviewCellsPerAxis accepts a whole number, unrelated to the zoom range', () => {
+  const c = resolveConfig({ camera: { overviewCellsPerAxis: 8 } }, { zoomLimits: LIMITS });
+  assert.equal(c.camera.overviewCellsPerAxis, 8);
   assert.deepEqual(c.notes, []);
 });
 
-test('a fractional minVisibleCells is rounded, and a non-positive one is floored at 1', () => {
-  const rounded = resolveConfig({ camera: { minVisibleCells: 3.4 } }, { zoomLimits: LIMITS });
-  assert.equal(rounded.camera.minVisibleCells, 3);
-  assert.match(rounded.notes.join('\n'), /minVisibleCells/);
+test('a fractional overviewCellsPerAxis is rounded, and a non-positive one is floored at 1', () => {
+  const rounded = resolveConfig({ camera: { overviewCellsPerAxis: 3.4 } }, { zoomLimits: LIMITS });
+  assert.equal(rounded.camera.overviewCellsPerAxis, 3);
+  assert.match(rounded.notes.join('\n'), /overviewCellsPerAxis/);
 
-  const floored = resolveConfig({ camera: { minVisibleCells: 0 } }, { zoomLimits: LIMITS });
-  assert.equal(floored.camera.minVisibleCells, 1);
-  assert.match(floored.notes.join('\n'), /minVisibleCells/);
+  const floored = resolveConfig({ camera: { overviewCellsPerAxis: 0 } }, { zoomLimits: LIMITS });
+  assert.equal(floored.camera.overviewCellsPerAxis, 1);
+  assert.match(floored.notes.join('\n'), /overviewCellsPerAxis/);
 });
 
 test('narrowing far enough to orphan a rung is allowed and silent', () => {
@@ -103,13 +103,13 @@ test('narrowing far enough to orphan a rung is allowed and silent', () => {
 test('nonsense values fall back and say so, rather than throwing', () => {
   const c = resolveConfig(
     {
-      camera: { minVisibleCells: 'big' },
+      camera: { overviewCellsPerAxis: 'big' },
       map: { contentRatio: 0, slotSeed: 2.7 },
       search: { weights: { tagExact: -1 }, minTokenLength: 0 },
     },
     { zoomLimits: LIMITS }
   );
-  assert.equal(c.camera.minVisibleCells, DEFAULTS.camera.minVisibleCells);
+  assert.equal(c.camera.overviewCellsPerAxis, DEFAULTS.camera.overviewCellsPerAxis);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio, 'a ratio of 0 is out of range');
   assert.equal(c.map.slotSeed, 3, 'a fractional seed is rounded');
   assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
@@ -170,7 +170,7 @@ test('the default weights satisfy every cross-signal inequality docs/search_rule
 test('the shipped defaults are valid against the real limits', () => {
   const c = resolveConfig({}, { zoomLimits: ZOOM_LIMITS });
   assert.deepEqual(c.notes, [], 'defaults must not need correcting');
-  assert.ok(c.camera.minVisibleCells >= 1);
+  assert.ok(c.camera.overviewCellsPerAxis >= 1);
 });
 
 // --- the flight duration ---------------------------------------------------

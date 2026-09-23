@@ -164,11 +164,11 @@ export function fitZoom({
 }
 
 /**
- * The zoom that shows at least `cells` whole rows and columns on a canvas -
- * `fitZoom` with an n x n target, so a narrow phone and a wide monitor each
- * zoom out only as far as their own shape requires. This is what the "center"
+ * The zoom that shows at least `cellsPerAxis` whole rows and columns on a
+ * canvas - `fitZoom` with an n x n target, so a narrow phone and a wide monitor
+ * each zoom out only as far as their own shape requires. This is what the "center"
  * button, a room double-tap, and the rearrangement's park zoom out to, at
- * `config.camera.minVisibleCells`.
+ * `config.camera.overviewCellsPerAxis`.
  *
  * Takes the canvas itself (or `null`, before the first paint) rather than a
  * `ViewportRect`, so a call site can pass `canvasRef.current` without checking
@@ -176,14 +176,14 @@ export function fitZoom({
  */
 export function overviewZoom(
   canvas: { clientWidth: number; clientHeight: number } | null,
-  cells: number,
+  cellsPerAxis: number,
   cam: Camera
 ): number {
   if (!canvas) return cam.zoom;
   return fitZoom({
     width: canvas.clientWidth,
     height: canvas.clientHeight,
-    target: { w: cells, h: cells },
+    target: { w: cellsPerAxis, h: cellsPerAxis },
     aspect: cam.aspect ?? CELL_ASPECT,
     limits: cam.limits ?? ZOOM_LIMITS,
   });

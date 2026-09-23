@@ -953,7 +953,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
       setCard({ id, rank, x, y });
-      flyTo(x, y, overviewZoom(canvasRef.current, config.camera.minVisibleCells, cam.current));
+      flyTo(x, y, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current));
     },
     [flyTo, config, canvasRef, cam]
   );
@@ -978,7 +978,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   /** A row's "show on the map" - aim the camera, then go and look. */
   const showOnMap = useCallback(
     (x: number, y: number) => {
-      flyTo(x, y, overviewZoom(mapViewport(), config.camera.minVisibleCells, cam.current));
+      flyTo(x, y, overviewZoom(mapViewport(), config.camera.overviewCellsPerAxis, cam.current));
       exitCatalog();
     },
     [flyTo, config, exitCatalog, mapViewport, cam]
@@ -1037,7 +1037,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setSeed((s) => s + 1);
   }, [requestAnimation]);
   const recentre = useCallback(
-    () => flyTo(0, 0, overviewZoom(canvasRef.current, config.camera.minVisibleCells, cam.current)),
+    () => flyTo(0, 0, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current)),
     [flyTo, config, canvasRef, cam]
   );
 

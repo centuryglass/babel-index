@@ -367,7 +367,7 @@ code comments, this file, and everything under `docs/`.
     1x so a load is never upscaled.
   - The return-to-center view (`overviewZoom`, recomputed at each call site:
     the center button, a room double-tap, the rearrangement's park) frames
-    `config.camera.minVisibleCells` whole rows/columns, so a rearrangement
+    `config.camera.overviewCellsPerAxis` whole rows/columns, so a rearrangement
     has rooms to slide across.
 
   Collapsing them breaks whichever view loses. `camera.ts`'s
