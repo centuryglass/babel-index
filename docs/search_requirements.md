@@ -5,9 +5,9 @@ the target, not a description of what the code does today: some of these
 hold now, some do not, and nothing here is written to match the current
 implementation.
 
-`docs/search_rules.md` specifies the behavior as built, and
-`docs/search_critique.md` reviews the gap between the two. This file is the
-input both of those should answer to. It states no formula, no weight and no
+`docs/search_rules.md` specifies the behavior as built, and the gaps between
+the two are tracked as GitHub issues labelled `area:search`. This file is the
+input both should answer to. It states no formula, no weight and no
 data structure on purpose - a requirement that names a mechanism stops being
 a requirement and becomes a design.
 
