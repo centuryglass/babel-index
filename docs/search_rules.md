@@ -412,7 +412,8 @@ and story rules above and need one precise meaning.
 *Enforcement:* they read off the strength curve "Computing strength"
 defines - `0` at and below `centre`, rising linearly to `1` at `high`.
 `clipStrengthGate` is that curve, and "reasonably/highly certain" means
-`clipStrengthGate >= 0.5`. All three anchors are measured by
+`clipStrengthGate >= 0.5`. Both anchors, and the `low` probe that validates
+`centre`, are measured by
 `tools/embed/cosine-range.ts` against this corpus, not chosen: whole-list
 percentiles silently assumed "most pairs are unrelated", which turned out
 wrong for common, genuinely-true words (`book` scored below the naive
@@ -431,9 +432,10 @@ rather than a weak match. A cosine below `centre` is absence of evidence, not
 evidence of a mismatch: CLIP's joint space has no meaningful antipode, and a
 text vector pointing away from an image vector is a coherent concept that
 happens to share no direction with library walls, not a claim that the image
-is the query's opposite. So everything below `centre` reads as `0`. See `tools/embed/cosine-range.ts` for how each anchor was
-measured and `cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each
-read off a different distribution.
+is the query's opposite. So everything below `centre` reads as `0`. See
+`tools/embed/cosine-range.ts` for how each anchor was measured and
+`cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each read off a
+different distribution.
 
 ### Balancing signals against each other
 

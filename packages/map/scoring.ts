@@ -81,7 +81,6 @@ const { noun, verb, adjective } = winkLemmatizer;
 export interface ClipBand {
   centre: number;
   high: number;
-  low: number;
 }
 
 /**
@@ -103,11 +102,9 @@ export function lemmatise(word: string): string {
  * The measured anchors of CLIP's strength curve (docs/search_rules.md
  * "Image-content (CLIP) matching" + "Computing strength"): `centre` is the
  * no-opinion point (0), `high` is a genuine match's typical confidence (1).
- * Linear between them, 0 below `centre` - see `clipCurveStrength`. `low` is
- * a genuinely-irrelevant query's typical confidence; the curve does not read
- * it.
+ * Linear between them, 0 below `centre` - see `clipCurveStrength`.
  *
- * All three are measured against a real corpus via
+ * Both are measured against a real corpus via
  * `tools/embed/cosine-range.ts` (CLIP ViT-B/32), read off
  * `cosine-range-report.json`:
  *   - `centre` is the median of the overall keyword x room distribution
@@ -117,17 +114,19 @@ export function lemmatise(word: string): string {
  *     across near-universal keywords true of nearly every room (`bookshelf`,
  *     `book`, `library`, ...), preferred over the raw max so one outlier pair
  *     does not define "as sure as it gets".
- *   - `low` (`--irrelevant`, `irrelevant.ceiling`) is the median best match of
- *     ten strong concepts CLIP recognises but that share no visual structure
- *     with library walls (`race car`, `swimming pool`, `sandy beach`, ...).
  *
- * `low` sitting below `centre` is what makes `centre` a conservative zero:
- * strong, irrelevant concepts land under it, so a room at `centre` is noise
- * rather than a weak match. A cosine below `centre` is absence of evidence,
- * not evidence of a mismatch - CLIP's joint space has no meaningful
- * antipode - so it reads as 0, never as a negative claim.
+ * `centre` is a conservative zero. The `--irrelevant` probe
+ * (`irrelevant.ceiling`, the median best match of ten strong concepts CLIP
+ * recognises but that share no visual structure with library walls: `race
+ * car`, `swimming pool`, `sandy beach`, ...) measured `0.171`, below
+ * `centre`, so a room at `centre` is noise rather than a weak match. Re-run
+ * that probe when recalibrating `centre`.
+ *
+ * A cosine below `centre` is absence of evidence, not evidence of a
+ * mismatch - CLIP's joint space has no meaningful antipode - so it reads as
+ * 0, never as a negative claim.
  */
-export const CLIP_STRENGTH: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
+export const CLIP_STRENGTH: ClipBand = { centre: 0.205, high: 0.279 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.

@@ -433,7 +433,7 @@ inpainting pipeline, and isn't touched anywhere else in the project.
                            each flag does.
 - `tools/embed/cosine-range.ts`: Measure CLIP's raw cosine range against a real
                                  corpus - the source of `CLIP_STRENGTH`/
-                                 `search.density.clipCentre/clipHigh/clipLow`'s
+                                 `search.density.clipCentre/clipHigh`'s
                                  calibration and of `docs/search_rules.md`'s
                                  thresholds. `--universal`/`--irrelevant` probe
                                  lists measure the high/low extremes;
