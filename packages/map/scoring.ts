@@ -383,13 +383,18 @@ export interface SearchIndexSource {
  * re-walks the source text itself rather than reading this index.
  *
  * @param joined output of `joinMetadata()`
+ * @param opts.minLength must match the `minTokenLength` `rankHybrid` filters
+ *   the query with, or a query word shorter than this never matches a story
  */
-export function buildSearchIndex(joined: (SearchIndexSource | null)[] | null | undefined): SearchIndex {
+export function buildSearchIndex(
+  joined: (SearchIndexSource | null)[] | null | undefined,
+  { minLength = 3 }: { minLength?: number } = {}
+): SearchIndex {
   return (joined ?? []).map((entry) => {
     if (!entry) return null;
     // Lemmatised, not just tokenised: a search matches a story word by base
     // form, so `cats` finds `cat` but `catalogue` does not. See `storyScore`.
-    const sequence = tokeniseWithPositions(entry.story ?? '').map(({ word, start, end }) => ({
+    const sequence = tokeniseWithPositions(entry.story ?? '', { minLength }).map(({ word, start, end }) => ({
       lemma: lemmatise(word),
       start,
       end,

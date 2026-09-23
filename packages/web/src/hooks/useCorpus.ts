@@ -27,7 +27,8 @@ import type { ManifestResponse } from '../../../map/manifest.ts';
 /** A fetch the manifest advertised that came back non-ok or threw, named for the HUD line in `MapView.tsx`. */
 export type CorpusErrorSource = 'metadata' | 'embeddings' | 'tagLinks';
 
-export function useCorpus(manifest: ManifestResponse) {
+/** @param minTokenLength config `search.minTokenLength`, which the story index must share with the query side */
+export function useCorpus(manifest: ManifestResponse, minTokenLength: number) {
   const [metadata, setMetadata] = useState<(RoomMeta | null)[] | null>(null);
   const [tagLinks, setTagLinks] = useState<Record<string, string> | null>(null);
   const [corpusErrors, setCorpusErrors] = useState<CorpusErrorSource[]>([]);
@@ -113,7 +114,10 @@ export function useCorpus(manifest: ManifestResponse) {
 
   // Folded and tokenised once, so a search is set lookups rather than a
   // megabyte of string work.
-  const searchIndex = useMemo(() => (metadata ? buildSearchIndex(metadata) : null), [metadata]);
+  const searchIndex = useMemo(
+    () => (metadata ? buildSearchIndex(metadata, { minLength: minTokenLength }) : null),
+    [metadata, minTokenLength]
+  );
 
   return { metadata, embeddings, searchIndex, described, tagLinks, corpusErrors };
 }
