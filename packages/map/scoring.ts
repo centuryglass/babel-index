@@ -711,16 +711,15 @@ export function clipCurveStrength(cosine: number | null | undefined, band: ClipB
 }
 
 /**
- * A `[0, 1]` strength as a percentage, clamped to 0.01-99.99. Nothing reads
- * as completely certain or completely absent, not even at the anchor cosines
- * themselves: this covers both CLIP's own curve and the composite `strength`
- * `explainRanking` reports up top (docs/search_rules.md "Reporting").
+ * A `[0, 1]` strength as a percentage, clamped to 0-100. This covers both
+ * CLIP's own curve and the composite `strength` `explainRanking` reports up
+ * top (docs/search_rules.md "Reporting").
  *
  * @param strength in [0, 1]
- * @returns in [0.01, 99.99]
+ * @returns in [0, 100]
  */
 export function strengthPercent(strength: number): number {
-  return Math.min(99.99, Math.max(0.01, strength * 100));
+  return Math.min(100, Math.max(0, strength * 100));
 }
 
 /**

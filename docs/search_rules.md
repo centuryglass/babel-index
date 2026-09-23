@@ -401,9 +401,8 @@ the image share.
 raw cosine is in the row's tooltip.
 *Enforcement:* the percentage is `strengthPercent(clipStrengthGate)`.
 
-**No reported percentage is completely certain or completely absent.** The
-CLIP row and the composite line are both clamped to `0.01%`-`99.99%` by
-`strengthPercent`.
+**Every reported percentage stays in `0%`-`100%`.** The CLIP row and the
+composite line are both clamped to that range by `strengthPercent`.
 
 **Tags, titles, and story report what matched, not percentages.** A tag
 match is exact, partial, or absent; a title match is the same, once per room;
