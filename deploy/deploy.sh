@@ -52,8 +52,10 @@ main() {
   local health_timeout="${BABEL_HEALTH_TIMEOUT:-90}"
 
   requested="${1:-${SSH_ORIGINAL_COMMAND:-}}"
-  # The workflow sends `deploy <sha>`. The verb leaves room for a second
-  # action and is stripped here.
+  # The workflow sends `deploy <sha>`, `deploy` is the only action we
+  # currently support. Future versions could support others (e.g.
+  # `test <sha>`), so it's worth sending this instead of the sha alone
+  # to prevent compatibility issues.
   requested="${requested#deploy }"
   sha="$(tr -d '[:space:]' <<<"$requested" | tr '[:upper:]' '[:lower:]')"
   if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
