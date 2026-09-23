@@ -139,7 +139,6 @@ interface SearchDensity {
   floor: number;
   clipCentre: number;
   clipHigh: number;
-  clipLow: number;
 }
 
 interface SearchDefaults {
@@ -558,15 +557,14 @@ export const DEFAULTS: Defaults = {
       floor: STRENGTH_FLOOR,
 
       /**
-       * The three anchors of CLIP's signed strength curve: `clipCentre` is the
+       * The measured anchors of CLIP's strength curve: `clipCentre` is the
        * no-opinion point (0), `clipHigh` a genuine match's typical confidence
-       * (+1), `clipLow` a genuinely irrelevant query's (-1). The one part of the
-       * gradient that is a measurement rather than a preference - `CLIP_STRENGTH`
-       * (`packages/map/scoring.ts`) is where they were measured.
+       * (1). The one part of the gradient that is a measurement rather than a
+       * preference - `CLIP_STRENGTH` (`packages/map/scoring.ts`) is where they
+       * were measured.
        */
       clipCentre: CLIP_STRENGTH.centre,
       clipHigh: CLIP_STRENGTH.high,
-      clipLow: CLIP_STRENGTH.low,
     },
   },
 };
@@ -802,9 +800,9 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
  * A `peak` below `map.contentRatio` is not rejected here because the layout
  * treats the baseline as a floor anyway - a gradient may add density, never
  * remove it - so the worst such a config can do is switch the effect off. An
- * inverted cosine band gets a note and falls back: `clipHigh <= clipLow` means
- * CLIP contributes no strength at all, which from the map looks like a corpus
- * with no embeddings blob.
+ * inverted cosine band gets a note and falls back: `clipHigh <= clipCentre`
+ * means CLIP contributes no strength at all, which from the map looks like a
+ * corpus with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {
   const d = DEFAULTS.search.density;
@@ -813,16 +811,16 @@ function density(src: Section, notes: string[]): SearchDensity {
     floor: ratio(src.floor, d.floor, 'search.density.floor', notes),
     clipCentre: number(src.clipCentre, d.clipCentre, 'search.density.clipCentre', notes),
     clipHigh: number(src.clipHigh, d.clipHigh, 'search.density.clipHigh', notes),
-    clipLow: number(src.clipLow, d.clipLow, 'search.density.clipLow', notes),
   };
-  if (!(out.clipHigh > out.clipCentre && out.clipCentre > out.clipLow)) {
+  // `clipLow` was a setting in older configs; say it no longer applies.
+  if (src.clipLow !== undefined) notes.push('search.density.clipLow is not a setting; ignored');
+  if (!(out.clipHigh > out.clipCentre)) {
     notes.push(
-      `search.density.clipHigh ${out.clipHigh} / clipCentre ${out.clipCentre} / clipLow ${out.clipLow} ` +
-        `are not in high > centre > low order; using ${d.clipHigh}/${d.clipCentre}/${d.clipLow}`
+      `search.density.clipHigh ${out.clipHigh} is not above clipCentre ${out.clipCentre}; ` +
+        `using ${d.clipHigh}/${d.clipCentre}`
     );
     out.clipCentre = d.clipCentre;
     out.clipHigh = d.clipHigh;
-    out.clipLow = d.clipLow;
   }
   return out;
 }

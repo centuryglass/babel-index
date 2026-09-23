@@ -2,7 +2,7 @@
  * Measure where CLIP's raw cosine range actually sits on a real corpus.
  *
  * `CLIP_STRENGTH` (`packages/map/scoring.ts`) and `search.density.clipCentre/
- * clipHigh/clipLow` want numbers read off this corpus's own behaviour, not
+ * clipHigh` want numbers read off this corpus's own behaviour, not
  * guessed. This script embeds every line of a keyword list with the same text
  * tower `packages/server/app.ts` loads at search time and scores each vector
  * against every row of a corpus's `embeddings.bin` with the same

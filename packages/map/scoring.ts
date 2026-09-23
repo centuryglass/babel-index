@@ -77,11 +77,10 @@ import type {
 
 const { noun, verb, adjective } = winkLemmatizer;
 
-/** The three-anchor band `signedClipStrength`/`matchStrength` read a raw cosine against. */
+/** The anchor band `clipCurveStrength`/`matchStrength` read a raw cosine against. */
 export interface ClipBand {
   centre: number;
   high: number;
-  low: number;
 }
 
 /**
@@ -100,13 +99,12 @@ export function lemmatise(word: string): string {
 }
 
 /**
- * The three anchors of CLIP's signed strength curve (docs/search_rules.md
+ * The measured anchors of CLIP's strength curve (docs/search_rules.md
  * "Image-content (CLIP) matching" + "Computing strength"): `centre` is the
- * no-opinion point (0), `high` is a genuine match's typical confidence (+1),
- * `low` is a genuinely-irrelevant query's typical confidence (-1). Continuous
- * and monotone between them - see `signedClipStrength`.
+ * no-opinion point (0), `high` is a genuine match's typical confidence (1).
+ * Linear between them, 0 below `centre` - see `clipCurveStrength`.
  *
- * All three are measured against a real corpus via
+ * Both are measured against a real corpus via
  * `tools/embed/cosine-range.ts` (CLIP ViT-B/32), read off
  * `cosine-range-report.json`:
  *   - `centre` is the median of the overall keyword x room distribution
@@ -116,16 +114,19 @@ export function lemmatise(word: string): string {
  *     across near-universal keywords true of nearly every room (`bookshelf`,
  *     `book`, `library`, ...), preferred over the raw max so one outlier pair
  *     does not define "as sure as it gets".
- *   - `low` (`--irrelevant`, `irrelevant.ceiling`) is the median best match of
- *     ten strong concepts CLIP recognises but that share no visual structure
- *     with library walls (`race car`, `swimming pool`, `sandy beach`, ...).
  *
- * `low` sits below `centre`: a coherent-but-wrong concept is confidently
- * negative, not merely no-opinion, because it has its own specific direction
- * that is actively dissimilar to library imagery - where gibberish just
- * embeds near the corpus mean. So `low` is measured, not mirrored from `high`.
+ * `centre` is a conservative zero. The `--irrelevant` probe
+ * (`irrelevant.ceiling`, the median best match of ten strong concepts CLIP
+ * recognises but that share no visual structure with library walls: `race
+ * car`, `swimming pool`, `sandy beach`, ...) measured `0.171`, below
+ * `centre`, so a room at `centre` is noise rather than a weak match. Re-run
+ * that probe when recalibrating `centre`.
+ *
+ * A cosine below `centre` is absence of evidence, not evidence of a
+ * mismatch - CLIP's joint space has no meaningful antipode - so it reads as
+ * 0, never as a negative claim.
  */
-export const CLIP_STRENGTH: ClipBand = { centre: 0.205, high: 0.279, low: 0.171 };
+export const CLIP_STRENGTH: ClipBand = { centre: 0.205, high: 0.279 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -680,7 +681,7 @@ function storyLongBonus01(chars: number): number {
  */
 export const STORY_FLOOR = 0.5;
 
-/** The named parts `matchStrength` combines into one signed reading. */
+/** The named parts `matchStrength` combines into one reading. */
 export interface StrengthParts {
   /** best per-term tag reading, in [0, 1] - `K` in docs/search_rules.md */
   tagStrength?: number;
@@ -692,54 +693,42 @@ export interface StrengthParts {
 }
 
 /**
- * CLIP's raw cosine placed against the three-anchor band, as a signed
- * strength in [-1, 1] (docs/search_rules.md "Computing strength" and
- * "Image-content (CLIP) matching"): 0 at `band.centre` (the no-opinion
- * point), rising to +1 at `band.high` (a genuine match's typical
- * confidence), falling to -1 at `band.low` (a genuinely-irrelevant query's
- * typical confidence). Two linear segments, continuous at the centre.
+ * CLIP's raw cosine placed against the anchor band, as a strength in [0, 1]
+ * (docs/search_rules.md "Computing strength" and "Image-content (CLIP)
+ * matching"): 0 at or below `band.centre` (the no-opinion point), rising
+ * linearly to 1 at `band.high` (a genuine match's typical confidence).
  *
- * `clipStrengthGate` - the ranking term docs/search_rules.md calls for - is
- * this function's output clamped to its positive half: `Math.max(0, ...)`,
- * done by the caller (`rankHybrid`) rather than here, because
- * `matchStrength` needs the same call's negative half too.
+ * This is both `matchStrength`'s `C` and `rankHybrid`'s `clipStrengthGate`.
  *
- * @returns in [-1, 1]
+ * @returns in [0, 1]
  */
-export function signedClipStrength(cosine: number | null | undefined, band: ClipBand = CLIP_STRENGTH): number {
+export function clipCurveStrength(cosine: number | null | undefined, band: ClipBand = CLIP_STRENGTH): number {
   if (cosine === null || cosine === undefined || !Number.isFinite(cosine)) return 0;
-  const { centre, high, low } = band;
-  if (cosine >= centre) {
-    const span = high - centre;
-    if (!(span > 0)) return 0;
-    return clamp01((cosine - centre) / span);
-  }
-  const span = centre - low;
+  const { centre, high } = band;
+  const span = high - centre;
   if (!(span > 0)) return 0;
-  return -clamp01((centre - cosine) / span);
+  return clamp01((cosine - centre) / span);
 }
 
 /**
- * A signed `[-1, 1]` strength as a percentage, magnitude clamped to
- * 0.01-99.99. Nothing reads as completely certain in either direction, not
- * even at the anchor cosines themselves: this covers both CLIP's own signed
- * curve and the composite `strength` `explainRanking` reports up top
- * (docs/search_rules.md "Reporting").
+ * A `[0, 1]` strength as a percentage, clamped to 0.01-99.99. Nothing reads
+ * as completely certain or completely absent, not even at the anchor cosines
+ * themselves: this covers both CLIP's own curve and the composite `strength`
+ * `explainRanking` reports up top (docs/search_rules.md "Reporting").
  *
- * @param signed in [-1, 1]
- * @returns in [-99.99, -0.01] union [0.01, 99.99]
+ * @param strength in [0, 1]
+ * @returns in [0.01, 99.99]
  */
-export function signedPercent(signed: number): number {
-  const magnitude = Math.min(99.99, Math.max(0.01, Math.abs(signed) * 100));
-  return signed < 0 ? -magnitude : magnitude;
+export function strengthPercent(strength: number): number {
+  return Math.min(99.99, Math.max(0.01, strength * 100));
 }
 
 /**
- * How sure the search is that one room is a match - one signed number in
- * [-1, 1], positive is confidence the room matches, 0 is no opinion, negative
- * is confidence it does NOT (docs/search_rules.md, "Computing strength").
+ * How strongly one room matches the search - one number in [0, 1], 0 for no
+ * evidence (docs/search_rules.md, "Computing strength"). Nothing reads as a
+ * mismatch: every signal can only find evidence for a room, never against it.
  *
- * A signed soft-OR of absolute readings, each computed from the room's raw
+ * A soft-OR of absolute readings, each computed from the room's raw
  * evidence rather than anything normalised across the corpus. This is the
  * number `ordering.ts`'s density gradient reads, not the ranking score:
  *
@@ -756,13 +745,10 @@ export function signedPercent(signed: number): number {
  *     ratio the ranking uses. A single matched word sits at the moderate
  *     `STORY_FLOOR`, a full matched clause reaches 1; using the ratio here
  *     would make a one-word query that matches read as 100% certain.
- *   - `Cpos`/`Cneg`: the positive and negative halves of the signed CLIP curve.
+ *   - `C` (CLIP): `clipCurveStrength` of the raw cosine.
  *
- * Positive strength is `1 - (1-K)(1-Kt)(1-S)(1-Cpos)` - any one signal can
- * carry it alone, and two weak agreeing signals count for more than either
- * alone. The signed result is that value when any positive signal fired,
- * else `-Cneg`: a room with real text evidence is never reported as a
- * mismatch just because CLIP is cool on its picture.
+ * Strength is `1 - (1-K)(1-Kt)(1-S)(1-C)` - any one signal can carry it
+ * alone, and two weak agreeing signals count for more than either alone.
  *
  * @param parts.tagStrength K, already in [0, 1]
  * @param parts.titleStrength Kt, already in [0, 1] - the same best reading as
@@ -773,7 +759,7 @@ export function signedPercent(signed: number): number {
  *   as the same "zero" a non-match would, so this is passed explicitly
  * @param parts.cosine raw CLIP cosine, or null/undefined
  * @param clip raw-cosine anchors
- * @returns signed, in [-1, 1]
+ * @returns in [0, 1]
  */
 export function matchStrength(
   { tagStrength = 0, titleStrength = 0, storyLongChars = 0, storyMatched = false, cosine = null }: StrengthParts = {},
@@ -782,16 +768,8 @@ export function matchStrength(
   const K = clamp01(tagStrength);
   const Kt = clamp01(titleStrength);
   const S = storyMatched ? STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01(storyLongChars) : 0;
-  const signed = signedClipStrength(cosine, clip);
-  const Cpos = Math.max(0, signed);
-  const Cneg = Math.max(0, -signed);
-
-  const pos = 1 - (1 - K) * (1 - Kt) * (1 - S) * (1 - Cpos);
-  // When nothing fired, `-Cneg` would return `-0`: it compares equal to 0,
-  // but a sign on a zero strength reads as a negative claim. `Cneg` is
-  // already 0 in that case, so the explicit `0` only avoids IEEE 754's
-  // negative zero.
-  return pos > 0 ? pos : Cneg > 0 ? -Cneg : 0;
+  const C = clipCurveStrength(cosine, clip);
+  return 1 - (1 - K) * (1 - Kt) * (1 - S) * (1 - C);
 }
 
 /** One room's row in `rankHybrid`'s working set, before the composite sort reorders it. */
@@ -809,7 +787,6 @@ interface ScoredRow {
   storyLongChars: number;
   clipNorm: number;
   clipStrengthGate: number;
-  clipSigned: number;
   cosine: number | null;
   strength: number;
 }
@@ -1020,8 +997,7 @@ export function rankHybrid({
 
     const cosine = cosines ? (cosines[id] ?? null) : null;
     const clipNorm = clipNormAll ? (clipNormAll[id] ?? 0) : 0;
-    const clipSigned = signedClipStrength(cosine, clipStrength);
-    const clipStrengthGate = Math.max(0, clipSigned);
+    const clipStrengthGate = clipCurveStrength(cosine, clipStrength);
     const storyLongBonus = storyLongBonus01(storyLongChars);
     const tagStrength = hasTerms ? tagBest : 0;
     const titleStrength = hasTerms ? titleBest : 0;
@@ -1047,7 +1023,6 @@ export function rankHybrid({
       storyLongChars,
       clipNorm,
       clipStrengthGate,
-      clipSigned,
       cosine,
       strength: matchStrength(
         { tagStrength, titleStrength, storyLongChars, storyMatched, cosine },
@@ -1082,7 +1057,6 @@ export function rankHybrid({
     storyLongChars: new Float32Array(count),
     clip: new Float32Array(count),
     clipStrengthGate: new Float32Array(count),
-    clipSigned: new Float32Array(count),
     cosine: new Float32Array(count),
   };
   const ranks: SignalRanks = {
@@ -1110,7 +1084,6 @@ export function rankHybrid({
     breakdown.storyLongChars[rank] = row.storyLongChars;
     breakdown.clip[rank] = row.clipNorm;
     breakdown.clipStrengthGate[rank] = row.clipStrengthGate;
-    breakdown.clipSigned[rank] = row.clipSigned;
     breakdown.cosine[rank] = row.cosine ?? NaN;
     ranks.tag[rank] = tagRanking.rank[row.id];
     ties.tag[rank] = tagRanking.ties[row.id];
@@ -1210,7 +1183,7 @@ export function explainRanking(
   return {
     rank: rank + 1,
     total,
-    percent: signedPercent(at(strength)),
+    percent: strengthPercent(at(strength)),
     contributions,
     tag: hasTag
       ? { rank: ranks.tag[rank], ties: ties.tag[rank], exact: tagExact, partial: tagPartialCount }
@@ -1220,7 +1193,7 @@ export function explainRanking(
       : null,
     story: hasStory ? { rank: ranks.story[rank], ties: ties.story[rank], length: storyLongChars } : null,
     clip: hasClip
-      ? { rank: ranks.clip[rank], ties: ties.clip[rank], cosine, percent: signedPercent(at(breakdown?.clipSigned)) }
+      ? { rank: ranks.clip[rank], ties: ties.clip[rank], cosine, percent: strengthPercent(at(breakdown?.clipStrengthGate)) }
       : null,
   };
 }

@@ -10,7 +10,6 @@
   --dim: #e1d9cc;
   --panel: rgba(18, 5, 3, 0.88);
   --edge: rgba(180, 160, 120, 0.42);
-  --mismatch: #941b1b;
   /*
     The gold chrome accent - the search badge, focus rings, the favorited
     star, the faint washes behind chips and hovered controls. One value in
@@ -676,13 +675,7 @@ mark {
 .score { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--edge); font-size: 11px; color: var(--dim); }
 .score p { margin: 2px 0; font-variant-numeric: tabular-nums; }
 .score .score-composite { color: var(--ink); font-weight: 500; }
-/*
-  docs/search_rules.md "Reporting": a negative reading is evidence of a
-  mismatch, not a bare minus sign, so it gets a visually distinct style -
-  a different color plus italics - never confused with a positive match.
-*/
 .clip-strength { color: var(--dim); }
-.clip-strength.mismatch { color: var(--mismatch); font-style: italic; }
 /*
   Set apart from the sum above it on purpose: every row in that sum is
   relative to this query's corpus, and this one is measured against
@@ -893,12 +886,11 @@ mark {
 /*
   The gold accents (`--accent`) read on dark chrome but wash out on cream,
   so the rank and "read the rest" drop to the paper's inked rust, the same
-  move the overlays' sheets make. The mismatch reading keeps its own colour.
+  move the overlays' sheets make.
 */
 .catalog-body.paper-sheet .catalog-rank,
 .catalog-body.paper-sheet .catalog-more { color: var(--paper-accent); }
 .catalog-body.paper-sheet .clip-strength { color: var(--paper-dim); }
-.catalog-body.paper-sheet .clip-strength.mismatch { color: var(--mismatch); }
 /*
   "Show in the catalog" (`RoomOverlay`'s view toggle) lands a reader on a
   row that otherwise looks like any other - this is what actually picks
@@ -1631,7 +1623,6 @@ mark {
 }
 .score-strip .score-composite { color: var(--ink); font-weight: 500; }
 .score-strip .clip-strength { color: #6a5f4c; }
-.score-strip .clip-strength.mismatch { color: var(--mismatch); font-style: italic; }
 /*
   The detail lines are laid out in a grid whose columns are CONTENT-sized and
   LEFT-aligned (`justify-content: start`), not stretched to fill the row - just

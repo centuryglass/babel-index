@@ -50,23 +50,6 @@ export function Highlight({ text, ranges }: { text: string; ranges?: MatchRange[
 }
 
 /**
- * The composite line's phrase, both signs, as docs/search_rules.md
- * "Reporting" describes it.
- *
- * The negative reading says "does not match" outright rather than leaving a
- * minus sign to interpret, and is worded as a confidence claim because that
- * is what it is: only CLIP reaches the negative half, off its calibrated
- * band. The positive reading is match strength, which is not a confidence
- * claim and does not borrow the word.
- */
-function compositeStrengthText(percent: number): { mismatch: boolean; text: string } {
-  const magnitude = Math.abs(percent).toFixed(2);
-  return percent < 0
-    ? { mismatch: true, text: `${magnitude}% certain this does not match` }
-    : { mismatch: false, text: `${magnitude}% match strength` };
-}
-
-/**
  * The trailing "also tied on this axis" clause, shared by every detail line -
  * "tied with 3" for three other rooms at this exact rank, empty for none. Kept
  * terse ("tied with N", not "tied with N others"): the score strip's columns
@@ -98,22 +81,15 @@ function storyLine(story: RankingExplanation['story']): string | null {
 }
 
 /**
- * The clip line, styled per docs/search_rules.md "Reporting": a negative
- * reading is set apart (different color, italic) rather than carrying a
- * bare minus sign, so it cannot be misread as a weaker positive. The raw
- * cosine lives in its own tooltip (tap-and-hold on mobile): the visible
- * percentage already reads off the calibrated curve, and the raw number is
- * for whoever wants to check that calibration, not the main read.
+ * The clip line (docs/search_rules.md "Reporting"). The raw cosine lives in
+ * its own tooltip (tap-and-hold on mobile): the visible percentage already
+ * reads off the calibrated curve, and the raw number is for whoever wants
+ * to check that calibration, not the main read.
  */
 function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
-  const mismatch = clip.percent < 0;
-  const pct = Math.abs(clip.percent).toFixed(2);
   return (
     <p className="score-line" title={`${clip.cosine.toFixed(3)} cosine between CLIP text and image vectors`}>
-      #{clip.rank} by image:{' '}
-      <span className={mismatch ? 'clip-strength mismatch' : 'clip-strength'}>
-        {pct}% {mismatch ? 'mismatch' : 'match'}
-      </span>
+      #{clip.rank} by image: <span className="clip-strength">{clip.percent.toFixed(2)}% match</span>
     </p>
   );
 }
@@ -138,8 +114,7 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
 function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
   const { contributions, tag, title, story, clip } = explanation;
   const compositeTooltip = contributions.map((c) => `${c.percent}% by ${c.label}`).join(', ');
-  const composite = compositeStrengthText(explanation.percent);
-  const compositeText = `#${explanation.rank} of ${explanation.total}, ${composite.text}.`;
+  const compositeText = `#${explanation.rank} of ${explanation.total}, ${explanation.percent.toFixed(2)}% match strength.`;
   const tagText = tagLine(tag);
   const titleText = titleLine(title);
   const storyText = storyLine(story);

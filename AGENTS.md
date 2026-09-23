@@ -407,7 +407,7 @@ code comments, this file, and everything under `docs/`.
   numbers.** The blend min-maxes CLIP, so some room scores 1 for *any*
   query; a gradient driven by that clusters nonsense as confidently as an
   exact match. `matchStrength` reads raw cosines against absolute bounds
-  (`CLIP_STRENGTH`, config `search.density.clipLow/High`).
+  (`CLIP_STRENGTH`, config `search.density.clipCentre/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.**
   `scan.ts` rejects a blob whose row count drifted. The sidecar joins per
   file, so a partial match is just partial - but `matched: 0` against
