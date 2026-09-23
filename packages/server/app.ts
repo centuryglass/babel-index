@@ -31,6 +31,7 @@ import { createUrlFor } from '../web/src/lib/rooms.ts';
 import type { Manifest } from '../map/manifest.ts';
 import type { Config } from '../config/config.ts';
 import type { FavoriteStore } from './favorites.ts';
+import { withClipCache } from './clip-cache.ts';
 import type { UsageMetrics } from './metrics.ts';
 
 /** A resolved config as `loadConfig()` (packages/config/load.ts) returns it -
@@ -798,7 +799,7 @@ function textTower(dtype: string): Promise<{ tokenizer: any; model: any }> {
     textTowerPromises.set(
       dtype,
       (async () => {
-        const { AutoTokenizer, CLIPTextModelWithProjection } = await import('@huggingface/transformers');
+        const { AutoTokenizer, CLIPTextModelWithProjection } = withClipCache(await import('@huggingface/transformers'));
         const [tokenizer, model] = await Promise.all([
           AutoTokenizer.from_pretrained(TEXT_MODEL),
           CLIPTextModelWithProjection.from_pretrained(TEXT_MODEL, { dtype: dtype as any }),

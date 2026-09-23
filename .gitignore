@@ -27,6 +27,9 @@ reference/blender/assets
 # hand, kept local only.
 performance_testing/
 
+# Downloaded CLIP weights (packages/server/clip-cache.ts).
+.clip_model_cache/
+
 # Local tuning overlay (packages/config). Optional and never committed.
 config.json
 

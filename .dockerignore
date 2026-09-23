@@ -22,6 +22,7 @@ packages/web/e2e/
 *.e2e.ts
 
 favorites.json
+.clip_model_cache/
 config.json
 *.env
 

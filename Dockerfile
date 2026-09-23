@@ -12,8 +12,10 @@
 # publishes native binaries for win32/darwin/linux (AGENTS.md), which covers
 # this image's linux base, but it's sizeable and downloads model weights on
 # first search - pass `--build-arg WITH_CLIP=false` for a smaller image that
-# ranks by keywords and story only.
+# ranks by keywords and story only. The weights land in
+# /app/.clip_model_cache, so a volume there keeps them across containers:
 #
+#   docker run -p 5173:5173 -v babel-clip:/app/.clip_model_cache babel-index
 #   docker build --build-arg WITH_CLIP=false -t babel-index .
 
 FROM node:20-bookworm-slim AS deps
