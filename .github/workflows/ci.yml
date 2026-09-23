@@ -176,21 +176,27 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [test, e2e, lint, typecheck]
+    needs: [changes, test, e2e, lint, typecheck]
     runs-on: ubuntu-latest
     steps:
-      # `e2e` is allowed to be `skipped` - the `changes` job decided this PR
-      # cannot have touched anything the browser smoke test can see - but
-      # never anything else. `audit` is deliberately not required (see its
-      # own comment above).
+      # `changes` is allowed to be `skipped` - it only runs for
+      # `pull_request` events (see its own comment above) - but never
+      # `failure` or `cancelled`, otherwise a broken `changes` run (a `git
+      # diff` error, a checkout problem, a runner loss) skips `e2e` as a
+      # side effect and this job would wave that through as a legitimate
+      # "no browser changes" skip. `e2e` is allowed to be `skipped` only
+      # once `changes` is confirmed to have actually run and decided that.
+      # `audit` is deliberately not required (see its own comment above).
       - name: All checks passed
         if: |
           needs.test.result != 'success' ||
+          (needs.changes.result != 'success' && needs.changes.result != 'skipped') ||
           (needs.e2e.result != 'success' && needs.e2e.result != 'skipped') ||
           needs.lint.result != 'success' ||
           needs.typecheck.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
+          echo "changes result: ${{ needs.changes.result }}"
           echo "e2e result: ${{ needs.e2e.result }}"
           echo "lint result: ${{ needs.lint.result }}"
           echo "typecheck result: ${{ needs.typecheck.result }}"
