@@ -33,7 +33,10 @@ already in for another reason. Each spot-check runs the §3 workflow over that
 one section rather than a whole batch, and the §4 verifier proves the same way
 that no code moved. Bug-fixing and deep code analysis stay out of scope: a
 comment pass reads code closely enough to *notice* a bug, and the rule is to
-record it in `docs/pending_task_list.md`, not fix it in the same commit.
+open a GitHub issue for it (AGENTS.md, "Tracking open work": what was
+observed, how to reproduce it, what is ruled out), not fix it in the same
+commit. Search the open issues first (`.claude/cache/issues/index.md`) so a
+known bug gets a comment rather than a duplicate.
 
 Scope: JS/TS sources under `packages/`, `tools/`, `build/`, and their tests,
 plus `packages/web/index.html` and `packages/web/style.css` - §4's verifier
@@ -188,8 +191,8 @@ declaration in the same breath, and prefer naming the symbol over the count.
 §4.2a`; that section has not existed since a4eb2ae culled and restructured the
 doc, and the same commit deleted `docs/catalog-plan.md` outright while four files
 went on citing its `§2` and `§7`.) Plan docs are *ephemeral* by design —
-`concept.md` is explicitly not kept in sync, and a task list entry leaves by
-being done — so a section number into one is a fact with an expiry date. A
+`concept.md` is explicitly not kept in sync, and an issue closes when its
+work is done — so a section number into one is a fact with an expiry date. A
 *quotation* from one rots the same way and reads as more authoritative while it
 does: `config.ts` said `0.2 is the concept's "maybe 80% generic"`, and
 `concept.md` never gave a percentage (it says "A configurable percentage") — the
@@ -200,11 +203,12 @@ it; the renumber just rots again at the next cull. Two exceptions. A pointer int
 a doc AGENTS.md calls a *spec* — `search_rules.md`, which it says to update
 alongside a scoring change, and `keyboard-controls.md` — is durable, and a named
 *section title* there (`docs/search_rules.md "Story matching"`) survives a
-renumber where a `§4.2a` will not. And a pending-task pointer is fine when it is
-a live TODO anchored at that exact spot, the "see the pending entry for details
-on this right here" shape, because it gets cleaned up as the issue does; a
-pointer to an entry that has already shipped, or to one whose fix will not touch
-this line, is the same dead `§4.2a` in a different costume. Tells to grep for:
+renumber where a `§4.2a` will not. And an issue pointer (`#NN`) is fine when
+the issue is open and anchored at that exact spot, the "issue #NN tracks the
+fix for this line" shape, because it gets cleaned up as the issue closes; a
+pointer to a closed issue, or to one whose fix will not touch this line, is
+the same dead `§4.2a` in a different costume (AGENTS.md: cite an issue only
+when it is open and the reader should follow it). Tells to grep for:
 `§[0-9]`, `docs/`, `\.md` inside a comment, and a quoted phrase attributed to a
 doc — check the doc still contains it.
 
@@ -222,12 +226,10 @@ unanchored `\b`, which no comment mentioned and which returns a rect's
 the tag. *Move:* when a comment says the code *refuses*, *requires*, *enforces*
 or *never* does something, read the branch it claims or run it before keeping the
 sentence — cheap in a tools tree, where the input is a text file you can edit into
-a repro. Then per AGENTS.md's bug rule: correct the comment to the truth, and file
-the gap when the code is what is wrong (both of this file's findings are in
-`docs/pending_task_list.md`'s "Tools"). The claim travels, so check where it is
-quoted: `svgPath.ts`'s `flattenPath` carried the importer's false one until
-its own pass corrected it to the code's actual behaviour (documented rather
-than fixed; the importer-side fix stays in the pending entry).
+a repro. Then per AGENTS.md's bug rule: correct the comment to the truth, and
+open a GitHub issue when the code is what is wrong. The claim travels, so check
+where it is quoted: `svgPath.ts`'s `flattenPath` carried the importer's false
+one until its own pass corrected it to the code's actual behaviour.
 
 **A rationale whose premise moved elsewhere.** A comment can state its rule
 correctly and still be false because it reasons from what *another* file wants.
@@ -359,16 +361,17 @@ as comment-only. Neither walks into a nested language: `stripHtml` has no
 neither today.
 
 Contract self-tests for both paths live in `tools/comment-check/strip.test.mjs`
-(also run by `npm test`, which discovers `tools/`).
+(which `npm test` would pick up; see the local-only note below).
 
 This is a **local-only tool**: classic TS is installed in a nested
 `tools/comment-check/package.json` so its `tsc` binary can't shadow the
-project's `typescript` v7 (the native tsgo port). Consequences:
+project's `typescript` (pinned to `^6`; see AGENTS.md's *Commands*). Consequences:
 - The nested `node_modules/` is gitignored and is not installed by CI. That is
   intentional — this is a branch/machine tool. On a fresh clone, run once:
   `npm --prefix tools/comment-check install`.
-- `npm test` will try to load `strip.test.mjs`; if classic TS isn't installed it
-  errors. Not a merge gate concern (local only), but know why.
+- `npm test` picks up `strip.test.mjs`, which fails without that install, so
+  don't copy it onto `main` for a pass (AGENTS.md, "Comment and documentation
+  audits").
 
 ### Fallback — esbuild one-liner (faster, one blind spot)
 
@@ -452,7 +455,7 @@ the dropped `rows.sort(...)`. They agree.)
   which are the canonical home for subsystem facts — when a code comment or a
   doc passes through one of those facts, cite the bullet, don't restate it.
   Also cleared there: the stale `.js`/`.mjs` filename citations, the deleted
-  catalog-plan's "plan §8" (moved to `pending_task_list.md`), the dead
+  catalog-plan's "plan §8", the dead
   `accessibility-plan.md §3.7` pair, and the `server-nginx.conf` namings.
 - **Where these ideas came from (§2b).** The bake-off lived in
   `docs/comment-revision-tests/` (local, untracked): five models each critiqued
