@@ -1251,13 +1251,20 @@ mark {
 /*
   The score's detail lines go multi-column only in the STACKED overlay, where
   the text sits below the image and has the full dialog width - a fixed two
-  content-sized columns, not one per detail line. The side-by-side split
-  keeps one column: its text page is a narrow reading column with no room
-  for a second (see the layout notes). The composite strength line stays
-  full width in both.
+  content-sized columns, not one per detail line - and only once that width
+  holds two. `max-content` tracks never shrink, so a narrower page (a phone)
+  would push the second column off the card. The 422px threshold is two
+  `.score-line` caps (`--score-col`'s 200px default, unset in the overlay)
+  plus `.score-details`'s 22px gap; change either and this moves with it.
+  The side-by-side split keeps one column: its text page is a narrow reading
+  column with no room for a second (see the layout notes). The composite
+  strength line stays full width in both.
 */
-.overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
-.overlay-columns.columns .overlay-body .score-details { grid-template-columns: max-content; }
+.overlay-columns .overlay-body .score-details { grid-template-columns: max-content; }
+.overlay-columns:not(.columns) .overlay-body .score { container-type: inline-size; }
+@container (min-width: 422px) {
+  .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
+}
 /*
   The room permalink (`/catalog/<file>`, already SSR'd and boot-linked - see
   `app.ts`'s `/catalog/:file`, `main.tsx`'s `INITIAL_ROUTE` - but with no way
