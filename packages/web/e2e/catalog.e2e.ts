@@ -378,6 +378,86 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     }
   });
 
+  /**
+   * Searches for one room's first keyword plus a word from its story, so the
+   * top result carries at least two score detail lines, then opens that room's
+   * overlay at `width` and returns the score box's measurements.
+   */
+  async function overlayScoreAt(width: number) {
+    const { page } = session;
+    await openCatalog();
+    const row = page.locator('.catalog-row:not(.catalog-center)').first();
+    const chip = (await row.locator('.chip').first().textContent()).trim();
+    const word = ((await row.locator('.story').textContent()).match(/[a-z]{6,}/i) ?? [''])[0];
+    await page.locator('.catalog-search input').fill(`${chip} ${word}`);
+    await page.locator('.catalog-search input').press('Enter');
+    await waitFor(
+      async () => /ranked for/.test((await page.locator('.catalog-count').textContent()) ?? ''),
+      SEARCH_TIMEOUT,
+      'a search from the catalog never re-ranked it'
+    );
+    await page.setViewportSize({ width, height: 850 });
+    await page.locator('.catalog-row:not(.catalog-center) .catalog-tile-button').first().click();
+    const details = page.locator('.overlay .score-details');
+    await details.waitFor({ timeout: 5000 });
+    return page.evaluate(() => {
+      const cols = document.querySelector('.overlay-columns');
+      const box = document.querySelector('.overlay .score-details');
+      return {
+        split: cols.classList.contains('columns'),
+        lines: box.querySelectorAll('.score-line').length,
+        columns: getComputedStyle(box).gridTemplateColumns.split(' ').length,
+        overflow: box.scrollWidth - box.clientWidth,
+        html: box.outerHTML,
+      };
+    });
+  }
+
+  async function closeOverlayScore() {
+    const { page } = session;
+    try {
+      if (await page.locator('.overlay').count()) {
+        await page.keyboard.press('Escape');
+        await page.locator('.overlay').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      }
+      await page.setViewportSize({ width: 1280, height: 800 });
+      if (await page.locator('.catalog').count()) {
+        await page.locator('.catalog-search input').fill('');
+        await page.locator('.catalog-search input').press('Enter');
+        await closeCatalog();
+      }
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+  }
+
+  test('on a phone, the overlay\'s score detail lines stack instead of running off the card [SR-33]', async () => {
+    // The stacked overlay's detail columns are sized to their content and
+    // cannot shrink, so two of them side by side on a phone pushed the second
+    // one past the card's edge, where it was clipped.
+    try {
+      const score = await overlayScoreAt(393);
+      assert.equal(score.split, false, 'expected the stacked overlay at phone width');
+      assert.ok(score.lines >= 2, `need two detail lines to test the layout:\n${score.html}`);
+      assert.equal(score.columns, 1, `the detail lines did not stack:\n${score.html}`);
+      assert.ok(score.overflow <= 0, `the detail lines overflow the card by ${score.overflow}px:\n${score.html}`);
+    } finally {
+      await closeOverlayScore();
+    }
+  });
+
+  test('with room for two, the overlay\'s score detail lines sit side by side [SR-33]', async () => {
+    try {
+      const score = await overlayScoreAt(700);
+      assert.equal(score.split, false, 'expected the stacked overlay at this width');
+      assert.ok(score.lines >= 2, `need two detail lines to test the layout:\n${score.html}`);
+      assert.equal(score.columns, 2, `the detail lines stacked with room for two:\n${score.html}`);
+      assert.ok(score.overflow <= 0, `the detail lines overflow the card by ${score.overflow}px:\n${score.html}`);
+    } finally {
+      await closeOverlayScore();
+    }
+  });
+
   test('paginated, the pager sits under the rows rather than a screenful of nothing', async () => {
     const { page } = session;
     // Spacers stand in for pages a reader can scroll to. Paginated there are
