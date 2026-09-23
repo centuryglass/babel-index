@@ -10,8 +10,17 @@ become). Open work lives in
 
 ## How to use this file
 
-- **Read [`docs/file_map.md`](docs/file_map.md) at the start of a session,**
-  before navigating the repo. It is the file-by-file map.
+- **Read [`docs/file_map.md`](docs/file_map.md) when the task needs the
+  repo's shape, not by default.** It is the file-by-file map. Read it:
+  - before creating a file or module, to find one that already does the job;
+  - before adding, removing, renaming or moving a file, since the map is
+    part of that change;
+  - when the task names a behavior but no file, and a search for its
+    obvious symbols comes up empty;
+  - for work that spans packages (a cross-cutting refactor, an audit,
+    triage over many issues).
+
+  A task that names its files or symbols doesn't need it.
 - **This file is for facts that cross files, and most changes add nothing
   to it.** A bullet here earns its place by biting someone who is editing a
   *different* file than the one the fact lives in. Before adding one, ask:

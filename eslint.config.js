@@ -23,7 +23,7 @@ const UNUSED_VARS_OPTIONS = {
 };
 
 export default defineConfig([
-  globalIgnores(['node_modules/**', 'assets/**']),
+  globalIgnores(['node_modules/**', 'assets/**', '.claude/worktrees/**']),
   js.configs.recommended,
   {
     languageOptions: {
