@@ -3,7 +3,7 @@
  * the Canvas2D renderer and the WebGL one (`?webgl=0` vs `?webgl` -
  * `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`), and check the two draw
  * the same map. This is the real-GPU check behind the lockstep invariant in
- * AGENTS.md's "The WebGL renderer" - the recording fakes in
+ * docs/agents/rendering.md's "The WebGL renderer" - the recording fakes in
  * `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call shape,
  * never pixels or a real GPU.
  *
@@ -12,7 +12,8 @@
  *     their own account of the frame (`support.ts`'s `parseHud`), and every
  *     draw-loop decision that isn't a raw pixel - which pyramid level, how
  *     many cells substituted/blank - must agree, because the two loops are
- *     supposed to run in lockstep (see AGENTS.md, "The WebGL renderer").
+ *     supposed to run in lockstep (see docs/agents/rendering.md, "The
+ *     WebGL renderer").
  *   - A pixel diff is the loose guard. GL's LINEAR sampling and the browser's
  *     2D image smoothing genuinely differ at tile edges and on text, so an
  *     exact match is not the bar; the bar is "these are the same picture, not

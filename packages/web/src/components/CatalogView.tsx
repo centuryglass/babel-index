@@ -3,8 +3,8 @@
  * (`alphabeticalOrder`, `lib/catalog.ts`) and ranked like the map while a
  * search runs. The map shows where the reader stands; the catalog shows the
  * whole ranking, each room once. Neither is a fallback for the other, and
- * this is not the accessibility mode (AGENTS.md, "The catalog, and the two
- * modes").
+ * this is not the accessibility mode (docs/agents/catalog.md, "The catalog, and
+ * the two modes").
  *
  * The paging arithmetic - which rooms are on a page, which pages are
  * mounted, how tall a spacer is, which pyramid level a thumbnail asks for -
@@ -167,8 +167,8 @@ const MAT_PAD = 6;
  *
  * Reserved even on rows that show no button: a per-row reserve would make
  * the chip clamp vary per row, and no reserve clips the button away on the
- * narrow displays that need it (AGENTS.md, "A fixed row cannot show
- * everything, so the overlay is not optional").
+ * narrow displays that need it (docs/agents/catalog.md, "A fixed row cannot
+ * show everything, so the overlay is not optional").
  */
 const TEXT_CHROME_PX = 50;
 /** One line of story: `--catalog-line`, the `.catalog-row .story` line height. */
@@ -722,8 +722,8 @@ export function CatalogView({
             only the 'mine'/'count' options depend on it.
 
             Picking any mode but 'relevance' while a search runs ends the
-            search first (`main.tsx`'s `changeSort`; AGENTS.md, "Distance
-            from the center carries one meaning at a time").
+            search first (`main.tsx`'s `changeSort`; docs/agents/search.md,
+            "Distance from the center carries one meaning at a time").
           */}
           <label className="catalog-sort">
             {/*
@@ -1074,9 +1074,9 @@ function CatalogRow({
           <span className="catalog-show dim">not on the map</span>
         ))}
       {/*
-        The favorite toggle is in the head, not in `RoomDetails` (AGENTS.md,
-        "A relevance sort is a re-rank, and the catalog row's toggle is in
-        the head").
+        The favorite toggle is in the head, not in `RoomDetails`
+        (docs/agents/favorites.md, "A relevance sort is a re-rank, and the
+        catalog row's toggle is in the head").
       */}
       {favorite && <FavoriteToggle favorite={favorite} />}
     </div>
@@ -1108,8 +1108,8 @@ function CatalogRow({
             {/*
               The floated shape: the fixed-height flow area (`flowH`), then
               the score strip beneath it. The tile floats inside the flow and
-              the story wraps around it (AGENTS.md, "A room row's thumbnail
-              floats, and the story wraps around it").
+              the story wraps around it (docs/agents/catalog.md, "A room row's
+              thumbnail floats, and the story wraps around it").
 
               `RoomDetails` gets `weights={null}` so it renders no score; the
               row places `ScoreBreakdown` below the flow instead. "read the

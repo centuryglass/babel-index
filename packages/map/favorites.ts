@@ -28,10 +28,10 @@
  *
  * ### Keys are filenames, not ids
  *
- * The reason is AGENTS.md's "Favorites are keyed by filename everywhere":
- * room ids are positional and renumber when the corpus grows. Ids are the
- * currency inside a session, so this module is handed `files` - the id ->
- * filename lookup, i.e. `manifest.rooms` - and does the crossing itself, in
+ * The reason is docs/agents/favorites.md's "Favorites are keyed by filename
+ * everywhere": room ids are positional and renumber when the corpus grows. Ids
+ * are the currency inside a session, so this module is handed `files` - the id
+ * -> filename lookup, i.e. `manifest.rooms` - and does the crossing itself, in
  * one place.
  *
  * No DOM and no React, so every case in the file is assertable in the plain

@@ -71,7 +71,8 @@ in `app.ts`), so the rearrangement still happens.
 Every room with at least one favorite, keyed by filename.
 
 - **Response**: `{ counts: Record<string, number> }`. A count is the size
-  of a per-room set of hashed visitor ids (see`AGENTS.md`, "Favorites").
+  of a per-room set of hashed visitor ids (see `docs/agents/favorites.md`,
+  "Favorites").
 - `Cache-Control: no-store`, to ensure counts are always current.
 - Without `--favorites`, none of the three favorites routes exist, and the
   manifest's `favorites` is `null`.
@@ -85,7 +86,7 @@ its numeric id: ids are positional and renumber when the corpus changes.
   visitor (`persist.ts`'s `getOrCreateFavoriteClientId`), matching
   `/^[A-Za-z0-9_-]{8,128}$/`. It decides whose favorite this is. A separate
   token bucket keyed on `req.ip` decides how fast writes can arrive (see
-  `AGENTS.md`, "Favorite writes are rate-limited by `req.ip`").
+  `docs/agents/favorites.md`, "Favorite writes are rate-limited by `req.ip`").
 - No request body.
 - **Response**: `{ file: string, count: number, favorited: true }`, where
   `count` is the room's new total. Favoriting twice is one favorite.
@@ -100,8 +101,8 @@ never there changes nothing.
 
 ## `GET /api/health`
 
-Liveness for the deploy workflow (`AGENTS.md`, "Deploying to the VPS"). The
-client does not call it.
+Liveness for the deploy workflow (`docs/agents/deploy.md`, "Deploying to the
+VPS"). The client does not call it.
 
 - **Response**: `{ ok: true, commit: string | null, rooms: number,
   uptimeSeconds: number }`.

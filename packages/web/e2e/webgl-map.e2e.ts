@@ -4,10 +4,10 @@
  * `glSlideRenderer.ts` make on a live canvas. `glRenderer.test.ts` and
  * `glSlideRenderer.test.ts` cover the same draw loop against a
  * `fakeGLContext()` that records calls rather than running them, so a real
- * driver rejecting one of them surfaces nowhere in `npm test`. AGENTS.md's
- * "The WebGL renderer" carries the standing invariants, and "Testing and CI"
- * explains why every spec here names its renderer rather than inheriting the
- * production default.
+ * driver rejecting one of them surfaces nowhere in `npm test`.
+ * docs/agents/rendering.md's "The WebGL renderer" carries the standing
+ * invariants, and "Testing and CI" explains why every spec here names its
+ * renderer rather than inheriting the production default.
  *
  * `openLibrary({ webgl: true })` puts a bare `?webgl` on the url, so
  * `webglFlag.ts`'s `WEBGL` is true before `main.tsx` mounts. Every assertion

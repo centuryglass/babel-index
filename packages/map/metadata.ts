@@ -4,10 +4,11 @@
  *
  * The join is per filename: add, remove or rename images and every surviving
  * entry still lands on its own room. (`embeddings.bin` is keyed by row order
- * instead and must be regenerated when the corpus moves - AGENTS.md,
- * "embeddings.bin is keyed by row order".) Joining tolerates a miss and
- * reports how many matched; a room with no entry simply has no keywords,
- * which is what the center room and the generic alternates want anyway.
+ * instead and must be regenerated when the corpus moves -
+ * docs/agents/search.md, "embeddings.bin is keyed by row order".) Joining
+ * tolerates a miss and reports how many matched; a room with no entry simply
+ * has no keywords, which is what the center room and the generic alternates
+ * want anyway.
  *
  * ### `keywords` is a fixed shape
  *

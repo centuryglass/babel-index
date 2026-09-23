@@ -80,7 +80,7 @@ export function useCenterShelf({
 
   // The center room's book titles: override books first, then past searches
   // filling the wall newest-first, then the tag pool for whatever is left
-  // (AGENTS.md, "The center room's controls").
+  // (docs/agents/map.md, "The center room's controls").
   const centreSlots = useMemo(
     () => assignTitles({ history, tags, overrides }),
     [history, tags, overrides]

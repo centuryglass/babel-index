@@ -204,7 +204,7 @@ export function createApp({
 
   /**
    * Liveness, for the deploy workflow to check a release against
-   * (AGENTS.md, "Deploying to the VPS").
+   * (docs/agents/deploy.md, "Deploying to the VPS").
    *
    * `commit` is the reason this exists at all: a 200 from the old process
    * is indistinguishable from a 200 from the new one (see version.ts).
@@ -333,8 +333,8 @@ export function createApp({
    * Favorites.
    *
    * Three routes, mounted only when a store exists (what is recorded, and
-   * why it is a set rather than a counter, is favorites.ts and AGENTS.md's
-   * "Favorites"):
+   * why it is a set rather than a counter, is favorites.ts and
+   * docs/agents/favorites.md's "Favorites"):
    *
    *   GET    /api/favorites        every room with at least one, by file
    *   POST   /api/favorites/:file  this visitor favorites the room
@@ -346,7 +346,7 @@ export function createApp({
    * mounted; the room is named in the path and validated against the
    * corpus, which is also what keeps an arbitrary string out of the store.
    *
-   * Identity and throttling sit on different keys (AGENTS.md,
+   * Identity and throttling sit on different keys (docs/agents/favorites.md,
    * "Favorite writes are rate-limited by `req.ip`"):
    * `X-Favorite-Client` - a token the browser generates once, see
    * `useFavorites.ts` - decides whose favorite a write records; the rate
@@ -616,11 +616,11 @@ export function createApp({
           // lists only canonical urls, so there is little for a crawler to
           // consolidate here anyway.
           //
-          // `base` is the public prefix the proxy strips (AGENTS.md,
-          // "Deployment and the base path"), so a root-absolute Location built
-          // from it is what the browser needs: a Location resolves against the
-          // request url, never against `<base href>`. Stays on the same
-          // prefix (`mode`) it was asked on.
+          // `base` is the public prefix the proxy strips
+          // (docs/agents/deploy.md, "Deployment and the base path"), so a
+          // root-absolute Location built from it is what the browser needs: a
+          // Location resolves against the request url, never against
+          // `<base href>`. Stays on the same prefix (`mode`) it was asked on.
           res.redirect(302, `${base}${roomPath(slugs.slugs[id], mode)}`);
           return;
         }

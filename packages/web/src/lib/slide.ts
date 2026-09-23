@@ -46,7 +46,7 @@
  *
  * The five durations are by-feel numbers, so they live in `packages/config`,
  * and this file states no fallback for them - the same rule
- * `useMapCamera.ts` gives for the flight duration, and AGENTS.md's
+ * `useMapCamera.ts` gives for the flight duration, and docs/agents/map.md's
  * "Consuming files state no fallback defaults". What this file owns is how a
  * plan is laid out in time; what the numbers should be is somebody else's
  * question.

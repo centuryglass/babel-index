@@ -44,10 +44,10 @@ export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithou
  * A ring spinning around the badge, shown while a rearrangement's preload
  * is running - what a reader browsing away from the center tile sees
  * during a preload, since the center-tile indicator only plays when its
- * book is on screen (AGENTS.md, "The loading indicator"). Unlike
- * `SearchOrbitArrow` it carries no per-frame state (`style.css`'s
- * `.search-icon-button.preparing` gates a plain CSS animation), so it
- * needs no ref and is plain markup rather than injected SVG.
+ * book is on screen (docs/agents/rearrangement.md, "The loading indicator").
+ * Unlike `SearchOrbitArrow` it carries no per-frame state (`style.css`'s
+ * `.search-icon-button.preparing` gates a plain CSS animation), so it needs no
+ * ref and is plain markup rather than injected SVG.
  */
 export function SearchOrbitSpinner(props: ComponentPropsWithoutRef<'span'>) {
   return <span aria-hidden="true" {...props} />;

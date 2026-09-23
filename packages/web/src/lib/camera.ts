@@ -12,8 +12,8 @@
  * Keeping the base unit a cell rather than a pixel is what lets the tile change
  * shape without rewriting `packages/map`: slot placement and ranking are in
  * cells and do not care what a cell looks like. That module reads the aspect for
- * one purpose, stated in AGENTS.md's "packages/map measures distance as it
- * looks".
+ * one purpose, stated in docs/agents/map.md's "packages/map measures distance
+ * as it looks".
  *
  * Nothing here touches the DOM; `useMapCamera.ts` owns the pointer events and
  * the ref holding the live camera. What can be stated as an equation is here, so
@@ -141,7 +141,7 @@ export const clampZoom = (z: number, limits: ZoomLimits = ZOOM_LIMITS): number =
  * binding axis - so "fits" is not "jammed to the edge".
  *
  * Which of the map's two opening views uses this, and which uses
- * `overviewZoom`, is AGENTS.md's "Two opening views".
+ * `overviewZoom`, is docs/agents/map.md's "Two opening views".
  */
 export function fitZoom({
   width,

@@ -4,8 +4,8 @@
  *
  * `DEFAULTS` is the whole set and the single statement of every default; the
  * `config.json` overlay `load.ts` reads is optional, partial, and never
- * committed (AGENTS.md, "Config and the pyramid"). No filesystem and no side
- * effects here - `load.ts` is the part that touches a disk.
+ * committed (docs/agents/map.md, "Config and the pyramid"). No filesystem and
+ * no side effects here - `load.ts` is the part that touches a disk.
  *
  * The overlay arrives as `unknown`: parsed JSON nothing has validated before it
  * gets here, so every reader below checks what it takes rather than trusting a
@@ -24,8 +24,8 @@
  * invariant that a `config.json` overlay cannot verify at load time:
  *
  *   - `packages/web/src/lib/pyramid.ts`: the tile ladder, per-level cache
- *     budgets, the prefetch ring and sheet packing (AGENTS.md, "Config and the
- *     pyramid"). Kept out because a budget below its own worst-case-visible cell
+ *     budgets, the prefetch ring and sheet packing (docs/agents/map.md,
+ *     "Config and the pyramid"). Kept out because a budget below its own worst-case-visible cell
  *     count thrashes the cache within a single frame, and no range check here
  *     could see that.
  *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
@@ -189,8 +189,8 @@ export const DEFAULTS: Defaults = {
   /**
    * Where `camera.ts` already states a constant, this block imports it rather
    * than restating it, so the value the code uses and the value documented here
-   * cannot end up different (AGENTS.md, "Consuming files state no fallback
-   * defaults").
+   * cannot end up different (docs/agents/map.md, "Consuming files state no
+   * fallback defaults").
    */
   camera: {
     /**
@@ -211,8 +211,9 @@ export const DEFAULTS: Defaults = {
      *
      * A cell count rather than a pixels-per-cell number because which axis
      * binds varies - width on a phone, height on a wide monitor - and cells mean
-     * the same thing on either. AGENTS.md's "Two opening views" is what this
-     * value belongs to; the page-load view is fitted to the display instead.
+     * the same thing on either. docs/agents/map.md's "Two opening views" is
+     * what this value belongs to; the page-load view is fitted to the display
+     * instead.
      */
     overviewCellsPerAxis: 5,
 
@@ -341,12 +342,13 @@ export const DEFAULTS: Defaults = {
     /**
      * How long a rearrangement takes, in milliseconds.
      *
-     * Duration is the viewport's, not the corpus's (AGENTS.md, "The reorder
-     * animation"): the planner slides only the lines that cross the on-camera
-     * rectangle and everything else is an invisible swap, so these numbers set
-     * the whole animation whatever the corpus size. `packages/web/src/lib/slide.ts`
-     * is how a plan is laid out in time, and `packages/map/illusion.ts` is why a
-     * wave's lines are free to move at once.
+     * Duration is the viewport's, not the corpus's
+     * (docs/agents/rearrangement.md, "The reorder animation"): the planner
+     * slides only the lines that cross the on-camera rectangle and everything
+     * else is an invisible swap, so these numbers set the whole animation
+     * whatever the corpus size. `packages/web/src/lib/slide.ts` is how a plan
+     * is laid out in time, and `packages/map/illusion.ts` is why a wave's lines
+     * are free to move at once.
      *
      * Lowering all five proportionally makes the same animation faster; the
      * ratios between them are what shape it.
@@ -415,8 +417,9 @@ export const DEFAULTS: Defaults = {
     /**
      * Rows per page - the unit both paging modes slice by, so this one number
      * sets the granularity of pagination and of infinite scroll alike
-     * (AGENTS.md, "Pagination and infinite scroll are one primitive with a
-     * different window"; `packages/web/src/lib/catalog.ts`'s `pageOf`).
+     * (docs/agents/catalog.md, "Pagination and infinite scroll are one
+     * primitive with a different window"; `packages/web/src/lib/catalog.ts`'s
+     * `pageOf`).
      */
     perPage: 20,
 
@@ -572,7 +575,7 @@ export const DEFAULTS: Defaults = {
 /**
  * Merge an overlay over `DEFAULTS`, validating as it goes. Never throws: a bad
  * value falls back and every adjustment is reported in `notes`, which the server
- * prints at startup (AGENTS.md, "Config and the pyramid").
+ * prints at startup (docs/agents/map.md, "Config and the pyramid").
  *
  * @param raw the overlay, typically parsed `config.json`
  * @param opts.zoomLimits the hard range this config may narrow but not widen.

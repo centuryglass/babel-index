@@ -5,8 +5,9 @@
  * fade, then the prefetch ring and coarser-level warm pass) with
  * `gl/context.ts`'s quad primitives in place of `CanvasRenderingContext2D`
  * calls, and the same `TileCache`/`pyramid.ts` policy: one draw call per
- * cell, no instancing. AGENTS.md's "The WebGL renderer" carries the lockstep
- * rule for the two loops; `render-parity.parity.ts` checks the result.
+ * cell, no instancing. docs/agents/rendering.md's "The WebGL renderer" carries
+ * the lockstep rule for the two loops; `render-parity.parity.ts` checks the
+ * result.
  *
  * Hover glows for the favorite badge and the distill toggle are not
  * re-traced per frame: `gl/glowTexture.ts` bakes the traced silhouette to a
@@ -43,9 +44,9 @@ import type { SortMode } from '../../../map/favorites.ts';
 
 /**
  * Same rule as `render.ts`'s `idOf`; the twins mirror each other rather than
- * share an abstraction - see AGENTS.md's "The WebGL renderer". Built from
- * `layout.rankOf`/`isCenter` rather than `layout.roomAt()` for the same
- * per-frame allocation reason (issue #256).
+ * share an abstraction - see docs/agents/rendering.md's "The WebGL renderer".
+ * Built from `layout.rankOf`/`isCenter` rather than `layout.roomAt()` for the
+ * same per-frame allocation reason (issue #256).
  */
 const idOf = (layout: MapLayout, order: number[], gx: number, gy: number): RoomId => {
   if (isCenter(gx, gy)) return CENTER;
