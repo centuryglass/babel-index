@@ -134,7 +134,7 @@ test('/api/manifest carries the config, and never the operator notes', async () 
     const m = await (await get('/api/manifest')).json();
     // The client reads all three of these on its first render, so their absence
     // is not a degraded map, it is a crash.
-    assert.ok(m.config.camera.minVisibleCells > 0);
+    assert.ok(m.config.camera.overviewCellsPerAxis > 0);
     assert.ok(m.config.map.contentRatio > 0);
     assert.ok(m.config.search.weights.clip >= 0);
     // `notes` is for whoever started the server; shipping it would invite the
