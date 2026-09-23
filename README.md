@@ -34,10 +34,10 @@ text. You can tag your favorites, and view the ones that other people liked
 the most.
 
 It is also **a working, deployed web application**, built and maintained as a
-real software project. It has required CI across Node 20/22/24, automated
-deployment with release validation, unit tests for the core logic, and
-Playwright tests for the deployed application. If that's what you're here for,
-skip to [**How it's built**](#how-its-built) or read
+real software project, with required CI across Node 20/22/24, unit tests
+for the core logic, Playwright browser tests, and automated deployment that
+verifies the release it shipped. If that's what you're here for, skip to
+[**How it's built**](#how-its-built) or read
 [`docs/architecture.md`](docs/architecture.md) for the five-minute version.
 
 This project was coded with significant AI assistance, primarily through
@@ -49,10 +49,10 @@ ensure AI agents reduce technical debt instead of magnifying it.
 
 Content warning: horror, body-horror, death, insects/arthropods, gore, and
 trypophobia. Most examples are fairly mild and only present in occasional
-rooms. Any of these tags can be blocked using URL parameters, e.g.
-https://centuryglass.us/babel-index/?blockTags=horror,death or through the
-content settings controls at the bottom of the help dialog opened through
-the "READ ME" book.
+rooms. Any of these tags can be blocked with the content settings at the
+bottom of the help dialog (the "READ ME" book), or on a first visit with a
+URL parameter, e.g. https://centuryglass.us/babel-index/?blockTags=horror,death.
+Once a browser has a saved choice, the parameter is ignored.
 
 ## The Library
 
@@ -80,7 +80,6 @@ all of them are at least somewhat interesting.
 | ------------------------------------------------------------------------------------------------------------------------------ |
 | Activate "distill mode" in the center of the library to banish the identical shelves, pulling in only unique ones.             |
 
-
 ## Search, and the density gradient
 
 | ![A search for "plants" pulls many close matches toward the center](docs/images/search_plants.jpg) | ![A search for "sociology" pulls only a few unique rooms toward the center](docs/images/search_sociology.jpg) |
@@ -94,17 +93,17 @@ confidence. A query the library can answer clusters tightly. A query it
 cannot stays diffuse. The map tells you how much to trust the result before
 you have read a single room.
 
-Ranking and strength are separate measurements. Ranking combines CLIP image
-embeddings, keyword matches, and story text, then normalizes and min-maxes
-those scores across the corpus for the query. This means some room always
-scores 1.00, regardless of what was searched for.
+Ranking and strength are separate measurements. Ranking blends CLIP image
+embeddings, keyword matches and story text into one relative order. Its
+CLIP term is min-maxed across the corpus for each query, so some room
+always gets full CLIP credit, whatever was searched for.
 
-Strength instead is a soft-OR over four absolute readings - tag, title, story
-and CLIP - each measured against a fixed, corpus-calibrated bound rather than
-normalized against the rest of the results. A corpus with no `embeddings.bin`
-still reports strength from its text signals alone. Nonsense queries
-therefore produce scores near zero rather than creating an artificial "best
-match", and the density gradient stays flat when the search has little to say.
+Strength is absolute. It is a soft-OR of four readings - tag, title, story
+and CLIP - each measured against a fixed, corpus-calibrated bound, not
+against the other results. A nonsense query scores near zero instead of
+producing an artificial "best match", and the density gradient stays flat
+when the search has little to say. A corpus with no `embeddings.bin` still
+reports strength from its text signals alone.
 
 [`docs/search_rules.md`](docs/search_rules.md) is the full specification;
 [`packages/map/scoring.ts`](packages/map/scoring.ts) and
@@ -119,9 +118,8 @@ unique room.
 ![The catalog view: a search bar, the index shelf's contents as a row of
 tag/history chips, and a paged, ranked list of rooms](docs/images/catalog.jpg)
 
-It is not an accessibility mode - the map itself is keyboard-navigable and
-screen-reader annotated. A linear list was rejected as an accommodation and
-kept as a control for everyone.
+It is a choice offered to everyone, not an accessibility mode: the map
+itself is keyboard-navigable and screen-reader annotated.
 
 ## Rooms and stories
 
@@ -142,173 +140,154 @@ and my artist's statement:
 
 ![The project's story on the left page, the artist's statement on the right](docs/images/story_and_statement.jpg)
 
-> The full walkthrough of every control - the index shelf's twelve, the room
-> overlay's eight - is in [`docs/user-guide.md`](docs/user-guide.md), or in
-> the app's "READ ME" book.
+> Every control on the index shelf and the room overlay is walked through in
+> [`docs/user-guide.md`](docs/user-guide.md), and in the app's "READ ME"
+> book.
 
 ## How it's built
 
-One Node/Express process serves the API and the client. There is no database,
-no separate framework server, and no build step. The application has seven
-runtime dependencies.
+One Node/Express process serves the API, the pages and the client, straight
+from TypeScript source: no database, no compile step, and seven runtime
+dependencies plus an optional CLIP package.
+[`docs/architecture.md`](docs/architecture.md) is the five-minute overview.
+The parts most worth a look:
 
-[`docs/architecture.md`](docs/architecture.md) is the five-minute overview;
-these are the parts worth a look.
-
-The application runs directly from TypeScript source. `packages/server/index.ts`
-starts an esbuild context at startup and serves the client bundle from memory,
-while [`build/`](build)'s Node ESM loader transforms `.ts` and `.tsx` modules
-as they are imported. There is no `dist/` directory or separate compilation
-step to keep in sync.
-
-The map is virtualized and has both WebGL2 and Canvas2D renderers, with WebGL2
-used where supported. The two renderers have independent draw loops, and
-`npm run test:parity` can compare their output on a real GPU when either one
-changes.
-
-The map's rearrangement is implemented as a local sliding-tile illusion
-rather than physically relocating the entire corpus. Only the visible region
-needs to be rearranged, and tiles that will become visible are prefetched
-before the animation begins.
-
-The server also validates deployments against the code that is actually
-running. `/api/health` reports the loaded git commit, and the deployment
-health check verifies that it matches the commit being released both locally
-and through the public URL. A deployment that starts successfully but serves
-zero rooms is rejected.
-
-
-Favorites are stored as sets rather than counters. Each browser generates a
-random identifier, and the server stores a salted hash of that identifier for
-each room. Favoriting the same room twice therefore has no additional effect,
-and removing a favorite that isn't present does nothing.
-
-The server cannot reconstruct a visitor's personal favorites from these
-hashes, and personal favorites are kept in the browser. Rate limiting uses
-the request address separately from the favorite identifier.
-
-The test suite covers the pure logic in `packages/map`, `packages/config`,
-`packages/pipeline`, and most of the server without starting a browser or
-using the network. Playwright provides browser-level tests, and lint,
-typechecking, CodeQL, and the file-map check are required CI checks.
-
-## Project structure
-
-|                           |                                                                                                                                    |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `build/`                  | the Node-side TypeScript hook (`--import ./build/register.mjs`) that lets every script run `.ts` sources directly, no compile step |
-| `packages/server/`        | offline demo server: scans a directory, serves a manifest                                                                          |
-| `packages/web/`           | React + canvas map - pan, zoom, search, live layout controls                                                                       |
-| `packages/map/`           | placement, ranking, scoring, the rearrangement animation - no DOM                                                                  |
-| `packages/config/`        | the by-feel numbers, with the reasoning behind each                                                                                |
-| `packages/pipeline/`      | the resolution-pyramid generator                                                                                                   |
-| `deploy/`                 | the VPS deploy script, its SSH forced command, and the health check both halves of the pipeline share                              |
-| `infra/`                  | Terraform for the Cloudflare R2 bucket the corpus lives in                                                                         |
-| `tools/center-placement/` | tile geometry and the SVG importer                                                                                                 |
-| `tools/embed/`            | computes and stores CLIP image embeddings for a corpus                                                                             |
-| `tools/upload/`           | syncs a corpus to Cloudflare R2, incrementally by content hash                                                                     |
-| `tools/font-lab/`         | ad hoc design lab for the center shelf's spine titles (not wired into any npm script)                                              |
-| `tools/curation/`         | Python/Qt tools for turning generated tiles into `metadata.json` - a separate ecosystem, with its own `README.md`                  |
-| `assets/corpus-sample/`   | a ready-to-run sample corpus                                                                                                       |
-
-> See [`docs/architecture.md`](docs/architecture.md) for a five-minute
-> system overview, or [`docs/file_map.md`](docs/file_map.md) for the full
-> file-by-file layout.
+- **Deploys are verified against the running commit.** `/api/health`
+  reports the commit the process loaded, and a deploy passes only when that
+  matches the sha being released, checked on the box and through the public
+  url. A release serving zero rooms fails.
+- **Two renderers, one picture.** The map is a virtualized canvas drawn by
+  WebGL2 where supported and Canvas2D otherwise. A parity test compares
+  them before every deploy.
+- **Rearrangement is a sliding-tile illusion.** Only rows and columns on
+  screen actually slide; everything else is swapped out of sight, so the
+  animation's cost tracks the viewport, not the corpus.
+- **Favorites are sets, not counters.** The server keeps a salted hash of a
+  random browser-generated id per room, so a repeated favorite or removal
+  changes nothing, and no one's personal list can be rebuilt from the
+  store.
+- **Tests gate merges.** Unit tests on Node 20/22/24, Playwright browser
+  tests, lint, typecheck, and the file-map and search-requirements checks
+  all feed one required CI check.
 
 ## Running it locally
 
-Requires Node 20 or newer (CI runs 20/22/24).
+Requires Node 20 or newer.
 
 ```sh
 npm install
 npm run demo        # http://localhost:5173, against assets/corpus-sample/
 ```
 
-CLIP-based search (`@huggingface/transformers`, via `onnxruntime-node`) is
-optional: it only supports win32/darwin/linux, so nothing else in the demo
-requires it, and it is never imported statically. Without it, search still
-works from keyword and story matching alone, just without the embedding
-signal.
+CLIP search needs `@huggingface/transformers`, an optional dependency whose
+`onnxruntime-node` ships only for Windows, macOS and Linux. Where it is
+missing, the demo still runs and search ranks by keywords and story text
+alone.
 
-The base demo uses a tiny set of sample images included with this repo. To run
-it against a larger set of image tiles:
+Every flag is optional:
+
+| Flag                     | Effect                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `--images <dir>`         | serve this directory as the corpus (default `assets/corpus-sample`)                             |
+| `--shared-dir <dir>`     | where the center and generic tiles live (default `assets`)                                       |
+| `--center <file>`        | name the center tile, if it isn't `center_tile.*` or `center.*`                                  |
+| `--port <n>`             | listen port (default 5173); startup fails if it is taken                                        |
+| `--config <file>`        | override tuning values (default `./config.json`, if present)                                    |
+| `--favorites <file>`     | record global favorite counts in this JSON file; without it, no favorite controls appear        |
+| `--trust-proxy <value>`  | Express `trust proxy`; set `1` behind a reverse proxy that sends `X-Forwarded-For`              |
+| `--base-path <path>`     | serve under a subpath behind a prefix-stripping proxy, e.g. `/babel-index/`                     |
+| `--remote <url> --prefix <name>` | read a corpus uploaded with `npm run upload:r2` instead of `--images`                    |
+
+Behind a reverse proxy, pass `--trust-proxy 1`: favorite writes are
+rate-limited by address, and without it every visitor shares the proxy's
+address and one rate limit. `--base-path` works only behind such a proxy;
+a direct visit to the port serves a page whose requests 404
+([`deploy/README.md`](deploy/README.md)). Setting both `LOG_FILE` and
+`ADMIN_PASSWORD_HASH` in the environment turns on a password-protected log
+viewer at `/admin/logs` ([`docs/api.md`](docs/api.md)).
+
+`npm run demo:watch` rebuilds on every edit and reloads the page; under
+plain `npm run demo`, a client edit needs a restart.
+
+### Your own rooms
+
+`--images` takes any directory of room images. Two optional steps make it
+look and search like the live site:
 
 ```sh
-npm run demo -- --images /path/to/rooms [--port 5173]
+npm run generate:mips -- --images <dir>         # resolution pyramid, so zoomed-out views load fast
+npm run generate:embeddings -- --images <dir>   # CLIP embeddings (needs the optional CLIP install)
 ```
 
-To record global favorite counts, point it at a file to keep them in:
+Titles, keywords and stories come from a `metadata.json` beside the
+images; [`tools/curation/`](tools/curation/README.md) holds the tools that
+produce it.
 
-```sh
-npm run demo -- --favorites path/to/favorites.json [--trust-proxy 1]
-```
-
-Without `--favorites`, no counts are recorded and no favorite control
-appears. When favorites are enabled, the stored data is a set of salted hashes
-of random IDs generated by browsers: enough to prevent one visitor from
-favoriting the same room twice, but not enough to reconstruct anyone's
-personal favorite list. Personal favorites remain in the browser.
-
-`--trust-proxy` is needed behind a reverse proxy because Express otherwise
-sees the proxy's address rather than the visitor's when rate limiting.
-The proxy must send `X-Forwarded-For` for this to work.
-
-### Running it with Docker
+### Docker
 
 ```sh
 docker build -t babel-index .
 docker run -p 5173:5173 babel-index
-```
-
-Against your own image tiles instead of the sample corpus, mount them and pass
-`--images` the same way you would to `npm run demo`:
-
-```sh
 docker run -p 5173:5173 -v /path/to/rooms:/data:ro babel-index --images /data
 ```
 
-Any flag from above works the same way, appended after the image name. Pass
-`--build-arg WITH_CLIP=false` for a smaller image that skips the CLIP text
-tower and ranks by keywords and story only.
+Flags go after the image name, as with `npm run demo`. Build with
+`--build-arg WITH_CLIP=false` for a smaller image that skips CLIP and ranks
+by keywords and story only.
 
 ### Configuration
 
-Values that can be adjusted to taste (zoom range, opening camera, slider
-defaults, search weights, etc.) are in
-[`packages/config/config.ts`](packages/config/config.ts), each with its
-reasoning. Override any subset with a `config.json`:
-
-```sh
-npm run demo -- --config path/to/config.json     # defaults to ./config.json
-```
+Tunable values (zoom range, opening camera, slider defaults, search
+weights, and more) are defined, each with its reasoning, in
+[`packages/config/config.ts`](packages/config/config.ts). A `config.json`
+passed with `--config` overrides any subset. Invalid values fall back to
+defaults, and the server prints a note for each one at startup.
 
 ### Testing
 
 ```sh
-npm test              # node --test, no browser and no network
-npm run test:e2e      # browser smoke test (npx playwright install chromium once)
+npm test                     # unit tests: node --test, no browser, no network
+npm run test:e2e             # Playwright browser tests (run `npx playwright install chromium` once)
+npm run test:parity          # Canvas2D vs WebGL render comparison
 npm run lint
 npm run typecheck
-npm run check:file-map  # Ensures docs/file_map.md covers all major project files
+npm run check:file-map       # docs/file_map.md lists every tracked file
+npm run check:requirements   # docs/search_requirements.md keeps its test coverage
 ```
 
-CI runs the unit tests on Node 20/22/24 and the e2e suite; the aggregate
-`ci` check needs both, and it gates merges. `npm run test:parity` is a
-separate, manual Canvas2D-vs-WebGL render comparison that needs a real GPU
-and is not part of CI.
+[`docs/architecture.md`](docs/architecture.md#testing-and-ci) lists which of
+these gate a merge and which gate a deploy.
+
+## Project structure
+
+|                      |                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `packages/server/`   | the Express server: API, pages, and the in-memory client bundle                   |
+| `packages/web/`      | the React client: the map, its renderers, the catalog, the center-shelf controls  |
+| `packages/map/`      | placement, ranking, scoring, and the rearrangement planner; no DOM                |
+| `packages/config/`   | the tunable numbers, with the reasoning behind each                               |
+| `packages/pipeline/` | the resolution-pyramid generator                                                  |
+| `build/`             | the Node loader hook that runs `.ts`/`.tsx` sources directly                      |
+| `deploy/`            | the VPS deploy script, its health check, and the nginx config                     |
+| `infra/`             | Terraform for the Cloudflare R2 bucket the live corpus is served from             |
+| `tools/`             | offline CLIs: embeddings, R2 upload, tile geometry, doc checks, curation (Python) |
+| `assets/`            | the sample corpus and the shared center and generic tiles                         |
+
+[`docs/file_map.md`](docs/file_map.md) describes every file.
 
 ## Documentation
 
-* [`docs/architecture.md`](docs/architecture.md) - a five-minute system overview: request flow, deploy, rendering, testing
-* [`docs/user-guide.md`](docs/user-guide.md) - every control in the library, annotated
-* [`docs/api.md`](docs/api.md) - the `/api/*` request/response contract
-* [`docs/file_map.md`](docs/file_map.md) - the full file-by-file layout
-* [`docs/concept.md`](docs/concept.md) - the initial project concept and a dated log of select design decisions
-* [`docs/keyboard-controls.md`](docs/keyboard-controls.md) - the full keyboard spec for the map view
-* [`docs/search_rules.md`](docs/search_rules.md) - the full specification of what a search does
-* [`deploy/README.md`](deploy/README.md) - the one-time VPS setup and the rollback path
-* [`AGENTS.md`](AGENTS.md) - notes for coding agents (engineering conventions and invariants)
-- [GitHub issues](https://github.com/centuryglass/babel-index/issues) — all open tasks.
+- [`docs/architecture.md`](docs/architecture.md) - a five-minute system overview: request flow, deploy, rendering, CI
+- [`docs/api.md`](docs/api.md) - the `/api/*` request/response contract
+- [`docs/user-guide.md`](docs/user-guide.md) - every control in the library, annotated
+- [`docs/search_rules.md`](docs/search_rules.md) - what a search does, in full
+- [`docs/search_requirements.md`](docs/search_requirements.md) - what search must achieve for a reader, with test coverage tracked per requirement
+- [`docs/keyboard-controls.md`](docs/keyboard-controls.md) - the map's keyboard spec
+- [`docs/file_map.md`](docs/file_map.md) - every file, and what it is for
+- [`docs/concept.md`](docs/concept.md) - the original concept and a dated log of design decisions
+- [`deploy/README.md`](deploy/README.md) - one-time VPS setup and rollback
+- [`AGENTS.md`](AGENTS.md) - rules for coding agents: conventions and invariants
+- [GitHub issues](https://github.com/centuryglass/babel-index/issues) - all open work
 
 ## License
 

@@ -228,8 +228,7 @@ export function tokenise(text: unknown, { minLength = 3, stopwords = true }: Tok
  *
  * Quotes are found before folding removes anything meaningful: every
  * `"..."` span becomes one term with `quoted: true`, and everything outside
- * quotes is split on whitespace into single-word terms the same way
- * `tokenise()` already splits. An unterminated quote (`art "nouveau`) is not
+ * quotes is split on whitespace into single-word terms. An unterminated quote (`art "nouveau`) is not
  * a parse error - the dangling `"` is just a character with nothing either
  * side of it to pair with, so the rest of the query reads as ordinary words.
  *
@@ -276,7 +275,7 @@ export function parseQuery(raw: unknown): ParsedQuery {
  * text against each keyword, the same way an unquoted single-word term
  * already is - and so is the whole query, which `rankHybrid` passes here as
  * one synthetic term (docs/search_rules.md "Tag matching"). So "quoting an unquoted-equivalent single word changes nothing"
- * (docs/search_rules.md, "Feature additions") holds by construction - the two
+ * (docs/search_rules.md, "Quoted phrases") holds by construction - the two
  * cases share this one code path.
  *
  * @param keywords folded room keywords
@@ -477,10 +476,11 @@ export function longestMatchRun(
 
 /**
  * Whether a quoted phrase's words appear consecutively in the story, by
- * lemma, in the order the phrase gave them - the story-side half of "a quoted
- * phrase is one contiguous story match" (docs/search_rules.md, "Feature
- * additions"). Unlike `longestMatchRun`, order matters: `"glass room"` must
- * not match a story where only `room glass` appears.
+ * lemma, in the order the phrase gave them (docs/search_rules.md, "Quoted
+ * phrases"). Unlike `longestMatchRun`, order matters: `"glass room"` must
+ * not match a story where only `room glass` appears. `rankHybrid` takes the
+ * longer of this and `longestMatchRun` as `storyLongChars`, so a quote does
+ * not narrow story matching (issue #327).
  *
  * @param phraseLemmas the phrase's own words, lemmatised, in order
  * @returns characters spanned by the match, 0 if the phrase is not found

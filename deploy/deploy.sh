@@ -1,49 +1,47 @@
 #!/usr/bin/env bash
 #
-# The whole deploy, run ON THE VPS by .github/workflows/deploy.yml over SSH.
-# See deploy/README.md for the one-time setup this expects.
+# The deploy itself, run on the VPS by .github/workflows/deploy.yml over SSH.
+# deploy/README.md has the one-time setup and the rollback path.
 #
 #   deploy/deploy.sh <40-char sha>
 #
-# It is also the SSH forced command: authorized_keys pins the deploy key to
-# this script, so a leaked key cannot get a shell, only ask for a revision of
-# `main` to be deployed. The requested sha therefore arrives in
-# $SSH_ORIGINAL_COMMAND rather than as an argument, and is read from either.
+# It is also the deploy key's SSH forced command, so a leaked key can only ask
+# for a revision of `main`. Over SSH the sha arrives in $SSH_ORIGINAL_COMMAND;
+# run by hand, it is the first argument. Either is read.
 #
-# Two rules make that pinning worth anything, and both are here rather than in
-# the workflow, because the workflow is the thing being defended against:
+# Two rules make that pinning worth anything. Both live here, not in the
+# workflow, because the workflow is what they defend against:
 #
-#   - The sha must already be an ancestor of origin/<branch>. Anyone holding
-#     the key can redeploy main, or roll back to something that WAS main, and
-#     nothing else - not a branch, not a fork's commit, not a tag.
-#   - Nothing here interpolates the request into a command. It is matched
-#     against a 40-hex pattern before it is used at all.
+#   - The sha must already be an ancestor of origin/<branch>. The key can
+#     redeploy main or roll back to something that was main, and nothing
+#     else: not a branch, a fork's commit, or a tag.
+#   - The request is never interpolated into a command. It must match a
+#     40-hex pattern before it is used at all.
 #
-# The deploy is not rolled back on failure, deliberately: a release that comes
-# up unhealthy stops here, loudly, with the previous sha printed so the
-# rollback is one command. Automatic rollback would hide a bad release behind
-# a green-looking site and a red workflow nobody reads twice.
+# A failure is not rolled back. The script stops with the previous sha
+# printed, and the rollback is a manual redeploy of it. An automatic rollback
+# would pair a working-looking site with a red workflow, easily misread as
+# flaky CI.
 set -euo pipefail
 
-# Every step lives in a function called on the last line, because this script
-# replaces itself partway through: `git reset --hard` rewrites deploy.sh while
-# bash is still reading it, and bash reads a script incrementally as it runs.
-# Git's rename-into-place keeps the open handle pointing at the old inode, so
-# this is belt and braces - but the failure it guards against (bash resuming
-# at a byte offset into a file that changed underneath it) is silent and
-# absurd to debug.
+# Every step lives in a function called on the last line, because
+# `git reset --hard` rewrites this script while bash is still reading it, and
+# bash reads a script incrementally. Parsing the whole body first keeps bash
+# from resuming at a byte offset into a changed file, a silent failure. Git's
+# rename-into-place already keeps the open handle on the old inode; this is
+# the second guard. The version that runs is the one already on the box, so a
+# change here takes effect one deploy late.
 main() {
   local requested sha previous lock_before lock_after
 
-  # The repo is wherever this script was run from, so nothing here has to be
-  # told where the checkout lives - moving it needs no edit.
+  # The repo is the checkout this script sits in, so moving the checkout needs
+  # no edit here (only the authorized_keys path).
   local repo_dir
   repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
-  # Per-box settings: the service name and the port it listens on are not
-  # properties of the source tree, so they are not stated in it. Sourced
-  # first, so the file gets to set the BABEL_* the defaults below read - and
-  # so it can put node on PATH, which a forced command does not inherit.
+  # Per-box settings, which are not properties of the source tree. Sourced
+  # before the defaults below so it can set any BABEL_*, and so it can put
+  # node on PATH, which a forced command does not inherit.
   if [[ -r /etc/babel-index-deploy.conf ]]; then
     # shellcheck source=/dev/null
     source /etc/babel-index-deploy.conf
@@ -54,8 +52,10 @@ main() {
   local health_timeout="${BABEL_HEALTH_TIMEOUT:-90}"
 
   requested="${1:-${SSH_ORIGINAL_COMMAND:-}}"
-  # The workflow sends `deploy <sha>`; the leading verb is there so a future
-  # second action has somewhere to go, and is stripped here.
+  # The workflow sends `deploy <sha>`, `deploy` is the only action we
+  # currently support. Future versions could support others (e.g.
+  # `test <sha>`), so it's worth sending this instead of the sha alone
+  # to prevent compatibility issues.
   requested="${requested#deploy }"
   sha="$(tr -d '[:space:]' <<<"$requested" | tr '[:upper:]' '[:lower:]')"
   if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
@@ -63,8 +63,8 @@ main() {
   fi
 
   # A forced command runs under a non-login shell with a minimal PATH, so an
-  # nvm- or asdf-managed node is not on it. Checking here turns that into one
-  # clear line instead of `npm: command not found` halfway through a deploy.
+  # nvm- or asdf-managed node is not on it. This check fails in one clear line
+  # before anything changes, not with `npm: command not found` mid-deploy.
   for tool in git node npm; do
     command -v "$tool" >/dev/null || die "$tool is not on PATH ($PATH) - set PATH in /etc/babel-index-deploy.conf"
   done
@@ -75,16 +75,18 @@ main() {
   previous="$(git rev-parse HEAD)"
   say "currently at $previous"
 
-  # An explicit refspec, so origin/<branch> is definitely updated - the
-  # ancestor check below is only as good as how fresh that ref is.
+  # An explicit refspec, so origin/<branch> is always updated. The ancestor
+  # check below is only as good as that ref is fresh.
   git fetch --quiet --prune origin "+refs/heads/$branch:refs/remotes/origin/$branch"
   git cat-file -e "${sha}^{commit}" 2>/dev/null || die "$sha is not a commit in this repo, even after fetching origin/$branch"
   git merge-base --is-ancestor "$sha" "origin/$branch" ||
     die "$sha is not an ancestor of origin/$branch - this key may only deploy revisions that reached $branch"
 
   lock_before="$(git rev-parse HEAD:package-lock.json)"
-  # Tracked files only: `config.json` and `favorites.json` are untracked and
-  # live in this directory, so this must never become `git clean`.
+  # Resets tracked files only. `config.json`, `favorites.json` and the log
+  # file are untracked and live in this directory, so this must never become
+  # `git clean`. From here until the restart, the checkout is ahead of the
+  # running process; a failed install leaves it that way.
   git reset --quiet --hard "$sha"
   lock_after="$(git rev-parse HEAD:package-lock.json)"
 
@@ -96,12 +98,12 @@ main() {
   fi
 
   say "restarting $service"
-  # -n so a missing sudoers rule fails immediately and says so, rather than
+  # -n so a missing sudoers rule fails immediately and says so, instead of
   # blocking on a password prompt no one is there to answer.
   sudo -n systemctl restart "$service"
 
-  # The unit is up; whether it is SERVING the code we just checked out is a
-  # different question, and the only one worth answering. See health-check.mjs.
+  # A restarted unit is not proof it serves the new code; health-check.mjs
+  # checks the running commit.
   node deploy/health-check.mjs "$health_url" "$sha" "--timeout=$health_timeout" || {
     warn "the service did not come up healthy on $sha, and has NOT been rolled back."
     warn "roll back with:  ssh <this box> 'deploy $previous'"
@@ -111,12 +113,11 @@ main() {
   say "deployed $sha"
 }
 
-# `npm ci` rather than `npm install`, so a deploy installs the lockfile it was
-# tested against rather than whatever resolves today. The cost is that `ci`
-# deletes node_modules outright - and transformers.js caches the CLIP weights
-# INSIDE it (node_modules/@huggingface/transformers/.cache), so a plain
-# reinstall silently re-downloads a few hundred MB of model on the first
-# search after every dependency bump. Move it aside and put it back.
+# Installs the lockfile CI tested (`npm ci`), keeping the CLIP model cache.
+# `npm ci` deletes node_modules, and transformers.js caches the CLIP weights
+# inside it (node_modules/@huggingface/transformers/.cache). Without the move
+# aside and back, every dependency bump silently re-downloads a few hundred MB
+# of model on the first search after deploying.
 install_dependencies() {
   local cache='node_modules/@huggingface/transformers/.cache'
   local stash
@@ -127,20 +128,17 @@ install_dependencies() {
     mv "$cache" "$stash/cache"
   fi
 
-  # Two flags this box needs, and a bigger machine would not:
+  # Two flags for this small, CPU-only box; a larger host can drop both:
   #   --maxsockets=1 holds the install to one connection at a time, so a
-  #     from-scratch install cannot exhaust a small VPS's memory or its
-  #     bandwidth allowance partway through and leave node_modules half
-  #     written. Slower on purpose.
+  #     from-scratch install cannot exhaust a small VPS's memory or bandwidth
+  #     partway through and leave node_modules half written. It is slower.
   #   --onnxruntime-node-install-cuda=skip stops onnxruntime-node's install
-  #     script fetching the CUDA binaries. The corpus is served by a CPU-only
-  #     box with no GPU to use them, and they are large enough to be the thing
-  #     that fails.
+  #     script fetching CUDA binaries, which this box has no GPU to use and
+  #     which are large enough to cause failures.
   npm ci --omit=dev --maxsockets=1 --onnxruntime-node-install-cuda=skip
 
-  # An install that pulled a new transformers.js may have written a cache of
-  # its own; the stashed copy is content-addressed by url, so either one is
-  # correct and merging them is not worth the complication.
+  # If the install already wrote a new cache, keep it and drop the stash.
+  # Both are content-addressed by url, so either is correct.
   if [[ -d "$stash/cache" && ! -d "$cache" ]]; then
     mkdir -p "$(dirname "$cache")"
     mv "$stash/cache" "$cache"

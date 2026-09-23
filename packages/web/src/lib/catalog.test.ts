@@ -100,11 +100,10 @@ test('a row is as tall as the tile is, whatever shape the tile becomes', () => {
 });
 
 test('an ultra-narrow row stacks the tile under the head and details, rather than beside them', () => {
-  // Sum, not max - the picture runs the full width beneath the name row
-  // rather than sharing it, so the two never compete for the same height.
+  // Sum, not max: the picture runs full width beneath the name row.
   assert.equal(stackedRowHeight(320, 30, 20), tileHeight(320) + 30 + 20);
   assert.equal(stackedRowHeight(320, 30, 20, 24), tileHeight(320) + 30 + 20 + 24);
-  // The mat costs both sides, exactly like a wide row's.
+  // The mat costs both sides, as on a wide row.
   assert.equal(stackedRowHeight(320, 30, 20, 0, 6), tileHeight(320) + 12 + 30 + 20);
   // The picture-to-link gap is reserved on top of the rest of the stack.
   assert.equal(stackedRowHeight(320, 30, 20, 0, 6, 8), tileHeight(320) + 12 + 30 + 20 + 8);
@@ -119,8 +118,7 @@ test('a thumbnail asks for a level that can actually cover it', () => {
         `level ${level} is on the ladder for ${cssWidth}@${dpr}`
       );
       const drawn = cssWidth * Math.min(DPR_CAP, dpr);
-      // Either it covers the drawn width, or it is the finest rung there is -
-      // asking for something off the top of the ladder is not an option.
+      // Either it covers the drawn width, or it is the finest rung there is.
       assert.ok(
         sizeOf(level).w >= drawn || level === 0,
         `level ${level} (${sizeOf(level).w}px) for a ${drawn}px draw`
@@ -132,8 +130,8 @@ test('a thumbnail asks for a level that can actually cover it', () => {
 test('a smaller thumbnail asks for a coarser level, and dpr counts', () => {
   assert.ok(thumbLevel(120, 1) > thumbLevel(640, 1), 'small thumbs go coarser');
   assert.ok(thumbLevel(120, 2) <= thumbLevel(120, 1), 'a retina thumb needs at least as much');
-  // The renderer caps dpr at 2; a 3x display must not ask for a finer rung than
-  // a 2x one, or the catalog would out-demand the map on the same screen.
+  // Capped at `DPR_CAP`, as the map renderers are, so the catalog never asks
+  // for a finer rung than the map on the same screen.
   assert.equal(thumbLevel(200, 3), thumbLevel(200, 2));
 });
 
@@ -229,10 +227,8 @@ test('the flip is its own inverse, so entering and leaving cannot disagree', () 
 });
 
 test('a DOMRect has to be converted, and the conversion is what makes the scale right', () => {
-  // `rectOf` carries the mechanism: `to.w` on a DOMRect is undefined, so
-  // `flipTransform`'s zero-size guard returns a scale of 1 and the animation
-  // translates without scaling. Both readings are asserted here, so the trap and
-  // the conversion that avoids it are pinned by one test.
+  // Asserts both the trap (a raw DOMRect silently scales by 1; see `rectOf`)
+  // and the conversion that avoids it.
   const anchor = { x: 128, y: 144, w: 1024, h: 768 };
   const domRect = { x: 16, y: 102, width: 240, height: 180 };
 
@@ -250,20 +246,17 @@ test('a zero-sized destination does not produce a divide by zero', () => {
 });
 
 test('the chip clamp is derived from the room the row actually has', () => {
-  // A tall card - a narrow display's small thumbnail against a fixed text
-  // minimum - has room for more than two lines of chips, and the count follows
-  // the room rather than a constant.
+  // The count follows the height left over, not a constant.
   assert.equal(chipLines(160, 50, 24), 4);
   assert.equal(chipLines(74, 50, 24), 1);
 
-  // Never zero: a room's keywords should clip - and be counted by the row's
-  // own "+N" - rather than vanish outright.
+  // Never zero, even unmeasured: overflowing keywords are clipped and counted
+  // by the row's "+N", never hidden outright.
   assert.equal(chipLines(50, 50, 24), 1);
   assert.equal(chipLines(30, 50, 24), 1);
   assert.equal(chipLines(160, 50, 0), 1);
 
-  // More reserved space (a taller title, the score strip appearing) leaves
-  // fewer lines for chips.
+  // More reserved space (a wrapped title) leaves fewer lines for chips.
   assert.ok(chipLines(160, 90, 24) <= chipLines(160, 50, 24));
 });
 

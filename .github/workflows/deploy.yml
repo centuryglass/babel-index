@@ -1,34 +1,25 @@
 name: deploy
 
-# Ship a tagged release to the VPS, and prove it actually shipped.
+# Ship a tagged release to the VPS, and prove it shipped.
 #
-# This runs AFTER `ci`, not alongside it: `workflow_run` fires on the ci
-# workflow's completion and carries the sha ci ran against, so what gets
-# deployed is exactly the revision that went green rather than whatever the
-# tip of main happens to be by the time this starts.
+# Runs after `ci`, on its completion: `workflow_run` carries the sha ci
+# tested, so the deploy ships that revision, not whatever main's tip is by
+# the time this starts.
 #
-# It only fires for the push that merges release-please's standing release
-# PR, never for an ordinary merge to main - the job's `if` matches the head
-# commit message against release-please's own PR title convention
-# (`chore(main): release X.Y.Z`, see release-please.yml), since that PR
-# title becomes the squash-merge commit subject on main the same way any
-# other PR's does. That merge is also the one point release-please tags and
-# writes to CHANGELOG.md, so a deploy always corresponds to a released,
-# changelogged version - never a change nobody outside the repo can name.
+# Only the push that merges release-please's release PR deploys. The job's
+# `if` matches the head commit subject against that PR's title
+# (`chore(main): release ...`; release-please.yml's header explains why the
+# title becomes the subject). That merge is also where release-please tags
+# and writes CHANGELOG.md, so every automatic deploy is a named release.
 #
-# The deploy itself is one ssh call. Everything it does on the far side lives
-# in `deploy/deploy.sh` - reviewed like any other code in this repo, rather
-# than as a heredoc buried in a yaml file - and the key it authenticates with
-# is pinned to that script as an SSH forced command, so a leaked key can ask
-# for a revision of main to be deployed and nothing else. `deploy/README.md`
-# is the one-time setup; the secrets it lists have to exist or the first run
-# stops on the check below and says which are missing.
+# The deploy is one ssh call to `deploy/deploy.sh`, which the key is pinned
+# to as an SSH forced command, so a leaked key can only ask for a revision of
+# main. `deploy/README.md` has the one-time setup and failure triage; the
+# "authorize the runner" step names any secret it lists that is missing.
 #
-# Redeploy or roll back by hand from the Actions tab ("Run workflow"), passing
-# a sha - anything that has been on main is accepted, which is what makes the
-# rollback path a button rather than an ssh session. A manual dispatch is the
-# one way to deploy something other than a tagged release, e.g. an urgent
-# fix between releases.
+# A manual dispatch ("Run workflow", with a sha) is the rollback and
+# redeploy path, and the one way to ship something other than a release,
+# such as an urgent fix. Any sha that has been on main is accepted.
 on:
   workflow_run:
     workflows: [ci]
@@ -44,10 +35,9 @@ on:
 permissions:
   contents: read
 
-# Never two deploys at once, and never cancel one in flight: the second half
-# of a deploy is a service restart, and a cancelled run leaves the box
-# somewhere nobody chose. A superseded run waits its turn and then deploys the
-# newer revision over the top.
+# Never two deploys at once, and never cancel one in flight: a deploy ends in
+# a service restart, and a cancelled run leaves the box in a state nobody
+# chose. A queued run waits its turn, then deploys over the top.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -55,16 +45,15 @@ concurrency:
 jobs:
   deploy:
     name: deploy to production
-    # A dispatch is a person choosing; everything else has to be a successful
-    # PUSH to main whose head commit is release-please's own release commit.
-    # `workflow_run`'s branch filter matches the HEAD branch of the run that
-    # triggered it, which for a pull request is the PR's own branch - a fork
-    # branch named `main` would otherwise satisfy it. The event and branch
-    # checks here, and deploy.sh's own "must be an ancestor of origin/main"
-    # check on the far side, are the same rule stated on both sides of the
-    # ssh connection. The commit-message check is what keeps an ordinary
-    # merge to main from deploying at all - release-please.yml's header has
-    # the PR-title-to-commit-subject reasoning.
+    # Triggered via a successful push to main whose head commit is
+    # release-please's release commit, or via manual dispatch.
+    #   - The `event == 'push'` check is required: `workflow_run`'s branch
+    #     filter matches the triggering run's head branch, which for a pull
+    #     request is the PR's branch, so a fork branch named `main` would pass.
+    #     deploy.sh's ancestor-of-origin/main check enforces the same rule on
+    #     the far side of the ssh connection.
+    #   - The commit-message check keeps an ordinary merge to main from
+    #     deploying.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -72,8 +61,8 @@ jobs:
        github.event.workflow_run.head_branch == 'main' &&
        startsWith(github.event.workflow_run.head_commit.message, 'chore(main): release '))
     runs-on: ubuntu-latest
-    # 15 was enough for the ssh call and health check alone; the parity gate
-    # (npm ci, a Chromium install, two browser sessions) needs more room.
+    # Sized for the parity gate (npm ci, a Chromium install, two browser
+    # sessions) plus the ssh call and both health checks.
     timeout-minutes: 20
     environment:
       name: production
@@ -83,9 +72,8 @@ jobs:
       - name: which commit
         id: target
         env:
-          # Three sources, one winner: an explicitly dispatched sha, else the
-          # revision ci just passed on, else the sha this workflow was
-          # dispatched from (the tip of main, for a dispatch with no input).
+          # First non-empty wins: a dispatched sha, else the revision ci just
+          # passed, else the tip of the ref a dispatch with no input ran from.
           REQUESTED: ${{ inputs.sha }}
           TESTED: ${{ github.event.workflow_run.head_sha }}
           FALLBACK: ${{ github.sha }}
@@ -113,16 +101,12 @@ jobs:
 
       - run: npm ci
 
-      # `npm run test:parity` (`render-parity.parity.ts`) checks the
-      # WebGL/Canvas2D lockstep invariant in AGENTS.md. It boots two browser
-      # sessions, too slow to gate every push, so it gates deploys instead:
-      # a revision that
-      # breaks parity between the two renderers never reaches production, at
-      # the cost of the minute or so this and the browser install below add
-      # to every deploy. `chromium.launch()` in `support.ts` takes no
-      # GPU-specific args, so this runs on the runner's headless, GPU-less
-      # Chromium the same way `webgl-map.e2e.ts` already does in `e2e.yml` -
-      # software (SwiftShader) WebGL2 is enough.
+      # The render-parity gate: a revision that breaks Canvas2D/WebGL parity
+      # (AGENTS.md, "The two renderers are separate implementations kept in
+      # lockstep") never reaches production. It boots two browser sessions,
+      # too slow to gate every merge, so it gates deploys. It runs on the
+      # runner's GPU-less Chromium with software (SwiftShader) WebGL2, as
+      # `webgl-map.e2e.ts` does in `e2e.yml`.
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
@@ -153,10 +137,9 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/babel_deploy
           chmod 600 ~/.ssh/babel_deploy
-          # Pinned host keys, never TOFU: this connection hands a machine the
-          # authority to run a deploy, and accepting whatever key answers
-          # would hand it to whatever answers. `ssh-keyscan` output, see
-          # deploy/README.md.
+          # Pinned host keys, never trust-on-first-use: accepting whatever
+          # key answers would let an impostor report a deploy that never
+          # happened. deploy/README.md covers producing this secret.
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
@@ -167,10 +150,10 @@ jobs:
           SSH_USER: ${{ secrets.DEPLOY_USER }}
           SHA: ${{ steps.target.outputs.sha }}
         run: |
-          # The far side ignores this command string as a command - the forced
-          # command in authorized_keys runs deploy.sh regardless - and reads it
-          # from SSH_ORIGINAL_COMMAND instead. IdentitiesOnly so the agent
-          # cannot quietly offer some other key and change who is connecting.
+          # The far side never runs this string: the forced command in
+          # authorized_keys runs deploy.sh, which reads it from
+          # SSH_ORIGINAL_COMMAND. IdentitiesOnly so an agent cannot offer some
+          # other key and change who is connecting.
           ssh -i ~/.ssh/babel_deploy \
               -p "$SSH_PORT" \
               -o BatchMode=yes \
@@ -179,12 +162,10 @@ jobs:
               -o ConnectTimeout=20 \
               "$SSH_USER@$SSH_HOST" "deploy $SHA"
 
-      # deploy.sh already checked this against 127.0.0.1 before returning
-      # success. This is the other half of the question: the box is serving
-      # the new revision, but can anyone REACH it - through nginx, through the
-      # subpath's prefix-stripping proxy_pass, from outside the machine? A
-      # deploy that only ever checks localhost cannot tell a working site from
-      # a broken reverse proxy in front of a working server.
+      # The second health check. deploy.sh already verified 127.0.0.1; this
+      # one goes through nginx and the subpath's prefix-stripping proxy_pass,
+      # the only check that sees a broken reverse proxy in front of a working
+      # server.
       - name: verify it from outside
         env:
           PUBLIC_URL: ${{ vars.PUBLIC_URL }}

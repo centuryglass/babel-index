@@ -1,556 +1,520 @@
 # Search rules
 
-This is the full specification of what a search does: what a query is parsed into,
-what one room's evaluation against that query looks like, how that evaluation
-becomes an order and a set of displayed numbers, and every assertion about
-behavior that the implementation (`packages/map/scoring.ts`, `packages/map/ordering.ts`,
-`packages/config/config.ts`) has to satisfy.
-
-This describes the finished behavior, and matches the implementation
+The specification of what a search does: how a query is parsed, how each room
+is scored against it, and how that score becomes an order, a map density and
+the numbers a reader sees. It describes the code as built
 (`packages/map/scoring.ts`, `packages/map/ordering.ts`,
-`packages/config/config.ts`) as of this writing. Keep it that way: a change
-to a weight, a matching rule, or a strength anchor updates this file in the
-same commit, rather than letting it drift back into being a target the code
-no longer implements.
+`packages/config/config.ts`). A change to a weight, a matching rule or a
+strength anchor updates this file in the same commit.
+
+What search has to accomplish for a reader is stated separately, in
+[`search_requirements.md`](search_requirements.md).
 
 ## Overview: one evaluation, two questions
 
-A search asks each room in the corpus the same four questions - does the query
-match your tags, your title, your story, your picture - and folds
-the answers into one number per room. That one number is used for two different
-purposes, and the difference between them is the single most important thing to
-hold onto while reading the rest of this document:
+A search asks every room four questions - does the query match your tags,
+your title, your story, your picture - in one pass over the corpus. From the
+answers it computes two numbers per room, which answer different questions:
 
-- **Ranking** answers "which rooms are the best matches, relative to each other,
-  for this query on this corpus". It sorts the whole corpus into one order. A
-  weighted sum, not a tiered bucket sort - see "One sort, not tiers" below.
-- **Strength** answers "how good is this room's match, in absolute terms,
-  independent of what anything else in the corpus scored". One number in
-  `[0, 1]`: how strong the match is, `0` for no evidence. Nothing reports a
-  mismatch - search only ever finds evidence for a room, never against it.
-  It drives the map's density gradient (rooms that match strongly cluster
-  near the center; rooms that do not stay scattered at the baseline) and the
-  percentages the UI reports. Its full definition is
-  "Computing strength".
+- **Ranking** (`score`) answers "which rooms are the best matches, relative to
+  each other, for this query on this corpus". It is one weighted sum that
+  sorts the whole corpus into one order (see "One sort, not tiers").
+- **Strength** (`strength`) answers "how good is this room's match, in
+  absolute terms, whatever else in the corpus scored". It is one number in
+  `[0, 1]`, `0` for no evidence. It drives the map's density gradient (strong
+  matches cluster near the center, the rest stay at the baseline) and the
+  percentages the UI reports. See "Computing strength".
 
-These can't be answered from the same number, because ranking is *relative* -
-some room is always the best match for any query, including a nonsense one - and
-strength needs to be able to say "none of these are good" when that's true. A
-raw CLIP cosine that is merely the best of a bad lot must not read as a strong
-match.
-Both computations happen in the same pass over the corpus (there's no reason to
-score twice), but they read different halves of the data: ranking reads scores
-normalised *within this query's results*, strength reads raw scores against
-*fixed, corpus-measured bounds*. Whenever a rule below says "reasonably certain"
-or "highly certain", it is describing CLIP's own calibrated reading, never the
-relative one.
+One number cannot answer both. Ranking is relative: some room is always the
+best match for any query, including a nonsense one. Strength has to be able
+to say "none of these are good". So ranking reads CLIP normalised *within
+this query's results*, and strength reads raw scores against *fixed,
+corpus-measured bounds*. A raw CLIP cosine that is merely the best of a bad
+lot must not read as a strong match.
+
+Strength is evidence, never counter-evidence. No signal can find evidence
+against a room, so nothing reports a mismatch.
 
 Strength is not coverage. A room that matched one term of a five-term query
-exactly is a strong match for that term, and says so; how much of the query a
-room explains is what ranking's counts decide. See "Computing strength".
+exactly is a strong match for that term, and says so. How much of the query
+a room explains is decided by ranking's counts.
 
 ### One sort, not tiers
 
-Every rule below - "an exact tag match should outrank a CLIP match", "a long
-story match should outrank a partial tag match" - reads like a rule for sorting
-into buckets: tags first, then story, then image content. That is not how this
-is built, on purpose. A tiered sort lets one weak signal in a high tier beat a
-strong signal in a low one - a room with one throwaway partial tag match would
-permanently outrank a room CLIP is completely certain about, just for being in
-a higher bucket - which breaks the reason a hybrid search exists at all.
+The rules below read like bucket rules ("an exact tag match outranks a CLIP
+match"), but the implementation is a single weighted sum. A tiered sort would
+let one weak signal in a high tier beat a strong signal in a low one: a room
+with one throwaway partial tag match would outrank a room CLIP is certain
+about.
 
-Instead, everything is one weighted sum, and the assertions below hold because
-the *constants* in that sum are chosen so the inequality is true by construction
-- not because of case-by-case bucket logic. "An exact tag match always outranks
-a CLIP match" is true because one exact tag match's score contribution is
-larger than the maximum every other signal could possibly add up to, not
-because tag matches are sorted into a bucket ahead of CLIP matches. See each
-assertion's enforcement for the arithmetic.
-
-## Data structures
-
-### 1. The parsed query
-
-A query is parsed into an ordered list of **terms**, not a flat list of words.
-This is what makes quoted-phrase matching (see Feature additions) possible
-without disturbing anything else: everywhere the rest of this document says
-"term", read "one word, or one quoted phrase treated as a single unit".
-
-```
-Term = {
-  text: string,       // as typed, one word or the contents of one "quoted phrase"
-  folded: string,      // fold(text) - lowercased, accent-stripped, ASCII
-  quoted: boolean,      // was this a "quoted phrase" in the original query?
-  words: string[],      // folded, tokenised sub-words - always [folded] for an
-}                       // unquoted term, the phrase's own words for a quoted one
-
-ParsedQuery = {
-  raw: string,          // the query exactly as typed
-  folded: string,        // fold(raw) - the whole query, still used for the
-  terms: Term[],         // existing "whole query against one keyword" reading
-}
-```
-
-Splitting happens before folding removes anything meaningful: quotes are found
-first, everything inside one pair becomes one term with `quoted: true`, and
-everything outside quotes is split on whitespace into single-word terms the
-same way `tokenise()` already works. Stopwords and the `minTokenLength` floor
-still apply per word for scoring purposes, same as today - quoting changes how
-a term is matched, not the vocabulary floor.
-
-### 2. The per-room index
-
-Unchanged by any of the above - this is the existing shape `buildSearchIndex`
-already produces, and quoted-phrase matching (keyword-only, see Feature
-additions) needs no new fields here, since a keyword is already stored as one
-folded string and a phrase is tested as a substring the same way a word is:
-
-```
-RoomIndex = {
-  keywords: string[],      // folded, one entry per tag, NOT tokenised further
-  title: string | null,     // folded room title, or null - one string, not a
-                             // list, because a room has at most one
-  story: Set<string>,       // lemmatised story words - order and adjacency are
-}                           // already gone; this is why story can't see phrases
-```
-
-### 3. One room's evaluation against one query
-
-This is what the scoring pass computes for every room, and what `explainRanking`
-reads to build the display. Ranking, strength, and every reporting number in
-this document all come out of this one structure - nothing downstream
-recomputes any of it independently.
-
-```
-RoomMatch = {
-  tagExact: number,          // n - count of terms that exactly equal a keyword
-  tagPartialSum: number,      // sum of best-substring fractions over every term
-                               // that matched partially (not exactly) - a SUM,
-                               // not an average; see the tag assertions for why
-  titleExact: boolean,         // did some term match the room's title exactly -
-                                 // a bool, not a count: a room has one title, so
-                                 // there is only ever one to match - see "Title
-                                 // matching" for why this isn't folded into tagExact
-  titlePartial: number,         // best substring fraction over every term tested
-                                  // against the title - a MAX, not a sum, because
-                                  // every term is testing the SAME one string
-  storyRatio: number,          // matched story chars / query chars, in [0, 1] -
-                                // a RANKING input; strength reads the length below
-  storyLongChars: number,       // longest CONTIGUOUS run of matched query words,
-                                 // in chars - what tells "cat" (short, moderate
-                                 // strength) from a whole matched clause (100%)
-  clipCosine: number | null,     // raw cosine against this room's image, or null
-  clipNorm: number,                // clipCosine min-max normalised across every
-                                     // room FOR THIS QUERY - always 1 for the
-                                     // best-matching room, whatever the query was
-  clipStrengthGate: number,          // clipCosine placed against the match band,
-                                     // in [0, 1] - the strength curve, see
-                                     // "Image-content" below
-  score: number,                     // the one weighted sum ranking sorts by
-  strength: number,                   // the one absolute [0, 1] the density
-}                                      // gradient and the UI's percentage read, see
-                                       // "Computing strength"
-```
-
-### 4. The corpus-wide result
-
-```
-SearchResult = {
-  order: number[],           // room ids, best RoomMatch.score first
-  strength: Float32Array,     // parallel to order: RoomMatch.strength per rank
-  breakdown: {                 // parallel to order, one array per RoomMatch field,
-    ...RoomMatch fields          // so a display can read "rank 4's tagExact" etc.
-  },
-  ranks: {                       // this rank's position if sorted by ONE signal
-    tag: number[],                 // alone, plus how many rooms tie with it -
-    title: number[],                 // what "Tag ranking" / "tied with N others"
-    story: number[],                // in the reporting rules needs. Ties are
-    clip: number[],                  // real for tag/title/story (integer-ish
-  },                                  // scores); CLIP ties are only exact-float
-  ties: {                              // coincidences
-    tag: number[],
-    title: number[],
-    story: number[],
-    clip: number[],
-  },
-  signals: { keyword: boolean, title: boolean, story: boolean, clip: boolean },
-}
-```
-
-`ranks`/`ties` are independent per-signal sorts of the same `breakdown` arrays
-already computed - no new scoring, just four more sorts of numbers the pass
-already produced, kept out of the main `order` so re-sorting for a display
-column never touches placement.
-
-## Feature additions
-
-- **Quoted-phrase matching, scoped to tags only.** `"art nouveau"` is tested as
-  one term against a room's keywords - exact if some keyword equals the whole
-  phrase, partial if some keyword contains it as a substring - and is NOT also
-  broken into `art` and `nouveau` for separate credit. This is a deliberate
-  precision-over-recall tradeoff, the same one phrase search always makes: a
-  room tagged `art` and `nouveau` as two *separate* keywords gets zero tag
-  credit from the quoted phrase, because the phrase never appears as a
-  contiguous run in either one. Quoting an unquoted-equivalent single word
-  (`"art"`) changes nothing.
-- **A quoted phrase matches the story as an ordered run too.** The story is
-  indexed as the lemmatised token *sequence*, positions kept, so a phrase is
-  checked against the story the same way it is against a keyword: the phrase's
-  words must appear consecutively (by lemma), not merely somewhere in the room.
-  This is the same machinery the "long story match" rule needs - a contiguous
-  run of matched query words - so quoted phrases get story credit for the
-  same reason, not as a special case.
+Each rule holds because the weights make its inequality true. "An exact tag
+match outranks any non-exact evidence" holds because one exact tag's
+contribution is larger than every non-exact signal's maximum added together.
+"Balancing signals against each other" lists the weights and the
+inequalities.
 
 ## Assertions
 
-Each assertion is a plain statement of behavior, followed by exactly how the
-implementation makes it true.
+Each assertion is a statement of behavior, followed by how the implementation
+makes it true.
+
+### Balancing signals against each other
+
+**The seven weights are `config.search.weights`, and every cross-signal
+guarantee is an inequality over them.**
+
+| Symbol | `search.weights` key | Default | Weighs |
+| --- | --- | --- | --- |
+| `E` | `tagExact` | 5 | each term that exactly equals a keyword |
+| `P` | `tagPartial` | 0.45 | the partial-tag budget, `clamp01(tagPartialSum / TAG_PARTIAL_SATURATION)` |
+| `T` | `titleExact` | 5.5 | an exact title match (0 or 1) |
+| `Pt` | `titlePartial` | 0.2 | the best partial title fraction |
+| `S` | `story` | 0.4 | `storyRatio`, the query-relative story match |
+| `L` | `storyLong` | 2 | the long-story bonus, a curve of `storyLongChars` |
+| `C` | `clip` | 1 | `clipNorm * clipStrengthGate` |
+
+The ranking score is:
+
+```
+score = E * tagExact + P * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION)
+      + T * titleExact + Pt * titlePartial
+      + S * storyRatio + L * storyLongBonus
+      + C * clipNorm * clipStrengthGate
+```
+
+The inequalities the defaults satisfy, and the rule each one serves:
+
+| Inequality | Defaults | What it guarantees |
+| --- | --- | --- |
+| `E > P + Pt + S + L + C` | `5 > 4.05` | an exact tag outranks all non-exact evidence combined |
+| `T > P + Pt + S + L + C` | `5.5 > 4.05` | an exact title does too |
+| `E < T < 2E` | `5 < 5.5 < 10` | an exact title edges out one exact tag, not two |
+| `L > C + P + Pt` | `2 > 1.65` | a long story match outranks CLIP plus maxed partial tag and title matches |
+| `C * 0.5 >= P` | `0.5 >= 0.45` | a reasonably certain CLIP match clears the partial-tag budget |
+
+Each default clears its inequality with margin, so re-tuning one weight means
+re-checking every inequality it appears in. `config.test.ts` and
+`scoring.test.ts` assert them, against `DEFAULTS` only: a `config.json` can
+set weights that break them, and nothing reports it (open issue
+[#229](https://github.com/centuryglass/babel-index/issues/229)).
+
+Four formula constants in `scoring.ts` are not config. The first two shape
+terms the inequalities bound; the last two feed strength, not the score:
+
+- `TAG_PARTIAL_SATURATION` (2): how much summed partial-tag fraction fills
+  the `P` budget.
+- `STORY_LONG_RANGE` (`{ low: 16, high: 40 }`): the character band the
+  long-story bonus ramps across.
+- `STORY_FLOOR` (0.5): strength's reading for any story match.
+  A judgement call, with no distribution to measure it against.
+- `CLIP_STRENGTH` (`{ centre, high }`): the default CLIP anchors, overridable
+  as `search.density.clipCentre`/`clipHigh`.
 
 ### Text matching mechanics
 
 **Matching ignores case, accents, and other diacritics.** `rosé` and `rose`,
 `Café` and `cafe`, are the same query and the same keyword.
-*Enforcement:* every string is run through `fold()` before comparison - NFD
-decomposition strips combining marks, then `any-ascii` transliterates whatever
-is left that isn't already ASCII (this covers letters like `ł` or `ø` that have
-nothing for NFD to strip).
+*Enforcement:* every string goes through `fold()`: NFD decomposition with
+combining marks stripped, lowercasing, then `any-ascii` for whatever is still
+not ASCII (letters like `ł` or `ø`, which NFD has nothing to strip from).
 
-**A story match only counts a genuine form of the same word, not a lookalike.**
-Searching `cat` must not match `category`; searching `room` should match
-`rooms`; searching `animation` must not match `animal`.
-*Enforcement:* story matching compares **lemmas** (`wink-lemmatizer`, trying
-noun then verb then adjective rules), not prefixes or stems. A Porter-style
-stemmer was tried and rejected specifically because it collapses `animation`
-and `animal` onto the same stem - a real false positive, not hypothetical.
+**A story match counts only a genuine form of the same word, not a
+lookalike.** Searching `cat` must not match `category`; `room` should match
+`rooms`; `animation` must not match `animal`.
+*Enforcement:* story matching compares lemmas (`wink-lemmatizer`, trying
+noun, then verb, then adjective rules), not prefixes or stems. A
+suffix-collapsing stemmer folds `animation` and `animal` onto one stem.
 
 **Very short words and common filler words carry no search signal.**
-Searching `a room of glass` should not spend meaningful weight on `a` or `of`.
-*Enforcement:* `tokenise()` drops any token under `minTokenLength` (default 3 -
-`a` would otherwise substring-match most keywords in the corpus) and drops a
-fixed stopword list (`the`, `and`, `with`, ...) before scoring ever sees them. A
-word this drops cannot score, and therefore cannot be highlighted either - the
-same token list feeds both.
+Searching `a room of glass` should not spend weight on `a` or `of`.
+*Enforcement:* `tokenise()` drops any token shorter than
+`search.minTokenLength` (default 3; `a` would otherwise substring-match most
+keywords) and any word in `STOPWORDS`. A dropped word cannot score, and so
+cannot be highlighted: the same token list feeds both. The tag and title
+rules apply the same floor to unquoted terms; a quoted phrase is always
+eligible.
 
-**A pasted wall of text can't be used to lock up the search.** A query is
-capped at `maxQueryLength` (256) characters, enforced in `search()` itself so
-a keyword chip, a history entry, or a shelf-book search - not only what's typed
-into the box - all go through the same limit. `/api/search` enforces the same
-cap server-side, since a direct request to the endpoint never goes through
-`search()` at all.
+**A pasted wall of text cannot lock up the search.** A query is truncated to
+`search.maxQueryLength` (default 256) characters.
+*Enforcement:* `useSearch.ts`'s `search()` truncates, so a keyword chip, a
+history entry and a shelf-book search pass through the same limit as typing.
+`/api/search` truncates again server-side, since a direct request never goes
+through `search()`.
 
 ### Tag matching
 
-**An exact tag match always outranks any non-exact-tag evidence.** A room with
-one exact tag match beats a room with any combination of partial tags, story
-matches, and CLIP confidence, no matter how strong.
-*Enforcement:* `tagExact` (`n`) is worth a fixed `E = 5` points per match, and
-`E` is set above the combined ceiling of every other signal
-(`E > tagPartial + story + storyLong + clip`, i.e. `5 > 0.45 + 0.4 + 2 + 1 =
-3.85`) - so a single additional exact tag match can never be caught up by
-anything else in the sum, whatever those other signals are doing.
+A term matches a keyword exactly when its folded text equals the folded
+keyword, and partially by the fraction of the keyword it covers as a
+substring (`classifyTagTerm`). `art` covers 3/11 of `art nouveau`.
 
-**More exact tag matches always beat fewer.** Searching `alien impasto` should
-rank a room tagged with both `alien` and `impasto` above one tagged with only
-one of them.
-*Enforcement:* the same margin above applies to each additional exact match -
-`n` exact matches are worth `n * E`, and `E` alone already exceeds everything
-non-exact-tag could contribute, so `n+1` beats `n` unconditionally.
+**An exact tag match outranks any non-exact evidence.** A room with one exact
+tag match beats a room with any combination of partial tags, partial titles,
+story matches and CLIP confidence.
+*Enforcement:* `E > P + Pt + S + L + C`. An exact title match is not
+non-exact evidence; see "Title matching".
+
+**More exact tag matches beat fewer, all else equal.** Searching
+`alien impasto` should rank a room tagged with both above one tagged with
+only one.
+*Enforcement:* `n` exact matches are worth `n * E`, and `E` alone exceeds all
+non-exact evidence, so `n + 1` beats `n` between rooms with the same title
+reading. An exact title match (`T`) can outweigh one exact tag of
+difference: one exact tag plus an exact title (`E + T = 10.5`) beats two
+exact tags alone (`2E = 10`).
 
 **A partial tag match is real evidence, but a confident image match beats a
-lone one.** `art` partially matching the tag `art nouveau` should count for
-something, but a room CLIP is genuinely confident about should still win.
-*Enforcement:* the partial-tag budget is capped at `P = 0.45` regardless of how
-many terms partially match or how strong any one fraction is (summed fractions
-are clamped against a saturation constant, `TAG_PARTIAL_SATURATION = 2`, so it
-can't be inflated by a long query). A "reasonably certain" CLIP match - defined
-below as `clipStrengthGate >= 0.5` on the room CLIP is most confident about -
-contributes at least `0.5` points, which already clears `0.45`.
+lone one.** `art` partially matching `art nouveau` counts for something, but
+a room CLIP is reasonably certain about should still win.
+*Enforcement:* the partial-tag term is capped at `P` however many terms match
+partially: summed fractions are divided by `TAG_PARTIAL_SATURATION` and
+clamped to 1, so a long query cannot inflate it. A reasonably certain CLIP
+match (`clipStrengthGate >= 0.5`, see "Image-content (CLIP) matching") on
+the room CLIP ranks first (`clipNorm = 1`) contributes at least
+`C * 0.5 = 0.5`, which clears `P`.
 
-**More partial tag matches beat fewer, for the same number of exact matches.**
-*Enforcement:* `tagPartialSum` is a running **sum**, not an average, over every
-partially-matching term. A sum can only grow as matches are added; an average
-can fall when a weaker match joins a stronger one, which would rank a room with
-*more* evidence lower - backwards from what this rule asks for.
+**More partial tag matches beat fewer, for the same number of exact
+matches.**
+*Enforcement:* `tagPartialSum` is a sum over the partially matching terms,
+not an average. A sum only grows as matches are added; an average can fall
+when a weaker match joins a stronger one, ranking a room with more evidence
+lower. The sum stops helping once it reaches `TAG_PARTIAL_SATURATION`.
 
 **A multi-word tag typed plainly is an exact match, without quotes.** A room
-tagged `outsider art` is found exactly by the query `outsider art`, not only by
-`"outsider art"`. Quoting narrows what a phrase may match (see Feature
-additions); it is not the only way to reach a phrase.
-*Enforcement:* the whole folded query is classified against the room's keywords
-as one more candidate beside the per-term pass, and the better reading wins -
-`keywordScore`'s two-readings rule, applied per room in `rankHybrid`. An exact
-whole-query match counts as **one** exact match, never more, so
-`brutalism mezzotint` hitting two separate keywords (two exact matches, `2E`)
-still outranks one room tagged with the whole phrase (`E`). The reading is only
-built for a query of more than one term; with one term, it is the term. This
-matters because a keyword chip searches its text unquoted and multi-word
-keywords are common in a real corpus, so without it the commonest search a
-reader makes cannot reach the tag it names.
+tagged `outsider art` is found exactly by the query `outsider art`, not only
+by `"outsider art"`. A keyword chip searches its text unquoted, and
+multi-word keywords are common, so without this the commonest search a reader
+makes could not reach the tag it names.
+*Enforcement:* for a query of more than one eligible term, `tagTermsOf`
+builds a whole-query term, and `rankHybrid` classifies it against each room's
+keywords beside the per-term pass. The better reading wins:
+- An exact whole-query match counts as one exact match, never more, so
+  `brutalism mezzotint` hitting two separate keywords (`2E`) still outranks
+  a room tagged with the whole phrase (`E`).
+- A partial whole-query match is used only when no term matched the room's
+  keywords at all.
 
 **A quoted phrase is one match, not one match per word it contains.**
 Searching `"art nouveau"` credits at most one exact or one partial match for
-that whole phrase, never two.
-*Enforcement:* a quoted term is one entry in the parsed query's `terms` list
-(see Data structures) and is classified exactly once, the same as any
-single-word term - it simply tests the whole phrase as the substring/equality
-candidate instead of one word.
+the whole phrase.
+*Enforcement:* a quoted phrase is one entry in the parsed query's `terms` and
+is classified once, testing the whole phrase as the equality/substring
+candidate. See "Quoted phrases".
 
 ### Title matching
 
-A room's optional human-written `title` (`packages/map/metadata.ts`) is matched
-the same way a keyword is - exact/partial, term by term, no fuzziness beyond the
-substring rule tags already use - with one structural difference: a room has
-*one* title, not a list of them, so where the tag rules sum or count across
-several keywords, the title rules take the single best reading across the
-query's terms instead. And an exact title match is prioritized slightly above
-an exact tag match: naming the room by its actual title is the most specific
-thing a query can do, more specific than repeating one of its three generic
-style keywords.
+A room's optional `title` (`packages/map/metadata.ts`) is matched the way a
+keyword is: exact or partial, term by term, by the same substring rule. A
+room has one title, not a list, so where the tag rules sum or count across
+keywords, the title rules take the best reading across the query's terms.
+An exact title match is weighted slightly above an exact tag match: naming a
+room by its title is the most specific thing a query can do.
 
-**A term matches a title exactly or partially, by the same rule a term matches
-a keyword.** Searching `"the unsurveyed room"` should match a room titled `The
-Unsurveyed Room` exactly; searching `unsurveyed` should match it partially.
-*Enforcement:* every term in the query (the same `tagTerms` the tag rules
-classify - one word, or one quoted phrase treated as a single unit) is tested
-against the room's title with `classifyTagTerm`, the identical function tag
-matching uses, called with the title as a one-element keyword list. Quoting
-behaves identically to the tag rule above: a quoted phrase is one match against
-the title, never one match per word it contains.
+**A term matches a title exactly or partially, by the same rule a term
+matches a keyword.** Searching `"the unsurveyed room"` matches a room titled
+`The Unsurveyed Room` exactly; `unsurveyed` matches it partially.
+*Enforcement:* every term the tag rules classify, and the whole-query term,
+is tested against the title with `classifyTagTerm`, called with the title as
+a one-element keyword list. A quoted phrase is one match against the title,
+as it is against keywords.
 
-**Multiple terms hitting the same title is the same evidence read twice, not
-new evidence.** Two different keywords partially matched is stronger proof
-than one - that's why `tagPartialSum` sums. Two different query terms landing
-inside the same one title string is not the same kind of stacking: they are
-both describing the identical piece of evidence.
-*Enforcement:* `titlePartial` is the **maximum** substring fraction over every
-term that matched partially, not a sum - unlike `tagPartialSum`. `titleExact`
-is a single boolean (did any term equal the title exactly), not a count -
-unlike `tagExact`, there is nothing for it to count past one, since a room only
-has one title to match.
+**Several terms hitting the same title are one piece of evidence read twice,
+not new evidence.** Two different keywords partially matched is stronger
+proof than one, which is why `tagPartialSum` sums. Two query terms landing
+inside the same title string describe the same evidence.
+*Enforcement:* `titlePartial` is the maximum substring fraction over every
+term, not a sum. `titleExact` is 0 or 1 (did any term equal the title), not
+a count.
 
-**An exact title match always outranks any non-exact-tag, non-exact-title
-evidence, and outranks a single exact tag match too - but not by much.** A room
-found by its exact title should edge out a room that only matched one of its
-generic tags, but two exact tag matches (a strong, specific hit on real
-generation keywords) should still beat one title.
-*Enforcement:* `titleExact` is worth a fixed `T = 5.5` points, chosen so it
-clears both bars with real margin: `T` is set above the combined ceiling of
-every non-exact signal (`T > tagPartial + titlePartial + story + storyLong +
-clip`, i.e. `5.5 > 0.45 + 0.2 + 0.4 + 2 + 1 = 4.05`), the same shape of
-guarantee `E` (tag-exact) makes for itself - and `T` clears `E` itself
-(`5.5 > 5`) by a deliberately small margin, "slightly", per the rule's own
-wording. `T` stays well under `2E = 10`, so two exact tag matches still beat
-one exact title match; `E` is unchanged and still clears every non-exact signal
-including `titlePartial` (`5 > 0.45 + 0.2 + 0.4 + 2 + 1 = 4.05`).
+**An exact title match outranks any non-exact evidence, and a single exact
+tag match too - but not two exact tag matches.**
+*Enforcement:* `T > P + Pt + S + L + C`, the same guarantee `E` makes, and
+`E < T < 2E`. The margin over `E` is small (`T - E = 0.5`): it decides
+between an exact-title room and an exact-tag room whose other evidence is
+comparable. If the tag room's non-exact evidence exceeds the title room's by
+more than `0.5`, the tag room wins.
 
-**A partial title match is real evidence, weaker than a partial tag match.** A
-tag is one of three deliberately-chosen style keywords; the title is one
-string doing several jobs at once (display name, catalog sort key, spine
-label), so a substring landing inside it is somewhat less specific evidence
-of a real match than a substring landing inside a purpose-built tag.
-*Enforcement:* the title-partial weight is `Pt = 0.2`, below tag-partial's
-`P = 0.45`. `L` (the long-story bonus) still clears `clip + tagPartial +
-titlePartial` with `L`'s existing margin intact
-(`2 > 1 + 0.45 + 0.2 = 1.65`), so a long story match keeps outranking any
-combination of CLIP, a partial tag match, and a partial title match at once -
-the same guarantee "Story matching" makes below, now checked against one more
-signal in the ceiling.
+**A partial title match is real evidence, weaker than a partial tag match.**
+A tag is a purpose-chosen style keyword. A title does several jobs (display
+name, catalog sort key, spine label), so a substring landing inside it is
+less specific evidence.
+*Enforcement:* `Pt < P`, and `L > C + P + Pt` keeps the long-story guarantee
+intact with the title term included.
 
 ### Story matching
 
-**A short, exact story match is real evidence, and beats an ordinary or weak
-image match - but a genuinely confident one can still win.** Searching `cat`
-and finding it in a room's story should usually outrank CLIP, unless CLIP is
-unusually sure of itself.
-*Enforcement:* a single-term query that fully matches always reaches
-`storyRatio = 1` (the ratio is against the *query's* length, not the story's),
-contributing the full `S = 0.4`. Since a "highly certain" CLIP match
-contributes at least `0.5` (`clip * clipStrengthGate >= 1 * 0.5`), it still
-wins - but nothing short of that threshold (roughly the top of the corpus's
-ordinary cosine range, see "Image-content (CLIP) matching" below) can beat the bare word
-match. This is the same inequality as the partial-tag rule above, from the
-story side.
+A story is indexed as its ordered sequence of lemmas, with each word's span
+in the folded text. Two story readings feed ranking:
 
-**A long story match - most or all of a matched sentence - outranks every CLIP
-match and every partial tag match, at once, unconditionally.** "Long" means
-*contiguous*: a run of query words found consecutively in the story, not the same
-words scattered across it. `cat dog bird fish` hitting four unrelated sentences is
-not a long match; `a room walled in glass` found as one phrase is.
-*Enforcement:* `storyLongChars` (the character length of the longest contiguous
-run of matched query words, by lemma - not the query-relative ratio, and not a
-sum over scattered hits) feeds a saturating bonus:
-`storyLongBonus = clamp01((storyLongChars - 16) / (40 - 16))`. Below 16 matched
-characters (roughly one or two words) the bonus is exactly zero; by 40 (roughly a
-full clause) it saturates at `L = 2`, and `L` is set above `clip + tagPartial`
-(`2 > 1 + 0.45 = 1.45`) - so it wins even against a room that is simultaneously
-CLIP's top, fully-confident pick AND has a maxed-out partial tag match. Measuring
-a contiguous run needs the story indexed as an ordered token sequence, not a set.
+- `storyRatio`: the matched share of the query, in `[0, 1]`. Each query token
+  counts by its length (`cartographer` outweighs `oil`), and the ratio
+  divides by the query, not the story, so a hit in a long story is worth the
+  same as in a short one.
+- `storyLongChars`: the character span, in the folded story, of the longest
+  contiguous run of story words whose lemma is one of the query's
+  (`longestMatchRun`). "Contiguous" is in the indexed sequence, so a stopword
+  or short word between two matches does not break a run. The query's word
+  order does not matter.
 
-**A quoted phrase is one contiguous story match, same as one keyword match.**
-`"art nouveau"` credits the story only where those two words appear consecutively,
-feeding `storyLongChars` as a single run - the same ordered-run test the long-match
-rule above already makes, so quoting adds no new story mechanism.
+**A short, exact story match is real evidence, and beats a weak image match -
+but a confident one can still win.** Searching `cat` and finding it in a
+room's story should usually outrank CLIP.
+*Enforcement:* a query whose every token is in the story reaches
+`storyRatio = 1` and contributes the full `S`. CLIP's term,
+`C * clipNorm * clipStrengthGate`, beats it only when it exceeds `S` (`0.4`
+with the defaults). A reasonably certain CLIP match on CLIP's top room
+contributes at least `0.5`, so it always does.
+
+**A long story match outranks every CLIP match and every partial tag and
+title match, at once.** "Long" means contiguous: `cat dog bird fish` hitting
+four unrelated sentences is not a long match; `a room walled in glass` found
+as one run is.
+*Enforcement:* `storyLongChars` feeds a saturating bonus,
+`storyLongBonus = clamp01((storyLongChars - low) / (high - low))` over
+`STORY_LONG_RANGE`. Below `low` (16 characters, roughly one or two words) it
+is zero; at `high` (40, roughly a full clause) it saturates at `L`, and
+`L > C + P + Pt`, so it beats a room that is CLIP's fully confident top pick
+and has maxed-out partial tag and title matches.
 
 ### Image-content (CLIP) matching
 
-**A query CLIP has no real opinion about cannot look confident just because it
-produced *some* top result.** Every query has a best-matching room by
-construction of relative ranking (min-max normalisation always gives the top
-result exactly `1.0`) - that must not read as a strong match for a query like
-`cghjj`.
-*Enforcement:* CLIP's contribution to the ranking sum is
-`clip * clipNorm * clipStrengthGate` - the *relative* rank position
-(`clipNorm`) multiplied by the *absolute* confidence (`clipStrengthGate`,
-read off the raw cosine against fixed, corpus-measured bounds). A query with no
-real signal has every raw cosine sitting low against those bounds, so
-`clipStrengthGate` is near zero and the whole term contributes almost nothing
-- whatever `clipNorm` says.
+CLIP's absolute reading is the strength curve `clipCurveStrength`: `0` at and
+below the anchor `centre`, rising linearly to `1` at `high`. In ranking this
+value is `clipStrengthGate`; in strength it is `C`. **"Reasonably certain"**,
+used throughout these rules, means `clipStrengthGate >= 0.5`.
 
-**"Reasonably certain" and "highly certain" are calibrated against this
-corpus's cosine DISTRIBUTION, not guessed.** These phrases appear in the tag
-and story rules above and need one precise meaning.
-*Enforcement:* they read off the strength curve "Computing strength"
-defines - `0` at and below `centre`, rising linearly to `1` at `high`.
-`clipStrengthGate` is that curve, and "reasonably/highly certain" means
-`clipStrengthGate >= 0.5`. Both anchors, and the `low` probe that validates
-`centre`, are measured by
-`tools/embed/cosine-range.ts` against this corpus, not chosen: whole-list
-percentiles silently assumed "most pairs are unrelated", which turned out
-wrong for common, genuinely-true words (`book` scored below the naive
-90th-percentile "noise" cutoff on real, correct matches) - so `centre` is
-instead the *median* of the whole keyword x room distribution (`overall.p50`,
-`≈0.205`, the noise band a query with no real signal lands in - validated
-against a keysmash/nonsense probe, which landed within 0.01 of it), `high` is
-the *median* ceiling across near-universal keywords true of nearly every room
-(`bookshelf`, `book`, `library`, `shelf`, ... - `≈0.279`), and `low` is the
-*median* ceiling across known-irrelevant strong concepts - things CLIP
-recognises but that share nothing with a shelved library wall (`race car`,
-`swimming pool`, `sandy beach`, ... - `≈0.171`). The curve does not read
-`low`; its measurement is what makes `centre` a conservative zero. Strong,
-irrelevant concepts land under `centre`, so a room at `centre` is noise
-rather than a weak match. A cosine below `centre` is absence of evidence, not
-evidence of a mismatch: CLIP's joint space has no meaningful antipode, and a
-text vector pointing away from an image vector is a coherent concept that
-happens to share no direction with library walls, not a claim that the image
-is the query's opposite. So everything below `centre` reads as `0`. See
-`tools/embed/cosine-range.ts` for how each anchor was measured and
-`cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each read off a
-different distribution.
+**A query CLIP has no real opinion about cannot look confident just because
+it produced some top result.** Min-max normalisation always gives the top
+room `clipNorm = 1`, and that must not read as a strong match for `cghjj`.
+*Enforcement:* CLIP's ranking term is `C * clipNorm * clipStrengthGate`, the
+relative position times the absolute reading. A query with no real signal
+has every raw cosine near or below `centre`, so `clipStrengthGate` is near
+zero and the term contributes almost nothing, whatever `clipNorm` says.
 
-### Balancing signals against each other
+**The anchors are measured against a corpus's cosine distributions, not
+guessed.**
+*Enforcement:* `CLIP_STRENGTH` holds the defaults (`centre` 0.205, `high`
+0.279); config can override them as `search.density.clipCentre`
+and `clipHigh`. `tools/embed/cosine-range.ts` measures them:
+- `centre` is the median of the whole keyword x room distribution, the band
+  a query with no real signal lands in. A keysmash probe lands on it.
+- `high` is the median ceiling across keywords true of nearly every room
+  (`bookshelf`, `book`, `library`, ...), a genuine match's typical
+  confidence.
+- A third probe, strong concepts that share nothing with a library wall
+  (`race car`, `swimming pool`, ...), lands below `centre`. The curve does
+  not read it; it shows `centre` is a conservative zero, so a room at
+  `centre` is noise rather than a weak match.
 
-**Nothing here is a hard tier - every guarantee above is one inequality inside
-a single weighted sum.** See "One sort, not tiers" in the overview.
+`CLIP_STRENGTH`'s docblock carries the measurement details, and
+`cosine-stats.ts`'s header says what each distribution answers.
 
-**These seven constants ARE the search weights, not a separate accounting.**
-`E=5` (per exact tag), `P=0.45` (partial-tag budget), `T=5.5` (exact title
-match), `Pt=0.2` (partial-title budget), `S=0.4` (full short-story match),
-`L=2` (long contiguous-story bonus) and `C=1` (CLIP) are exactly what
-`config.search.weights` carries, in this seven-way
-`{tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip}`
-shape - the exact/partial distinction needs its own weight for both tag and
-title, and short/long needs its own weight for story, for the inequalities to
-hold. Each was chosen so its rule's inequality holds with real margin, not
-just at the boundary, so re-tuning any one requires re-checking the others'
-margins rather than eyeballing it alone.
+**A cosine below `centre` is absence of evidence, not evidence of a
+mismatch.** CLIP's joint space has no meaningful antipode: a text vector
+pointing away from an image vector is an unrelated concept, not a claim that
+the image is the query's opposite.
+*Enforcement:* the curve clamps everything below `centre` to `0`.
 
-### Computing strength
+## Quoted phrases
 
-Ranking asked "which room is most like the query"; strength asks the different
-question the overview names - "how good is this room's match, in absolute
-terms" - and the density gradient and the UI's percentage both read its answer.
-It is one number in `[0, 1]`: how strong the match is, `0` for no evidence.
-No signal can push it below `0`, because none of them can find evidence
-against a room. It is built from
-the same evaluation ranking uses, but from each signal's *absolute* reading,
-never the query-normalised one.
+A quoted phrase is one term (see "The parsed query"). What quoting changes:
 
-**Strength is a soft-OR of the absolute readings.** Any one signal
-can carry it alone - an exact tag is a full-strength match whatever CLIP thinks
-of the picture - and two weak agreeing signals count for more than either alone.
-*Enforcement:* four inputs, each in `[0, 1]`:
-- `K` (tags), the room's **best** reading over the query's terms: each term
-  contributes `1` if it exactly equals a keyword, its substring fraction if it
-  only partially matches, or `0`, and `K` is the **maximum** of those, taken
-  over the query's terms and the whole-query reading alike. A maximum, not a
-  mean: a room whose tag the reader typed is a full-strength match for that
-  tag whatever else the query asked about, so adding unrelated words to a
-  query must not weaken a room that has not changed. How much of the query a
-  room explains is real information, and it is what ranking's `tagExact`
-  count already decides - `n * E` ranks a room matching more terms higher
-  without claiming the one-term match is weaker than it is.
-- `Kt` (title), the same best reading as `K`, but against the room's
-  one title instead of its list of keywords - each query term contributes `1`
-  for an exact title match, its substring fraction for a partial one, `0`
-  otherwise, maxed over the query's terms and the whole query. A room with no
-  title contributes `Kt = 0` and drops out of the soft-OR below exactly as a
-  room with no metadata drops out of `K`.
-- `S` (story), from **absolute matched length**, not the query-relative
-  `storyRatio` ranking uses: `S = STORY_FLOOR + (1 - STORY_FLOOR) x storyLongBonus01`
-  when any story word matched, where `storyLongBonus01 = clamp01((storyLongChars
-  - 16) / (40 - 16))` is the same contiguous-run curve the ranking bonus reads.
-  A single matched word sits at the moderate `STORY_FLOOR`; a full matched clause
-  reaches `1`. Using `storyRatio` here instead would make a one-word query that
-  matches read as a 100% match, which is the bug this rule exists to avoid.
-- `C` (CLIP), the raw cosine read against the curve in "Image-content (CLIP)
-  matching": `0` at and below `centre`, `1` at `high` (`clipCurveStrength`).
+- **Tags and titles: a quoted phrase is tested whole.** `"art nouveau"` is
+  exact if some keyword equals the whole phrase, partial if some keyword
+  contains it as a substring, and is not also split into `art` and `nouveau`
+  for separate credit. A room tagged `art` and `nouveau` as two separate
+  keywords gets no tag credit from the quoted phrase. This is phrase search's
+  usual precision-over-recall tradeoff. Quoting a single word (`"art"`)
+  changes nothing, since both cases go through `classifyTagTerm` with the
+  same folded text.
+- **The floor: a quoted phrase is always eligible** for tag and title
+  matching, whatever its length or stopwords.
+- **The story: quoting adds an ordered run and restricts nothing.** The
+  phrase's words still count toward `storyRatio` and `longestMatchRun`
+  wherever they appear, as unquoted words do. `storyPhraseRun` also
+  measures the phrase's words appearing consecutively in the phrase's order,
+  and `storyLongChars` takes the longer of the two runs. With the default
+  `minTokenLength`, that ordered run is never longer than the unordered one,
+  so quoting does not change a story score. Open issue
+  [#327](https://github.com/centuryglass/babel-index/issues/327) tracks
+  deciding what a quote should do here.
 
-Strength is the soft-OR `1 - (1 - K)(1 - Kt)(1 - S)(1 - C)`. With no
-embedding blob `C = 0` and strength is text-only; with no metadata
-`K = Kt = S = 0` and strength is CLIP-only; with no title `Kt = 0` alone and
-strength falls back to tags/story/CLIP. A room no signal found evidence for
-reads `0` whether or not the corpus has embeddings, and the density floor and
-baseline paint it the same either way.
+## Computing strength
 
-**Strength need not be monotone with rank; the map makes it so.** The blend
-above can hand back a later rank a higher strength than an earlier one (they
-sort on `score`, not on this). `ordering.ts`'s density ramp takes the running
-minimum down the ranks and snaps anything under `STRENGTH_FLOOR` to the
-baseline, so density still falls monotonically outward - strength does not have
-to arrive that way.
+Strength is built from the same evaluation ranking uses, but from each
+signal's absolute reading, never the query-normalised one.
 
-### Reporting
+**Strength is a soft-OR of four absolute readings.** Any one signal can
+carry it alone (an exact tag is a full-strength match whatever CLIP thinks of
+the picture), and two weak agreeing signals count for more than either alone.
+*Enforcement:* `matchStrength` computes
+`strength = 1 - (1 - K)(1 - Kt)(1 - S)(1 - C)` from four inputs in
+`[0, 1]`. Strength's `S` and `C` are not the ranking weights of the same
+letter.
+- `K` (tags): the room's best reading over the query's terms and the
+  whole-query term - `1` for an exact keyword match, the substring fraction
+  for a partial one, `0` otherwise. A maximum, not a mean: adding unrelated
+  words to a query must not weaken a room that has not changed. How much of
+  the query a room explains is decided by ranking's `tagExact` count.
+- `Kt` (title): the same best reading against the room's one title. A room
+  with no title has `Kt = 0`.
+- `S` (story): from absolute matched length, not the query-relative
+  `storyRatio`. When any story word matched,
+  `S = STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01`, where
+  `storyLongBonus01` is the same `STORY_LONG_RANGE` curve the ranking bonus
+  reads. A single matched word sits at `STORY_FLOOR`; a full matched clause
+  reaches `1`. Using `storyRatio` would make any one-word query that matches
+  read as a 100% match.
+- `C` (CLIP): `clipCurveStrength` of the raw cosine (see "Image-content
+  (CLIP) matching").
 
-**CLIP's reported strength is a percentage anchored on the distribution's
-no-opinion centre.** The number shown to a reader is `clipStrengthGate`, the
-curve above, rendered as a percentage: `0` at or below the cosine an unrelated
-query lands at, rising toward `100%` at the high extreme a genuine match
-reaches.
-*Enforcement:* a monotone map from measured anchors (no-opinion centre, high
-extreme) rather than one linear band from a hand-set floor; `cosine-stats.ts`
-computes the percentiles they read.
+A missing signal reads `0` and drops out of the product. With no embedding
+blob, strength is text-only; with no metadata, it is CLIP-only. A room no
+signal found evidence for reads `0` either way, and the map places it at the
+baseline.
+
+**Strength need not be monotone with rank; the map makes it so.** Ranks sort
+on `score`, not on strength, so a later rank can have a higher strength than
+an earlier one. `ordering.ts`'s `densityRamp` takes the running minimum down
+the ranks and snaps anything under `search.density.floor` (default
+`STRENGTH_FLOOR`) to the baseline, so density still falls monotonically
+outward. The cost is that a room's reported strength and the strength it is
+placed by can disagree (open issue
+[#226](https://github.com/centuryglass/babel-index/issues/226)).
+
+## Reporting
+
+`explainRanking` builds everything a room's score display shows, from the
+same `breakdown` the sort used. It returns `null` for a room nothing matched
+on any axis and with no CLIP reading.
+
+**The composite line shows the overall rank and the strength, and explains
+itself on demand.** It reads "#4 of 2048, 73.00% match strength". Its tooltip
+breaks the score into each axis's share.
+*Enforcement:* the percentage is `strengthPercent(strength)`. Each share
+(`contributions`) is that axis's weighted term divided by `score`, rounded to
+a whole percent and sorted greatest first. An axis that contributed nothing
+is omitted rather than shown as `0%`, so a room no text touched shows only
+the image share.
+
+**CLIP's row reports the strength curve as a percentage.** It reads
+"#2 by image: 41.00% match": `0` at or below `centre`, `100%` at `high`. The
+raw cosine is in the row's tooltip.
+*Enforcement:* the percentage is `strengthPercent(clipStrengthGate)`.
 
 **No reported percentage is completely certain or completely absent.** The
-CLIP row and the composite line are both clamped to `0.01%`-`99.99%` - CLIP
-never gets the last word.
+CLIP row and the composite line are both clamped to `0.01%`-`99.99%` by
+`strengthPercent`.
 
-**Tags, titles, and story report counts, not percentages - a percentage isn't
-the right question for them.** A tag match is either exact, partial, or absent; a
-title match is the same, once per room; a story match is a run of characters.
-There's no meaningful "73% sure" reading for any of them.
-*Enforcement:* the tag row shows `tagExact` and however many terms matched
-partially (derived from `tagPartialSum`'s contributing terms); the title row
-shows whether `titleExact` fired, or that the title matched partially; the
-story row shows `storyLongChars`. None of the three reads from the CLIP
-strength curve - the distribution anchors exist only for the CLIP row.
+**Tags, titles, and story report what matched, not percentages.** A tag
+match is exact, partial, or absent; a title match is the same, once per room;
+a story match is a run of characters. None has a meaningful "73% sure"
+reading.
+*Enforcement:* the tag row shows the exact count (`tagExact`) and the partial
+count (`tagPartialCount`); the title row shows "exact" or "partial"; the story
+row shows `storyLongChars` as its length. None reads the CLIP curve.
 
-**Every room can be read on each axis independently, including how it compares
-only on that axis.** A reader should be able to see "this room ranks #4 by tag
-match, tied with 2 others" separately from its overall position - and the same
-for title.
-*Enforcement:* `SearchResult.ranks`/`ties` (see Data structures) are computed
-by sorting `breakdown.tagExact`/`tagPartialSum`, `breakdown.titleExact`/
-`titlePartial`, `breakdown.storyRatio`/`storyLongChars`, and
-`breakdown.clipCosine` independently of the composite `order` - four extra
-sorts of already-computed numbers, not four extra scoring passes.
+**Every room can be read on each axis independently, including how it ranks
+on that axis alone.** A reader can see "#4 by tag, tied with 2" separately
+from the room's overall position.
+*Enforcement:* `rankHybrid`'s `ranks`/`ties` come from four extra sorts of
+the already-computed numbers, independent of the composite `order`:
+- tag: `tagExact`, then `tagPartialSum`;
+- title: `titleExact`, then `titlePartial`;
+- story: `storyRatio`, then `storyLongChars`;
+- clip: the raw cosine.
 
-**The composite view shows one ranking and explains itself on demand.** The
-main display is just the overall rank (`x / N` rooms, `explainRanking`'s
-`total`); a tooltip
-breaks down what earned it, as a percentage of the total score contributed by
-each signal that actually contributed something.
-*Enforcement:* `explainRanking` already omits a signal entirely when it
-contributed zero (a room no text touched shows only a CLIP row) rather than
-printing a false `0%` - the tooltip's percentages are `weighted signal
-contribution / RoomMatch.score`, read off the same `breakdown` structure
-everything else in this document reads from.
+Ranks use competition ranking (`1, 2, 2, 4`), so "#4" always means three
+rooms scored higher on that axis.
+
+## Data structures
+
+The types live in `packages/map/searchResult.ts`.
+
+### The parsed query
+
+A query is parsed (`parseQuery`) into an ordered list of terms. Everywhere
+this document says "term", read "one word, or one quoted phrase treated as a
+single unit".
+
+```
+Term = {
+  text: string,       // as typed: one word, or the contents of one "quoted phrase"
+  folded: string,     // fold(text)
+  quoted: boolean,    // was this a "quoted phrase" in the original query?
+  words: string[],    // [folded] for an unquoted term; the phrase's words for a quoted one
+}
+
+ParsedQuery = {
+  raw: string,        // the query as typed
+  folded: string,     // fold(raw) - the whole-query term's text
+  terms: Term[],
+}
+```
+
+Quotes are found before folding: each `"..."` span becomes one term with
+`quoted: true`, and everything outside quotes is split on whitespace into
+one term per word. (`tokenise()`, which the story reading uses, splits on any
+non-letter, non-digit character instead.) An unterminated quote is an
+ordinary character. `parseQuery` applies no stopword or length floor;
+`tagTermsOf` applies it to unquoted terms, and `tokenise()` to story tokens.
+
+### The per-room index
+
+`buildSearchIndex` builds one entry per room when metadata arrives, `null`
+for a room with no metadata:
+
+```
+SearchIndexEntry = {
+  keywords: string[],         // folded, one entry per tag, not tokenised further
+  title: string | null,       // folded title - one string, since a room has at most one
+  story: {
+    sequence: { lemma, start, end }[],  // lemmatised story words in order, with
+                                        // their spans in the folded story
+    set: Set<string>,                   // the same lemmas, for storyRatio's lookups
+  },
+}
+```
+
+A keyword is stored whole, so a quoted phrase is tested against it as a
+substring the same way a word is.
+
+### One room's evaluation against one query
+
+`rankHybrid` computes one row per room in the same pass. Ranking, strength
+and every reported number read this row; nothing downstream recomputes any
+of it.
+
+```
+tagExact          // count of terms exactly equal to a keyword
+tagPartialSum     // sum of best substring fractions over partially matching terms
+tagPartialCount   // how many terms that sum is over
+titleExact        // 0 or 1
+titlePartial      // max substring fraction against the title
+storyRatio        // matched share of the query, in [0, 1] - a ranking input
+storyLongChars    // longest contiguous matched run, in characters
+cosine            // raw CLIP cosine, or null without embeddings
+clipNorm          // cosine min-maxed across the corpus for this query
+clipStrengthGate  // clipCurveStrength(cosine), in [0, 1]
+score             // the weighted sum ranking sorts by
+strength          // the soft-OR the density gradient and the UI read
+```
+
+### The corpus-wide result
+
+```
+RankHybridResult = {
+  order: number[],          // room ids, best score first
+  strength: Float32Array,   // by rank, parallel to order
+  breakdown: ScoreBreakdown,// by rank: one array per row field above
+  ranks: SignalRanks,       // by rank: { tag, title, story, clip } per-axis rank
+  ties: SignalRanks,        // by rank: how many other rooms share that axis rank
+  signals: { clip, keyword, title, story },  // which signals found anything
+}
+```
+
+`breakdown` renames three row fields: `storyRatio` is `story`, `clipNorm` is
+`clip`, and a missing `cosine` is `NaN`. `ranks`/`ties` are computed apart
+from `order`, so re-sorting for a display column never touches placement.
+`useSearch.ts` stores the result as `SearchResult`, which adds the searched
+`term`, and whose arrays are all `null` for a corpus with neither embeddings
+nor metadata to rank with.

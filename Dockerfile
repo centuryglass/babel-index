@@ -12,8 +12,7 @@
 # publishes native binaries for win32/darwin/linux (AGENTS.md), which covers
 # this image's linux base, but it's sizeable and downloads model weights on
 # first search - pass `--build-arg WITH_CLIP=false` for a smaller image that
-# ranks by keywords and story only, matching the README's "lighter test
-# build" option.
+# ranks by keywords and story only.
 #
 #   docker build --build-arg WITH_CLIP=false -t babel-index .
 
