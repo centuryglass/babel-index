@@ -929,3 +929,9 @@ node tools/comment-check/check.mjs --base <rev> <file>...  # vs another revision
   arguing with themselves. Keep it tool-agnostic ("AI assistance", never a
   product name), since the maintainer uses more than one agent. Existing
   issues and comments without one need no edit.
+- **An issue links a repo document by permalink, not by branch path.** Use a
+  blob url pinned to a commit sha, with the section's heading anchor
+  (`.../blob/<sha>/docs/search_rules.md#reporting`), so the link still shows
+  what the issue was written against after the doc is edited, renamed or
+  deleted. Code references by symbol name (`scoring.ts`'s `rankHybrid`) stay
+  as they are.
