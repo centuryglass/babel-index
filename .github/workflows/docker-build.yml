@@ -1,7 +1,7 @@
 name: docker build
 
 # Builds the Dockerfile against the exact revision deploy.yml just shipped -
-# no push, no registry, build-only (issue #246). The image itself is a
+# no push, no registry, build-only. The image itself is a
 # frivolous convenience (the VPS deploy in deploy.sh never touches Docker),
 # but it will drift out of step with package.json/packages layout unnoticed
 # otherwise, so something has to build it occasionally.

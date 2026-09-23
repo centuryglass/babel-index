@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 /**
- * Poll a server's /api/health until it reports the revision it was supposed
- * to be running, or give up and say why.
+ * Poll a server's /api/health until it reports the expected revision, or give
+ * up and say why. Exits 0 when healthy, 1 when not, 2 on bad arguments.
  *
  *   node deploy/health-check.mjs <url> <sha> [--timeout=90] [--interval=2]
  *
- * One definition of "the deploy worked", used twice: `deploy.sh` runs it on
- * the box against 127.0.0.1 (did the unit come back up on the new code?) and
+ * The one definition of "the deploy worked", run twice: `deploy.sh` runs it
+ * on the box against 127.0.0.1 (did the unit come back on the new code?), and
  * `.github/workflows/deploy.yml` runs it from the runner against the public
- * url (can the world actually reach it, through nginx and all?). Two checks
- * that could disagree about what healthy means would be two chances to call a
- * broken release good.
+ * url (can anyone reach it through nginx?).
  *
- * `.mjs` run by plain `node`, deliberately, where the rest of the repo would
- * be `.ts` through the loader hook (AGENTS.md): this has to run on the VPS in
- * the window right after `npm ci` has emptied and refilled node_modules, and
- * on a CI runner that has installed nothing at all. No imports, no
- * dependencies, no build step - just Node's own fetch.
+ * Plain `.mjs` with no imports, run by bare `node`: on the VPS it runs right
+ * after `npm ci --omit=dev` has replaced node_modules, so it must not depend
+ * on that tree or on the loader hook.
  */
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -58,9 +54,8 @@ async function attempt() {
   try {
     health = await res.json();
   } catch {
-    // Reaching something that answers but isn't this server at all - a proxy
-    // error page, a default vhost - looks like a deploy problem from here and
-    // will not resolve itself by waiting.
+    // A 200 that isn't JSON is some other server (a proxy error page, a
+    // default vhost), which waiting will not fix.
     throw new Fatal(`${url} answered with something that is not JSON - is this the right url?`);
   }
 
@@ -71,10 +66,10 @@ async function attempt() {
     );
   if (health.commit !== expected) return `still serving ${String(health.commit).slice(0, 12)}`;
 
-  // Past this point the NEW process is answering, so anything still wrong with
-  // it is wrong for good. An empty corpus is the one that matters: the library
-  // serves perfectly happily with nothing in it, which is exactly what a unit
-  // file pointing --images somewhere that no longer exists looks like.
+  // Past this point the new process is answering, so anything still wrong
+  // with it is wrong for good. An empty corpus is the case that matters: the
+  // library serves normally with no rooms, which is what a unit whose --images
+  // path no longer exists looks like.
   if (!health.ok) throw new Fatal(`the new revision is up and reporting itself unhealthy: ${JSON.stringify(health)}`);
   if (!health.rooms)
     throw new Fatal(
@@ -85,8 +80,7 @@ async function attempt() {
 }
 
 const deadline = Date.now() + timeoutMs;
-// Assigned on every path that reaches the loop's end, so it needs no
-// initial value - the loop cannot exit without having set it.
+// The latest not-yet-healthy reason, reported if the deadline passes.
 let last;
 process.stdout.write(`waiting for ${url} to report ${expected.slice(0, 12)}`);
 
