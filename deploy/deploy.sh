@@ -134,7 +134,7 @@ install_dependencies() {
   #     partway through and leave node_modules half written. It is slower.
   #   --onnxruntime-node-install-cuda=skip stops onnxruntime-node's install
   #     script fetching CUDA binaries, which this box has no GPU to use and
-  #     which are large enough to be the thing that fails.
+  #     which are large enough to cause failures.
   npm ci --omit=dev --maxsockets=1 --onnxruntime-node-install-cuda=skip
 
   # If the install already wrote a new cache, keep it and drop the stash.
