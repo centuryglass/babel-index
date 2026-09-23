@@ -23,8 +23,7 @@ fi
 # `.claude/scripts/issues.mjs` by hand, piping in issue JSON from the
 # GitHub MCP tools instead.
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  node .claude/scripts/issues.mjs --fetch
-  cat .claude/cache/issues/index.md
+  node .claude/scripts/issues.mjs --fetch && cat .claude/cache/issues/index.md || true
 else
   node .claude/scripts/issues.mjs --fetch-api && cat .claude/cache/issues/index.md || true
 fi

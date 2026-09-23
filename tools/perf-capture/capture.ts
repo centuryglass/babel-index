@@ -9,7 +9,7 @@
  * the full flag list and how to read the output.
  *
  *   node --import ./build/register.mjs tools/perf-capture/capture.ts
- *   node --import ./build/register.mjs tools/perf-capture/capture.ts --renderer webgl --seed my-seed
+ *   node --import ./build/register.mjs tools/perf-capture/capture.ts --renderer canvas2d --seed my-seed
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -86,7 +86,7 @@ async function main() {
     options: {
       seed: { type: 'string', default: 'babel-perf' },
       duration: { type: 'string', default: '60000' },
-      renderer: { type: 'string', default: 'canvas2d' },
+      renderer: { type: 'string', default: 'webgl' },
       images: { type: 'string', default: 'assets/corpus-sample' },
       server: { type: 'string' },
       out: { type: 'string', default: join(HERE, 'out') },
@@ -145,7 +145,8 @@ async function main() {
     page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()));
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-    const query = renderer === 'webgl' ? 'debug&webgl' : 'debug';
+    // Both renderers are named in the url, so the profile never follows `webglFlag.ts`'s `DEFAULT_WEBGL`.
+    const query = renderer === 'webgl' ? 'debug&webgl=1' : 'debug&webgl=0';
     await page.goto(`${origin}?${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
       () => /[1-9]\d* drawn/.test(document.getElementById('hud')?.textContent ?? ''),

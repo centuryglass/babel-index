@@ -392,7 +392,5 @@ imports at bundle time.
 - `docs/search_requirements.md`: What search must do for a reader, as
   numbered `SR-nn` requirements. Maintainer-set intent, not a description of
   the code.
-- `docs/search_critique.md`: A review of search as built, with
-  recommendations; its findings are filed as GitHub issues.
 - `docs/cosine-range-report.json`: Snapshot of `cosine-range.ts`'s last real
   run, the numbers `docs/search_rules.md` cites.
