@@ -790,7 +790,14 @@ async function withStore(run: (store: FavoriteStore, path: string) => Promise<vo
   const dir = await mkdtemp(join(tmpdir(), 'babel-favapi-'));
   try {
     const path = join(dir, 'favorites.json');
-    await run(await createJsonFavoriteStore({ path, flushMs: 0 }), path);
+    const store = await createJsonFavoriteStore({ path, flushMs: 0 });
+    try {
+      await run(store, path);
+    } finally {
+      // The store's deferred snapshot write can still be in flight here, and
+      // it recreates files under `dir` mid-`rm`, failing with ENOTEMPTY.
+      await store.flush();
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
