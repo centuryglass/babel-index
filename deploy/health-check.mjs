@@ -67,9 +67,7 @@ async function attempt() {
   if (health.commit !== expected) return `still serving ${String(health.commit).slice(0, 12)}`;
 
   // Past this point the new process is answering, so anything still wrong
-  // with it is wrong for good. An empty corpus is the case that matters: the
-  // library serves normally with no rooms, which is what a unit whose --images
-  // path no longer exists looks like.
+  // with it is wrong for good.
   if (!health.ok) throw new Fatal(`the new revision is up and reporting itself unhealthy: ${JSON.stringify(health)}`);
   if (!health.rooms)
     throw new Fatal(
