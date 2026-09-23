@@ -31,7 +31,7 @@ inline in `app.ts`, and this page gives those shapes.
 
 The corpus manifest, plus resolved client config and favorites-store
 status. The client blocks on this fetch before it can render anything, so
-every page load makes it once.
+every page load calls it once.
 
 - **Response**: `ManifestResponse` (`packages/map/manifest.ts`) - the room
   list and urls, shared-tile info, pyramid levels, embedding and metadata
@@ -71,10 +71,8 @@ in `app.ts`), so the rearrangement still happens.
 Every room with at least one favorite, keyed by filename.
 
 - **Response**: `{ counts: Record<string, number> }`. A count is the size
-  of a per-room set of hashed visitor ids, never a raw counter (see
-  `AGENTS.md`, "Favorites").
-- `Cache-Control: no-store`, because a stale count reads as a favorite that
-  did not register.
+  of a per-room set of hashed visitor ids (see`AGENTS.md`, "Favorites").
+- `Cache-Control: no-store`, to ensure counts are always current.
 - Without `--favorites`, none of the three favorites routes exist, and the
   manifest's `favorites` is `null`.
 
