@@ -37,8 +37,9 @@ COPY build ./build
 COPY packages ./packages
 COPY assets ./assets
 # packages/web imports tile geometry straight out of tools/center-placement/lib
-# at bundle time (AGENTS.md, "`center.ts` is the pure half") - the client build
-# fails without it even though nothing else here runs the tools/ CLIs.
+# at bundle time (docs/agents/map.md, "`center.ts` is the pure half") - the
+# client build fails without it even though nothing else here runs the tools/
+# CLIs.
 COPY tools/center-placement/lib ./tools/center-placement/lib
 # /api/health reports which revision is running, and this image carries no
 # .git for packages/server/version.ts to read one out of (see .dockerignore),

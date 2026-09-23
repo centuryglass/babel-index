@@ -34,8 +34,8 @@
  * mounted and the client offers no favorite control. Behind a reverse proxy
  * it must be paired with `--trust-proxy 1` (and an nginx that sets
  * X-Forwarded-For), or every visitor shares the proxy's address and one
- * rate-limit bucket (AGENTS.md, "Favorite writes are rate-limited by
- * `req.ip`").
+ * rate-limit bucket (docs/agents/favorites.md, "Favorite writes are
+ * rate-limited by `req.ip`").
  *
  * `LOG_FILE`/`ADMIN_PASSWORD_HASH` (env vars, not flags - the second is a
  * secret) turn on the admin log viewer at /admin/logs (see app.ts,
@@ -244,7 +244,8 @@ if (watch) await ctx.watch();
 else await ctx.dispose();
 
 // Once per process, not per request: a running process cannot change which
-// revision it is (AGENTS.md, "Deploying to the VPS"; see version.ts).
+// revision it is (docs/agents/deploy.md, "Deploying to the VPS"; see
+// version.ts).
 const commit = resolveCommit(repoRoot);
 
 app = createApp({

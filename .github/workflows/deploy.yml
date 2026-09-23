@@ -102,11 +102,11 @@ jobs:
       - run: npm ci
 
       # The render-parity gate: a revision that breaks Canvas2D/WebGL parity
-      # (AGENTS.md, "The two renderers are separate implementations kept in
-      # lockstep") never reaches production. It boots two browser sessions,
-      # too slow to gate every merge, so it gates deploys. It runs on the
-      # runner's GPU-less Chromium with software (SwiftShader) WebGL2, as
-      # `webgl-map.e2e.ts` does in `e2e.yml`.
+      # (docs/agents/rendering.md, "The two renderers are separate
+      # implementations kept in lockstep") never reaches production. It boots
+      # two browser sessions, too slow to gate every merge, so it gates deploys.
+      # It runs on the runner's GPU-less Chromium with software (SwiftShader)
+      # WebGL2, as `webgl-map.e2e.ts` does in `e2e.yml`.
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 

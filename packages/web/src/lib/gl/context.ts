@@ -11,12 +11,12 @@
  * dpr `resize()` was last called with.
  *
  * `createGLContext` must be called exactly once per canvas element's
- * lifetime; AGENTS.md's "GL setup happens once per canvas element's
- * lifetime" bullet carries the rule and what a second call leaks.
- * `dispose()` frees the GL objects this context owns, and nothing else
- * does - the unmount cleanup calls it. A lost context is not discarded this
- * way: its objects are already invalid, and `useMapRendererGL.ts` builds a
- * fresh runtime on restore.
+ * lifetime; docs/agents/rendering.md's "GL setup happens once per canvas
+ * element's lifetime" bullet carries the rule and what a second call leaks.
+ * `dispose()` frees the GL objects this context owns, and nothing else does -
+ * the unmount cleanup calls it. A lost context is not discarded this way: its
+ * objects are already invalid, and `useMapRendererGL.ts` builds a fresh runtime
+ * on restore.
  */
 import { VERTEX_SRC, FRAGMENT_SRC } from './shaders.ts';
 

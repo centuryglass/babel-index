@@ -458,8 +458,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // what its exact text is - both free to move as the sample set does. Read it
     // the way the app does - `api/manifest`, then `manifest.metadata.url` - so
     // the relative urls resolve through `<base href>` exactly as they do in the
-    // client (see the base-path notes in AGENTS.md), rather than guessing where
-    // the sidecar is served from.
+    // client (see docs/agents/deploy.md, "Deployment and the base path"),
+    // rather than guessing where the sidecar is served from.
     const sidecar = (await page.evaluate(async () => {
       const manifest = await (await fetch('api/manifest')).json();
       return (await fetch(manifest.metadata.url)).json();

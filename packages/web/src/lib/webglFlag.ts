@@ -1,9 +1,9 @@
 /**
  * The map renderer switch: the WebGL one (`glRenderer.ts` and
  * `glSlideRenderer.ts`, wired up by `useMapRendererGL.ts`) or the Canvas2D one
- * (`render.ts` and `slide.ts`). AGENTS.md's "The WebGL renderer" carries the
- * standing rule, including why the Canvas2D hatch stays while both renderers
- * exist; this module turns a url into that choice.
+ * (`render.ts` and `slide.ts`). docs/agents/rendering.md's "The WebGL renderer"
+ * carries the standing rule, including why the Canvas2D hatch stays while both
+ * renderers exist; this module turns a url into that choice.
  */
 
 /** Which renderer a visit with no `webgl` parameter gets. */

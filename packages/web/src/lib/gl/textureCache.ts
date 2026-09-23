@@ -10,8 +10,8 @@
  * not stamped in the current or previous frame - a tile drawn last frame is
  * never evicted out from under a render still using it. The cache is a
  * strong `Map`, and its budget is separate from `pyramid.ts`'s
- * decoded-byte budgets; AGENTS.md's "The texture cache has its own eviction
- * budget" bullet carries that reasoning.
+ * decoded-byte budgets; docs/agents/rendering.md's "The texture cache has its
+ * own eviction budget" bullet carries that reasoning.
  *
  * Only uploads real `ImageBitmap`s - the `LoadableImage` half of
  * `tiles.ts`'s `Drawable` exists for browser-free fakes, and under Node

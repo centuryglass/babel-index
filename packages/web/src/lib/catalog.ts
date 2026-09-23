@@ -4,7 +4,7 @@
  * thumbnail asks for. Pure (no DOM, no React), so the list's behavior is
  * tested without a browser; `CatalogView.tsx` renders it.
  *
- * Two rules from AGENTS.md shape it:
+ * Two rules from docs/agents/catalog.md shape it:
  * - Pagination and infinite scroll both slice `order` with `pageOf` and differ
  *   only in `mountedPages`'s `window` ("Pagination and infinite scroll are one
  *   primitive with a different window").
@@ -102,8 +102,9 @@ export function spacerHeight(
 }
 
 /**
- * How tall a thumbnail of this width is, from `BASE_TILE`'s aspect (AGENTS.md,
- * "Don't assume the tile aspect ratio; read it from `BASE_TILE`").
+ * How tall a thumbnail of this width is, from `BASE_TILE`'s aspect
+ * (docs/agents/map.md, "Don't assume the tile aspect ratio; read it from
+ * `BASE_TILE`").
  */
 export function tileHeight(thumbWidth: number): number {
   return Math.round(thumbWidth * (BASE_TILE.h / BASE_TILE.w));
@@ -276,9 +277,9 @@ export function flipCss(t: FlipTransform): string {
  * thumbnail shrinks while the name row and story minimum do not.
  *
  * At least one line, because zero would hide a room's keywords outright. Chips
- * that still do not fit are counted and shown as a `+N` chip (AGENTS.md, "What
- * a row cannot show, it counts"). `CatalogView.tsx`'s `CHIP_LINE_PX` is the
- * pixel cost of a line.
+ * that still do not fit are counted and shown as a `+N` chip
+ * (docs/agents/catalog.md, "What a row cannot show, it counts").
+ * `CatalogView.tsx`'s `CHIP_LINE_PX` is the pixel cost of a line.
  *
  * @param contentPx    the height available to chips and text (`CatalogView`'s flow area)
  * @param reservedPx   the name row, button and one story line

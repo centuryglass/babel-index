@@ -17,10 +17,10 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  *
  * Relative, not `/images`/`/shared`: a leading slash opts a url out of
  * `<base href>` resolution entirely, and a subpath deployment needs every
- * browser-resolved url to go through the base (AGENTS.md, "Deployment and
- * the base path"). Express's own routes are unaffected either way -
- * `app.use('/images', ...)` matches on the path Express receives, which the
- * VPS's prefix-stripping proxy has already reduced to this same shape.
+ * browser-resolved url to go through the base (docs/agents/deploy.md,
+ * "Deployment and the base path"). Express's own routes are unaffected either
+ * way - `app.use('/images', ...)` matches on the path Express receives, which
+ * the VPS's prefix-stripping proxy has already reduced to this same shape.
  */
 export const IMAGES_BASE = 'images';
 export const SHARED_BASE = 'shared';
@@ -304,7 +304,7 @@ async function scanShared(
  *
  * Ids are the positions in the sorted filename list - stable across
  * restarts, which is what the map's slot assignment keys on, and they
- * renumber when the corpus changes (AGENTS.md, "Favorites").
+ * renumber when the corpus changes (docs/agents/favorites.md, "Favorites").
  *
  * The shared tiles - the blank center and the generic tiles - live in
  * `sharedDir`, which defaults to the corpus directory itself: there, a

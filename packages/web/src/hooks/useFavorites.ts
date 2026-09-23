@@ -8,9 +8,9 @@
  * endpoint that could answer.
  *
  * Everything is keyed by room filename rather than id, because ids are
- * positional and shift when the corpus grows (AGENTS.md, "Favorites"). Ids
- * are what the rest of the app passes around, so the crossing between the
- * two happens here, in `fileOf`.
+ * positional and shift when the corpus grows (docs/agents/favorites.md,
+ * "Favorites"). Ids are what the rest of the app passes around, so the crossing
+ * between the two happens here, in `fileOf`.
  *
  * A toggle updates local state immediately and then tells the server; the
  * reply carries the authoritative count, which replaces the guess. A failed

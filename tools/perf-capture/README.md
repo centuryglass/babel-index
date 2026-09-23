@@ -67,9 +67,9 @@ DevTools' own Performance panel and tools like Lighthouse read from:
   `heapUsedStartBytes` after GC has had a chance to run (the sampling interval
   gives it several) suggests a genuine leak, not just live working-set size.
 - `Nodes` - live DOM node count. This map is virtualized canvas (see
-  `AGENTS.md`'s "The map is virtualized canvas" note), so a large or growing
-  number here across a run that never leaves map mode points at something
-  mounting where it shouldn't.
+  `docs/agents/map.md`'s "The map is virtualized canvas" note), so a large or
+  growing number here across a run that never leaves map mode points at
+  something mounting where it shouldn't.
 - `JSEventListeners` - a count that keeps climbing across `enterCatalog`/
   `exitCatalog` cycles is the classic "listener added on mount, never removed"
   shape.

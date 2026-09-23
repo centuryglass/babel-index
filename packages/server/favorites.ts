@@ -1,10 +1,10 @@
 /**
  * Global favorite counts - the only state this server persists. The store
  * keeps, per room, a set of HMAC(salt, file + NUL + clientId) hashes: no
- * addresses, no sessions, no timestamps. AGENTS.md's "Favorites" section is
- * the canonical statement of the invariants this module implements - a count
- * is a set's size rather than a counter, the hash is keyed per room, identity
- * is a browser-generated token (see `useFavorites.ts`) rather than an
+ * addresses, no sessions, no timestamps. docs/agents/favorites.md's "Favorites"
+ * section is the canonical statement of the invariants this module implements -
+ * a count is a set's size rather than a counter, the hash is keyed per room,
+ * identity is a browser-generated token (see `useFavorites.ts`) rather than an
  * address, and everything keys on filename.
  *
  * Hashing is not a security control and is not claimed as one: it is the

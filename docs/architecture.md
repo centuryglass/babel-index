@@ -2,8 +2,9 @@
 
 A five-minute system overview. [`README.md`](../README.md) covers what the
 project is and how to run it, [`docs/api.md`](api.md) the HTTP contract,
-and [`docs/file_map.md`](file_map.md) every file. `AGENTS.md` holds the
-engineering invariants behind the decisions summarized here.
+and [`docs/file_map.md`](file_map.md) every file. `AGENTS.md` and
+`docs/agents/` hold the engineering invariants behind the decisions
+summarized here.
 
 ## Shape of the system
 
@@ -62,7 +63,7 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
    /api/favorites/:file`. The server stores a set of HMACs (salt, filename,
    token) per room, not a counter, so favoriting twice is one favorite and
    no request can drive a count negative. A visitor's own list stays in the
-   browser. `AGENTS.md`'s "Favorites" section has the full rules.
+   browser. `docs/agents/favorites.md`'s "Favorites" section has the full rules.
 
 ## No compile step
 
@@ -171,8 +172,9 @@ keep an AI-assisted process producing code a human would sign off on.
   their changes pass the same CI gates as any other, and every diff is
   reviewed before it lands.
 - **One rulebook.** `AGENTS.md` (symlinked as `CLAUDE.md`) is read by every
-  session: the conventions, the invariants, and the "things that will bite
-  you" that a fresh context would not otherwise know.
+  session: the conventions, the invariants that cross files, and a routing
+  table to `docs/agents/`, where each area's "things that will bite you"
+  load only when a change touches that area.
 - **One task list.** Open work lives only in GitHub issues. A `SessionStart`
   hook (`.claude/hooks/session-start.sh`) caches the open issues under
   `.claude/cache/issues/` and prints their titles into the agent's context.
@@ -195,4 +197,5 @@ keep an AI-assisted process producing code a human would sign off on.
 - [`docs/keyboard-controls.md`](keyboard-controls.md) - the map's keyboard
   spec.
 - [`deploy/README.md`](../deploy/README.md) - VPS setup and rollback.
-- `AGENTS.md` - engineering conventions and invariants.
+- `AGENTS.md` - engineering conventions and invariants, with per-area
+  hazards in `docs/agents/`.

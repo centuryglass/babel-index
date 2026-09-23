@@ -158,7 +158,7 @@ export interface FavoritesInfo {
  * corpus has nothing to say about either. A null `favorites` means no store
  * was configured and the routes are not mounted, which the client reads as
  * "render no favorite control" - a different statement from a count of zero
- * (AGENTS.md, "No store, no feature").
+ * (docs/agents/favorites.md, "No store, no feature").
  */
 export interface ManifestResponse extends Manifest {
   favorites: FavoritesInfo | null;

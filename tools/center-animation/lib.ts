@@ -8,7 +8,7 @@
  * A crop is stored as a `Rect` in cell fractions ({x, y, w, h} against the
  * tile's width and height independently), the same convention as
  * `tools/center-placement`'s geometry. The center cell is stretched per-axis
- * when drawn, so one divisor for both axes is the bug AGENTS.md's
+ * when drawn, so one divisor for both axes is the bug docs/agents/map.md's
  * "The fractions are per-axis" warns about.
  */
 

@@ -2,8 +2,8 @@
  * Which revision this process is running, for `/api/health` to report.
  *
  * The deploy workflow compares that report against the sha it just pushed -
- * AGENTS.md's "Deploying to the VPS" carries why a 200 without the right
- * sha verifies nothing (old process alive, wrong checkout, second copy of
+ * docs/agents/deploy.md's "Deploying to the VPS" carries why a 200 without the
+ * right sha verifies nothing (old process alive, wrong checkout, second copy of
  * the repo on the box).
  *
  * `BABEL_COMMIT` is read first so a container image or any other deployment

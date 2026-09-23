@@ -5,7 +5,7 @@
  *
  * It does not change how Express routes anything: the VPS's nginx config
  * strips the prefix before a request reaches this process, so every route
- * in app.ts stays mounted at its usual unprefixed path (AGENTS.md,
+ * in app.ts stays mounted at its usual unprefixed path (docs/agents/deploy.md,
  * "Deployment and the base path" carries the whole mechanism). What a
  * subpath does break is browser-side: root-absolute urls resolve against the
  * true origin root, one level above the subpath, so every url this server

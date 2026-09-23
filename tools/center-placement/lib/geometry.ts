@@ -2,8 +2,8 @@ import { MEASURED } from './measured.ts';
 
 /**
  * Layout of one center tile, as pixels for a tile of a given size. The center
- * is the only tile traced exactly (AGENTS.md, "Tile geometry"); a corpus room
- * needs only a bounding box.
+ * is the only tile traced exactly (docs/agents/map.md, "Tile geometry"); a
+ * corpus room needs only a bounding box.
  *
  * Two kinds of number come out of `layout()`:
  *
@@ -112,7 +112,8 @@ export function layout({ width = 1024, height = Math.round(width * TILE_ASPECT) 
   const H = height;
   // One divisor per axis, and that is load-bearing: the measured fractions
   // carry no aspect, so a single divisor for both axes stretches every rect
-  // onto a shape the trace never had (AGENTS.md, "The fractions are per-axis").
+  // onto a shape the trace never had (docs/agents/map.md, "The fractions are
+  // per-axis").
   const r = ([x, y, w, h]: [number, number, number, number]): Rect => ({
     x: round(x * W),
     y: round(y * H),

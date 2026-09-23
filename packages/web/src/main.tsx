@@ -389,12 +389,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // tiles are requested at the coarsest rung `manifest.shared.levels`
     // actually has instead - a screen at opening zoom shows only a handful
     // of them, and preloading every one at full resolution paid for
-    // thousands of cells' worth of art before a single frame draws (AGENTS.md,
-    // "Shared art has its own pyramids"). Never hardcode the coarsest rung as
-    // `pyramid.fallbackLevel`: an older corpus with no shared pyramid
-    // generated has no tile there. Distill's alternates get the same
-    // treatment off `manifest.shared.distillLevels` instead, since that tree
-    // may not share the base tiles' rungs (`manifest.ts`'s `SharedAssets`
+    // thousands of cells' worth of art before a single frame draws
+    // (docs/agents/map.md, "Shared art has its own pyramids"). Never hardcode
+    // the coarsest rung as `pyramid.fallbackLevel`: an older corpus with no
+    // shared pyramid generated has no tile there. Distill's alternates get the
+    // same treatment off `manifest.shared.distillLevels` instead, since that
+    // tree may not share the base tiles' rungs (`manifest.ts`'s `SharedAssets`
     // doc).
     const coarsestOf = (levels: { dir: string | null; level: number }[] | undefined) => {
       const numbers = (levels ?? []).filter((l) => l.dir).map((l) => l.level);
@@ -561,8 +561,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The card's tile image: a real room by id, a generic cell by the same
   // positional face `render.ts` draws for its cell (`layout.genericIndexAt`
-  // must not depend on rank - see AGENTS.md's "Which generic tile a cell
-  // shows depends only on its coordinate"). Level 0, the only level
+  // must not depend on rank - see docs/agents/map.md's "Which generic tile a
+  // cell shows depends only on its coordinate"). Level 0, the only level
   // `urlFor` can give an `<img src>`.
   const cardSrc = useMemo(() => {
     if (!card) return null;

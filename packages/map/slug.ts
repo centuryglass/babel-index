@@ -10,9 +10,9 @@
  * ever changes. The stem is the canonical slug for a room with no title, and a
  * permanent alias for every room that has one.
  *
- * Room ids never appear in a path. They are positional (AGENTS.md,
- * "Favorites"), so an id in a shared url comes back pointing at a different
- * room once the corpus grows.
+ * Room ids never appear in a path. They are positional
+ * (docs/agents/favorites.md, "Favorites"), so an id in a shared url comes back
+ * pointing at a different room once the corpus grows.
  *
  * No DOM and no runtime imports, like the rest of this package: `app.ts`
  * resolves an incoming path with this and `main.tsx` builds the copy-link url

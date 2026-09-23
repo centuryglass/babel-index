@@ -21,8 +21,8 @@
  * depends on the ref object rather than the element, so a canvas that
  * unmounted would come back holding the right camera, reporting the right
  * HUD, and silently never panning again. Keeping it mounted also keeps the
- * tile cache and the pyramid's LRU warm. AGENTS.md's "The catalog, and the
- * two modes" owns the full rule and its e2e guard.
+ * tile cache and the pyramid's LRU warm. docs/agents/catalog.md's "The catalog,
+ * and the two modes" owns the full rule and its e2e guard.
  */
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
@@ -376,19 +376,19 @@ export function MapView({
       </button>
       {/*
         The favorites-sort switch and the reorder button - diegetic
-        controls of the center tile (AGENTS.md's "The center room's controls"), in one
-        container sized to the whole cell like `.center-books`, so a pan
-        costs one style write regardless of how many buttons are inside.
-        Each button is positioned in percentages of that container
-        (`rectStyle`), and `pointer-events: none` on the container keeps
-        the canvas the gesture owner: a pan starting on a button still
+        controls of the center tile (docs/agents/map.md's "The center room's
+        controls"), in one container sized to the whole cell like
+        `.center-books`, so a pan costs one style write regardless of how many
+        buttons are inside. Each button is positioned in percentages of that
+        container (`rectStyle`), and `pointer-events: none` on the container
+        keeps the canvas the gesture owner: a pan starting on a button still
         pans. A sighted click routes through `onTap` ->
         `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
-        (`center.ts`), and `onClick` is the keyboard/screen-reader entry
-        point, calling the same handlers. The reorder button needs no
-        favorite store and is never hidden; the two switches are
-        meaningless without one, so they render only while `favorites` is
-        true - the same gate the debug panel's own sort buttons use.
+        (`center.ts`), and `onClick` is the keyboard/screen-reader entry point,
+        calling the same handlers. The reorder button needs no favorite store
+        and is never hidden; the two switches are meaningless without one, so
+        they render only while `favorites` is true - the same gate the debug
+        panel's own sort buttons use.
 
         Each button carries a `title` (which can never pop up here:
         pointer events never reach the button) and a `.control-tooltip`
@@ -519,8 +519,8 @@ export function MapView({
 
           The label carries the units, not `aria-valuetext` alone: engines
           disagree on `aria-valuetext` for a native `input[type=range]`
-          (the split behind AGENTS.md's "Assert on the accessible name, not
-          on raw ARIA attributes" - the e2e first caught it when CI moved
+          (the split behind docs/agents/testing.md's "Assert on the
+          accessible name, not raw ARIA attributes" - the e2e first caught it when CI moved
           to a newer Chromium than the test was written against). An
           accessible name is computed the same way everywhere, so the "of
           N" part lives in the label. `aria-valuetext` stays for the
@@ -622,8 +622,8 @@ export function MapView({
           subtree, so a node that fell back to the hint would read the
           instructions aloud each time a status cleared. This `.note` shows
           only the static hint, and only while no status is live. The live
-          region itself is `main.tsx`'s, outside both views (AGENTS.md's
-          "One live region for the whole app").
+          region itself is `main.tsx`'s, outside both views
+          (docs/agents/catalog.md's "One live region for the whole app").
         */}
         <div className="note">
           {!status && 'drag to pan, scroll to zoom. right-click a room.'}

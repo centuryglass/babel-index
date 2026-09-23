@@ -16,7 +16,8 @@ overview.
 - `README.md`: What this is and how to run it.
 - `LICENSE`: Unlicense.
 - `CHANGELOG.md`: Written by the release-please workflow.
-- `AGENTS.md`: The agent rulebook. `CLAUDE.md` is a symlink to it.
+- `AGENTS.md`: The agent rulebook; per-area hazards are in `docs/agents`.
+  `CLAUDE.md` is a symlink to it.
 - `package.json` / `package-lock.json`: Dependencies and every `npm run`
   script (see `AGENTS.md`'s "Commands").
 - `jsconfig.json`: The `tsc` config `npm run typecheck` reads (`checkJs`,
@@ -74,8 +75,8 @@ overview.
     CLIP text tower calls.
   * `image-fixtures.ts`: Synthetic image headers for testing `scan.ts`'s
     parsers.
-  * `base-path.ts`: `normalizeBasePath` for `--base-path` (see `AGENTS.md`'s
-    "Deployment and the base path").
+  * `base-path.ts`: `normalizeBasePath` for `--base-path` (see
+    `docs/agents/deploy.md`'s "Deployment and the base path").
   * `clip-cache.ts`: `CLIP_CACHE_DIR`, the repo-root `.clip_model_cache/`
     every CLIP tower loader points transformers.js at.
   * `version.ts`: The running commit (`BABEL_COMMIT`, else `.git`), read
@@ -140,7 +141,7 @@ overview.
       `lib/camera.ts`.
     * `useMapRenderer.ts`: The Canvas2D map frame loop.
     * `useMapRendererGL.ts`: The WebGL frame loop, used when `webglFlag.ts`'s
-      `WEBGL` is true (see `AGENTS.md`'s "The WebGL renderer").
+      `WEBGL` is true (see `docs/agents/rendering.md`'s "The WebGL renderer").
     * `useMapCursor.ts`: The keyboard cursor, what a reader hears about it,
       and every key over the map.
     * `useCenterShelf.ts`: The center shelf's book titles, roving tabindex,
@@ -149,7 +150,7 @@ overview.
       FLIP animation between them.
     * `useRearrangement.ts`: The sliding-tile rearrangement - whether a
       layout/order change animates, and what is announced when it lands
-      (see `AGENTS.md`'s "The reorder animation").
+      (see `docs/agents/rearrangement.md`'s "The reorder animation").
     * `useDialog.ts`: Shared modal-dialog behavior (focus in/out, Escape,
       Tab-trap) plus a topmost-only dialog stack. `BookOverlay` uses it, so
       `ArtistStatementOverlay`/`BabelBookOverlay` do; `HelpDialog` and
@@ -170,7 +171,7 @@ overview.
       emits - polygon flattening, canvas replay, point-in-polygon.
     * `camera.ts`: Pure camera math for the map.
     * `loadingAnimation.ts`: The center-tile loading indicator's sprite
-      playback (see `AGENTS.md`'s "The loading indicator").
+      playback (see `docs/agents/rearrangement.md`'s "The loading indicator").
     * `render.ts`: Draws one Canvas2D map frame.
     * `slide.ts`: The Canvas2D rearrangement animation renderer.
     * `picking.ts`: `roomAtPoint` - which room is under a screen point.
@@ -198,7 +199,7 @@ overview.
     * `perfProbe.ts`: Rearrangement frame-timing instrumentation behind
       `?perf`.
     * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl` override and the WebGL2
-      probe (see `AGENTS.md`'s "The WebGL renderer").
+      probe (see `docs/agents/rendering.md`'s "The WebGL renderer").
     * `glRenderer.ts`: The WebGL counterpart of `render.ts`.
     * `glSlideRenderer.ts`: The WebGL counterpart of `slide.ts`.
     * `gl/context.ts`: The shader program, VAO and quad-drawing primitives;
@@ -216,7 +217,7 @@ overview.
       toggle) baked once and cached as textures.
 - `packages/web/e2e`: Playwright specs (`*.e2e.ts`), the render parity suite
   (`render-parity.parity.ts`, `npm run test:parity`), and `support.ts`'s
-  shared helpers (see `AGENTS.md`'s "Testing and CI").
+  shared helpers (see `docs/agents/testing.md`'s "Testing and CI").
 - `packages/config`: Every number tuned by feel.
   * `config.ts`: `DEFAULTS` and validation, no filesystem.
   * `load.ts`: Reads the optional `config.json` overlay.
@@ -327,8 +328,8 @@ imports at bundle time.
   because `packages/web` imports geometry from it at bundle time.
 - `.dockerignore`: Keeps dev-only paths out of the build context, re-including
   `tools/center-placement/lib`.
-- `deploy`: Shipping a release to the VPS from Actions (see `AGENTS.md`'s
-  "Deploying to the VPS").
+- `deploy`: Shipping a release to the VPS from Actions (see
+  `docs/agents/deploy.md`'s "Deploying to the VPS").
   * `deploy.sh`: The deploy, run on the VPS and pinned as the deploy key's
     SSH forced command.
   * `health-check.mjs`: Polls `/api/health` until it reports the expected
@@ -348,7 +349,7 @@ imports at bundle time.
   sha `deploy.yml` shipped; build only, no push.
 - `.github/workflows/release-please.yml`: Keeps the standing release PR
   current from squash-merged PR titles; merging it is the release (see
-  `AGENTS.md`'s "Release discipline").
+  `docs/agents/deploy.md`'s "Release discipline").
 - `release-please-config.json` / `.release-please-manifest.json`: The
   config `release-please.yml` reads and the version state it writes; never
   hand-edit the manifest.
@@ -385,6 +386,18 @@ imports at bundle time.
 - `docs/user-guide.md`: Every control, annotated with screenshots - the
   repo-side counterpart of the in-app "READ ME" dialog.
 - `docs/file_map.md`: This file.
+- `docs/agents`: Per-area agent hazards, reached from `AGENTS.md`'s "Things
+  that will bite you" routing table.
+  * `map.md`: Tile geometry, map coordinates, the center tile and its
+    controls, camera and gestures, config and the pyramid.
+  * `search.md`: Search ranking and the density gradient.
+  * `favorites.md`: The favorites store, identity, sorting and badge.
+  * `rearrangement.md`: The reorder animation and the loading indicator.
+  * `rendering.md`: The WebGL and Canvas2D renderers.
+  * `catalog.md`: The catalog view and the two modes.
+  * `deploy.md`: The base path, VPS deploys and release discipline.
+  * `testing.md`: Testing and CI.
+  * `comment-audit.md`: The comment and documentation audit process.
 - `docs/concept.md`: The original concept and a dated design-decision log. A
   record of intent, not kept in sync with the code.
 - `docs/keyboard-controls.md`: The spec for every key the map view handles,

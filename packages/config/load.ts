@@ -4,7 +4,8 @@
  *
  * The overlay is optional and partial: absent, the app runs on `DEFAULTS`
  * exactly; present, it need only carry the keys being changed. Why no
- * `config.json` is committed is under AGENTS.md, "Config and the pyramid".
+ * `config.json` is committed is under docs/agents/map.md, "Config and the
+ * pyramid".
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';

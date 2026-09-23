@@ -11,11 +11,11 @@
  *
  * The catalog needs this modal because its rows are a fixed height - a row
  * cannot grow to fit a long story, and growing it in place would turn the
- * spacer arithmetic into estimates (AGENTS.md's "A fixed row cannot show
- * everything, so the overlay is not optional"). The map path needs it
- * because its tile is canvas-painted: here the tile is a real `<img>` at
- * its own native resolution, and a right-click on it reaches the browser's
- * "save image", which the map cannot offer.
+ * spacer arithmetic into estimates (docs/agents/catalog.md's "A fixed row
+ * cannot show everything, so the overlay is not optional"). The map path needs
+ * it because its tile is canvas-painted: here the tile is a real `<img>` at its
+ * own native resolution, and a right-click on it reaches the browser's "save
+ * image", which the map cannot offer.
  *
  * Tile and story scroll as one region (`.overlay` itself, not a split
  * pane), so a long story and a native-resolution picture share the space -
@@ -49,8 +49,8 @@ type RoomSubject = { id: number; rank?: number } | { generic: true };
 /**
  * The permalink itself - `roomPath`'s relative url resolved against
  * `document.baseURI`, the same `<base href>` every other relative fetch in
- * this app resolves against (see AGENTS.md's "Deployment and the base
- * path"), so the copied link is correct under a subpath deployment without
+ * this app resolves against (see docs/agents/deploy.md's "Deployment and the
+ * base path"), so the copied link is correct under a subpath deployment without
  * this file knowing what that prefix is.
  *
  * `mode` names which reading the link should reopen into - the caller

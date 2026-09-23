@@ -1,6 +1,6 @@
 /**
- * The WebGL counterpart of `useMapRenderer.ts` - see AGENTS.md's "The WebGL
- * renderer" for the standing invariants this file exists to uphold.
+ * The WebGL counterpart of `useMapRenderer.ts` - see docs/agents/rendering.md's
+ * "The WebGL renderer" for the standing invariants this file exists to uphold.
  *
  * Two effects, not one:
  *
@@ -500,8 +500,8 @@ export function useMapRendererGL({
     };
     // `latestRef`/`anim`/`cam`/`genericFade` are refs, read fresh on every
     // call, so they stay out of the deps: this effect must remain
-    // canvas-lifetime-only. See this file's doc and AGENTS.md's "The WebGL
-    // renderer".
+    // canvas-lifetime-only. See this file's doc and docs/agents/rendering.md's
+    // "The WebGL renderer".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasRef, cache]);
 }

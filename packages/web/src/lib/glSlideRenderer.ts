@@ -5,9 +5,9 @@
  * extended by its travel, then the prefetch ring - with `gl/context.ts`'s
  * quad primitives. `packages/map`'s `Board`/`Motion`/`applyMove` are shared
  * unmodified: `createSlideshow`'s `advanceTo()` output feeds this renderer
- * exactly as it feeds `slide.ts`; only the final paint differs. AGENTS.md's
- * "The WebGL renderer" carries the lockstep rule; `render-parity.parity.ts`
- * checks it.
+ * exactly as it feeds `slide.ts`; only the final paint differs.
+ * docs/agents/rendering.md's "The WebGL renderer" carries the lockstep rule;
+ * `render-parity.parity.ts` checks it.
  *
  * `GLSlideDrawOpts` is `slide.ts`'s `SlideDrawOpts` with `ctx` swapped for
  * `gl`, and `GLSlideDrawResult` is `SlideDrawResult` - derived, not

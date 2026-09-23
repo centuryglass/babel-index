@@ -1003,7 +1003,7 @@ mark {
  * tan fill - fine for a labelled control, wrong for a button that IS a
  * picture, where it reads as haze over the whole thumbnail. Both
  * catalog overlays opt out explicitly, the same "namespace catalog CSS"
- * trap AGENTS.md's Catalog section names for the pager's own buttons.
+ * trap docs/agents/catalog.md names for the pager's own buttons.
  */
 .catalog-center-book:hover, .catalog-distill-toggle:hover { background: none; }
 /*
@@ -1910,9 +1910,9 @@ mark {
  * by catalogPage.ts) - plain document flow, not the interactive catalog's
  * virtualized rows, since this markup only ever paints before `bundle.js`
  * takes over `#root` (or for a no-JS visitor who never gets that far).
- * `.ssr-*` is a deliberately separate prefix from `.catalog-*` - see this
- * file's own "namespace catalog CSS" lesson (AGENTS.md) about an unprefixed
- * rule reaching into a class it was never written for.
+ * `.ssr-*` is a deliberately separate prefix from `.catalog-*` - see
+ * docs/agents/catalog.md's "Namespace catalog CSS" about an unprefixed rule
+ * reaching into a class it was never written for.
  */
 .ssr-page {
   max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; color: var(--ink);

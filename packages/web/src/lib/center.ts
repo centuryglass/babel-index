@@ -16,10 +16,10 @@
  *
  * Every rect here is in cell fractions - `{x, y, w, h}` read against the cell's
  * own width and height - so a width and a height in one rect are not the same
- * distance: AGENTS.md's "The fractions are per-axis". They come from one trace,
- * `tools/center-placement/lib/geometry.ts`, and an element the reference SVG did
- * not carry at the last import is null: a null control is left out of the
- * interface rather than guessed at.
+ * distance: docs/agents/map.md's "The fractions are per-axis". They come from
+ * one trace, `tools/center-placement/lib/geometry.ts`, and an element the
+ * reference SVG did not carry at the last import is null: a null control is
+ * left out of the interface rather than guessed at.
  *
  * See also:
  * - `useCenterShelf.ts`: the behaviors tied to these elements
@@ -156,7 +156,7 @@ interface Run {
  *
  * `bookAtPoint` walks these rather than `ROWS` so that a point in a gap wider
  * than a book resolves to nothing rather than to whichever book sits nearest -
- * AGENTS.md's "center.ts is the pure half".
+ * docs/agents/map.md's "center.ts is the pure half".
  */
 const RUNS: Run[] = (() => {
   interface Building { start: number; books: Rect[]; x1: number }
@@ -208,8 +208,8 @@ const HOVER_BACKDROP = 'rgba(0,0,0,0.55)';
 /**
  * The auto-fit range a spine title's font is sized within, per title:
  * `config.center`'s `spineMinPx`/`spineMaxPx`, threaded in as a parameter so
- * this file states no fallback of its own (AGENTS.md's "Consuming files state no
- * fallback defaults").
+ * this file states no fallback of its own (docs/agents/map.md's "Consuming
+ * files state no fallback defaults").
  */
 export interface SpineFontLimits {
   /** floor: a long title shrinks toward this and no further, then is truncated with an ellipsis */
@@ -410,10 +410,10 @@ const OPENING_MARGIN = 0.94;
 /**
  * The zoom the map opens at: `CENTER_OPENING_RECT` fit to the viewport, floored
  * at what the search box alone needs and capped at the tile's native width so a
- * load is never already upscaled. This is the page-load view of AGENTS.md's
- * "Two opening views", not the return-to-center one (`overviewZoom`).
- * `main.tsx`'s `goToSearch` flies here, so the search button never moves the
- * camera further than where the page opened.
+ * load is never already upscaled. This is the page-load view of
+ * docs/agents/map.md's "Two opening views", not the return-to-center one
+ * (`overviewZoom`). `main.tsx`'s `goToSearch` flies here, so the search button
+ * never moves the camera further than where the page opened.
  */
 export function openingZoom(viewport: ViewportRect, limits?: ZoomLimits): number {
   return Math.min(

@@ -90,7 +90,7 @@ export function useCorpus(manifest: ManifestResponse, minTokenLength: number) {
 
   // The keyword -> external-link map: a corpus-specific file, fetched from
   // its own url and absent from any corpus that has not been given one
-  // (AGENTS.md, "`tagLinks.json` is a flat keyword -> url map").
+  // (docs/agents/search.md, "`tagLinks.json` is a flat keyword -> url map").
   useEffect(() => {
     if (!manifest.tagLinks) return;
     let cancelled = false;

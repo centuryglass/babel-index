@@ -253,13 +253,14 @@ default branch. Until `deploy.yml` is on main, nothing deploys and no
   `install_dependencies` explains each. A larger host can drop both.
 - **The reverse proxy must be in front of the server.** The unit's
   `--base-path /babel-index/` rewrites only the urls the page uses, not the
-  routes; hit directly on `localhost:5173`, every relative fetch 404s (AGENTS.md,
-  "Deployment and the base path"). The live nginx config strips the prefix,
-  and must also redirect a bare `/babel-index` to `/babel-index/`.
-  `deploy/babel-index.nginx.conf` is a hand-synced reference copy of those
-  blocks, not a drop-in include, since the live file also holds TLS and
-  unrelated vhosts.
+  routes; hit directly on `localhost:5173`, every relative fetch 404s
+  (docs/agents/deploy.md, "Deployment and the base path"). The live nginx config
+  strips the prefix, and must also redirect a bare `/babel-index` to
+  `/babel-index/`. `deploy/babel-index.nginx.conf` is a hand-synced reference
+  copy of those blocks, not a drop-in include, since the live file also holds
+  TLS and unrelated vhosts.
 - **With `--favorites` on, the unit also needs `--trust-proxy 1`.** Behind
   nginx, `req.ip` is the proxy, so without it every visitor shares one
-  favorite-write rate bucket (AGENTS.md, "Favorite writes are rate-limited by
-  `req.ip`"). The reference nginx config already sends `X-Forwarded-For`.
+  favorite-write rate bucket (docs/agents/favorites.md, "Favorite writes are
+  rate-limited by `req.ip`"). The reference nginx config already sends
+  `X-Forwarded-For`.
