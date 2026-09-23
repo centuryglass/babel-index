@@ -161,7 +161,6 @@ export function useSearch({
         clipStrength: {
           centre: searchConfig.density.clipCentre,
           high: searchConfig.density.clipHigh,
-          low: searchConfig.density.clipLow,
         },
       });
       requestAnimationRef.current(describeSignals(signals, Boolean(searchIndex)));

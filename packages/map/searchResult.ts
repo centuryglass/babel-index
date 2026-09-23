@@ -86,10 +86,8 @@ export interface ScoreBreakdown {
   storyLongChars: Float32Array;
   /** `clipNorm` - min-max normalised across the corpus for this query */
   clip: Float32Array;
-  /** the positive half of the signed CLIP strength curve, in [0, 1] */
+  /** CLIP's absolute strength curve (`clipCurveStrength`), in [0, 1] - also what the CLIP row's reported percentage reads */
   clipStrengthGate: Float32Array;
-  /** the full signed CLIP strength curve, in [-1, 1] - what the CLIP row's reported percentage reads */
-  clipSigned: Float32Array;
   cosine: Float32Array;
 }
 
@@ -193,11 +191,7 @@ export interface ClipRankingSummary {
   ties: number;
   /** the raw cosine - absolute, not relative to this query's corpus */
   cosine: number;
-  /**
-   * the signed strength curve as a clamped percentage (docs/search_rules.md
-   * "Reporting") - positive is confidence the image matches, negative is
-   * confidence it does not.
-   */
+  /** the strength curve as a clamped percentage (docs/search_rules.md "Reporting") */
   percent: number;
 }
 
@@ -212,7 +206,7 @@ export interface RankingExplanation {
   rank: number;
   /** corpus size - the "of 2048" in "#4 of 2048" */
   total: number;
-  /** the composite `strength`, as a signed clamped percentage */
+  /** the composite `strength`, as a clamped percentage */
   percent: number;
   contributions: ContributionShare[];
   tag: TagRankingSummary | null;
