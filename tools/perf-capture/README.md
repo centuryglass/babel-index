@@ -11,8 +11,8 @@ Protocol the whole time. No manual steps.
 ## Run
 
 ```sh
-npm run profile:chrome                                    # Canvas2D, default seed, 1 minute
-npm run profile:chrome -- --renderer webgl                # WebGL renderer instead
+npm run profile:chrome                                    # WebGL, default seed, 1 minute
+npm run profile:chrome -- --renderer canvas2d             # Canvas2D renderer instead
 npm run profile:chrome -- --seed my-seed --duration 120000 # a longer, differently-seeded run
 npm run profile:chrome -- --server http://localhost:5173   # profile a server you already started
 ```
@@ -50,7 +50,7 @@ Output lands in `out/<renderer>-<seed>-<timestamp>/`:
 | --- | --- | --- |
 | `--seed <string>` | `babel-perf` | same seed -> same scripted sequence, see `debugActions.ts` |
 | `--duration <ms>` | `60000` | how long the scripted session runs |
-| `--renderer <canvas2d\|webgl>` | `canvas2d` | which map renderer to profile - adds `&webgl` to the page URL |
+| `--renderer <canvas2d\|webgl>` | `webgl` | which map renderer to profile - adds `&webgl=1` or `&webgl=0` to the page URL |
 | `--images <dir>` | `assets/corpus-sample` | corpus the demo server serves - ignored if `--server` is given |
 | `--server <url>` | (none) | profile an already-running demo server instead of spawning one |
 | `--sample-interval <ms>` | `1000` | how often `Performance.getMetrics` is sampled |
