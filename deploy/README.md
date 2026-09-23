@@ -201,7 +201,7 @@ click.
 
 ### 3. The admin log viewer (optional)
 
-`/admin/logs` (`docs/api.md`) reads the server log from a phone, without
+`/admin/logs` (`docs/api.md`) reads the server log from any browser, without
 ssh. It needs two env vars on the unit, both unset by default:
 
 ```sh
