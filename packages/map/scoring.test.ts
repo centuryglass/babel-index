@@ -20,6 +20,7 @@ import {
   storyMatchRanges,
   storyPhraseRun,
   storyScore,
+  strengthPercent,
   TAG_PARTIAL_SATURATION,
   tagTermsOf,
   tokenise,
@@ -749,6 +750,14 @@ test('CLIP strength is read off the raw cosine, against the anchor band [SR-16] 
   assert.ok(Math.abs(posMid - 0.5) < 1e-6, `halfway to the high extreme is ${posMid}`);
 });
 
+test('strengthPercent reports the full 0-100 range, clamped at both ends', () => {
+  assert.equal(strengthPercent(0), 0);
+  assert.equal(strengthPercent(1), 100);
+  assert.equal(strengthPercent(0.41), 41);
+  assert.equal(strengthPercent(-0.5), 0);
+  assert.equal(strengthPercent(1.5), 100);
+});
+
 test('clipCurveStrength is a monotone [0, 1] curve, zero at and below the centre [SR-16]', () => {
   const { centre, high } = CLIP_STRENGTH;
   assert.equal(clipCurveStrength(centre), 0, 'the no-opinion centre');
@@ -1159,6 +1168,6 @@ test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosin
   assert.equal(breakdown.clip[0], 1, 'relative score is the top of the range');
   assert.ok(Math.abs(explanation.clip.cosine - cosines[0]) < 0.01, 'the clip summary carries the RAW cosine');
   assert.ok(explanation.clip.cosine < CLIP_STRENGTH.centre, 'which is below the no-opinion centre');
-  assert.equal(explanation.clip.percent, 0.01, 'reported at the clamped floor, never negative');
-  assert.equal(explanation.percent, 0.01, 'and the composite reading agrees there is no evidence');
+  assert.equal(explanation.clip.percent, 0, 'reported at the clamped floor, never negative');
+  assert.equal(explanation.percent, 0, 'and the composite reading agrees there is no evidence');
 });
