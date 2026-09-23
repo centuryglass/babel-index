@@ -558,11 +558,12 @@ export const DEFAULTS: Defaults = {
       floor: STRENGTH_FLOOR,
 
       /**
-       * The three anchors of CLIP's signed strength curve: `clipCentre` is the
+       * The measured anchors of CLIP's strength curve: `clipCentre` is the
        * no-opinion point (0), `clipHigh` a genuine match's typical confidence
-       * (+1), `clipLow` a genuinely irrelevant query's (-1). The one part of the
-       * gradient that is a measurement rather than a preference - `CLIP_STRENGTH`
-       * (`packages/map/scoring.ts`) is where they were measured.
+       * (1), `clipLow` a genuinely irrelevant query's, which the curve does not
+       * read. The one part of the gradient that is a measurement rather than a
+       * preference - `CLIP_STRENGTH` (`packages/map/scoring.ts`) is where they
+       * were measured.
        */
       clipCentre: CLIP_STRENGTH.centre,
       clipHigh: CLIP_STRENGTH.high,
@@ -802,8 +803,8 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
  * A `peak` below `map.contentRatio` is not rejected here because the layout
  * treats the baseline as a floor anyway - a gradient may add density, never
  * remove it - so the worst such a config can do is switch the effect off. An
- * inverted cosine band gets a note and falls back: `clipHigh <= clipLow` means
- * CLIP contributes no strength at all, which from the map looks like a corpus
+ * inverted cosine band gets a note and falls back: `clipHigh <= clipCentre`
+ * means CLIP contributes no strength at all, which from the map looks like a corpus
  * with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {

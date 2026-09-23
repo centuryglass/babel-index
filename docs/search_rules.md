@@ -25,12 +25,12 @@ hold onto while reading the rest of this document:
   for this query on this corpus". It sorts the whole corpus into one order. A
   weighted sum, not a tiered bucket sort - see "One sort, not tiers" below.
 - **Strength** answers "how good is this room's match, in absolute terms,
-  independent of what anything else in the corpus scored". One signed
-  number in `[-1, 1]`: positive is how strong the match is, `0` is no
-  opinion, negative is confidence it does *not* match. It drives the map's
-  density gradient (rooms that match strongly cluster near the center; rooms
-  that do not stay scattered at the baseline - only the positive side
-  clusters) and the percentages the UI reports. Its full definition is
+  independent of what anything else in the corpus scored". One number in
+  `[0, 1]`: how strong the match is, `0` for no evidence. Nothing reports a
+  mismatch - search only ever finds evidence for a room, never against it.
+  It drives the map's density gradient (rooms that match strongly cluster
+  near the center; rooms that do not stay scattered at the baseline) and the
+  percentages the UI reports. Its full definition is
   "Computing strength".
 
 These can't be answered from the same number, because ranking is *relative* -
@@ -144,12 +144,11 @@ RoomMatch = {
                                      // room FOR THIS QUERY - always 1 for the
                                      // best-matching room, whatever the query was
   clipStrengthGate: number,          // clipCosine placed against the match band,
-                                     // in [0, 1] - the positive half of the signed
-                                     // strength curve, see "Image-content" below
+                                     // in [0, 1] - the strength curve, see
+                                     // "Image-content" below
   score: number,                     // the one weighted sum ranking sorts by
-  strength: number,                   // the one absolute [-1, 1] the density
-}                                      // gradient and the UI's percentage read -
-                                       // negative is "sure it does NOT match", see
+  strength: number,                   // the one absolute [0, 1] the density
+}                                      // gradient and the UI's percentage read, see
                                        // "Computing strength"
 ```
 
@@ -410,10 +409,9 @@ real signal has every raw cosine sitting low against those bounds, so
 **"Reasonably certain" and "highly certain" are calibrated against this
 corpus's cosine DISTRIBUTION, not guessed.** These phrases appear in the tag
 and story rules above and need one precise meaning.
-*Enforcement:* they read off the same signed strength curve "Computing
-strength" defines - two linear segments meeting at `centre`, `0` there, `+1`
-at `high`, `-1` at `low`. `clipStrengthGate` is the positive half of that
-curve read back into `[0, 1]`, and "reasonably/highly certain" means
+*Enforcement:* they read off the strength curve "Computing strength"
+defines - `0` at and below `centre`, rising linearly to `1` at `high`.
+`clipStrengthGate` is that curve, and "reasonably/highly certain" means
 `clipStrengthGate >= 0.5`. All three anchors are measured by
 `tools/embed/cosine-range.ts` against this corpus, not chosen: whole-list
 percentiles silently assumed "most pairs are unrelated", which turned out
@@ -426,12 +424,14 @@ the *median* ceiling across near-universal keywords true of nearly every room
 (`bookshelf`, `book`, `library`, `shelf`, ... - `≈0.279`), and `low` is the
 *median* ceiling across known-irrelevant strong concepts - things CLIP
 recognises but that share nothing with a shelved library wall (`race car`,
-`swimming pool`, `sandy beach`, ... - `≈0.171`). `low` landing BELOW `centre`
-was the interesting result, not the expected one: a keysmash query embeds near
-the corpus's mean direction (genuinely no signal), while a coherent-but-wrong
-concept has its own specific direction that is actively dissimilar to library
-imagery - so real off-topic content reads as more confidently wrong than
-gibberish does. See `tools/embed/cosine-range.ts` for how each anchor was
+`swimming pool`, `sandy beach`, ... - `≈0.171`). The curve does not read
+`low`; its measurement is what makes `centre` a conservative zero. Strong,
+irrelevant concepts land under `centre`, so a room at `centre` is noise
+rather than a weak match. A cosine below `centre` is absence of evidence, not
+evidence of a mismatch: CLIP's joint space has no meaningful antipode, and a
+text vector pointing away from an image vector is a coherent concept that
+happens to share no direction with library walls, not a claim that the image
+is the query's opposite. So everything below `centre` reads as `0`. See `tools/embed/cosine-range.ts` for how each anchor was
 measured and `cosine-stats.ts`'s docstring for why `centre`/`high`/`low` each
 read off a different distribution.
 
@@ -457,15 +457,16 @@ margins rather than eyeballing it alone.
 Ranking asked "which room is most like the query"; strength asks the different
 question the overview names - "how good is this room's match, in absolute
 terms" - and the density gradient and the UI's percentage both read its answer.
-It is one signed number in `[-1, 1]`: positive is how strong the match is,
-`0` is no opinion, negative is confidence it does *not* match. It is built from
+It is one number in `[0, 1]`: how strong the match is, `0` for no evidence.
+No signal can push it below `0`, because none of them can find evidence
+against a room. It is built from
 the same evaluation ranking uses, but from each signal's *absolute* reading,
 never the query-normalised one.
 
-**Strength is a signed soft-OR of the absolute readings.** Any one signal
+**Strength is a soft-OR of the absolute readings.** Any one signal
 can carry it alone - an exact tag is a full-strength match whatever CLIP thinks
 of the picture - and two weak agreeing signals count for more than either alone.
-*Enforcement:* four inputs, each in `[0, 1]`, plus CLIP's negative half:
+*Enforcement:* four inputs, each in `[0, 1]`:
 - `K` (tags), the room's **best** reading over the query's terms: each term
   contributes `1` if it exactly equals a keyword, its substring fraction if it
   only partially matches, or `0`, and `K` is the **maximum** of those, taken
@@ -489,52 +490,37 @@ of the picture - and two weak agreeing signals count for more than either alone.
   A single matched word sits at the moderate `STORY_FLOOR`; a full matched clause
   reaches `1`. Using `storyRatio` here instead would make a one-word query that
   matches read as a 100% match, which is the bug this rule exists to avoid.
-- `Cpos` / `Cneg` (CLIP), the positive and negative halves of the signed curve
-  below: `Cpos = max(0, signedClip)`, `Cneg = max(0, -signedClip)`.
+- `C` (CLIP), the raw cosine read against the curve in "Image-content (CLIP)
+  matching": `0` at and below `centre`, `1` at `high` (`clipCurveStrength`).
 
-The positive strength is the soft-OR
-`pos = 1 - (1 - K)(1 - Kt)(1 - S)(1 - Cpos)`, and the signed result is `pos`
-when any positive signal fired, else `-Cneg`. A room with real text evidence is
-never reported as a mismatch just because CLIP is cool on its picture - the
-negative reading is only reached when nothing positive contradicts it. With no
-embedding blob `Cpos = Cneg = 0` and strength is text-only; with no metadata
-`K = Kt = S = 0` and strength is CLIP-only, free to go negative; with no title
-`Kt = 0` alone and strength falls back to tags/story/CLIP exactly as it does
-today.
+Strength is the soft-OR `1 - (1 - K)(1 - Kt)(1 - S)(1 - C)`. With no
+embedding blob `C = 0` and strength is text-only; with no metadata
+`K = Kt = S = 0` and strength is CLIP-only; with no title `Kt = 0` alone and
+strength falls back to tags/story/CLIP. A room no signal found evidence for
+reads `0` whether or not the corpus has embeddings, and the density floor and
+baseline paint it the same either way.
 
 **Strength need not be monotone with rank; the map makes it so.** The blend
 above can hand back a later rank a higher strength than an earlier one (they
 sort on `score`, not on this). `ordering.ts`'s density ramp takes the running
 minimum down the ranks and snaps anything under `STRENGTH_FLOOR` to the
 baseline, so density still falls monotonically outward - strength does not have
-to arrive that way. Only the positive part feeds the gradient: a mismatch is not
-a reason to cluster a room toward the center.
+to arrive that way.
 
 ### Reporting
 
-**CLIP's reported strength is a signed percentage anchored on the
-distribution's no-opinion centre.** The number shown to a reader is the signed
-curve above rendered as a percentage: `0` at the cosine an unrelated query lands
-at, rising toward `+100%` at the high extreme a genuine match reaches, and - for
-the rare cosine that falls *below* the no-opinion centre - toward `-100%`.
-*Enforcement:* a monotone map with three measured anchors (no-opinion centre,
-high extreme, low extreme) rather than one linear band from a hand-set floor. A
-signed transform of the measured noise CDF is the natural shape; `cosine-stats.ts`
-computes the percentiles it reads. Most of the negative percentage range maps
-onto *low-positive* cosines - text→image cosines almost never actually go below
-zero on this corpus (global min `-0.060` across 4.4M pairs) - so a "does not
-match" reading is a cosine well under the noise centre, not a negative cosine.
+**CLIP's reported strength is a percentage anchored on the distribution's
+no-opinion centre.** The number shown to a reader is `clipStrengthGate`, the
+curve above, rendered as a percentage: `0` at or below the cosine an unrelated
+query lands at, rising toward `100%` at the high extreme a genuine match
+reaches.
+*Enforcement:* a monotone map from measured anchors (no-opinion centre, high
+extreme) rather than one linear band from a hand-set floor; `cosine-stats.ts`
+computes the percentiles they read.
 
-**CLIP is never reported as completely certain, in either direction.** The
-percentage is clamped to `0.01%`-`99.99%` (and the same for the negative side)
-- CLIP never gets the last word.
-
-**A negative match reads as evidence of a mismatch, not as a bare minus sign.**
-A cosine below the no-opinion centre is shown as a compact phrase like "73%
-certain the image content does not match the text", in a visually distinct style
-(a different color, and either italics or bold - resolved during implementation)
-so it is not confused with a positive, if weaker, match. Internally this is the
-negative strength value (e.g. `-0.73`); the phrasing is how it is surfaced.
+**No reported percentage is completely certain or completely absent.** The
+CLIP row and the composite line are both clamped to `0.01%`-`99.99%` - CLIP
+never gets the last word.
 
 **Tags, titles, and story report counts, not percentages - a percentage isn't
 the right question for them.** A tag match is either exact, partial, or absent; a

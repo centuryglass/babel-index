@@ -14,7 +14,7 @@ import {
   normaliseScores,
   parseQuery,
   rankHybrid,
-  signedClipStrength,
+  clipCurveStrength,
   STORY_FLOOR,
   STORY_LONG_RANGE,
   storyMatchRanges,
@@ -732,25 +732,38 @@ test('a single matched story word sits at the moderate STORY_FLOOR, a full claus
   assert.equal(matchStrength({ storyMatched: false, storyLongChars: 0 }), 0);
 });
 
-test('CLIP strength is read off the raw cosine, against the three-anchor band [SR-16] [SR-19]', () => {
+test('CLIP strength is read off the raw cosine, against the anchor band [SR-16] [SR-19]', () => {
   const { centre, high, low } = CLIP_STRENGTH;
   assert.equal(matchStrength({ cosine: centre }), 0, 'at the no-opinion centre it says nothing');
   assert.equal(matchStrength({ cosine: high + 0.05 }), 1, 'above the high extreme, as sure as it gets');
-  assert.equal(matchStrength({ cosine: low - 0.05 }), -1, 'below the low extreme, as sure it does NOT match');
+  assert.equal(matchStrength({ cosine: low - 0.05 }), 0, 'below the low anchor is still no evidence, not a mismatch');
   const posMid = matchStrength({ cosine: (centre + high) / 2 });
   assert.ok(Math.abs(posMid - 0.5) < 1e-6, `halfway to the high extreme is ${posMid}`);
-  const negMid = matchStrength({ cosine: (centre + low) / 2 });
-  assert.ok(Math.abs(negMid + 0.5) < 1e-6, `halfway to the low extreme is ${negMid}`);
 });
 
-test('signedClipStrength is a monotone signed curve across all three anchors [SR-16]', () => {
+test('clipCurveStrength is a monotone [0, 1] curve, zero at and below the centre [SR-16]', () => {
   const { centre, high, low } = CLIP_STRENGTH;
-  assert.equal(signedClipStrength(centre), 0, 'the no-opinion centre');
-  assert.equal(signedClipStrength(high + 1), 1, 'saturates at the high extreme');
-  assert.equal(signedClipStrength(low - 1), -1, 'saturates at the low extreme');
-  assert.equal(signedClipStrength(null), 0);
-  assert.ok(signedClipStrength((centre + high) / 2) > 0, 'above centre reads positive');
-  assert.ok(signedClipStrength((centre + low) / 2) < 0, 'below centre reads negative');
+  assert.equal(clipCurveStrength(centre), 0, 'the no-opinion centre');
+  assert.equal(clipCurveStrength(high + 1), 1, 'saturates at the high extreme');
+  assert.equal(clipCurveStrength((centre + low) / 2), 0, 'below centre reads as no evidence');
+  assert.equal(clipCurveStrength(low - 1), 0, 'however far below');
+  assert.equal(clipCurveStrength(null), 0);
+  assert.ok(clipCurveStrength((centre + high) / 2) > 0, 'above centre reads positive');
+});
+
+test('match strength is never negative, whatever the signals [SR-16]', () => {
+  const { low } = CLIP_STRENGTH;
+  for (const parts of [
+    { cosine: -1 },
+    { cosine: low - 0.1 },
+    { tagStrength: 0.3, cosine: -1 },
+    { storyMatched: true, storyLongChars: 0, cosine: -1 },
+    {},
+  ]) {
+    const s = matchStrength(parts);
+    assert.ok(s >= 0 && s <= 1, `${JSON.stringify(parts)} gave ${s}`);
+    assert.ok(!Object.is(s, -0), `${JSON.stringify(parts)} gave -0`);
+  }
 });
 
 test('a query nothing matches clusters nothing, and does not even decide the order [SR-19]', () => {
@@ -763,14 +776,13 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
   // is 0 for all three, and the ranking's CLIP term,
   // `clip * clipNorm * clipStrengthGate`, is silenced right along with any
   // positive strength. Ranking falls back to stable id order, as if there
-  // were no signal at all. Strength itself reads these as a confident
-  // mismatch (negative) - a separate question, which the density gradient
-  // floors again.
+  // were no signal at all. Strength reads them as 0: a low cosine is
+  // absence of evidence, not evidence of a mismatch.
   const cosines = [-0.2, -0.15, -0.1];
   assert.ok(cosines.every((c) => c <= CLIP_STRENGTH.low));
   const strength = strengthOf({ query: 'cghjj', embeddings: atCosines(...cosines) });
 
-  assert.ok(Math.max(...strength) <= 0, `expected no positive strength, got ${[...strength]}`);
+  assert.ok(strength.every((c) => c === 0), `expected zero strength, got ${[...strength]}`);
   assert.ok(strength.every((c) => c < STRENGTH_FLOOR), 'and nothing that would survive the floor');
 
   assert.equal(Math.max(...normaliseScores(cosines)), 1, 'relative CLIP alone would have picked a "winner"');
@@ -867,8 +879,8 @@ test('the strength bounds are configurable', () => {
   const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, scale: 127, vector: CLIP_QUERY };
   assert.equal(
     rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).strength[0],
-    -1,
-    'the default band reads it as a confident mismatch'
+    0,
+    'the default band reads it as no evidence'
   );
   const loosened = rankHybrid({
     count: 3,
@@ -1118,8 +1130,8 @@ test('explainRanking reports an exact vs. a partial title match', () => {
 });
 
 test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosine underneath it [SR-32] [SR-36]', () => {
-  // Every cosine is below `CLIP_STRENGTH.low`: CLIP reads all of these as a
-  // confident mismatch, not merely "no opinion". Min-maxing still puts the
+  // Every cosine is below `CLIP_STRENGTH.low`: CLIP finds no evidence for
+  // any of these rooms. Min-maxing still puts the
   // best of them at 1.00 (`breakdown.clip`), which is the trap - a line
   // printing that relative number alone would claim a confident match.
   const cosines = [-0.1, -0.15, -0.2];
@@ -1140,6 +1152,6 @@ test('the CLIP line reads a certain-looking 1.00 as uncertain, off the raw cosin
   assert.equal(breakdown.clip[0], 1, 'relative score is the top of the range');
   assert.ok(Math.abs(explanation.clip.cosine - cosines[0]) < 0.01, 'the clip summary carries the RAW cosine');
   assert.ok(explanation.clip.cosine < CLIP_STRENGTH.low, 'which is below the low extreme');
-  assert.equal(explanation.clip.percent, -99.99, 'reported as a clamped signed percentage');
-  assert.equal(explanation.percent, -99.99, 'and the composite reading agrees it is a confident mismatch');
+  assert.equal(explanation.clip.percent, 0.01, 'reported at the clamped floor, never negative');
+  assert.equal(explanation.percent, 0.01, 'and the composite reading agrees there is no evidence');
 });
