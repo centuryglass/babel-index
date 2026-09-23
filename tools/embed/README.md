@@ -23,7 +23,8 @@ Plain `node tools/embed/embed.ts` does not work: the tool imports `.ts` modules,
 and the npm script is what loads them through `build/register.mjs` (AGENTS.md,
 *Commands*).
 
-First run downloads the model (cached under `~/.cache/huggingface` afterwards).
+First run downloads the model (cached under the repo-root `.clip_model_cache/`
+afterwards, see `packages/server/clip-cache.ts`).
 Writes two files, next to the images by default:
 
 - `embeddings.bin` — int8, row-major, `count × dim` bytes.

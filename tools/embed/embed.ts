@@ -31,6 +31,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanDirectory } from '../../packages/server/scan.ts';
+import { withClipCache } from '../../packages/server/clip-cache.ts';
 import { contentHash } from '../../packages/pipeline/mips.ts';
 
 /**
@@ -77,7 +78,7 @@ function quantiseInto(row: ArrayLike<number>, out: Int8Array, base: number): voi
  */
 async function loadVisionTower(): Promise<typeof import('@huggingface/transformers')> {
   try {
-    return await import('@huggingface/transformers');
+    return withClipCache(await import('@huggingface/transformers'));
   } catch (err: any) {
     if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
     // Tagged `expected` for main()'s handler. Deciding that by sniffing the

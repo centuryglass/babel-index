@@ -43,6 +43,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { embeddingScores } from '../../packages/map/ordering.ts';
+import { withClipCache } from '../../packages/server/clip-cache.ts';
 import {
   summarize,
   suggestClipBounds,
@@ -159,7 +160,7 @@ async function loadKeywords(file: string): Promise<string[]> {
 async function loadTextTower(model: string): Promise<{ tokenizer: any; textModel: any }> {
   let transformers;
   try {
-    transformers = await import('@huggingface/transformers');
+    transformers = withClipCache(await import('@huggingface/transformers'));
   } catch (err: any) {
     if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
     throw Object.assign(new Error(

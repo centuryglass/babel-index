@@ -76,6 +76,8 @@ overview.
     parsers.
   * `base-path.ts`: `normalizeBasePath` for `--base-path` (see `AGENTS.md`'s
     "Deployment and the base path").
+  * `clip-cache.ts`: `CLIP_CACHE_DIR`, the repo-root `.clip_model_cache/`
+    every CLIP tower loader points transformers.js at.
   * `version.ts`: The running commit (`BABEL_COMMIT`, else `.git`), read
     once at startup and reported by `/api/health`.
   * `roomContent.ts`: Memoized loader for the real `metadata.json`/

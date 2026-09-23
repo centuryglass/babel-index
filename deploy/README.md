@@ -239,18 +239,15 @@ default branch. Until `deploy.yml` is on main, nothing deploys and no
   one deploy late.
 - **The checkout is the deploy's to overwrite, except for untracked files.**
   `git reset --hard` discards any hand edit to a tracked file on the box.
-  `config.json`, `favorites.json` and (if `LOG_FILE` is inside the checkout)
-  the log file are untracked and are the only state this deployment owns, so
-  nothing here may ever run `git clean`.
+  `config.json`, `favorites.json`, the CLIP weights cache
+  (`.clip_model_cache/`) and (if `LOG_FILE` is inside the checkout) the log
+  file are untracked and are the only state this deployment owns, so nothing
+  here may ever run `git clean`.
 - **A failed install leaves the checkout ahead of the running process.** The
   reset happens before `npm ci`, and the restart after it. If the install
   fails, the old process keeps serving, but the next restart or reboot starts
   the new checkout on a broken `node_modules`. Roll back (or redeploy) before
   anything restarts the unit.
-- **`npm ci --omit=dev` deletes `node_modules`, and the CLIP weights are
-  cached inside it.** `deploy.sh`'s `install_dependencies` moves that cache
-  aside and back. Without it, every dependency bump re-downloads a few
-  hundred MB on the first search after deploying.
 - **The install carries two flags for this small, CPU-only box:**
   `--maxsockets=1` and `--onnxruntime-node-install-cuda=skip`.
   `install_dependencies` explains each. A larger host can drop both.

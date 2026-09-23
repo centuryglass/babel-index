@@ -113,21 +113,10 @@ main() {
   say "deployed $sha"
 }
 
-# Installs the lockfile CI tested (`npm ci`), keeping the CLIP model cache.
-# `npm ci` deletes node_modules, and transformers.js caches the CLIP weights
-# inside it (node_modules/@huggingface/transformers/.cache). Without the move
-# aside and back, every dependency bump silently re-downloads a few hundred MB
-# of model on the first search after deploying.
+# Installs the lockfile CI tested (`npm ci`). The CLIP weights cache lives
+# outside node_modules (packages/server/clip-cache.ts), so the install does
+# not touch it.
 install_dependencies() {
-  local cache='node_modules/@huggingface/transformers/.cache'
-  local stash
-  stash="$(mktemp -d)"
-
-  if [[ -d "$cache" ]]; then
-    say 'setting the CLIP model cache aside'
-    mv "$cache" "$stash/cache"
-  fi
-
   # Two flags for this small, CPU-only box; a larger host can drop both:
   #   --maxsockets=1 holds the install to one connection at a time, so a
   #     from-scratch install cannot exhaust a small VPS's memory or bandwidth
@@ -136,15 +125,6 @@ install_dependencies() {
   #     script fetching CUDA binaries, which this box has no GPU to use and
   #     which are large enough to cause failures.
   npm ci --omit=dev --maxsockets=1 --onnxruntime-node-install-cuda=skip
-
-  # If the install already wrote a new cache, keep it and drop the stash.
-  # Both are content-addressed by url, so either is correct.
-  if [[ -d "$stash/cache" && ! -d "$cache" ]]; then
-    mkdir -p "$(dirname "$cache")"
-    mv "$stash/cache" "$cache"
-    say 'CLIP model cache restored'
-  fi
-  rm -rf "$stash"
 }
 
 say() { printf '==> %s\n' "$*"; }
