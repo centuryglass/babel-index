@@ -479,6 +479,14 @@ test('T (an exact title match) clears the same ceiling, and clears E slightly [S
   assert.ok(titleExact < 2 * tagExact, 'two exact tag matches still beat one exact title match');
 });
 
+test('a story index built at minTokenLength matches the short query words that setting lets through', () => {
+  const story = 'An ox stands in the reading room.';
+  const index = buildSearchIndex([{ keywords: [], story }], { minLength: 2 });
+  const { breakdown } = rankHybrid({ query: 'ox', count: 1, weights: WEIGHTS, index, minTokenLength: 2 });
+  assert.ok(breakdown.story[0] > 0, 'the two-letter word is in the index and scores');
+  assert.deepEqual(storyMatchRanges(story, ['ox'], { minLength: 2 }), [{ start: 3, end: 5 }]);
+});
+
 test('an exact title match outranks an exact tag match', () => {
   const index = buildSearchIndex([
     { keywords: [{ text: 'unsurveyed' }], story: null },

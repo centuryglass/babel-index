@@ -220,7 +220,8 @@ export function useSearch({
       // `classifyTagTerm` in scoring.ts), so the keyword finder is the faithful
       // one here - a room's title marks exactly where its tag-style match landed.
       title: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, tokens),
-      story: (text: string): MatchRange[] => storyMatchRanges(text, tokens),
+      story: (text: string): MatchRange[] =>
+        storyMatchRanges(text, tokens, { minLength: searchConfig.minTokenLength }),
     };
   }, [result, searchConfig]);
 
