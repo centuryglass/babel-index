@@ -45,9 +45,8 @@ concurrency:
 jobs:
   deploy:
     name: deploy to production
-    # A dispatch always runs. Otherwise the triggering ci run must be a
-    # successful push to main whose head commit is release-please's release
-    # commit.
+    # Triggered via a successful push to main whose head commit is
+    # release-please's release commit, or via manual dispatch.
     #   - The `event == 'push'` check is required: `workflow_run`'s branch
     #     filter matches the triggering run's head branch, which for a pull
     #     request is the PR's branch, so a fork branch named `main` would pass.
