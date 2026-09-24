@@ -42,8 +42,9 @@ export function HelpBody() {
         <strong>Favorites:</strong> mark a room as a favorite to find it again later and
         to help others discover the most interesting ones. Sort by your favorites to see
         all rooms you've marked, or by most favorited to see which ones other people
-        recommend. Favorite counts are anonymized and tied to your browser, not to you.
-        It's the only data this site stores on its server.
+        recommend. Your favorites add to each room's public count, but they're linked to
+        a random ID in your browser, not to you. They're the only thing this site's
+        server keeps about its visitors.
       </p>
       <p>
         <strong>Keyboard, general:</strong> Tab moves between controls, arrow keys pan

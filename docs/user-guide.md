@@ -43,8 +43,9 @@ The center shelf lets you search the library and rearrange its shelves.
     bar from anywhere on the map.
 11. This star is the favorite toggle for the next room to the left. Clicking
     it marks that room as one of your favorites, making it easier for you to
-    find again, and adding to the global favorite count. Global favorite data
-    is tied to individual browser sessions and is fully anonymized.
+    find again, and adding to the global favorite count. Global favorite
+    counts are linked to a random ID stored in your browser, not to your name
+    or IP address.
 12. The distill mode switch banishes all of the near-identical Library of
     Babel shelves from the map, leaving only the unique rooms pulled in by
     the index.
@@ -74,7 +75,7 @@ story and details.
    the fictional world that particular shelf came from. Stories were written
    by various LLMs based on the image and tags.
 6. When a search is active, this block will tell you how closely this room
-   matches the search term, breaking down exactly what elements are matched.
+   matches the search term, breaking down which elements matched.
 7. Click this button to find this room within the catalog mode. If you're
    already in catalog mode, it's replaced by a "show on the map" button.
 8. Clicking here, clicking outside of the frame, or pressing escape closes the
