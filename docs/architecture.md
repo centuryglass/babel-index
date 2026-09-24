@@ -179,8 +179,8 @@ keep an AI-assisted process producing code a human would sign off on.
   hook (`.claude/hooks/session-start.sh`) caches the open issues under
   `.claude/cache/issues/` and prints their titles into the agent's context.
   It uses the `gh` CLI where it is authenticated and the public REST API
-  otherwise. An OpenCode plugin runs the same hook, and `opencode.json` adds
-  the cached index to OpenCode's system prompt.
+  otherwise. An OpenCode plugin runs the same hook once per session and adds
+  the cached index to that session's system prompt.
 - **Honest documentation.** Left to its habits, an agent writes comments
   that argue with the previous version of the code, restate a fact far from
   where it is defined, and inflate rather than inform. `AGENTS.md`'s

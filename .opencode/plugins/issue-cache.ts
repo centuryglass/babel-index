@@ -1,36 +1,82 @@
 /**
  * OpenCode's counterpart to the Claude Code `SessionStart` hook: refreshes
- * the GitHub issue cache (AGENTS.md, "Tracking open work") when OpenCode
- * starts in this repo.
+ * the GitHub issue cache (AGENTS.md, "Tracking open work") once per session
+ * and puts `.claude/cache/issues/index.md` into that session's system prompt.
  *
- * OpenCode has no hook whose output becomes session context, so the two
- * halves are split:
- *   - This plugin writes the cache by running `.claude/hooks/session-start.sh`,
- *     which owns the `gh`-or-REST-API choice. Its printed index is discarded.
- *   - `opencode.json`'s `instructions` entry puts `.claude/cache/issues/index.md`
- *     into the system prompt. OpenCode re-reads instruction files on every
- *     model call and skips a missing one.
+ * Both halves run in the V2 `context` session hook, which fires before every
+ * model request:
+ *   - A session's first request runs `.claude/hooks/session-start.sh`, which
+ *     owns the `gh`-or-REST-API choice, and waits for it up to
+ *     `REFRESH_TIMEOUT_MS`. Its printed index is discarded. A refresh that
+ *     times out or fails leaves the previous run's cache in place.
+ *   - The index is read once per session and pushed onto `event.system` on
+ *     every request. The text is held per session so a later session's
+ *     refresh never changes an earlier session's prompt mid-conversation.
  *
- * The refresh is not awaited, so a slow or rate-limited fetch never delays
- * startup. Until it finishes, the prompt carries the previous run's cache, or
- * none on a fresh checkout.
+ * Sessions created within `REFRESH_REUSE_MS` of a refresh share it, so a
+ * burst of subagent sessions costs one fetch against the REST API's
+ * unauthenticated rate limit.
  *
- * OpenCode runs plugins under Bun, which loads `.ts` directly; this file is
- * outside `jsconfig.json`'s typecheck scope, so the shell type is local.
+ * OpenCode V2 reads `id` and `setup` off the default export. The definition
+ * object is written out rather than built with `Plugin.define` because that
+ * needs `@opencode/plugin`, and this repo has no OpenCode dependency
+ * (AGENTS.md, "Conventions"). The file runs under OpenCode's own loader,
+ * outside `jsconfig.json`'s typecheck scope, so the context types are local.
  */
 
-type BunShellPromise = Promise<unknown> & {
-  cwd(dir: string): BunShellPromise;
-  quiet(): BunShellPromise;
-  nothrow(): BunShellPromise;
+import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+const INDEX_PATH = '.claude/cache/issues/index.md';
+const REFRESH_TIMEOUT_MS = 20_000;
+const REFRESH_REUSE_MS = 60_000;
+
+type ContextEvent = {
+  sessionID: string;
+  system: { type: 'text'; text: string }[];
 };
 
-type PluginInput = {
-  $: (strings: TemplateStringsArray, ...values: unknown[]) => BunShellPromise;
-  worktree: string;
+type PluginContext = {
+  location: { directory: string };
+  session: {
+    hook(name: 'context', handler: (event: ContextEvent) => Promise<void>): Promise<unknown>;
+  };
 };
 
-export const IssueCache = async ({ $, worktree }: PluginInput) => {
-  void $`bash .claude/hooks/session-start.sh`.cwd(worktree).quiet().nothrow().catch(() => {});
-  return {};
+export default {
+  id: 'babel-index.issue-cache',
+  async setup({ location, session }: PluginContext) {
+    const root = location.directory;
+    let refresh: { started: number; done: Promise<void> } | undefined;
+    const indexBySession = new Map<string, Promise<string | undefined>>();
+
+    const runRefresh = () =>
+      new Promise<void>((resolve) => {
+        execFile(
+          'bash',
+          ['.claude/hooks/session-start.sh'],
+          { cwd: root, timeout: REFRESH_TIMEOUT_MS },
+          () => resolve(),
+        );
+      });
+
+    const loadIndex = async () => {
+      if (!refresh || Date.now() - refresh.started > REFRESH_REUSE_MS) {
+        refresh = { started: Date.now(), done: runRefresh() };
+      }
+      await refresh.done;
+      return readFile(path.join(root, INDEX_PATH), 'utf8').catch(() => undefined);
+    };
+
+    await session.hook('context', async (event) => {
+      let index = indexBySession.get(event.sessionID);
+      if (!index) {
+        index = loadIndex();
+        indexBySession.set(event.sessionID, index);
+      }
+      const text = await index;
+      if (text) event.system.push({ type: 'text', text: `Instructions from: ${INDEX_PATH}\n${text}` });
+    });
+  },
 };
