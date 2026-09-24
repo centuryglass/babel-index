@@ -17,9 +17,8 @@ import type { RoomMeta } from '../../../map/metadata.ts';
 
 /**
  * Books on the center shelf with a fixed distinct function, reserved by slot
- * index. The bottom-right "forget searches" book is layered on top of this in
- * `overrides` rather than living here, because its presence depends on
- * `history` and these never vary.
+ * index. The bottom-right "forget searches" book is added in `overrides`, only
+ * while `history` is non-empty.
  */
 const CENTER_OVERRIDES: Record<number, { text: string; action: string }> = {
   0: { text: 'READ ME', action: 'help' },

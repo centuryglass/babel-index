@@ -306,11 +306,9 @@ export function panByPixels(cam: Camera, dxPx: number, dyPx: number, damp: numbe
  *   `panByPixels` subtracts it; `dx`/`dy` here are where the reader asked to go.
  * - There is no floor, which is why this is a separate function. A drag is
  *   bounded by how far a hand can travel in one stroke, so `panByPixels` can
- *   afford one. A held arrow key is bounded only by patience: the browser
- *   repeats `keydown` about thirty times a second while it is down, so any
- *   non-zero floor is a constant outward velocity that never stops. Measured, a
- *   floor the size of the pointer's let a six-second hold reach thirty-one cells
- *   past a boundary a mouse could barely push eleven past.
+ *   afford one. A held arrow key auto-repeats `keydown` for as long as it is
+ *   down, so any non-zero floor is a constant outward velocity that never
+ *   stops.
  *
  * Scaling straight from `damp` makes the step approach zero as the resistance
  * does, so a hold settles about a screen out - where the pointer lands too.
