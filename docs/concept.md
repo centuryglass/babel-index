@@ -1,5 +1,7 @@
 # "The Index of Babel"
 
+This is the original design, and it is not kept in sync with the code. [`architecture.md`](architecture.md) describes the system as built.
+
 1. Create an image of one room in the Library of Babel. Make it detailed yet generic - a photorealistic model would probably be appropriate. Make sure it tiles seamlessly.
 2. Using Stable Diffusion, dynamic prompting and ControlNet, create thousands of variant rooms, each expressing a unique randomized combination of concepts and visual styles as a library room, each still capable of tiling with any other set of rooms.
 3. Curate: go through results, save rooms that are unique, interesting, or exceptional.
@@ -21,6 +23,8 @@ I conceived of this project in late 2024, but never started because it seemed li
 
 ## Design extensions
 Significant user-visible features I decided to add during implementation will be documented here.
+
+8/11/2026: TODO: explain retargeting a tile from a whole room to one shelved wall.
 
 ### 8/12/26: Base tile construction
 
@@ -47,20 +51,70 @@ If we're making the books into UI elements, five shelves of 32 books each makes 
 ### 8/20/26: Accessibility support
 The application should be fully usable in a screen reader, and reduced motion constraints should be honored. Keyboard controls should let users navigate the library, and UI elements should be mirrored in the DOM if possible, rather than just being built in a canvas. Map structure changes and returning to the center should be announced by screen readers. I'll fully test this with the orca screen reader before release.
 
+8/20/2026: TODO: explain choosing a keyboard cursor and a live region over a DOM mirror of the map.
+
 ### 8/22/26: Catalog mode
 This project is all about being able to use technology and information science to enhance our ability to search random noise for accidental meaning. To serve that purpose, there should be an alternate interface that maximizes search capability by sacrificing the illusion of the infinite library.
 
 In catalog mode, no default rooms will be shown, and rooms will be shown as a flat list in order of search match. Keywords and stories will appear to the right of each room, not needing to be opened automatically. When searching, rank and certainty metrics will be plainly shown for each room. The map view's mostly-diegetic interface will be replaced with a search UI modeled after the usual conventions for searching and sorting an online dataset.
 
+8/28/2026: TODO: explain the paged Library of Babel book overlay.
+
+8/28/2026: TODO: explain the keyword chips' links to external sites (`tagLinks.json`).
+
+8/30/2026: TODO: explain giving each room a title.
+
 ### 8/30/26: Favorite count tracking
 This project is fundamentally about searching and curation, and I should do something to support that in the code. The solution: add a favorite icon to each room detail panel, and show each room's global favorite count. 
 
 #### The interface
-Favorite count should appear in both map and catalog views. Users should be able to both add and remove a room from favorites. from either the map or the catalog, Users should be able to sort in two ways. Either by their own favorites, or by global favorite count. 
+Favorite count should appear in both map and catalog views. Users should be able to both add and remove a room from favorites from either the map or the catalog. Users should be able to sort in two ways: either by their own favorites, or by global favorite count. 
 
 #### Data tracking
 I don't want to spy on my users and I don't want to build an account system, but I don't want the counts to just be raw numbers that anyone can mess with by hitting an endpoint either.
 
 Personal favorite lists can be tracked in local storage. The server should never expose favorites on a per-user basis; let users track their own favorites. 
 
-Global counts will tracked internally as per-image sets of hashed IP addresses. The hashing isn't a real security method, it's mostly just present as another way to signal that I'm not interested in spying on my users. Checking favorites on a room returns the size of the set, add_favorite and remove_favorite endpoints add and remove the request IP from the set. Gaming the system in a limited way is possible, but not something I'm very worried about. The important part is ensuring a bad actor can't just zero out favorite counts or boost them infinitely.
+Global counts will be tracked internally as per-image sets of hashed IP addresses. The hashing isn't a real security method, it's mostly just present as another way to signal that I'm not interested in spying on my users. Checking favorites on a room returns the size of the set, add_favorite and remove_favorite endpoints add and remove the request IP from the set. Gaming the system in a limited way is possible, but not something I'm very worried about. The important part is ensuring a bad actor can't just zero out favorite counts or boost them infinitely.
+
+9/5/2026: TODO: explain identifying favorites by a random token stored in the browser instead of by hashed IP address.
+
+9/2/2026: TODO: explain distill mode (added as "sieve mode", renamed 9/5), which hides the generic rooms.
+
+9/8/2026: TODO: explain the center book's story and artist's statement overlay.
+
+9/11/2026: TODO: explain the leather-and-paper visual theme.
+
+9/13/2026: TODO: explain the server-rendered catalog and link previews, for search engines and link unfurlers.
+
+9/16/2026: TODO: explain shareable room links (the copy-link button, then `/map/:room` and `/catalog/:room` addressed by title on 9/18).
+
+9/22/2026: TODO: explain renaming search "certainty" to "match strength", and treating a weak image match as no evidence rather than a mismatch.
+
+## Engineering changes
+
+8/12/2026: TODO: explain the resolution pyramid, and packing its coarse levels into shared sheets (8/28).
+
+8/13/2026: TODO: explain computing the query's CLIP text embedding on the server while ranking stays in the browser.
+
+8/22/2026: TODO: explain making CLIP optional, so the app still runs where the model can't be installed (e.g. Android/Termux).
+
+8/27/2026: TODO: explain splitting `main.jsx` into hooks.
+
+8/27/2026: TODO: explain the TypeScript migration decision.
+
+8/28/2026: TODO: explain writing search ranking down as a spec (`search_rules.md`) calibrated against the real corpus.
+
+8/30/2026: TODO: explain moving the curation tools into this repo.
+
+9/10/2026: TODO: explain making WebGL the default map renderer (spiked 9/9), with Canvas2D kept as a fallback.
+
+9/14/2026: TODO: explain deploying to the VPS from CI with release verification, and release-please versioning (9/18).
+
+9/16/2026: TODO: explain the critique of AI-written comment style and the repo-wide comment refactor.
+
+9/17/2026: TODO: explain treating the project as both an art piece and an engineering portfolio.
+
+9/19/2026: TODO: explain the admin log viewer and hourly usage metrics (9/21) that persist no visitor data.
+
+9/21/2026: TODO: explain moving open work from in-repo plan docs to GitHub issues.

@@ -7,9 +7,8 @@ implementation.
 
 `docs/search_rules.md` specifies the behavior as built, and the gaps between
 the two are tracked as GitHub issues labelled `area:search`. This file is the
-input both should answer to. It states no formula, no weight and no
-data structure on purpose - a requirement that names a mechanism stops being
-a requirement and becomes a design.
+input both should answer to. It states no formula, weight or data
+structure, since a requirement that names a mechanism is a design.
 
 **An `SR-nn` is a permanent identifier, not a list position.** Tests cite
 requirements by id (`test('... [SR-18]', ...)`) and `npm run
@@ -108,8 +107,8 @@ coverage gap.
 
 - **SR-37** A search should produce the same ranking in the map and in the
   catalog.
-- **SR-38** Search should be reachable from the center tile, the side panel,
-  and the catalog alike.
+- **SR-38** Search should be reachable from the map's center tile, from
+  anywhere else on the map, and from the catalog alike.
 - **SR-39** Recent searches should be recoverable without retyping.
 - **SR-40** Search should respect blocked tags and never surface a room the
   reader has excluded.

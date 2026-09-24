@@ -1,100 +1,55 @@
 # Keyboard controls - map mode
 
 The spec for every key map mode handles, state by state. Catalog mode is out
-of scope here (see the note at the end). `RoomOverlay.tsx` is the one
+of scope here (see "Out of scope here"). `RoomOverlay.tsx` is the one
 room-detail dialog, reached from a ranked result, a click/tap on a room, or
 `Enter`/`Space` over the keyboard cursor, and it is fully modal (Tab trapped,
 `Escape` closes).
 
 ## Focus states and tab order
 
-Several independent key handlers exist, one per focus target. Which one is
-live is decided entirely by DOM focus - there is no "am I in the search box"
-style flag anywhere in the map code; focusing an element is what turns its
-handler on and everything else off.
+Each focus target has its own key handler, and DOM focus alone decides which
+one is live. No flag in the map code tracks "am I in the search box";
+focusing an element turns its handler on and every other one off.
 
 Tab order through the map subtree, top to bottom in the DOM:
 
-1. **The canvas** (`role="application"`, `tabIndex={0}`) - the map's only
-   *diegetic* forward tab stop. `MapView.tsx`'s own comment states this
-   directly: "One tab stop for the entire map... so Tab always leaves the map
-   in one press."
-2. **The search input**, `.center-search` - *only when it is currently
-   visible*. It renders positioned over the center tile and is
-   `display: none` until the render loop finds it on screen and legible
-   (`MapView.tsx`); while hidden it is out of the tab sequence entirely, not
-   just visually hidden.
-3. **The shelf's one roving book** (`role="toolbar"`) - forty book buttons
-   exist, but only the currently-focused one has `tabIndex={0}`; the rest are
-   `tabIndex={-1}` so the wall costs one tab stop, not forty. Zoom/legibility
-   gated exactly like the search input (`useMapRenderer.ts`'s `booksEl.style
-   .display`), so hidden and out of the tab sequence when not legible.
+1. **The canvas** (`role="application"`, `tabIndex={0}`) - the first stop.
+   The `RoomDetails` chips nested inside it are `tabIndex={-1}`, so they add
+   no stops.
+2. **The search input**, `.center-search` - only while it is visible. It is
+   positioned over the center tile and stays `display: none` until the
+   render loop finds it on screen and legible (`MapView.tsx`). While hidden it
+   is out of the tab sequence, not only visually hidden.
+3. **The shelf's one roving book** (`role="toolbar"`) - of the buttons
+   `BOOK_COUNT` generates, only the focused one has `tabIndex={0}` and the
+   rest are `tabIndex={-1}`, so the wall costs one tab stop. It is gated on
+   zoom and legibility like the search input (`useMapRenderer.ts`'s
+   `booksEl.style.display`).
 4. **`.center-book`** (the artist's-statement hotspot traced into the shelf
-   gap) - same zoom/legibility gating as the shelf.
-5. **`.center-controls`**' buttons - the reorder button (always present when
-   its rect is legible) and the two favorite-sort toggles (`favorites`-gated
-   on top of that). Same zoom/legibility gating as the shelf.
-6. **`.search-trigger`** (the "go to search" icon button) - the one control
-   in this list that is **not** zoom-gated. It is always mounted and always
-   in the tab sequence regardless of where the camera is, which is why
-   panning away from the center collapses this whole list down to just
-   "canvas, then search-trigger" - every zoom-gated stop in between drops out
-   of the tab order along with its `display: none`.
+   gap) - gated like the shelf.
+5. **`.center-controls`' buttons** - the reorder button, plus the two
+   favorite-sort toggles when `favorites` is on. Gated like the shelf.
+6. **`.search-trigger`** (the "go to search" icon button) - the one stop that
+   is not zoom-gated. It is always mounted and always in the tab sequence, so
+   with the camera away from the center the list collapses to the canvas and
+   `.search-trigger`.
 
-Plain `Tab` walks forward through whichever of 1-6 are currently visible, in
-order, then leaves the map subtree entirely into whatever follows in the
-document (normally nothing - the browser's own chrome). Plain `Shift+Tab`
-walks the same list backward. Neither one *wraps* - there is no code making
-the map subtree a closed loop, so pressing `Tab` on `.search-trigger` (or
-whichever control is currently last) does not cycle back around to the
-canvas; it exits into the browser, exactly as the last focusable element on
-any ordinary, non-modal page would. See "Why doesn't Tab wrap back to the
-canvas?" below for why that's deliberate rather than an oversight.
+Plain `Tab` walks forward through whichever of 1-6 are visible, then leaves
+the map subtree for whatever follows in the document, normally the browser's
+own chrome. `Shift+Tab` walks the same list backward. Neither wraps: the map
+is the whole page, not a modal, so Tab past the last stop reaches the
+browser's UI as it would on any page.
 
-**Getting back to the canvas** therefore has two routes:
+**Getting back to the canvas** has two routes:
 
-- `Shift+Tab`, repeated once per stop currently between focus and the
-  canvas - one press from the search input or `.search-trigger` when nothing
-  else is visible between them and the canvas, more the further out zoom has
-  put you (up to all of 2-6 when everything is legible and `favorites` is
-  on).
-- `Escape`, a direct jump to the canvas from *any* of stops 2-6, regardless
-  of how many are visible. `useCenterShelf.ts`'s `onBooksKeyDown` handles it
-  for the shelf; `main.tsx`'s `onSearchKeyDown` and `onControlKeyDown` handle
-  it for the search input and every plain center-tile button (`.center-book`,
-  the three `.center-controls` buttons, `.search-trigger`) respectively -
-  three call sites rather than one only because the shelf's handler already
-  existed as part of `bookNeighbour`'s dispatch and had no reason to move,
-  while the five plain buttons share nothing else worth factoring a hook
-  around.
-
-### Why doesn't Tab wrap back to the canvas?
-
-It could - trapping Tab at the edges of the map subtree and cycling it back
-onto the canvas is the same technique `RoomOverlay.tsx` already uses
-internally. The reason it's *not* done here is what that technique is for:
-`RoomOverlay`, `HelpDialog` and `ArtistStatementOverlay` trap Tab because
-they are modal - the rest of the page is inert while they're open, so
-nothing is lost by making them a closed loop, and a reader tabbing past the
-last button is never trying to reach anything else.
-
-The map is not modal. It's the whole page. A reader tabbing past
-`.search-trigger` is not stuck inside a dialog by mistake; they're doing
-exactly what `Tab` is supposed to do on any ordinary page - moving on to
-whatever the browser or the rest of the document offers next (the address
-bar, another extension's toolbar button, a browser tab strip). Trapping
-that would mean the map hijacks Tab for as long as the page is open, which
-is a much bigger intervention than a modal trap: it would cut off a keyboard
-user's only way to reach the browser's own UI without switching input
-method. That's the actual reason "make canvas first, or last, in a closed
-cycle" isn't the fix - canvas already *is* first, and being last as well
-only means something if the ends are joined, which is the same trap by
-another name.
-
-`Escape`, not a wrap, is the intended fix for "I ended up on a control I
-didn't mean to press and want back on the map" - it's a direct jump rather
-than a cycle, so it works the same regardless of how many zoom-gated
-controls happen to be visible.
+- `Shift+Tab`, once per visible stop between focus and the canvas.
+- `Escape`, a direct jump to the canvas from any of stops 2-6. Three handlers
+  implement it:
+  - `useCenterShelf.ts`'s `onBooksKeyDown`, for the shelf.
+  - `main.tsx`'s `onSearchKeyDown`, for the search input.
+  - `main.tsx`'s `onControlKeyDown`, for every plain center-tile button
+    (`.center-book`, the `.center-controls` buttons, `.search-trigger`).
 
 ## State 1 - Canvas focused (no overlay open, no book focused)
 
@@ -107,35 +62,30 @@ controls happen to be visible.
 | `Ctrl/Cmd+Arrow` | Jump cursor to next ranked room in that direction, or announce "nothing further" |
 | `PageUp` / `+` / `=` | Zoom in one step, re-centered on cursor's cell |
 | `PageDown` / `-` | Zoom out one step, re-centered on cursor's cell |
-| `Home` | Fly to (0, 0) at default zoom |
+| `Home` | Fly to (0, 0) at the return-to-center zoom (`overviewZoom`) |
 | `Ctrl/Cmd+Home` | Fly to rank-0 room, or announce "no ranked rooms" |
 | `Ctrl/Cmd+End` | Fly to the last-ranked room, or announce "no ranked rooms" |
 | `Enter` / `Space` | Open the room overlay for the room (or generic cell) under the cursor - no-op only on the center, matching right-click/long-press |
 | `/` | Focus search (fly home first if search is off-screen) |
 | `?` | Announce nearest ranked room in each direction + distance to boundary |
-| `Tab` | Leave the canvas forward - to whichever of the search input/shelf/`.center-book`/`.center-controls`/`.search-trigger` is first among those currently visible (see "Focus states and tab order" above) |
+| `Tab` | Leave the canvas forward, to the first visible stop after it (see "Focus states and tab order") |
 
-Plain `End` (no modifier) is intentionally unbound: unlike `Home`, there is
-no cell "End" obviously means on its own.
+Plain `End` (no modifier) is unbound: unlike `Home`, it names no obvious cell.
 
 **The cursor ring is the only visible sign the canvas has focus**, and it
-shows the instant focus arrives - it does not wait for a first arrow press.
-`useMapRenderer.ts` attaches `focus`/`blur` listeners to the canvas
-alongside its other DOM listeners; on `focus` it checks `canvas.matches(
-':focus-visible')` and shows the ring if true, and `blur` always hides it.
-`:focus-visible`, not plain `:focus`, is what keeps a mouse click on the map
-from lighting up a permanent reticle for someone who never touched a
-keyboard - the same distinction every other focus ring in this app draws
-(`style.css`'s `:focus-visible` rules). Waiting for the first *handled*
-keypress instead would hide the ring for exactly the span between
-successfully tabbing onto the canvas and the first arrow press, which is the
-one moment a keyboard user most needs confirmation that the tab stop was
-real.
+shows as soon as focus arrives, before any arrow press. `useMapRenderer.ts`
+listens for `focus`/`blur` on the canvas:
 
-**Precedence rules, restated from code comments:**
+- On `focus`, it shows the ring if `canvas.matches(':focus-visible')`.
+- On `blur`, it hides the ring.
+
+`:focus-visible`, not `:focus`, keeps a mouse click on the map from lighting
+up the ring, matching every other focus ring in the app (`style.css`'s
+`:focus-visible` rules).
+
+**Precedence rules:**
 - A pointer/wheel/touch event always interrupts an in-flight keyboard-
-  triggered flight ("a hand on the map beats anything the map was doing to
-  itself").
+  triggered flight.
 - Repeated key-repeat presses in the same tick read the flight's *target*
   (`flightTarget()`), not its interpolated position, so they compound
   instead of cancelling.
@@ -143,9 +93,10 @@ real.
   announced once per direction, not blocked.
 - `prefers-reduced-motion` collapses every keyboard-triggered flight to an
   instant jump.
-- A rearrangement animation in progress is ended by any keyboard action
-  here, falling back to an instant rebuild rather than sliding under it -
-  the same rule the pointer path already follows.
+- A keyboard action does not end a rearrangement animation in progress. Its
+  flight is overridden by the rearrangement's next camera move; only a
+  pointer grab ends one. Issue #306 tracks these keys staying enabled while
+  inert.
 
 ## State 2 - Center shelf book focused (roving tabindex)
 
@@ -159,12 +110,10 @@ real.
 | `End` | Jump to last book slot |
 | `Escape` | Return focus to the canvas |
 | `Enter` / `Space` | Not intercepted - native `<button>` click activation fires `onBook(i)` |
-| `Tab` | Not intercepted - leaves the shelf forward, out of the map subtree |
+| `Tab` | Not intercepted - moves to the next visible stop in the tab order |
 
-The shelf and the canvas are deliberately different key vocabularies, not
-one handler gated by focus target - none of the canvas's Ctrl+Arrow,
-PageUp/Down, `/`, or `?` bindings apply here, because none of them are
-meaningful with a book focused rather than a map cell.
+None of the canvas's `Ctrl+Arrow`, `PageUp/Down`, `/` or `?` bindings apply
+with a book focused.
 
 ## State 3 - Search input focused
 
@@ -176,32 +125,27 @@ form, standard text editing/selection applies unmodified.
 |---|---|
 | `Escape` | Return focus to the canvas (map's copy only - see below) |
 
-This is the *only* difference from standard text entry, and it is opt-in per
-instance: `SearchForm` takes an optional `onKeyDown` prop, and only the map's
-copy (`MapView.tsx`) passes one (`main.tsx`'s `onSearchKeyDown`). The
-catalog's copy of the same component passes nothing, because "return to the
-canvas" isn't meaningful there - the catalog has no canvas to return to.
+The `Escape` binding is opt-in per instance: `SearchForm` takes an optional
+`onKeyDown` prop, and only the map's copy (`MapView.tsx`) passes one
+(`main.tsx`'s `onSearchKeyDown`). The catalog's copy passes none, since the
+catalog has no canvas.
 
-Everything else about "am I in the search box" is implicit: canvas keys
-(`/`, `?`, arrows-as-pan, etc.) simply never fire while the input has DOM
-focus, because there is no code anywhere checking focus target to suppress
-them - focus ownership is the entire mechanism. One consequence worth
-calling out explicitly: `/`, typed while already in the search box, inserts
-a literal `/` character rather than doing anything special, since the
-global `/`-to-focus binding lives on the canvas's handler alone.
+Canvas keys (`/`, `?`, arrows-as-pan) never fire while the input has focus,
+because they are bound on the canvas alone. A `/` typed in the search box
+inserts a literal `/`.
 
 ## State 4 - A plain center-tile control button focused
 
 `.center-book`, `.center-controls`' reorder/mine/count buttons, and
-`.search-trigger` - five plain `<button>`s with no other keyboard behavior
-of their own (activation is native click, same as the shelf's books), sharing
-one `onKeyDown` (`main.tsx`'s `onControlKeyDown`).
+`.search-trigger` - plain `<button>`s with no other keyboard behavior
+(activation is native click, as for the shelf's books), sharing one
+`onKeyDown` (`main.tsx`'s `onControlKeyDown`).
 
 | Key | Behavior |
 |---|---|
 | `Escape` | Return focus to the canvas |
 | `Enter` / `Space` | Native button activation |
-| `Tab` / `Shift+Tab` | Not intercepted - ordinary DOM tab order (see above) |
+| `Tab` / `Shift+Tab` | Not intercepted - ordinary DOM tab order (see "Focus states and tab order") |
 
 ## State 5 - `RoomOverlay` open
 
@@ -215,18 +159,14 @@ on the keyboard cursor).
 | `Tab` / `Shift+Tab` | Trapped - wraps between the first and last focusable element inside the dialog |
 | `Enter` / `Space` | Native button activation only |
 
-While open, canvas and shelf handlers are inert by construction: focus moves
-into the dialog root on mount, so `onMapKeyDown`/`onBooksKeyDown` simply
-never fire - the same "focus ownership is the whole gating mechanism"
-pattern as the search box, and deliberately not backed by a redundant "is a
-dialog open" flag anywhere.
+While the overlay is open, the canvas and shelf handlers are inert: focus
+moves into the dialog root on mount, so `onMapKeyDown`/`onBooksKeyDown` never
+fire.
 
-`HelpDialog` and `ArtistStatementOverlay` follow the same pattern - `Escape`
-closes, Tab trapped, and a `window`-level `keydown` listener that only acts
-when that dialog is topmost (`HelpDialog` inlines its own copy;
-`ArtistStatementOverlay` gets it from `useDialog`'s dialog stack) - and are
-not restated here since they are not part of the center tile's own control
-surface.
+`HelpDialog` and `ArtistStatementOverlay` behave the same way: `Escape`
+closes, Tab is trapped, and a `window`-level `keydown` listener acts only
+while that dialog is topmost. `HelpDialog` inlines its listener;
+`ArtistStatementOverlay` gets it from `useDialog`'s dialog stack.
 
 ## Out of scope here
 
