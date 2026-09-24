@@ -31,9 +31,10 @@
  *     [--out report.json] [--low-percentile 90] [--high-percentile 50]
  *
  * Emits a JSON report (--out, default ./cosine-range-report.json) with the full
- * percentile tables, per-keyword stats, and a suggested clipLow/clipHigh, and
+ * percentile tables, per-keyword stats, and a coarse clipLow/clipHigh pair, and
  * prints a shorter version of the same to the console. See `suggestClipBounds`
- * for what that pair is read off, and what it is not.
+ * for what that pair is read off, and how it differs from the
+ * `search.density` settings.
  *
  * The expensive part is the text tower, not the arithmetic: a few thousand
  * cosines per keyword is a few million multiply-adds total, well under a second,

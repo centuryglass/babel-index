@@ -10,7 +10,7 @@ variable "cloudflare_account_id" {
 }
 
 variable "r2_bucket_name" {
-  description = "R2 bucket name. Must match whatever tools/upload/upload-r2.mjs is pointed at (R2_BUCKET / --bucket)."
+  description = "R2 bucket name. Must match whatever tools/upload/upload-r2.ts is pointed at (R2_BUCKET / --bucket)."
   type        = string
   default     = "babel-index-corpus"
 }

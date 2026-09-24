@@ -5,9 +5,9 @@
  * the real repo tree and diffs it against what this resolves.
  *
  * The map's bullets are three-level indentation (0/2/4 spaces), each line
- * starting with its path in backticks right after the `-`/`*` marker
- * (`AGENTS.md`'s Layout section documents the convention). A nested
- * bullet's path is relative to its nearest ancestor - normally the
+ * starting with its path in backticks right after the `-`/`*` marker.
+ * This header is the format's one home; `docs/file_map.md` points here.
+ * A nested bullet's path is relative to its nearest ancestor - normally the
  * ancestor's own path (a directory), but when the ancestor's last path
  * segment has a file extension (`tools/embed/cosine-range.ts` listing
  * `cosine-stats.ts` as a related sibling, not something inside it) it's

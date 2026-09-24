@@ -10,9 +10,8 @@
  * `git ls-files` on every run - so there is nothing to keep in sync, and
  * `docs/search_requirements.md` can go on naming no tests at all.
  *
- * The baseline is a ratchet rather than a gate. 49 requirements could not
- * be covered in one change, so `baseline.json` lists the ones known to be
- * uncovered: losing coverage fails, gaining it never does, and
+ * The baseline is a ratchet. `baseline.json` lists the requirements known
+ * to be uncovered: losing coverage fails, gaining it never does, and
  * `--update-baseline` rewrites the list once a gap is closed.
  */
 import { execFileSync } from 'node:child_process';

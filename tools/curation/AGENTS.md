@@ -13,10 +13,6 @@ and a mobile web fallback), alt text, sensitive-content tagging, and title
 generation. Nothing here is imported by `packages/` - it produces the input
 a corpus directory needs, it doesn't run alongside the app.
 
-Migrated without any history from a personal scripts directory that also held
-a lot of unrelated tools; only the files this subtree actually uses came
-along.
-
 ## Layout
 
 - `babel_index_review/`: the package. `core.py` is the shared logic (on-disk
@@ -53,9 +49,8 @@ along.
 - Model calls all route through `tag/describe_image.py`'s prefix convention
   (`local:`, `openrouter:`, bare Claude id) - see `README.md`'s Setup section
   for the env vars each backend reads. Don't add a second way to pick a model.
-- No tests here (migrated as-is; the source repo didn't have any for this
-  subtree either), and this stays a deliberately loose, imported set of
-  utility scripts - don't chase general coverage. The one exception is a
+- No tests here, and this stays a loose set of utility scripts: don't
+  chase general coverage. The one exception is a
   test that guards against real data loss (e.g. a concurrency race that
   could silently drop or duplicate a write to `metadata.json`) - that's
   worth a `node:test`-free `pytest`/`unittest` file. Any such test runs
@@ -63,11 +58,9 @@ along.
 
 ## Things that will bite you
 
-- **`keyword_map.py`'s source path used to be a hardcoded absolute path** into
-  a sibling Stable Diffusion install on the original machine. It now defaults
-  to the bundled `data/all_styles.txt` snapshot; override with
-  `BABEL_KEYWORD_SOURCE` to point it at a live wildcard file instead of the
-  snapshot when re-syncing.
+- **`keyword_map.py` reads the bundled `data/all_styles.txt` snapshot** by
+  default; set `BABEL_KEYWORD_SOURCE` to point it at a live wildcard file
+  when re-syncing.
 - **`onnxruntime`/CLIP-embedding concerns from the rest of this repo don't
   apply here** - this subtree never touches `packages/`'s optional
   `@huggingface/transformers` dependency; it's a fully separate curation step

@@ -23,9 +23,8 @@ import { parseFileMap } from './lib.ts';
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const FILE_MAP_PATH = 'docs/file_map.md';
 
-// Filenames/extensions the map is never required to mention - see
-// AGENTS.md's "Tests sit next to the code" (unit tests) and the request
-// that started this check (images).
+// Filenames/extensions the map is never required to mention: tests (see
+// AGENTS.md's "Tests sit next to the code") and images.
 const TEST_RE = /\.(test\.(ts|mjs)|e2e\.ts|parity\.ts)$/;
 const IMAGE_RE = /\.(png|jpe?g|webp|gif|ico|svg)$/i;
 

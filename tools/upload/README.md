@@ -1,4 +1,4 @@
-# tools/upload — Cloudflare R2 sync
+# tools/upload - Cloudflare R2 sync
 
 Uploads a corpus - room images at every generated pyramid level, the
 keyword/story sidecar, the optional keyword -> external-link map, the CLIP
@@ -25,8 +25,8 @@ you need something else (a custom domain, a local S3-compatible test server).
 ## Run
 
 ```sh
-node tools/upload/upload-r2.ts                          # assets/corpus-sample/, prefix "corpus-sample"
-node tools/upload/upload-r2.ts --images <dir> [--shared-dir assets] \
+npm run upload:r2                                # assets/corpus-sample/, prefix "corpus-sample"
+npm run upload:r2 -- --images <dir> [--shared-dir assets] \
   [--prefix <name>] [--bucket <name>] [--center center.jpg] [--dry-run]
 ```
 
@@ -35,16 +35,18 @@ credentials-requiring requests beyond the manifest fetch.
 
 ## Layout in the bucket
 
-Keys mirror the local layout, so a future R2-backed demo server can resolve a
-room's url the same way `packages/web/src/rooms.js` does locally:
+Keys mirror the local layout, so the demo server's `--remote` mode
+(`packages/server/remote.ts`) serves the bucket through the same manifest
+shape as a local scan:
 
 ```
 <prefix>/001.jpg                  level 0 (flat)
 <prefix>/512/001.jpg              level 1
 <prefix>/metadata.json
-<prefix>/tagLinks.json          only if the corpus has one
+<prefix>/tagLinks.json            only if the corpus has one
 <prefix>/embeddings.bin
 <prefix>/embeddings.json
+<prefix>/manifest.json            the scanDirectory() result, read by --remote
 <prefix>/upload-manifest.json     this tool's own bookkeeping (below)
 shared/center_tile.png
 shared/generic/a.jpg
@@ -57,7 +59,11 @@ collide in one bucket. The shared tiles live outside any prefix, at the
 bucket root, since multiple corpora can point at the same center/generic
 assets. The loading-animation manifest and sheets ride up the same way, read
 from `<shared-dir>/animation/`; a shared dir without one (no indicator built)
-simply uploads nothing there.
+uploads nothing there.
+
+`manifest.json` is the `scanDirectory()` result, the same shape
+`/api/manifest` serves locally, written on every run. `--remote` fetches it,
+so the bucket needs no listing API: the scan runs once, here, at upload time.
 
 ## Incremental by content hash
 
@@ -67,30 +73,29 @@ local file the corpus touches and skips any whose hash still matches the
 manifest's record, so touching a handful of images costs a handful of PUTs,
 not a full re-upload. Nothing is ever deleted from R2 by this tool.
 
-The hash compared is the uploaded file's own bytes, not the source-image hash
-`generate:mips` embeds in `metadata.json` - that also catches a pyramid level
+The hash compared is the uploaded file's own bytes (`contentHash` from
+`packages/pipeline/mips.ts`), not the source-image hash `generate:mips`
+embeds in `metadata.json`. That also catches a pyramid level
 re-encoded at a different JPEG quality, which shares its source hash with the
 old level but isn't the same bytes.
 
-A matching hash alone doesn't prove the object is still in the bucket - the
-manifest only records what a past run *believed* it wrote, and a manual
-delete or any other out-of-band loss would otherwise read as "unchanged"
-forever. Every run also lists the bucket (scoped to this corpus's prefix and
-to `shared/`) and re-uploads any key missing from that listing regardless of
-its recorded hash.
+Every run also lists the bucket (scoped to this corpus's prefix and to
+`shared/`) and re-uploads any key missing from that listing regardless of
+its recorded hash; `diffAgainstManifest` in `lib.ts` owns that rule.
 
 The pure decision logic (which files make up a corpus upload, and which of
 those are new/changed) lives in `lib.ts`, tested without any real corpus or
-bucket in `lib.test.mjs`.
+bucket in `lib.test.ts`.
 
 ## Cache purge
 
 If the bucket is fronted by a Cloudflare zone with `enable_zone_protections`
-(see `infra/`), every object under `assets_hostname` - including
-`manifest.json` itself - is edge-cached for `cache_edge_ttl_seconds` (24h by
-default). Replacing a file under an existing key, or overwriting
-`manifest.json` in place, leaves the edge serving the old copy until that TTL
-expires. This tool purges exactly the keys it just wrote, if you set:
+(see `infra/`), every object under `assets_hostname`, including
+`manifest.json`, is edge-cached for `cache_edge_ttl_seconds`. Replacing a
+file under an existing key, or overwriting `manifest.json` in place, leaves
+the edge serving the old copy until that TTL expires. This tool purges the
+keys it just wrote, plus `crossOriginFetchedKeys` (`lib.ts`) on every run,
+if you set:
 
 ```sh
 export CLOUDFLARE_API_TOKEN=...        # needs Zone.Cache Purge on the zone below
@@ -98,27 +103,26 @@ export CLOUDFLARE_ZONE_ID=...          # the zone fronting the bucket
 export CLOUDFLARE_ASSETS_HOSTNAME=...  # matches terraform's assets_hostname
 ```
 
-All three unset skips the purge with a note - the common case for a bucket
-with no zone protections, or a purely local demo. Purges go out at most 30
-URLs per Cloudflare API call; past 1000 keys in one run, a single
-`purge_everything` call replaces the whole batch instead.
+- Any of the three unset skips the purge with a note: the case for a bucket with no
+  zone protections, or a purely local demo.
+- All three set but the purge request failing is an error, not a note.
+- Purges go out `PURGE_BATCH` URLs per Cloudflare API call. Past
+  `PURGE_ALL_THRESHOLD` keys in one run, a single `purge_everything` call
+  replaces the whole batch (both constants are in `upload-r2.ts`).
 
 A Cloudflare `purge_cache` call can return `success: true` and still not
-evict a given object - observed in practice on `metadata.json`/`tagLinks.json`
-after a real CORS-config change, confirmed stale by comparing a normal
-request against one with a cache-busting query string (which reaches the
-origin directly and proved R2 itself was already correct). Retrying the same
-by-URL purge did nothing; a `purge_everything` call for the zone, or a manual
-purge from the Cloudflare dashboard, is what actually cleared it. If a page
-still shows stale data (or CORS errors on a request that used to work) after
-this tool prints `cache purged: N key(s)`, don't assume the purge script is
-broken - check the object directly with a cache-busting query string first,
-and fall back to a dashboard purge if the API-driven one didn't take.
+evict a given object, and retrying the same by-URL purge does not help. If a
+page still shows stale data (or CORS errors) after this tool prints
+`cache purged: N key(s)`:
+
+1. Request the object with a cache-busting query string. That reaches the
+   origin directly, so it shows whether R2 itself is current.
+2. If R2 is current, purge the zone from the Cloudflare dashboard, or with a
+   `purge_everything` API call.
 
 ## Concurrency
 
-Hashing and uploading both run up to 16 files at once, through the same
-bounded-concurrency `createLimiter` used for CLIP inference
-(`packages/server/search-cache.ts`) - each file is a separate network or disk
-round trip, and running them one at a time pays full latency per file for no
-reason.
+Hashing and uploading both run several files at once, through the
+bounded-concurrency `createLimiter` from `packages/server/search-cache.ts`.
+A corpus is many small files, and running them one at a time pays full
+round-trip latency per file.

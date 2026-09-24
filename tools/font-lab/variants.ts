@@ -3,8 +3,8 @@
  *
  * Two sweeps share one shape so the renderer treats them uniformly:
  *
- *   - FONTS: each candidate face at the settings the app ships today, so the
- *     only thing that changes screen to screen is the typeface. This is the
+ *   - FONTS: each candidate face at `BASE`, so the only thing that changes
+ *     screen to screen is the typeface. This is the
  *     "which font" question.
  *   - SETTINGS: one face held fixed while the rendering knobs move - weight,
  *     halo, tracking, size, ink. This is the "having picked a font, how do we
@@ -51,9 +51,10 @@ export interface Variant extends SpineStyle {
   face: FaceRef | null;
 }
 
-// The app's current spine styling, from `center.ts`. Every variant starts
-// here and overrides a subset, so "baseline" is stated once. Per-field
-// meanings live in `SpineStyle` above.
+// The lab's reference styling. Every variant starts here and overrides a
+// subset, so "baseline" is stated once. The app's shipped styling is in
+// `center.ts`'s rendering constants and `config.center`, and differs from
+// this. Per-field meanings live in `SpineStyle`.
 export const BASE: SpineStyle = {
   weight: 400,
   style: 'normal',
@@ -82,13 +83,13 @@ export function findFont(name: string): FontEntry | undefined {
   return FONTS.find((f) => f.family.toLowerCase() === needle || f.slug.toLowerCase() === needle);
 }
 
-/** The font sweep: one composite per candidate, plus the shipping baseline. */
+/** The font sweep: one composite per candidate, plus the system-sans reference. */
 const fontSweep: Variant[] = [
   {
     id: 'baseline-system-sans',
     group: 'fonts',
-    label: 'CURRENT — system sans-serif',
-    sub: 'what the app ships today',
+    label: 'Reference: system sans-serif',
+    sub: 'the lab baseline, no webfont',
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     face: null, // no webfont; uses the OS UI face
     ...BASE,
@@ -120,7 +121,7 @@ interface SweepFont {
   bold: number;
 }
 
-// Every candidate face plus the shipping system-sans baseline, each swept in
+// Every candidate face plus the system-sans reference, each swept in
 // its own out/settings/<slug>/ group so per-font composites never clobber
 // one another.
 const settingsFonts: SweepFont[] = [
@@ -216,11 +217,10 @@ function buildSettingsSweep(sf: SweepFont): Variant[] {
       backdrop: true,
       face: face(400),
     },
-    // The size cap is a live question: the wider-book tile roughly doubled
-    // spine width, so at the baseline maxPx the title stops growing well
-    // before the 2x zoom cap - zooming in enlarges the shelf behind the text
-    // but not the text. These raise the ceiling so the title fills the wider
-    // spine and keeps growing with zoom.
+    // At `BASE`'s maxPx the title stops growing well before the 2x zoom cap,
+    // so zooming in enlarges the shelf behind the text but not the text.
+    // These raise the ceiling so the title fills the spine and keeps growing
+    // with zoom.
     {
       id: 'set-10-cap-16',
       label: `${label} — cap 16`,

@@ -7,8 +7,8 @@ tagging. These are offline curation tools that run against a working tile
 directory before it becomes (or updates) a corpus under `--images`/`assets/` -
 nothing here is imported by `packages/`.
 
-Migrated from a personal scripts repo; see `AGENTS.md` in this directory for
-the coding-agent-facing notes (layout, conventions, gotchas).
+See `AGENTS.md` in this directory for the coding-agent-facing notes
+(layout, conventions, gotchas).
 
 ## Setup
 
@@ -126,11 +126,10 @@ regardless of `--workers`, since a single-model `llama-server` can't usefully
 serve concurrent requests. Every tile's result is still written to
 `metadata.json` one at a time by a single thread as it completes, so an
 interrupted run (Ctrl+C included) loses nothing beyond whatever was still
-in flight at that moment - same guarantee as the old serial loop, just
-faster. `metadata.json` reads and writes are also now safe across
-*processes*: running two of these tools (or one alongside the GUI) against
-the same `DIR` at once no longer risks one process's save silently
-overwriting another's.
+in flight at that moment. `metadata.json` reads and writes are also safe
+across *processes*: two of these tools (or one alongside the GUI) can run
+against the same `DIR` at once without one process's save overwriting
+another's.
 
 **Story generation via Claude Code subagents (no API billing)**
 

@@ -1,12 +1,11 @@
 # File map
 
 Every tracked file in the repo, with a line or two on what it is for.
-`AGENTS.md` (see its "Layout") has agents read this at the start of a
-session; [`docs/architecture.md`](architecture.md) is the five-minute system
-overview.
+`AGENTS.md`'s "How to use this file" says when agents read it;
+[`docs/architecture.md`](architecture.md) is the five-minute system overview.
 
 - A file added, removed or renamed is not done until this map says so.
-  `npm run check:file-map` fails CI on drift; `tools/check-file-map/index.ts`'s
+  `npm run check:file-map` fails CI on drift; `tools/check-file-map/lib.ts`'s
   header has the format rules.
 - Unit tests are not listed: assume each module has a `{name}.test.ts` beside
   it. Playwright specs are in `packages/web/e2e`.
