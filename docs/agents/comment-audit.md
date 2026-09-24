@@ -12,15 +12,16 @@ audit process and its code-preservation tool live on the
 `qwen3.8-flash-comment-fix` branch, not `main`. Pull them in, do the pass,
 and remove them before committing.
 
-Fetch the branch if needed (`git fetch origin qwen3.8-flash-comment-fix`),
-then copy four files to their real paths so the plan's cross-references
-resolve:
+Fetch the branch (`git fetch origin qwen3.8-flash-comment-fix`), then copy
+four files to their real paths so the plan's cross-references resolve. A
+fresh clone has only the remote-tracking ref, so read through `origin/`:
 
 ```sh
-git show qwen3.8-flash-comment-fix:docs/comment-refactor-plan.md > docs/comment-refactor-plan.md
-git show qwen3.8-flash-comment-fix:docs/claude_critique.md > docs/claude_critique.md
-git show qwen3.8-flash-comment-fix:tools/comment-check/check.mjs > tools/comment-check/check.mjs
-git show qwen3.8-flash-comment-fix:tools/comment-check/strip.mjs > tools/comment-check/strip.mjs
+mkdir -p tools/comment-check
+git show origin/qwen3.8-flash-comment-fix:docs/comment-refactor-plan.md > docs/comment-refactor-plan.md
+git show origin/qwen3.8-flash-comment-fix:docs/claude_critique.md > docs/claude_critique.md
+git show origin/qwen3.8-flash-comment-fix:tools/comment-check/check.mjs > tools/comment-check/check.mjs
+git show origin/qwen3.8-flash-comment-fix:tools/comment-check/strip.mjs > tools/comment-check/strip.mjs
 ```
 
 - `docs/comment-refactor-plan.md` is the process: the tell-and-move table,
