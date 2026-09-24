@@ -33,6 +33,11 @@ overview.
     gitignored `.claude/cache/issues/` (`index.md` plus one file per issue).
     `.mjs` because it must run before `npm install`; its header lists the
     fetch paths.
+- `opencode.json`: OpenCode project config; loads the cached issue index as
+  an instruction file.
+- `.opencode`: OpenCode session config for this repo, not part of the app.
+  * `plugins/issue-cache.ts`: Runs `.claude/hooks/session-start.sh` at
+    OpenCode startup to refresh the issue cache.
 
 ### Build:
 - `build`: The Node-side TypeScript loader hook (see `AGENTS.md`'s
