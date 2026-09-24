@@ -1,15 +1,8 @@
-// Flat config, kept small on purpose: recommended JS/TS rules plus just enough
-// environment/JSX wiring to stop false-positive no-undef on real globals.
-// The lint pass is a required CI check (see .github/workflows/ci.yml's
-// `lint` job), so rule tuning beyond `recommended` should stay deliberate -
-// a new error-level rule needs the existing tree triaged against it first,
-// not just enabled and left to fail CI.
-//
-// typescript-eslint's `recommended` config is the non-type-checked variant
-// (no `parserOptions.project`) on purpose: `npm run typecheck` (`tsc
-// --noEmit`) already owns type correctness, so lint stays syntax-only and
-// fast - a type-checked config would need a full TS program build on every
-// lint run and would just re-report what typecheck already catches.
+// Flat config: recommended JS/TS rules plus the environment and JSX wiring
+// that keeps no-undef off real globals. Lint is a required CI check, so a new
+// error-level rule needs the existing tree triaged against it before it is
+// enabled. typescript-eslint's `recommended` is the non-type-checked variant;
+// see AGENTS.md, "Linting is syntax-only".
 import { defineConfig, globalIgnores } from 'eslint/config';
 import js from '@eslint/js';
 import globals from 'globals';
@@ -48,8 +41,8 @@ export default defineConfig([
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', UNUSED_VARS_OPTIONS],
       // The codebase leans on `any` in a few loose spots (AGENTS.md, "Loose
-      // data gets an honest type") - not worth an error-level rule the
-      // existing tree hasn't been triaged against.
+      // data gets an honest type"), and the tree hasn't been triaged
+      // against an error-level rule for it.
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
@@ -61,7 +54,6 @@ export default defineConfig([
     // React elements server-side via react-dom/server, and JSX is how the
     // components it renders are written - it never runs in a browser.
     files: [
-      'build/**/*.ts',
       'packages/config/**/*.ts',
       'packages/map/**/*.ts',
       'packages/pipeline/**/*.ts',
@@ -77,8 +69,7 @@ export default defineConfig([
     // render.ts composites variants onto the center tile via Playwright
     // Chromium, and capture.ts drives a real page over CDP - both run in
     // Node but reference document/window directly (render.ts's own DOM
-    // building, capture.ts's page.evaluate callbacks), the same case the
-    // pre-TypeScript config carved out for render.mjs.
+    // building, capture.ts's page.evaluate callbacks).
     files: ['tools/font-lab/render.ts', 'tools/perf-capture/capture.ts'],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
@@ -104,9 +95,8 @@ export default defineConfig([
     },
     // Only the two classic hook-correctness rules, not the newer React
     // Compiler rules (immutability, refs, purity, ...) bundled into
-    // `recommended` as of v7 - this codebase leans on mutable refs as a
-    // deliberate escape hatch (see useMapRenderer.ts), which those rules
-    // flag wholesale.
+    // `recommended` as of v7. The codebase uses mutable refs as an escape
+    // hatch (see useMapRenderer.ts), which those rules flag wholesale.
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',

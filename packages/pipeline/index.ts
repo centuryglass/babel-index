@@ -125,8 +125,9 @@ if (sheetSteps.length) {
 await updateMetadataHashes(imagesDir, hashes);
 console.log(`  metadata.json: ${hashes.size} content hash(es) recorded\n`);
 
-// The shared tiles - the center render and every generic/ tile - get the
-// same per-file ladder, rooted at --shared-dir instead. See shared-mips.ts.
+// The shared tiles (the center render, every generic/ tile and every
+// generic_distill/ tile) get the same per-file ladder, rooted at
+// --shared-dir. See shared-mips.ts.
 if (sharedDir) {
   console.log(`  shared tiles in ${sharedDir} ...\n`);
   const shared = await writeSharedMips({ sharedDir, center: argv.center, quality });
