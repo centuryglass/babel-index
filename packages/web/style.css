@@ -1,8 +1,7 @@
 /*
- * All of the app's CSS - the one styling authority, no CSS-in-JS, no
- * per-component files. Served as its own file (see app.ts's /style.css
- * route) rather than inlined into index.html, so it can be read and
- * tweaked without touching the bundle.
+ * All of the app's CSS: the one styling authority, with no CSS-in-JS and no
+ * per-component files. app.ts's /style.css route serves it as its own file,
+ * so it can be read and tweaked without rebuilding the bundle.
  */
 :root {
   color-scheme: dark;
@@ -15,8 +14,8 @@
     star, the faint washes behind chips and hovered controls. One value in
     two forms: --accent as a hex for solid strokes/text, --accent-rgb as the
     bare channels so a translucent wash is rgba(var(--accent-rgb), a). Tuned
-    to read on the dark chrome; on the cream paper sheets it washes out, so
-    those swap to --paper-accent (see .paper-sheet) rather than reading this.
+    to read on the dark chrome; it washes out on the cream paper sheets, so
+    those swap to --paper-accent (see .paper-sheet).
   */
   --accent: #c49654;
   --accent-rgb: 196, 150, 84;
@@ -31,9 +30,9 @@
   --hover-glow-rgb: 200, 169, 95;
   /*
     Paper: the open book's pages read as warm cream sheets with dark ink,
-    set inside the dark cover the rest of the app uses. Kept as its own
-    variable set (not the --ink/--panel palette) so it can be lifted into
-    a full light theme later without unpicking it from the book markup.
+    set inside the dark cover the rest of the app uses. A separate variable
+    set from --ink/--panel, so it can become a full light theme without
+    being unpicked from the book markup.
   */
   --paper: #ece2cb;
   --paper-rgb: 236, 226, 203;
@@ -46,12 +45,16 @@
 }
 * { box-sizing: border-box; }
 /*
- * touch-action and overscroll-behavior are set all the way up, not just on
- * the canvas. The browser decides whether a touch sequence belongs to the
- * page or to itself at touch-start, from the computed touch-action of the
- * hit element AND its ancestors; anything left claimable up the chain lets
- * it take a two-finger gesture for page zoom and send us a pointercancel
- * instead of the pinch.
+ * touch-action and overscroll-behavior are set on every ancestor of the
+ * canvas, not only the canvas.
+ * - The browser decides at touch-start whether a gesture is its own, from
+ *   the intersection of the touch-action of the hit element and all its
+ *   ancestors.
+ * - Anything left claimable up the chain lets it take a two-finger gesture
+ *   as page zoom and send a pointercancel instead of the pinch.
+ * - Because it is an intersection, a descendant can only restrict it
+ *   further, never re-enable it; the `:has()` rule below relaxes the chain
+ *   itself.
  */
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #110302;
@@ -60,52 +63,36 @@ html, body {
 body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
 #root, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 /*
- * The clip is load-bearing on a phone, not tidiness. The center tile's DOM
- * overlays (`.center-search`, `.center-books`, `.center-book`,
- * `.center-controls`) are absolutely positioned over the WHOLE center cell,
- * which at reading zoom is several screens wide, and #root is their
- * containing block - so without a clip here that box is document content
- * sticking out past the viewport. `html`/`body`'s `overflow: hidden` never
- * reaches it: neither is in the containing-block chain of an absolutely
- * positioned descendant of a positioned #root. A mobile browser then reads
- * the page as wider and taller than the screen and responds by dropping the
- * page scale to fit and growing the LAYOUT viewport to match - which is what
- * `position: fixed` resolves against, so every dialog's `.overlay-scrim`
- * starts covering a box several times the screen (the dialog lands mostly
- * off it, and its close button has to be panned to) and the map paints at a
- * fraction of its size once the dialog closes.
- *
- * `clip`, not `hidden`: `hidden` would make #root a scroll container, and
- * then focusing a shelf book that is off screen (the shelf's roving
- * tabindex) scrolls the whole app - canvas included - sideways under the
- * reader. A browser too old to know `clip` drops the declaration and is left
- * exactly where it was, which is the right way to fail here.
+ * #root clips the center cell's DOM overlays, which would otherwise grow
+ * the page on a phone (docs/agents/map.md, "The center cell's DOM overlays
+ * are sized to the whole cell").
+ * - `html`/`body`'s `overflow: hidden` does not reach those overlays: #root
+ *   is positioned, so it is their containing block.
+ * - Unclipped, a mobile browser grows the layout viewport to fit them. Every
+ *   `position: fixed` `.overlay-scrim` then covers several screens, and the
+ *   map paints small once a dialog closes.
+ * - `clip`, not `hidden`: `hidden` makes #root a scroll container, and
+ *   focusing an off-screen shelf book (roving tabindex) then scrolls the
+ *   whole app sideways.
+ * - A browser without `clip` drops the declaration, which fails safe.
  */
 #root { touch-action: none; overflow: clip; }
 canvas { display: block; cursor: grab; touch-action: none; }
 canvas.dragging { cursor: grabbing; }
 /*
-  touch-action only ever restricts, never re-enables: `:has()` relaxes the
-  whole chain to `pan-y` exactly while one of those is mounted
-  (`.overlay-scrim` is shared by RoomOverlay, HelpDialog, BookOverlay, so
-  this one rule covers every dialog's own vertical scrolling), leaving the
-  map's own gesture handling untouched at every other time. The descendant's
-  relaxed value cannot undo the `none` at `html`/`body`/`#root` because
-  touch-action uses the intersection of every ancestor's used value up the tree.
+  While a dialog or the catalog is mounted, the whole chain relaxes to
+  `pan-y` so their regions can scroll vertically. `.overlay-scrim` is shared
+  by every dialog, so this one rule covers them all; the map's gestures are
+  untouched otherwise.
 
-  `pan-y`, not `auto`: neither a dialog nor the catalog needs the browser's
-  own pinch-zoom or horizontal pan, only their own vertical scroll region.
-  Letting native page zoom happen at all - even scoped to a single dialog -
-  left the rest of the document (the map canvas, its search badge, all
-  fixed-size and absolutely positioned) visibly detached the moment the
-  reader also panned, and a later attempt to toggle native zoom on
-  per-dialog and reset it at each boundary found Firefox Mobile doesn't
-  reliably discard a leftover native zoom/pan once a dialog closes, even
-  when the reset mutates the viewport meta directly. The fix in both cases
-  is the same: never grant native zoom permission at the document level,
-  and give any content that needs magnifying a scoped zoom instead
-  (`.zoom-scope` below, `useContentZoom.ts`) that never leaves its own
-  element.
+  `pan-y`, not `auto`: native page zoom must never be granted at the
+  document level.
+  - Native zoom inside a dialog detaches the fixed and absolutely positioned
+    map chrome from the page as soon as the reader also pans.
+  - Firefox Mobile does not reliably discard a leftover native zoom once a
+    dialog closes, even when the viewport meta is reset.
+  Content that needs magnifying gets a scoped zoom instead (`.zoom-scope`,
+  `useContentZoom.ts`).
 */
 html:has(.overlay-scrim, .catalog),
 body:has(.overlay-scrim, .catalog),
@@ -113,33 +100,25 @@ body:has(.overlay-scrim, .catalog),
   touch-action: pan-y;
 }
 /*
-  Shared scoped pinch-zoom surface - a room overlay's tile-and-story
-  together, a help/book dialog's page, the catalog list. `transform-origin:
-  0 0` is load-bearing, not a style choice: the anchor-preserving zoom math
-  in `contentZoomCamera.ts` assumes it. `pan-y` at rest lets a single-finger
-  drag scroll the region beneath it exactly as it always could, right up
-  until the reader actually zooms in (`.zoomed`, `touch-action: none`),
-  where the same drag instead pans the zoomed content.
+  The shared scoped pinch-zoom surface: a room overlay's tile and story
+  together, a help or book dialog's page, the catalog list.
+  - `transform-origin: 0 0` is required by the anchor-preserving zoom math
+    in `contentZoomCamera.ts`.
+  - At rest, `pan-y` lets a one-finger drag scroll the region. Once zoomed
+    (`.zoomed`, `touch-action: none`), the same drag pans the content.
 */
 .zoom-scope { transform-origin: 0 0; touch-action: pan-y; }
 .zoom-scope.zoomed { touch-action: none; }
 
 /*
- * The live search field, anchored to the center tile's traced search
- * box. `main.tsx` drives display/left/top/width/height imperatively
- * from the render loop each frame - `display: none` here is only the
- * pre-first-frame default, never re-asserted by React.
- */
-/*
- * pointer-events: none until focused. Without this, the field is a real
- * DOM element sitting over the canvas by z-order alone, so a pan or
- * pinch whose fingers happen to cross its screen rect at a moment it is
- * visible gets eaten by the input instead of reaching the map - even
- * though nobody meant to touch a text field. It is reachable at all
- * because `goToSearch`'s `.focus()` call is a DOM API, not a pointer
- * event, so pointer-events does not block it; `:focus-within` then
- * opens the field back up so a reader can click inside it to place a
- * cursor once they are actually typing.
+ * The live search field, anchored to the center tile's traced search box.
+ * - The render loop (useMapRenderer.ts, useMapRendererGL.ts) sets display,
+ *   left, top, width and height every frame. `display: none` here is only
+ *   the default before the first frame.
+ * - `pointer-events: none` until focused, so a pan or pinch that crosses
+ *   the field reaches the map instead of the input. `goToSearch`'s
+ *   `.focus()` is not a pointer event, so it still works; `:focus-within`
+ *   then lets the reader click to place a cursor.
  */
 .center-search {
   position: absolute; display: none; margin: 0; padding: 0; border: none;
@@ -147,10 +126,9 @@ body:has(.overlay-scrim, .catalog),
 }
 .center-search:focus-within { pointer-events: auto; }
 /*
-  Paper, not dark chrome - the field sits over a brass panel traced into the
-  tile art, and a cream plate reads as something set into that panel rather
-  than a UI overlay floating on top of it. `--paper-rgb` at less than full
-  opacity lets a hint of the brass show through at the edges.
+  Paper, not dark chrome: the field sits over a brass panel traced into the
+  tile art, and a cream plate reads as set into that panel. `--paper-rgb`
+  below full opacity lets a hint of the brass show at the edges.
 */
 .center-search input[type="search"] {
   width: 100%; height: 100%; padding: 0 26px 0 10px; text-align: center;
@@ -176,21 +154,15 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 
 /*
  * The shelf's book buttons, over the center tile's painted spines.
- *
- * Transparent by design: the title is already drawn on the canvas, so a
- * button that painted its own would double it. What these add is
- * everything the pixels cannot have - a name, a focus ring, an activate.
- *
- * pointer-events: none, and unlike `.center-search` there is no
- * `:focus-within` escape hatch: a click on a book already reaches the
- * same `onBook` through the canvas's own tap handling, so opening these
- * up to the pointer would only take gestures away from the map for no
- * behaviour that is not already there.
- *
- * The `button` overrides are against the panel's button styling above,
- * which is a filled, padded, flexed control - none of which belongs on a
- * one-spine-wide sliver. The ring's offset comes in from 2px for the
- * same reason: at a spine's width, 2px reaches across its neighbours.
+ * - Transparent: the canvas already draws each title. The buttons add what
+ *   pixels cannot have: a name, a focus ring, activation.
+ * - `pointer-events: none`, with no `:focus-within` exception: a click
+ *   already reaches `onBook` through the canvas's tap handling, so taking
+ *   the pointer here would only steal gestures from the map.
+ * - The overrides undo the global `button` rule's fill, padding and flex,
+ *   none of which fits a one-spine-wide sliver. The focus ring's offset
+ *   shrinks from 2px for the same reason: at a spine's width, 2px reaches
+ *   across its neighbours.
  */
 .center-books { position: absolute; display: none; pointer-events: none; }
 .center-books button {
@@ -200,11 +172,10 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .center-books button:hover { background: none; }
 .center-books button:focus-visible { outline-offset: 1px; }
 /*
-  The one-time nudge toward the help book (`showHelpHint`, main.tsx) - a
-  soft pulse rather than anything that steals focus or blocks input, so
-  a reader who ignores it loses nothing. Turned off entirely rather than
-  held static under reduced motion: a book that never stops glowing
-  reads as broken, not as a hint.
+  The one-time nudge toward the help book (`showHelpHint`, main.tsx): a
+  soft pulse that neither steals focus nor blocks input. Under reduced
+  motion it is turned off entirely, since a book that glows without
+  stopping reads as broken.
 */
 .center-books button.hint { animation: book-hint 1.8s ease-in-out infinite; }
 @keyframes book-hint {
@@ -213,19 +184,16 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 
 /*
- * The open book's hotspot - sized over the WHOLE cell like
- * `.center-books`, not its own box; the highlight is the traced SVG
- * path inside it (`CENTER_BOOK_PATH`), stretched per axis by
- * `viewBox="0 0 1 1"` + `preserveAspectRatio="none"` exactly like the
- * tile image itself, so the highlight is the exact silhouette rather
- * than a rectangle that laps onto the spines either side of it.
- * Positioned and shown/hidden by the same render loop as
- * `.center-books` and for the same reason `pointer-events: none`: a
- * real click already reaches `onTap` -> `centerBookAtPoint` through the
- * canvas, so opening this up to the pointer would only take a gesture
- * away from the map. The `.hover` class is toggled by that render
- * loop's own pointermove listener (useMapRenderer.ts) rather than by
- * CSS `:hover`, which never fires on a `pointer-events: none` element.
+ * The open book's hotspot, sized over the whole cell like `.center-books`.
+ * - The highlight is the traced SVG path inside it (`CENTER_BOOK_PATH`),
+ *   stretched per axis by `viewBox="0 0 1 1"` and
+ *   `preserveAspectRatio="none"` like the tile image, so it matches the
+ *   book's silhouette instead of lapping onto neighbouring spines.
+ * - The render loop positions and shows it. `pointer-events: none` for the
+ *   same reason as `.center-books`: a click reaches `onTap` ->
+ *   `centerBookAtPoint` through the canvas.
+ * - `.hover` is toggled by the render loop's pointermove listener, since
+ *   CSS `:hover` never fires on a `pointer-events: none` element.
  */
 .center-book {
   position: absolute; display: none; margin: 0; padding: 0; border: none;
@@ -237,17 +205,15 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .center-book:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /*
- * The favorites-sort switch and reorder button - one container over
- * the whole cell exactly like `.center-books`, its buttons positioned
- * in percentages from their own traced rects. `pointer-events: none`
- * for the same reason as the shelf: a real click already reaches
- * `onTap` -> `shuffleButtonAtPoint`/`mineToggleAtPoint`/
- * `countToggleAtPoint` through the canvas. The `.hover` class is
- * toggled by the render loop's own pointermove listener
- * (useMapRenderer.ts), same as `.center-book` above, rather than by CSS
- * `:hover`, which never fires on a `pointer-events: none` element -
- * the glow itself is a plain background tint since these buttons paint
- * no text of their own to protect.
+ * The favorites-sort switch and reorder button: one container over the
+ * whole cell like `.center-books`, each button placed in percentages from
+ * its traced rect.
+ * - `pointer-events: none`: a click reaches `onTap` ->
+ *   `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
+ *   through the canvas.
+ * - `.hover` comes from the render loop's pointermove listener, as on
+ *   `.center-book`. The glow is a plain background tint, since these
+ *   buttons have no text to protect.
  */
 .center-controls { position: absolute; display: none; pointer-events: none; }
 .center-controls button {
@@ -258,12 +224,10 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),0.75); }
 .center-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /*
- * A custom tooltip, not the native `title` popup: the button it is
- * inside has `pointer-events: none` (inherited from `.center-controls`),
- * so a real `mouseover` never reaches it and `title` alone would never
- * show. Shown on the same `.hover` class the render loop's pointermove
- * listener already toggles (useMapRenderer.ts), and on `:focus-visible`
- * so tabbing to the control shows it too, not just a mouse.
+ * A custom tooltip, not the native `title` popup, which never shows: the
+ * button has `pointer-events: none` from `.center-controls`, so no
+ * `mouseover` reaches it. Shown on the render loop's `.hover` class and on
+ * `:focus-visible`, so keyboard focus shows it too.
  */
 .center-controls .control-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
@@ -278,14 +242,12 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 
 /*
- * The on-tile favorite badge's tooltip - `.control-tooltip` above sits
- * inside the one fixed button it labels, but a badge is painted onto
- * EVERY tile on the canvas and has no per-tile DOM button to anchor
- * one to. One floating element instead, positioned at the pointer by
- * the render loop's own `pointermove` listener (useMapRenderer.ts,
- * alongside `hoveredFavorite`) rather than tied to any element's box.
- * `display: none` is the hidden default; the listener sets `block`
- * only while the pointer is over a badge's traced silhouette.
+ * The on-tile favorite badge's tooltip: one floating element, since a badge
+ * is painted onto every tile and has no DOM button to anchor to.
+ * - The render loop's pointermove listener positions it at the pointer
+ *   (alongside `hoveredFavorite`).
+ * - `display: none` is the default; the listener sets `block` only while
+ *   the pointer is over a badge's traced silhouette.
  */
 .favorite-tooltip {
   position: absolute; display: none; pointer-events: none; z-index: 2;
@@ -296,11 +258,11 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 
 /*
- * The distill toggle's tooltip - same one-floating-element treatment as
- * `.favorite-tooltip` above, and for the same reason: the toggle is
- * canvas-painted onto the center tile's corner and has no per-element
- * box of its own to anchor one to.
+ * The distill toggle's tooltip, one floating element like
+ * `.favorite-tooltip`: the toggle is painted onto the center tile's corner
+ * and has no element box to anchor to.
  */
+
 .distill-tooltip {
   position: absolute; display: none; pointer-events: none; z-index: 2;
   transform: translate(-50%, -100%); margin-top: -8px;
@@ -327,16 +289,12 @@ input[type="search"] {
 }
 input[type="search"]:focus { border-color: var(--accent); }
 /*
- * One focus ring for everything, and it must stay visible. The search
- * fields used to say `outline: none` and lean on a border-colour shift
- * instead - a one-pixel hue change is not an indicator, and it is the
- * kind that disappears entirely against the panel at low contrast. The
- * offset is what keeps the ring off the control's own border so the two
- * do not read as one thicker edge.
- *
- * `:focus-visible` rather than `:focus` so a mouse click on a button does
- * not leave a ring behind, which is the reason `outline: none` gets
- * reached for in the first place.
+ * One focus ring for everything, and it must stay visible. A border-colour
+ * shift alone is not an indicator: at low contrast it disappears against
+ * the panel.
+ * - The offset keeps the ring off the control's border, so the two do not
+ *   read as one thicker edge.
+ * - `:focus-visible`, not `:focus`, so a mouse click leaves no ring behind.
  */
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -379,11 +337,11 @@ input[type="search"]:focus { border-color: var(--accent); }
 
 .buttons { display: flex; gap: 7px; }
 /*
-  `flex: 1` here is for the dev panel's button ROWS, where the buttons
-  share the width evenly - but this selector is every button in the
-  document, so anything else that puts buttons in a flex container gets it
-  too. That is the same trap `.row` was; the catalog opts out explicitly
-  below rather than this being narrowed under the panel it was written for.
+  `flex: 1` is for the dev panel's button rows, where buttons share the
+  width evenly, but this selector matches every button in the document.
+  Any other button in a flex container stretches unless it opts out, as
+  the catalog's controls do (docs/agents/catalog.md, "Namespace catalog
+  CSS").
 */
 button {
   flex: 1; padding: 6px 8px; background: rgba(var(--accent-rgb),0.12); color: var(--ink);
@@ -392,11 +350,9 @@ button {
 button:hover { background: rgba(var(--accent-rgb),0.24); }
 .search-trigger { width: 100%; }
 /*
-  The map's own search affordance - not part of the panel, so it has to
-  exist and be positioned without one. Same corner the panel used to put
-  its trigger in (top-left), but a standalone circular badge rather than
-  a full-width panel row, which is why this comes after `.search-trigger`
-  and overrides its `width: 100%`.
+  The map's search affordance: a standalone circular badge in the top-left
+  corner, positioned without the panel. It must come after
+  `.search-trigger`, whose `width: 100%` it overrides.
 */
 .search-icon-button {
   position: absolute; top: 16px; left: 16px; width: 56px; height: 56px; z-index: 1;
@@ -416,22 +372,19 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 }
 .search-icon-glyph svg, .search-icon-arrow svg { display: block; width: 100%; height: 100%; }
 /*
-  The arrow is a separate layer over the same badge, rotated around the
-  badge's own center rather than baked into a single traced shape - see
-  `SearchIcon.tsx`. `useMapRenderer` writes its `transform` every frame
-  from the live camera, so it always points at wherever the center tile
-  currently is on screen; no default rotation here to fight that.
+  The arrow is a separate layer over the badge, rotated around the badge's
+  center (see `SearchIcon.tsx`). The render loop writes its `transform`
+  every frame from the live camera so it points at the center tile, so no
+  default rotation belongs here.
 */
 .search-icon-arrow { transform-origin: 50% 50%; }
 /*
-  The far-field loading affordance - a ring around the badge, shown while a
-  rearrangement's preload is running regardless of whether the center-tile
-  indicator is also visible (`main.tsx`'s `preparingRearrangement`, unlike
-  `hasLoadingAnimation`/`showLoading`, is never gated on the center book
-  being on screen - see `docs/pending_task_list.md`'s "Loading indicator"
-  entry). A dashed border rather than a solid one with a gap cut into it, so
-  the ring reads as motion rather than as a broken circle when the spin is
-  disabled below.
+  The far-field loading affordance: a ring around the badge while a
+  rearrangement's preload runs (`main.tsx`'s `preparingRearrangement`).
+  Unlike the center-tile indicator (`useRearrangement.ts`'s `showLoading`),
+  it is not gated on the center book being on screen. The border is dashed,
+  not a solid ring with a gap, so it still reads as motion when reduced
+  motion stops the spin.
 */
 .search-icon-spinner {
   position: absolute; inset: -6px; border-radius: 50%; pointer-events: none;
@@ -471,21 +424,18 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
   flex: none;
   /*
-    A zoomed `.zoom-scope` sibling further down in the same `.overlay` (its
-    scale grows the element visually without reserving extra layout space)
-    can otherwise paint over the head and swallow clicks meant for its own
-    buttons - `.overlay`'s own `overflow-y: auto` only clips at ITS
-    boundary, not between siblings inside it. Kept above every zoom-scope
-    sibling regardless of DOM order.
+    Stacked above every `.zoom-scope` sibling. A zoomed scope grows visually
+    without reserving layout space, so it can otherwise paint over the head
+    and swallow clicks on its buttons; `.overlay`'s `overflow-y: auto` clips
+    only at the overlay's boundary, not between siblings.
   */
   position: relative; z-index: 1;
 }
 /*
-  The card head sits on the dialog's dark cover, same as the catalog bar
-  sits on the dark backdrop - light-on-dark, like `.favorite-toggle`/
-  `.catalog-show` elsewhere. A paper fill was tried here and pulled the
-  eye toward the frame instead of whatever it frames - a tile and story
-  in `RoomOverlay`, the prose itself in the other three.
+  The card head sits on the dialog's dark cover, as the catalog bar sits on
+  the dark backdrop, so it is light-on-dark like `.favorite-toggle` and
+  `.catalog-show`. A paper fill here pulls the eye to the frame instead of
+  what it frames.
 */
 .card-id {
   padding: 2px 6px; color: var(--dim); font-size: 10px;
@@ -500,10 +450,9 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 }
 .card-close:hover { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
 /*
-  The non-pinch path to the same `useContentZoom` scope a dialog or the
-  catalog carries - native browser zoom is deliberately not offered as a
-  fallback (see the touch-action doc comment above), so a mouse-and-
-  keyboard reader needs a real control here, not just a gesture.
+  The non-pinch path to a dialog's or the catalog's `useContentZoom` scope.
+  Native browser zoom is never granted (see the `html:has(.overlay-scrim,
+  .catalog)` rule), so a mouse-and-keyboard reader needs a control here.
 */
 .zoom-controls { display: inline-flex; flex: none; gap: 4px; }
 .zoom-controls button {
@@ -539,13 +488,10 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
   .room-head .catalog-show-full { display: none; }
   .room-head .catalog-show-short { display: inline; }
   /*
-    `.card-head` is shared by RoomOverlay, HelpDialog and BookOverlay (the
-    artist's statement, the Babel book), so this one rule drops the zoom
-    buttons everywhere a narrow display has no room for them beside the
-    title/counter and the close button. Pinch-to-zoom itself
-    (useContentZoom.ts) still works regardless - only the button path a
-    mouse/keyboard reader would use is gone, and a narrow viewport is
-    overwhelmingly a touch one anyway.
+    Drops the zoom buttons from every dialog's `.card-head` on a narrow
+    display, which has no room for them beside the title and close button.
+    Pinch-to-zoom (useContentZoom.ts) still works, and a narrow viewport is
+    almost always a touch one.
   */
   .card-head .zoom-controls { display: none; }
 }
@@ -559,13 +505,11 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 .favorite-toggle.on { color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
 .favorite-count { font-variant-numeric: tabular-nums; }
 /*
-  The title and the favorite count are one fact about the room (what it is,
-  how loved it is), not two separate controls, so they share one chip
-  instead of each carrying its own button chrome - a rectangle and a pill
-  side by side read as two buttons, and the title isn't one (it does
-  nothing on click). The favorite toggle nested inside keeps its own hit
-  target and hover/on color, just without a second background/border -
-  `.card-id`'s own chip is stripped out here for the same reason.
+  The title and the favorite count share one chip: they are one fact about
+  the room, and a rectangle beside a pill reads as two buttons when the
+  title is not one. The nested `.card-id` and favorite toggle lose their
+  own background and border; the toggle keeps its hit target and hover/on
+  colour.
 */
 .room-id {
   display: flex; align-items: center; gap: 6px; min-width: 0;
@@ -591,13 +535,11 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 .room-id .favorite-toggle:hover { background: none; }
 .room-id .favorite-toggle.on { background: none; }
 /*
-  Sized to its own text, like every other catalog-bar control - the
-  panel's `button { flex: 1 }` would otherwise stretch the select across
-  the row. The label and the select share ONE paper pill rather than each
-  getting its own - two adjacent boxes of the same weight read as two
-  separate buttons and broke the "this text names that control" pairing;
-  a control (something with a real interactive element inside) gets the
-  rounded button-style chrome, same radius as the buttons beside it.
+  Sized to its text, like every other catalog-bar control, against the
+  global `button { flex: 1 }`. The label and the select share one pill, so
+  the text reads as naming the control; two boxes of the same weight read
+  as two buttons. Being a control, it gets the button chrome and radius of
+  its neighbours.
 */
 .catalog-sort {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
@@ -653,11 +595,10 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 .chip-link:hover { background: rgba(var(--accent-rgb),0.3); border-color: var(--accent); color: var(--ink); }
 .story { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
 /*
-  A match, marked where it matched. Deliberately a wash of the accent
-  rather than a block fill: a story with six hits in it should still read
-  as prose, and a solid highlight turns it into a ransom note. `<mark>`'s
-  UA default is a yellow block on black text, which is unreadable on this
-  palette, so both colours are restated.
+  A match, marked where it matched, as a wash of the accent: a story with
+  many hits should still read as prose, which a solid block fill prevents.
+  `<mark>`'s UA default of yellow on black is unreadable on this palette,
+  so both colours are restated.
 */
 mark {
   background: rgba(var(--accent-rgb),0.26); color: var(--ink);
@@ -677,20 +618,18 @@ mark {
 .score .score-composite { color: var(--ink); font-weight: 500; }
 .clip-strength { color: var(--dim); }
 /*
-  Set apart from the sum above it on purpose: every row in that sum is
-  relative to this query's corpus, and this one is measured against
-  absolute bounds. Reading it as another term would be reading it wrong.
+  Set apart from the score's sum: every row in the sum is relative to this
+  query's corpus, and this one is measured against absolute bounds, so it
+  is not another term.
 */
 .score .sure th, .score .sure td { color: var(--dim); font-style: italic; }
 .forget { width: 100%; }
 
 /*
-  The map's wrapper. `display: contents` generates no box at all, so the
-  canvas and the two center-tile overlays keep positioning against #root
-  exactly as they did before there was a wrapper - wrapping must cost
-  nothing, or every imperative rect in the render loop shifts. `[hidden]`
-  has to be restated because the class would otherwise win on specificity
-  over the UA's `[hidden] { display: none }`.
+  The map's wrapper. `display: contents` generates no box, so the canvas and
+  the center-tile overlays position against #root; a box here would shift
+  every rect the render loop sets. `[hidden]` is restated because the class
+  otherwise outranks the UA's `[hidden] { display: none }`.
 */
 .map-view { display: contents; }
 .map-view[hidden] { display: none; }
@@ -709,9 +648,9 @@ mark {
   animation: catalog-in 240ms ease both;
 }
 /*
-  The cross-fade half of the transition. The FLIP on the first row's
-  thumbnail is driven from `main.tsx`; this is what the rest of the list
-  does, and it is what the whole transition degrades to when the center
+  The cross-fade half of the map-to-catalog transition; `useModeTransition.ts`
+  runs the FLIP on the first row's thumbnail. The rest of the list only
+  fades, and the whole transition falls back to this fade when the center
   tile was off screen.
 */
 @keyframes catalog-in { from { opacity: 0; } to { opacity: 1; } }
@@ -728,10 +667,10 @@ mark {
 }
 .catalog-bar-row { display: flex; gap: 10px; align-items: center; }
 /*
-  The bar names the query IN FULL - the shelf link that repeats it is
-  ellipsised to a column, so this is where a reader confirms what was
-  actually searched for. Bounded by `search.maxQueryLength`, and allowed
-  to wrap rather than to push the paging control off the edge.
+  The bar's count names the query in full: the shelf link that repeats it
+  is ellipsised, so this is where a reader confirms what was searched. The
+  query is bounded by `search.maxQueryLength`, and the row wraps rather
+  than push the paging control off the edge.
 */
 .catalog-bar-row.sub { flex-wrap: wrap; align-items: center; }
 .catalog-count { overflow-wrap: anywhere; }
@@ -744,13 +683,10 @@ mark {
 .catalog-search input[type="search"]:focus { border-color: var(--paper-accent); outline: none; }
 .catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
 /*
-  A short text label, not a button: fit to its own text rather than
-  claiming a 16em basis, squared and lightly padded (not the buttons'
-  rounder, roomier chrome) so it reads as a caption set on the dark bar
-  rather than something pressable. `margin-right: auto` is what actually
-  pushes the sort/paging group to the right of the row - the previous
-  16em flex-grow basis did that as a side effect, and losing it without
-  this took the alignment with it.
+  A text label, not a button: fit to its text, squared and lightly padded,
+  so it reads as a caption on the dark bar rather than something pressable.
+  `margin-right: auto` pushes the sort and paging group to the row's right
+  end.
 */
 .catalog-count {
   flex: 0 1 auto; margin: 0 auto 0 0; padding: 2px 6px; overflow-wrap: anywhere;
@@ -786,18 +722,15 @@ mark {
 
 .paging { display: flex; gap: 4px; }
 /*
-  Sized to their own text, against the global `button { flex: 1 }` above -
-  which stretched the pager's two buttons across half the window each and
-  the top bar's toggle across everything the search box left.
+  Sized to their text, against the global `button { flex: 1 }`, which
+  would stretch the pager's buttons and the top bar's toggle across the row.
 */
 .catalog .mode-toggle, .paging button, .pager button { flex: 0 0 auto; }
 /*
-  Light-on-dark, like `.card-id`/`.card-close` in a dialog head (see git
-  history for the paper-chrome version this replaced) - these three sit
-  directly on the dark bar/backdrop, same as that chrome does on a dialog's
-  dark cover. `.catalog-show` is excluded - it lives inside a room row's
-  `.paper-sheet` card already and keeps the gold-wash-over-cream look that
-  gets it for free (see the rule below it).
+  Light-on-dark, like `.card-id` and `.card-close` in a dialog head: these
+  sit directly on the dark bar and backdrop. `.catalog-show` is styled
+  separately; it sits inside a room row's `.paper-sheet` card and keeps a
+  gold wash over the cream.
 */
 .paging button, .mode-toggle, .pager button {
   font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
@@ -817,11 +750,12 @@ mark {
   border-radius: 4px; padding: 4px 9px;
 }
 /*
-  The panel's `.forget { width: 100% }` is sized for its own block-layout
-  `.buttons` row; the catalog bar is flex, so it needs the same
-  sized-to-its-own-text override as `.mode-toggle` above or it stretches
-  across the row and shoves the toggle onto the next line.
+  The panel's `.forget { width: 100% }` suits its block-layout `.buttons`
+  row. The catalog bar is flex, so it needs the same sized-to-text override
+  as `.mode-toggle`, or it stretches and pushes the toggle onto the next
+  line.
 */
+
 .catalog .forget {
   width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--ink);
   cursor: pointer; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
@@ -833,19 +767,14 @@ mark {
 .catalog-list { list-style: none; margin: 0; padding: 0; }
 
 /*
-  Every row is exactly `--catalog-row` tall, and that is load-bearing
-  rather than cosmetic: the spacers standing in for unmounted pages are
-  computed from it, so a row that grew with its story would make them a
-  guess and the scroll position would jump on every recycle. The story is
-  clamped to fit; the whole of it is in the room card.
-*/
-/*
-  Namespaced, and that is not tidiness: the dev panel has had a `.row`
-  class since before this file did, and an unprefixed rule here reached
-  into it and turned every slider row into a flex box of fixed height.
-  Shared classes are the ones that are shared ON PURPOSE - `.chips`,
-  `.story`, `.score` all come from RoomDetails and must look the same in a
-  card and in a row.
+  Every row is `--catalog-row` tall.
+  - The spacers standing in for unmounted pages are computed from that
+    height, so a row that grew with its story would make the scroll
+    position jump on every recycle. The story is clamped to fit; the room
+    card holds all of it.
+  - Prefixed `.catalog-` so no rule here reaches the dev panel's `.row`
+    (docs/agents/catalog.md, "Namespace catalog CSS"). `.chips`, `.story`
+    and `.score` come from RoomDetails and are shared by design.
 */
 .catalog-row {
   display: flex; gap: 14px; align-items: flex-start;
@@ -853,11 +782,10 @@ mark {
   overflow: hidden;
 }
 /*
-  A room's thumbnail floats INSIDE its card, so the story's line boxes shrink
-  beside the picture and then run the card's full width once past its bottom
-  edge. Sized as two rigid columns they cannot do that, and a phone's row is
-  then mostly dark background under a small tile: the text column's fixed
-  needs set the height and the picture has no way to grow into it.
+  A room's thumbnail floats inside its card, so the story's line boxes
+  shrink beside the picture and run the card's full width below it. Two
+  rigid columns cannot do that: on a phone the text column sets the height
+  and the row is mostly dark background under a small tile.
 
   `.catalog-head` and `.chips` are flex containers, so each establishes its own
   formatting context and sits beside the float rather than running under it -
@@ -866,14 +794,11 @@ mark {
 .catalog-row .catalog-tile-button { float: left; margin: 0 16px 8px 0; }
 /*
   Each room rides on a cream sheet (`.paper-sheet`), so the list reads as a
-  stack of cards floating on the dark gaps between rows rather than one
-  continuous scroll - the divider that used to separate rows is gone, the
-  row's own vertical padding is the gap. The picture sits ON the sheet, like a
-  plate on a printed page, because it floats inside it for the text to wrap
-  around. `.paper-sheet`'s reading-dialog padding is trimmed to a row's scale
-  here, and that inset is priced into `CatalogView`'s `CARD_PAD` so the fixed
-  row height still holds - the card cannot clip its own score strip or "read
-  the rest" button.
+  stack of cards on the dark gaps between rows; the row's vertical padding
+  is the gap. The picture sits on the sheet, like a plate on a printed page.
+  `.paper-sheet`'s dialog padding is trimmed to a row's scale here, and
+  `CatalogView`'s `CARD_PAD` must match it, or the fixed row height clips
+  the card's score strip and "read the rest" button.
 */
 .catalog-row .catalog-body.paper-sheet { padding: 12px 16px; }
 /*
@@ -892,12 +817,10 @@ mark {
 .catalog-body.paper-sheet .catalog-more { color: var(--paper-accent); }
 .catalog-body.paper-sheet .clip-strength { color: var(--paper-dim); }
 /*
-  "Show in the catalog" (`RoomOverlay`'s view toggle) lands a reader on a
-  row that otherwise looks like any other - this is what actually picks
-  it out. A background pulse rather than a border: a border shifts
-  layout by its own width unless every row reserves it unused, and this
-  is transient by design (`SPOTLIGHT_MS`, `CatalogView.tsx`) rather than
-  a standing marker that would want a permanent outline.
+  Picks out the row "Show in the catalog" (`RoomOverlay`'s view toggle)
+  lands on. A background pulse, not a border: a border shifts layout unless
+  every row reserves it, and the marker is transient (`SPOTLIGHT_MS`,
+  `CatalogView.tsx`).
 */
 .catalog-row.spotlight { animation: catalog-spotlight 1.6s ease-out; }
 @keyframes catalog-spotlight {
@@ -905,20 +828,15 @@ mark {
   100% { background: transparent; }
 }
 /*
-  The tile is a BUTTON - pressing it enlarges the room. A bare <img> with a
-  click handler is unreachable by keyboard and announces as an image
-  rather than as a control.
-*/
-/*
-  A thin cream mat around every thumbnail - a border rather than padding, so
-  it sits OUTSIDE the containing block absolutely-positioned overlays (the
-  center row's open-book hotspot, the distill toggle) measure against; both
-  keep working unmoved because their coordinate origin is still the image's
-  own edge, not the mat's outer one. `--catalog-mat` (`MAT_PAD`,
-  CatalogView.tsx) is priced into the row height exactly like `CARD_PAD` is for
-  the text card, so the card still matches the mat's full height rather than
-  just the image inside it, and the black gap between rows never widens -
-  the mat lives inside the row's existing height, not added to it.
+  The tile is a button that enlarges the room. A bare <img> with a click
+  handler is unreachable by keyboard and announces as an image.
+
+  The thin cream mat around every thumbnail is a border, not padding, so it
+  sits outside the containing block that the center row's open-book hotspot
+  and distill toggle measure against; their origin stays the image's edge.
+  `--catalog-mat` (`MAT_PAD`, CatalogView.tsx) is counted in the row height
+  like `CARD_PAD`, so the card matches the mat's full height and the gap
+  between rows does not widen.
 */
 .catalog-tile-button {
   flex: 0 0 auto; padding: 0; background: var(--paper);
@@ -927,10 +845,10 @@ mark {
 }
 /*
   The same plate-on-a-page framing the room overlay's tile gets
-  (`.overlay-tile`): the cream mat above, then a hairline edge and a soft drop
-  shadow. Drawn with `box-shadow` rather than more border/padding so it adds no
-  layout space - the row height and the hotspot insets still measure against
-  the mat's own edge, unchanged.
+  (`.overlay-tile`): the cream mat, then a hairline edge and a soft drop
+  shadow. `box-shadow`, not more border or padding, so it adds no layout
+  space: the row height and the hotspot insets still measure against the
+  mat's edge.
 */
 .catalog-tile-button, .catalog-tile-wrap {
   box-shadow: 0 0 0 1px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
@@ -939,24 +857,22 @@ mark {
   The one divider between the picture and the wrapping story, mirroring the
   room overlay's split-column rule (`.overlay-columns.columns .overlay-body`'s
   `border-left`). The thumbnail floats, so this is a vertical line in the gap
-  the float's right margin opens - drawn on a pseudo-element so it spans the
-  picture's own height without taking part in the wrap. Skipped on the center
+  the float's right margin opens, drawn on a pseudo-element so it spans the
+  picture's height without taking part in the wrap. Skipped on the center
   row (its picture sits in a grid, not a float) and under ultra-narrow (the
   tile goes full width with no text beside it). `--edge` resolves to
   `--paper-edge` inside the card's `.paper-sheet`, the same ink the overlay's
   divider takes.
 */
 /*
-  `z-index: 1`, not just `position: relative`, is load-bearing: a floated box
-  that is `position: relative` with `z-index: auto` is not promoted into the
-  positioned paint step (CSS2.1 Appendix E step 6) - it still paints as a
-  plain float (step 3), UNDER the `.story` text that wraps past its bottom
-  edge (step 5). Once the row is wide enough for the wrapped story to run
-  taller than the float, the story's own block box (full row width, even
-  where no glyph is painted beside the float) covers the float and wins
-  hit-testing, so `.catalog-tile-button` is unclickable there - confirmed
-  with `elementsFromPoint` landing on `.story` first at a repro width, fixed
-  by giving the float an explicit stack level.
+  The float needs `z-index: 1`, not only `position: relative`, or the tile
+  is unclickable wherever the story runs taller than it.
+  - A relatively positioned float with `z-index: auto` still paints as a
+    plain float (CSS2.1 Appendix E step 3), under the wrapping `.story`
+    (step 5).
+  - The story's block box spans the full row width, so it covers the float
+    and wins hit-testing.
+  An explicit stack level moves the float into the positioned paint step.
 */
 .catalog-row:not(.catalog-center) .catalog-tile-button { position: relative; z-index: 1; }
 .catalog:not(.ultra-narrow) .catalog-row:not(.catalog-center) .catalog-tile-button::after {
@@ -980,15 +896,14 @@ mark {
   border-radius: 3px;
 }
 /*
-  The open book's hotspot on the catalog's small thumbnail, filling the
-  whole thumbnail - the traced SVG path inside it is the actual
-  highlight shape, stretched per axis exactly like the map's own
-  `.center-book`. A real `:hover`/`:focus-visible` works here (unlike
-  the map) because this sits in an ordinary scrolling list, not over the
-  gesture-owning canvas - there is no pan to protect from a stray
-  pointerdown. `inset: 0` is against the WRAP's padding edge, which sits
-  right at the image's own border - the mat above adds no padding, only a
-  border, so this hotspot lands exactly on the image regardless of `--catalog-mat`.
+  The open book's hotspot, filling the catalog's center thumbnail. The
+  traced SVG path inside is the highlight shape, stretched per axis like
+  the map's `.center-book`.
+  - Real `:hover` and `:focus-visible` work here, unlike on the map: this
+    sits in a scrolling list, with no canvas pan to protect.
+  - `inset: 0` measures from the wrap's padding edge, which is the image's
+    edge because the mat is a border. The hotspot lands on the image
+    whatever `--catalog-mat` is.
 */
 .catalog-center-book {
   position: absolute; inset: 0; margin: 0; padding: 0; border: none;
@@ -999,22 +914,21 @@ mark {
 .catalog-center-book:hover path { fill: rgba(var(--hover-glow-rgb),0.28); stroke: rgba(var(--hover-glow-rgb),0.55); stroke-width: 0.004; }
 .catalog-center-book:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /*
- * The global `button:hover` rule below washes any plain button with a
- * tan fill - fine for a labelled control, wrong for a button that IS a
- * picture, where it reads as haze over the whole thumbnail. Both
- * catalog overlays opt out explicitly, the same "namespace catalog CSS"
- * trap docs/agents/catalog.md names for the pager's own buttons.
+ * The global `button:hover` rule washes any plain button with a tan fill,
+ * which reads as haze over a button that is a picture. Both catalog
+ * thumbnail overlays opt out (docs/agents/catalog.md, "Namespace catalog
+ * CSS").
  */
 .catalog-center-book:hover, .catalog-distill-toggle:hover { background: none; }
 /*
- * The distill toggle on the catalog's center-row thumbnail - anchored to the
- * tile's bottom right corner and sized as a FRACTION of the thumbnail
- * (`--distill-w`/`--distill-h`, `iconSize / BASE_TILE` from CatalogView), not
- * a pixel rect. The map's canvas overlay scales this icon by the tile's own
- * size, so as a share of the tile it is constant - percentages let the
- * picture be sized by the center-row grid (below) with no pixel rect to keep
- * in step. Both vars are `0` until the `<img>` decodes, so the button has no
- * footprint before then.
+ * The distill toggle on the catalog's center-row thumbnail, anchored to the
+ * tile's bottom-right corner.
+ * - Sized as a fraction of the thumbnail (`--distill-w`/`--distill-h`,
+ *   `iconSize / BASE_TILE` from CatalogView), matching the map, where the
+ *   icon scales with the tile. The center-row grid can then size the
+ *   picture with no pixel rect to keep in step.
+ * - Both vars are `0` until the `<img>` decodes, so the button has no
+ *   footprint before then.
  */
 .catalog-distill-toggle {
   position: absolute; right: 0; bottom: 0; margin: 0; padding: 0; border: none;
@@ -1051,15 +965,15 @@ mark {
   padding: 14px 16px 16px;
 }
 /*
-  A single seamless leather grain over the dark chrome - the side panels, the
-  dialog shells (room/help/statement overlays all carry `.overlay`) and the
-  catalog backdrop. `overlay` blend-mode blends the tile against each surface's
-  OWN base colour, so the tint still comes from --panel / .catalog's #150805 and
-  the image only adds grain; this rule sets no background-color of its own. It
-  must stay AFTER those three set their `background:` shorthands, or the
-  shorthand resets background-image back to none. Served from the shared dir as
-  a RELATIVE url so it survives the subpath deploy like every other asset. The
-  map canvas is already painted art and the scrim is translucent over it, so
+  A seamless leather grain over the dark chrome: the side panel, every
+  dialog's `.overlay`, and the catalog backdrop.
+  - The `overlay` blend mode blends against each surface's base colour, so
+    the tint still comes from `--panel` or `.catalog`'s background; the
+    image only adds grain.
+  - This rule must come after those three set their `background`
+    shorthands, which would otherwise reset `background-image`.
+  - The url is relative, so it survives a subpath deploy.
+  The map canvas is painted art and the scrim is translucent over it, so
   neither takes the grain.
 */
 .panel, .overlay, .catalog {
@@ -1068,17 +982,13 @@ mark {
 }
 .overlay:focus { outline: none; }
 /*
-  A cream sheet that sits ON TOP of the dark `.overlay` cover, exactly as
-  BookOverlay floats its `.book` over the cover: the `.card-head` and its
-  close button stay on the cover outside the paper, so the content reads
-  as a sheet laid onto the dialog rather than the dialog itself turning to
-  paper. The book overlays get this look from `.book`/`.book-page`;
-  `.paper-sheet` is the same stock for the dialogs (RoomOverlay,
-  HelpDialog) that hold arbitrary content rather than book pages, so its
-  gradient/border/shadow are kept in step with `.book-page`. Remapping the
-  palette variables the shared `RoomDetails`/help markup reads recolours
-  everything inside to dark ink without restating a colour per element -
-  the reason the `--paper-*` set exists.
+  A cream sheet laid on the dark `.overlay` cover, as BookOverlay lays its
+  `.book`. The `.card-head` stays on the cover, outside the paper.
+  - The same stock as `.book-page`, for dialogs that hold arbitrary content
+    (RoomOverlay, HelpDialog). Keep its gradient, border and shadow in step
+    with `.book-page` and `.overlay-columns`.
+  - Remapping the palette variables recolours the shared `RoomDetails` and
+    help markup to dark ink without restating a colour per element.
 */
 .paper-sheet {
   color: var(--paper-ink);
@@ -1099,37 +1009,22 @@ mark {
 .paper-sheet :focus-visible { outline-color: var(--paper-accent); }
 .paper-sheet .favorite-toggle.on { color: var(--paper-accent); border-color: var(--paper-accent); }
 /*
-  Sized to its own native resolution by default: `max-width: 100%` with
-  `height: auto` never blows it up past that, only shrinking it to fit a
-  narrower dialog - the same rule the map's opening view follows. No
-  `width` rule here, deliberately - `width` is left unset rather than
-  stated as `auto`, so the `width`/`height` HTML attributes' own
-  presentational hint (the browser's built-in equivalent of `width:
-  1024px`) stays live in the cascade and `max-width` caps it. Writing
-  `width: auto` here instead - even though `auto` is `width`'s own initial
-  value, so it looks like a no-op - measurably is not one: an unloaded
-  `<img>` (no bytes yet, any duration - a network request genuinely
-  pending, not just mid-flight for a frame or two) renders at 0x0 for as
-  long as it stays unloaded once `width: auto` is explicitly written
-  alongside `height: auto`, in every version of Chromium this was checked
-  against, confirmed against a bare test page outside this app entirely.
-  Left unset, the same pending `<img>` sizes correctly from the very first
-  paint - what actually fixes the flash the alt-text box could show, more
-  reliably than anything sized on a wrapper element around the `<img>`
-  could be (a `<div>` with `width: min(<native>px, 100%)` was tried instead
-  of this: it sizes correctly on its own, but as a flex item inside
-  `.overlay-columns.columns` - `.overlay.columns` is `width: fit-content` -
-  a percentage width can't participate in that shrink-to-fit computation
-  the way a replaced element's own intrinsic size can, and the columns-mode
-  dialog settled small and stayed there, the tile squeezed toward nothing).
-  The three-layer `box-shadow` reads as a plate tipped onto the page - a
-  thin paper mat, a hairline rule, then a soft drop shadow - rather than a
-  flat UI border; `box-shadow` rather than `border`/`padding` so it adds
-  no layout space `decideColumns`/`measureScale` would have to account for.
-
-  The tile no longer carries its own zoom (see `.zoom-scope` above) -
-  `RoomOverlay` scopes one content zoom to the whole `.overlay-columns`
-  pair, tile and story together, so this rule is purely visual now.
+  Shown at native resolution, shrunk to fit a narrower dialog and never
+  enlarged, the same rule the map's opening view follows.
+  - Leave `width` unset; do not write `width: auto`. Unset, the
+    `width`/`height` attributes' presentational hint stays live and
+    `max-width` caps it, so a pending `<img>` sizes correctly from the
+    first paint. Chromium renders a still-loading `<img>` at 0x0 when
+    `width: auto` and `height: auto` are both written.
+  - Size the `<img>` itself, not a wrapper. Inside `.overlay.columns`
+    (`width: fit-content`), a wrapper's percentage width cannot take part in
+    shrink-to-fit the way a replaced element's intrinsic size can, and the
+    split dialog collapses.
+  - The three-layer `box-shadow` (paper mat, hairline, drop shadow) reads as
+    a plate on the page. It adds no layout space for `decideColumns` or
+    `measureScale` to account for.
+  Zoom is not set here: `RoomOverlay` scopes one content zoom to the whole
+  `.overlay-columns` pair.
 */
 .overlay-tile {
   display: block; max-width: 100%; height: auto;
@@ -1137,21 +1032,16 @@ mark {
   box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
 }
 /*
-  Nothing clipped here: this is where the whole story lives. Redundant
-  today, because the clamp is scoped to `.catalog-row` - and kept because
-  it is the second of two independent things holding that property, and
-  the e2e assertion only fails when BOTH are gone. Losing one silently is
-  exactly what this is for.
+  Nothing clipped here: this is where the whole story lives. Redundant with
+  the clamp being scoped to `.catalog-row`, and kept as a second guard: the
+  e2e assertion fails only when both are gone, so one can be lost silently.
 */
 .overlay-body .story { display: block; overflow: visible; white-space: pre-line; }
 /*
-  One paper sheet holds the tile and the text together, stacked or split
-  alike - a picture floating on the dark cover with a separate cream card
-  under or beside it read as two things laid on top of each other, not
-  one page. `.overlay-body` below still carries `.paper-sheet` for its
-  ink color variables, but its own background/border/shadow are switched
-  off (`.overlay-body.paper-sheet` further down) so it never draws a
-  second, redundant card nested inside this one.
+  One paper sheet holds the tile and the text together, stacked or split,
+  so they read as one page. `.overlay-body` carries `.paper-sheet` only for
+  its ink variables; `.overlay-body.paper-sheet` switches off its card so
+  none nests inside this one.
 */
 .overlay-columns {
   position: relative;
@@ -1169,34 +1059,28 @@ mark {
 */
 .overlay.columns { width: fit-content; max-width: min(1500px, 96vw); }
 /*
-  The tile keeps its natural height and the text page (`.overlay-body`,
-  `align-self: stretch` below) fills to match it, so the page is always the
-  image's size rather than resizing to its own story. A short story sits at the
-  top of a mostly-empty page - commonplace enough to read as natural, and
-  steadier than a page whose height changes per room. Only the body stretches
-  on the cross axis; the tile image, which has no set height, would stretch
-  too and lose its aspect ratio if it did. `align-items: center` (rather than
-  flex-start) is what centers a tile shorter than the text column instead of
-  pinning it to the top of the row - `.columns` is added by `RoomOverlay`'s
-  `decideColumns`, never by a media query: it measures whether the stacked
-  pair actually overflows the scrim before switching layouts, so a story that
-  already fits never moves.
+  The split layout. `RoomOverlay`'s `decideColumns` adds `.columns`, never a
+  media query: it switches only when the stacked pair overflows the scrim,
+  so a story that fits never moves.
+  - The tile keeps its natural height, and the text page (`.overlay-body`,
+    `align-self: stretch`) fills to match, so the page does not resize per
+    story.
+  - Only the body stretches on the cross axis. The tile has no set height
+    and would lose its aspect ratio.
+  - `align-items: center` centers a tile shorter than the text column.
 */
 .overlay-columns.columns { display: flex; align-items: center; gap: 0; }
 /*
-  The tile keeps its own natural size (`flex-basis: auto` reads that
-  from the image itself) rather than stretching to fill whatever the
-  text column leaves behind - `max-width: 100%` above still applies,
-  so it only ever shrinks from there, never grows past it.
+  The tile keeps its natural size (`flex-basis: auto` reads it from the
+  image) rather than filling what the text column leaves; `.overlay-tile`'s
+  `max-width: 100%` still lets it shrink.
 */
 .overlay-columns.columns .overlay-tile { flex: 0 1 auto; min-width: 0; margin: 0 24px 0 0; }
 /*
-  A comfortable reading width, not a stretch to fill the leftover row -
-  capped so a short story doesn't get stranded in a column sized for a
-  much longer one, and the dialog's own `fit-content` means there's no
-  leftover space to fill anyway. The border-left is the one divider
-  between the tile and the text, drawn on the shared paper rather than as
-  a second card's own edge.
+  A capped reading width, so a short story is not stranded in a wide
+  column; the dialog's `fit-content` leaves no slack to fill. The
+  border-left is the one divider between tile and text, drawn on the shared
+  paper.
 */
 .overlay-columns.columns .overlay-body {
   flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
@@ -1204,53 +1088,43 @@ mark {
   display: flex; flex-direction: column;
 }
 /*
-  The body stretches to the tile's height, so a short story (or one already
-  grown to the 2x scale cap) leaves slack below it. Pin the score and its top
-  rule to the bottom of that column rather than letting them sit right under
-  the story with the blank space beneath - `margin-top: auto` in the flex
-  column eats whatever slack is left. When the story does fill the height, the
-  auto margin collapses to zero and the score follows it as before.
+  Pins the score to the bottom of the stretched body column, so a short
+  story's slack sits between the story and the score. When the story fills
+  the height, the auto margin collapses to zero.
 */
 .overlay-columns.columns .overlay-body .score { margin-top: auto; }
 /*
-  Strips `.paper-sheet`'s own background/border/shadow/padding - the
-  shared sheet above (`.overlay-columns`) already draws the card, so this
-  would otherwise nest a second one under the tile. What's left, the color
-  variables `.paper-sheet` remaps, still cascades to everything inside.
+  Strips `.paper-sheet`'s background, border, shadow and padding, since
+  `.overlay-columns` already draws the card. The remapped colour variables
+  still cascade.
 */
 .overlay-body.paper-sheet { background: none; border: none; box-shadow: none; border-radius: 0; padding: 0; }
 /*
-  Stacked only: the one divider between the tile and the text becomes a
-  rule across the page instead of down its side, in the gap the tile's
-  own bottom margin already opens.
+  Stacked only: the divider between tile and text runs across the page, in
+  the gap the tile's bottom margin opens.
 */
 .overlay-columns:not(.columns) .overlay-body { border-top: 1px solid var(--edge); padding-top: 14px; }
 /*
-  Split view only: the tile is usually taller than the text needs to be, so
-  `RoomOverlay`'s `measureScale` drives this up past 1 until the text fills
-  that slack instead of leaving it blank - see the file doc comment there.
-  `calc()` off the ordinary size rather than a second set of sizes, so raising
-  `--split-text-scale` is the only thing that ever moves these; the stacked
-  layout, the card and the catalog row never set the variable and read their
-  usual px value. The keyword chips and the score breakdown are held at their
-  base size and left OUT of the scale, for the same reason: growing them widens
-  each line until a set that fit on one line spills onto two, and the score's
-  per-axis detail lines read worse once forced to wrap. So only the story grows
-  to fill.
+  Split view only: `RoomOverlay`'s `measureScale` raises `--split-text-scale`
+  past 1 until the story fills the slack beside a taller tile (see
+  RoomOverlay's file header).
+  - Sizes are `calc()` off the ordinary size, so the variable is the only
+    thing that moves them. Layouts that never set it read the usual size.
+  - Only the story scales. Scaled chips spill a line that fit onto two, and
+    the score's detail lines read worse wrapped.
 */
 .overlay-columns.columns { --split-text-scale: 1; }
 .overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
 /*
-  The score's detail lines go multi-column only in the STACKED overlay, where
-  the text sits below the image and has the full dialog width - a fixed two
-  content-sized columns, not one per detail line - and only once that width
-  holds two. `max-content` tracks never shrink, so a narrower page (a phone)
-  would push the second column off the card. The 422px threshold is two
-  `.score-line` caps (`--score-col`'s 200px default, unset in the overlay)
-  plus `.score-details`'s 22px gap; change either and this moves with it.
-  The side-by-side split keeps one column: its text page is a narrow reading
-  column with no room for a second (see the layout notes). The composite
-  strength line stays full width in both.
+  The overlay's score details: one column, or two content-sized columns in
+  the stacked layout once its full dialog width holds two.
+  - `max-content` tracks never shrink, so without the width gate a phone
+    pushes the second column off the card.
+  - 422px is two `.score-line` caps (`--score-col`'s default, unset in the
+    overlay) plus `.score-details`'s `column-gap`. Change either and this
+    moves with it.
+  The split layout keeps one column, and the composite line stays full
+  width in both.
 */
 .overlay-columns .overlay-body .score-details { grid-template-columns: max-content; }
 .overlay-columns:not(.columns) .overlay-body .score { container-type: inline-size; }
@@ -1258,19 +1132,15 @@ mark {
   .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
 }
 /*
-  The room permalink (`/catalog/<file>`, already SSR'd and boot-linked - see
-  `app.ts`'s `/catalog/:file`, `main.tsx`'s `INITIAL_ROUTE` - but with no way
-  to reach it from a room opened off the map). Pinned over the cream page's
-  own bottom-right corner rather than a third row in the head, which already
-  carries the favorite toggle, the other reading's link, zoom controls and
-  close. `.overlay-columns` is `position: relative` above specifically so
-  this stays anchored to it rather than escaping to `.overlay`'s padding
-  edge or `.overlay-scrim`'s - true whether the pair is stacked or split,
-  and independent of `useContentZoom`'s own transform on the same element.
-  Deliberately outside `.story`'s `--split-text-scale` (a scale meant for
-  prose, not chrome) so the label stays legible at the smallest size a long
-  story can shrink everything else on the page to.
+  Copies the room's permalink (`app.ts`'s room routes, `main.tsx`'s
+  `INITIAL_ROUTE`). Pinned to the cream page's bottom-right corner, since
+  the head is full.
+  - `.overlay-columns` is `position: relative` so this anchors to the page,
+    stacked or split, and not to `.overlay` or `.overlay-scrim`.
+  - Outside `--split-text-scale`, which is for prose, so the label keeps
+    its size.
 */
+
 .share-button {
   position: absolute; right: 10px; bottom: 10px; z-index: 1;
   display: inline-flex; align-items: center; gap: 5px;
@@ -1288,11 +1158,9 @@ mark {
 /* The help dialog reuses .overlay/.card-head; only the prose is its own. */
 .help-overlay { width: min(520px, 100%); }
 /*
-  `.card-id` is `--dim` everywhere else because it sits beside a room's
-  own title there - here it IS the dialog's title, with nothing brighter
-  on the line to defer to, so it takes `--ink` instead. Scoped to this
-  overlay rather than changed at the source: `.card-id` still needs to
-  read as secondary next to a room's title in `RoomOverlay`.
+  Here `.card-id` is the dialog's title, with nothing brighter on the line,
+  so it takes `--ink`. Elsewhere it stays `--dim` to read as secondary
+  beside a room's title.
 */
 .help-overlay .card-id { color: var(--ink); }
 .help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
@@ -1304,16 +1172,13 @@ mark {
 .help-keys dt { color: var(--ink); font-weight: 600; white-space: nowrap; }
 .help-keys dd { margin: 0; color: var(--dim); }
 /*
-  Landscape gets a wider dialog laid out in two CSS columns instead of
-  one long scroll - the "giant pillar of text" a plain-language rewrite
-  produces once it says everything a diegetic hint used to leave
-  implicit. Gated on both orientation and a minimum width rather than
-  orientation alone, so a narrow landscape phone still gets one column
-  instead of two columns too thin to read. `column-fill` stays at its
-  `balance` default, so `break-inside: avoid` on each paragraph/group is
-  what keeps a block from splitting across the two, not manual placement -
-  there is no per-paragraph column assignment to keep in sync as the copy
-  changes.
+  Landscape gets a wider dialog in two CSS columns instead of one long
+  scroll.
+  - Gated on a minimum width as well as orientation, so a narrow landscape
+    phone keeps one readable column.
+  - `column-fill` stays `balance`; `break-inside: avoid` keeps each
+    paragraph or group whole, so there is no per-paragraph placement to
+    keep in sync with the copy.
 */
 @media (orientation: landscape) and (min-width: 560px) {
   .help-overlay { width: min(820px, 94vw); }
@@ -1340,24 +1205,21 @@ mark {
 }
 
 /*
-  The open book both reading dialogs share (BookOverlay): two pages side
-  by side when the dialog is wide enough for two readable columns, one
-  column when it is not. The collapse is a container query on the dialog's
-  OWN width - available width, not a device/pointer gate, so a shrunk
-  desktop window collapses too - and BookOverlay reports the same 680px
-  threshold to JS so a spread-at-a-time reader (the Babel book) advances
-  by the matching amount.
+  The open book both reading dialogs share (BookOverlay): two pages side by
+  side when the dialog is wide enough, one column when it is not.
+  - The collapse is a container query on the dialog's width, not a device
+    gate, so a shrunk desktop window collapses too.
+  - BookOverlay reports the same 680px threshold to JS, so the Babel book
+    advances a spread at a time by the matching amount.
 
-  The BOOK LOOK lives here: cream paper (`--paper-*`) inside the dark
-  cover the `.overlay` frame draws, lifted off it with a shadow. The two
-  layouts render the paper differently on purpose. Stacked (narrow), each
-  page is its OWN sheet with a small gap between - the paper styling sits
-  on `.book-page`. Wide, the pages join into one continuous spread with a
-  shadowed gutter valley down the center seam - the paper styling moves to
-  `.book`, and the pages go transparent over it. A book showing a single
-  page (the Babel book collapsed) is just one sheet. This whole block is
-  the swap point - a page-curl or a different stock is a change here, not
-  to the markup.
+  The book's look lives here: cream paper (`--paper-*`) inside the dark
+  `.overlay` cover, lifted off it with a shadow.
+  - Stacked, each page is a separate sheet; the paper is on `.book-page`.
+  - Wide, the pages join into one spread with a shadowed gutter down the
+    seam; the paper moves to `.book` and the pages go transparent.
+  - A single page (the Babel book collapsed) is one sheet.
+  A page curl or a different stock is a change to this block, not to the
+  markup.
 */
 .book-overlay { container: book / inline-size; }
 /* Stacked: separate sheets. */
@@ -1445,8 +1307,8 @@ mark {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px; line-height: 1.4; color: var(--paper-ink);
 }
-/* The page-nav sits UNDER the book on the dark cover, its rule dividing it
-   from the pages above (a top border, not the card-head's bottom one). */
+/* The page-nav sits under the book on the dark cover, its top border
+   dividing it from the pages. */
 .book-nav {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--edge);
@@ -1467,9 +1329,9 @@ mark {
 /*
   One overlay opening another (the statement opens the Babel book). The
   book's scrim sits above the base z-index; the statement gets `behind`,
-  dimmed and set back so the book reads as sitting on top of it rather
-  than replacing it. Only the LOOK is here - which dialog reacts to Escape
-  is the shared dialog stack's job (useDialog), not z-index.
+  dimmed and set back so the book reads as on top of it. Only the look is
+  here: which dialog reacts to Escape is the dialog stack's job
+  (useDialog).
 */
 .overlay-scrim.stacked { z-index: 30; }
 .overlay-scrim.behind .statement-overlay { opacity: 0.55; }
@@ -1479,20 +1341,15 @@ mark {
 }
 
 /*
-  Stretch the cream card to the row's full height - which the image column
-  sets in the common case - so every card is the SAME height rather than
-  shrinking to its own story and letting the dark padding claim the leftover.
-  The row stays fixed-height (the spacer arithmetic rests on that); this only
-  changes what fills it. The self-sizing center row (`.catalog-center`) is
-  unaffected - its body is unwrapped with `display: contents` there (see
-  "The center room's row" below), so this box never exists to stretch.
+  Stretches the cream card to the row's full height, so every card is the
+  same height instead of shrinking to its story. The row itself stays
+  fixed-height. The center row unwraps its body with `display: contents`
+  (`.catalog-center .catalog-body`), so this box does not exist there.
 */
 .catalog-body { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
 /*
-  The room's identity and the way out to the map share one row, with real
-  space under it. They used to be at opposite ends of the row with the
-  keyword chips in between, which put a link and a row of tags a thumb's
-  width apart.
+  The room's identity and the way out to the map share one row, with space
+  under it, so the link is not a thumb's width from the keyword chips.
 */
 .catalog-head {
   display: flex; align-items: baseline;
@@ -1502,17 +1359,15 @@ mark {
   margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
   display: flex; align-items: baseline; gap: 8px; min-width: 0;
   flex: 1 1 auto;
-  /* One line: "Room 25" breaking in two pushed the whole row down. */
+  /* One line: a name breaking in two would push the whole row down. */
   white-space: nowrap; overflow: hidden;
 }
 .catalog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /*
-  A narrow row has no width to spare on the line the name sits on, so the
-  map link is gone (`CatalogRow`'s `narrow`) and the name is allowed the
-  second line the link was taking - clamped at two, and paid for in
-  `TITLE_LINE_PX` so the row stays exactly as tall as every other one.
-  `--catalog-title-line` is that same number, so what is reserved and
-  what is drawn cannot drift.
+  A narrow row drops the map link (`CatalogRow`'s `narrow`) and gives the
+  name a second line, clamped at two. `TITLE_LINE_PX` pays for it so the
+  row stays as tall as every other; `--catalog-title-line` is the same
+  number, so what is reserved and what is drawn cannot drift.
 */
 .catalog.narrow .catalog-name { white-space: normal; }
 .catalog.narrow .catalog-title {
@@ -1527,36 +1382,28 @@ mark {
 }
 .catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
 /*
-  Deliberately NOT line-clamped. `-webkit-line-clamp` needs
-  `display: -webkit-box`, which establishes its own formatting context and so
-  refuses to flow around the floated thumbnail - the clamp and the wrap cannot
-  both be had. The card's own fixed height does the cutting instead, and the
-  fade below says so.
+  Not line-clamped: `-webkit-line-clamp` needs `display: -webkit-box`, which
+  establishes a formatting context and will not flow around the floated
+  thumbnail. The measured `max-height` cuts the story instead, and the fade
+  on `.clipped` shows the cut.
 */
 .catalog-row .story {
   display: block; line-height: var(--catalog-line, 19px); margin-bottom: 5px;
   /*
-    `max-height` is set inline by `CatalogRow` (measured to fill the flow
-    area's leftover height exactly), so the story yields BEFORE the score strip
-    beneath the flow rather than pushing it off the card.
+    `CatalogRow` sets `max-height` inline, measured to fill the flow area's
+    leftover height, so the story yields before the score strip beneath it.
 
-    `overflow: clip`, NOT `hidden`: both clip the story to that measured height,
-    but `hidden` establishes a block formatting context, and a BFC sits BESIDE
-    the floated tile as a rectangle instead of wrapping around it - which left
-    a narrow display's story stuck in the thin column beside the tile with the
-    space beneath it empty. `clip` does not establish a BFC, so the story's
-    line boxes flow around the tile (narrow beside it, full width beneath) and
-    still cut at the ceiling.
+    `overflow: clip`, not `hidden`: `hidden` establishes a block formatting
+    context, which sits beside the floated tile as a rectangle and leaves
+    the space beneath the tile empty. `clip` lets the line boxes flow around
+    the tile and still cuts at the ceiling.
   */
   overflow: clip;
 }
 /*
-  A story the flow area cut ends in a fade - a mask on the story itself, so it
-  lands exactly on the story's own bottom edge (its measured `max-height`)
-  rather than a guessed offset, and only ever fades the story's own pixels,
-  never the floated tile beside it. Only on rows that actually cut something
-  (`.clipped`, measured in `CatalogRow`); to transparent, which reveals the
-  cream card behind it.
+  A cut story ends in a fade to the cream card. The mask is on the story
+  itself, so it lands on the story's measured bottom edge and never fades
+  the floated tile. Only on rows `CatalogRow` measured as cut (`.clipped`).
 */
 .catalog-row .catalog-body.clipped .story {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
@@ -1565,7 +1412,7 @@ mark {
 /*
   The fixed-height area that carries the tile, name, chips and story. Its
   height (`--catalog-flow-h`, CatalogView) is the tile's or the text minimum's,
-  whichever is taller; the score strip sits in normal flow BELOW it, so the
+  whichever is taller; the score strip sits in normal flow below it, so the
   strip's top rule always lands under the tile rather than beside it and the
   strip gets the card's full width. `overflow: hidden` both clips the story to
   this height and contains the floated tile (a block formatting context), and
@@ -1593,13 +1440,10 @@ mark {
   box-shadow: -7px 0 7px 2px var(--paper);
 }
 /*
-  The cap is a variable, not a literal - `--catalog-chips-max`
-  (`CatalogView.tsx`'s `chipLines`/`CHIP_LINE_PX`), derived the same way
-  the row's own height derives everything else: from what the row actually
-  leaves over, rather than a flat guess that is wrong at most widths. A room
-  with more keywords than fit still clips rather than growing the row (the
-  fixed-height invariant every spacer is computed from), and the `+N` pinned
-  to this box is what says how many it had to hold back.
+  The chips' height cap, `--catalog-chips-max` (`CatalogView.tsx`'s
+  `chipLines`/`CHIP_LINE_PX`), is derived from what the row leaves over,
+  like the rest of the row's height. More keywords than fit are clipped
+  rather than growing the row, and the pinned `+N` counts them.
 */
 .catalog-row .chips {
   position: relative;
@@ -1607,14 +1451,10 @@ mark {
   overflow: hidden; align-content: flex-start;
 }
 /*
-  The score, as a full-width composite strength line plus up to four SHORT
-  per-axis lines (tag, title, story, clip) flowed into columns -
-  `CatalogView.tsx`'s `scoreStripHeight` reserves room for the worst case on
-  every row, whether or not this room's own search found that many, so
-  every row stays exactly as tall as every other - what the sliding
-  window's spacers are computed from. Each line never wraps and clips
-  with an ellipsis rather than growing a second visual line, which is
-  what would actually break that uniform height.
+  The score: a full-width composite strength line plus short per-axis lines
+  flowed into columns. `CatalogView.tsx`'s `scoreStripHeight` reserves the
+  worst case on every row, so rows stay the same height. Each line never
+  wraps; it ellipsises, since a second visual line would break that height.
 */
 .score-strip { margin: 6px 0 0; padding: 6px 0 0; border-top: 1px solid var(--edge); font-size: 10px; color: var(--dim); }
 .score-strip p {
@@ -1624,12 +1464,11 @@ mark {
 .score-strip .score-composite { color: var(--ink); font-weight: 500; }
 .score-strip .clip-strength { color: #6a5f4c; }
 /*
-  The detail lines are laid out in a grid whose columns are CONTENT-sized and
-  LEFT-aligned (`justify-content: start`), not stretched to fill the row - just
-  enough gap between them to read as distinct. `grid-auto-flow: row` fills the
-  first row of `--score-cols` columns, then the next, so a fixed row count
-  (from CatalogView's `scoreLayoutFor`) gives a fixed height. The composite
-  "match strength" line spans all columns on its own line above them...
+  The detail lines, in a grid of content-sized, left-aligned columns with
+  just enough gap to read as distinct. Rows fill `--score-cols` columns at a
+  time, so the row count from CatalogView's `scoreLayoutFor` fixes the
+  height. The composite line sits on its own line above, except under
+  `.score-one-row`.
 */
 .score-details {
   display: grid; grid-template-columns: repeat(var(--score-cols, 2), max-content);
@@ -1644,10 +1483,9 @@ mark {
 */
 .score-details .score-line { min-width: 0; max-width: var(--score-col, 200px); }
 /*
-  ...unless the row is wide enough to give every detail its own column, in
-  which case the composite joins them as one more column on a single line
-  (`.score-one-row`) instead of taking a line to itself. The whole strip
-  becomes one flex row: the composite, then the details grid beside it.
+  `.score-one-row`: the row is wide enough for every detail to have its own
+  column, so the strip becomes one flex row, the composite line first and
+  the details grid beside it.
 */
 .catalog.score-one-row .score-strip { display: flex; align-items: baseline; column-gap: 22px; }
 .catalog.score-one-row .score-strip .score-composite { flex: 0 0 auto; }
@@ -1655,42 +1493,32 @@ mark {
 .catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
 
 /*
-  Below ULTRA_NARROW_PX (CatalogView.tsx) a row has no width left to show a
-  thumbnail beside any text at all - not even the wrapped-title, no-map-link
-  shape `.narrow` already falls back to. So it stops being a smaller version
-  of the floated row and becomes a stack instead: the name row first, full
-  width; the picture beneath it, full width; and no chips or story at all -
-  `CatalogRow` does not render `RoomDetails` in this shape, and
-  `.catalog-details-link` stands in for both, opening the same room overlay
-  every other "read more" affordance here already opens.
+  Below `ULTRA_NARROW_PX` (CatalogView.tsx) a row has no width for a
+  thumbnail beside any text, so it becomes a stack: the name row, then the
+  picture, both full width. `CatalogRow` renders no chips or story in this
+  shape; `.catalog-details-link` opens the room overlay instead.
 
-  `.catalog-row:not(.catalog-center)`'s own `.catalog-tile` width comes from
-  `--catalog-row-thumb` (`CatalogView.tsx`'s `rowThumbPx`) rather than the
-  center room's `--catalog-thumb` - the two diverge exactly here, since an
-  ultra-narrow row's tile is sized to the row's own full width
-  (`ultraThumbWidth`) while the center room's fixed two-column thumbnail
-  never changes shape.
+  A room row's tile width is `--catalog-row-thumb` (`CatalogView.tsx`'s
+  `rowThumbPx`), separate from the center room's `--catalog-thumb`: the two
+  diverge here, where a room row's tile takes the row's full width
+  (`ultraThumbWidth`).
 */
 .catalog-row:not(.catalog-center) .catalog-tile { width: var(--catalog-row-thumb); }
 .catalog.ultra-narrow .catalog-row .catalog-tile-button { float: none; display: block; margin: 0; }
 /*
-  Fixed to `--catalog-ultra-head` (`ULTRA_HEAD_PX`) rather than left to its
-  content, same reason every other fixed piece of a catalog row is: the row's
-  own height is arithmetic (`stackedRowHeight`), so what this actually
-  renders at and what JS reserved for it cannot be allowed to drift.
-  Centering the content in the box is what turns unused reserve into
-  breathing room instead of an empty gap at the bottom.
+  Fixed to `--catalog-ultra-head` (`ULTRA_HEAD_PX`): the row's height is
+  arithmetic (`stackedRowHeight`), so what renders must match what JS
+  reserved. Centering turns unused reserve into even spacing instead of a
+  gap at the bottom.
 */
 .catalog.ultra-narrow .catalog-row .catalog-head {
   height: var(--catalog-ultra-head); margin-bottom: 0;
   align-items: center; overflow: hidden;
 }
 /*
-  `.narrow`'s two-line title clamp (above) exists because a narrow row's
-  head shares its line with the floated tile and has little width to spare.
-  An ultra-narrow head is the row's own full width, so it reverts to one
-  ellipsised line - overriding back rather than never clamping in the first
-  place, since `.ultra-narrow` rows are always also `.narrow` ones
+  An ultra-narrow head is the row's full width, so it reverts `.narrow`'s
+  two-line title clamp to one ellipsised line. It must override, since an
+  `.ultra-narrow` catalog is always also `.narrow`
   (`ULTRA_NARROW_PX < NARROW_PX`).
 */
 .catalog.ultra-narrow .catalog-row .catalog-name { white-space: nowrap; }
@@ -1698,13 +1526,10 @@ mark {
   display: block; -webkit-line-clamp: unset; text-overflow: ellipsis; white-space: nowrap;
 }
 /*
-  Widthed to the PICTURE, not the card - `--catalog-row-thumb` is the same
-  variable `.catalog-tile` draws at, so this lines up with the image's own
-  edges rather than the card's, which sit `--catalog-mat` further out on
-  either side. `margin: 0 auto` is what centers it into that gap symmetrically
-  - the tile-button's mat is invisible against the paper card, so a
-  full-width link here reads as wider than the picture above it, and this is
-  where the two elements are made to agree.
+  As wide as the picture, not the card: `--catalog-row-thumb` is the width
+  `.catalog-tile` draws at. The mat is invisible against the paper card, so
+  a full-width link would read as wider than the picture above it. The auto
+  horizontal margins center it.
 */
 .catalog-details-link {
   display: flex; align-items: center; justify-content: center;
@@ -1715,46 +1540,36 @@ mark {
 }
 .catalog-details-link:hover { background: rgba(var(--accent-rgb),0.12); }
 
-/* The center room's row: the shelf, as links. */
 /*
-  The one row that sizes itself. Forty shelf titles wrap to as many lines
-  as the width needs, and cropping them to a tile's height would hide the
-  newest searches - which are the whole reason the wall is a record. Safe
-  because this row is not a PAGED one: the spacers stand in for those, and
-  the scroll arithmetic takes this row's measured height as its lead.
+  The center room's row: the shelf, as links. The one row that sizes
+  itself: the shelf's `HISTORY_SLOT_COUNT` titles wrap to as many lines as
+  the width needs, since cropping them would hide the newest searches. Safe
+  because this row is not paged; the scroll arithmetic takes its measured
+  height as its lead.
 */
 .catalog-center {
   height: auto; min-height: var(--catalog-row);
 }
 /*
-  The picture, the title, the index-shelf line and the shelf's spines all
-  live on ONE column grid, at every width above a phone, so the spine columns
-  beside the picture and the columns beneath it land on the same grid lines -
-  the alignment two independent runs (beside starting at the picture's edge,
-  below at the card's left) could never promise. `.paper-sheet` is on the row
-  itself so one cream card holds all of it, and `.catalog-body` is unwrapped
-  with `display: contents` so its title/sub/shelf become grid items of the
-  row directly. The picture is a grid item spanning `--pic-cols` columns and
-  `--pic-rows` rows (CatalogView's layout effect fits both from the grid's own
-  resolved tracks, always rounding the columns UP so the cover picture is
-  never snapped smaller than its natural width); the title and index-shelf
-  line take the columns to its right; and the spines auto-flow into every cell
-  the three leave - filling the columns beside the picture top to bottom, then
-  the full width once past its bottom edge. A wide display simply fits more
-  columns, so more spines sit beside the picture before any wrap below; the
-  layout is the same. `--shelf-col` is each column's minimum and `1fr`
-  stretches them to fill, so the columns stay uniform ("identical spines, not
-  rubble") and every one aligns. Tab order follows DOM order, not the grid's
-  visual placement.
+  Above ultra-narrow, the picture, the title, the index-shelf line and the
+  spines share one column grid, so the spine columns beside the picture and
+  beneath it land on the same grid lines.
+  - `.paper-sheet` is on the row, so one cream card holds everything;
+    `.catalog-body` is `display: contents`, so its children are grid items.
+  - The picture spans `--pic-cols` by `--pic-rows`. CatalogView's layout
+    effect fits both from the resolved tracks, rounding columns up so the
+    picture never snaps below its natural width.
+  - The title and index-shelf line take the columns to its right. The spines
+    auto-flow into every cell left: beside the picture, then full width
+    below it.
+  - `--shelf-col` is each column's minimum and `1fr` stretches them, so the
+    columns stay uniform and aligned.
+  - Tab order follows DOM order, not grid placement.
 
-  The margin restates the 16px gutter `.catalog-row`'s own padding gives every
-  room row (grid needs its own padding, so the row padding is overridden and
-  the horizontal inset has to come back as a margin). The 7px TOP is the
-  card's one exterior gap: without it the sheet butts against the top of the
-  list while every gap below is a strip of backdrop, so it matches the 7px a
-  room row's top padding leaves between this card and the first one under it
-  (`.catalog-row`'s `padding: 7px 16px`). Bottom stays 0 - that gap is the
-  next row's own top padding.
+  The margin restores the 16px gutter `.catalog-row`'s padding gives a room
+  row, since the grid needs its own padding. The 7px top matches the gap a
+  room row's top padding leaves below this card; the bottom gap is the next
+  row's top padding.
 */
 .catalog-center.paper-sheet {
   display: grid; margin: 7px 16px 0; padding: 16px;
@@ -1770,9 +1585,8 @@ mark {
 }
 .catalog-center .catalog-tile { width: 100%; height: auto; }
 /*
-  The title and the index-shelf line sit in the columns to the right of the
-  picture (`--pic-next` is the grid line just past it); the spines flow in
-  beneath them.
+  The title and the index-shelf line sit in the columns right of the
+  picture (`--pic-next` is the grid line just past it).
 */
 .catalog-center .catalog-name {
   grid-column: var(--pic-next, 3) / -1;
@@ -1785,28 +1599,23 @@ mark {
   margin: 0; align-self: center;
 }
 /*
-  The shelf's wrapper is dissolved (`display: contents`) so each spine is a
-  grid item of the row directly, auto-placed into the cells the picture and
-  the two text lines leave. A surviving wrapper box would be one grid item
-  instead, sitting beside the picture as a single rigid column.
-  `min-width: 0` lets a long title ellipsise to its track instead of a grid
-  item's default `min-width: auto` widening the whole column to fit it.
+  The shelf's wrapper is `display: contents`, so each spine is a grid item
+  of the row, auto-placed into the cells left over; a wrapper box would sit
+  beside the picture as one rigid column. `min-width: 0` lets a long title
+  ellipsise instead of widening its column.
 */
 .catalog-center .shelf-links { display: contents; }
 .catalog-center .shelf-link { width: auto; margin: 0; min-width: 0; }
 /* Narrow only tightens the card's padding; the shared grid above is unchanged. */
 .catalog.narrow:not(.ultra-narrow) .catalog-center.paper-sheet { padding: 12px; }
 /*
-  Below `ULTRA_NARROW_PX` there is no width left to share between the picture
-  and a text column at all - see the equivalent room-row shape in
-  `CatalogView.tsx`. The shared grid collapses to a single stacked column
-  (named areas, `grid-area` reassigning every item off the span vars the grid
-  above set): the title moves above the picture since a caption reads before
-  the thing it names, the picture goes full width, the index-shelf line sits
-  between it and the shelf it describes, and the shelf goes back to its own
-  two-column scrolling box (`.shelf-links` below) - a phone has no room to
-  wrap spines around the picture. `grid-auto-rows: auto` undoes the shared
-  grid's fixed row height so each stacked block takes the height it needs.
+  Below `ULTRA_NARROW_PX` the picture and a text column cannot share the
+  width, so the grid becomes one stacked column of named areas.
+  - The title comes first, since a caption reads before what it names.
+  - The picture goes full width, then the index-shelf line.
+  - The shelf is its own scrolling grid box (`.shelf-links`); a phone has
+    no room to wrap spines around the picture.
+  - `grid-auto-rows: auto` undoes the fixed row height.
 */
 .catalog.ultra-narrow .catalog-center.paper-sheet {
   padding: 16px;
@@ -1821,44 +1630,36 @@ mark {
 .catalog.ultra-narrow .catalog-center .catalog-tile-wrap { grid-area: tile; align-self: stretch; }
 .catalog.ultra-narrow .catalog-center .catalog-name { grid-area: name; }
 .catalog.ultra-narrow .catalog-center .catalog-sub { grid-area: sub; }
+/*
+  A harder cap than `.shelf-links`' own: on a phone, that cap plus the
+  picture is most of the screen, and a reader would arrive at a wall of
+  remembered searches instead of the library. The shelf scrolls and is
+  ordered newest first, so the cap costs only the oldest titles'
+  visibility.
+*/
 .catalog.ultra-narrow .catalog-center .shelf-links {
   grid-area: shelf; display: grid; max-height: 22vh; overflow-y: auto;
 }
 .catalog.ultra-narrow .catalog-center .shelf-link { min-width: 0; }
 /*
-  A GRID of equal cells, not a wrapped row of pills sized to their own
-  text. Forty tags at forty different widths read as rubble; the wall this
-  stands for is a grid of identical spines, and the column width comes
-  from the longest title actually on it (`shelfColumnCh`) so the shape is
-  the dataset's rather than a guess.
+  A grid of equal cells, not a wrapped row of pills sized to their text:
+  the wall it stands for is a grid of identical spines. The column width
+  comes from the longest title on it (`shelfColumnCh`).
 */
 .shelf-links {
   display: grid; align-content: start; gap: 4px;
   /*
     `min(..., 48%)` guarantees at least two columns however narrow the
-    display: without it a phone gets one column of forty rows, which is a
-    thousand pixels of shelf before the first room. The titles ellipsise,
-    so a narrow column costs some text, not the layout.
+    display; one column would put the whole shelf above the first room.
+    The titles ellipsise, so a narrow column costs text, not layout.
   */
   grid-template-columns: repeat(auto-fill, minmax(min(var(--shelf-col, 12ch), 48%), 1fr));
   /*
-    And the wall is capped rather than allowed to set the row's height.
-    On anything wide this is well under the cap and never scrolls; on a
-    phone it is what keeps the center room from being the whole page.
+    Capped, so the shelf never sets the row's height. On a wide display it
+    stays under the cap.
   */
   max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
 }
-/*
-  A much harder cap on a true phone (`.catalog.ultra-narrow .catalog-center
-  .shelf-links` above), where 42vh of shelf plus the picture above it is
-  most of the screen and a reader arrives at a wall of remembered searches
-  rather than at the library. The shelf scrolls there, and it is ordered
-  newest first, so what a lower cap costs is the oldest titles' visibility -
-  not their reachability. Plain `.narrow` drops the cap - it wraps around
-  the picture instead of sitting in its own scrollable box (see
-  `.catalog.narrow:not(.ultra-narrow) .catalog-center .shelf-links` above), so there is no
-  separate box left to cap.
-*/
 .shelf-link {
   font: inherit; font-size: 10px; cursor: pointer; padding: 3px 6px;
   border-radius: 3px; border: 1px solid transparent;
@@ -1870,18 +1671,16 @@ mark {
 .shelf-link.history { color: var(--ink); border-color: var(--edge); }
 /*
   An override does something other than search, so it must not look like
-  the tags around it. Underlined for now - a placeholder for whatever the
-  font/text pass decides, but the distinction has to be visible before
-  then, not only in the colour.
+  the tags around it, and the difference cannot be colour alone. The
+  underline is a placeholder style.
 */
 .shelf-link.override { color: var(--accent); border-color: var(--accent); text-decoration: underline; }
 .shelf-link:hover { background: rgba(var(--accent-rgb),0.22); }
 /*
-  The center row's shelf sits on the same cream sheet the room rows use
-  (`.paper-sheet`, now on `.catalog-center` itself - see above). The default
-  and history links follow the remapped `--dim`/`--ink`/`--edge` onto paper,
-  but the override links' gold (`--accent`) washes out on cream, so they take
-  the paper's inked rust - the same drop the rank and "read the rest" make.
+  The center row's shelf sits on a cream sheet (`.catalog-center.paper-sheet`).
+  The default and history links follow the remapped `--dim`/`--ink`/`--edge`,
+  but the override links' gold washes out on cream, so they take the paper's
+  inked rust, as the rank and "read the rest" do.
 */
 .catalog-center.paper-sheet .shelf-link.override { color: var(--paper-accent); border-color: var(--paper-accent); }
 
@@ -1893,12 +1692,10 @@ mark {
 .pager button[disabled] { opacity: 0.35; cursor: default; }
 .story.dim { color: var(--dim); font-style: italic; }
 /*
- * The sidecar's optional caption, rendered only inside the map canvas's
- * fallback content (`RoomDetails`'s `showPicture` prop) - fallback
- * content is never painted, so nothing here is actually seen; this
- * styling only matters if a browser without canvas support ever renders
- * it for real. Every other consumer puts the same text on an `<img
- * alt>` instead.
+ * The sidecar's optional caption, rendered only in the map canvas's
+ * fallback content (`RoomDetails`'s `showPicture` prop). It is seen only in
+ * a browser without canvas support. Every other consumer puts the same text
+ * on an `<img alt>`.
  */
 .picture {
   margin: 0 0 8px; padding-left: 8px; font-size: 11.5px; line-height: 1.5;
@@ -1906,14 +1703,13 @@ mark {
 }
 
 /*
- * The server-rendered catalog/room pages (app.ts's renderPage, bodies built
- * by catalogPage.ts) - plain document flow, not the interactive catalog's
- * virtualized rows, since this markup only ever paints before `bundle.js`
- * takes over `#root` (or for a no-JS visitor who never gets that far).
- * `.ssr-*` is a deliberately separate prefix from `.catalog-*` - see
- * docs/agents/catalog.md's "Namespace catalog CSS" about an unprefixed rule
- * reaching into a class it was never written for.
+ * The server-rendered catalog and room pages (app.ts's renderPage, bodies
+ * built by catalogPage.ts): plain document flow, since this markup paints
+ * only before `bundle.js` takes over `#root`, or for a no-JS visitor.
+ * `.ssr-*` is a separate prefix from `.catalog-*` (docs/agents/catalog.md,
+ * "Namespace catalog CSS").
  */
+
 .ssr-page {
   max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; color: var(--ink);
 }

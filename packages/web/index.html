@@ -3,30 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <!--
-      No `maximum-scale` and no `user-scalable=no`. Blocking page zoom is a
-      WCAG 1.4.4 failure and it locks out exactly the low-vision readers this
-      map is hardest on. These attributes prevent iOS treating a two-finger
-      map pinch as page zoom, but that job is done by `touch-action: none`,
-      set all the way up the tree below - the browser decides at touch-start
-      from the computed touch-action of the hit element AND its ancestors, so
-      nothing is left claimable. Worth re-checking on a real device alongside
-      the in-tile search field; a simulator does not settle iOS gesture
-      arbitration.
+      No `maximum-scale` and no `user-scalable=no`: blocking page zoom is a
+      WCAG 1.4.4 failure, and it locks out the low-vision readers this map is
+      hardest on. `style.css`'s `touch-action: none` on `html, body` keeps a
+      two-finger map pinch from becoming page zoom instead. iOS gesture
+      arbitration needs a real device to confirm; a simulator does not settle
+      it.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>%%TITLE%%</title>
     <meta name="description" content="%%DESCRIPTION%%" />
-    <!-- Every href below is relative so a subpath deployment resolves it
-         under <base href> instead of the browser's origin guess, which the
-         reverse-proxied prefix never sees - see base-path.ts. The og:*/
-         twitter:* content urls are the one exception: link unfurlers parse
-         this HTML without ever seeing <base href>, so app.ts's renderPage
-         fills the canonical-url and og-image placeholders below with an
-         absolute url per request, naming the page being served rather than
-         the site root - a /catalog/<slug> permalink gets its own canonical
-         url and its own og:image (the room's own picture). Note that
-         renderPage substitutes both placeholder names globally - spelling
-         either inside this comment would rewrite this prose too. -->
+    <!-- Every href below is relative, so a subpath deployment resolves it
+         under <base href> (see base-path.ts).
+         The og:*/twitter:* content urls are the exception. Link unfurlers
+         never see <base href>, so app.ts's renderPage fills the canonical-url
+         and og-image placeholders with an absolute url for the page being
+         served; a /catalog/<slug> permalink gets the room's picture.
+         renderPage substitutes placeholder names globally, so spelling one
+         inside a comment rewrites the comment too. -->
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
@@ -48,22 +42,17 @@
     %%NOSCRIPT_REDIRECT%%
   </head>
   <body>
-    <!-- The body placeholder below is real, crawlable content for the
-         catalog/room routes (app.ts's renderPage) - empty on other routes,
-         unchanged from before this existed. It lives inside #root because
-         bundle.js's `createRoot(rootEl).render(<App />)` (main.tsx) takes
-         ownership of this container on its first commit either way - putting
-         the SSR markup here means a visitor sees real content immediately,
-         then the interactive app in its place once JS runs, rather than a
-         blank frame first. This is not hydration - there's no attempt to
-         reuse this markup's DOM nodes, only to not leave the container empty
-         until JS replaces it. -->
+    <!-- The body placeholder is crawlable content that app.ts's renderPage
+         fills on the catalog, room, /help and /about routes, and leaves
+         empty on `/`.
+         It sits inside #root so a visitor sees it until main.tsx's
+         `createRoot(rootEl).render(<App />)` replaces it on first commit.
+         React does not hydrate it; the markup is discarded. -->
     <div id="root">%%SSR_BODY%%</div>
-    <!-- The route-script placeholder below is empty except on the
-         catalog/room routes - tells main.tsx which mode/room to open on
-         first render, read once at module scope exactly as
-         `?catalog`/`?blockTags` already are. Must land before bundle.js
-         reads it. -->
+    <!-- The route-script placeholder sets `window.__INITIAL_ROUTE__`, which
+         tells main.tsx which mode, room or dialog to open on first render.
+         renderPage fills it on the same routes as the body placeholder.
+         It must come before bundle.js, which reads it once at module scope. -->
     %%INITIAL_ROUTE_SCRIPT%%
     <script type="module" src="bundle.js"></script>
   </body>
