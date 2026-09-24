@@ -43,10 +43,10 @@ import { isCenter, type MapLayout } from '../../../map/ordering.ts';
 import type { SortMode } from '../../../map/favorites.ts';
 
 /**
- * Same rule as `render.ts`'s `idOf`; the twins mirror each other rather than
- * share an abstraction - see docs/agents/rendering.md's "The WebGL renderer".
- * Built from `layout.rankOf`/`isCenter` rather than `layout.roomAt()` for the
- * same per-frame allocation reason (issue #256).
+ * Same rule as `render.ts`'s `idOf`, kept in lockstep with it - see
+ * docs/agents/rendering.md's "The WebGL renderer".
+ * Built from `layout.rankOf`/`isCenter` for the same per-frame allocation
+ * reason.
  */
 const idOf = (layout: MapLayout, order: number[], gx: number, gy: number): RoomId => {
   if (isCenter(gx, gy)) return CENTER;
@@ -70,9 +70,12 @@ export type GLDrawOpts = Omit<DrawOpts, 'ctx'> & { gl: GLContext };
 
 export type GLDrawResult = DrawResult;
 
-/** `#0a0908`, `render.ts`'s background fill, as float RGB. */
+/**
+ * The GL clear colour, `#0a0908`. Every cell paints over it (see `render.ts`'s
+ * draw loop), so it shows only where a frame leaves a gap.
+ */
 const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255];
-/** `#15120f`, `render.ts`'s blank-cell fallback fill, as float RGB. */
+/** `render.ts`'s blank-cell fill `#15120f`, as float RGB; all four copies must agree (see that fill's comment). */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 /**
  * `cssVars.ts`'s `HOVER_GLOW_RGB`, as a flat quad. Used only when

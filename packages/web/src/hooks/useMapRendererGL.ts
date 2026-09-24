@@ -7,15 +7,14 @@
  *   - The canvas-lifetime effect (deps `[canvasRef, cache]` only) creates the
  *     GL context, the two renderers and every listener once per real canvas
  *     mount, or again after a lost context restores. `cache` is a dep because
- *     a genuinely new `TileCache` (a reloaded corpus) does need a fresh GL
+ *     a new `TileCache` (a reloaded corpus) does need a fresh GL
  *     runtime bound to it; `layout`/`order`/`favorites` and the like change
  *     on almost every search or toggle and must not tear this down.
  *   - Everything that legitimately changes often is read through
  *     `latestRef`, assigned during the render body (not inside an effect) so
  *     it is current before any effect runs, regardless of declaration order.
- *     The second, tiny effect exists only to call `draw.current()` when one
- *     of those values changes - the redraw trigger a full effect-rebuild
- *     used to provide for free.
+ *     The second, tiny effect calls `draw.current()` when one of those
+ *     values changes; without it they would not trigger a redraw.
  *
  * `main.tsx` hands this hook the real `canvasRef` only when `WEBGL` is on
  * and a dummy always-null ref otherwise (see `webglFlag.ts`), the same way
@@ -397,7 +396,7 @@ export function useMapRendererGL({
       }
 
       // Below `minFavoriteInteractiveWidth`, the badge is too small to
-      // fairly hit (issue #257) and hover is skipped - see
+      // fairly hit and hover is skipped - see
       // `useMapRenderer.ts`'s twin comment.
       let nextFavorite: { x: number; y: number; id: number } | null = null;
       if (favs) {

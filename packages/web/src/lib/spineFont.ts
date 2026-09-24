@@ -8,14 +8,10 @@
  * pure half - just the CSS family string `composeSpines` puts in `ctx.font` -
  * and `loadSpineFont` is the DOM half, called once from `main.tsx`.
  *
- * The woff2 asset is imported dynamically, inside `loadSpineFont`, rather than
- * at module scope: `center.ts` (and therefore this module) is imported by
- * `center.test.ts`/`render.test.ts`/`slide.test.ts` under plain Node, which
- * has no bundler and no loader for a raw `.woff2` binary - only esbuild's
- * `dataurl` loader (packages/server/index.ts, bundle.test.ts) knows how to
- * turn that import into a string. A static import would eagerly resolve it
- * and crash every one of those suites; a dynamic import defers it to the one
- * real call site, in the browser, where esbuild has already inlined it.
+ * The woff2 asset is imported inside `loadSpineFont`, never at module scope.
+ * Node test suites import this module through `center.ts` and have no loader
+ * for `.woff2`, so a static import crashes them; only the browser bundle
+ * (esbuild's `dataurl` loader, `packages/server/index.ts`) resolves it.
  */
 
 /** `ctx.font`'s family list - Georgia is the fallback while the webfont loads. */

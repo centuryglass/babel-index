@@ -44,7 +44,7 @@
  *
  * ### Timing comes from config
  *
- * The five durations are by-feel numbers, so they live in `packages/config`,
+ * The durations (config's `slide` section) are by-feel numbers, so they live in `packages/config`,
  * and this file states no fallback for them - the same rule
  * `useMapCamera.ts` gives for the flight duration, and docs/agents/map.md's
  * "Consuming files state no fallback defaults". What this file owns is how a
@@ -223,8 +223,8 @@ export function buildTimeline(moves: Move[], timing: Config['slide']): Timeline 
  * applied. For a shift that is the far end of its own motion; for a swap it
  * is wherever the run already stands, so a swap emitted after a shift lands
  * at that shift's completion, not at the next run's start. While runs play
- * strictly in sequence the distinction is invisible; once they overlap it is
- * load-bearing - see the cascade in `buildTimeline`.
+ * strictly in sequence the distinction is invisible; once they overlap it
+ * decides when the swap lands - see the cascade in `buildTimeline`.
  */
 function pushMove(lane: Lane, move: Move): void {
   let run = lane.runs[lane.runs.length - 1];
@@ -462,6 +462,7 @@ export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRen
         }
         drawn++;
       } else {
+        // Must match `render.ts`'s blank-cell fill.
         ctx.fillStyle = '#15120f';
         ctx.fillRect(sx, sy, cw, ch);
         blank++;

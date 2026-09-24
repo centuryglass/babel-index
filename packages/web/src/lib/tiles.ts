@@ -26,18 +26,18 @@
  * frame/lastUsed. That is why sheet-backed entries skip the "never evict
  * while loading" guard `evict()` still applies to per-file entries.
  *
- * ### Budgets are per level, and that is load-bearing
+ * ### Budgets are per level
  *
  * Each level gets its own LRU with its own budget from `pyramid.ts`. A single
  * global LRU would break rule 1: zooming in floods the cache with level 0,
  * evicts the entire coarse field, and zooming back out flashes blank across the
  * whole screen - which is the failure the pyramid exists to prevent. Levels
- * never evict each other. `sheetImages` is a further LRU of its own, on top of
- * (not instead of) the per-level room-pointer budgets above - see its budget's
+ * never evict each other. `sheetImages` is a further LRU of its own, in addition
+ * to the per-level room-pointer budgets above - see its budget's
  * docblock in pyramid.ts for why "images held" means something different once
  * one image can serve hundreds of rooms.
  *
- * ### Eviction is frame-aware, and that is too
+ * ### Eviction is frame-aware
  *
  * The renderer walks cells row by row, so mid-frame the tiles it has already
  * drawn are the least recently used entries in the cache. A plain LRU therefore
@@ -59,10 +59,9 @@
  * default: its sheets, once loaded, are never evicted at all (see
  * `neverEvictSheetLevels`). A pan at that zoom crosses the whole map in a
  * couple of gestures - constantly warming and dropping sheets there would
- * mean visibly thrashing rather than caching. The whole level's sheets are
- * few and cheap (see SHEETS's docblock), so holding all of them forever,
- * loaded lazily as each is first asked for, is strictly better than evicting
- * any of them.
+ * mean visibly thrashing. The whole level's sheets are few and cheap (see
+ * SHEETS's docblock), so all of them are held forever, each loaded lazily when
+ * first asked for.
  *
  * `createImage` exists so all of this can be tested without a DOM; the browser
  * never passes it.
@@ -342,14 +341,13 @@ self.onmessage = (e) => {
 }
 
 /**
- * The browser's `LoadableImage`: fetch the encoded bytes and decode off the
- * content main thread into an owned `ImageBitmap` (see `decodeInWorker`). Buys
- * two things, both from profiling zoom lag:
+ * The browser's `LoadableImage`: fetch the encoded bytes and decode them off
+ * the main thread into an owned `ImageBitmap` (see `decodeInWorker`).
  *
- *   - the decode never runs on the render thread, so the first draw of a tile
- *     (or a 48 MB sheet) no longer stalls it - the per-level-transition jank, and
- *   - the decoded surface is JS-owned and never silently discarded, so a later
- *     draw can never trigger a re-decode of a tile that never left the cache.
+ *   - A draw never decodes, so the first draw of a tile or sheet cannot stall
+ *     the render thread.
+ *   - The bitmap is JS-owned and never discarded by the browser, so a tile
+ *     still in the cache never re-decodes.
  */
 function createBitmapImage(): LoadableImage {
   let url = '';

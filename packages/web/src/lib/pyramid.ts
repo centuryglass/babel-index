@@ -1,7 +1,7 @@
 /**
  * The resolution pyramid: which size of each room to draw, and how much to keep.
  *
- * THIS FILE IS THE TUNING SURFACE. Every number that decides what gets fetched,
+ * This file is the tuning surface. Every number that decides what gets fetched,
  * what gets held and what gets thrown away is a constant at the top of this
  * file, with the arithmetic that justifies it written next to it. Nothing else
  * in the codebase should contain a pyramid number - `tiles.ts` reads the ladder
@@ -20,9 +20,9 @@
  *      draw nothing is for every level of every room to be missing.
  *   2. Cells load slightly before they are needed - a ring outside the viewport,
  *      and the next level out, warmed at lower priority than anything visible.
- *   3. Hold rather than refetch. Budgets below are generous on purpose and each
- *      level has its own, so zooming in cannot evict the coarse field that rule
- *      1 falls back on.
+ *   3. Hold before refetching. Budgets below are generous and each level has
+ *      its own, so zooming in cannot evict the coarse field that rule 1 falls
+ *      back on.
  *
  * Nothing here assumes a tile size or a tile shape. BASE_TILE is the only place
  * either is stated; the ladder is expressed as divisors of it, and every pixel
@@ -111,50 +111,25 @@ export const DPR_CAP = 2;
  * `divisor` is what BASE_TILE is divided by, so the ladder is a statement about
  * ratios and survives any change to the tile. Level 0 is the source art.
  *
- * `budget` is the maximum number of entries held at that level. For a
- * per-file level (below `SHEETS.fromLevel`) that is still literally "decoded
- * images held" - it is a ceiling, not a reservation; entries appear only as
- * cells are visited. For a sheet-packed level it counts cheap per-room
- * pointers `{sheetUrl, rect}` instead (see tiles.ts) - the actual decoded
- * bytes for those levels are bounded separately by `SHEETS.cacheBudget`,
- * shared across every sheet-packed level, since one decoded sheet image now
- * serves hundreds of rooms. The table below states real decoded-byte cost
- * only for levels 0-1; treat its rows for 2-4 as "budget bytes" no longer
- * meaning real memory.
+ * `budget` is the maximum number of entries held at that level, a ceiling
+ * rather than a reservation. What an entry costs depends on the level:
  *
- * At the current BASE_TILE of 1024x768 that works out as (bytes/tile being
- * w x h x 4, decoded RGBA - what the browser actually holds; the encoded JPEG
- * is ~20x smaller and is not the constraint):
+ * - Below `SHEETS.fromLevel` (per-file levels), an entry is one decoded
+ *   image, `w x h x 4` bytes of RGBA.
+ * - From `SHEETS.fromLevel` on, an entry is a cheap `{sheetUrl, rect}`
+ *   pointer (`tiles.ts`). Decoded bytes for those levels are bounded
+ *   separately by `SHEETS.cacheBudget`.
  *
- *   level      size  bytes/tile  budget  budget bytes  worst-case visible*
- *       0  1024x768        3 MB     480      1,440 MB                  30
- *       1   512x384      768 KB     800        600 MB                  99
- *       2   256x192      192 KB    1200        225 MB                  336
- *       3    128x96       48 KB    3200        150 MB†                1271
- *       4     64x48       12 KB   16400        202 MB†                4740
- *       5     32x24        3 KB   65000        200 MB†                7500
- *                                          ~2.6 GB nominal, ~2.4 GB real*
+ * Budgets must satisfy rules 1 and 3, and `pyramid.test.ts` asserts both from
+ * the live constants and `BASE_TILE`:
  *
- * *worst-case visible = cells on a 2560x1440 device-pixel viewport at the
- * zoom in that level's band which shows the most of them. The test
- * (`pyramid.test.ts`) recomputes these columns against multiple tile shapes,
- * so this comment is illustrative only - trust the assertion.
+ * - Each level holds at least one worst-case screen plus its prefetch ring,
+ *   or it evicts tiles it is still drawing.
+ * - Each coarser level holds more than the finer one before it, so zooming
+ *   in cannot evict the field rule 1 falls back on.
  *
- * †Not real bytes. Real bytes for levels 3-5 come from `SHEETS.cacheBudget`
- * sheets instead; "~2.4 GB real" adds a 2048-room corpus's full complement
- * of sheets on top of levels 0-2, which is the actual ceiling to budget a
- * machine against, not the nominal table total.
- *
- * Level 2 is per-file, not sheet-packed (see SHEETS.fromLevel) - its zoom band
- * pulls nearly every 256-room sheet just to show a handful of rooms (under
- * 8% utilization), costing ~94x the bytes to save a dozen requests. Its
- * budget is real decoded bytes again, sized well above both its own worst
- * case (336) and level 1's (rule 3 needs each coarser level to hold strictly
- * more than the one before it).
- *
- * Level 0 holds 480 rooms against a worst case of 30 - rule 3 buying revisits,
- * not screens. Lower CACHE_SCALE if the total exceeds what the machine can
- * spare; the ratios between levels are the part worth keeping.
+ * Lower `CACHE_SCALE` if the total exceeds what the machine can spare; the
+ * ratios between levels are the part worth keeping.
  */
 export const LEVELS: LevelSpec[] = [
   { level: 0, divisor: 1, budget: 480 },
@@ -223,22 +198,18 @@ export const PREFETCH: PrefetchConfig = {
  * into one grid image cuts that to one request per sheet, letting the edge
  * cache actually warm instead of perpetually seeing cold URLs.
  *
- * Levels below `fromLevel` stay one file per room. Level 2 used to be packed
- * too, but sheet packing only pays for itself where visible rooms outnumber
- * sheets - at level 2's zoom band only ~12-20 rooms are on screen against a
- * 256-room sheet (under 8% utilization), and because room order is a random
- * per-session permutation, sheets carry no locality: those 12-20 rooms land
- * in nearly every sheet, not a shared few. Fetching whole sheets there cost
- * ~94x the bytes of per-file tiles to save a dozen requests, which is why
- * only the coarsest levels are packed. Fewer rooms per sheet also means a
- * smaller re-upload blast radius when one room in it changes (see
- * tools/upload/lib.ts) - another reason to leave the request-cheap, room-
- * sparse end of the ladder unpacked.
+ * Levels below `fromLevel` stay one file per room. Packing pays only where
+ * visible rooms outnumber sheets. Room order is a random per-session
+ * permutation, so sheets carry no locality: at a finer level the few rooms on
+ * screen land in nearly every sheet, and fetching whole sheets costs far more
+ * bytes than the requests it saves. Lowering `fromLevel` needs that
+ * arithmetic redone. Unpacked rooms also keep a re-upload small when one room
+ * changes (see `tools/upload/lib.ts`).
  *
  * `cols * rows` must equal `roomsPerSheet` - `sheetPlan` asserts this
  * (`packages/pipeline/layout.ts`, called by both `packages/pipeline/sheets.ts`
- * and `packages/server/scan.ts`) rather than deriving one from the other, so
- * a bad edit fails loudly instead of packing a partial grid.
+ * and `packages/server/scan.ts`), so a bad edit fails loudly before it packs
+ * a partial grid.
  */
 export const SHEETS: SheetsConfig = {
   fromLevel: 3,
@@ -247,8 +218,8 @@ export const SHEETS: SheetsConfig = {
   rows: 16,
   /**
    * Decoded sheet images held at once, across every sheet-packed level
-   * combined (`tiles.ts`'s `sheetImages`, a budget on top of - not instead
-   * of - the per-level room-pointer budgets in `LEVELS`). A corpus of N
+   * combined (`tiles.ts`'s `sheetImages`, a budget in addition to the
+   * per-level room-pointer budgets in `LEVELS`). A corpus of N
    * rooms has `ceil(N / roomsPerSheet)` sheets per sheet-packed level, so
    * once this is at least (sheet-packed levels) x (sheets per level), the
    * whole coarse end of the pyramid fits in memory at once and a full scroll

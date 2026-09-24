@@ -117,7 +117,7 @@ interface UseMapRendererOpts {
   /**
    * `config.favorites.minInteractiveTileWidth` - below this many CSS pixels
    * of cell width, the favorite badge stops responding to hover (and, in
-   * `main.tsx`'s tap handler, to a tap) - issue #257.
+   * `main.tsx`'s tap handler, to a tap).
    */
   minFavoriteInteractiveWidth?: number;
   /**
@@ -149,8 +149,8 @@ interface UseMapRendererOpts {
   /**
    * Release a search's indicator/spinner claim (`useRearrangement.ts`'s
    * `beginSearchPreload`) when the map is grabbed before any rearrangement
-   * plan exists to own it - the window `anim.current` alone cannot see
-   * (#235). A no-op when nothing claimed it.
+   * plan exists to own it - the window `anim.current` alone cannot see.
+   * A no-op when nothing claimed it.
    */
   cancelSearchPreload?: () => void;
 }
@@ -207,23 +207,18 @@ export function useMapRenderer({
     // pattern as `hoveredBook`.
     let hoveredDistill = false;
     // Gates the cursor ring (`render.ts`), tied to the canvas's own focus
-    // rather than to whether a key has been pressed: a reader who just
-    // tabbed onto the map has no other sign the press landed. `:focus-visible`
-    // rather than `:focus` keeps a mouse click from lighting a permanent
+    // so a reader who just tabbed onto the map sees the press landed.
+    // `:focus-visible` keeps a mouse click from lighting a permanent
     // reticle - the same selector the center tile's DOM controls use for
     // their outlines (`style.css`).
     let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
-    // `getBoundingClientRect()` on either element forces the browser to flush
-    // any layout the frame's own style writes (searchEl/booksEl/bookEl/
-    // controlsEl, above) just queued, before the canvas draw below even
-    // starts - the classic forced-reflow trap, and one every frame ever
-    // drawn used to pay for the search arrow's bearing. Neither rect changes
-    // on pan/zoom/scroll, only on an actual layout change, so both are
-    // cached here and refreshed by their own `ResizeObserver` instead of
-    // read fresh every frame. `hud` only exists under `?debug` and its
-    // presence cannot change mid-effect-lifetime, so it is looked up once
-    // here too rather than on every `render()` call.
+    // The canvas and search-arrow rects are cached and refreshed by their own
+    // `ResizeObserver`. Calling `getBoundingClientRect()` inside `render()`
+    // would force a reflow of the frame's own style writes (searchEl/booksEl/
+    // bookEl/controlsEl) every frame. Neither rect changes on pan/zoom/scroll.
+    // `hud` exists only under `?debug` and cannot appear mid-effect, so it is
+    // looked up once here too.
     const hud = document.getElementById('hud');
     let canvasRect = canvas.getBoundingClientRect();
     const canvasRO = new ResizeObserver(() => {
@@ -241,8 +236,8 @@ export function useMapRenderer({
       badgeRO.observe(arrowElForObserver);
     }
 
-    // The favorites-sort switch and reorder button's three children - looked
-    // up once here instead of on every `pointermove`. The container is
+    // The favorites-sort switch and reorder button's three children, looked
+    // up once here for every `pointermove` to share. The container is
     // mounted (hidden, not unmounted) for the whole effect lifetime whether
     // or not its cell is on screen, so these don't change underneath the cache.
     const controlsContainerEl = controlsRef?.current ?? null;
@@ -440,7 +435,7 @@ export function useMapRenderer({
       const running = anim.current;
       if (!running) {
         // No rearrangement plan exists yet, but a search may already have
-        // claimed the indicator ahead of one (`beginSearchPreload`, #235) -
+        // claimed the indicator ahead of one (`beginSearchPreload`) -
         // that has nothing else to hand it back.
         cancelSearchPreload?.();
         return;
@@ -513,8 +508,8 @@ export function useMapRenderer({
 
       // The favorites-sort switch and reorder button - DOM `.hover` classes
       // like the open book's: neither paints text, so a CSS overlay is the
-      // whole highlight. `shuffleEl`/`mineEl`/`countEl` are looked up once
-      // above rather than queried here on every move.
+      // whole highlight. `shuffleEl`/`mineEl`/`countEl` are cached at effect
+      // setup.
       shuffleEl?.classList.toggle('hover', shuffleButtonAtPoint(px, py, cellRect));
       mineEl?.classList.toggle('hover', mineToggleAtPoint(px, py, cellRect));
       countEl?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
@@ -553,7 +548,7 @@ export function useMapRenderer({
       // (`favoriteToggleAtPoint`) with no padding - the tap hit test pads out
       // for touch (`favoriteHitRect`), but a mouse hover should track the
       // art exactly. Below `minFavoriteInteractiveWidth`, the badge is too
-      // small to fairly hit (issue #257) and hover is skipped.
+      // small to fairly hit and hover is skipped.
       let nextFavorite: { x: number; y: number; id: number } | null = null;
       if (favorites) {
         const cellPx = pxPerCell(cam.current);
