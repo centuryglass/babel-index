@@ -269,7 +269,9 @@ path can match several rows; read every file it matches.
 - **Open issues are usually already in context.** The `SessionStart` hook
   (`.claude/hooks/session-start.sh`) runs `.claude/scripts/issues.mjs`, which
   writes `.claude/cache/issues/` (`index.md` plus one file per issue) and
-  prints the index. The cache is generated and gitignored; never edit it or
+  prints the index. OpenCode runs the same script from
+  `.opencode/plugins/issue-cache.ts` and loads the index through
+  `opencode.json`'s `instructions`. The cache is generated and gitignored; never edit it or
   treat it as the source of truth. `issues.mjs`'s header covers the fetch
   paths and `BABEL_INDEX_ISSUES_TOKEN`.
 - **When the hook produced nothing** (rate-limited, no token, or an agent

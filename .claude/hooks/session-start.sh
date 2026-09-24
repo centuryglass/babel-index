@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+# Also run by OpenCode (`.opencode/plugins/issue-cache.ts`), which discards
+# stdout and reads the cache file instead.
 cd "${CLAUDE_PROJECT_DIR:-.}"
 
 if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
