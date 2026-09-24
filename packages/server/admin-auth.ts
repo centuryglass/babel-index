@@ -3,41 +3,24 @@
  * only `/api/logs`/`/admin/logs`). `ADMIN_PASSWORD_HASH` holds `salt:hash`
  * (both hex, from `scryptSync`) - `hashPassword` below is what
  * `tools/hash-admin-password` calls to produce it; the plaintext password is
- * never written anywhere, including this env var. There is exactly one
- * operator, so the Basic Auth username is read but never checked - the
- * scheme requires one, this deployment has no use for it.
+ * never written anywhere, including this env var. There is one
+ * operator, so the Basic Auth username is read but never checked.
  *
- * `express-basic-auth` or similar would do this too, but the whole
- * implementation is the parse-header-and-timingSafeEqual below plus what
- * `node:crypto` already ships - not worth a dependency for.
+ * `requireAdminAuth` rate-limits on `req.ip` via `rate-buckets.ts`. Every
+ * request spends a token, right password or wrong, so this bounds guesses
+ * per address. Behind a reverse proxy it needs `--trust-proxy` (see
+ * index.ts), or every visitor shares the proxy's bucket.
  *
- * `requireAdminAuth` also rate-limits, on `req.ip` via `rate-buckets.ts` -
- * the same shape `app.ts` already uses for favorite writes. Every request
- * spends a token, whether the password turns out right or not, so this
- * bounds guesses per address rather than only reacting to wrong ones.
- * Behind a reverse proxy this needs `--trust-proxy` set (same caveat as
- * favorites - see index.ts), or every visitor shares the proxy's bucket.
+ * `verifyPassword` must stay on async `scrypt`: `scryptSync` on a request
+ * path blocks every other request for each hash, and the rate limit can't
+ * prevent that, since it is per address and a distributed burst gets a
+ * fresh budget per address. `hashPassword` is sync because only the
+ * `tools/hash-admin-password` CLI calls it.
  *
- * `verifyPassword` uses `scrypt`'s async (thread-pool) form, not
- * `scryptSync`: a burst of login attempts still costs the same CPU, but on
- * libuv's thread pool rather than blocking the process's one JS thread -
- * `scryptSync` here would stall every other request (image serving,
- * search, everything) for each hash's duration, which a rate limit alone
- * doesn't prevent during the burst before it trips (the bucket bounds *guesses per address*, not concurrent
- * *addresses*, so a distributed attacker gets a fresh burst per address).
- * `hashPassword` stays sync - it's `tools/hash-admin-password`'s one-off CLI
- * call, never on a request path, so blocking there is harmless.
- *
- * Every attempt is logged (`ip`, path, outcome) through the same `logger`
- * everything else writes through - so a real attack shows up in the log
- * file this module itself gates access to, not just as user-visible
- * slowness. Never the attempted password, right or wrong: that's worth
- * nothing operationally and is exactly the kind of thing that shouldn't
- * end up sitting in a log file. Rate-limited attempts log at `warn`
- * (this is the "someone is hammering the endpoint" signal, and the bucket
- * itself already caps how often it can fire); a wrong password also logs
- * at `warn`; a real login logs at `info`, so the level filter in the log
- * viewer can separate "did I get in" from "is something hammering this".
+ * Every attempt is logged (`ip`, path, outcome), never the attempted
+ * password. Rate-limited and wrong-password attempts log at `warn`, a
+ * successful login at `info`, so the log viewer's level filter separates
+ * logins from hammering.
  */
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -89,11 +72,9 @@ function passwordFromHeader(header: string | undefined): string | null {
  * caller (`app.ts`) builds this once and reuses it for every admin route,
  * so the three log-viewer routes share one budget rather than one each.
  *
- * `buckets` is injectable so a test can exhaust a burst without needing 20+
- * real `scrypt` calls to finish inside one refill window - the default
- * refill (1/second) leaves no margin against ~20 password hashes' own
- * wall-clock cost (thread-pool queuing included), which is what made the
- * shared default flaky under CI load.
+ * `buckets` is injectable so a test can exhaust a burst without waiting on
+ * a burst's worth of real `scrypt` calls, which can outlast one refill
+ * window under load and make the test flaky.
  */
 export function requireAdminAuth(passwordHash: string, buckets: RateBuckets = createRateBuckets()) {
   return async (req: Request, res: Response, next: NextFunction) => {

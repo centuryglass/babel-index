@@ -1,20 +1,17 @@
 /**
  * Hourly, privacy-preserving usage counts: unique visitors, searches, and
- * favorite adds/removes, logged through `logger.ts` on the wall-clock hour
- * (see GitHub issue #282). Nothing here is written to disk, and no per-visitor
- * data survives a flush.
+ * favorite adds/removes, logged through `logger.ts` on the wall-clock hour.
+ * Nothing here is written to disk, and no per-visitor data survives a
+ * flush.
  *
  * A visitor is remembered only as `HMAC(hourlySalt, ip)` in the current
  * hour's in-memory `Set` - the same shape `favorites.ts` uses to make a hash
  * useless as an identity list. Unlike `favorites.ts`'s salt, which persists
  * so counts survive a restart, this salt is thrown away and regenerated on
- * every flush: the point here is a size, not a running total, so nothing
- * needs to be recognizable across hours - and if it were, an operator could
- * correlate one visitor's hash across log lines, which is exactly the kind
- * of tracking this feature is meant not to build.
+ * every flush. Only a per-hour size is needed, and a persistent salt would
+ * let an operator correlate one visitor's hash across log lines.
  *
- * An hour where every count is zero is not logged at all, per the issue -
- * a quiet demo produces a quiet log, not an hourly line of zeroes.
+ * An hour where every count is zero is not logged at all.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { logger } from './logger.ts';
@@ -67,10 +64,9 @@ export function createUsageMetrics({ log = defaultLog, now = Date.now }: UsageMe
   };
 
   // Aligned to the wall-clock hour, not just every HOUR_MS from process
-  // start - a demo restarted at 2:17 should still flush at 3:00, not 3:17.
-  // Recomputing the delay from `now()` on every reschedule (rather than a
-  // plain setInterval) keeps it pinned to the hour instead of drifting by
-  // however long the previous flush took.
+  // start - a demo restarted at 2:17 still flushes at 3:00. The delay is
+  // recomputed from `now()` on every reschedule, so it stays pinned to the
+  // hour without drifting by however long the previous flush took.
   let timer: NodeJS.Timeout;
   const scheduleNext = () => {
     timer = setTimeout(() => {
