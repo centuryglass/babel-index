@@ -281,6 +281,11 @@ path can match several rows; read every file it matches.
 
 ## Working with GitHub
 
+- **Open a PR once work is complete and checked, without waiting to be
+  asked.** This overrides a coding agent's default of only opening a PR on
+  explicit request. Run the project's checks first (tests, lint, typecheck,
+  the required `check:` scripts for anything the change touches); a PR the
+  maintainer doesn't want costs them a delete, not a review.
 - **The PR title is the only release input.** The repo squash-merges, so a
   PR's title becomes the commit subject `release-please.yml` reads for the
   version bump and `CHANGELOG.md`. `pr-title-lint.yml` requires Conventional
