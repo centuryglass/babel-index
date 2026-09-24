@@ -3,12 +3,10 @@
  * another, and the state machine that decides whether a layout/order change
  * gets that treatment or is simply drawn.
  *
- * Split out of `main.tsx`. What was implicit before this - "the next layout change should animate" and
- * "here is the sentence for it" as two separate ref writes a caller had to
- * remember to make together - is now one call, `requestAnimation(note)`. That
- * also closes the search-error bug the plan names: a flag set before an
- * `await` and stranded when it threw is not expressible once the only way to
- * ask for an animation is to say so, with its note, in one place.
+ * A caller asks for an animation with one call, `requestAnimation(note)`,
+ * which sets the animate flag and the announcement together. The next
+ * layout/order change consumes both, so a flag cannot be left set without its
+ * note, or stranded by a throw between two separate writes.
  *
  * `anim` stays a ref owned by `main.tsx` and is passed in rather than created
  * here, because `useMapRenderer` reads it every frame and the render loop
@@ -32,12 +30,10 @@ import type { RunningAnim } from './useMapRenderer.ts';
 
 /**
  * The on-camera rectangle a rearrangement's target zoom implies, and the
- * pyramid level that zoom will actually want there - shared by
- * `prepareRearrangement` (before the flight) and the plan it builds, which
- * previously computed this same geometry again after landing. This holds for
- * the flight `startRearrangement` runs, which only ever changes
- * zoom - never x/y (see the `-0.5`/`+0.5` cancellation there) - so `cam`'s
- * current position is already the landing position.
+ * pyramid level that zoom will want there. Valid before the flight because
+ * `startRearrangement`'s flight changes only zoom, never x/y (see the
+ * `-0.5`/`+0.5` cancellation there), so `cam`'s current position is already
+ * the landing position.
  */
 function landingRectangle(cam: Camera, canvas: HTMLCanvasElement, targetZoom: number) {
   const dpr = Math.min(DPR_CAP, window.devicePixelRatio || 1);
@@ -81,19 +77,16 @@ interface UseRearrangementOpts {
    * Fired once per `prepareRearrangement`, with the ids/level it just
    * computed by simulating the plan - see that function's own doc for why
    * that set is not just the static before/after viewport union. Fired
-   * before the throttled readiness-polling loop starts, so a caller gets it
-   * as early as this hook can offer it. This hook stays renderer-agnostic -
-   * it doesn't know or care what a caller does with the ids, only that
-   * `main.tsx` wires it to the WebGL texture warmer
-   * (`gl/warm.ts`) when `?webgl` is active. Optional, and doing nothing
-   * when omitted, the same as `announce`.
+   * before the throttled fetch loop starts. The hook stays renderer-agnostic;
+   * `main.tsx` wires this to the WebGL texture warmer (`gl/warm.ts`) when the
+   * WebGL renderer is in use. Optional.
    */
   onPreparing?: (ids: ReadonlySet<number>, level: number) => void;
   /**
    * The center-tile loading indicator, or null when none is deployed. Played
    * while `prepareRearrangement` fetches, and held to a full cycle boundary
-   * before the flight - but only when the center book is actually on screen to
-   * show it. A ref so it can be cancelled by the map-interrupt path in the
+   * before the flight, but only when the center book is on screen to show
+   * it. A ref so it can be cancelled by the map-interrupt path in the
    * render hooks (`useMapRenderer.ts`'s onDown) as well as here.
    */
   loadingAnim?: { current: LoadingAnimation | null };
@@ -103,8 +96,7 @@ interface UseRearrangementOpts {
    * indicator's cycle-boundary wait), but unconditionally rather than
    * gated on the center book being on screen - `SearchIcon.tsx`'s
    * `SearchOrbitSpinner`, the search badge's own affordance for the same
-   * far-field case. Optional, and doing nothing when omitted, the same as
-   * `announce`.
+   * far-field case. Optional.
    */
   onPreparingChange?: (preparing: boolean) => void;
 }
@@ -130,16 +122,13 @@ export function useRearrangement({
   // Set by `requestAnimation` and consumed by the effect below. A slider drag
   // changes the layout too, and must not animate - so a caller has to ask.
   const animateNext = useRef(false);
-  // What brought the change about, in the search's own voice - carried
-  // alongside `animateNext` because they are one act, not two: see the file
-  // comment above.
+  // What brought the change about, in the search's own voice. Written
+  // together with `animateNext` by `requestAnimation`.
   const pendingNote = useRef('');
   const arrangement = useRef<{ layout: MapLayout; order: number[] } | null>(null);
-  // What to do once the new arrangement has actually landed on screen - after
-  // the slide (and, if parked, the fly back) rather than merely launched. Read
-  // once by the effect below alongside `pendingNote`, for the same reason: a
-  // caller asking for this one animation to be watched for should not also be
-  // on the hook for the next one it did not ask about.
+  // What to do once the new arrangement has landed on screen, after the slide
+  // and any zoom back. Consumed once by the layout effect, like `pendingNote`,
+  // so it applies only to the animation it was requested with.
   const pendingOnSettledRef = useRef<(() => void) | null>(null);
 
   const requestAnimation = useCallback(
@@ -154,8 +143,8 @@ export function useRearrangement({
   // Whether a search has claimed the indicator ahead of any rearrangement
   // plan existing for it - see `beginSearchPreload`. Distinct from
   // `anim.current`: that only exists once a plan is being prepared, which
-  // for a search is well after its network fetch and `rankHybrid` have both
-  // finished (#235). `startRearrangement` clears this the moment it runs,
+  // for a search is after its network fetch and `rankHybrid` have both
+  // finished. `startRearrangement` clears this the moment it runs,
   // transferring ownership to its own `playingLoad`/`onPreparingChange`
   // bookkeeping; every path that runs instead is responsible for calling
   // `cancelSearchPreload`.
@@ -163,9 +152,9 @@ export function useRearrangement({
 
   /**
    * Start the center-tile indicator and the search badge's spinner as soon
-   * as a real search is submitted (`useSearch.ts`), rather than waiting for
-   * `rankHybrid` to finish and a rearrangement to be requested for it - the
-   * gap #235 closes. Gated on center-book visibility exactly as
+   * as a real search is submitted (`useSearch.ts`), so the indicator covers
+   * the search's fetch and `rankHybrid` as well as the preload. Gated on
+   * center-book visibility the same way as
    * `startRearrangement`'s own indicator start is (below); the badge
    * spinner is not, for the same far-field reason `onPreparingChange`'s doc
    * gives.
@@ -200,42 +189,28 @@ export function useRearrangement({
   }, [loadingAnim, onPreparingChange]);
 
   /**
-   * Prepare a rearrangement completely - the plan AND every tile the
-   * animation will show - before the camera moves at all, rather than
-   * fetching mid-flight. The flight itself is the moment of peak contention
-   * on a cold cache, so fetches issued during it compete for the same
-   * network/decode budget with nothing to fall back on; doing the work up
-   * front is what keeps them off that critical path.
+   * Build the plan and fetch every tile the animation will show, before the
+   * camera moves. Fetches issued mid-flight compete for the network/decode
+   * budget at the moment a cold cache has nothing to fall back on.
    *
-   * Building the plan HERE rather than after landing also closes the seam
-   * cost for free: the landing rectangle depends only on the camera's
-   * current x/y (this flight never changes position, only zoom - see the
-   * `-0.5`/`+0.5` cancellation in `startRearrangement`) and the target zoom,
-   * both already known before the flight starts.
+   * The plan can be built now because the landing rectangle depends only on
+   * the camera's current x/y and the target zoom (see `landingRectangle`).
    *
-   * The id set to fetch is more than `before`'s and `after`'s static viewport
-   * rectangles. On a real 2048-room corpus the rooms actually shown during a
-   * rearrangement run 27-48% ahead of that static union, because
-   * `shiftRow`/`shiftCol` rotate a whole line and the conveyor
+   * The id set to fetch is larger than the union of `before`'s and `after`'s
+   * viewports. `shiftRow`/`shiftCol` rotate a whole line, and the conveyor
    * (`makeParker`/`makeAvailable`) stages a needed value in from wherever it
-   * currently sits - which can be well outside either rectangle, and is a
-   * real, load-bearing part of the choreography rather than an edge case. So
-   * this simulates the actual planned sequence with the real `applyMove`,
-   * snapshotting every on-camera cell after each non-`swap` move (a `swap`'s
-   * both ends are guaranteed off camera - `moves.ts` - so it can never change
-   * what is on-camera, and skipping it is free correctness, not an
-   * approximation). Pure array work, cheap regardless of corpus size -
-   * confirmed on a 2048-room case.
+   * sits, often outside both rectangles. So this replays the planned moves
+   * with `applyMove`, snapshotting every on-camera cell after each non-`swap`
+   * move. Skipping a `swap` is exact, since `illusion.ts` keeps both of its
+   * ends off camera.
    *
-   * Generic and center cells are skipped entirely: a generic's face is
-   * fungible and resolved by position at draw time (`slide.ts`'s "reads the
-   * generic index at each tile's home board cell"), and both it and the
-   * center tile are already pinned at corpus-load time (`main.tsx`), so
-   * neither ever needs fetching here.
+   * Generic and center cells are skipped: a generic's face is resolved by
+   * position at draw time (`docs/agents/map.md`), and both it and the center
+   * tile are pinned at corpus-load time (`main.tsx`), so neither needs
+   * fetching here.
    *
-   * Returns `null` when `buildRearrangement` declines (not animatable) -
-   * before ever starting a flight for it, unlike the old post-landing check,
-   * which flew out and back for nothing in this case.
+   * Returns `null` when `buildRearrangement` declines (not animatable), so
+   * the caller falls back before any flight starts.
    */
   const prepareRearrangement = useCallback(
     async (
@@ -269,19 +244,13 @@ export function useRearrangement({
       }
       onPreparing?.(ids, level);
 
-      // Issue requests capped at the same concurrency `cache.prefetch` uses
-      // in the ordinary render path (`PREFETCH.concurrency`), not all of them
-      // at once. Unthrottled, a cold-cache first rearrangement fires many
-      // large fetches at the one moment the cache has nothing to fall back on,
-      // and they compete for the same network/decode budget - a measured
-      // regression on Android Chrome (seen in perf-capture data).
-      // `cache.prefetch` itself can't be reused directly to get the cap: its
-      // queue is cleared on every `beginFrame()`,
-      // which keeps running for the CURRENT (pre-flight) arrangement while
-      // this function awaits, and would drop anything not yet started before
-      // its turn came up. So this drives `cache.request` (immediate, not
-      // queued) at a capped number in flight instead, polling readiness with
-      // `requestAnimationFrame` the same way the old wait loop did.
+      // Keep at most `PREFETCH.concurrency` requests in flight, the cap
+      // `cache.prefetch` uses; unthrottled, a cold cache fires every fetch at
+      // once and they contend for the same network/decode budget.
+      // `cache.prefetch` itself can't be used: its queue is cleared on every
+      // `beginFrame()`, which keeps running for the current arrangement while
+      // this awaits, and would drop requests not yet started. So this drives
+      // `cache.request` directly and polls readiness each animation frame.
       const prepareStart = performance.now();
       const deadline = prepareStart + config.slide.prepareTimeoutMs;
       const pending = [...ids];
@@ -306,8 +275,8 @@ export function useRearrangement({
         });
       }
 
-      // How long that took, and how much of it prepare gave up on - the number
-      // the "delay before motion" side of the tradeoff lives on (perf-capture data).
+      // How long prepare took, and how many tiles it gave up on, for the perf
+      // probe.
       let notReady = 0;
       for (const id of ids) if (!cache.isReady(id, level)) notReady++;
       perfRecordPrepare(performance.now() - prepareStart, ids.size, notReady);
@@ -322,22 +291,20 @@ export function useRearrangement({
   /**
    * Slide the library from one arrangement into another.
    *
-   * The camera zooms out IN PLACE first - eased to `min(current zoom,
-   * overviewZoom(...))` at the x/y it already has - rather than flying home to
-   * the center. Widening the view is what gives the slide a wall of rooms to
-   * work with; recentering was never necessary for that, and it cost every
-   * reader their position on the map for every rearrangement, search
-   * included. A reader already at or below that zoom gets no zoom flight at
-   * all - the slide runs immediately against wherever they are, exactly as it
-   * does when a favorite toggled live is asking for the same treatment
-   * mid-browse.
-   * `buildRearrangement` needs no particular position (the fixed tile - the
-   * center room - not being in the on-camera rectangle at all is the ordinary
-   * case, see `board.ts`). The guarantee is the same either way - nothing is
-   * ever seen to teleport - and it is a guarantee about whatever rectangle the
-   * camera is parked on, not about which rectangle that is. Returns false
-   * when the change cannot be animated legally or the camera cannot be
-   * treated as settled, which is the caller's cue to let it happen at once.
+   * The camera first zooms out in place, eased to `min(current zoom,
+   * overviewZoom(...))` at its current x/y, so the reader keeps their
+   * position on the map. The wider view gives the slide a wall of rooms to
+   * work with. A reader already at or below that zoom gets no flight, and
+   * the slide runs where they are.
+   *
+   * `buildRearrangement` needs no particular position; the fixed center room
+   * is usually outside the on-camera rectangle (see `board.ts`). The
+   * no-teleport guarantee holds for whichever rectangle the camera is parked
+   * on.
+   *
+   * Returns false when the change cannot be animated legally or the camera
+   * cannot be treated as settled, which is the caller's cue to apply it at
+   * once.
    */
   const startRearrangement = useCallback(
     async (
@@ -351,16 +318,9 @@ export function useRearrangement({
         return false;
       }
 
-      // Someone who asked for less motion gets the library rebuilt at once.
-      // Returning false here is not a special case: it is the same answer
-      // `buildRearrangement` gives for a change that cannot be animated
-      // legally, and the caller already knows what to do with it. So reduced
-      // motion costs one condition and reuses a path that is already written
-      // and already tested, rather than adding a branch of its own.
-      //
-      // Before the flight, deliberately: the zoom-out exists to set up the
-      // animation, so with no animation to set up there is no reason to move
-      // the camera - and moving it unasked is itself the thing being avoided.
+      // Reduced motion rebuilds the library at once, through the same false
+      // return as an unanimatable change. Checked before the flight, so the
+      // camera does not move either.
       if (prefersReducedMotion()) {
         cancelSearchPreload();
         return false;
@@ -375,12 +335,9 @@ export function useRearrangement({
       // so `perfDump()` can report all three phases apart.
       perfSetPhase('preparing');
 
-      // Remembered so the map can return to it once the slide settles -
-      // widening to the default zoom is only there to give the animation a
-      // wall of rooms to work with, and leaving the camera at that zoom
-      // afterwards fights whatever zoom the reader actually wanted (often
-      // the opening view, to keep using the center tile's controls). Moot
-      // when the camera never leaves in the first place.
+      // The zoom to return to once the slide settles, so the reader gets back
+      // the view they had (often the opening view, to keep using the center
+      // tile's controls). Unused when the camera never zooms out.
       const returnZoom = cam.current.zoom;
       const target = Math.min(
         returnZoom,
@@ -388,15 +345,13 @@ export function useRearrangement({
       );
 
       // The center-tile indicator plays over the book's page while the
-      // preload runs - but only when that page is actually on screen and large
-      // enough to read (the same legibility gate the shelf's own titles use).
-      // The search badge's own spinner (`onPreparingChange`, below) is not
-      // gated on that - it is the far-field affordance for exactly the case
-      // where the center book isn't visible to show anything.
-      // A search already claimed the indicator before this plan existed
-      // (`beginSearchPreload`, #235) - ownership transfers here rather than
-      // restarting `play()`, which would reset the cycle a reader has
-      // already been watching partway through.
+      // preload runs, only when that page is on screen and legible (the gate
+      // the shelf's own titles use). The search badge's spinner
+      // (`onPreparingChange`) is ungated: it covers the case where the center
+      // book isn't visible.
+      // If a search already claimed the indicator (`beginSearchPreload`),
+      // ownership transfers here without calling `play()` again, which would
+      // reset the cycle the reader is partway through.
       const alreadyLoading = searchPreloading.current;
       searchPreloading.current = false;
       const cellRect = centerCellRect(cam.current, {
@@ -409,9 +364,8 @@ export function useRearrangement({
       const playingLoad = alreadyLoading || (showLoading ? loadingAnim?.current?.play(requestDraw) ?? false : false);
       onPreparingChange?.(true);
 
-      // Everything the animation will need - the plan and every tile it will
-      // show - computed and fetched now, before the camera moves at all. See
-      // `prepareRearrangement`'s own doc for why.
+      // The plan and every tile it will show, before the camera moves (see
+      // `prepareRearrangement`).
       const prepared = await prepareRearrangement(before, after, canvas, target);
       if (anim.current?.before !== before) {
         if (playingLoad) loadingAnim?.current?.cancel();
@@ -419,8 +373,7 @@ export function useRearrangement({
         return true; // superseded during prepare; not ours to undo
       }
       if (!prepared) {
-        // Not animatable - discovered before ever starting a flight for it,
-        // unlike the old post-landing check.
+        // Not animatable; discovered before any flight.
         if (playingLoad) loadingAnim?.current?.cancel();
         onPreparingChange?.(false);
         anim.current = null;
@@ -431,7 +384,7 @@ export function useRearrangement({
       // Hold the flight until the indicator has played at least one full cycle
       // and reached a cycle boundary. It started when prepare did, so on a cold
       // cache it has been running the whole fetch; on a warm one this is the
-      // deliberate minimum the reader sees it for. A grab mid-cycle cancels it
+      // minimum the reader sees it for. A grab mid-cycle cancels it
       // (the render hooks' onDown) and resolves this wait, which also ends the
       // rearrangement - re-checked below before the camera moves.
       if (playingLoad) {
@@ -453,11 +406,9 @@ export function useRearrangement({
 
       perfSetPhase('flight');
       if (target !== returnZoom) {
-        // Land before rearranging, rather than racing it: two animations
-        // competing for the same attention and neither lands. It is also a
-        // correctness requirement now that flights ease - the plan is made
-        // against exactly the cells on screen, so it cannot be made until the
-        // camera has stopped moving.
+        // Land before sliding. The plan is made against the cells on screen
+        // at the landing zoom, so the slide cannot start while the camera is
+        // still moving.
         const landed = await flyTo(cam.current.x - 0.5, cam.current.y - 0.5, target);
         if (anim.current?.before !== before) return true; // superseded; not ours to undo
         if (!landed) {
@@ -524,13 +475,9 @@ export function useRearrangement({
     const previous = arrangement.current;
     arrangement.current = current;
 
-    // In the catalog there is no map on screen to rearrange, and flying a
-    // hidden camera to set up a slide nobody can see would be a second of
-    // nothing. `layout`/`order` still updated, so returning to the map simply
-    // shows the new arrangement at once - which is not a new path but the one
-    // `buildRearrangement` already takes when a change cannot be animated
-    // legally. `announce` speaks for it in whatever voice the current reading
-    // uses.
+    // In the catalog there is no map on screen to rearrange. `layout`/`order`
+    // still update, so returning to the map shows the new arrangement at once.
+    // `announce` speaks in whatever voice the current reading uses.
     if (mode !== 'map') {
       // No map on screen to rearrange, so nothing below will ever claim a
       // preload a search already started.
@@ -552,9 +499,9 @@ export function useRearrangement({
     pendingOnSettledRef.current = null;
     startRearrangement(previous, current, onSettled).then((started) => {
       if (!started) {
-        // Nothing to watch for - the new arrangement is already on screen,
-        // drawn at once rather than slid into. Whatever `onSettled` wanted to
-        // do (typically: find where a room landed) is already true.
+        // Nothing to watch for: the new arrangement is already drawn on
+        // screen, so whatever `onSettled` wanted to do (typically: find where
+        // a room landed) can run now.
         requestDraw();
         onSettled?.();
       }

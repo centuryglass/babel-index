@@ -28,41 +28,44 @@ export interface SharedAsset extends Partial<ImageSize> {
 }
 
 /**
- * The shared tiles: the blank center (if any), the generic alternates, and
- * distill mode's paired alternates for them - `genericDistill[i]` is
- * `generic[i]`'s replacement art when distill mode fades it in, matched by
- * filename stem in `scan.ts`'s `scanShared`. Null at an index whose generic
- * tile has no matching distill alternate on disk; the fade falls back to a
- * flat black overlay for that one rather than failing the whole corpus.
- *
- * `levels` is which per-file pyramid rungs the center and every generic tile
- * actually share on disk - the intersection of what `discoverLevels` finds
- * under the shared directory's root (the center) and its `generic/`
- * subdirectory, so a level only appears here when both trees have it. Always
- * at least `[{level: 0, dir: null}]`. `distillLevels` is the same discovery
- * rooted at `generic_distill/` instead, kept separate rather than intersected
- * with `levels`: not every generic tile has a distill alternate at all, so
- * requiring the base tree's rungs would silently veto a level the distill
- * tree actually has. `rooms.ts` is the one place any of the three is read;
- * the rest of the fixed app art (the distill toggle, the "forget searches"
- * overlay) is in none of them and stays flat at level 0 (see rooms.ts's
- * header).
- *
- * `favoriteLevels` is the favorite badge's pyramid - `fav_on.png`/
- * `fav_off.png` scaled to the tile's per-level widths, checked for
- * directly (`scan.ts`'s `discoverFavoriteLevels`) rather than intersected
- * with `levels`: the scaled badge files happen to live in the same
- * `<width>/` directories the center tile's pyramid does (a convenient home
- * for shared art with no style variants), but that is a storage detail, not
- * a shared discovery - a level counts here only when both badge faces are
- * actually present, regardless of what the center/generic trees have.
+ * The shared tiles served from `--shared-dir`, and the pyramid rungs each set
+ * has on disk. Read by `rooms.ts` (url resolution), `main.tsx` (warming),
+ * and the favorite badge's drawing (`favoriteBadge.ts`, `render.ts`). The rest
+ * of the fixed app art (the distill toggle, the "forget searches" overlay) is
+ * in none of these and stays flat at level 0 (see `rooms.ts`'s header).
  */
 export interface SharedAssets {
+  /** The blank center render, or null when none is deployed. */
   center: SharedAsset | null;
+  /** The generic alternates. */
   generic: SharedAsset[];
+  /**
+   * Distill mode's paired alternates: `genericDistill[i]` is `generic[i]`'s
+   * replacement art when distill mode fades it in, matched by filename stem
+   * in `scan.ts`'s `scanShared`. Null where a generic tile has no alternate
+   * on disk; the fade then uses a flat black overlay for that tile.
+   */
   genericDistill: (SharedAsset | null)[];
+  /**
+   * The per-file rungs the center and every generic tile share on disk: the
+   * intersection of what `discoverLevels` finds under the shared directory's
+   * root (the center) and its `generic/` subdirectory. Always at least
+   * `[{level: 0, dir: null}]`.
+   */
   levels: LevelInfo[];
+  /**
+   * The same discovery rooted at `generic_distill/`, not intersected with
+   * `levels`. Not every generic tile has a distill alternate, so the base
+   * tree's rungs must not veto a level the distill tree has.
+   */
   distillLevels: LevelInfo[];
+  /**
+   * The favorite badge's pyramid: `fav_on.png`/`fav_off.png` scaled to the
+   * tile's per-level widths (`scan.ts`'s `discoverFavoriteLevels`). A level
+   * counts only when both badge faces are present. The scaled files share the
+   * center tile's `<width>/` directories, but the discovery is independent of
+   * `levels`.
+   */
   favoriteLevels: LevelInfo[];
 }
 

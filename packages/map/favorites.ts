@@ -77,10 +77,8 @@ export interface FavoriteSortInput {
 export function favoriteOrder(base: number[], input: FavoriteSortInput): number[] {
   if (input.mode === 'relevance') return base;
 
-  // The base position is the tiebreak, captured before sorting rather than
-  // assumed: `Array.prototype.sort` is stable in every engine this runs in,
-  // but a comparator that says the tiebreak out loud survives a rewrite
-  // that sorts a different array.
+  // The base position is the explicit tiebreak, so the result stays stable
+  // even if a rewrite sorts a different array than `base`.
   const at = new Map<number, number>();
   base.forEach((id, i) => at.set(id, i));
 
