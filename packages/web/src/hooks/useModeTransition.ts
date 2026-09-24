@@ -3,6 +3,12 @@
  * the FLIP animation that folds the center tile into the catalog's first row
  * (or back out) rather than cutting between them.
  *
+ * FLIP is First, Last, Invert, Play: measure the element's rect before the
+ * switch, measure it again after, apply a transform that puts it back where
+ * it started, then animate that transform to none. Leaving the catalog runs
+ * it in reverse, from none onto the center tile. Only `transform` is
+ * animated, so no frame recomputes layout.
+ *
  * Split out of `main.tsx` - the most self-contained block in that file:
  * `flipFrom`, `centreRectNow`, `animatedSwitch` and the FLIP
  * `useLayoutEffect` are read nowhere else.
