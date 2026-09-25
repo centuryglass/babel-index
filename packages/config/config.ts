@@ -17,7 +17,7 @@
  * narrowing that leaves the finest rung or two unreachable is legal and silent.
  * `ZOOM_LIMITS`'s own comment carries why the direction is one-way.
  *
- * ### Numbers deliberately kept out
+ * ### Numbers kept out
  *
  * Other by-feel constants live where they are read, either because more than one
  * runtime needs them or because moving them means re-checking a derived
@@ -30,25 +30,26 @@
  *     could see that.
  *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
  *     hard zoom range, in code so config cannot widen it.
- *   - `packages/map/scoring.ts`'s `TAG_PARTIAL_SATURATION`/`STORY_FLOOR`: paired
- *     with `search.weights` in the inequalities
+ *   - `packages/map/scoring.ts`'s `TAG_PARTIAL_SATURATION`/`STORY_LONG_RANGE`:
+ *     they shape the score terms `search.weights` balances in the inequalities
  *     `docs/search_rules.md` "Balancing signals against each other" states and
- *     `scoring.test.ts` checks. Moving one means re-deriving the others.
+ *     `scoring.test.ts` checks. Moving one means re-checking them all.
+ *     `STORY_FLOOR` sits beside them and feeds strength, not the score.
  *   - `packages/web/src/lib/center.ts`'s spine sizing (`SPINE_SIZE_SCALE`,
  *     `SPINE_HALO_SCALE`, `SPINE_HALO_FLOOR`) and opening fit
  *     (`OPENING_MARGIN`): the same kind of tuning as `center` below, not
  *     exposed here.
  *   - `packages/web/src/lib/favoriteBadge.ts`'s `MIN_FAVORITE_HIT_TOUCH`/
  *     `TOUCH_HIT_AREA_CAP`: the badge's touch-target floor and area cap.
- *   - `packages/web/src/components/CatalogView.tsx`'s `ROW_PAD`, `TEXT_MIN`,
- *     `STORY_RESERVED_PX` and neighbours: not movable here even though they look
- *     tunable. `spacerHeight` computes the catalog's scroll arithmetic from these
- *     exact numbers, so an override would desync the spacers from what actually
- *     renders and corrupt scroll position rather than just look different.
- *   - `packages/server/app.ts`'s `RATE_BURST`/`RATE_REFILL_MS`/
- *     `RATE_MAX_TRACKED`/`EMBED_CACHE_SIZE`: server-side rate-limit and cache
- *     tuning. This object rides to the browser on the manifest, which
- *     server-only knobs have no need to do.
+ *   - `packages/web/src/components/CatalogView.tsx`'s `ROW_PAD`, `TEXT_MIN`
+ *     and neighbours: not movable here even though they look tunable. The
+ *     catalog's row heights, and so `spacerHeight`'s scroll arithmetic, are
+ *     computed from these numbers, so an override would desync the spacers
+ *     from what renders and corrupt scroll position.
+ *   - `packages/server/rate-buckets.ts`'s `RATE_BURST`/`RATE_REFILL_MS`/
+ *     `RATE_MAX_TRACKED` and `packages/server/app.ts`'s `EMBED_CACHE_SIZE`:
+ *     server-side rate-limit and cache tuning. This object rides to the
+ *     browser on the manifest, which server-only knobs have no need to do.
  *   - `tools/upload`, `tools/embed`, `tools/perf-capture`, `tools/font-lab`:
  *     each has its own offline/dev-tool constants (concurrency, batch sizes,
  *     timeouts). They run outside the demo server, so nothing here reaches them.
@@ -400,10 +401,8 @@ export const DEFAULTS: Defaults = {
      * plan's tiles to fetch and decode before animating with whatever is ready.
      * Proceeding on the timeout is a fallback, not a failure.
      *
-     * Sized against real `?perf` captures of the cold-cache case: about a
-     * second on desktop Chrome and Android Chrome, with a longer tail on
-     * Android Firefox. A wait before anything moves reads as loading; the
-     * same time spent stuttering mid-slide does not.
+     * Sized to cover a cold cache with a margin. A wait before anything moves
+     * reads as loading; the same time spent stuttering mid-slide does not.
      *
      * Two consequences of being a wait rather than a beat: `duration()`'s
      * sub-frame warning applies here (this is the one slide timing not passed
@@ -488,12 +487,11 @@ export const DEFAULTS: Defaults = {
      * `packages/map/scoring.ts`'s header is why a raw cosine cannot be weighted
      * directly.
      *
-     * Each is chosen so the inequality its own rule states -
-     * `docs/search_rules.md`'s "Tag matching", "Title matching" and "Story
-     * matching" assertions - holds with margin rather than at the boundary.
-     * `scoring.test.ts` asserts those inequalities against these numbers, so a
-     * re-tune that breaks one fails a test instead of quietly changing the
-     * ranking.
+     * Each is chosen so the inequalities in `docs/search_rules.md` "Balancing
+     * signals against each other" hold with margin rather than at the
+     * boundary. `config.test.ts` and `scoring.test.ts` assert them against
+     * these numbers, so a re-tune that breaks one fails a test instead of
+     * quietly changing the ranking.
      */
     weights: {
       tagExact: 5,

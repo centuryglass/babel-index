@@ -14,11 +14,12 @@ export interface StorySequenceEntry {
 }
 
 /**
- * A room's story, tokenised and lemmatised once at build time - both as an
- * ORDERED sequence (what a contiguous-run measurement needs, see
- * `longestMatchRun`/`storyPhraseRun` in `scoring.ts`) and as a `Set` of the
- * same lemmas for `storyScore`'s O(1) membership test. The set is derivable
- * from the sequence; kept alongside rather than rebuilt per query.
+ * A room's story, tokenised and lemmatised once at build time, held two ways.
+ *
+ * - `sequence` keeps story order, which the contiguous-run measurements
+ *   (`scoring.ts`'s `longestMatchRun`, `storyPhraseRun`) need.
+ * - `set` holds the same lemmas for `storyScore`'s O(1) membership test,
+ *   built once so no query rebuilds it.
  */
 export interface StoryIndex {
   sequence: StorySequenceEntry[];
@@ -74,11 +75,11 @@ export interface ScoreBreakdown {
   score: Float32Array;
   tagExact: Float32Array;
   tagPartialSum: Float32Array;
-  /** how many terms `tagPartialSum` is a sum OVER - a count, not a fraction */
+  /** how many terms `tagPartialSum` sums over - a count, not a fraction */
   tagPartialCount: Int32Array;
   /** 0 or 1 - did some term match the room's title exactly (docs/search_rules.md "Title matching") */
   titleExact: Float32Array;
-  /** the MAX substring fraction over every term tested against the title, not a sum - there is only one title */
+  /** the largest substring fraction over every term tested against the title, not a sum - there is only one title */
   titlePartial: Float32Array;
   /** `storyRatio` - query-relative, the ranking's short-story term */
   story: Float32Array;

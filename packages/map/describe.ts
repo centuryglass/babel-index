@@ -1,36 +1,27 @@
 /**
- * Naming what the reader is standing in, in their own words.
+ * The words a reader is told about where they are: cell and room names, and
+ * what the library just became after it rearranges.
  *
- * What a screen reader announces on arrival at a cell, and the label the
- * room card and the ranked listbox both reuse - one implementation, more
- * than one consumer, the same split `picking.ts` and `center.ts` already
- * make for hit-testing. Pure, no DOM, no runtime imports, so the words a
- * reader hears can be asserted without a browser.
+ * Pure, with no DOM and no runtime imports, so the words can be asserted
+ * without a browser. The screen-reader arrival text, the room card and the
+ * ranked listbox all take their labels from here.
  *
- * `describeCell` names a cell and `describeRoom` names a room the caller
- * already holds; the announcement builders (`describeArrangement`,
- * `describeCatalog`, `describeSort`) say what the library just became.
+ * - `describeCell` names a cell, and `describeRoom` a room the caller holds.
+ * - `describeArrangement`, `describeCatalog` and `describeSort` build the
+ *   announcements.
  *
- * The name stays short - it is read on every arrival, not opened on
- * request - so a room's keywords go in and its story does not. The story is
- * the `description`, read separately (a card's body, a listbox option's
- * extra text), and it is honest when there is nothing to say: a room with
- * no metadata is ranked like any other and must not be described as though
- * it had a story it does not.
+ * A `Description` carries three fields:
  *
- * ### `picture`
- *
- * `picture` is the third and rarest field: the sidecar's optional `alt`,
- * one sentence about the image rather than about the room (see
- * `metadata.ts` for how it is written). For a real room it is never
- * generated at runtime - it arrives with the corpus or it does not arrive
- * at all. A generic cell is the one exception: every generic tile shows the
- * same kind of image (a shelf wall of illegible spines) no matter which of
- * the placeholder files is drawn, so one fixed sentence in `describeCell`
- * covers all of them. A real per-tile caption is deferred, not rejected:
- * `assets/generic/` is placeholder art meant to be swapped for real
- * inpainting output, and a caption written against art that is not the
- * shipping art describes nothing.
+ * - `name` is read on every arrival, so it stays short. A room's keywords go
+ *   in, its story does not.
+ * - `description` is the story, read separately (a card's body, a listbox
+ *   option's extra text). A room with no metadata gets `null`, never a
+ *   stand-in story.
+ * - `picture` is the sidecar's optional `alt`, one sentence about the image
+ *   (see `metadata.ts`). A real room's is never generated at runtime. Every
+ *   generic cell shares one fixed sentence in `describeCell`, since all
+ *   generic tiles show the same kind of image. Per-tile generic captions wait
+ *   on real art: `assets/generic/` is placeholder art.
  */
 
 import type { MapLayout } from './ordering.ts';

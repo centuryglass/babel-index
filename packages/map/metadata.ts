@@ -2,44 +2,29 @@
  * Room metadata: the stylistic keywords and the short story text that the
  * generator writes alongside each image.
  *
- * The join is per filename: add, remove or rename images and every surviving
- * entry still lands on its own room. (`embeddings.bin` is keyed by row order
- * instead and must be regenerated when the corpus moves -
- * docs/agents/search.md, "embeddings.bin is keyed by row order".) Joining
- * tolerates a miss and reports how many matched; a room with no entry simply
- * has no keywords, which is what the center room and the generic alternates
- * want anyway.
+ * One implementation joined on both sides: the server (`scan.ts`,
+ * `roomContent.ts`) and the browser (`useCorpus.ts`). No DOM and no runtime
+ * imports, like the rest of this package.
  *
- * ### `keywords` is a fixed shape
+ * The join is per filename, so adding, removing or renaming images leaves
+ * every surviving entry on its room. `embeddings.bin` is keyed by row order
+ * instead (docs/agents/search.md, "embeddings.bin is keyed by row order").
+ * Joining tolerates a miss and reports how many matched. A room with no entry
+ * has no keywords, which suits the center room and the generic alternates.
  *
- * Every keyword is a `{text, type}` record - the generator always writes it
- * that way. The count is not enforced: "three keywords" is a fact about how
- * the corpus is generated, not a constraint the map needs, and rejecting a
- * room with two would lose real data to a rule nothing here depends on.
+ * Field rules:
  *
- * ### `title` is optional
- *
- * A room may carry a human-written `title`, shown in place of its filename
- * wherever a reader is told which room they're looking at (`roomTitle`), and
- * used in place of the filename as the sort key of the catalog's idle
- * alphabetized order (`alphabeticalOrder`). Most rooms have none until the
- * corpus is retitled, so both consumers carry a fallback.
- *
- * ### `alt` is optional in the strong sense
- *
- * A room may carry an `alt`: one sentence describing the picture, for a
- * reader who cannot see it. It is written offline, beside the story and with
- * the story as context - never at runtime, which is why the map carries no
- * model dependency. A room whose story is thin should carry no `alt` at all
- * rather than a padded one: `describe.ts`'s honesty rule ("no description
- * recorded") is a better answer than a confident sentence about a wall of
- * books that could be any wall of books. So absence normalises to null and
- * every consumer falls back to what the room already has.
- *
- * No DOM and no runtime imports, like the rest of this package: the server
- * joins it (`scan.ts`, `roomContent.ts`) and the browser joins it
- * (`useCorpus.ts`), and one implementation with both consumers is what keeps
- * them from drifting.
+ * - `keywords`: every keyword is a `{text, type}` record. The count is not
+ *   enforced, since nothing in the map depends on it.
+ * - `title` is optional. It replaces the filename wherever a reader is told
+ *   which room they're looking at (`roomTitle`) and as the catalog's
+ *   alphabetical sort key (`alphabeticalOrder`). Most rooms have none yet, so
+ *   both consumers carry a fallback.
+ * - `alt` is optional: one sentence describing the picture, written offline
+ *   with the story as context, never at runtime, so the map carries no model
+ *   dependency. A room whose story is thin carries no `alt` rather than a
+ *   padded one. Absence normalises to null, and every consumer falls back to
+ *   what the room already has.
  */
 
 /** One keyword, as the generator writes it. */
