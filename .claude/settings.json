@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git fetch origin qwen3.8-flash-comment-fix)",
+      "Bash(mkdir -p tools/comment-check)",
+      "Bash(git show origin/qwen3.8-flash-comment-fix:*)",
+      "Bash(npm --prefix tools/comment-check install)",
+      "Bash(node tools/comment-check/check.mjs:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
