@@ -74,10 +74,8 @@ manifest's record, so touching a handful of images costs a handful of PUTs,
 not a full re-upload. Nothing is ever deleted from R2 by this tool.
 
 The hash compared is the uploaded file's own bytes (`contentHash` from
-`packages/pipeline/mips.ts`), not the source-image hash `generate:mips`
-embeds in `metadata.json`. That also catches a pyramid level
-re-encoded at a different JPEG quality, which shares its source hash with the
-old level but isn't the same bytes.
+`packages/pipeline/mips.ts`), so a pyramid level re-encoded at a different
+JPEG quality uploads even though its source image is unchanged.
 
 Every run also lists the bucket (scoped to this corpus's prefix and to
 `shared/`) and re-uploads any key missing from that listing regardless of

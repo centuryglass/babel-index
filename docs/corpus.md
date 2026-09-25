@@ -106,7 +106,6 @@ and every one is optional.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `hash` | string | Content hash of the source image, written by `npm run generate:mips`. It lets two copies of `metadata.json` be diffed to see which images changed. `tools/upload` does not use it. |
 | `final` | boolean | The story is approved. Title generation and sensitive-content tagging only consider final rooms by default, and the review tools skip them. |
 | `needs_inpainting` | `true`, or absent | The image has a flaw awaiting a fix in the inpainting pipeline. |
 

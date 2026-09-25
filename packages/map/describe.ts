@@ -20,8 +20,8 @@
  *
  * ### `picture`
  *
- * `picture` is the third and rarest field: the sidecar's optional `alt`,
- * one sentence about the image rather than about the room (see
+ * `picture` is the third field: the sidecar's `alt`, a description of the
+ * image rather than of the room (see
  * `metadata.ts` for how it is written). For a real room it is never
  * generated at runtime - it arrives with the corpus or it does not arrive
  * at all. A generic cell is the one exception: every generic tile shows the
