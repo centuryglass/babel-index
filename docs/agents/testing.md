@@ -21,10 +21,12 @@ still apply.
   runs it before the ssh call, and a failure stops the deploy. It runs on a
   CI runner's GPU-less Chromium (SwiftShader WebGL2). Its header explains
   the scene choices.
-- **e2e specs pin their renderer with `openLibrary`'s `webgl` option.** Every
-  spec but `webgl-map.e2e.ts` passes `webgl=0`, because the blank/repaint
-  probes (`fingerprint`, `getImageData`) need a 2D context. An unpinned spec
-  would silently switch renderer with the production default.
+- **`openLibrary()` pins every e2e spec's renderer, defaulting to Canvas2D.**
+  It always puts `webgl=0` or `webgl` on the query string, and only
+  `webgl-map.e2e.ts` and `render-parity.parity.ts` pass `webgl: true`. The
+  blank/repaint probes (`fingerprint`, `getImageData`) need a 2D context. A
+  spec that loaded the page some other way would switch renderer with the
+  production default.
 - **When to run e2e locally.** On the maintainer's machine (Arch Linux per
   `/etc/os-release`) Chromium is preinstalled and the suite is cheap: run it
   whenever a change touches tested behavior. In a cloud agent container it

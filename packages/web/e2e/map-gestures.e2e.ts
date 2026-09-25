@@ -1,7 +1,7 @@
 /**
  * The browser smoke test: map rendering, the camera, pointer/touch gestures,
  * and search's rearrangement of the map. This file covers everything the
- * other specs here don't: accessibility-plan work is `accessibility.e2e.ts`,
+ * other specs here don't: accessibility is `accessibility.e2e.ts`,
  * `keyboard-cursor.e2e.ts` and `shelf.e2e.ts`, the catalog is
  * `catalog.e2e.ts`.
  *
@@ -10,16 +10,15 @@
  * thing on screen is a black rectangle. It drives the real demo server, in a
  * real browser, against the sample corpus.
  *
- * None of the files in this directory are part of `npm test`; run them on
- * purpose:
+ * None of the files in this directory are part of `npm test`; run them
+ * explicitly:
  *
  *   npx playwright install chromium   # once
  *   npm run test:e2e
  *
  * In CI they run from .github/workflows/e2e.yml, which `ci.yml` calls as a
- * reusable workflow - so this suite is a merge gate, and a test in here that
- * is timing-dependent rather than state-dependent blocks everyone. Wait on a
- * condition, never on a duration.
+ * reusable workflow, so this suite is a merge gate (see
+ * docs/agents/testing.md, "Wait on a condition, never a duration").
  *
  * If Playwright's bundled Chromium is not the one on the machine - a sandbox
  * with its own browsers, a distro package - point BABEL_E2E_CHROMIUM at the
@@ -60,9 +59,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
   test('the canvas is actually painted, not just present', async () => {
     const { page } = session;
-    // The whole reason this test exists. A blank canvas is two flat fills:
-    // the page background and the not-yet-loaded cell colour. Real rooms are
-    // photographs, so they bring hundreds of distinct colours with them.
+    // A blank canvas is two flat fills: the page background and the
+    // not-yet-loaded cell colour. Real rooms are photographs, so they bring
+    // hundreds of distinct colours with them.
     const seen = await page.evaluate(() => {
       const canvas = document.querySelector('canvas');
       const ctx = canvas.getContext('2d');
@@ -127,17 +126,14 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // The center tile's DOM overlays (`.center-search`, `.center-books`,
     // `.center-book`, `.center-controls`) are positioned over the whole
     // center cell, which at reading zoom is several screens wide. On a
-    // desktop that is invisible - content sticking out of a viewport that
-    // cannot scroll, and nothing more. A phone reads the same overflow as a
-    // page wider than the screen: it drops the page scale to fit and grows
-    // the layout viewport to match, and `position: fixed` resolves against
-    // that, so every dialog's scrim covers several screens (the dialog lands
-    // mostly off the display, its close button has to be panned to) and the
-    // map paints at a fraction of its size once the dialog closes. Both were
-    // reported from a real phone. What prevents it is a clip
-    // (`#root { overflow: clip }`) that shows no sign of being there until it
-    // is gone, so what this asserts is the document's own size - the one
-    // reading that says the same thing here as on the phone.
+    // desktop the overflow is invisible. A phone reads it as a page wider
+    // than the screen: it drops the page scale to fit and grows the layout
+    // viewport to match, and `position: fixed` resolves against that, so every
+    // dialog's scrim covers several screens and the map paints at a fraction
+    // of its size once the dialog closes. A clip (`#root { overflow: clip }`)
+    // prevents it and shows no sign of being there until it is gone, so this
+    // asserts the document's own size, which reads the same here as on a
+    // phone.
     await page.mouse.move(640, 400);
     try {
       for (let i = 0; i < 12; i++) await page.mouse.wheel(0, -600);
@@ -161,16 +157,13 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     const { page } = session;
     // The unit tests prove the policy; this proves it is wired to the real
     // canvas against a real corpus with real level directories on disk. Without
-    // it the whole pyramid could be selecting levels nothing ever fetches.
+    // it the pyramid could be selecting levels nothing ever fetches.
     await page.mouse.move(640, 400);
     for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 600);
-    // `settled()` waits out a rearrangement and two frames, which covers the
-    // camera but not a tile that has not finished decoding - so a far-out
-    // screen can be settled and still be a cell or two short for a frame or
-    // two. `blank === 0` is a condition, and waiting a fixed number of frames
-    // for it is what made this flake (~1 run in 5 on a slow machine). Poll it
-    // instead, bounded, so a cell that never arrives still fails the assertion
-    // below rather than hanging.
+    // Poll until `blank === 0`, bounded, so a cell that never arrives fails
+    // the assertion below rather than hanging. `settled()` covers the camera
+    // but not a tile still decoding, so a settled far-out screen can be a
+    // cell or two short for a frame or two.
     let out = await settled(page);
     for (const until = Date.now() + 5000; out.blank > 0 && Date.now() < until; )
       out = await settled(page);
@@ -215,9 +208,8 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     const sparse = await settled(page);
     assert.ok(sparse.edge > most.edge, `a sparser map must spread out: ${most.edge} -> ${sparse.edge}`);
 
-    // Ending on 100% leaves every visible cell holding a room, which the rest
-    // of this file relies on: every remaining test in it wants a real room
-    // under a fixed screen point.
+    // Ending on 100% leaves every visible cell holding a room; every remaining
+    // test in this file wants a real room under a fixed screen point.
     await ratio.press('End');
     const dense = await settled(page);
     assert.ok(dense.edge < sparse.edge, `a denser map must pack tighter: ${sparse.edge} -> ${dense.edge}`);
@@ -250,10 +242,10 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
   test('a hand on the map interrupts a flight instead of fighting it', async () => {
     const { page, flightMs } = session;
-    // The half that decides whether the map feels like yours. A flight still
-    // easing under your hand drags the world out from under the finger holding
-    // it, and the zoom is where that is unambiguous: a drag never changes zoom,
-    // so any zoom that moves after the grab is the flight refusing to yield.
+    // A flight still easing under the hand drags the world out from under the
+    // finger holding it. The zoom is where that is unambiguous: a drag never
+    // changes zoom, so any zoom that moves after the grab is the flight
+    // refusing to yield.
     await page.locator('button', { hasText: 'center' }).click();
     const centered = await landed(page, flightMs);
     await page.mouse.move(640, 400);
@@ -304,9 +296,8 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // move alone, which is a test that cannot tell a working search from one
     // whose ranking is discarded.
     //
-    // `landed` rather than `settled`: the camera is flying for ~450ms after the
-    // click, and a "parked" camera read mid-flight is a position a flight
-    // would only pass through.
+    // `landed`, not `settled`: the camera flies for `flightMs` after the
+    // click, and a camera read mid-flight is a position it only passes through.
     await page.locator('button', { hasText: 'center' }).click();
     await landed(page, flightMs);
     const before = await fingerprint(page);
@@ -327,29 +318,21 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     await page.locator('input[type=search]').fill('clockwork');
     await page.locator('input[type=search]').press('Enter');
 
-    // The fetch this triggers can take a while (a cold CLIP text tower load
-    // pays for itself here) - `requestAnimation` and the rearrangement it
-    // drives do not necessarily start before the first poll below runs. Until
-    // they do, the camera is still sitting at `atField` exactly as it would
-    // be once a rearrangement finished and eased back - so the `waitFor`
-    // after this would otherwise report success having never watched a
-    // rearrangement happen at all, and this test's own trailing assertions
-    // would then be checking state a still-in-flight fetch can rewrite out
-    // from under a later test (confirmed directly: the search here has
-    // finished the camera back to `atField` while the very next test was
-    // already mid-gesture, its own flight overridden by this one's). Wait for
-    // the rearrangement to actually begin first.
+    // Wait for the rearrangement to begin. The fetch can be slow (a cold CLIP
+    // text tower load), and until the rearrangement starts the camera already
+    // sits at `atField`, so the `waitFor` below would pass without watching
+    // one. The late rearrangement would then override the next test's
+    // flight.
     await page.waitForFunction(
       () => document.getElementById('hud')?.textContent?.replace(/^\[gl\] /, '').startsWith('rearranging'),
       null,
       { timeout: SEARCH_TIMEOUT }
     );
 
-    // A search does not recenter the camera - it zooms out in place to show
-    // off the rearrangement, then eases back to the zoom the reader was
-    // actually at, at the same x/y throughout. So
-    // the final resting point is exactly where the search was triggered from,
-    // not the center.
+    // A search does not recenter the camera: it zooms out in place for the
+    // rearrangement, then eases back to the reader's zoom, at the same x/y
+    // throughout. The camera comes to rest where the search was triggered
+    // from, not the center.
     await waitFor(
       async () => {
         const c = await settled(page);
@@ -365,8 +348,8 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
       'a search must return the camera to exactly where it was called from'
     );
 
-    // Same camera, same slots - so any change in pixels is the rooms moving
-    // between those slots, which is the whole mechanic.
+    // Same camera, same slots, so any change in pixels is the rooms moving
+    // between those slots.
     await waitFor(
       async () => (await fingerprint(page)) !== before,
       10_000,
@@ -383,26 +366,22 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
     // The previous test leaves the camera wherever its search was called
     // from (the search-trigger's zoomed-in opening view), not the wider
-    // overview zoom - return to the center button's view explicitly rather
-    // than relying on leftover state, so rooms are on screen at the
-    // coordinates below. `recentre` (not a plain click + `landed`) because
-    // the previous test's rearrangement can still be settling here, and a
-    // `flyTo` issued mid-rearrangement is silently swallowed - see that
-    // helper's own doc.
+    // overview zoom. Return to the center button's view so rooms are on
+    // screen at the coordinates below, through `recentre` because the
+    // previous test's rearrangement can still be settling (see `recentre`).
     await recentre(page, flightMs);
     await page.mouse.move(640, 400);
 
     // The map is 100% non-generic by the time this runs (the sliders test,
     // earlier in this file, left the ratio maxed) - but the center cell is
-    // reserved, so aim off it. (We just returned to the center at the
-    // overview zoom, not the fully-in page-load zoom, so rooms around the
-    // center are on screen here.) Every gesture test after this one in this
-    // file reuses this same fixed point for the same reason.
+    // reserved, so aim off it. At the center button's overview zoom, rooms
+    // around the center are on screen. Every gesture test after this one in
+    // this file reuses this fixed point.
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
-    // `.card-id` now leads with the room's title when it has one, so a real
-    // room is confirmed via the dialog's own accessible name (`desc.name`,
-    // `describeRoom`) instead - unaffected by title/filename display order.
+    // Confirm a real room through the dialog's accessible name (`desc.name`,
+    // `describeRoom`); `.card-id`'s visible text leads with the room's title
+    // when it has one.
     assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
 
     const chips = card.locator('.chip');
@@ -415,12 +394,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
     // A chip is a live search: reopen, click one, and the note must report a
     // keyword-driven ranking for the term the chip carried. Read the term
-    // from this opening's chip, right before clicking it, rather than the
-    // one captured above - `chips` is a live locator, re-querying the DOM at
-    // click time, so if the room under this fixed point ever isn't the one
-    // the first open showed (a rearrangement landing between the two clicks,
-    // however unlikely), the assertion below must still match whatever chip
-    // was actually clicked, not a room-1 leftover it never asked about.
+    // from this opening's chip, right before clicking it: `chips` is a live
+    // locator, and the room under this fixed point may differ from the first
+    // opening's if a rearrangement lands between the two clicks.
     await page.mouse.click(880, 300, { button: 'right' });
     await card.waitFor({ timeout: 5000 });
     const term = await chips.first().textContent();
@@ -432,14 +408,12 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     //
     // Wait for the note that reflects this search, not just any "ranked by":
     // the previous test's note lingers in the live region, and a keyword chip
-    // is the one query guaranteed to name "keywords" (it searches a keyword the
-    // room actually has), so a looser wait can pass on the stale note first.
+    // is the one query that always names "keywords" (it searches a keyword the
+    // room has), so a looser wait can pass on the stale note first.
     //
-    // And read the live region rather than `.note`. There is one region for
-    // the whole app and it lives outside both views - the panel is part of the
-    // map, and a region inside it would be unmounted on every switch to the
-    // catalog, which is how a screen reader loses one. `.note` keeps only the
-    // static hint, so the text this waits on is no longer in it.
+    // And read the live region, not `.note`, which keeps only the static
+    // hint. There is one region for the whole app, outside both views, so a
+    // switch to the catalog does not unmount it.
     await waitFor(
       async () => /keywords/.test(await page.locator('[role=status]').textContent()),
       SEARCH_TIMEOUT,
@@ -450,15 +424,13 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
   // --- pointer and touch gestures ---------------------------------------------
   //
   // Everything below reuses the dense map and the fixed screen point (880, 300)
-  // the `right-clicking a room opens its card` test established, rather than
-  // re-deriving either - that test returns the camera to the overview zoom and
-  // center, and the "non-generic" slider has been at 100% since the sliders
-  // test earlier in this file.
+  // the `right-clicking a room opens its card` test established: that test
+  // returns the camera to the overview zoom and center, and the "non-generic"
+  // slider has been at 100% since the sliders test earlier in this file.
 
   test('a long press opens the card, and a drag cancels it', async () => {
     const { page } = session;
-    // The interaction that decides whether the map is usable on a phone: a
-    // press that becomes a pan must not also open a card.
+    // A press that becomes a pan must not also open a card.
     const card = page.locator('.overlay');
 
     await page.mouse.move(880, 300);
@@ -481,9 +453,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
   test('pinching zooms, and two fingers do not fight over the pan', async () => {
     const { page } = session;
     // Playwright's touchscreen is single-touch, so a real pinch has to be
-    // dispatched through CDP. It is worth the awkwardness: pinch is the one
-    // gesture that cannot be approximated with a mouse, and the multi-pointer
-    // bookkeeping it needs is the same code the drag and the long press run on.
+    // dispatched through CDP. Pinch cannot be approximated with a mouse, and
+    // the multi-pointer bookkeeping it needs is the same code the drag and the
+    // long press run on.
     const before = await settled(page);
 
     await pinch(page, { cx: 640, cy: 400, from: 80, to: 260 });
@@ -495,8 +467,8 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     assert.ok(back.zoom < out.zoom, `squeezing must zoom out: ${out.zoom} -> ${back.zoom}`);
 
     // Two fingers held at a fixed distance and slid together are a pan, not a
-    // zoom. Before pointers were tracked by id, both fingers fed one drag ref
-    // and the map juddered between them.
+    // zoom. Pointers are tracked by id; if both fingers fed one drag, the map
+    // would judder between them.
     const steady = await settled(page);
     await pinch(page, { cx: 640, cy: 400, from: 160, to: 160, slide: { x: 120, y: 0 } });
     const slid = await settled(page);
@@ -506,11 +478,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
   test('lifting one finger hands the gesture to the other without a lurch', async () => {
     const { page } = session;
-    // The gotcha of multi-touch. The remaining finger's next move is measured
-    // from wherever the pinch left off unless the drag is re-anchored to where
-    // that finger actually is - and the symptom is the map jumping by the width
-    // of the gesture at the exact moment a pinch ends, which is constant on a
-    // phone and invisible on a desktop.
+    // The remaining finger's next move is measured from wherever the pinch
+    // left off unless the drag is re-anchored to where that finger is. The
+    // symptom is the map jumping by the width of the gesture as a pinch ends.
     const survivor = await pinch(page, { cx: 640, cy: 400, from: 200, to: 220, lift: true });
     const lifted = await settled(page);
 
@@ -537,13 +507,12 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // does not consider capturable, which is ordinary on touch - capture is
     // implicit there, and the browser drops it itself at the end of a sequence
     // or when it cancels one. CDP injection keeps the capture state tidy and so
-    // never exercises that path; this makes the calls throw on purpose instead.
+    // never exercises that path; this makes the calls throw.
     //
-    // What it protects: an unguarded release aborts the handler before the
-    // bookkeeping runs, leaving the finger in the pointer map, after which every
-    // gesture is read as a pinch against a finger no longer on the glass. That
-    // is a hazard the spec allows rather than one observed in the wild - see the
-    // note in useMapCamera.ts - but it is cheap to hold shut.
+    // An unguarded release aborts the handler before the bookkeeping runs,
+    // leaving the finger in the pointer map, after which every gesture is read
+    // as a pinch against a finger no longer on the glass. The spec allows the
+    // throw (see `capture` in `useMapCamera.ts`).
     await page.evaluate(() => {
       const proto = HTMLCanvasElement.prototype;
       (window as any).__capture = {
@@ -560,12 +529,10 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     try {
       const moves = [];
       for (let i = 0; i < 3; i++) {
-        // Re-center first. Pan resistance grows with distance from the origin,
-        // so three drags in a row from wherever the last one ended would differ
-        // for a reason that has nothing to do with pointer bookkeeping - which
-        // is exactly what the first version of this test measured. And the
-        // re-center now flies, so the baseline has to be taken after it lands
-        // or the drag is measured partly against the flight.
+        // Re-center first, since pan resistance grows with distance from the
+        // origin and three drags in a row would otherwise differ for a reason
+        // unrelated to pointer bookkeeping. Take the baseline after the flight
+        // lands, or the drag is measured partly against the flight.
         await page.locator('button', { hasText: 'center' }).click();
         const before = await landed(page, session.flightMs);
         await touchDrag(page, { from: { x: 900, y: 400 }, to: { x: 700, y: 400 } });

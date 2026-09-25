@@ -31,15 +31,10 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('axe finds no WCAG violations on the opening view', async () => {
     const { page } = session;
-    // The broad net under the specific assertions below. Those say what this
-    // app in particular must do; this one catches the whole class of ordinary
-    // mistake - an unlabelled control, a bad contrast ratio, a role with a
-    // required attribute missing - in the parts of the page nobody is looking
-    // at, which is exactly where accessibility work rots.
-    //
-    // It is not a substitute for the named tests: axe cannot know that the
-    // rooms slider ought to say what its number counts, only that it has a
-    // name at all.
+    // The broad net under the specific assertions below: an unlabelled
+    // control, a bad contrast ratio, a role missing a required attribute,
+    // anywhere on the page. It does not replace the named tests; axe can tell
+    // that the rooms slider has a name, not that the name says what it counts.
     const { violations } = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
@@ -60,21 +55,15 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     await ratio.focus();
     await ratio.press('Home');
 
-    // try/finally, not just a trailing restore at the end of the test: several
-    // tests after this one - card focus, the live region, reduced motion - rely
-    // on the map being dense and the camera centered, so an assertion failing
-    // partway through must not also strand those for everything that runs
-    // afterward. That turns one failure into an unrelated-looking cascade,
-    // which is exactly what made a flake here harder to diagnose than it
-    // needed to be.
+    // Later tests (card focus, the live region, reduced motion) need a dense
+    // map and a centered camera, so the restore is in `finally` (see
+    // docs/agents/testing.md, "Test cleanup belongs in `finally`").
     try {
-      // "clockwork" is a confirmed keyword hit in the sample corpus's own
-      // metadata - three rooms carry it - so it is guaranteed to rank real
-      // results rather than fall back to CLIP alone. Anything that finds zero
-      // matches would test the empty state instead of this one, so a query
-      // known to match is not a convenience, it is the point. This search is
-      // also what several tests later in this file lean on staying active -
-      // see the live-region and reduced-motion tests below.
+      // "clockwork" is a keyword in the sample corpus's own metadata, so it
+      // ranks real results rather than falling back to CLIP alone. A query
+      // with zero matches would test the empty state instead. The live-region
+      // and reduced-motion tests later in this file need this search to stay
+      // active.
       await page.locator('button.search-trigger').click();
       await landed(page, session.flightMs);
       await page.locator('input[type=search]').fill('clockwork');
@@ -83,24 +72,15 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       const results = page.locator('.results-list');
       await results.waitFor({ timeout: SEARCH_TIMEOUT });
 
-      // The first search's ranking can change again shortly after it first
-      // appears - CLIP embeddings load asynchronously and can re-rank a
-      // keyword/story-only result (see SEARCH_TIMEOUT's own comment on why
-      // the first search is slow) - so `.results-list` existing is not the
-      // same claim as "the search is done." Poll for the mounted count to
-      // hold steady across two reads before trusting it; found by this test
-      // failing intermittently, once on a run that also happened to send the
-      // search-trigger flight to the far-zoomed opening view rather than
-      // simply focusing the field, which is circumstantial evidence for
-      // "still settling," not proof, but the poll costs nothing either way.
+      // Wait for the mounted count to hold across two reads. `.results-list`
+      // existing does not mean the search is done: CLIP embeddings load
+      // asynchronously and can re-rank a keyword/story-only result shortly
+      // after it appears (see `SEARCH_TIMEOUT`).
       const options = results.locator('.result');
       let previousCount = null;
       let count;
-      // `previousCount` starts at `null`, which cannot equal a real count, so
-      // this always waits out at least one real 200ms gap (`waitFor`'s own
-      // poll interval) between two agreeing reads before trusting one - not
-      // just two reads taken back to back with nothing between them, which
-      // would prove nothing about whether it had actually settled.
+      // `previousCount` starts at `null`, which no real count equals, so two
+      // agreeing reads are always at least one `waitFor` poll interval apart.
       await waitFor(
         async () => {
           count = await options.count();
@@ -113,14 +93,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       );
       assert.ok(count > 0, 'a query with a known match must produce at least one result');
 
-      // Let the search's rearrangement fully settle before moving on. Later
-      // tests in this file lean on its announcement still being in the live
-      // region, and the announcement fires only once the rearrangement settles
-      // and is still the current arrangement - so if this test returned while
-      // it was mid-animation, a later layout change would drop it as stale
-      // before it was ever announced. The center-tile loading indicator
-      // (`loadingAnimation.ts`) adds a full cycle to that settle, so the wait
-      // here is not optional.
+      // Wait for the search's rearrangement to settle. Later tests read its
+      // announcement from the live region, and the announcement fires only
+      // once the rearrangement settles and is still current, so a later layout
+      // change mid-animation would drop it as stale. The center-tile loading
+      // indicator (`loadingAnimation.ts`) adds a full cycle to that settle.
       await settled(page);
 
       const label = await page.locator('#results-label').textContent();
@@ -128,46 +105,34 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       const posinset = await first.getAttribute('aria-posinset');
       const setsize = await first.getAttribute('aria-setsize');
 
-      // The label reports the true match count, not just what got mounted -
-      // that is the whole point of windowing rather than silently truncating.
+      // The label reports the true match count, not just the mounted window.
       assert.match(label, /results\s+\d+/, `the results label must report a count, got ${JSON.stringify(label)}`);
 
-      // `aria-setsize`/`aria-posinset` go on the `<li>` rather than the button
-      // because only `listitem` supports them - a bare `button` does not, and
-      // axe's `aria-allowed-attr` rule would catch that placement mistake. But
-      // Chrome's CDP `Accessibility.getFullAXTree` does not surface either
-      // property for a native `<li>` at all - confirmed by dumping a node in
-      // full rather than guessing from an empty read - so this can only check
-      // that the DOM carries the values, not that a real screen reader's
-      // platform API receives them the way it receives the button's name
-      // checked below. Left as an open question in issue #243
-      // rather than a claim this test does not back up.
+      // `aria-setsize`/`aria-posinset` go on the `<li>`, since only `listitem`
+      // supports them (axe's `aria-allowed-attr` rule catches them on the
+      // button). CDP's `Accessibility.getFullAXTree` does not surface either
+      // property for a native `<li>`, so this checks only that the DOM carries
+      // the values, not that a screen reader receives them (issue #243).
       assert.equal(posinset, '1');
       assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
 
-      // The button is what carries the name a reader hears - `listitem` has
-      // no "name from contents" in the accessible-name algorithm, so the
-      // `<li>` wrapping it is correctly nameless in the tree; only its child
-      // speaks. Checked last, since it is the slow CDP round trip and nothing
-      // after it depends on the count/setsize/label read above staying in
-      // sync with it.
+      // The button carries the name a reader hears. `listitem` has no "name
+      // from contents" in the accessible-name algorithm, so the `<li>` is
+      // nameless in the tree. Checked last because the CDP round trip is slow.
       const nodes = await axNodes(page);
       assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
 
-      // No arrow keys anywhere in this flow - Tab is the whole story, which
-      // is why this ships before the map's keyboard interface
-      // (`keyboard-cursor.e2e.ts`).
+      // No arrow keys in this flow; the listbox is reachable with focus and
+      // Enter alone. The map's arrow-key interface is `keyboard-cursor.e2e.ts`.
       await options.first().focus();
       await page.keyboard.press('Enter');
 
       const card = page.locator('.overlay');
       await card.waitFor({ timeout: 5000 });
-      // `.card-id`'s visible text now leads with the room's title when it has
-      // one, so it can no longer be parsed back into "Room N" and compared to
-      // the result button's text. The dialog's own accessible name
-      // (`desc.name`, from the same `describeRoom` call that built the result
-      // button's text) is the same string regardless of what the card
-      // displays visually - a direct, exact comparison instead of a prefix guess.
+      // Compare the dialog's accessible name, not `.card-id`'s visible text,
+      // which leads with the room's title when it has one. The name
+      // (`desc.name`) comes from the same `describeRoom` call that built the
+      // result button's text, so the two match exactly.
       const cardLabel = await card.getAttribute('aria-label');
       const firstResultText = await options.first().textContent();
       assert.equal(
@@ -187,18 +152,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       await page.keyboard.press('Escape');
       await card.waitFor({ state: 'detached', timeout: 5000 });
     } finally {
-      // Restores the ratio and the camera, not just the ratio. A search that
-      // finds the field off screen flies to the far-zoomed `opening` view
-      // (fitted tight on the center tile) rather than simply focusing it; an
-      // assertion failing before this test flies anywhere else left the
-      // camera there once, and a right-click at a fixed screen point in a
-      // later test landed on the center tile's own controls instead of a room
-      // - one test's failure taking down an unrelated one's precondition,
-      // which is worse than the original failure. Clicking "center" is cheap
-      // and makes every subsequent test's assumption ("a dense map, framed
-      // normally") true regardless of how far this one got. Does not clear
-      // the search query - the live-region and reduced-motion tests below
-      // need it still active.
+      // Restores the ratio and the camera. A search trigger that finds the
+      // field off screen flies to the far-zoomed `opening` view, where a later
+      // test's right-click at a fixed screen point would land on the center
+      // tile's controls instead of a room. Leaves the search query active for
+      // the live-region and reduced-motion tests.
       await ratio.press('End');
       await page.getByRole('button', { name: 'center' }).click();
       await landed(page, session.flightMs);
@@ -210,25 +168,20 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     const nodes = await axNodes(page);
 
     // A slider whose label is a sibling with no `htmlFor` reaches the reader
-    // as a bare number with no indication of what it measures - the failure
-    // both assertions below exist for.
+    // as a bare number with no indication of what it measures.
     const rooms = axFind(nodes, 'slider', /rooms on the map/i);
     const ratio = axFind(nodes, 'slider', /non-generic/i);
     assert.ok(rooms, 'the rooms slider must have an accessible name');
     assert.ok(ratio, 'the ratio slider must have an accessible name');
 
-    // Having a name is only half of it: a range announces its raw number, which
-    // is the one thing about it nobody was wondering about. The units have to
-    // reach the reader through the name, which is why this asserts on `name`
-    // and not on `aria-valuetext`: that attribute is honoured by chromium 1194
-    // and ignored by Chrome 151 on a native `input[type=range]`, so a test that
-    // reads it back is testing the browser. This still catches the bug the test
-    // was written for - a label with no `htmlFor` leaves no name to match at
-    // all - and now also catches a label that says only a bare number.
+    // The name must also say what the number counts. This asserts on `name`,
+    // not `aria-valuetext` (see docs/agents/testing.md, "Assert on the
+    // accessible name, not raw ARIA attributes"). It fails both on a label
+    // with no `htmlFor`, which leaves no name to match, and on a label that
+    // says only a bare number.
     //
     // Both sliders are checked before either is asserted, and the failure
-    // carries the whole node: "expected /%/, got 26" cost a CI round trip once
-    // because it could not distinguish a missing attribute from an ignored one.
+    // dumps both nodes, so a missing attribute and an ignored one read apart.
     const said = [
       ['rooms', rooms, /\d+ of \d+/],
       ['ratio', ratio, /\d+%/],
@@ -265,8 +218,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // file can leave it on a room rather than the center - and flying home to
     // pin the name down would wipe the live region the announcement test after
     // this one reads. What must hold here is the role and that the name is a
-    // real cell's, which is exactly what an unlabelled graphic or a static
-    // placeholder would fail.
+    // real cell's, which an unlabelled graphic or a static placeholder fails.
     const named = page.getByRole('application', {
       name: /the center of the library|Room \d+, rank \d+ of \d+|a blank wall|the far field/i,
     });
@@ -290,8 +242,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
     // And a single right-click can still land in the gap between a render and
     // the browser wiring up its context-menu handler on a loaded runner -
-    // retry once rather than trust one attempt, but still fail loudly if the
-    // card genuinely never shows.
+    // retry once rather than trust one attempt, but still fail if the card
+    // never shows.
     await page.mouse.click(880, 300, { button: 'right' });
     try {
       await card.waitFor({ timeout: 3000 });
@@ -307,16 +259,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       'the card must take focus when it opens'
     );
 
-    // And it is named by the room it describes, not just "room" - the one
-    // fact the reader already had.
-    //
-    // Matched case-insensitively on purpose: `.card-id` is styled
-    // `text-transform: uppercase`, and Chrome folds that into the computed
-    // accessible name, so the reader is handed "ROOM 21 · 022.WEBP" rather than
-    // the DOM's own "room 21 · 022.webp". Harmless for a word that is still
-    // pronounceable, worth knowing before naming anything after an acronym, and
-    // it goes away when the card takes its label from `describeCell` rather
-    // than from a visually-transformed node.
+    // And it is named by the room it describes (its `aria-label`,
+    // `desc.name`), not just "room".
     const dialog = axFind(await axNodes(page), 'dialog', /^room \d+/i);
     assert.ok(dialog, 'the card must be named by the room it describes');
 
@@ -328,12 +272,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // Tab restarts from the top, and a screen reader is left describing a card
     // that is no longer there.
     //
-    // What is not asserted here, because it is not yet true: returning focus to
-    // whatever opened the card. Right-clicking the canvas blurs the focused
-    // control to the body before the card ever mounts, so a pointer-opened card
-    // has no opener to go back to. `RoomOverlay` restores when there is one,
-    // and the path that gives it one is Enter on the map cursor (phase C).
-    // Assert it there, where it can actually fail.
+    // Focus return to the opener is not asserted here. Right-clicking the
+    // canvas blurs the focused control to the body before the card mounts, so
+    // a pointer-opened card has no opener. `RoomOverlay` restores focus when
+    // there is one; `keyboard-cursor.e2e.ts` asserts it for a card opened
+    // with Enter on the map cursor.
     assert.ok(
       await page.evaluate(() => document.activeElement?.isConnected ?? false),
       'focus must not be left on a detached node'
@@ -358,13 +301,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('reduced motion rebuilds the library instead of sliding it [SR-31]', async () => {
     const { page } = session;
-    // Asserted through the camera rather than by watching for the absence of an
-    // animation, which would be a race dressed up as a test. A normal
-    // rearrangement parks the camera on the center first, because the slide is
-    // planned against exactly the cells on screen. Reduced motion bails out
-    // before that flight - there is no animation to set up, and moving someone's
-    // camera unasked is the very thing they turned off - so the giveaway is a
-    // camera that did not move at all.
+    // Asserted through the camera, since watching for the absence of an
+    // animation would race. A normal rearrangement zooms out in place to plan
+    // the slide against the cells on screen, then flies back to the reader's
+    // zoom (`startRearrangement`, `useRearrangement.ts`). Reduced motion
+    // returns before that flight, so the camera must not move at all.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     try {
       // Somewhere clearly not the center, so "did not move" is unambiguous.
@@ -435,13 +376,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test("a room's picture caption becomes real <img alt> text in the catalog and overlay, and nothing is invented when it is absent", async () => {
     const { page } = session;
-    // The caption path is a format change plus a fallback. The sample corpus
-    // now ships a real caption for every room (the curation tools produce it
-    // upstream of this repo), so the whole path - fetch, join, describeRoom,
-    // `<img alt>` - can be seen end to end against the corpus exactly as it
-    // ships. The absent case - a corpus that carries no caption, where
-    // nothing may be invented in its place - no longer occurs in the shipped
-    // corpus, so it is produced by routing the sidecar's `alt` back out.
+    // The sample corpus ships a caption for every room (the curation tools
+    // produce it upstream of this repo), so the present case runs end to end
+    // (fetch, join, `describeRoom`, `<img alt>`) against the corpus as it
+    // ships. The absent case, where nothing may be invented in the caption's
+    // place, is produced by routing the sidecar's `alt` back out.
     const openCatalogHere = async () => {
       await page.locator('.panel .mode-toggle').click();
       await page.locator('.catalog').waitFor({ timeout: 5000 });
@@ -457,9 +396,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // real one reached the screen" without pinning which room lands in row 1 or
     // what its exact text is - both free to move as the sample set does. Read it
     // the way the app does - `api/manifest`, then `manifest.metadata.url` - so
-    // the relative urls resolve through `<base href>` exactly as they do in the
-    // client (see docs/agents/deploy.md, "Deployment and the base path"),
-    // rather than guessing where the sidecar is served from.
+    // the relative urls resolve through `<base href>` as they do in the client
+    // (see docs/agents/deploy.md, "Deployment and the base path").
     const sidecar = (await page.evaluate(async () => {
       const manifest = await (await fetch('api/manifest')).json();
       return (await fetch(manifest.metadata.url)).json();
@@ -506,8 +444,8 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     await page.keyboard.press('Control+Home');
     await page.waitForTimeout(session.flightMs + 200);
     // `state: 'attached'`, not the default `'visible'` - canvas fallback content
-    // is never painted, so it can never satisfy Playwright's visibility check
-    // even though it is genuinely present in the tree.
+    // is never painted, so it cannot satisfy Playwright's visibility check
+    // even though it is present in the tree.
     await canvas.locator('.picture').waitFor({ state: 'attached', timeout: 5000 });
     assert.ok(
       captions.has(await canvas.locator('.picture').textContent()),
@@ -515,7 +453,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     );
 
     // Absent: strip every caption back out, and nothing may be invented to fill
-    // the gap - the empty-alt case the shipped corpus no longer provides.
+    // the gap.
     await page.route('**/metadata.json', async (route) => {
       const sidecar = await (await route.fetch()).json();
       for (const key of Object.keys(sidecar)) {

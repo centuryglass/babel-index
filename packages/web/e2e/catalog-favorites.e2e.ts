@@ -1,9 +1,8 @@
 /**
  * The browser smoke test for favoriting from the catalog: the one half of the
  * favoriting path `favorites.e2e.ts` does not cover, since that file only
- * ever reaches the star through the map's diegetic controls. Its own header
- * explains why `favorites: true` is what makes this file different from the
- * rest of the suite - it is the same reason here.
+ * ever reaches the star through the map's diegetic controls. Boots with
+ * `favorites: true`, as that file does (see `openLibrary`).
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';

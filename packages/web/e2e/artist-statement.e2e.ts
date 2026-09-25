@@ -1,10 +1,9 @@
 /**
  * The artist's statement overlay: it opens as a two-page book from the center
- * shelf, it opens the Babel book ON TOP of itself, and Escape peels the two off
+ * shelf, it opens the Babel book on top of itself, and Escape peels the two off
  * in order (book first, statement second) rather than closing both at once.
- * That last part is the whole reason `useDialog` grew a topmost-only stack, and
- * it is exactly the kind of thing only a real browser with two live `window`
- * keydown listeners can prove - so it lives here, not in a unit test.
+ * That last part is what `useDialog`'s topmost-only stack is for, and only a
+ * real browser with two live `window` keydown listeners can prove it.
  *
  * See `support.ts` for the shared harness, `map-gestures.e2e.ts` for the
  * shared header comment on why and how (including how to run the suite), and
