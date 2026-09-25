@@ -518,5 +518,25 @@
     "title": "The Chrysalis Archive",
     "alt": "Polished digital illustration with Art Nouveau ornamentation. The central bookcase is enclosed in a thick, bright white frame, with a narrow additional tier of books resting above it. Flanking the bookcase on either side are tall, dark-green wall panels decorated with symmetrical white floral scrollwork framing pale, organic, teardrop-shaped sculptural motifs. The glowing circular lamp hangs down from a metallic mount on the ceiling.",
     "hash": "2c87831be63f4e97030441383b24f1735e5a6068ded51379da87f51d2f194b0f"
+  },
+  "027.webp": {
+    "keywords": [
+      {
+        "text": "Jorge Luis Borges",
+        "type": "artist"
+      },
+      {
+        "text": "vellum",
+        "type": "medium/material"
+      },
+      {
+        "text": "demoscene",
+        "type": "movement/style"
+      }
+    ],
+    "story": "Every year the Inquisitors file the same complaint: this gallery is a forgery. Their case is careful. The Library holds every arrangement of letters, so somewhere a wall's spines must fall into sentences by chance, but chance is untidy, and nothing here is. Each shelf holds the count the old librarian's account gives, not one volume more. The lamp is precisely what he called it. The room fits his description the way a translation fits its original, as though someone built it from his pages alone and then signed along the spines.\n\nThe Authors, who agree with the Inquisitors about nothing, answer that a forgery of the Library is still a room in it. The complaint is read aloud, filed with the others, and the lamp is left burning.",
+    "title": "As Described",
+    "alt": "Softly lit 3D rendering in warm lamplight and deep blue shadow. A dark walnut bookcase stands against blue-green plaster walls divided by thin walnut moldings, under a dark frieze inlaid with a row of pale hexagons. Its five shelves hold identical books bound in cream parchment, and each spine carries a single hand-inked lowercase letter between ruled lines, with blank spines for the spaces between words. Read shelf by shelf, the spines spell: \"i have never seen a library, only read of them. this one is built from a description, and i am not sure it is right. if you can read it, it is close enough.\" Above the bookcase a glowing orange with a green leaf at its stem sits in a brass ring on a round walnut plate, lighting a faint haze around it. Dark polished floorboards catch the light below.",
+    "hash": "6b2cafa2309f998acbed9ee55878b0c9d6dc43d8181627b0d2b16cdc7507d699"
   }
 }
