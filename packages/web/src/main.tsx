@@ -1,3 +1,20 @@
+/**
+ * The app's entry point and composition root.
+ *
+ * - `App` fetches the manifest and renders `Library` once it arrives.
+ * - `Library` owns the state the two readings share: reader settings and
+ *   their persistence, search history, blocked tags, the sort mode, the
+ *   derived layout and catalog order, and which room card, overlay or
+ *   dialog is open. It wires that state into the hooks and passes the
+ *   results to `MapView`, `CatalogView` and the dialogs.
+ * - The hooks own the behaviour, for example: `useMapCamera` the camera
+ *   and gestures, `useMapRenderer`/`useMapRendererGL` the render loop,
+ *   `useCorpus` the corpus sidecars, `useSearch` the ranking,
+ *   `useRearrangement` the reshuffle animation, `useModeTransition` the
+ *   switch between readings, `useCenterShelf` the shelf's books.
+ * - Module-scope constants at the end are read once at page load, from the
+ *   url and the server's route hint.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
@@ -86,7 +103,7 @@ type CardState = RoomPick;
 function Library({ manifest }: { manifest: ManifestResponse }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // A canvas commits to one context type, permanently, at the first
-  // `getContext` call - so exactly one renderer may touch it. `WEBGL` is
+  // `getContext` call, so only one renderer may touch it. `WEBGL` is
   // decided at page load, and the inactive hook gets this permanently-null
   // ref: its effect bails before ever calling `getContext`.
   const inertCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,7 +112,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // re-rendering the tree that often would cost far more than the style
   // writes the loop makes alongside each canvas repaint.
 
-  // The live search field, on the center tile rather than in the side panel.
+  // The live search field on the center tile.
   const searchFormRef = useRef<HTMLFormElement>(null);
   // The shelf's book buttons: one box matching the center cell, its buttons
   // laid out in percentages inside it - so panning costs one style write,
@@ -692,9 +709,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // The panel's search affordance: focus the live field on the center tile
   // if it is fully usable, otherwise fly to the opening view and focus once
   // landed. A dropped flight (the reader grabbed the map mid-flight) leaves
-  // focus alone. Defined here rather than with the search wiring below
-  // because `useMapCursor` takes it for `/` - as a plain JSX prop, this
-  // position costs no listener rebinding.
+  // focus alone. `useMapCursor` takes it for `/`, so it is defined ahead of
+  // that hook.
   const goToSearch = useCallback(async () => {
     const canvas = canvasRef.current;
     const input = searchFormRef.current?.querySelector('input');
@@ -961,8 +977,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [flyTo, config, canvasRef, cam]
   );
 
-  // The catalog's own scroll position - not part of the mode transition, so
-  // it stays here rather than moving into `useModeTransition`.
+  // The catalog's scroll container. Not part of the mode transition, so it
+  // is not in `useModeTransition`.
   const catalogScrollRef = useRef<HTMLDivElement>(null);
 
   // A canvas-sized box for overviewZoom. While the catalog is open the map
