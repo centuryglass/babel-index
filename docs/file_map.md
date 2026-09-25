@@ -385,6 +385,8 @@ imports at bundle time.
 
 ### Docs:
 - `docs/api.md`: The `/api/*` request/response contract.
+- `docs/corpus.md`: The corpus directory format: `metadata.json` fields,
+  `tagLinks.json`, and filename keying.
 - `docs/architecture.md`: The five-minute, human-facing system overview.
 - `docs/user-guide.md`: Every control, annotated with screenshots - the
   repo-side counterpart of the in-app "READ ME" dialog.
