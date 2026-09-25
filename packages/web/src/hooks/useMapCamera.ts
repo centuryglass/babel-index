@@ -535,12 +535,18 @@ export function useMapCamera({
     // tap's click after `touchend`, hit-testing at dispatch time, so a tap
     // whose `onTap` swaps the view (the shelf's catalog book, via
     // `enterCatalog`) would have its click land on whatever the new view put
-    // under the finger - on Firefox for Android, ~370ms later. Only cancelling
-    // `touchend` suppresses that click; cancelling `pointerdown` stops the
-    // compatibility mousedown/mouseup but not the click. The canvas is hidden
-    // rather than unmounted in catalog mode, so it still receives this
-    // `touchend` after the swap.
-    const onTouchEnd = (e: TouchEvent) => e.preventDefault();
+    // under the finger. Only cancelling `touchend` suppresses that click;
+    // cancelling `pointerdown` stops the compatibility mousedown/mouseup but
+    // not the click. The canvas stays mounted, hidden, in catalog mode, so it
+    // still receives this `touchend` after the swap.
+    //
+    // The `cancelable` check is required: a `touchend` the browser has marked
+    // uncancelable cannot be cancelled, and Chromium logs a console
+    // intervention warning for every attempt, which fails the e2e suite's
+    // "nothing was logged to the console" tests.
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
 
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
