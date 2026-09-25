@@ -5,7 +5,7 @@
  * extended by its travel, then the prefetch ring - with `gl/context.ts`'s
  * quad primitives. `packages/map`'s `Board`/`Motion`/`applyMove` are shared
  * unmodified: `createSlideshow`'s `advanceTo()` output feeds this renderer
- * exactly as it feeds `slide.ts`; only the final paint differs.
+ * as it feeds `slide.ts`; only the final paint differs.
  * docs/agents/rendering.md's "The WebGL renderer" carries the lockstep rule;
  * `render-parity.parity.ts` checks it.
  *
@@ -57,7 +57,9 @@ export type GLSlideDrawOpts = Omit<SlideDrawOpts, 'ctx'> & { gl: GLContext };
 
 export type GLSlideDrawResult = SlideDrawResult;
 
+/** Same as `glRenderer.ts`'s `BACKGROUND`. */
 const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255];
+/** Same as `glRenderer.ts`'s `BLANK_FILL`; must match `render.ts`'s blank-cell fill. */
 const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
 
 export function createGLSlideRenderer({

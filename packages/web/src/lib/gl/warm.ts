@@ -8,11 +8,9 @@
  * upload on its first draw - which for a rearrangement lands in the flight,
  * the one phase that is supposed to feel instant.
  *
- * Polls on its own loop rather than sharing `prepareRearrangement`'s
- * readiness loop: `cache.get(id, level)` is cheap to call repeatedly - it
- * answers once ready and keeps the load going otherwise - so a second small
- * poll is simpler than threading a second consumer through the first one's
- * promise. Stops when every id has uploaded or when `timeoutMs` passes -
+ * Polls on its own loop, separate from `prepareRearrangement`'s readiness
+ * loop; `cache.get(id, level)` is cheap to call repeatedly, answering once
+ * ready and keeping the load going otherwise. Stops when every id has uploaded or when `timeoutMs` passes -
  * the same `config.slide.prepareTimeoutMs` budget
  * `prepareRearrangement` uses - so a slow network cannot leave this
  * polling after the prepare window itself has closed.

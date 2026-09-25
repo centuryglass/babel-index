@@ -41,10 +41,10 @@ export interface LoadingRect {
 }
 
 /**
- * One cycle as written in `manifest.json`. The client re-declares this shape
- * rather than importing it from `tools/center-animation` - the served JSON is
- * the contract between the two, and coupling the browser bundle to a file under
- * `tools/` would drag it into the Docker build context for no runtime gain.
+ * One cycle as written in `manifest.json`. The served JSON is the contract
+ * with `tools/center-animation`, so the client declares its own copy of this
+ * shape. Importing it from `tools/` would pull that file into the browser
+ * bundle and the Docker build context.
  */
 export interface LoadingCycle {
   name: string;

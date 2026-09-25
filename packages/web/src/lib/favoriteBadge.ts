@@ -7,7 +7,7 @@
  * loaded art was itself scaled to match - the same factor `render.ts`/
  * `slide.ts` draw the tile itself at, and the one factor covers both axes
  * because both assets share the tile's aspect. The badge has a pyramid
- * (`manifest.shared.favoriteLevels`, issue #257), so the scale denominator is
+ * (`manifest.shared.favoriteLevels`), so the scale denominator is
  * not a flat `BASE_TILE.w` - `favoriteIconScreenRect` is the one home for that
  * rule and the double-shrink it prevents.
  *

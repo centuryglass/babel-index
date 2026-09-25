@@ -91,10 +91,9 @@ export interface DrawContext {
  * `layout.genericIndexAt`, a content cell its room. `genericId(-1)` is
  * `CENTER`, the fallback for a corpus with no generic tiles at all.
  *
- * Built from `layout.rankOf`/`isCenter` directly rather than
- * `layout.roomAt()`, which allocates a fresh `RoomAtResult` object on every
- * call - this runs once per cell in the visible pass and the prefetch ring,
- * tens of thousands of times a frame at coarse zoom (issue #256).
+ * Built from `layout.rankOf`/`isCenter` because `layout.roomAt()` allocates a
+ * `RoomAtResult` per call, and this runs once per cell in the visible pass
+ * and the prefetch ring, tens of thousands of times a frame at coarse zoom.
  */
 const idOf = (layout: MapLayout, order: number[], gx: number, gy: number): RoomId => {
   if (isCenter(gx, gy)) return CENTER;
@@ -336,7 +335,9 @@ export function createRenderer({ cache, pyramid = PYRAMID }: CreateRendererOpts)
             if (hit.level !== level) substituted++;
           } else {
             // Rule 1's floor. Only reachable before the generic itself has
-            // loaded, or for a room the manifest does not have.
+            // loaded, or for a room the manifest does not have. `#15120f` is
+            // copied in `slide.ts` and as `BLANK_FILL` in both GL renderers;
+            // `npm run test:parity` needs all four to agree.
             ctx.fillStyle = '#15120f';
             ctx.fillRect(sx, sy, cw, ch);
             blank++;
@@ -495,18 +496,18 @@ function traceFavoriteToggle(ctx: PathContext, cellPx: { x: number; y: number },
 }
 
 /**
- * Draw one tile's favorite badge at the tile's draw level (`level`,
- * `render.ts`'s per-frame pick), if that exact level's art has landed: rule 1
- * does not apply, and there is no fallback to a different rung either. A
- * still-loading level draws nothing this frame rather than a mismatched size,
- * and a level with no generated badge art at all (`FAV_ON`/`FAV_OFF` stop at
- * tile width 128 - see `manifest.shared.favoriteLevels`) draws nothing ever
- * (issue #257): the badge's final screen size always tracks `cellPx.x`
- * regardless of which rung's pixels back it (`favoriteIconScreenRect`), so a
- * coarser asset shown at a fine cell would only be a softer badge, not a
- * smaller one - falling back would defeat the whole reason multiple rungs
- * exist. `slide.ts` calls this too, so a sliding room wears the same badge in
- * the same corner.
+ * Draw one tile's favorite badge only if art for the tile's draw level
+ * (`level`, the per-frame pick) has landed. Rule 1 does not apply, and there
+ * is no fallback to another rung:
+ *
+ * - A still-loading level draws nothing this frame.
+ * - A level with no generated badge art (`FAV_ON`/`FAV_OFF` stop at tile
+ *   width 128; see `manifest.shared.favoriteLevels`) never draws one.
+ *
+ * `favoriteIconScreenRect` sizes the badge from `cellPx.x` whichever rung
+ * backs it, so a coarser asset at a fine cell would draw a softer badge, not a
+ * smaller one. `slide.ts` calls this too, so a sliding room wears the same
+ * badge in the same corner.
  *
  * `hovered` paints the gold glow in the badge's traced silhouette
  * (`FAVORITE_TOGGLE_PATH`) - shape, not box, like the shelf's open book.
