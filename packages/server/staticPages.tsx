@@ -4,20 +4,15 @@
  * `renderPage`) until `bundle.js` boots the interactive `HelpDialog`/
  * `ArtistStatementOverlay` over them.
  *
- * The prose itself is not restated here: `HelpBody.tsx` and
- * `ArtistStatementPages.tsx` are pure, stateless components with no hooks or
- * browser calls, so `react-dom/server`'s `renderToStaticMarkup` can render
- * the exact same markup the live dialogs use. That's what makes JSX the one
- * source of truth for these two texts rather than a second copy kept in
- * step by hand, or a markup format (Markdown, a CMS doc) neither side reads
- * natively - the artist's statement in particular has a real outbound link,
- * a `<pre><code>` block, and a button/link that has to differ between the
- * two contexts (see `ArtistStatementPages.tsx`'s own comment on
- * `runBookLink`).
+ * The prose lives only in `HelpBody.tsx` and `ArtistStatementPages.tsx`,
+ * rendered here with `react-dom/server`'s `renderToStaticMarkup` into the
+ * same markup the live dialogs use. Hazard: those components must stay pure
+ * (no hooks, no browser calls) or this render breaks. The one element that
+ * differs between the two contexts is `runBookLink` (see
+ * `ArtistStatementPages.tsx`).
  *
- * `.tsx` rather than `.ts`, unlike the rest of `packages/server`: this is
- * the one file there that renders React elements rather than building HTML
- * strings by hand, and JSX is how the components it renders are written.
+ * The only `.tsx` file in `packages/server`, since it renders React
+ * elements.
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { HelpBody } from '../web/src/components/HelpBody.tsx';

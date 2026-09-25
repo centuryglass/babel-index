@@ -118,10 +118,9 @@ ${renderEntryList(entries)}
   var autoRefresh = document.getElementById('autoRefresh');
   var timer = null;
 
-  // The fragment route returns exactly this page's own <ul id="entries">
-  // markup (logViewerPage.ts's renderEntryList) - one HTML renderer, used
-  // for both the first paint and every refresh, rather than a second one
-  // reimplemented in this script from JSON.
+  // The fragment route returns this page's own <ul id="entries"> markup
+  // (logViewerPage.ts's renderEntryList), so one HTML renderer serves both
+  // the first paint and every refresh.
   function refresh() {
     var url = 'logs/fragment?' + new URLSearchParams({
       minLevel: params.get('minLevel') || '0',

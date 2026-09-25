@@ -11,13 +11,11 @@
  *
  * `LOG_FILE`, if set, also writes every line to that path through
  * `log-file.ts`'s size-capped rotating destination (`LOG_FILE_MAX_BYTES`,
- * default `DEFAULT_LOG_FILE_MAX_BYTES`) - what `app.ts`'s `/api/logs` and
- * `/admin/logs` read back (see `index.ts`, which mounts those routes only
- * when this same env var and `ADMIN_PASSWORD_HASH` are both set). Pretty
- * printing is skipped whenever `LOG_FILE` is set: the deploy is the only
- * place this env var is expected to be set, and stdout there is never a TTY
- * anyway, so this only ever changes behavior for the (rare, and now
- * unsupported) case of testing `LOG_FILE` from an interactive terminal.
+ * default `DEFAULT_LOG_FILE_MAX_BYTES`) - what `app.ts`'s log routes read
+ * back (see its `logFile` option). Pretty printing is skipped whenever
+ * `LOG_FILE` is set: the deploy is the only place it is expected, and
+ * stdout there is never a TTY, so an interactive terminal with `LOG_FILE`
+ * set gets plain JSON.
  */
 import pino from 'pino';
 import { createRotatingFileStream, DEFAULT_LOG_FILE_MAX_BYTES } from './log-file.ts';
@@ -26,7 +24,7 @@ import { createRotatingFileStream, DEFAULT_LOG_FILE_MAX_BYTES } from './log-file
  * `pino-pretty` is a devDependency, so a production install
  * (`npm ci --omit=dev`) may not have it. Resolution is checked rather than
  * the package required: a TTY with no pretty package installed degrades to
- * plain JSON instead of crashing the process on the first log call.
+ * plain JSON, not a crash on the first log call.
  */
 function prettyPrinterAvailable(): boolean {
   try {

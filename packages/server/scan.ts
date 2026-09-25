@@ -115,7 +115,7 @@ export async function imageSize(path: string): Promise<ImageSize | null> {
  * The generator writes `<dir>/<width>/<file>` for every level below the
  * source and leaves level 0 flat, so discovery is: work out what the ladder
  * *would* produce at this source size, then keep the rungs whose directory
- * is really there. Level 0 is always present - it is the flat files
+ * is there. Level 0 is always present - it is the flat files
  * themselves - which is what keeps "point it at a directory of images" true
  * for a corpus that has never been near the pipeline.
  *
@@ -414,7 +414,7 @@ export async function scanDirectory(
   // manifest - the client blocks on that fetch before its first frame, and
   // the sidecar itself can be megabytes. The coverage pair is what keeps
   // drift visible from here: matched 0 against non-zero entries means the
-  // keys have moved, and on the map that looks exactly like no sidecar.
+  // keys have moved, and on the map that looks the same as no sidecar.
   let metadata: Manifest['metadata'] = null;
   try {
     const sidecar = JSON.parse(await readFile(join(dir, METADATA_FILE), 'utf8'));

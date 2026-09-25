@@ -109,45 +109,43 @@ export interface CreateAppOptions {
   /** directory of app-level static assets (favicon, touch icon, manifest,
    *  OG/Twitter card image) - see packages/web/public. Not corpus content, so
    *  it is unrelated to imagesDir/sharedDir; served at the same root paths
-   *  index.html's icon/manifest links use. Absent (the default in most
-   *  tests) means none of those files exist and only the bare /favicon.ico
-   *  204 below answers - same "no store, no feature" shape as `favorites`. */
+   *  index.html's icon/manifest links use.
+   *
+   *  The nullable options below (`publicDir`, `favorites`, `logFile`,
+   *  `metrics`) share one rule: absent, the default in tests, means that
+   *  feature's routes or recording are not set up at all. With no
+   *  `publicDir`, only the bare /favicon.ico 204 answers. */
   publicDir?: string | null;
   /** where the app is reverse-proxied to, e.g. '/babel-index/' (default '/').
    *  Every route below stays mounted at its own unprefixed path - see
    *  base-path.ts - this only sets the `<base href>` the served HTML carries,
    *  so the browser resolves this file's relative urls under the subpath. */
   basePath?: string;
-  /** where global favorite counts live (see favorites.ts). Absent - the
-   *  default, and every test that does not ask for it - means the favorite
-   *  routes are not mounted at all and the client renders no favorite UI,
-   *  rather than a count nothing can record. */
+  /** where global favorite counts live (see favorites.ts). Absent, the
+   *  favorite routes are not mounted and the client renders no favorite UI. */
   favorites?: FavoriteStore | null;
   /** passed straight to Express's `trust proxy` setting. It has to be set for
    *  a deployment behind a reverse proxy, or `req.ip` is the proxy's own
-   *  address - one hash for every visitor, and every favorite count capped at
-   *  one. Default false: correct for a direct connection, which is what the
-   *  demo is. See index.ts's `--trust-proxy`. */
+   *  address, and every visitor shares one rate bucket for favorite writes
+   *  and admin logins. Default false: correct for a direct connection, which
+   *  is what the demo is. See index.ts's `--trust-proxy`. */
   trustProxy?: string | number | boolean;
   /** the revision this process is running, reported by /api/health (see
-   *  version.ts). Null - the default, and every test - means the server
-   *  cannot name its own revision, which /api/health reports honestly rather
-   *  than omitting. */
+   *  version.ts). Null, the default in every test, means the server cannot
+   *  name its own revision; /api/health still includes the field. */
   commit?: string | null;
   /** the log file logger.ts's LOG_FILE is writing (log-file.ts), for
-   *  /api/logs and /admin/logs to read back. Absent - the default, and every
-   *  test that doesn't ask for it - means those routes aren't mounted at
-   *  all, the same "no store, no feature" shape as favorites. Requires
-   *  adminPasswordHash too: logs with no password configured stay unmounted
-   *  rather than serving unauthenticated (see index.ts). */
+   *  /api/logs, /admin/logs and /admin/logs/fragment to read back.
+   *
+   *  Those routes mount only when this and `adminPasswordHash` are both set,
+   *  so logs are never served unauthenticated. This is the rule's one home;
+   *  index.ts warns at startup when only one of the two env vars is set. */
   logFile?: string | null;
-  /** admin-auth.ts's hashPassword() output, gating /api/logs and
-   *  /admin/logs. See logFile above for why both are required together. */
+  /** admin-auth.ts's hashPassword() output, gating the log routes. Needs
+   *  `logFile` too - see that option. */
   adminPasswordHash?: string | null;
-  /** where hourly usage counts are recorded (see metrics.ts). Absent - the
-   *  default, and every test that doesn't ask for it - means visits,
-   *  searches and favorite writes are simply not counted, the same
-   *  "no store, no feature" shape as favorites. */
+  /** where hourly usage counts are recorded (see metrics.ts). Absent,
+   *  visits, searches and favorite writes are not counted. */
   metrics?: UsageMetrics | null;
 }
 
@@ -176,26 +174,24 @@ export function createApp({
 
   // Only when asked for: Express's default (off) is the truthful reading of a
   // direct connection, and trusting a header nobody strips would let any
-  // client pick its own address - which here means picking its own favorite
-  // hash, one per request, without limit.
+  // client pick its own address - which here means picking its own rate
+  // budget, one per request, without limit.
   if (trustProxy !== false) app.set('trust proxy', trustProxy);
 
-  // Config rides on the manifest rather than getting an endpoint of its own:
-  // the client already blocks on this fetch before it can render, and a second
-  // round trip for a hundred bytes would only add a state where the map exists
-  // and does not yet know its own zoom range. `notes` is for the operator, not
-  // the browser, so it is stripped here - index.ts prints it at startup.
+  // Config rides on the manifest: the client already blocks on this fetch
+  // before it can render, so it never sees a map that doesn't yet know its
+  // own zoom range. `notes` is for the operator, not the browser, so it is
+  // stripped here - index.ts prints it at startup.
   const { notes: _notes, source: _source, ...clientConfig } = config ?? (resolveConfig() as ResolvedConfig);
   const clipTextDtype = clientConfig.search.clipTextDtype;
 
-  // Whether the client should offer favoriting at all. A flag rather than the
-  // counts themselves: the manifest stays small (see the `metadata` note in
-  // scanDirectory), and the counts are a second, cacheable thing that changes
-  // on its own schedule.
+  // Whether the client should offer favoriting at all. Only the flag: the
+  // manifest stays small (see the `metadata` note in scanDirectory), and the
+  // counts come from /api/favorites on their own schedule.
   const favoritesInfo = favorites ? { enabled: true } : null;
 
   app.get('/api/manifest', (req, res) => {
-    // The one request every page load makes exactly once, so it stands in
+    // The one request every page load makes once, so it stands in
     // for "a visit" for metrics.ts's unique-visitor count - see its own
     // header for why the count itself never sees a raw address.
     metrics?.recordVisit(req.ip ?? '');
@@ -229,9 +225,8 @@ export function createApp({
 
   /**
    * The admin log viewer - a way to read what's in `logFile` from a phone
-   * over HTTPS instead of ssh-ing into the VPS and grepping. Mounted only
-   * when both `logFile` and `adminPasswordHash` are set (see their own
-   * option comments); index.ts warns at startup if only one is.
+   * over HTTPS without an ssh session. Mounted only under the `logFile`
+   * option's rule.
    *
    *   GET /api/logs          JSON: { entries: (LogEntry | RawLogEntry)[] }
    *   GET /admin/logs         the HTML viewer page (server-rendered, works
@@ -291,12 +286,11 @@ export function createApp({
    * endpoint stays a stateless thing that could sit in front of a static
    * bundle.
    *
-   * Two fallbacks return a deterministic pseudo-ranking instead, so the
-   * mechanic - type a term, watch the library rearrange around the center -
-   * survives without a model: no blob for this corpus, or the text tower
-   * failing to load (offline with nothing cached). Both are labelled
-   * `stub`, so the UI can say so rather than imply the order means
-   * something.
+   * Two fallbacks return a deterministic pseudo-ranking, so the mechanic -
+   * type a term, watch the library rearrange around the center - survives
+   * without a model: no blob for this corpus, or the text tower failing to
+   * load (offline with nothing cached). Both are labelled `stub`, so the UI
+   * can say the order means nothing.
    */
   app.get('/api/search', async (req, res) => {
     const q = String(req.query.q ?? '')
@@ -349,7 +343,8 @@ export function createApp({
    * Identity and throttling sit on different keys (docs/agents/favorites.md,
    * "Favorite writes are rate-limited by `req.ip`"):
    * `X-Favorite-Client` - a token the browser generates once, see
-   * `useFavorites.ts` - decides whose favorite a write records; the rate
+   * `persist.ts`'s `getOrCreateFavoriteClientId` - decides whose favorite a
+   * write records; the rate
    * bucket below, keyed on the address, decides how fast a write can come.
    */
   if (favorites) {
@@ -399,17 +394,17 @@ export function createApp({
   }
 
   // App-level static assets (favicon, touch icon, manifest, OG/Twitter card
-  // image) - see packages/web/public. `express.static` 404s through to the
-  // fallback below rather than intercepting anything else mounted here, since
-  // none of app.ts's other routes share a name with a file in that directory.
+  // image) - see packages/web/public. `express.static` falls through to the
+  // routes below on a miss, and a file there shadows any route mounted after
+  // it with the same path (the /favicon.ico handler below relies on this).
   if (publicDir) app.use(express.static(publicDir, { maxAge: '1h' }));
 
-  // Without a publicDir there is no favicon.ico to serve - answer 204 rather
-  // than let it 404 log on every load.
+  // Without a publicDir there is no favicon.ico to serve - answer 204 so the
+  // browser's request on every load isn't a 404.
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
-  // `no-cache`, not `no-store`: always revalidate against the `ETag`
-  // `res.send()` already computes, rather than skip caching outright.
+  // `no-cache`: every load revalidates against the `ETag` `res.send()`
+  // computes.
   app.get('/bundle.js', (_req, res) => {
     res.set('Cache-Control', 'no-cache');
     res.type('application/javascript').send(getBundleJs ? getBundleJs() : bundleJs);
@@ -482,7 +477,7 @@ export function createApp({
       const origin = requestOrigin(req, base);
       // A room filename containing `</script>` (unlikely but not impossible)
       // would close this tag early. JSON.stringify escapes quotes and
-      // backslashes but leaves `<` alone, so `<` is written as `<` -
+      // backslashes but leaves `<` alone, so `<` is written as `\u003c` -
       // the only character here that can affect HTML parsing.
       const routeScript = initialRoute
         ? `<script>window.__INITIAL_ROUTE__ = ${JSON.stringify(initialRoute).replace(/</g, '\\u003c')};</script>`
@@ -532,8 +527,8 @@ export function createApp({
      * `config.catalog.perPage` the client uses.
      *
      * `?page=` is 1-based on this public url; `pageOf`'s own contract is
-     * 0-based, so the conversion happens right here rather than leaking a
-     * public url convention into that pure module.
+     * 0-based, so the conversion happens here and that module stays free
+     * of url conventions.
      */
     app.get('/catalog', async (req, res, next) => {
       try {
@@ -571,9 +566,8 @@ export function createApp({
      * reachable under two path prefixes that share this one handler:
      * `catalog/:slug` opens the room in the linear list, `map/:slug` opens
      * the same room's overlay over the pannable map. `mode` is the only
-     * thing that differs between the two `app.get` calls below - reusing one
-     * closure is what keeps the redirect/collision/not-found handling from
-     * drifting between them.
+     * thing that differs between the two `app.get` calls below, so the
+     * redirect/collision/not-found handling is shared.
      *
      * A room answers to its filename stem as well, and anything but the
      * canonical slug redirects to it - so a retitled room's old links still
@@ -632,8 +626,7 @@ export function createApp({
           canonicalPath: roomPath(slugs.slugs[id], mode),
           bodyHtml: result.bodyHtml,
           // The filename, not the slug: it is what `main.tsx` matches a room
-          // on, so translating here is what keeps the client from building a
-          // second slug table to read its own url.
+          // on, so the client needs no slug table to read its own url.
           initialRoute: { mode, room: manifest.rooms[id].file },
           noscriptRedirectPath: mode === 'map' ? roomPath(slugs.slugs[id], 'catalog') : null,
         });
@@ -648,8 +641,8 @@ export function createApp({
      * One-shot SSR-linkable routes for the two static dialogs reachable from
      * the center shelf - a no-JS/crawler-readable page plus an
      * `initialRoute` hint so `main.tsx` opens the matching dialog once JS
-     * takes over (the same pattern as `/catalog` above, minimal bodyHtml
-     * rather than real per-corpus SSR content since neither page has any).
+     * takes over (the same pattern as `/catalog` above, with a static
+     * bodyHtml since neither page has per-corpus content).
      */
     app.get('/help', (req, res, next) => {
       const { title, description, bodyHtml } = renderHelpPage(base);
@@ -736,11 +729,9 @@ export function createApp({
  *
  * It matters because the package is optional. `onnxruntime-node`, which
  * transformers.js needs, publishes for win32/darwin/linux only; on anything
- * else (Android under Termux, say) npm refuses it. As a required dependency
- * that takes the whole install down with it; as an optional one it is
- * skipped, everything else installs, and the demo runs - ranking by
- * keywords and story instead of by CLIP. This is how the server says so at
- * startup rather than leaving it to be discovered on the first search.
+ * else (Android under Termux, say) npm skips it and the demo ranks by
+ * keywords and story only. This lets the server say so at startup, before
+ * the first search.
  */
 export function hasTextModel(): boolean {
   try {
@@ -762,9 +753,8 @@ const EMBED_CACHE_SIZE = 200;
 const embedCache = createLruCache(EMBED_CACHE_SIZE);
 
 // Bounds how many CLIP text-tower inferences run at once. Sized to the CPU
-// like any other CPU-bound worker pool: past that many threads are fighting
-// for the same cores rather than doing useful work, so a burst of distinct
-// queries degrades to queueing latency instead of thrashing the machine.
+// like any other CPU-bound worker pool, so a burst of distinct queries
+// degrades to queueing latency, not thrashing.
 //
 // Queueing is otherwise invisible server-side - throughput pins at the cap
 // and only latency shows it. Logging here, throttled, means a real traffic
@@ -780,10 +770,9 @@ const embedLimiter = createLimiter(Math.max(1, availableParallelism()), {
   },
 });
 
-// Keyed by dtype rather than one bare promise: `createApp` may be built more
-// than once in a process (tests do this) with different config, and reusing
-// a model loaded at the wrong precision would be silently wrong rather than
-// slow.
+// Keyed by dtype: `createApp` may be built more than once in a process
+// (tests do this) with different config, and reusing a model loaded at the
+// wrong precision would be silently wrong.
 const textTowerPromises = new Map<string, Promise<{ tokenizer: any; model: any }>>();
 
 /**
@@ -792,7 +781,7 @@ const textTowerPromises = new Map<string, Promise<{ tokenizer: any; model: any }
  * A dynamic `import` so the heavy dependency is pulled only when a real
  * search actually runs - the stub path, and every test that never sets up a
  * blob, stay free of it. The promise is memoised, so concurrent first
- * requests share one load rather than racing two model downloads.
+ * requests share one load.
  */
 function textTower(dtype: string): Promise<{ tokenizer: any; model: any }> {
   if (!textTowerPromises.has(dtype))
@@ -834,7 +823,7 @@ async function embedQuery(q: string, dtype: string): Promise<number[]> {
  * Hard ceiling on how much of `query` {@link stubRanking} hashes, independent
  * of `clientConfig.search.maxQueryLength` - a config value CodeQL cannot see
  * is already capped by the time it reaches this loop. Callers already slice
- * to `maxQueryLength` (256 by default) before calling in; this is a second,
+ * to `maxQueryLength` before calling in; this is a second,
  * unconfigurable bound so a compromised or misconfigured `maxQueryLength`
  * can't turn the loop unbounded.
  */

@@ -7,9 +7,8 @@
  *                    [--base-path /babel-index/]
  *
  * Point it at a directory of images and it serves a browsable library. No
- * database, no bucket, no upload step - the directory *is* the corpus. That is
- * the whole point of offline mode: get a working local demo before hosting is
- * worth thinking about.
+ * database, no bucket, no upload step - the directory is the corpus, so a
+ * local demo works before any hosting exists.
  *
  * `--base-path` is for serving this under a subpath of a shared domain
  * (`https://centuryglass.us/babel-index/`) instead of its own subdomain -
@@ -26,8 +25,8 @@
  *
  * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the corpus
  * and shared tiles both come from the remote host (see remote.ts), and the
- * manifest's urls point the browser there directly rather than this server
- * serving or proxying anything under `/images`/`/shared`.
+ * manifest's urls point the browser there directly; this server serves
+ * nothing under `/images`/`/shared`.
  *
  * `--favorites <path>` turns on global favorite counts, stored in that one
  * JSON file (see favorites.ts). Without it the favorite routes are not
@@ -38,14 +37,12 @@
  * rate-limited by `req.ip`").
  *
  * `LOG_FILE`/`ADMIN_PASSWORD_HASH` (env vars, not flags - the second is a
- * secret) turn on the admin log viewer at /admin/logs (see app.ts,
- * log-file.ts, admin-auth.ts). Both are required together; with only one
- * set this process logs a warning and mounts neither route rather than
- * serving unauthenticated.
+ * secret) turn on the admin log viewer at /admin/logs; when it mounts is
+ * `app.ts`'s `logFile` option.
  *
  * Hourly usage counts (unique visitors, searches, favorite adds/removes) are
- * always logged, with no flag to turn them off - see metrics.ts for why that
- * is safe to leave on by default.
+ * always logged, with no flag to turn them off - see metrics.ts for what they
+ * keep.
  *
  * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
@@ -125,8 +122,7 @@ if (config.source) logger.info({ source: config.source }, 'config loaded');
 for (const note of config.notes) logger.warn({ note }, 'config note');
 
 // Off unless asked for. The counts are the only state this process persists,
-// and a demo that silently started recording them somewhere would be the
-// wrong default: nothing to clean up, nothing to explain.
+// so a plain demo run leaves no file behind.
 const favoritesPath = argv.favorites as string | undefined;
 let favorites: FavoriteStore | null = null;
 if (favoritesPath) {
@@ -138,23 +134,22 @@ if (favoritesPath) {
   }
 }
 
-// Always on: unlike favorites, there is no file to create and nothing
-// persisted (see metrics.ts) - just an hourly log line, so there is no
-// "off by default" case to design for.
+// Always on: nothing is persisted (see metrics.ts), just an hourly log
+// line.
 const metrics = createUsageMetrics();
 
-// Off unless both are set - see this file's header comment. A misconfigured
-// single env var stays unmounted (app.ts) rather than accidentally serving
-// logs with no password, but it's worth saying so at startup rather than
-// leaving that to be discovered by a 404 on /admin/logs.
+// Mounted under app.ts's `logFile` rule. A single env var set alone is
+// reported here so the operator doesn't first learn of it from a 404 on
+// /admin/logs.
 const logFile = process.env.LOG_FILE || null;
 const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH || null;
 if (logFile && !adminPasswordHash) logger.warn('LOG_FILE is set but ADMIN_PASSWORD_HASH is not - /admin/logs will not be mounted');
 if (adminPasswordHash && !logFile) logger.warn('ADMIN_PASSWORD_HASH is set but LOG_FILE is not - /admin/logs will not be mounted');
 
-// Express's `trust proxy`, verbatim - '1' and 'loopback' both mean something
-// to it, so this is not parsed into a boolean here. Unset is a direct
-// connection, where the socket address is the visitor's.
+// Express's `trust proxy`, verbatim apart from digit strings becoming
+// numbers - '1' and 'loopback' both mean something to it, so this is not
+// parsed into a boolean. Unset is a direct connection, where the socket
+// address is the visitor's.
 const trustProxyArg = argv['trust-proxy'];
 const trustProxy =
   trustProxyArg === undefined ? false : typeof trustProxyArg === 'string' && /^\d+$/.test(trustProxyArg) ? Number(trustProxyArg) : trustProxyArg;
@@ -200,8 +195,7 @@ await loadRoomContent(manifest, imagesDir);
 
 // The text tower is optional - app.ts's `hasTextModel` says why. Without it
 // a search still ranks by keywords and story, so this is a note, not a
-// warning, said at startup rather than left to be discovered on the first
-// query.
+// warning, said at startup before the first query.
 if (!hasTextModel()) logger.info('no CLIP text model installed - search will rank by keywords and story only');
 
 logger.info(watch ? 'bundling client (watch mode)' : 'bundling client');
@@ -220,9 +214,9 @@ const ctx = await context({
   sourcemap: 'inline',
   write: false,
   define: { 'process.env.NODE_ENV': '"development"' },
-  // Chrome art (the search icon's badge and arrow) gets imported as raw
-  // markup rather than traced into JSX by hand, so the source SVGs in
-  // assets/ stay the one copy of that path data - see SearchIcon.tsx.
+  // Chrome art (the search icon's badge and arrow) is imported as raw
+  // markup, so the source SVGs in assets/ stay the one copy of that path
+  // data - see SearchIcon.tsx.
   // The center shelf's spine webfont is bundled the same self-hosted way, as a
   // base64 data URI, so a title renders without a font CDN request - see
   // spineFont.ts.
@@ -328,8 +322,7 @@ function parseArgs(args: string[]): Record<string, string | boolean> {
     const key = a.slice(2);
     const next = args[i + 1];
     // A flag with no value after it (or immediately followed by another
-    // flag, e.g. `--watch --port 5173`) is boolean rather than missing its
-    // argument - `--watch` has no value to consume.
+    // flag, e.g. `--watch --port 5173`) is boolean.
     if (next === undefined || next.startsWith('--')) out[key] = true;
     else out[key] = args[++i];
   }

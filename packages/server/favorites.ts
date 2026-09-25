@@ -3,9 +3,9 @@
  * keeps, per room, a set of HMAC(salt, file + NUL + clientId) hashes: no
  * addresses, no sessions, no timestamps. docs/agents/favorites.md's "Favorites"
  * section is the canonical statement of the invariants this module implements -
- * a count is a set's size rather than a counter, the hash is keyed per room,
- * identity is a browser-generated token (see `useFavorites.ts`) rather than an
- * address, and everything keys on filename.
+ * a count is a set's size, the hash is keyed per room, identity is a
+ * browser-generated token (`persist.ts`'s `getOrCreateFavoriteClientId`),
+ * and everything keys on filename.
  *
  * Hashing is not a security control and is not claimed as one: it is the
  * shape that makes the stored data useless while still letting a set
@@ -21,9 +21,8 @@
  * Storage is one JSON file: the data is one small map of string sets,
  * written by one process, read on page load, held in memory and snapshotted
  * with an atomic tmp+rename on a debounce so a burst of favorites costs one
- * write. `FavoriteStore` is an interface rather than this file's shape, so
- * another backend can replace it without `app.ts` or the client learning
- * anything new.
+ * write. `app.ts` sees only the `FavoriteStore` interface, so another
+ * backend can replace this one.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
@@ -75,9 +74,9 @@ export async function createJsonFavoriteStore({ path, flushMs = 1000 }: JsonStor
   const { salt, rooms } = await read(path);
 
   let timer: NodeJS.Timeout | null = null;
-  // Writes are serialised through this rather than fired in parallel: two
-  // renames onto the same path from two overlapping writes can land in either
-  // order, and the loser is a stale snapshot with no way to tell.
+  // Writes are serialised through this: two renames onto the same path from
+  // two overlapping writes can land in either order, and the loser is a
+  // stale snapshot with no way to tell.
   let writing: Promise<void> = Promise.resolve();
   let dirty = false;
 
@@ -94,7 +93,7 @@ export async function createJsonFavoriteStore({ path, flushMs = 1000 }: JsonStor
       await mkdir(dirname(path), { recursive: true });
       await writeFile(tmp, JSON.stringify(snapshot));
       // Atomic on the same filesystem, so a crash mid-write leaves the previous
-      // snapshot intact rather than a truncated one.
+      // snapshot intact.
       await rename(tmp, path);
     });
     return writing;
@@ -135,8 +134,8 @@ export async function createJsonFavoriteStore({ path, flushMs = 1000 }: JsonStor
       const set = rooms.get(file);
       if (!set) return 0;
       if (set.delete(hash(file, clientId))) {
-        // An emptied room is dropped rather than left as an empty array, so the
-        // snapshot does not accumulate a key per room anyone ever touched.
+        // An emptied room is dropped, so the snapshot does not accumulate a
+        // key per room anyone ever touched.
         if (!set.size) rooms.delete(file);
         touch();
       }
