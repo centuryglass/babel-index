@@ -1,23 +1,18 @@
 /**
- * Everything the corpus IS: the keyword/story sidecar, the embedding blob, and
- * the search index built over them - three things fetched or derived from the
- * manifest and nothing else, so "load the corpus" is one call instead of two
- * fetch effects and a memo scattered through `Library`.
+ * The corpus data derived from the manifest: the keyword/story sidecar, the
+ * embedding blob, the tag links, and the search index built over them.
  *
- * `embeddings` stays a ref holding `{ data, dim }` rather than becoming React
- * state - it is a megabyte-scale `Int8Array`, and re-rendering every time it
- * arrives would be paid for nothing anyone reads from it synchronously.
+ * `embeddings` is a ref holding `{ data, dim, scale }`, not React state: it is
+ * a megabyte-scale `Int8Array` nothing reads during render, so its arrival
+ * need not re-render.
  *
- * `tagLinks` is a flat keyword -> url object, small enough (a few dozen
- * entries at most) to be React state directly.
+ * `tagLinks` is a small keyword -> url object, held as React state.
  *
- * Each of the three fetches the manifest advertises can fail on its own - an
- * interrupted `tools/upload` sync is a plausible way to end up with a
- * manifest naming a `metadata.json` or `embeddings.bin` that 404s - and the
- * corpus still renders in that state, just with degraded search. `corpusErrors`
- * names which of them did, for the HUD line in `MapView.tsx` (`described`'s
- * neighbor) rather than a `.catch(() => {})` a maintainer can only find by
- * opening the network tab.
+ * Each fetch the manifest advertises can fail on its own (an interrupted
+ * `tools/upload` sync can leave a manifest naming a missing `metadata.json`
+ * or `embeddings.bin`). The corpus still renders, with degraded search, and
+ * `corpusErrors` names the failed sources for the panel line in
+ * `MapView.tsx`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinMetadata, type RoomMeta } from '../../../map/metadata.ts';

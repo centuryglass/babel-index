@@ -1,28 +1,22 @@
 /**
  * The map, and every control that belongs to it.
  *
- * A presenter, not an owner: every piece of state it renders lives in
- * `main.tsx`'s `Library`, because the catalog reads the same state and two
- * copies would be two chances to disagree. What is here is the markup; the
- * frame loop is `useMapRenderer.ts`/`useMapRendererGL.ts`, the camera is
- * `useMapCamera.ts`, and the search, the ranking and the rearrangement
- * live in `Library` too.
+ * A presenter: every piece of state it renders lives in `main.tsx`'s
+ * `Library`, which the catalog reads too. The frame loop is
+ * `useMapRenderer.ts`/`useMapRendererGL.ts` and the camera is
+ * `useMapCamera.ts`.
  *
  * ### `display: contents`, and never unmounted
  *
  * The wrapper generates no box when shown, so the canvas and the
- * center-tile overlays position against `#root` as if it were not there -
- * a real box would shift every imperative rect the render loop writes.
- * Hidden, it is `display: none`, which takes the subtree out of the
- * accessibility tree along with the pixels.
+ * center-tile overlays position against `#root`. A real box would shift
+ * every imperative rect the render loop writes. Hidden, it is
+ * `display: none`, which also takes the subtree out of the accessibility
+ * tree.
  *
- * It is hidden rather than unmounted, and that is load-bearing:
- * `useMapCamera` binds its pointer listeners once, in an effect that
- * depends on the ref object rather than the element, so a canvas that
- * unmounted would come back holding the right camera, reporting the right
- * HUD, and silently never panning again. Keeping it mounted also keeps the
- * tile cache and the pyramid's LRU warm. docs/agents/catalog.md's "The catalog,
- * and the two modes" owns the full rule and its e2e guard.
+ * It must be hidden, not unmounted: a remounted canvas gets no pointer
+ * listeners and never pans again (docs/agents/catalog.md, "The map is
+ * hidden, never unmounted").
  */
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
@@ -45,17 +39,16 @@ import type { CorpusErrorSource } from '../hooks/useCorpus.ts';
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
 
-/** The ranked list's own rows - `main.tsx`'s `searchResults`, not `SearchResult`. */
+/** The ranked list's rows - `main.tsx`'s `searchResults`, not `SearchResult`. */
 type SearchResultsList = { total: number; rooms: { id: number; x: number; y: number; rank: number; name: string }[] } | null;
 
 /**
  * Each book's position inside the shelf container, as percentages.
  *
- * Computed once at module scope because the fractions never change; the
- * container is the thing that moves. Per-axis, like everything that
- * touches this tile: `x`/`w` against the cell's width, `y`/`h` against its
- * height. One divisor for both would put every focus ring on the wrong
- * book, as silently as it would stretch the art.
+ * Per-axis, like everything on this tile: `x`/`w` against the cell's width,
+ * `y`/`h` against its height. One divisor for both puts every focus ring on
+ * the wrong book. The fractions are fixed; the render loop moves the
+ * container.
  */
 const BOOK_STYLES = BOOK_RECTS.map((b) => ({
   left: `${b.x * 100}%`,
@@ -185,7 +178,7 @@ export function MapView({
   /** the room under the keyboard cursor, null on the center cell and on wallpaper */
   cursorId: number | null;
   onRescatter: () => void;
-  /** the distill toggle's own floating tooltip - the render loop positions it, via `distillTooltipRef` in both map-renderer hooks */
+  /** the distill toggle's floating tooltip - the render loop positions it, via `distillTooltipRef` in both map-renderer hooks */
   distillTooltipRef: Ref<HTMLDivElement>;
   onRecentre: () => void;
   history: string[];
@@ -200,29 +193,25 @@ export function MapView({
 }) {
   return (
     <>
-      {/* The map view wrapper - `display: contents`/`display: none` per
-          `mode`, hidden not unmounted; see the *`display: contents`, and
-          never unmounted* section above. */}
+      {/* `display: contents`/`display: none` per `mode`; see the file
+          header's "`display: contents`, and never unmounted". */}
       <div className="map-view" hidden={mode !== 'map'}>
       {/*
-        `role="application"`, scoped to exactly this element and nowhere
-        else: inside it a screen reader's own browse-mode reading turns off
-        and arrow keys reach the page, which is what lets them pan. That
-        trade must not creep onto the panel below, so this is the only
-        application region in the document.
+        `role="application"` is scoped to this element only. Inside it a
+        screen reader's browse mode turns off and arrow keys reach the page,
+        which is what lets them pan. That trade must not spread to other
+        controls, so this is the only application region in the document.
 
-        One tab stop for the entire map: `tabIndex={0}` here and nothing
-        else keyboard-reachable at the top level of this subtree, so Tab
-        leaves the map in one press. The chips nested below are
-        `tabIndex={-1}` - real, touch-reachable elements that do not
-        lengthen the desktop tab sequence.
+        The canvas is the map's first tab stop; docs/keyboard-controls.md,
+        "Focus states and tab order", lists the rest. The chips nested
+        below are `tabIndex={-1}`: real elements a touch screen reader
+        reaches, adding no tab stops.
 
-        `aria-label` is the static name - what a reader hears arriving here
-        for the first time. Everything after that arrives through the app's
-        one live region, fed by `announceCursorMove` (`useMapCursor.ts`)
-        and rendered by `main.tsx`: an attribute change on an
-        already-focused element is not reliably announced across screen
-        readers on its own.
+        `aria-label` is what a reader hears on arriving here. Every later
+        change arrives through the app's one live region, fed by
+        `announceCursorMove` (`useMapCursor.ts`) and rendered by `main.tsx`,
+        because an attribute change on an already-focused element is not
+        reliably announced.
       */}
       <canvas
         ref={canvasRef}
@@ -232,20 +221,15 @@ export function MapView({
         onKeyDown={onMapKeyDown}
       >
         {/*
-          The same component the card and the catalog render, not a second
-          copy of the markup - `chipTabIndex={-1}` is the only difference,
-          and it keeps the map exactly one tab stop while leaving the chips
-          real elements a touch screen reader's swipe navigation reaches.
-          No score breakdown here: this is the cursor's contents, and a
-          table of numbers read out on every arrow press is not peripheral
-          vision.
+          The keyboard cursor's room, in the same component the card and the
+          catalog render. `chipTabIndex={-1}` keeps the chips out of the tab
+          sequence. No score breakdown: it would be read out on every arrow
+          press.
 
-          Guarded on `cursorEntry` rather than letting `RoomDetails` render
-          its own empty state: "No keywords recorded for this room" is
-          right for something a reader deliberately opened, and wrong for
-          a cursor sitting on wallpaper - the common case, one the canvas's
-          own `aria-label` already names (`describeCell`'s generic `name`).
-          Saying it again in different words is noise on every arrow press.
+          Rendered only when `cursorEntry` is set. On wallpaper the canvas's
+          `aria-label` already names the cell (`describeCell`'s generic
+          `name`), and `RoomDetails`'s empty state would repeat it on every
+          arrow press.
         */}
         {cursorEntry && (
           <RoomDetails
@@ -264,33 +248,25 @@ export function MapView({
         )}
       </canvas>
       {/*
-        The on-tile favorite badge's "add to favorites"/"remove from
-        favorites" tooltip - one floating element for the whole map, not a
-        `.control-tooltip` per badge, because badges are canvas-painted on
-        every tile and none of them carries a DOM element to hold one.
-        Positioned and shown imperatively from the render loop's
-        `pointermove` listener, the same treatment `searchArrowRef` gets -
-        not React state, since it moves on every pointer move rather than
-        on a render. `aria-hidden`: it repeats what the badge's own state
-        already is, and a room's favorite status is available on the card
-        without a mouse.
+        The on-tile favorite badge's tooltip - one floating element for the
+        whole map, since badges are canvas-painted and have no DOM element
+        to hold one. The render loop's `pointermove` listener positions and
+        shows it imperatively, like `searchArrowRef`. `aria-hidden`: the
+        card states a room's favorite status without a mouse.
       */}
       <div ref={favTooltipRef} className="favorite-tooltip" aria-hidden="true" />
       {/*
-        The distill toggle's own tooltip - the same one-floating-element
-        arrangement as the favorite badge's, for the same reason: the
-        toggle is canvas-painted onto the center tile's lower right corner
-        and has no DOM element of its own to carry one.
+        The distill toggle's tooltip - one floating element, since the
+        toggle is canvas-painted onto the center tile's lower right corner.
       */}
       <div ref={distillTooltipRef} className="distill-tooltip" aria-hidden="true" />
       {/*
-        The live search field, on the center tile itself rather than in the
-        panel. Always mounted - Playwright's `inputValue()` and React's
-        controlled `value` both need it attached - but hidden by the
-        stylesheet (`.center-search { display: none }`) until the render
-        loop finds it on screen and legible, at which point the loop takes
-        over `display` and position directly. The no-`style`-prop rule is
-        `SearchForm`'s own.
+        The live search field, on the center tile. Always mounted, since
+        Playwright's `inputValue()` and React's controlled `value` both need
+        it attached. The stylesheet hides it (`.center-search { display:
+        none }`) until the render loop finds it on screen and legible, then
+        the loop sets `display` and position directly. `SearchForm` states
+        its no-`style`-prop rule.
       */}
       <SearchForm
         formRef={searchFormRef}
@@ -303,24 +279,21 @@ export function MapView({
         maxLength={maxQueryLength}
       />
       {/*
-        The shelf, as a real control surface: the painted spines get DOM
-        buttons over the same rects, so the application's primary
-        interface - search history, and a browsable index of corpus
-        keywords - is reachable without a pointer. These are the slots
-        `assignTitles` returns and `composeSpines` draws.
+        The shelf's DOM buttons, over the painted spines' rects, so search
+        history and the keyword index are reachable without a pointer.
+        These are the slots `assignTitles` returns and `composeSpines`
+        draws.
 
         The render loop positions this container in one style write per
-        frame; the buttons inside are percentages of it (`BOOK_STYLES`), so
-        a pan costs one assignment, not one per button. `display: none` in
-        the stylesheet is the pre-first-frame default, and the loop takes
-        it over from there - the same no-`style`-prop arrangement as
-        `SearchForm`'s map copy.
+        frame, and the buttons are percentages of it (`BOOK_STYLES`).
+        `display: none` in the stylesheet is the pre-first-frame default;
+        the loop sets it from then on, so this element takes no `style`
+        prop.
 
-        `pointer-events: none`, from the stylesheet: the canvas keeps every
-        gesture, so a pan that crosses the shelf still pans. Focus is not a
-        pointer API, so the keyboard reaches these anyway, and a sighted
-        click routes through `onTap` -> `bookAtPoint` -> `onBook` - the
-        same function these buttons call.
+        `pointer-events: none`, from the stylesheet, so a pan that crosses
+        the shelf still pans. The keyboard still focuses these buttons. A
+        sighted click routes through `onTap` -> `bookAtPoint` -> `onBook`,
+        the same function the buttons call.
       */}
       <div
         ref={booksRef}
@@ -346,19 +319,18 @@ export function MapView({
         )}
       </div>
       {/*
-        The open book painted into a shelf gap - a distinct hotspot from
-        the lettered spines above, with the same two entry points: the
-        canvas's `onTap` -> `centerBookAtPoint` (`center.ts`) for a sighted
-        click, `onClick` for a keyboard Enter or a screen reader's
-        activate. Positioned and sized every frame over the whole cell,
-        like `.center-books` itself, not its own rect: the highlight is the
-        traced SVG path (`CENTER_BOOK_PATH`, in the same 0-1 cell-fraction
-        space as every other rect on this tile), not a box, and
-        `viewBox="0 0 1 1"` with `preserveAspectRatio="none"` stretches it
-        per-axis onto the cell the way `render.ts` stretches the tile
-        image. `pointer-events: none` so the canvas keeps every gesture -
-        and, since that means this element never sees `:hover`, the render
-        loop's pointermove listener toggles the hover highlight as a class.
+        The open book painted into a shelf gap, which opens the artist's
+        statement. A sighted click goes through the canvas's `onTap` ->
+        `centerBookAtPoint` (`center.ts`); `onClick` serves the keyboard and
+        screen readers.
+
+        Positioned and sized every frame over the whole cell, like
+        `.center-books`. The highlight is the traced SVG path
+        (`CENTER_BOOK_PATH`, in 0-1 cell fractions), and `viewBox="0 0 1 1"`
+        with `preserveAspectRatio="none"` stretches it per-axis the way
+        `render.ts` stretches the tile image. `pointer-events: none` means
+        it never sees `:hover`, so the render loop's pointermove listener
+        toggles the hover highlight as a class.
       */}
       <button
         ref={centerBookRef}
@@ -375,28 +347,20 @@ export function MapView({
         )}
       </button>
       {/*
-        The favorites-sort switch and the reorder button - diegetic
-        controls of the center tile (docs/agents/map.md's "The center room's
-        controls"), in one container sized to the whole cell like
-        `.center-books`, so a pan costs one style write regardless of how many
-        buttons are inside. Each button is positioned in percentages of that
-        container (`rectStyle`), and `pointer-events: none` on the container
-        keeps the canvas the gesture owner: a pan starting on a button still
-        pans. A sighted click routes through `onTap` ->
+        The reorder button and the favorites-sort switches, diegetic
+        controls of the center tile (docs/agents/map.md, "The center room's
+        controls"). The container is sized to the whole cell like
+        `.center-books`, and each button is a percentage of it
+        (`rectStyle`). `pointer-events: none` on the container keeps the
+        canvas the gesture owner. A sighted click routes through `onTap` ->
         `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
-        (`center.ts`), and `onClick` is the keyboard/screen-reader entry point,
-        calling the same handlers. The reorder button needs no favorite store
-        and is never hidden; the two switches are meaningless without one, so
-        they render only while `favorites` is true - the same gate the debug
-        panel's own sort buttons use.
+        (`center.ts`); `onClick` serves the keyboard and screen readers.
+        The two switches render only while `favorites` is true.
 
-        Each button carries a `title` (which can never pop up here:
-        pointer events never reach the button) and a `.control-tooltip`
-        child - a CSS bubble shown by the `.hover` class the render loop's
-        pointermove listener toggles on the button, so hover feedback
-        works despite `pointer-events: none`. It also shows on
-        `:focus-visible`, which a `title` alone would not give a keyboard
-        user.
+        A `title` never pops up here, since pointer events never reach the
+        button. The `.control-tooltip` child is the visible tooltip, shown
+        by the `.hover` class the render loop's pointermove listener
+        toggles, and on `:focus-visible`.
       */}
       <div ref={controlsRef} className="center-controls">
         {SHUFFLE_STYLE && (
@@ -442,11 +406,10 @@ export function MapView({
         )}
       </div>
       {/*
-        The search affordance - not part of the dev panel below (it has to
-        survive `?debug` being off, since the panel does not) and not
-        diegetic either; see `SearchIcon.tsx`. The arrow is a separate
-        layer with its own ref so the render loop can rotate it every frame
-        to point at wherever the center tile actually is on screen.
+        The search affordance, shown with or without `?debug` and not
+        diegetic; see `SearchIcon.tsx`. The arrow is a separate layer with
+        its own ref, so the render loop can rotate it every frame to point
+        at the center tile.
       */}
       <button
         type="button"
@@ -473,17 +436,13 @@ export function MapView({
         )}
 
         {/*
-          The ranked list: the lossless reading of a search, next to the
-          map's lossy spatial one. A plain list of buttons rather than
-          `role="listbox"`: the listbox pattern needs arrow-key roving, and
-          a listbox that does not implement roving is a broken widget,
-          worse than none. Every button here is independently reachable by
-          Tab.
+          The ranked results list, the lossless reading of a search. It is
+          debug-only, like the rest of this panel; issue #238 tracks giving
+          it a reader-facing home. It is a plain list of buttons, each a
+          Tab stop, not `role="listbox"`: a listbox needs arrow-key roving.
 
-          Absent entirely when there is no search, or when one ran and
-          matched nothing worth clustering (`gradedCount === 0`) - the
-          empty state is the uniform map, and a list with nothing ranked in
-          it would be noise.
+          Absent when there is no search, or when one matched nothing worth
+          clustering (`gradedCount === 0`).
         */}
         {searchResults && searchResults.total > 0 && (
           <div className="row results" role="region" aria-labelledby="results-label">
@@ -512,20 +471,15 @@ export function MapView({
         )}
 
         {/*
-          Both sliders carry an explicit `htmlFor`/`id` pair: the label is
-          a sibling of its input rather than wrapping it, so without the
-          association neither slider has an accessible name and both
-          announce as a bare number.
+          Both sliders need their `htmlFor`/`id` pair: the label is a
+          sibling of its input, so without it neither slider has an
+          accessible name.
 
-          The label carries the units, not `aria-valuetext` alone: engines
-          disagree on `aria-valuetext` for a native `input[type=range]`
-          (the split behind docs/agents/testing.md's "Assert on the
-          accessible name, not raw ARIA attributes" - the e2e first caught it when CI moved
-          to a newer Chromium than the test was written against). An
-          accessible name is computed the same way everywhere, so the "of
-          N" part lives in the label. `aria-valuetext` stays for the
-          engines that honour it, where it is what a drag announces - a
-          value change re-reads the value, never the name.
+          The label carries the units, because engines disagree on
+          `aria-valuetext` for a native `input[type=range]`
+          (docs/agents/testing.md, "Assert on the accessible name, not raw
+          ARIA attributes"). `aria-valuetext` stays for the engines that
+          honour it, where it is what a drag announces.
         */}
         <div className="row">
           <label htmlFor="rooms-on-map">
@@ -552,13 +506,9 @@ export function MapView({
         </div>
 
         {/*
-          Only `rescatter` and `center` remain debug-only; the rest of this
-          row's actions have diegetic homes on the center tile (the
-          shuffle control, the sort switches).
-          Those two stay because neither has a diegetic equivalent:
-          `rescatter` reseeds which cells hold a room at all, not the
-          ranking, and `center` is a plain camera reset. Distill mode's own
-          control is the center tile's lower right corner - see
+          Debug-only actions with no diegetic equivalent: `rescatter`
+          reseeds which cells hold a room, and `center` resets the camera.
+          Distill mode's control is on the center tile; see
           `distillToggle.ts`.
         */}
         <div className="buttons">
@@ -584,11 +534,8 @@ export function MapView({
         )}
 
         {/*
-          The second way into the catalog. The primary one is a book on the
-          center shelf, but books only exist while the spines are legible -
-          zoomed in on the center - so a reader in the far field, or one
-          who does not use a pointer, would otherwise have to fly home
-          before reaching the catalog at all.
+          A way into the catalog from anywhere. The primary one is a book on
+          the center shelf, which exists only while the spines are legible.
         */}
         <div className="buttons">
           <button className="mode-toggle" onClick={onEnterCatalog}>
@@ -597,12 +544,10 @@ export function MapView({
         </div>
 
         {/*
-          Search history persists, so there has to be a way to end it:
-          recording a reader's typed input with no way to clear it is not a
-          thing to ship. The primary control is the shelf's bottom-right
-          "forget searches" book (`useCenterShelf.ts`'s `overrides`); this
-          button and the catalog bar's are plain copies of it. Absent when
-          there is nothing to forget.
+          Clears the persisted search history. The primary control is the
+          shelf's "forget searches" book (`useCenterShelf.ts`'s
+          `overrides`); this button and the catalog bar's are copies of it.
+          Absent when there is nothing to forget.
         */}
         {history.length > 0 && (
           <div className="buttons">
@@ -617,13 +562,10 @@ export function MapView({
         )}
 
         {/*
-          The hint and the status are two different things and must not
-          share a node: `role="status"` announces every change to its
-          subtree, so a node that fell back to the hint would read the
-          instructions aloud each time a status cleared. This `.note` shows
-          only the static hint, and only while no status is live. The live
-          region itself is `main.tsx`'s, outside both views
-          (docs/agents/catalog.md's "One live region for the whole app").
+          The static hint, shown only while no status is live. It must never
+          share a node with `role="status"`, or the hint is read aloud each
+          time a status clears. The live region is `main.tsx`'s
+          (docs/agents/catalog.md, "One live region for the whole app").
         */}
         <div className="note">
           {!status && 'drag to pan, scroll to zoom. right-click a room.'}

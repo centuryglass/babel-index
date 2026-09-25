@@ -10,8 +10,8 @@ conventions still apply.
   `display: contents` and `display: none`, and the render loop returns early
   when `mode !== 'map'`. A remounted canvas comes back with no pointer
   listeners, because `useMapCamera`'s listener effect reads
-  `canvasRef.current` once: the HUD still reads correctly and the map never
-  pans again. `catalog.e2e.ts`'s "the map is where it was left when the
+  `canvasRef.current` only when it runs, and none of its dependencies is the
+  element: the HUD still reads correctly and the map never pans again. `catalog.e2e.ts`'s "the map is where it was left when the
   catalog closes" drags after a mode switch to catch this. Hiding also keeps
   the tile caches warm.
 - **A room's permalink is its title, and `packages/map/slug.ts` decides it
@@ -22,8 +22,9 @@ conventions still apply.
   same title each get their stem as a suffix, and `roomContent.ts` warns at
   startup.
 - **The catalog is not the accessibility mode.** It is a control offered to
-  everyone: nothing detects a screen reader or defaults into it, the panel's
-  ranked listbox stays, and `role="application"` stays scoped to the canvas.
+  everyone: nothing detects a screen reader or defaults into it, and
+  `role="application"` stays scoped to the canvas. The map's ranked results
+  list is debug-only for now (#238).
   The catalog is a `<ul>`, not a listbox, because its rows contain keyword
   chips.
 - **One live region for the whole app, outside both views,** so a mode

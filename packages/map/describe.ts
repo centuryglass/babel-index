@@ -2,7 +2,7 @@
  * Naming what the reader is standing in, in their own words.
  *
  * What a screen reader announces on arrival at a cell, and the label the
- * room card and the ranked listbox both reuse - one implementation, more
+ * room card and the ranked results list both reuse - one implementation, more
  * than one consumer, the same split `picking.ts` and `center.ts` already
  * make for hit-testing. Pure, no DOM, no runtime imports, so the words a
  * reader hears can be asserted without a browser.
