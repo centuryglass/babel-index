@@ -3,8 +3,8 @@
  * appears to glide over a backdrop.
  *
  * A cell is a wall, not a slot - the generic room is as much a wall as a corpus
- * room, and 80% of them being identical is a fact about the art, not licence to
- * treat them as empty. A single tile crossing the map would read as floating
+ * room, and most of them (all but `contentRatio`) being identical is a fact
+ * about the art, not licence to treat them as empty. A single tile crossing the map would read as floating
  * above wallpaper, and the grid would stop being somewhere you stand. A whole
  * row or column rotating instead carries every tile together and traverses
  * nothing, and it holds at any zoom because it never depends on which cells the
@@ -41,9 +41,8 @@
  * viewports; this file knows values in a rectangle and nothing else, which is
  * what keeps it testable against an independent replay.
  *
- * Ported from the reference solver with its phase structure and invariant
- * intact. `illusion.test.ts` replays the emitted list independently rather than
- * trusting this file's bookkeeping.
+ * `illusion.test.ts` replays the emitted list independently of this file's
+ * bookkeeping.
  */
 
 import type { Board, BoardValue, Bounds, LineRef, Move, Point } from './moves.ts';
@@ -85,10 +84,9 @@ export function planMoves(start: Board, end: Board, bounds: Bounds, fixed: Point
 
   validate(start, end, bounds, fixed);
 
-  // The board is simulated as we go rather than reasoned about symbolically:
-  // every primitive below both records a move and applies it, so at any line
-  // `board` is exactly what the client would be showing. That is what lets the
-  // supply logic ask live questions instead of tracking a permutation.
+  // The board is simulated as we go: every primitive below both records a
+  // move and applies it, so at any line `board` is what the client would be
+  // showing, and the supply logic asks live questions of it.
   const board = start.cells.slice();
   const target = end.cells;
   const moves: Move[] = [];
@@ -157,8 +155,8 @@ export function planMoves(start: Board, end: Board, bounds: Bounds, fixed: Point
   // any of them are fed, so no line's work can disturb another's, and that is
   // why a feed stage can wave and a parking stage cannot.
   //
-  // `wave` is set explicitly rather than inferred from stage parity, so a phase
-  // can be reshaped without the animation quietly mis-scheduling it.
+  // `wave` is set explicitly on each stage, not inferred from stage parity, so
+  // reshaping a phase cannot mis-schedule the animation.
   let stage = 0;
   let line: LineRef | null = null;
   let wave = false;

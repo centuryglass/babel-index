@@ -190,14 +190,14 @@ interface RepairGeometry {
  * Make the two boards agree as multisets, by rewriting off-camera cells.
  *
  * Overwriting the region left `end` holding too many of some values and too few
- * of others; `delta` counts which, since the two boards are identical
- * everywhere else. Every surplus occurrence is an off-camera cell that can be
- * rewritten to a value that is short, and there are always as many of one as of
- * the other because both boards are the same size.
+ * of others; `delta` counts which (`end` minus `start`), since the two boards
+ * are identical everywhere else. The total surplus equals the total shortfall
+ * because both boards are the same size. The repair rewrites off-camera cells
+ * holding a surplus value to a short value, one per unit of surplus.
  *
- * The one way this fails is a value that is short but has no surplus occurrence
- * anywhere: a room the new arrangement wants on camera that is not on the board
- * at all. See *When a rearrangement cannot be animated* in the module header.
+ * It fails when a surplus value has too few off-camera copies to rewrite: a
+ * room the new arrangement wants on camera that is not elsewhere on the board.
+ * See *When a rearrangement cannot be animated* in the module header.
  *
  * @param end mutated in place
  * @returns whether the repair was possible

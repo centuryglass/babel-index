@@ -11,12 +11,13 @@
  *   - Every cell is either a *content slot* or a copy of the generic room.
  *     Which one is decided by a seeded hash of the coordinate, so it is stable,
  *     needs no storage, and extends to infinity in every direction.
- *   - Content slots are ordered by distance from the origin. A ranking (from
- *     CLIP, from manual score, or shuffled) is poured into that ordering, so
- *     rank 0 lands in the slot nearest the center.
- *   - Re-ranking (after a search, or an active favorite sort - see
- *     `packages/map/favorites.ts`) swaps one array. Slot positions never move,
- *     which is what makes the reorder read as the library rearranging itself.
+ *   - Content slots are ordered by distance from the origin. A ranking (a
+ *     search's, a favorite sort's, or a shuffle) is poured into that
+ *     ordering, so rank 0 lands in the slot nearest the center.
+ *   - A re-rank with no strength profile swaps `order` and leaves slot
+ *     positions alone, so the reorder reads as the library rearranging
+ *     itself. A search or an active favorite sort carries a profile and
+ *     recomputes placement (see "The density gradient").
  *
  * ### The density gradient
  *
@@ -505,20 +506,18 @@ export function shuffledOrder(n: number, seed = 1): number[] {
  * Embeddings are int8-quantized and stored contiguously; scoring the whole
  * corpus is a few million multiply-adds, well under a frame at this size.
  *
- * Scores rather than an order, because the hybrid blend in `scoring.ts` needs
- * the numbers to normalise before weighting. `rankByEmbedding` is the CLIP-only
- * ordering built on top, so the dot product has one implementation.
+ * Returns scores, since the hybrid blend in `scoring.ts` needs the numbers to
+ * normalise before weighting. `rankByEmbedding` is the CLIP-only ordering built
+ * on top, so the dot product has one implementation.
  *
  * @param embeddings  roomCount * dim, row-major
  * @param dim      row width
  * @param scale    the int8 half-range `tools/embed` quantised these rows at
  *   (`embeddings.json`'s `scale`, carried in `manifest.embeddings.scale`).
- *   Ranking never cared about it - a monotone factor cannot reorder anything,
- *   and the blend min-maxes the column anyway - but the density gradient asks
- *   how sure CLIP is *in absolute terms*, and 0.3 is only a cosine once the
- *   quantisation is divided back out. Taken as a parameter rather than a
- *   constant here so this side can never drift from what `tools/embed/embed.ts`
- *   actually wrote (issue #231).
+ *   Ranking is unaffected by it, but the density gradient compares scores
+ *   against absolute cosine thresholds, which hold only once the quantisation
+ *   is divided back out. Read from the manifest so it always matches what
+ *   `tools/embed/embed.ts` wrote.
  * @param query    length dim, already L2-normalised
  */
 export function embeddingScores(embeddings: Int8Array, dim: number, scale: number, query: Float32Array): Float32Array {

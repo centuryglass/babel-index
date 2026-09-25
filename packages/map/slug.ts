@@ -14,10 +14,9 @@
  * (docs/agents/favorites.md, "Favorites"), so an id in a shared url comes back
  * pointing at a different room once the corpus grows.
  *
- * No DOM and no runtime imports, like the rest of this package: `app.ts`
- * resolves an incoming path with this and `main.tsx` builds the copy-link url
- * with it, and one implementation with both consumers is what keeps the two
- * from drifting.
+ * No DOM, so it runs on both sides: `app.ts` resolves an incoming path with
+ * this and `main.tsx` builds the copy-link url with it. One implementation
+ * keeps the two from drifting.
  */
 import { fold } from './scoring.ts';
 import type { Room } from './manifest.ts';
