@@ -12,18 +12,10 @@ keywords. This module owns everything the batch importer
   - the default story prompt, and
   - the Claude calls that generate and revise stories.
 
-Metadata schema (``metadata.json``), keyed by webp filename::
-
-    {
-      "00001.webp": {
-        "keywords": [{"text": "syrup", "type": "material"}, ...],
-        "story": "…",          # None/absent until generated
-        "alt": "…",            # None/absent until generated; accessibility alt text
-        "title": "…",          # None/absent until generated; see babel_index_review.titles
-        "final": true          # absent/false until the reviewer approves it
-      },
-      ...
-    }
+``metadata.json`` is keyed by webp filename; ``docs/corpus.md`` in the repo
+root specifies every field, including the curation-only ones (``final``,
+``needs_inpainting``). Fields other than ``keywords`` are absent
+until the tool that writes them has run.
 """
 
 from __future__ import annotations
@@ -60,7 +52,7 @@ SAMPLE_CORPUS_DIR = os.path.normpath(
 
 # Fields worth carrying from a curated tile onto a hand-picked sample: the
 # review workflow's own bookkeeping (final, sensitive_content_tags,
-# needs_inpainting) and the upload tool's content hash don't belong on it.
+# needs_inpainting) doesn't belong on it.
 SAMPLE_FIELDS = ("keywords", "story", "title", "alt")
 
 # Sensitive-content tag vocabulary shared by the review GUI and the

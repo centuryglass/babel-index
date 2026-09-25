@@ -12,8 +12,7 @@
  * on a corpus directory changes nothing that was already there. Reruns skip
  * work that is still current - see `mips.ts`.
  *
- * The coarse levels are then repacked into shared sheets (`sheets.ts`), and
- * every source's content hash recorded in the corpus's `metadata.json`.
+ * The coarse levels are then repacked into shared sheets (`sheets.ts`).
  *
  * --shared-dir additionally pyramids the center render and every `generic/`
  * and `generic_distill/` tile found there, in place - see `shared-mips.ts`.
@@ -29,7 +28,7 @@ import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import sharp from 'sharp';
 import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
-import { mipPlan, writeMips, sourceImages, checkSizes, updateMetadataHashes, type SourceSize } from './mips.ts';
+import { mipPlan, writeMips, sourceImages, checkSizes, type SourceSize } from './mips.ts';
 import { writeSheets } from './sheets.ts';
 import { writeSharedMips } from './shared-mips.ts';
 
@@ -84,12 +83,10 @@ console.log(inPlace ? '\n  writing in place ...\n' : `\n  writing to ${outDir} .
 let written = 0;
 let cached = 0;
 let done = 0;
-const hashes = new Map<string, string>();
 for (const file of files) {
   const result = await writeMips({ file: join(imagesDir, file), outDir, inPlace, quality });
   written += result.written;
   cached += result.cached;
-  hashes.set(file, result.hash);
   done++;
   if (done % 25 === 0 || done === files.length)
     process.stdout.write(`  ${done}/${files.length} rooms, ${written} files written, ${cached} unchanged\r`);
@@ -119,11 +116,6 @@ if (sheetSteps.length) {
   }
   console.log('');
 }
-
-// Each source's content hash is recorded in the corpus sidecar too - see
-// `updateMetadataHashes`.
-await updateMetadataHashes(imagesDir, hashes);
-console.log(`  metadata.json: ${hashes.size} content hash(es) recorded\n`);
 
 // The shared tiles (the center render, every generic/ tile and every
 // generic_distill/ tile) get the same per-file ladder, rooted at

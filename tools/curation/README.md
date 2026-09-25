@@ -40,8 +40,8 @@ the current numbers.
 
 Everything below is run as `python -m babel_index_review.<tool>` from
 `tools/curation/`, against a tile directory `DIR` holding `NNNNN.webp` files
-plus a `metadata.json` sidecar (see `babel_index_review/core.py`'s module
-docstring for the exact schema). `DIR` is always the first positional
+plus a `metadata.json` sidecar (see [`docs/corpus.md`](../../docs/corpus.md)
+for the exact schema). `DIR` is always the first positional
 argument, never a flag.
 
 ## The tools

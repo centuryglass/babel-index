@@ -17,11 +17,11 @@
  * - `description` is the story, read separately (a card's body, a listbox
  *   option's extra text). A room with no metadata gets `null`, never a
  *   stand-in story.
- * - `picture` is the sidecar's optional `alt`, one sentence about the image
- *   (see `metadata.ts`). A real room's is never generated at runtime. Every
- *   generic cell shares one fixed sentence in `describeCell`, since all
- *   generic tiles show the same kind of image. Per-tile generic captions wait
- *   on real art: `assets/generic/` is placeholder art.
+ * - `picture` is the sidecar's `alt`, a description of the image rather than
+ *   of the room (see `metadata.ts`). A real room's is never generated at
+ *   runtime. Every generic cell shares one fixed sentence in `describeCell`,
+ *   since all generic tiles show the same kind of image. Per-tile generic
+ *   captions wait on real art: `assets/generic/` is placeholder art.
  */
 
 import type { MapLayout } from './ordering.ts';

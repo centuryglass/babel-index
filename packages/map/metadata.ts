@@ -1,6 +1,7 @@
 /**
  * Room metadata: the stylistic keywords and the short story text that the
- * generator writes alongside each image.
+ * generator writes alongside each image. The file format is docs/corpus.md,
+ * "`metadata.json`".
  *
  * One implementation joined on both sides: the server (`scan.ts`,
  * `roomContent.ts`) and the browser (`useCorpus.ts`). No DOM and no runtime
@@ -16,15 +17,16 @@
  *
  * - `keywords`: every keyword is a `{text, type}` record. The count is not
  *   enforced, since nothing in the map depends on it.
- * - `title` is optional. It replaces the filename wherever a reader is told
- *   which room they're looking at (`roomTitle`) and as the catalog's
- *   alphabetical sort key (`alphabeticalOrder`). Most rooms have none yet, so
- *   both consumers carry a fallback.
- * - `alt` is optional: one sentence describing the picture, written offline
- *   with the story as context, never at runtime, so the map carries no model
- *   dependency. A room whose story is thin carries no `alt` rather than a
- *   padded one. Absence normalises to null, and every consumer falls back to
- *   what the room already has.
+ * - `title` and `alt` are expected but not required. Every room in the live
+ *   corpus carries both, but a corpus built by hand or mid-curation may lack
+ *   either, so absence normalises to null and every consumer falls back.
+ * - `title` is the room's name wherever a reader is told which room they're
+ *   looking at (`roomTitle`), and the catalog's alphabetical sort key
+ *   (`alphabeticalOrder`). Without one, both fall back to the id or filename.
+ * - `alt` describes the picture for a reader who cannot see it. It is written
+ *   offline beside the story, never at runtime, so the map carries no model
+ *   dependency. Without one, `describeRoom`'s `picture` is null and the image
+ *   gets an empty `alt`.
  */
 
 /** One keyword, as the generator writes it. */
