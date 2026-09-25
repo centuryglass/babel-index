@@ -7,10 +7,9 @@
  * ever asks "what have I favorited" of the server, because there is no
  * endpoint that could answer.
  *
- * Everything is keyed by room filename rather than id, because ids are
- * positional and shift when the corpus grows (docs/agents/favorites.md,
- * "Favorites"). Ids are what the rest of the app passes around, so the crossing
- * between the two happens here, in `fileOf`.
+ * Everything is keyed by room filename (docs/agents/favorites.md, "Favorites
+ * are keyed by filename everywhere"). The rest of the app passes ids, and
+ * `fileOf` converts between the two.
  *
  * A toggle updates local state immediately and then tells the server; the
  * reply carries the authoritative count, which replaces the guess. A failed

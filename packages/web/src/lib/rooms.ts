@@ -8,37 +8,26 @@
  * asks for a room at a level and does not want to know about directories or
  * sheets; this is the one place all three meet.
  *
- * A level the corpus does not have resolves to null rather than to a url that
- * would 404. That is what makes a flat directory of images - a corpus that has
- * never been through the pipeline - behave exactly as it did before the pyramid
- * existed: only level 0 resolves, so every lookup falls back to it.
+ * A level the corpus does not have resolves to null, not to a url that would
+ * 404. A flat directory of images that never went through the pipeline
+ * therefore resolves only level 0, and every lookup falls back to it.
  *
- * The shared tiles - the center, every generic tile, and every generic
- * tile's distill alternate - live OUTSIDE the corpus pyramid
- * (`manifest.shared`, served from `--shared-dir`), each in its own pyramid:
- * `manifest.shared.levels` is which per-file rungs the center and every
- * generic tile actually share on disk, and `manifest.shared.distillLevels` is
- * the same discovery rooted at `generic_distill/` instead (`scan.ts`
- * discovers both the same way it discovers `manifest.levels`, just rooted at
- * the shared directory - see its own comment). A level resolves by inserting
- * `<width>/` before the shared asset's filename, the same directory-per-level
- * convention the corpus uses - `packages/pipeline/shared-mips.ts` is what
- * writes it. A level the relevant `levels`/`distillLevels` array doesn't have
- * falls back to null exactly like a corpus level the manifest doesn't have.
+ * Shared art (`manifest.shared`, served from `--shared-dir`) has its own
+ * pyramids, one manifest array per group (docs/agents/map.md, "Shared art has
+ * its own pyramids"):
+ * - the center and every generic tile resolve off `shared.levels`;
+ * - generic distill alternates resolve off `shared.distillLevels`;
+ * - the favorite badge's faces (`FAV_ON`/`FAV_OFF`) resolve off
+ *   `shared.favoriteLevels`.
  *
- * The favorite badge's two faces (`FAV_ON`/`FAV_OFF`) get the same per-level
- * treatment, off `manifest.shared.favoriteLevels` - a pyramid of their own,
- * independent of `levels`/`distillLevels` even though the scaled files live
- * in the same `<width>/` directories the center tile's do (see
- * `SharedAssets.favoriteLevels`'s doc for why that's a storage detail, not a
- * shared discovery).
+ * A shared level resolves by inserting `<width>/` before the asset's
+ * filename, the layout `packages/pipeline/shared-mips.ts` writes. A level
+ * missing from the group's array resolves to null.
  *
- * Every OTHER shared id - the distill toggle's faces, the "forget searches"
- * overlay - is fixed-size app art with no pyramid of its own, and stays flat:
- * level 0 only, falling back to it through the cache's `servableLevel` for
- * any coarser request. There are only a handful of these and the cache keys
- * on id, not on cell, so a far-out screen of thousands of generic cells still
- * holds just those few in memory.
+ * Every other shared id (the distill toggle's faces, the "forget searches"
+ * overlay) is flat level-0 art, reached through the cache's `servableLevel`
+ * for any coarser request. The cache keys on id, not cell, so a screen of
+ * thousands of generic cells holds only those few images.
  */
 import {
   CENTER, genericId, genericDistillId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,

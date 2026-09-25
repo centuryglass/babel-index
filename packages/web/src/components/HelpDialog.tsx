@@ -5,9 +5,10 @@
  * the shelf.
  *
  * The focus-in/restore, Escape and Tab-trap machinery below is an inline
- * copy of what `useDialog` provides; `RoomOverlay` keeps the same
- * inline copy. `docs/file_map.md`'s `useDialog.ts` entry records which
- * dialogs have adopted the hook.
+ * copy of what `useDialog` provides, bound to `window` outside its
+ * topmost-only stack. It is correct only while no other dialog can open over
+ * this one, or one Escape closes both. `docs/file_map.md`'s `useDialog.ts`
+ * entry records which dialogs have adopted the hook.
  *
  * The content-blocking panel sits at the bottom of the dialog, collapsed
  * in a native `<details>` rather than mounted open: a reader who has never
