@@ -9,12 +9,8 @@
  * it in reverse, from none onto the center tile. Only `transform` is
  * animated, so no frame recomputes layout.
  *
- * Split out of `main.tsx` - the most self-contained block in that file:
- * `flipFrom`, `centreRectNow`, `animatedSwitch` and the FLIP
- * `useLayoutEffect` are read nowhere else.
- *
- * The map itself stays mounted and hidden throughout - this hook only ever
- * says which mode is current, never whether `MapView` is in the tree.
+ * The map stays mounted and hidden throughout: this hook says which mode is
+ * current, never whether `MapView` is in the tree.
  */
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { flipTransform, flipCss, rectOf, type Rect } from '../lib/catalog.ts';

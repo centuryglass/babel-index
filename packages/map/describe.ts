@@ -4,7 +4,7 @@
  *
  * Pure, with no DOM and no runtime imports, so the words can be asserted
  * without a browser. The screen-reader arrival text, the room card and the
- * ranked listbox all take their labels from here.
+ * ranked results list all take their labels from here.
  *
  * - `describeCell` names a cell, and `describeRoom` a room the caller holds.
  * - `describeArrangement`, `describeCatalog` and `describeSort` build the
@@ -14,8 +14,8 @@
  *
  * - `name` is read on every arrival, so it stays short. A room's keywords go
  *   in, its story does not.
- * - `description` is the story, read separately (a card's body, a listbox
- *   option's extra text). A room with no metadata gets `null`, never a
+ * - `description` is the story, read separately (a card's body, a results-list
+ *   row's extra text). A room with no metadata gets `null`, never a
  *   stand-in story.
  * - `picture` is the sidecar's `alt`, a description of the image rather than
  *   of the room (see `metadata.ts`). A real room's is never generated at

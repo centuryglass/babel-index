@@ -3,18 +3,14 @@
  * reply into one ranking via `rankHybrid`, and the two highlight
  * range-finders bound to whatever term that ranking is for.
  *
- * `requestAnimation` arrives through a ref rather than as a plain argument -
- * the one forward reference left in `main.tsx` after the rest were reordered
- * away, because this one is a genuine cycle rather than an ordering accident:
- * `announce` (`main.tsx`) needs this hook's `result` to know what to say,
- * `useRearrangement` needs `announce`, and `useRearrangement` is the thing
- * that returns `requestAnimation` - so this hook has to be called before
- * `useRearrangement` exists, and can only get its `requestAnimation` once
- * `main.tsx` fills the ref in afterwards.
+ * `requestAnimation`, `beginSearchPreload` and `cancelSearchPreload` arrive
+ * through refs that `main.tsx` fills in after `useRearrangement` runs. The
+ * cycle is real: `announce` (`main.tsx`) needs this hook's `result`,
+ * `useRearrangement` needs `announce`, and `useRearrangement` returns those
+ * three functions, so this hook runs first.
  *
- * `history`/`pushHistory` stay in `main.tsx`: the shelf reads history, the
- * panel's forget button writes it, and it survives a reload - a search is a
- * consumer of history, not its owner.
+ * `history`/`pushHistory` belong to `main.tsx`, since the shelf and the forget
+ * controls read and write history too.
  */
 import { useMemo, useRef, useState, type FormEventHandler } from 'react';
 import {
@@ -36,14 +32,12 @@ interface UseSearchOpts {
   searchIndex: SearchIndex | null;
   embeddings: { current: { data: Int8Array; dim: number; scale: number } | null };
   /** filled in by `main.tsx` once `useRearrangement` exists - see the file
-   * comment above. */
+   * header. */
   requestAnimationRef: { current: (note: string) => void };
   /**
-   * Same forward-ref cycle as `requestAnimationRef`, for
-   * `useRearrangement.ts`'s `beginSearchPreload`/`cancelSearchPreload` - the
-   * indicator and search-badge spinner start as soon as a real search is
-   * submitted, not once `rankHybrid` finishes and a rearrangement is
-   * actually requested for it (#235).
+   * `useRearrangement.ts`'s `beginSearchPreload`/`cancelSearchPreload`, filled
+   * in like `requestAnimationRef`. The indicator and search-badge spinner
+   * start when a real search is submitted, before `rankHybrid` finishes.
    */
   beginSearchPreloadRef: { current: () => void };
   cancelSearchPreloadRef: { current: () => void };
@@ -192,14 +186,11 @@ export function useSearch({
     search('');
   };
 
-  // The two range finders, bound to the query the CURRENT ranking is for.
+  // The two range finders, bound to the query the current ranking is for.
   //
-  // Bound rather than called with the query at each site: every consumer would
-  // otherwise have to remember which of the two rules applies to the text it is
-  // holding, and the whole point of `scoring.ts` owning them is that the answer
-  // is decided once. A keyword matches by substring, a story word by prefix;
-  // handing out two functions named for the thing they mark keeps that from
-  // being a decision anyone makes twice.
+  // A keyword matches by substring and a story word by prefix (`scoring.ts`).
+  // Consumers get one function per kind of text, so none of them picks the
+  // rule.
   //
   // Null with no search, which every consumer reads as "mark nothing".
   const highlight = useMemo(() => {

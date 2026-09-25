@@ -561,7 +561,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   );
 
   // The card's accessible name and story, from `describeCell` - the same
-  // function that names listbox options. Computed here because `layout`,
+  // function that names the ranked list's rows. Computed here because `layout`,
   // `order`, and `metadata` are in scope here; the pick knows only its cell.
   const cardDescription = useMemo(
     () => (card ? describeCell(card.x, card.y, { layout, order, metadata }) : null),
@@ -595,7 +595,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     return asset?.w && asset?.h ? { w: asset.w, h: asset.h } : null;
   }, [card, layout, manifest]);
 
-  // The ranked listbox: the `gradedCount` ranks the search's gradient
+  // The ranked results list: the `gradedCount` ranks the search's gradient
   // lifted above baseline - the cluster's size, and 0 for a uniform map.
   // This is the lossless channel: map position encodes rank and strength
   // but not adjacency; the ranking encodes everything.
@@ -1430,7 +1430,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 }
 
 /**
- * The most options the ranked listbox mounts at once - a DOM budget.
+ * The most rows the ranked results list mounts at once - a DOM budget.
  * `gradedCount` is normally tens of rooms; this exists for the corpus where
  * it is not.
  */
