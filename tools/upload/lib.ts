@@ -180,9 +180,8 @@ export function buildUploadList(
  * the previously-uploaded manifest. A key absent from the remote manifest
  * (new file, or first run) always uploads.
  *
- * Hashing the file's own bytes, not reusing metadata.json's per-source hash,
- * is deliberate: every quality setting of a re-encoded pyramid level shares
- * the old level's source hash while being different bytes.
+ * The hash is of the file's own bytes, so a pyramid level re-encoded at a
+ * different quality uploads even though its source image is unchanged.
  *
  * A matching hash alone isn't enough. `upload-manifest.json` records what a
  * previous run believed it wrote, not what's in the bucket now - an object
