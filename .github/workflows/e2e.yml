@@ -1,14 +1,9 @@
 name: e2e
 
-# A merge gate, and still runnable by hand.
+# The browser smoke test: a merge gate, and still runnable by hand.
 #
-# This used to be manual only, on the grounds that a browser per pull request
-# was more machinery than the smoke test earned. That trade changed: the map's
-# gestures, its focus handling and - once the accessibility work lands - its
-# whole keyboard interface are things only a browser can see, and a minute of
-# CI is cheaper than merging a map nobody drove. `ci.yml` calls this workflow
-# and will not go green without it, so branch protection still requires exactly
-# one check.
+# `ci.yml` calls this workflow and its aggregate `ci` job will not go green
+# without it, so branch protection requires only that one check.
 #
 # Manual runs pick their own Node version:
 #

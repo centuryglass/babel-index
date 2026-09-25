@@ -61,8 +61,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor declared in package.json engines, the current LTS, and the
-        # release after it - the tile geometry and the map layout are exact
+        # The floor declared in package.json engines and the even-numbered
+        # releases above it. The tile geometry and the map layout are exact
         # arithmetic, so a version that disagrees is worth hearing about.
         node: ['20', '22', '24']
 
@@ -74,9 +74,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      # Playwright is a devDependency for the manual e2e workflow only. This
-      # job never opens a browser, so it must not spend a minute downloading
-      # one on every run.
+      # This job never opens a browser, so it skips Playwright's browser
+      # download; the `e2e` job installs its own.
       - run: npm ci
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
@@ -87,7 +86,7 @@ jobs:
   # The browser smoke test, called rather than duplicated so `e2e.yml` stays the
   # one definition of how it runs and keeps its own manual dispatch. One Node
   # version is enough here: this job is about the browser, and the arithmetic
-  # that actually varies by runtime is covered by the matrix above.
+  # that varies by runtime is covered by the `test` matrix.
   #
   # `if: always()` overrides the default "skip if a need was skipped" rule -
   # `changes` itself is skipped on a push (it only runs for `pull_request`),
@@ -152,7 +151,7 @@ jobs:
   # dev/optional, never on a request path) carry high-severity advisories
   # with no fix available upstream, so a hard failure here would stay red
   # forever for reasons unrelated to a given PR. This still prints the full
-  # report on every run so a NEW, fixable advisory doesn't slip in silently.
+  # report on every run so a new, fixable advisory doesn't slip in silently.
   audit:
     name: npm audit
     runs-on: ubuntu-latest
@@ -180,13 +179,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # `changes` is allowed to be `skipped` - it only runs for
-      # `pull_request` events (see its own comment above) - but never
+      # `pull_request` events (see the `changes` job's comment) - but never
       # `failure` or `cancelled`, otherwise a broken `changes` run (a `git
       # diff` error, a checkout problem, a runner loss) skips `e2e` as a
       # side effect and this job would wave that through as a legitimate
       # "no browser changes" skip. `e2e` is allowed to be `skipped` only
       # once `changes` is confirmed to have actually run and decided that.
-      # `audit` is deliberately not required (see its own comment above).
+      # `audit` is not required (see the `audit` job's comment).
       - name: All checks passed
         if: |
           needs.test.result != 'success' ||

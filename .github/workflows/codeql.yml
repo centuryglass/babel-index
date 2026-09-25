@@ -6,9 +6,8 @@ name: codeql
 # regex, prototype pollution, ...) in code this repo actually wrote.
 #
 # Runs on every push/PR against main so a new vulnerability pattern is
-# caught before it merges, and weekly on its own so an advisory published
-# against a *pattern* CodeQL didn't used to flag still gets found against
-# code that hasn't changed.
+# caught before it merges, and weekly on its own so a query added to CodeQL
+# after a file last changed still runs against that file.
 on:
   push:
     branches: [main]
@@ -41,8 +40,8 @@ jobs:
       # esbuild bundles the client in-process at startup and `.ts` runs
       # straight through the Node loader hook, so there is no build step for
       # CodeQL to run before it scans. `javascript-typescript` covers both
-      # `.ts`/`.tsx` and the `.js`/`.mjs`/`.jsx` files the TypeScript
-      # migration hasn't reached yet.
+      # `.ts`/`.tsx` and the plain `.js`/`.mjs` files AGENTS.md's
+      # "Conventions" exempts from TypeScript.
       - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript

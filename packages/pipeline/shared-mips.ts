@@ -1,26 +1,16 @@
 /**
- * Writing pyramid levels for the shared tiles - `npm run generate:mips --
+ * Writes pyramid levels for the shared tiles. `npm run generate:mips --
  * --images <dir> --shared-dir <dir>` calls this after the corpus itself.
  *
- * Same ladder, same per-file `<width>/<file>` layout `mips.ts` writes for a
- * room (`writeMips`), just rooted at the shared directory instead: once for
- * the center render found there, once per file in its `generic/`
- * subdirectory, and once per file in its `generic_distill/` subdirectory -
- * distill mode's crossfade for each generic tile draws at whatever level the
- * base tile draws at (`render.ts`'s `drawGenericFade`), not just up close,
- * so it needs the same ladder the generic tiles get. `scan.ts`'s
- * `discoverLevels` is what turns this back into `manifest.shared.levels`/
- * `manifest.shared.distillLevels` at scan time - see its own comment.
+ * Each file gets the same per-file `<width>/<file>` ladder `mips.ts`'s
+ * `writeMips` writes for a room, rooted at the shared directory:
+ *   - the center render found there;
+ *   - every image in its `generic/` subdirectory;
+ *   - every image in its `generic_distill/` subdirectory.
  *
- * Only these three are generated here. The favorite badge has a pyramid
- * too (`manifest.shared.favoriteLevels`, `scan.ts`'s
- * `discoverFavoriteLevels`) but not from this tool - the scaled
- * `fav_on.png`/`fav_off.png` are hand-tuned for visibility at small sizes
- * rather than mechanically resized, and committed directly into the same
- * `<width>/` directories this writes for the center render. The rest of the
- * fixed app art (the distill toggle and everything else) is a tiny icon drawn
- * at a fixed size regardless of zoom (same file, always `cache.get(id, 0)`) -
- * a pyramid for it would be dead weight nothing ever asks for.
+ * `scan.ts`'s `discoverLevels` reads these back into the manifest; see
+ * `docs/agents/map.md`, "Shared art has its own pyramids". The favorite
+ * badge's pyramid is hand-tuned and committed, not generated here.
  */
 import { join, extname } from 'node:path';
 import { readdir } from 'node:fs/promises';

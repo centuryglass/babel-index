@@ -13,18 +13,18 @@
  * Three front ends, one compiler, because the callers have different
  * GitHub access:
  *   - `--fetch` shells out to `gh`, which the maintainer has locally.
- *   - `--fetch-api` calls the REST API directly with Node's built-in
- *     `fetch` - no `gh` binary needed, and no token needed either, since
- *     this repo is public: an unauthenticated call works, just against the
- *     shared 60/hr-per-IP limit rather than 5000/hr. A Claude Code Remote
- *     container's egress IP is shared with other traffic and was observed
- *     to have that budget already spent, so `fetchWithApi`'s own comment
- *     documents an optional `BABEL_INDEX_ISSUES_TOKEN` - a fine-grained,
- *     read-only, issues-only PAT safe to set as a plain env var - as the
- *     fix for that case. `GH_TOKEN`/`GITHUB_TOKEN` are tried too, for a
- *     setup where those happen to be a real PAT; in a Claude Code Remote
- *     session's environment they are not (401), so `session-start.sh`
- *     calls this front end best-effort regardless of outcome.
+ *   - `--fetch-api` calls the REST API with Node's built-in `fetch`, so it
+ *     needs no `gh` binary. The repo is public, so it needs no token
+ *     either; unauthenticated, it shares GitHub's 60/hr-per-IP limit, which
+ *     a Claude Code Remote container's egress IP can already have spent.
+ *     A token raises the limit to 5000/hr. The first one set wins:
+ *       - `BABEL_INDEX_ISSUES_TOKEN`: a fine-grained PAT with read-only
+ *         access to this repo's issues. It can do nothing an
+ *         unauthenticated request can't, so it is safe as a plain env var.
+ *       - `GH_TOKEN`, then `GITHUB_TOKEN`, for a setup where one of those
+ *         is a real PAT. In a Claude Code Remote session they are not
+ *         (401), which is why `session-start.sh` treats this front end as
+ *         best-effort.
  *   - stdin (or `--from-json`) takes an already-fetched JSON array, the
  *     fallback for an agent whose environment can reach neither
  *     `api.github.com` nor `gh` at all - see AGENTS.md's "Tracking open
@@ -70,24 +70,9 @@ function originRepo() {
 }
 
 /**
- * The repo is public, so no token is required by GitHub - only a token
- * raises the rate limit from 60/hr (unauthenticated, shared across every
- * request from the same egress IP - already exhausted by other traffic in
- * a Claude Code Remote container, observed as an immediate 403) to
- * 5000/hr. `BABEL_INDEX_ISSUES_TOKEN` is a scope-it-yourself escape hatch
- * for that: a fine-grained PAT with read-only access to this repo's
- * issues, safe to set as a plain (non-secret) environment variable since
- * it can do nothing but what an unauthenticated request already could.
- * `GH_TOKEN`/`GITHUB_TOKEN` are tried after it for a setup where those
- * happen to be a real PAT rather than reserved for something else, as
- * observed in a Claude Code Remote session (see the file docblock).
- *
- * The REST issues endpoint also returns pull requests (flagged with a
- * `pull_request` key) and paginates at 100/page regardless of what's asked
- * for, so both need handling `gh issue list` does internally. Comments are
- * a separate endpoint per issue - `fetchIssueComments` is only called for
- * an issue whose `comments` count is nonzero, to avoid a wasted request per
- * commentless issue against the same rate budget.
+ * Fetches every comment on one issue, following pagination. Called only for
+ * an issue whose `comments` count is nonzero, since each call is a request
+ * against the same rate budget.
  */
 async function fetchIssueComments(commentsUrl, headers) {
   const comments = [];
@@ -103,6 +88,12 @@ async function fetchIssueComments(commentsUrl, headers) {
   return comments;
 }
 
+/**
+ * The `--fetch-api` front end; the file header covers tokens and rate
+ * limits. The REST issues endpoint also returns pull requests (flagged with
+ * a `pull_request` key) and caps pages at 100, so this skips the former and
+ * pages through the latter, both of which `gh issue list` does internally.
+ */
 async function fetchWithApi() {
   const token = process.env.BABEL_INDEX_ISSUES_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
   const { owner, repo } = originRepo();
@@ -221,7 +212,7 @@ async function main() {
   if (!raw.trim()) {
     console.error(
       'no input. Pipe issue JSON in, pass --from-json <path>, use --fetch where `gh` is ' +
-      'available, or use --fetch-api where GH_TOKEN/GITHUB_TOKEN is set.'
+      'available, or use --fetch-api where api.github.com is reachable.'
     );
     process.exit(1);
   }
