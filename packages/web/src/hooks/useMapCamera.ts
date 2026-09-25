@@ -285,17 +285,9 @@ export function useMapCamera({
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
 
-      // Touch only: suppress the compatibility mouse events and trailing
-      // `click` the browser synthesizes from this pointer sequence. A tap
-      // whose `onTap` swaps the DOM synchronously (the shelf's catalog book,
-      // via `enterCatalog`) would otherwise have that click land on whatever
-      // the new view puts at those coordinates. Mouse and pen don't
-      // synthesize, so they are unaffected. Preventing default also drops the
-      // focus a tap gives the canvas, so it is restored here.
-      if (e.pointerType === 'touch') {
-        e.preventDefault();
-        canvas.focus();
-      }
+      // A touch gets no focus from the browser here: `onTouchEnd` cancels the
+      // synthesized mousedown that would have given it.
+      if (e.pointerType === 'touch') canvas.focus();
 
       // A hand on the map ends any flight, on the press and not the first
       // move, so a press that never becomes a drag still stops it.
@@ -539,10 +531,22 @@ export function useMapCamera({
       pick(e.clientX, e.clientY);
     };
 
+    // A touch on the map never becomes a click. The browser dispatches a
+    // tap's click after `touchend`, hit-testing at dispatch time, so a tap
+    // whose `onTap` swaps the view (the shelf's catalog book, via
+    // `enterCatalog`) would have its click land on whatever the new view put
+    // under the finger - on Firefox for Android, ~370ms later. Only cancelling
+    // `touchend` suppresses that click; cancelling `pointerdown` stops the
+    // compatibility mousedown/mouseup but not the click. The canvas is hidden
+    // rather than unmounted in catalog mode, so it still receives this
+    // `touchend` after the swap.
+    const onTouchEnd = (e: TouchEvent) => e.preventDefault();
+
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('contextmenu', onContextMenu);
     return () => {
@@ -555,6 +559,7 @@ export function useMapCamera({
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('touchend', onTouchEnd);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
