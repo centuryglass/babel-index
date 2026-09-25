@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.8.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.7.0...babel-index-v1.8.0) (2026-09-25)
+
+
+### Features
+
+* refresh the issue cache for OpenCode sessions ([#371](https://github.com/centuryglass/babel-index/issues/371)) ([b70e739](https://github.com/centuryglass/babel-index/commit/b70e73934509a8396d4807b98483442f88f43e07))
+
+
+### Bug Fixes
+
+* cancel touchend on the map so a tap's click can't hit the next view ([#373](https://github.com/centuryglass/babel-index/issues/373)) ([a54c1e2](https://github.com/centuryglass/babel-index/commit/a54c1e22b7d046b80f8f3b21cb622f15b9980216))
+* don't let a failed gh issue list fail SessionStart ([#350](https://github.com/centuryglass/babel-index/issues/350)) ([fd953ba](https://github.com/centuryglass/babel-index/commit/fd953ba0cd153b9ce88f44064845586140a5175e)), closes [#345](https://github.com/centuryglass/babel-index/issues/345)
+* keep the overlay's score details on the card at phone width ([#315](https://github.com/centuryglass/babel-index/issues/315)) ([14da786](https://github.com/centuryglass/babel-index/commit/14da78627130001aa8787f22e0a240612d8e5b11))
+* make match strength unsigned - a low CLIP cosine is no evidence, not a mismatch ([#317](https://github.com/centuryglass/babel-index/issues/317)) ([baae35d](https://github.com/centuryglass/babel-index/commit/baae35da46f5bdcb4975db6cb8bdcecf1e31631a))
+* only cancel a touchend the browser marks cancelable ([#378](https://github.com/centuryglass/babel-index/issues/378)) ([e519a9b](https://github.com/centuryglass/babel-index/commit/e519a9b89cd45bb9c69776a829afaf4dc1fc572d))
+* **perf-capture:** make the canvas2d profile load Canvas2D ([#347](https://github.com/centuryglass/babel-index/issues/347)) ([62e09e7](https://github.com/centuryglass/babel-index/commit/62e09e78aa024c67b1d98174ee56fd8efb71f3a0)), closes [#346](https://github.com/centuryglass/babel-index/issues/346)
+* refresh the issue cache once per OpenCode session ([#372](https://github.com/centuryglass/babel-index/issues/372)) ([9123f1b](https://github.com/centuryglass/babel-index/commit/9123f1b6bdd4c671a7bd7c68998562d27fffe807))
+* require changes job to succeed before accepting a skipped e2e job ([#348](https://github.com/centuryglass/babel-index/issues/348)) ([eb9cf23](https://github.com/centuryglass/babel-index/commit/eb9cf230af87d32302221e57fbfbfb2fe28ef5f7)), closes [#344](https://github.com/centuryglass/babel-index/issues/344)
+* **search:** build the story index and story highlights at search.minTokenLength ([#356](https://github.com/centuryglass/babel-index/issues/356)) ([c427e0e](https://github.com/centuryglass/babel-index/commit/c427e0e4d7fb810f5126c226d7595ca3c5fff0f9)), closes [#328](https://github.com/centuryglass/babel-index/issues/328)
+* **search:** clamp reported match strength to 0-100% instead of 0.01-99.99% ([#355](https://github.com/centuryglass/babel-index/issues/355)) ([ece7072](https://github.com/centuryglass/babel-index/commit/ece7072c819e62690a31b59c6e1f1f39ad3307af)), closes [#353](https://github.com/centuryglass/babel-index/issues/353)
+* **test:** flush the favorites store before withStore deletes its temp dir ([#354](https://github.com/centuryglass/babel-index/issues/354)) ([0ba34f2](https://github.com/centuryglass/babel-index/commit/0ba34f2ae9abc06c49bbce8adced05c64c605145)), closes [#349](https://github.com/centuryglass/babel-index/issues/349)
+
 ## [1.7.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.6.0...babel-index-v1.7.0) (2026-09-22)
 
 
