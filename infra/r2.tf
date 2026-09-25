@@ -1,4 +1,4 @@
-# The bucket tools/upload/upload-r2.mjs syncs the corpus into.
+# The bucket tools/upload/upload-r2.ts syncs the corpus into.
 resource "cloudflare_r2_bucket" "corpus" {
   account_id = var.cloudflare_account_id
   name       = var.r2_bucket_name

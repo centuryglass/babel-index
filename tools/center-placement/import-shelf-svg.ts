@@ -3,7 +3,7 @@
  * Turns the hand-traced Inkscape SVG of the center tile into the measured
  * geometry every consumer reads, `tools/center-placement/lib/measured.ts`.
  *
- *   node tools/center-placement/import-shelf-svg.ts <shelf_geometry.svg> [--out <file>]
+ *   npm run generate:shelf-geometry [-- --out <file>]   # reads tools/center-placement/shelf_geometry.svg
  *
  * The label on an element is the contract; its fill colour is decorative. An
  * element the trace does not carry is emitted as null, and the consumer leaves

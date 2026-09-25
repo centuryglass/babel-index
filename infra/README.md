@@ -1,8 +1,8 @@
-# infra — Cloudflare R2, applied locally
+# infra - Cloudflare R2, applied locally
 
 Terraform for the R2 bucket `tools/upload/upload-r2.ts` syncs the corpus
-into, plus the abuse protection in front of it. There is deliberately no
-CI/CD wiring here: this is applied by hand, from your own machine, with
+into, plus the abuse protection in front of it. There is no CI/CD wiring
+here: this is applied by hand, from your own machine, with
 credentials that never touch a GitHub Actions runner or secret store.
 
 ## Why the abuse protection exists
@@ -83,10 +83,8 @@ dashboard first, Terraform doesn't manage it here.
 
 ## Things to verify before relying on this
 
-Carried over from the abuse-protection review that prompted this stack -
-check these against current Cloudflare/provider docs before trusting the
-apply, since they're exactly the kind of detail that drifts between provider
-versions:
+Check these against current Cloudflare/provider docs before trusting the
+apply. They are the kind of detail that drifts between provider versions:
 
 - `cloudflare_notification_policy`'s `alert_type = "billing_usage_alert"` in
   `abuse-protection.tf` - confirm this is still the right string. A wrong one
@@ -115,5 +113,6 @@ versions:
 Local state (`terraform.tfstate*`) is gitignored - see `infra/.gitignore`.
 Since this is applied from one machine by hand, that's the source of truth;
 back it up yourself (or move to a remote backend) if that machine isn't
-durable. `.terraform.lock.hcl`, once `terraform init` generates it, should be
-committed so everyone applying this gets the same provider version.
+durable. `.terraform.lock.hcl` is committed so everyone applying this gets
+the same provider version; commit it again whenever `terraform init
+-upgrade` changes it.

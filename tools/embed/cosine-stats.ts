@@ -27,8 +27,8 @@
  * known negative. Either list's own distribution measures what a genuine match
  * or a genuine miss looks like, rather than where a mixed pool thins out.
  *
- * The shipped anchors are `CLIP_STRENGTH`'s three numbers; its docblock in
- * packages/map/scoring.ts says which of these measurements each one reads.
+ * The shipped anchors are `CLIP_STRENGTH`'s `centre` and `high`; its docblock
+ * in packages/map/scoring.ts says which of these measurements each one reads.
  * `docs/search_rules.md` "Image-content (CLIP) matching" is where they are used.
  */
 
@@ -122,12 +122,15 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
 }
 
 /**
- * Turn two measured distributions into a clipLow/clipHigh starting point: a high
+ * Turn two measured distributions into a coarse clipLow/clipHigh pair: a high
  * percentile of `overall` as the noise floor, a middling percentile of
  * `keywordMax` as a typical best match.
  *
  * A first read off the shape of the corpus, not what the app ships: the anchors
- * in `CLIP_STRENGTH` are read off a known-outcome list instead. Do not promote
+ * in `CLIP_STRENGTH` are read off a known-outcome list instead. The pair's
+ * names are not config keys. `search.density` has no `clipLow`, and its
+ * `clipHigh` defaults to `CLIP_STRENGTH.high`, which `summarizeUniversal`'s
+ * ceiling measures, not this `clipHigh`. Do not promote
  * `clipLow` to a strength floor on its own - a high percentile of `overall`
  * assumes most pairs are unrelated, and a common word that is genuinely true of
  * many rooms (`book`) scores below such a cutoff on correct matches.

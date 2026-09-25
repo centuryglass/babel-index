@@ -1,5 +1,5 @@
 output "r2_bucket_name" {
-  description = "Pass this as --bucket / R2_BUCKET to tools/upload/upload-r2.mjs."
+  description = "Pass this as --bucket / R2_BUCKET to tools/upload/upload-r2.ts."
   value       = cloudflare_r2_bucket.corpus.name
 }
 

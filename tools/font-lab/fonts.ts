@@ -8,8 +8,8 @@
  * can ask whether gilt reads better a touch heavier - tiny light strokes on a
  * bright spine tend to vanish.
  *
- * The system sans baseline (what the app ships today) needs no download; it is
- * declared in variants.ts by family string alone.
+ * The system-sans reference face needs no download; it is declared in
+ * variants.ts by family string alone.
  */
 export interface FontEntry {
   slug: string;
