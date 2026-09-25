@@ -2,14 +2,9 @@
  * The keyboard cursor: where it is, what a reader hears about it, and what
  * every key over the map does.
  *
- * Split out of `main.tsx`. The
- * four pieces this hides - the granularity hysteresis, the boundary-crossing
- * latch, `cursorNow`, and the key switch itself - had no reader anywhere else
- * in that file, which is what made this the seam to cut first.
- *
  * It owns no camera. Everything that moves is `useMapCamera`'s (`flyTo`,
- * `nudgeBy`, `flightTarget`), because the cursor is DERIVED from the camera
- * rather than tracked beside it - see the block comment below.
+ * `nudgeBy`, `flightTarget`), because the cursor is derived from the camera
+ * (see the `cursor` state).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cellDistance, type MapLayout } from '../../../map/ordering.ts';
@@ -75,40 +70,28 @@ export function useMapCursor({
 }: UseMapCursorOpts) {
   // --- the keyboard cursor ---------------------------------------------------
   //
-  // The cell under the camera center, DERIVED rather than separately tracked -
-  // that definition is the whole design, so anything that moves the camera
-  // moves the cursor with it and there is no second copy that can drift out
-  // of step. That includes the edge's own glide easing back after a keyboard
-  // press crosses the boundary: the camera moves, so the cursor does too,
-  // which is correct rather than a conflict.
+  // The cell under the camera center, derived from the camera and never
+  // tracked separately, so anything that moves the camera moves the cursor.
+  // That includes the edge glide easing back after a keyboard move.
   //
-  // `cursor` is React state only because JSX needs it - the canvas's
-  // `aria-label` and its nested, touch-reachable story/chips. The render loop
-  // does NOT read it (see `cursorNow` below), for the same reason `cam` is a
-  // ref: a re-render per keypress is fine, a torn-down and rebuilt render
-  // EFFECT per keypress is not.
+  // `cursor` is React state only for JSX: the canvas's `aria-label` and its
+  // nested, touch-reachable story/chips. The render loop derives the ring
+  // from the live camera and does not read it, for the same reason `cam` is a
+  // ref: a re-render per keypress is fine, rebuilding the render effect per
+  // keypress is not.
   const [cursor, setCursor] = useState<Cell>(() => cursorCell(cam.current));
 
   /**
-   * Where the cursor is currently, for the keyboard's own next move.
-   *
-   * `flightTarget()` rather than `cam.current`: mid-flight the latter is the
-   * interpolated position, so a second key press arriving in the same tick as
-   * the first would compute its move from a camera that has not gone anywhere
-   * yet, and the two presses would collapse into one. The flight's resolved
-   * target is where the previous press actually put the cursor. Idle - which
-   * includes while the glide is easing back from outside the region - it is
-   * just the live camera, so the next press builds on where the reader has
-   * actually drifted to rather than on where they last aimed.
+   * The cursor cell the keyboard's next move builds on: `cursorCell` of
+   * `flightTarget()` (see `useMapCamera`'s `flightTarget`). Idle, including
+   * while the glide eases back, that is the live camera, so the next press
+   * builds on where the reader has drifted to.
    */
   const cursorNow = useCallback(() => cursorCell(flightTarget()), [flightTarget]);
-  // The ring's position is derived from the live camera in the render loop,
-  // and every camera change already requests a draw - `cursor` state exists
-  // for JSX (the canvas's nested fallback content, below), not for the ring
-  // itself, so this just keeps that content in step with the cell it names.
-  // Whether the ring is shown AT ALL is a separate question, gated on canvas
-  // focus rather than on keyboard use - see `useMapRenderer.ts`'s
-  // `focus`/`blur` listeners.
+  // The ring is drawn from the live camera, and every camera change already
+  // requests a draw; this keeps the canvas's nested fallback content in step
+  // with `cursor`. Whether the ring shows at all is gated on canvas focus, in
+  // `useMapRenderer.ts`'s `focus`/`blur` listeners.
   useEffect(() => {
     requestDraw();
   }, [cursor, requestDraw]);
@@ -126,18 +109,14 @@ export function useMapCursor({
   const wasBeyondBoundary = useRef(false);
 
   /**
-   * Move the cursor to a specific cell, build what a reader should hear about
-   * arriving there, and push it into the existing polite live region (Phase
-   * A's `.note` status span) - not just the canvas's `aria-label`, because an
-   * attribute change on an already-focused element is not reliably announced
-   * across screen readers, and this is the one mechanism every AT actually
-   * supports.
+   * Move the cursor to a cell and announce the arrival through `setStatus`,
+   * the page's one polite live region. The canvas's `aria-label` changes too,
+   * but an attribute change on a focused element is not reliably announced
+   * across screen readers.
    *
-   * `lead` is anything that happened to bring the cursor here - a search's
-   * signals, a rearrangement's outcome. It goes in FRONT of the cell's own
-   * name and inside the same live-region write, because two writes a moment
-   * apart are two interruptions of whatever the reader was listening to, and
-   * a polite region queues them rather than merging them.
+   * `lead` is whatever brought the cursor here - a search's signals, a
+   * rearrangement's outcome. It goes in front of the cell's name in the same
+   * write, because a polite region queues two writes as two interruptions.
    */
   const announceCursorMove = useCallback(
     (cell: Cell, lead = '') => {
@@ -175,9 +154,9 @@ export function useMapCursor({
    *
    * Three clauses, and each is a different question: what decided the ranking
    * (the search's own note, if a search caused this), what the map now
-   * looks like as a whole, and what is under the cursor NOW. The announcement
-   * reads after the camera has settled rather than before, so the cursor it
-   * names is the one the reader actually ends up at: an animated rearrangement
+   * looks like as a whole, and what is under the cursor now. The announcement
+   * reads after the camera has settled, so the cursor it names is the one the
+   * reader ends up at: an animated rearrangement
    * parks the camera on the center first, and saying the cell they left would
    * be describing somewhere they are no longer standing.
    *
@@ -194,7 +173,7 @@ export function useMapCursor({
     [announceCursorMove, cursorNow, layout]
   );
 
-  /** `?` - the screen-reader equivalent of peripheral vision, built once as a pure module at file scope. */
+  /** `?` - the screen-reader equivalent of peripheral vision; see `describeSurroundings`. */
   const announceSurroundings = useCallback(() => {
     setStatus(describeSurroundings(layout, order, metadata, cursor));
   }, [layout, order, metadata, cursor, setStatus]);
@@ -202,13 +181,12 @@ export function useMapCursor({
   // The cursor's own story and keyword chips, nested inside the canvas as real
   // fallback content - touch users get this through the DOM while a
   // keyboard-only Enter would not reach it. `tabIndex={-1}` on the chips keeps
-  // them out of the desktop Tab sequence - the map is still exactly one tab
-  // stop - while leaving them real, interactive elements a touch screen
+  // them out of the desktop Tab sequence - the map is still one tab stop -
+  // while leaving them real, interactive elements a touch screen
   // reader's swipe navigation reaches regardless of tabindex.
   const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
   const cursorEntry = cursorRoom.center || cursorRoom.generic ? null : (metadata?.[cursorRoom.id] ?? null);
-  // Named here rather than in the view, so `describeRoom` has exactly one
-  // caller per reading of the corpus and the map cannot drift from the catalog
+  // Named here, not in the view, so `describeRoom` has one caller per reading of the corpus and the map cannot drift from the catalog
   // about what a room is called.
   const cursorDesc =
     cursorEntry && !cursorRoom.center && !cursorRoom.generic
@@ -262,53 +240,36 @@ export function useMapCursor({
           dx *= cellsX;
           dy *= cellsY;
         }
-        // `nudgeBy`, not `flyTo`: this is a PAN, and pans are damped by the
-        // map's resistance so pushing outward gets heavier - the same curve a
-        // pointer drag gets, for parity. Inside the content region the damping
-        // is 1, so this is still exactly one cell per press.
+        // `nudgeBy`, not `flyTo`: a pan is damped by the map's resistance the
+        // same way a pointer drag is. Inside the content region the damping is
+        // 1, so a press moves one cell.
         //
-        // The announcement therefore has to come from where the move actually
-        // LANDED (`cursorNow()` re-read after the nudge, which sees the new
-        // flight's target) rather than from a target computed here: far
-        // outside, a press may not advance the cursor a whole cell at all, and
-        // announcing the cell the reader aimed at would be describing a room
-        // they are not going to reach. When the cell is unchanged the string is
-        // identical, React does not re-render, and no live-region update fires
-        // - silence being the honest answer to a press that went nowhere.
+        // The announcement reads `cursorNow()` after the nudge, which sees the
+        // new flight's target. Far outside, a press may not advance a whole
+        // cell, and naming the aimed-at cell would describe a room the reader
+        // won't reach. An unchanged cell yields an identical string, so React
+        // does not re-render and nothing is re-announced.
         //
-        // Announced synchronously rather than on the flight landing: the
-        // cursor's cell is settled the instant the key is processed, and
-        // `keyboardMoveMs` exists to make that motion visible to sighted
-        // readers, not to gate anything else. A rapid run of presses each
-        // interrupts the previous flight - the same "a second flight replaces
-        // the first" `flyTo` already gives Home - so key-repeat chases
-        // smoothly rather than queuing animations.
+        // Announced on the keypress, not the landing: the cell is settled once
+        // the key is processed, and `keyboardMoveMs` only makes the motion
+        // visible. Each press replaces the previous flight, so key-repeat
+        // chases smoothly instead of queuing animations.
         nudgeBy(dx, dy, { ms: camera.keyboardMoveMs });
         announceCursorMove(cursorNow());
         return;
       }
 
-      // `+`/`-` are aliases for PageUp/PageDown - the convention every other
-      // map-like UI uses, and cheap to support since it is the same target
-      // math either way. `=` stands in for `+` because that is the bare key
-      // under Shift on the layouts where `+` lives, and browsers report
-      // whichever one the reader actually pressed.
+      // `+`/`-` are aliases for PageUp/PageDown. `=` stands in for `+`, since
+      // it is the unshifted key on layouts where `+` needs Shift, and browsers
+      // report whichever one was pressed.
       if (
         e.key === 'PageUp' || e.key === 'PageDown' ||
         e.key === '+' || e.key === '=' || e.key === '-'
       ) {
         e.preventDefault();
-        // Flies to the CURSOR's own cell at a new zoom, which keeps the
-        // cursor fixed across the zoom the way the old pixel-anchored
-        // `zoomBy` did, and lands the camera exactly cell-centered.
-        //
-        // The zoom is built off `flightTarget()`, not `cam.current.zoom` -
-        // `cam.current` is the INTERPOLATED value, which a flight in progress
-        // has not necessarily moved from its start at all yet. Two PageDown
-        // presses back to back both reading `cam.current.zoom` would compute
-        // the SAME target and the second would silently cancel the first's
-        // effect rather than compounding it - `flightTarget()` chains off the
-        // fully-resolved target of whatever is already in flight instead.
+        // Flies to the cursor's own cell at the new zoom, so the cursor stays
+        // fixed and the camera lands cell-centered. The zoom chains off
+        // `flightTarget()` (see `useMapCamera`'s `flightTarget`).
         const zoomingIn = e.key === 'PageUp' || e.key === '+' || e.key === '=';
         const factor = zoomingIn ? camera.zoomStepFactor : 1 / camera.zoomStepFactor;
         const zoom = flightTarget().zoom * factor;
@@ -340,9 +301,8 @@ export function useMapCursor({
         return;
       }
 
-      // The symmetric jump `Ctrl/Cmd+Home` doesn't have on its own: last
-      // ranked room rather than first. Plain `End` is left unbound - there is
-      // no cell it obviously means the way (0, 0) does for `Home`.
+      // `Ctrl/Cmd+End` jumps to the last ranked room, mirroring `Ctrl/Cmd+Home`.
+      // Plain `End` is unbound: no cell means to it what (0, 0) means to `Home`.
       if (e.key === 'End' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         const best = layout.cellOfRank(order.length - 1);
@@ -357,12 +317,9 @@ export function useMapCursor({
       }
 
       if (e.key === 'Enter' || e.key === ' ') {
-        // The center is the one cell this never opens - it's the controls,
-        // not a room, and has nothing a card could show. A generic cell DOES
-        // open: it has real content now (its shared alt caption, and the
-        // "this is filler" description), and right-click/long-press already
-        // opened it for a pointer - a keyboard-only reader had no way to
-        // reach either without this.
+        // Opens the card for a room or a generic cell, matching right-click
+        // and long press. The center never opens: it is the controls, not a
+        // room, and a card has nothing to show for it.
         const here = cursorNow();
         const at = layout.roomAt(here.x, here.y, order);
         if (at.center) return;
@@ -398,14 +355,10 @@ export function useMapCursor({
 }
 
 /**
- * `?`'s sentence: where you are, the nearest ranked room each way, and how
- * far the edge is. Module scope and pure, so it is one function of its
- * arguments rather than something that reads the hook's closure. Built over
- * already-tested primitives (`nextRoom`, `cellDistance`) rather than a new
- * pure module. Four cardinal directions via straight-line walks - a true
- * diagonal nearest-room search is more geometry than the key needs. On
- * request rather than on every move, because "verbose by default" is the
- * classic live-region mistake.
+ * `?`'s sentence: where the cursor is, the nearest ranked room in each
+ * cardinal direction (straight-line walks with `nextRoom`), and how far the
+ * edge is. Spoken on request, not on every move, so the live region stays
+ * quiet.
  */
 function describeSurroundings(
   layout: MapLayout,

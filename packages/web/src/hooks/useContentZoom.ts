@@ -23,17 +23,11 @@ interface Frame {
  * list - so a reader can magnify any of it without touching the browser's
  * own page zoom.
  *
- * Native browser zoom is not offered as a fallback: it moves the entire
- * page, and fixed-size, absolutely-positioned chrome elsewhere in the
- * document (the map canvas, its search badge) does not track it; and on
- * Firefox Mobile a viewport-meta reset meant to undo a native zoom/pan
- * after a dialog closes does not reliably take (Firefox bug 1498729 - a
- * dynamically-mutated viewport meta doesn't discard its old parsed values
- * there), leaving a zoom/pan that leaks past whatever dialog it happened
- * in. Confining the gesture to one scoped element avoids both problems:
- * nothing outside it is ever touched, and the zoom resets for free whenever
- * `resetKey` changes, since it is just React state, not anything the
- * browser has to be asked to undo.
+ * Hazard: don't fall back to native browser zoom. It moves the whole page,
+ * which fixed, absolutely-positioned chrome (the map canvas, its search
+ * badge) does not track, and on Firefox Mobile a viewport-meta reset after a
+ * dialog closes does not reliably undo it (Firefox bug 1498729). The zoom
+ * here is React state, so it resets whenever `resetKey` changes.
  *
  * Entirely independent of the map's own camera (`camera.ts`/
  * `useMapCamera.ts`) - private React state per hook instance, so a content

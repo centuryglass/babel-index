@@ -1,6 +1,6 @@
 /**
  * The one declaration point for style values shared between canvas-drawn
- * chrome and plain CSS - today, only the hover glow the open book
+ * chrome and plain CSS: the hover glow the open book
  * (`center.ts`'s `composeSpines`, `render.ts`'s favorite-badge/distill-toggle
  * hover, `gl/glowTexture.ts`'s bake) and its CSS-DOM counterparts
  * (`.center-book.hover`, `.center-controls button.hover`,
@@ -10,10 +10,6 @@
  * `center.ts` is asserted browser-free (`center.test.ts`), so nothing here
  * queries the DOM except `applyCssVars`, called once from `main.tsx` at
  * module scope.
- *
- * Deliberately its own file rather than living on `center.ts`: the value is
- * shared by the favorite badge and distill toggle too, which have nothing to
- * do with the center tile's own geometry.
  */
 export const HOVER_GLOW_RGB: readonly [number, number, number] = [200, 169, 95];
 

@@ -6,9 +6,9 @@
  * Cell (0, 0) is title page, user interface, and anchor at once. What is mapped
  * onto the art:
  *
- * - the shelf's closed books: `BOOK_COUNT` slots, the first two and the last
- *   reserved for fixed functions (`overrides` in `useCenterShelf.ts`), the rest
- *   lettered by `assignTitles`
+ * - the shelf's closed books: `BOOK_COUNT` slots, lettered by `assignTitles`
+ *   except for the reserved ones (`overrides` in `useCenterShelf.ts`): the
+ *   first two always, and the last while there is search history to forget
  * - the open book in a shelf gap: the artist's statement
  * - the search bar, drawn as a metal bar across the top of the room
  * - a panel beneath it: the favorite and global-count sort switches, and the
@@ -188,11 +188,6 @@ const RUNS: Run[] = (() => {
 // --- rendering constants, by feel ------------------------------------------
 // Art numbers, read where they are used. The spine title's font range is the
 // exception, and lives in `config.center` as `spineMinPx`/`spineMaxPx`.
-
-// TODO: I'm not sure putting these here is the best approach. The point of
-//       config is that all the tunable numbers are neatly organized in a
-//       single spot, where they can be easily found and adjusted. Because these
-//       constants weren't there, I didn't even know to find them here.
 
 /** Below this on-screen spine width, a title is sub-pixel; do not draw it. */
 const MIN_SPINE_PX = 5;
