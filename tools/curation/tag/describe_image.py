@@ -9,6 +9,7 @@ Entry points:
     conversation (initial prompt -> reply -> revision request -> ...), used for
     the babel-index story revision flow.
   - send_text(prompt) -- no image, plain text in, text out.
+  - converse_text(turns) -- no image, multi-turn.
 
 Both talk to Claude by default, while model ids prefixed with ``local:`` or
 ``openrouter:`` are routed instead to OpenAI-compatible servers (e.g. a llama.cpp
@@ -414,7 +415,15 @@ def _send_local(messages: list, model: str, base: str = LOCAL_API_BASE) -> str:
 
 def send_text(prompt: str, model: str = DEFAULT_MODEL) -> str:
     """Send a plain text prompt (no image) and return the model's reply."""
-    return _send([{"role": "user", "content": [{"type": "text", "text": prompt}]}], model=model)
+    return converse_text([("user", prompt)], model=model)
+
+
+def converse_text(turns: Sequence[Tuple[str, str]], model: str = DEFAULT_MODEL) -> str:
+    """Continue a text-only conversation of (role, text) turns and return the reply."""
+    if not turns:
+        raise ValueError("converse_text requires at least one turn")
+    messages = [{"role": role, "content": [{"type": "text", "text": text}]} for role, text in turns]
+    return _send(messages, model=model)
 
 
 def describe_image(

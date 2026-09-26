@@ -1,0 +1,18 @@
+[
+  {"name": "anecdote", "description": "Plain third-person narration of something that happened.", "weight": 1},
+  {"name": "first-person account", "description": "Someone tells what they saw or did, in their own voice.", "weight": 1},
+  {"name": "letter", "description": "A letter from one person to another, with a salutation and a sign-off.", "weight": 1},
+  {"name": "dialogue", "description": "An exchange between two or more speakers, as lines of speech with little or no narration.", "weight": 1},
+  {"name": "notice", "description": "A sign, bulletin or posted announcement addressed to whoever reads it.", "weight": 1},
+  {"name": "list", "description": "A numbered or bulleted list whose items add up to a story.", "weight": 1},
+  {"name": "diary entry", "description": "A dated private entry, written for no one else.", "weight": 1},
+  {"name": "marginalia", "description": "Notes left in the margins of a book, possibly by more than one hand, possibly answering each other.", "weight": 1},
+  {"name": "transcript", "description": "A record of testimony, an interview or a hearing, with speaker labels.", "weight": 1},
+  {"name": "instructions", "description": "Directions for doing something, addressed to the person who has to do it.", "weight": 1},
+  {"name": "classified ad", "description": "A want ad, personal ad, or lost-and-found notice.", "weight": 1},
+  {"name": "fable", "description": "A story told aloud, the way it has been passed down, perhaps with a moral.", "weight": 1},
+  {"name": "obituary", "description": "A death notice for a person, an object, a place or an idea.", "weight": 1},
+  {"name": "review", "description": "Someone's opinionated review of a book, a room, a service or an experience.", "weight": 1},
+  {"name": "message", "description": "A short urgent message: a telegram, a note under a door, a text.", "weight": 1},
+  {"name": "fragment", "description": "A piece of a longer document, starting or ending mid-thought.", "weight": 1}
+]

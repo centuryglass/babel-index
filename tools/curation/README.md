@@ -73,6 +73,23 @@ stories, generate alt text, and set sensitive-content tags by hand. See
 tile's image and a subset of its metadata (keywords, story, title, alt) into
 `assets/corpus-sample`, for hand-picking a representative demo corpus.
 
+The GUI's **Pitches** section runs the staged story engine
+(`story_engine/`, configured by `babel_index_review/story_frame.py`):
+
+1. **Pitch** reads the image once (cached per tile) and lists premises. Each
+   one carries a payload, an anchor in the image, and a turn: what the
+   reader gets out of it.
+2. **Write**, or a double-click on a pitch, writes that pitch into the story
+   field. The form is drawn by weight, or you can pick one in the dropdown
+   beside the button.
+3. Review, revise and finalize the draft as usual.
+
+Payloads and forms are `data/story_payloads.json` and
+`data/story_forms.json`. Each entry has a relative `weight`; raise the ones
+that keep working and lower the ones that don't. Every step, plus each Final
+or Clear on an engine-written story, is logged to
+`DIR/story_traces/<tile>.jsonl`.
+
 **Review from a phone**
 
 ```sh
