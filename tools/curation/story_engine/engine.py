@@ -37,6 +37,9 @@ class Frame:
     - ``presentation``: how the reader meets the story.
     - ``voice``: the stance the writer takes.
     - ``style_rules``: extra writing rules, one per list entry.
+    - ``pitch_limits``: word caps on each pitch field, enforced by the
+      validator. A model stretches a sentence limit indefinitely, but a
+      counted cap comes back with the exact overrun and gets fixed on retry.
     """
 
     subject: str
@@ -47,6 +50,9 @@ class Frame:
     forms: list[Option]
     word_limit: int = 150
     pitch_count: int = 6
+    pitch_limits: dict[str, int] = field(
+        default_factory=lambda: {"premise": 20, "turn": 20, "anchor": 12}
+    )
     style_rules: list[str] = field(default_factory=list)
 
 
@@ -113,13 +119,14 @@ def _validate_reading(data: object) -> Reading:
     )
 
 
-def _pitch_validator(payloads: list[Option]):
+def _pitch_validator(payloads: list[Option], limits: dict[str, int]):
     names = {option.name.casefold(): option.name for option in payloads}
 
     def validate(data: object) -> list[Pitch]:
         if not isinstance(data, dict) or not isinstance(data.get("pitches"), list):
             raise ReplyError("expected {\"pitches\": [...]}")
         pitches = []
+        overruns = []
         for i, item in enumerate(data["pitches"]):
             where = f"pitches[{i}]"
             if not isinstance(item, dict):
@@ -127,13 +134,16 @@ def _pitch_validator(payloads: list[Option]):
             payload = require_str(item, "payload", where)
             if payload.casefold() not in names:
                 raise ReplyError(f"{where}: payload {payload!r} is not one of {sorted(names.values())}")
-            pitches.append(
-                Pitch(
-                    payload=names[payload.casefold()],
-                    premise=require_str(item, "premise", where),
-                    anchor=require_str(item, "anchor", where),
-                    turn=require_str(item, "turn", where),
-                )
+            fields = {key: require_str(item, key, where) for key in ("premise", "anchor", "turn")}
+            for key, text in fields.items():
+                count, cap = len(text.split()), limits.get(key)
+                if cap is not None and count > cap:
+                    overruns.append(f"{where}.{key} has {count} words, over the cap of {cap}")
+            pitches.append(Pitch(payload=names[payload.casefold()], **fields))
+        if overruns:
+            raise ReplyError(
+                "; ".join(overruns)
+                + ". Cut each of these down to its core concept; don't just compress the wording"
             )
         if not pitches:
             raise ReplyError("no pitches")
@@ -175,6 +185,11 @@ def read_prompt(frame: Frame, keywords: list[str]) -> str:
 
 
 def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: list[Option]) -> str:
+    limits = frame.pitch_limits
+
+    def cap(key: str) -> str:
+        return f" At most {limits[key]} words." if key in limits else ""
+
     return (
         f"{frame.subject}\n{frame.presentation}\n\n"
         f"Notes on this image:\n{reading.as_notes()}\n"
@@ -184,11 +199,18 @@ def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: 
         "payload below. A payload is what the reader gets out of the story.\n"
         f"{_bullets(payloads)}\n\n"
         "Each pitch is a JSON object:\n"
-        '- "payload": the name of the payload it was written for\n'
-        '- "premise": the premise, in one sentence\n'
-        '- "anchor": the image detail or keyword intersection the premise grows from\n'
-        '- "turn": one sentence stating what the reader walks away with: an '
-        "event, a revelation, or an idea. Not a mood, an atmosphere or a description.\n\n"
+        '- "payload": the name of the payload it was written for.\n'
+        '- "premise": the core concept, the one thing the story is built on.'
+        f"{cap('premise')}\n"
+        '- "anchor": the image detail or keyword intersection the premise grows '
+        f"from, named plainly.{cap('anchor')}\n"
+        '- "turn": what the reader walks away with: an event, a revelation, or '
+        f"an idea. Not a mood, an atmosphere or a description.{cap('turn')}\n\n"
+        "A pitch is a concept, not a draft. Keep only what the hook needs to "
+        "work: no setting, no names, no sensory texture, no backstory, no "
+        "second idea. The writer adds texture later. If a detail could be "
+        "removed and the hook would still land, remove it. The word caps are "
+        "counted, and a pitch over its cap is rejected.\n\n"
         "What makes a good pitch:\n"
         "- The turn is the point. If you can't state a turn that would make a "
         "reader sit up, the premise isn't ready.\n"
@@ -199,8 +221,7 @@ def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: 
         "image unchanged, it isn't anchored.\n"
         "- The story need not be about this room or its books. It can be about "
         "anyone or anything, as long as it grows out of the image.\n"
-        "- A reader grasps the premise in one pass, without a pile of invented "
-        "detail to set it up.\n"
+        "- A reader grasps the premise in one pass.\n"
         "- The pitches differ from each other in subject and in shape, not just in payload.\n\n"
         'Reply with only a JSON object: {"pitches": [...]}.'
     )
@@ -209,7 +230,11 @@ def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: 
 def write_prompt(frame: Frame, keywords: list[str], reading: Reading, pitch: Pitch, form: Option) -> str:
     rules = [
         "The turn lands within the first two sentences. What follows builds on it; nothing delays it.",
-        "Every sentence serves the turn. Cut texture that doesn't.",
+        "Keep the story light to read. A passing detail is welcome when it costs "
+        "the reader nothing: an unexplained name that hints at a larger world, "
+        "an image that adds rhythm. What to avoid is density: a reader should "
+        "never have to hold several new particulars at once to follow the turn. "
+        "When a sentence stacks up details, keep the one that matters most and cut the rest.",
         frame.voice,
         "Don't describe the image. It is shown beside the story.",
         f"The image was generated from the keywords {', '.join(keywords)}. Take tone "
@@ -282,7 +307,8 @@ class Engine:
         reading = self.read(subject, image, keywords, model)
         payloads = draw(self.frame.payloads, self.frame.pitch_count, self.rng)
         prompt = pitch_prompt(self.frame, keywords, reading, payloads)
-        pitches, raws = llm.ask_json(image, prompt, model, _pitch_validator(self.frame.payloads))
+        validate = _pitch_validator(self.frame.payloads, self.frame.pitch_limits)
+        pitches, raws = llm.ask_json(image, prompt, model, validate, retries=2)
         run = new_run_id()
         self.trace.append(
             subject,

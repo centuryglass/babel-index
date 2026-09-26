@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Callable
+from typing import Callable, TypeVar
 
 from tag.describe_image import converse_about_image, converse_text
+
+T = TypeVar("T")
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
@@ -44,9 +46,9 @@ def ask_json(
     image: str | None,
     prompt: str,
     model: str,
-    validate: Callable[[object], object],
+    validate: Callable[[object], T],
     retries: int = 1,
-) -> tuple[object, list[str]]:
+) -> tuple[T, list[str]]:
     """Ask for JSON and return ``(validate(parsed), raw_replies)``.
 
     ``validate`` returns the cleaned value or raises ``ReplyError``. On a
