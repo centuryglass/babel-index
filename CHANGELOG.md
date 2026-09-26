@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.8.0...babel-index-v1.9.0) (2026-09-26)
+
+
+### Features
+
+* add a 27th sample room rendered entirely in code ([#381](https://github.com/centuryglass/babel-index/issues/381)) ([5436888](https://github.com/centuryglass/babel-index/commit/543688825bd48df4624e2503e1803d347217b816))
+
 ## [1.8.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.7.0...babel-index-v1.8.0) (2026-09-25)
 
 
