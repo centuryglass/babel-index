@@ -26,7 +26,8 @@
  * - `alt` describes the picture for a reader who cannot see it. It is written
  *   offline beside the story, never at runtime, so the map carries no model
  *   dependency. Without one, `describeRoom`'s `picture` is null and the image
- *   gets an empty `alt`.
+ *   gets an empty `alt`. Nothing on screen shows that lapse, so the server
+ *   warns at startup about every room lacking one (`roomContent.ts`).
  */
 
 /** One keyword, as the generator writes it. */

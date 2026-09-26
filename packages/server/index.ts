@@ -188,9 +188,9 @@ if (manifest.metadata) {
   if (matched === 0) logger.warn('none of the sidecar entries matched a room - are the keys the image filenames?');
 }
 
-// The sidecar is read here so roomContent.ts's duplicate-permalink warning
-// lands in the startup log, beside the rest of what this corpus turned out to
-// be. The catalog routes share this one memoized load.
+// The sidecar is read here so roomContent.ts's curation warnings land in the
+// startup log, beside the rest of what this corpus turned out to be. The
+// catalog routes share this one memoized load.
 await loadRoomContent(manifest, imagesDir);
 
 // The text tower is optional - app.ts's `hasTextModel` says why. Without it
