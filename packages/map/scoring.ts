@@ -1,60 +1,26 @@
 /**
- * Text scoring for search: keywords and story against a query.
+ * Text scoring for search, and the blend that ranks the corpus by it and CLIP.
  *
- * Separate from `ordering.ts` because it is the only meaty string code in the
- * package - folding, tokenising, stopwords. The blend that combines these
- * with CLIP lives here too, because the normalisation its weights depend on
- * is defined in this file.
+ * The rules this implements are docs/search_rules.md; its "Overview: one
+ * evaluation, two questions" is the design. Three invariants the code below
+ * relies on:
  *
- * ### Why every signal is normalised before it is weighted
+ * - One sort, not tiers. Every room is ranked by one weighted sum, and each
+ *   ordering rule holds because the weights make its inequality true.
+ * - Every signal is normalised before it is weighted. Partial and story
+ *   readings are ratios in [0, 1], and `tagExact` is a count of exact terms.
+ *   A CLIP cosine clusters in a narrow band on this corpus, so the CLIP term
+ *   is min-maxed across the corpus for each query. The weights are
+ *   `config.search.weights`.
+ * - Ranking is relative; strength is absolute. Min-max puts some room at 1
+ *   for any query, nonsense included, so `matchStrength` reads each signal's
+ *   absolute form, CLIP's raw cosine among them. That is why
+ *   `embeddingScores` dequantises.
  *
- * The four signals are not on the same scale. Keyword, title and story scores
- * are ratios and land in [0, 1] by construction. A CLIP cosine is nominally
- * [-1, 1], but on a corpus of near-identical library walls the scores for one
- * query cluster into a narrow band - the images differ far less than CLIP's
- * range allows - so no single weight balances it against the other three: large
- * enough to matter and it swamps keyword bonuses, small enough to balance one
- * and it is lost inside its own spread.
- *
- * So the CLIP term is min-max normalised across the corpus *for that query*:
- * one extra pass over an array that has just been scored anyway, after which
- * a weight of 0.25 means "a quarter of what a perfect keyword match is
- * worth". See `packages/config` for the weights themselves.
- *
- * ### One sort, not tiers
- *
- * Everything is ranked by the blended score. Bucketing - exact matches first,
- * then CLIP within the remainder - would let a room with one weak partial
- * keyword beat a room CLIP is certain about, and would splice a few results
- * onto the front of an unchanged order instead of rearranging the whole
- * library, best in the middle and worst at the edge.
- *
- * ### Ranking is relative; strength is not
- *
- * The blend answers "which room is most like the query". The map's density
- * gradient (`ordering.ts`) asks a different question - "how good is this
- * room's match, on its own terms" - and the blended score cannot answer it:
- * min-max normalisation destroys the very information required, since some
- * room always scores 1 whether the query was `art nouveau` or `cghjj`.
- * Strength is therefore computed from the *absolute* form of each signal,
- * alongside the ranking and from the same pass:
- *
- *   - keyword and story readings are already absolute. An exact keyword match
- *     is 1 because it is a match, not because it beat the corpus.
- *   - CLIP contributes its raw cosine against a pair of thresholds. This is
- *     the only place the raw number is used rather than the normalised one,
- *     and the reason `embeddingScores` dequantises: a nonsense string still
- *     produces a valid text vector, and what marks it as nonsense is that its
- *     cosine against every image is low in absolute terms.
- *
- * The thresholds want calibrating against a real corpus, which is why they
- * live in config (`search.density`).
- *
- * No DOM. Two imports: the dot products from `ordering.ts` so they have one
- * implementation, and a lemmatizer. `wink-lemmatizer` looks a word up per
- * part of speech rather than collapsing by suffix like a stemmer would; a
- * suffix-collapsing stem folds `animation` and `animal` together, which is a
- * false positive. See `lemmatise` for the lookup order.
+ * No DOM. Imports: `ordering.ts`'s dot products, `any-ascii` for `fold`, and
+ * `wink-lemmatizer`. The lemmatizer looks a word up per part of speech; a
+ * suffix-collapsing stemmer would fold `animation` and `animal` together.
+ * See `lemmatise` for the lookup order.
  */
 // Default import only: wink-lemmatizer is CommonJS, and Node's ESM interop
 // does not statically discover its named exports.
@@ -266,23 +232,6 @@ export function parseQuery(raw: unknown): ParsedQuery {
 }
 
 /**
- * How one term matches a room's keywords - exact, partial, or neither - as
- * one classification, whether the term is a single word or a quoted phrase.
- *
- * The one substring rule every tag and title match is read through: a term
- * matches a keyword exactly when it equals it, partially by the fraction of
- * the keyword it covers. A quoted phrase is tested as its whole `folded`
- * text against each keyword, the same way an unquoted single-word term
- * already is - and so is the whole query, which `rankHybrid` passes here as
- * one synthetic term (docs/search_rules.md "Tag matching"). So "quoting an unquoted-equivalent single word changes nothing"
- * (docs/search_rules.md, "Quoted phrases") holds by construction - the two
- * cases share this one code path.
- *
- * @param keywords folded room keywords
- * @returns `partial` is the best substring fraction found, 0 when there is no
- *   match at all (exact implies `partial` is meaningless and left at 0)
- */
-/**
  * The terms the tag and title rules classify for one query, and the
  * whole-query reading that sits beside them.
  *
@@ -316,6 +265,20 @@ export function tagTermsOf(
   return { terms, whole };
 }
 
+/**
+ * How one term matches a room's keywords: exact, partial, or neither.
+ *
+ * The one substring rule every tag and title match is read through. A term
+ * matches a keyword exactly when it equals it, and partially by the fraction
+ * of the keyword it covers. A term is tested as its whole `folded` text,
+ * whether it is one word, a quoted phrase, or the whole-query term
+ * `rankHybrid` builds (docs/search_rules.md "Tag matching"). Quoting a single
+ * word therefore changes nothing (docs/search_rules.md "Quoted phrases").
+ *
+ * @param keywords folded room keywords
+ * @returns `partial` is the best substring fraction found, 0 when there is no
+ *   match at all (exact implies `partial` is meaningless and left at 0)
+ */
 export function classifyTagTerm(
   term: Term | null | undefined,
   keywords: string[] | null | undefined
@@ -331,22 +294,21 @@ export function classifyTagTerm(
   return { exact: false, partial };
 }
 
-/**
- * Fold and tokenise, but keep each surviving token's [start, end) span into
- * the folded text rather than throwing position away.
- *
- * `tokenise()` is `fold(text).split(...)`, which is enough for a bag of words
- * but not for "how many characters does this run of the story span" - the
- * question `storyLongChars` (docs/search_rules.md "Story matching") asks.
- * Walking the same word-boundary regex `storyMatchRanges` already uses keeps
- * this in agreement with what counts as a word everywhere else in the file.
- */
+/** One token from `tokeniseWithPositions`, with its [start, end) span into the folded text. */
 interface WordSpan {
   word: string;
   start: number;
   end: number;
 }
 
+/**
+ * Fold and tokenise, keeping each surviving token's span into the folded text.
+ *
+ * `storyLongChars` (docs/search_rules.md "Story matching") needs how many
+ * characters a run of story words spans, which `tokenise`'s bag of words
+ * cannot give. It walks the same word-boundary regex as `storyMatchRanges`,
+ * so the two agree on what counts as a word.
+ */
 function tokeniseWithPositions(text: unknown, { minLength = 3, stopwords = true }: TokeniseOpts = {}): WordSpan[] {
   const folded = fold(text);
   const out: WordSpan[] = [];
@@ -405,7 +367,7 @@ export function buildSearchIndex(
       // "art nouveau" rather than the 0.45 its two tokens would average to.
       keywords: (entry.keywords ?? []).map((k) => fold(k.text)),
       // Folded, same as a keyword - one string rather than a list, since a
-      // room has at most one title. See "Title matching".
+      // room has at most one title (docs/search_rules.md "Title matching").
       title: entry.title ? fold(entry.title) : null,
       story: { sequence, set: new Set(sequence.map((t) => t.lemma)) },
     };
@@ -656,19 +618,22 @@ export function normaliseScores(scores: ArrayLike<number>): Float32Array {
 const clamp01 = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
 /**
- * Formula constants that are not user-tunable weights - unlike
- * `config.search.weights`, moving these means re-checking every cross-signal
- * inequality in docs/search_rules.md ("Balancing signals against each other")
- * they were chosen to satisfy, not retuning by feel.
+ * How much summed partial-tag fraction fills the `P` budget.
  *
- * `TAG_PARTIAL_SATURATION` caps how much a query can inflate `tagPartialSum`
- * by adding more partially-matching terms - without it, a long enough query
- * could add up to more than the `P` budget the exact-tag margin (`E > P + S +
- * L + C`) assumes. `STORY_LONG_RANGE` is the char-length band the "long story
- * match" bonus ramps across: below `low` (roughly one or two words) it is
- * zero, and by `high` (roughly a full clause) it has saturated.
+ * A formula constant, not a weight: changing it means re-checking every
+ * inequality in docs/search_rules.md "Balancing signals against each other".
+ * It caps how far extra partially-matching terms can inflate `tagPartialSum`,
+ * which keeps the exact-tag margin `E > P + Pt + S + L + C` true for a query
+ * of any length.
  */
 export const TAG_PARTIAL_SATURATION = 2;
+
+/**
+ * The character band the long-story bonus ramps across: zero below `low`
+ * (about one or two words), saturated at `high` (about a full clause).
+ *
+ * A formula constant, not a weight; see `TAG_PARTIAL_SATURATION`.
+ */
 export const STORY_LONG_RANGE = { low: 16, high: 40 };
 
 /** The saturating curve `storyLongChars` feeds, shared by the ranking bonus and strength's `S` term. */
@@ -736,7 +701,7 @@ export function strengthPercent(strength: number): number {
  * evidence rather than anything normalised across the corpus. This is the
  * number `ordering.ts`'s density gradient reads, not the ranking score:
  *
- *   - `K` (tags): the room's BEST reading over the query's terms - 1 for an
+ *   - `K` (tags): the room's best reading over the query's terms - 1 for an
  *     exact match, the substring fraction for a partial one, 0 for none.
  *     Computed by the caller, since this and ranking read the same per-term
  *     classification. A maximum rather than a mean over the terms: a room
@@ -785,7 +750,7 @@ interface ScoredRow {
   tagPartialCount: number;
   /** 0 or 1 - see docs/search_rules.md "Title matching" */
   titleExact: number;
-  /** MAX substring fraction over every term, not a sum - there is only one title */
+  /** the largest substring fraction over every term, not a sum - there is only one title */
   titlePartial: number;
   storyRatio: number;
   storyLongChars: number;
@@ -841,43 +806,7 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
   return { rank, ties };
 }
 
-/**
- * Rank the whole corpus by the blend of whatever signals are available.
- *
- * The weighted sum is the seven constants docs/search_rules.md "Balancing
- * signals against each other" names: `E` per exact tag, `P` for the
- * saturating partial-tag budget, `T` for an exact title match, `Pt` for the
- * partial-title budget, `S` for a short story match, `L` for the saturating
- * long-story bonus, `C` for CLIP (`clipNorm * clipStrengthGate` - relative
- * rank position times absolute confidence, so a query CLIP has no opinion
- * about cannot look confident just because it produced *some* top result).
- * Missing signals are omitted rather than substituted: no embedding blob
- * means the ranking is text-only and honest about it, and no metadata means
- * it is CLIP-only. Both are real rankings. Only the case where neither
- * exists needs the server's stub.
- *
- * @param opts.query          the raw query string
- * @param opts.count          rooms in the corpus
- * @param opts.weights        `config.search.weights`
- * @param opts.embeddings the blob, roomCount * dim row-major
- * @param opts.vector the query vector, L2-normalised
- * @param opts.clipStrength raw-cosine anchors for CLIP's share of strength
- * @returns `strength` is parallel to `order`, i.e. by rank, which is how the map's
- *   density gradient wants it - and `breakdown` follows the same convention,
- *   every array indexed by rank rather than by room id.
- *
- *   `breakdown` is what the catalog shows under a room and what
- *   `explainRanking` formats. It is returned always rather than behind a
- *   flag: a second pass that recomputed these for display could disagree
- *   with the one that sorted, and a scoring explanation that does not match
- *   the scoring is worse than none.
- *
- *   `ranks`/`ties` are independent per-axis sorts of `breakdown`'s own
- *   numbers (tag: `tagExact`/`tagPartialSum`; title: `titleExact`/
- *   `titlePartial`; story: `story`/`storyLongChars`; clip: `cosine`), each
- *   parallel to `order` like `breakdown` - see `rankAxis` for what the
- *   per-axis rank and tie counts mean.
- */
+/** `rankHybrid`'s options, documented on the function. */
 export interface RankHybridOpts {
   query: string;
   count: number;
@@ -892,6 +821,40 @@ export interface RankHybridOpts {
   clipStrength?: ClipBand;
 }
 
+/**
+ * Rank the whole corpus by the blend of whatever signals are available.
+ *
+ * The weighted sum is the seven constants docs/search_rules.md "Balancing
+ * signals against each other" names: `E` per exact tag, `P` for the
+ * saturating partial-tag budget, `T` for an exact title match, `Pt` for the
+ * partial-title budget, `S` for a short story match, `L` for the saturating
+ * long-story bonus, `C` for CLIP (`clipNorm * clipStrengthGate` - relative
+ * rank position times absolute confidence, so a query CLIP has no opinion
+ * about cannot look confident just because it produced *some* top result).
+ * A missing signal is omitted, not substituted: no embedding blob gives a
+ * text-only ranking, and no metadata a CLIP-only one. Only a corpus with
+ * neither needs the server's stub.
+ *
+ * @param opts.query          the raw query string
+ * @param opts.count          rooms in the corpus
+ * @param opts.weights        `config.search.weights`
+ * @param opts.embeddings the blob, roomCount * dim row-major
+ * @param opts.vector the query vector, L2-normalised
+ * @param opts.clipStrength raw-cosine anchors for CLIP's share of strength
+ * @returns `strength` is parallel to `order`, i.e. by rank, which is how the map's
+ *   density gradient wants it - and `breakdown` follows the same convention,
+ *   every array indexed by rank rather than by room id.
+ *
+ *   `breakdown` is what the catalog shows under a room and what
+ *   `explainRanking` formats. It is always returned from the pass that
+ *   sorted, so the explanation cannot disagree with the ranking.
+ *
+ *   `ranks`/`ties` are independent per-axis sorts of `breakdown`'s own
+ *   numbers (tag: `tagExact`/`tagPartialSum`; title: `titleExact`/
+ *   `titlePartial`; story: `story`/`storyLongChars`; clip: `cosine`), each
+ *   parallel to `order` like `breakdown` - see `rankAxis` for what the
+ *   per-axis rank and tie counts mean.
+ */
 export function rankHybrid({
   query,
   count,
@@ -916,7 +879,8 @@ export function rankHybrid({
 
   // CLIP twice over, from one pass of dot products: raw cosines for
   // strength, and the same column min-maxed for the blend. Two questions,
-  // two scalings - see *Ranking is relative; strength is not* above.
+  // two scalings - see this file's header, "Ranking is relative; strength is
+  // absolute".
   let cosines = null;
   let clipNormAll = null;
   if (embeddings && dim > 0 && scale > 0 && vector) {
@@ -1112,6 +1076,16 @@ export function rankHybrid({
 /** `explainRanking`'s four axes, in the order shown when every one contributed. */
 const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 'title match', story: 'story content' };
 
+/** `explainRanking`'s options, documented on the function. */
+export interface ExplainRankingOpts {
+  breakdown: ScoreBreakdown;
+  strength: Float32Array;
+  ranks: SignalRanks;
+  ties: SignalRanks;
+  weights: Config['search']['weights'];
+  total: number;
+}
+
 /**
  * One room's ranking, as a reader reads it rather than as the sum computed
  * it: one composite line ("#4 of 2,048, 73% match strength"), and one line
@@ -1137,15 +1111,6 @@ const CONTRIBUTION_LABELS = { clip: 'image content', tag: 'tag matches', title: 
  * @param opts.total rooms in the corpus (`result.order.length`)
  * @returns `null` when nothing at all matched this room - no tag, no title, no story, no CLIP data.
  */
-export interface ExplainRankingOpts {
-  breakdown: ScoreBreakdown;
-  strength: Float32Array;
-  ranks: SignalRanks;
-  ties: SignalRanks;
-  weights: Config['search']['weights'];
-  total: number;
-}
-
 export function explainRanking(
   rank: number,
   { breakdown, strength, ranks, ties, weights, total }: ExplainRankingOpts

@@ -1,41 +1,32 @@
 /**
  * Room metadata: the stylistic keywords and the short story text that the
- * generator writes alongside each image.
+ * generator writes alongside each image. The file format is docs/corpus.md,
+ * "`metadata.json`".
  *
- * The join is per filename: add, remove or rename images and every surviving
- * entry still lands on its own room. (`embeddings.bin` is keyed by row order
- * instead and must be regenerated when the corpus moves -
- * docs/agents/search.md, "embeddings.bin is keyed by row order".) Joining
- * tolerates a miss and reports how many matched; a room with no entry simply
- * has no keywords, which is what the center room and the generic alternates
- * want anyway.
+ * One implementation joined on both sides: the server (`scan.ts`,
+ * `roomContent.ts`) and the browser (`useCorpus.ts`). No DOM and no runtime
+ * imports, like the rest of this package.
  *
- * ### `keywords` is a fixed shape
+ * The join is per filename, so adding, removing or renaming images leaves
+ * every surviving entry on its room. `embeddings.bin` is keyed by row order
+ * instead (docs/agents/search.md, "embeddings.bin is keyed by row order").
+ * Joining tolerates a miss and reports how many matched. A room with no entry
+ * has no keywords, which suits the center room and the generic alternates.
  *
- * Every keyword is a `{text, type}` record - the generator always writes it
- * that way. The count is not enforced: "three keywords" is a fact about how
- * the corpus is generated, not a constraint the map needs, and rejecting a
- * room with two would lose real data to a rule nothing here depends on.
+ * Field rules:
  *
- * ### `title` and `alt` are expected but not required
- *
- * Every room in the live corpus carries both. The code still tolerates
- * either missing, because a corpus built by hand or mid-curation may lack
- * them: absence normalises to null and every consumer falls back.
- *
+ * - `keywords`: every keyword is a `{text, type}` record. The count is not
+ *   enforced, since nothing in the map depends on it.
+ * - `title` and `alt` are expected but not required. Every room in the live
+ *   corpus carries both, but a corpus built by hand or mid-curation may lack
+ *   either, so absence normalises to null and every consumer falls back.
  * - `title` is the room's name wherever a reader is told which room they're
- *   looking at (`roomTitle`), and the sort key of the catalog's idle
- *   alphabetized order (`alphabeticalOrder`). Without one, both fall back to
- *   the id or filename.
+ *   looking at (`roomTitle`), and the catalog's alphabetical sort key
+ *   (`alphabeticalOrder`). Without one, both fall back to the id or filename.
  * - `alt` describes the picture for a reader who cannot see it. It is written
- *   offline, beside the story - never at runtime, which is why the map
- *   carries no model dependency. Without one, `describeRoom`'s `picture` is
- *   null and the image gets an empty `alt`.
- *
- * No DOM and no runtime imports, like the rest of this package: the server
- * joins it (`scan.ts`, `roomContent.ts`) and the browser joins it
- * (`useCorpus.ts`), and one implementation with both consumers is what keeps
- * them from drifting.
+ *   offline beside the story, never at runtime, so the map carries no model
+ *   dependency. Without one, `describeRoom`'s `picture` is null and the image
+ *   gets an empty `alt`.
  */
 
 /** One keyword, as the generator writes it. */
