@@ -15,22 +15,19 @@
  *     supposed to run in lockstep (see docs/agents/rendering.md, "The
  *     WebGL renderer").
  *   - A pixel diff is the loose guard. GL's LINEAR sampling and the browser's
- *     2D image smoothing genuinely differ at tile edges and on text, so an
+ *     2D image smoothing differ at tile edges and on text, so an
  *     exact match is not the bar; the bar is "these are the same picture, not
  *     two different ones" - it catches a renderer drawing nothing, the wrong
  *     tile, or a missing badge. Every scene writes canvas2d/webgl/diff PNGs to
  *     `packages/web/e2e/artifacts/` so a human can read what the number meant.
  *
- * Not part of `npm test` OR `npm run test:e2e` - the `.parity.ts` suffix
- * matches neither glob, so it never gates a pull request. It boots two
- * servers and two browsers and is slower than either of those suites, which
- * is why `deploy.yml` is the only workflow that runs it: gating every PR
- * was ruled out as too slow for how low a priority full parity is, but
- * gating a deploy - the one place a broken renderer would actually reach
- * readers - costs only the minute or so a deploy already budgets for.
- * Headless Chromium's software WebGL2 (SwiftShader) is enough to run it;
- * no real GPU is required, on a CI runner or otherwise. Run it by hand
- * after touching either draw loop, same as before:
+ * A deploy gate, not a merge gate (see docs/agents/testing.md, "`npm run
+ * test:parity` is a deploy gate, not a merge gate"): the `.parity.ts` suffix
+ * matches neither the `npm test` nor the `npm run test:e2e` glob, and
+ * `deploy.yml` is the only workflow that runs it. It boots two servers and
+ * two browsers. Headless Chromium's software WebGL2 (SwiftShader) is enough
+ * to run it; no real GPU is required. Run it by hand after touching either
+ * draw loop:
  *
  *   npx playwright install chromium   # once
  *   npm run test:parity
@@ -51,18 +48,18 @@ import {
 type BabelDebug = { __babelDebug: { actions: { zoom(f: number): void; search(q: string): void } } };
 
 /**
- * The HUD fields that are a per-frame draw-loop DECISION rather than a raw
+ * The HUD fields that are a per-frame draw-loop decision rather than a raw
  * pixel, so they must match exactly between the two renderers at the same
  * camera: how many cells are in view, how many were drawn vs substituted from a
  * coarser level vs left blank, which pyramid level and tile size that implies,
  * and the search's clustered/blocked counts. `favHit` is camera/DPR geometry,
  * identical by construction, and `x`/`y` are asserted separately (exact).
  *
- * Deliberately NOT here: `cached` and `over`. Both count the shared decoded-tile
- * cache's occupancy (`tiles.ts`), which depends on decode and prefetch TIMING,
- * and each renderer has its own warm path (`gl/warm.ts` vs the Canvas2D loop) -
- * so they drift by a tile or two frame-to-frame without either renderer being
- * wrong. Asserting them made this suite intermittently fail on an off-by-one.
+ * `cached` and `over` are left out. Both count the shared decoded-tile cache's
+ * occupancy (`tiles.ts`), which depends on decode and prefetch timing, and
+ * each renderer has its own warm path (`gl/warm.ts` vs the Canvas2D loop), so
+ * they drift by a tile or two frame-to-frame without either renderer being
+ * wrong.
  */
 const PARITY_FIELDS = [
   'cells', 'drawn', 'level', 'tilePx', 'substituted', 'blank',
@@ -105,8 +102,8 @@ async function stableCanvasPng(page, timeoutMs = 15_000) {
     prev = cur;
   }
   // Never settled - hand back the last frame anyway so the diff still runs and
-  // the artifacts still land; a genuinely never-settling canvas is itself a
-  // finding the pixel bound will surface rather than hide behind a timeout.
+  // the artifacts still land; a canvas that never settles is itself a
+  // finding the pixel bound surfaces.
   return prev.toString('base64');
 }
 
@@ -200,7 +197,7 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
 
   /**
    * Bring both renderers to the same camera, let each canvas settle to a fixed
-   * frame, THEN read each HUD (so `substituted`/`drawn`/`blank` reflect the
+   * frame, then read each HUD (so `substituted`/`drawn`/`blank` reflect the
    * converged frame on both, not a moment mid-warm), assert the strict parity,
    * and capture + diff + save artifacts. Returns the diff so the caller can
    * assert the loose pixel bound with a scene-appropriate threshold.
@@ -232,7 +229,7 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
     return diff;
   }
 
-  // No far-zoom "overview" scene, on purpose. At the return-to-center view the
+  // No far-zoom "overview" scene. At the return-to-center view the
   // whole map's room tiles exceed the decoded-tile cache budget, so each of the
   // two independently-warmed sessions settles with a different subset of tiles
   // at a different pyramid level (the aggregate `substituted` count can
@@ -257,8 +254,8 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
       return landed(s.page, s.flightMs);
     });
     // Spine text and badge edges push this scene's diff up (meanAbs ~1.2,
-    // strongFraction ~1% observed) - the highest of the three, so a touch more
-    // headroom than the flatter overview/searched scenes.
+    // strongFraction ~1% observed), so its bounds sit above the flatter
+    // searched scene's.
     assert.ok(diff.meanAbs < 10, `center-zoom meanAbs too high: ${diff.meanAbs}`);
     assert.ok(diff.strongFraction < 0.12, `center-zoom strongFraction too high: ${diff.strongFraction}`);
   });

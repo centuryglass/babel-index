@@ -151,9 +151,8 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
 
   test('a rearrangement says what it did and what is now under the cursor [SR-47]', async () => {
     const { page } = session;
-    // Standing still while the library reorders around you and hearing
-    // nothing is not an accessible rearrangement, whatever the animation
-    // does: the new occupant must be announced.
+    // A reader standing still while the library reorders must hear the new
+    // occupant announced, whatever the animation does.
     const live = page.locator('[role=status]');
     await page.locator('button.search-trigger').click();
     await landed(page, session.flightMs);
@@ -167,9 +166,8 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     );
     const said = (await live.textContent()) ?? '';
     assert.match(said, /\d+ rooms on the map/, `no size in the announcement: ${said}`);
-    // And where the reader now stands. An animated rearrangement parks the
-    // camera on the center, so that is the honest answer here rather than
-    // the cell the search was typed from.
+    // And the cell under the cursor. A rearrangement leaves the camera where
+    // the search was typed from, so any real cell's description passes.
     assert.match(
       said,
       /the center of the library|Room \d+|a library wall|the far field/,
@@ -182,13 +180,12 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     await settled(page);
   });
 
-  test('the search badge shows preparing before the fetch resolves, and releases it once a reduced-motion change lands with nothing to animate [#235]', async () => {
+  test('the search badge shows preparing before the fetch resolves, and releases it once a reduced-motion change lands with nothing to animate', async () => {
     const { page } = session;
-    // Reduced motion means `startRearrangement` declines before ever
-    // claiming the indicator (see `useRearrangement.ts`'s early
-    // `prefersReducedMotion()` return) - the case #235's
-    // `cancelSearchPreload` exists for: without it, this search would leave
-    // the badge spinning forever.
+    // Reduced motion means `startRearrangement` declines before claiming the
+    // indicator (its early `prefersReducedMotion()` return in
+    // `useRearrangement.ts`), so only `cancelSearchPreload` stops this
+    // search's badge spinning.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     let release;
     const held = new Promise((r) => (release = r));
@@ -204,9 +201,8 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       await page.locator('input[type=search]').fill('clockwork');
       await page.locator('input[type=search]').press('Enter');
 
-      // The badge is already spinning while the fetch is still held - the
-      // whole point of #235: feedback starts at submission, not once the
-      // ranking lands.
+      // The badge spins while the fetch is still held: feedback starts at
+      // submission, not once the ranking lands.
       await waitFor(preparing, 2000, 'the search badge never showed preparing while the fetch was in flight');
 
       release();

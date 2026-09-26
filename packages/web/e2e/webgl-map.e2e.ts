@@ -6,8 +6,7 @@
  * `fakeGLContext()` that records calls rather than running them, so a real
  * driver rejecting one of them surfaces nowhere in `npm test`.
  * docs/agents/rendering.md's "The WebGL renderer" carries the standing
- * invariants, and "Testing and CI" explains why every spec here names its
- * renderer rather than inheriting the production default.
+ * invariants; `openLibrary`'s `webgl` option pins the renderer.
  *
  * `openLibrary({ webgl: true })` puts a bare `?webgl` on the url, so
  * `webglFlag.ts`'s `WEBGL` is true before `main.tsx` mounts. Every assertion

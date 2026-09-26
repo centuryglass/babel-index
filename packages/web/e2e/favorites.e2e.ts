@@ -2,15 +2,15 @@
  * The browser smoke test for favorites: the star toggle, the global count, and
  * the sliding-tile resort that follows one while sorted by favorites.
  *
- * `openLibrary({ favorites: true })` is what makes this file different from
- * the rest of the suite: every other file boots the server with no store at
- * all, so `manifest.favorites` is null there and no favorite control renders.
- * This is the one place that flag is on. See `map-gestures.e2e.ts` for the
- * shared header comment on why and how, including how to run the suite.
+ * Boots with `openLibrary({ favorites: true })`, which the rest of the suite
+ * omits (see `openLibrary`). See `map-gestures.e2e.ts` for the shared header
+ * comment, including how to run the suite.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEARCH_TIMEOUT, closeLibrary, fingerprint, landed, openLibrary, settled, waitFor } from './support.ts';
+import {
+  SEARCH_TIMEOUT, closeLibrary, fingerprint, landed, openLibrary, recentre, settled, waitFor,
+} from './support.ts';
 
 describe('the library, in a browser: favorites', { concurrency: false }, () => {
   let session;
@@ -36,35 +36,26 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       await ratio.press('End');
       await settled(page);
 
-      // Sorting by favorites is a rearrangement like any other, so it gets the
-      // same zoom-out-in-place `startRearrangement` gives every rearrangement
-      // (`useRearrangement.ts`) - the page is still centered on the shelf at
-      // this point, so widening to the default zoom is a camera move here. Let
-      // it land before panning away, otherwise a flaky "did the camera move"
-      // assertion below could be catching this flight rather than the one
-      // under test. It eases back to whatever zoom it was called from (here,
-      // the page-load opening view - see `useRearrangement.ts`'s
-      // `returnZoom`), so explicitly return to the "center" button's wider
-      // view afterwards: the opening view is zoomed into just the center
-      // shelf, too tight for a real room to be under the fixed point used
-      // below (`map-gestures.e2e.ts` relies on the same "center" button for
-      // the same reason).
       // The "sort by my favorites" switch is diegetic, painted onto the
       // center tile with `pointer-events: none` (see docs/agents/map.md's "The
       // center room's controls") - a real click reaches it through the canvas's
       // own hit testing, not a native pointer event on the button itself.
       // Activating it the same way `shelf.e2e.ts` activates a book - focus the
-      // element, then Enter - exercises the keyboard/screen-reader entry point
-      // instead, which is exactly as real a way to reach it.
+      // element, then Enter - exercises the keyboard/screen-reader entry point,
+      // an equally real way to reach it.
       const mineToggle = page.locator('[data-control="mine"]');
       await mineToggle.waitFor({ state: 'visible', timeout: 5000 });
       await page.evaluate(() => {
         (document.querySelector('[data-control="mine"]') as HTMLElement | null)?.focus();
       });
       await page.keyboard.press('Enter');
-      await landed(page, flightMs);
-      await page.locator('button', { hasText: 'center' }).click();
-      await landed(page, flightMs);
+      // Sorting by favorites is a rearrangement, so `startRearrangement`
+      // (`useRearrangement.ts`) zooms out in place and eases back to the zoom
+      // it was called from, here the page-load opening view. `recentre` waits
+      // that out, then moves to the "center" button's wider view: the opening
+      // view is too tight for a real room to be under the fixed point used
+      // below.
+      await recentre(page, flightMs);
 
       // Pan off-center. At the parked center a stray fly-home would land back
       // where it started, which would make "the camera did not move" true for
@@ -102,7 +93,7 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       // there is no flight to wait out - a regression would be a camera
       // flight. `landed`, not `settled`: `settled` only waits out the
       // tile-slide, not a flight still easing toward its target - reading
-      // straight after `settled` can catch an early frame of exactly that
+      // straight after `settled` can catch an early frame of that
       // flight, whose eased position rounds to the pre-toggle one by
       // coincidence. `landed` waits for two consecutive readings to agree,
       // which a still-moving camera cannot do.

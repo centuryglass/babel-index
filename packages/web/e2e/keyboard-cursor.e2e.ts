@@ -5,7 +5,7 @@
  * comment on why and how, including how to run the suite.
  *
  * `role="application"` on the canvas turns off a screen reader's browse-mode
- * reading for exactly this element, which is what lets arrow keys reach the
+ * reading for this element, which is what lets arrow keys reach the
  * page at all rather than being consumed by the reader's own navigation. None
  * of that can be asserted from JSX - only a real browser resolves whether a
  * role actually changes what a key press does.
@@ -39,9 +39,8 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
     await page.locator('canvas').focus();
     // Home for the same reason as the application-region test in
-    // `accessibility.e2e.ts`: the cursor follows a rearrangement now, not
-    // only a keypress, so where a fresh page load leaves it is not a
-    // precondition to lean on.
+    // `accessibility.e2e.ts`: the cursor follows a rearrangement as well as a
+    // keypress, so where a fresh page load leaves it is not a precondition.
     await page.keyboard.press('Home');
     await page.waitForTimeout(session.flightMs + 200);
     await assert.doesNotReject(
@@ -76,7 +75,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       'an arrow press must announce something about the new cursor cell'
     );
 
-    // Ctrl+arrow's whole point: whatever it lands on, if it finds anything at
+    // Ctrl+arrow's contract: whatever it lands on, if it finds anything at
     // all, is a real room - never the wallpaper a plain arrow could have just
     // as easily landed on. That is the one thing worth asserting without
     // hard-coding a room id or a step count from the sample corpus, both of
@@ -148,9 +147,9 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await page.keyboard.press('Enter');
     const card = page.locator('.overlay');
     await card.waitFor({ timeout: 5000 });
-    // `.card-id` now leads with the room's title when it has one, so a real
-    // room is confirmed via the dialog's own accessible name (`desc.name`,
-    // `describeRoom`) instead - unaffected by title/filename display order.
+    // Confirm a real room through the dialog's accessible name (`desc.name`,
+    // `describeRoom`); `.card-id`'s visible text leads with the room's title
+    // when it has one.
     assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
 
     await page.keyboard.press('Escape');
@@ -223,12 +222,11 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     }
     // Three, not merely more-than-one: an "instant" arrival still spans two
     // distinct values in a sampling window this wide, because the flight
-    // machinery takes exactly one rAF tick even at 0ms duration to notice it
-    // is already done - `before.x` on the sample that lands before that tick,
-    // `before.x + 1` on every one after. That two-value pattern is what a
-    // broken "always instant" sabotage produces and this test failed to catch
-    // the first time it was written; three or more values is only reachable
-    // by genuinely easing across several frames of `keyboardMoveMs`.
+    // machinery takes one rAF tick even at 0ms duration to notice it is
+    // already done - `before.x` on the sample that lands before that tick,
+    // `before.x + 1` on every one after. A broken "always instant" move
+    // produces that two-value pattern; three or more values is only reachable
+    // by easing across several frames of `keyboardMoveMs`.
     const distinctValues = new Set(samples.map((x) => x.toFixed(3))).size;
     assert.ok(
       distinctValues >= 3,
@@ -550,8 +548,8 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // `role="application"` plus a keyboard is the desktop story, but VoiceOver
     // and TalkBack have nothing that corresponds to "press Enter", so the
     // cursor's content must be reachable without it. Canvas fallback content
-    // is never painted (that is the whole point - it does not duplicate what
-    // is already on screen for sighted users), so a real pointer click cannot
+    // is never painted (it does not duplicate what is already on screen for
+    // sighted users), so a real pointer click cannot
     // reach it; `dispatchEvent` is the stand-in here for how an assistive
     // technology's own activation lands on an element regardless of
     // visibility.

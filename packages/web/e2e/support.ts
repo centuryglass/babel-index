@@ -1,13 +1,12 @@
 /**
- * Shared harness for the browser smoke suite, split across this directory's
- * `*.e2e.ts` files: each file shares one `page` across its own tests (real
- * gesture state, camera position and cache warmth are cheaper to carry
- * forward than to rebuild every test) but not across the suite. Every file
- * calls `openLibrary()` in its own `before` and `closeLibrary()` in its own
- * `after`, so a failure in one file cannot strand state for a file it has
- * nothing to do with. That does mean each file pays its own server boot and
- * browser launch - worth it for the isolation, and `node --test` runs files
- * in parallel processes by default anyway.
+ * Shared harness for the browser smoke suite in this directory's `*.e2e.ts`
+ * files. Each file shares one `page` across its own tests, since gesture
+ * state, camera position and cache warmth are cheaper to carry forward than
+ * to rebuild. No state crosses files: every file calls `openLibrary()` in its
+ * own `before` and `closeLibrary()` in its own `after`, so a failure in one
+ * file cannot strand state for another. Each file pays its own server boot
+ * and browser launch; the npm scripts run files one at a time
+ * (`--test-concurrency=1`).
  *
  * This module is not itself a test file (no `.e2e.ts` suffix, no
  * `describe`/`test`), so `node --test`'s glob never picks it up.
@@ -61,8 +60,8 @@ export async function waitFor(predicate, timeoutMs, message) {
  * Boot the demo server against the sample corpus and open it in a real
  * Chromium tab, `?debug` and all. Returns everything a file's `before` needs:
  * the live `page`/`browser`/`server` handles to close later, `origin` for
- * direct API calls, `flightMs` read off the manifest (see the note on why
- * this is never hard-coded), `roomCount` for the catalog's "every room once"
+ * direct API calls, `flightMs` read off the manifest (see `landed()` for
+ * why it is never hard-coded), `roomCount` for the catalog's "every room once"
  * assertion, and a `consoleErrors` array a file's own "nothing was logged to
  * the console" test reads at the end.
  *
@@ -73,14 +72,13 @@ export async function waitFor(predicate, timeoutMs, message) {
  * favorite control renders anywhere else in the suite - favorites coverage
  * is the flag's opt-in, not a gap to fix elsewhere.
  *
- * `webgl` pins the renderer - `webgl=0` (Canvas2D) or `webgl` (WebGL) is
- * always on the query string, never left to `webglFlag.ts`'s `DEFAULT_WEBGL`
- * (WebGL), because an unpinned suite would silently switch renderers under
- * this suite's 2D-canvas readbacks (`fingerprint`, the blank-tile checks) and
- * break them; pinning keeps every spec's renderer a fact of the test rather
- * than a fact of production. Defaults to Canvas2D because that is what those
- * readbacks need - the GL renderer has its own coverage in
- * `webgl-map.e2e.ts` and `render-parity.parity.ts`.
+ * `webgl` pins the renderer: `webgl=0` (Canvas2D) or `webgl` (WebGL) is
+ * always on the query string, never left to `webglFlag.ts`'s `DEFAULT_WEBGL`.
+ * An unpinned suite would switch renderer with the production default and
+ * break this suite's 2D-canvas readbacks (`fingerprint`, the blank-tile
+ * checks). It defaults to Canvas2D because those readbacks need it; the GL
+ * renderer has its own coverage in `webgl-map.e2e.ts` and
+ * `render-parity.parity.ts`.
  *
  * `extraParams` are appended to the page's query string alongside `?debug` for
  * anything else a spec needs to set before `main.tsx` mounts.
@@ -137,10 +135,8 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
     // events. It does not take the mouse away, so the drag and wheel tests are
     // unaffected - a desktop with a touchscreen is an ordinary machine.
     //
-    // An explicit context rather than `browser.newPage()`, which makes one
-    // implicitly: axe refuses to run against a page whose context it did not
-    // see created, and the accessibility sweeps in this suite are the whole
-    // reason it can claim anything about the parts of the app nobody looks at.
+    // An explicit context, because axe refuses to run against a page whose
+    // context it did not see created, and the accessibility sweeps need axe.
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       hasTouch: true,
@@ -175,9 +171,9 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
 }
 
 /**
- * Tear down a session `openLibrary()` returned. `screenshotName` should be
- * unique per file (e.g. `library-catalog.png`) - files can run as parallel
- * processes, and two of them writing `library.png` at once is a race.
+ * Tear down a session `openLibrary()` returned. `screenshotName` must be
+ * unique per file (e.g. `library-catalog.png`), or one file's failure
+ * screenshot overwrites another's.
  */
 export async function closeLibrary(session, screenshotName) {
   // `session` is undefined when `openLibrary()` itself threw - it already
@@ -202,14 +198,11 @@ export async function hud(page) {
 }
 
 /**
- * The parsing half of `hud`, split out so a caller that already holds a
- * confirmed-non-rearranging read (`settled`, below) can parse that exact
- * string rather than fetching a second, later one. Re-fetching there is a
- * real race, not a hypothetical one: between confirming the text is not
- * "rearranging…" and a fresh read moments later, a slow-resolving search (the
- * first one pays for a cold CLIP model load) can start its own rearrangement
- * in the gap, and the second read lands mid-animation, on text this regex
- * cannot parse at all.
+ * The parsing half of `hud`, so a caller holding a confirmed-non-rearranging
+ * read (`settled`) parses that exact string. A second fetch races: a
+ * slow-resolving search (the first pays for a cold CLIP model load) can
+ * start its rearrangement between the two reads, and the later read lands
+ * mid-animation on text this regex cannot parse.
  */
 export function parseHud(text) {
   // The GL renderer prefixes every HUD line with `[gl] ` (`useMapRendererGL.ts`)
@@ -222,11 +215,10 @@ export function parseHud(text) {
   // budget, `clustered` only when a search's density gradient actually
   // lifted some ranks above the baseline (`layout.gradedCount > 0` -
   // main.tsx), and `anim` only while the center-tile loading indicator is
-  // playing (`loadingAnim.current.activeName()`, both renderers) - all
-  // optional here, but parsed rather than skipped, because a test can land
-  // on a read mid-indicator (a search starts it before its own fetch
-  // resolves - see `useRearrangement.ts`'s `beginSearchPreload`, #235) and
-  // needs a name to assert against rather than a parse failure.
+  // playing (`loadingAnim.current.activeName()`, both renderers). All three
+  // are optional but parsed, because a test can read mid-indicator (a search
+  // starts it before its own fetch resolves - see `useRearrangement.ts`'s
+  // `beginSearchPreload`) and needs a name to assert against.
   const m = body.match(
     /^(\d+) cells · (\d+) drawn · level (\d+) \((\d+)px\) · (\d+) substituted · (\d+) blank · (\d+) cached(?: \(\+(\d+) over budget\))? · zoom (\d+) · x (-?[\d.]+) y (-?[\d.]+) · edge at r=([\d.]+)(?: · (\d+) clustered)?(?: · (\d+) blocked)? · fav hit ([\d.]+)×([\d.]+)px \((touch-padded|mouse)\)(?: · anim (\S+))?$/
   );
@@ -266,22 +258,17 @@ export function fingerprint(page) {
 
 /** The HUD after the next frame, so a just-issued change is reflected. */
 export async function settled(page) {
-  // A rearrangement takes over the HUD while it runs, and reports its own
-  // progress rather than the frame's numbers. Waiting it out is what "settled"
-  // has to mean now: reading mid-slide would be reading a frame of an animation
-  // rather than the state it lands on.
+  // Waits until the HUD is not reporting a rearrangement, which takes over the
+  // HUD with its own progress while it runs.
   //
-  // The loop is the point. A search starts its rearrangement only once the
-  // response has been ranked, so "not rearranging" can be true when it is
-  // checked and false two frames later, and reading between those two is how
-  // this intermittently caught the HUD mid-animation. Re-check after settling
-  // and go round again if one started underneath us.
+  // Re-check after the frame wait and loop if one started: a search starts
+  // its rearrangement only once the response is ranked, so "not rearranging"
+  // can be true when checked and false two frames later.
   const deadline = Date.now() + 30_000;
   for (;;) {
     // The GL renderer's HUD text carries the same `rearranging` body behind
-    // its own `[gl] ` prefix (`useMapRendererGL.ts`) - strip it before the
-    // check, same as `parseHud` does, rather than teaching this predicate a
-    // second "does it start with rearranging" rule.
+    // its own `[gl] ` prefix (`useMapRendererGL.ts`); strip it before the
+    // check, as `parseHud` does.
     await page.waitForFunction(
       () => !document.getElementById('hud')?.textContent?.replace(/^\[gl\] /, '').startsWith('rearranging'),
       null,
@@ -324,19 +311,15 @@ export async function landed(page, flightMs, timeoutMs = 5000) {
 }
 
 /**
- * Click the 'center' button and robustly wait for the camera to actually
- * arrive at the center cell - `main.tsx`'s `recentre` calls `flyTo(0, 0,
- * ...)`, and `cameraAtCell` (`camera.ts`) lands a flight on a cell's
- * CENTER, so the camera the HUD reports ends at world (0.5, 0.5), not
- * (0, 0). A `flyTo` issued while a rearrangement is still animating (or one
- * that starts in the gap right after the click) is silently swallowed: the
- * rearrangement's own camera control keeps driving x/y/zoom and the button
- * click has no visible effect at all, so `landed()` alone can report a
- * "settled" camera that never actually recentred (confirmed by direct
- * reproduction - see issue #265). Waiting
- * out any rearrangement before clicking narrows the race but does not close
- * it, so this also checks the outcome and retries the click if it didn't
- * land at (0.5, 0.5), rather than trusting one `landed()` read.
+ * Click the 'center' button and retry until the camera lands on the center
+ * cell, at world (0.5, 0.5): `main.tsx`'s `recentre` calls `flyTo(0, 0, ...)`,
+ * and `cameraAtCell` (`camera.ts`) lands a flight on a cell's center.
+ *
+ * A `flyTo` issued during a rearrangement, or one that starts just after the
+ * click, is overridden by the rearrangement's own camera, so `landed()` alone
+ * can report a camera at rest that never recentred. Waiting out any
+ * rearrangement before clicking narrows that race but does not close it, so
+ * this checks the outcome and clicks again.
  */
 export async function recentre(page, flightMs, timeoutMs = SEARCH_TIMEOUT) {
   const deadline = Date.now() + timeoutMs;
@@ -352,9 +335,8 @@ export async function recentre(page, flightMs, timeoutMs = SEARCH_TIMEOUT) {
 /**
  * Every distinct camera the HUD showed over a window, one sample per frame.
  *
- * Start it BEFORE the gesture under test and await it after, so the frames in
- * between are the ones it catches - which is the only way to observe an
- * animation rather than its endpoints.
+ * Start it before the gesture under test and await it after, so it catches
+ * the frames in between as well as the endpoints.
  */
 export function sampleCamera(page, ms) {
   return page.evaluate(
@@ -380,13 +362,11 @@ export function sampleCamera(page, ms) {
 /**
  * The accessibility tree as the browser actually computed it.
  *
- * Not `page.accessibility` - that API is gone as of Playwright 1.51 - and not
- * the attributes themselves, which would only restate the source. An accessible
- * name is computed from labels, roles, `aria-labelledby` and content together,
- * so the only way to know it landed is to read it back out of the tree the
- * screen reader would be handed. CDP is the one route that exposes the computed
- * properties alongside the name; `locator.ariaSnapshot()` reports a slider's
- * raw value and not the text that replaces it.
+ * An accessible name is computed from labels, roles, `aria-labelledby` and
+ * content together, so it is read back out of the tree a screen reader gets.
+ * CDP is the route that exposes the computed properties alongside the name:
+ * Playwright 1.51 removed `page.accessibility`, and `locator.ariaSnapshot()`
+ * reports a slider's raw value, not the text that replaces it.
  *
  * Chromium-only, which is what this suite runs.
  */
@@ -398,10 +378,9 @@ export async function axNodes(page) {
   return nodes.map((n) => ({
     role: n.role?.value,
     name: n.name?.value ?? '',
-    // Carried for the failure dumps rather than for any assertion: a control's
-    // value reaches CDP through both the node's own `value` and a `valuetext`
-    // property, and knowing which one held what is how the Chrome 151
-    // `aria-valuetext` difference got diagnosed.
+    // Carried for the failure dumps, not any assertion: a control's value
+    // reaches CDP through both the node's own `value` and a `valuetext`
+    // property, and Chromium builds differ on which one holds what.
     value: n.value?.value,
     props: Object.fromEntries((n.properties ?? []).map((x) => [x.name, x.value?.value])),
   }));
@@ -429,10 +408,10 @@ export async function touchDrag(page, { from, to, steps = 6 }) {
  * A two-finger pinch, dispatched as real touch events through CDP.
  *
  * Playwright's touchscreen is single-touch, so this is the only way to express
- * the gesture. Two details of `Input.dispatchTouchEvent` are worth writing down,
- * because both are easy to get wrong and fail silently rather than loudly:
+ * the gesture. Two details of `Input.dispatchTouchEvent` fail silently when
+ * wrong:
  *
- *   - `touchPoints` on a `touchEnd` are the points being RELEASED, not the ones
+ *   - `touchPoints` on a `touchEnd` are the points being released, not the ones
  *     that remain. Sending the survivor releases the wrong finger.
  *   - points carry an explicit `id`. Without one Chromium matches them by
  *     position, so a move after a release is read as a brand new finger rather

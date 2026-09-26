@@ -294,9 +294,8 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
         { timeout: 5000 }
       );
     } finally {
-      // In `finally`, not after the assertions: this file shares one page, and
-      // a failure here that left the catalog open would fail every test after
-      // it for a reason none of them are about.
+      // Close the catalog even on failure (see docs/agents/testing.md, "Test
+      // cleanup belongs in `finally`").
       if (await page.locator('.catalog').count()) await closeCatalog();
     }
   });
@@ -313,7 +312,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       const overlay = page.locator('.overlay');
       await overlay.waitFor({ timeout: 5000 });
 
-      // Nothing clipped in here: this is the whole point of it.
+      // Nothing clipped in here: the overlay exists to show the story in full.
       assert.equal(
         await overlay.locator('.story').evaluate((el) => el.scrollHeight > el.clientHeight + 1),
         false,
@@ -350,19 +349,18 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
   test('a row\'s tile button is clickable even where the wrapped story runs past its bottom edge', async () => {
     const { page } = session;
-    // Repro window for the now-fixed catalog-tile-button bug:
-    // wide enough that `.catalog-row .catalog-tile-button` floats (not
-    // `.ultra-narrow`) but narrow enough that a room's wrapped `.story` runs
-    // taller than the float, so the story's own block box - full row width,
-    // even over the part with no glyph painted beside the float - used to win
-    // hit-testing and swallow the click. 900x700 lands inside that window
-    // against the sample corpus; the default 1280-wide session doesn't.
+    // A viewport wide enough that `.catalog-row .catalog-tile-button` floats
+    // (not `.ultra-narrow`) but narrow enough that a room's wrapped `.story`
+    // runs taller than the float. There the story's own block box spans the
+    // full row width, even beside the float, and can win hit-testing and
+    // swallow the click. 900x700 lands inside that window against the sample
+    // corpus; the default 1280-wide session doesn't.
     await page.setViewportSize({ width: 900, height: 700 });
     try {
       await openCatalog();
       try {
         // The first non-center row, at 900x700 against the sample corpus -
-        // room 1's own story is what was measured reproducing the bug. A
+        // room 1's own story runs past the float. A
         // plain `.click()` fails the way a real pointer would if the story is
         // still on top - Playwright refuses rather than force it through.
         await page.locator('.catalog-tile-button').first().click({ timeout: 5000 });
