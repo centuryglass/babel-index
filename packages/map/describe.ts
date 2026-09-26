@@ -2,7 +2,7 @@
  * Naming what the reader is standing in, in their own words.
  *
  * What a screen reader announces on arrival at a cell, and the label the
- * room card and the ranked listbox both reuse - one implementation, more
+ * room card and the ranked results list both reuse - one implementation, more
  * than one consumer, the same split `picking.ts` and `center.ts` already
  * make for hit-testing. Pure, no DOM, no runtime imports, so the words a
  * reader hears can be asserted without a browser.
@@ -20,8 +20,8 @@
  *
  * ### `picture`
  *
- * `picture` is the third and rarest field: the sidecar's optional `alt`,
- * one sentence about the image rather than about the room (see
+ * `picture` is the third field: the sidecar's `alt`, a description of the
+ * image rather than of the room (see
  * `metadata.ts` for how it is written). For a real room it is never
  * generated at runtime - it arrives with the corpus or it does not arrive
  * at all. A generic cell is the one exception: every generic tile shows the

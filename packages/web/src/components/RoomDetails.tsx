@@ -11,8 +11,9 @@
  *   - the canvas's own nested fallback content, which is where a touch
  *     screen reader reads a room.
  *
- * They differ in two props. The fallback's chips are `tabIndex={-1}` so the
- * map stays exactly one tab stop, while the other two are ordinary tab stops.
+ * They differ in two props. The fallback's chips are `tabIndex={-1}` so they
+ * add no stops to the map's tab order, while the other two are ordinary tab
+ * stops.
  * And the fallback alone sets `showPicture`: the sidecar's optional `alt` is
  * real `<img alt>` text wherever a room's tile is an actual `<img>`
  * (`RoomOverlay`, the catalog thumbnail), so this component only ever renders

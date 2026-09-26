@@ -220,8 +220,9 @@ npm run generate:embeddings -- --images <dir>   # CLIP embeddings (needs the opt
 ```
 
 Titles, keywords and stories come from a `metadata.json` beside the
-images; [`tools/curation/`](tools/curation/README.md) holds the tools that
-produce it.
+images, specified in [`docs/corpus.md`](docs/corpus.md);
+[`tools/curation/`](tools/curation/README.md) holds the tools that produce
+it.
 
 ### Docker
 
@@ -279,6 +280,7 @@ these gate a merge and which gate a deploy.
 
 - [`docs/architecture.md`](docs/architecture.md) - a five-minute system overview: request flow, deploy, rendering, CI
 - [`docs/api.md`](docs/api.md) - the `/api/*` request/response contract
+- [`docs/corpus.md`](docs/corpus.md) - the corpus directory, `metadata.json` and `tagLinks.json`
 - [`docs/user-guide.md`](docs/user-guide.md) - every control in the library, annotated
 - [`docs/search_rules.md`](docs/search_rules.md) - what a search does, in full
 - [`docs/search_requirements.md`](docs/search_requirements.md) - what search must achieve for a reader, with test coverage tracked per requirement

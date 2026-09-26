@@ -18,11 +18,8 @@
  * level whose file already carries that hash, so touching a few images in a
  * large corpus costs a few resizes. Level 0 is never gated by this: in place it
  * is not rewritten, and to a separate `--out` it is copied byte for byte.
- *
- * `updateMetadataHashes` records each source's hash in the corpus's
- * `metadata.json` as well.
  */
-import { mkdir, copyFile, readdir, stat, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile, readdir, stat, readFile } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
@@ -36,20 +33,11 @@ export type { Size, LevelStep, MipStep } from './layout.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
-// Mirrors packages/server/scan.ts's METADATA_FILE. Not imported from there:
-// that module pulls in the server's directory-scan machinery, and this is a
-// name, not behaviour.
-const METADATA_FILE = 'metadata.json';
-
 // Prefixes the hash inside the EXIF ImageDescription so it reads unambiguously
 // against whatever else might land in that tag, and so a plain string search of
 // the raw EXIF bytes finds it without a TIFF parser.
 const HASH_PREFIX = 'babel-index:sha256:';
 const HASH_PATTERN = new RegExp(`${HASH_PREFIX}([0-9a-f]{64})`);
-
-/** One `metadata.json` sidecar entry. Unknown fields must round-trip - see `updateMetadataHashes`. */
-type SidecarEntry = Record<string, unknown>;
-type Sidecar = Record<string, SidecarEntry>;
 
 export interface WriteMipsResult {
   plan: MipStep[];
@@ -59,8 +47,6 @@ export interface WriteMipsResult {
   skipped: number;
   /** Levels whose embedded hash matched the source, so nothing was resized. */
   cached: number;
-  /** The source's content hash, for the caller to record. */
-  hash: string;
   source: Size;
 }
 
@@ -149,48 +135,7 @@ export async function writeMips({
     written++;
   }
 
-  return { plan, written, skipped, cached, hash, source: { w: meta.width, h: meta.height } };
-}
-
-/**
- * Merge a content hash onto each file's entry in the corpus's `metadata.json`
- * sidecar - the keyword/story data, keyed by filename like every other field
- * there (`packages/map/metadata.ts`).
- *
- * This copy is not what gates a rewrite - the EXIF stamp is. It is there so a
- * hosted corpus can be compared with a local one: diffing two
- * `metadata.json` files names which source images changed, without fetching the
- * images to compare them. `tools/upload` does not read this field; see its
- * `diffAgainstManifest`.
- *
- * Existing `keywords`/`story`/`alt` are preserved untouched; only `hash` is
- * added or refreshed. `normaliseEntry` ignores fields it does not know, so an
- * entry that is otherwise empty stays "no metadata" to the map while still
- * carrying a hash.
- *
- * A missing or unreadable sidecar is started fresh rather than failing the run,
- * so a corpus with no keyword/story data yet still gets one with hashes.
- *
- * @param dir the corpus directory `metadata.json` lives in
- * @param hashes filename -> content hash
- */
-export async function updateMetadataHashes(dir: string, hashes: Map<string, string>): Promise<void> {
-  const path = join(dir, METADATA_FILE);
-  let sidecar: Sidecar = {};
-  try {
-    const parsed = JSON.parse(await readFile(path, 'utf8'));
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) sidecar = parsed;
-  } catch {
-    // no sidecar yet, or unreadable: starts fresh
-  }
-
-  for (const [file, hash] of hashes) {
-    const existing = sidecar[file];
-    sidecar[file] =
-      existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...existing, hash } : { hash };
-  }
-
-  await writeFile(path, JSON.stringify(sidecar, null, 2) + '\n');
+  return { plan, written, skipped, cached, source: { w: meta.width, h: meta.height } };
 }
 
 /**

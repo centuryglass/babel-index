@@ -17,24 +17,20 @@
  * the corpus is generated, not a constraint the map needs, and rejecting a
  * room with two would lose real data to a rule nothing here depends on.
  *
- * ### `title` is optional
+ * ### `title` and `alt` are expected but not required
  *
- * A room may carry a human-written `title`, shown in place of its filename
- * wherever a reader is told which room they're looking at (`roomTitle`), and
- * used in place of the filename as the sort key of the catalog's idle
- * alphabetized order (`alphabeticalOrder`). Most rooms have none until the
- * corpus is retitled, so both consumers carry a fallback.
+ * Every room in the live corpus carries both. The code still tolerates
+ * either missing, because a corpus built by hand or mid-curation may lack
+ * them: absence normalises to null and every consumer falls back.
  *
- * ### `alt` is optional in the strong sense
- *
- * A room may carry an `alt`: one sentence describing the picture, for a
- * reader who cannot see it. It is written offline, beside the story and with
- * the story as context - never at runtime, which is why the map carries no
- * model dependency. A room whose story is thin should carry no `alt` at all
- * rather than a padded one: `describe.ts`'s honesty rule ("no description
- * recorded") is a better answer than a confident sentence about a wall of
- * books that could be any wall of books. So absence normalises to null and
- * every consumer falls back to what the room already has.
+ * - `title` is the room's name wherever a reader is told which room they're
+ *   looking at (`roomTitle`), and the sort key of the catalog's idle
+ *   alphabetized order (`alphabeticalOrder`). Without one, both fall back to
+ *   the id or filename.
+ * - `alt` describes the picture for a reader who cannot see it. It is written
+ *   offline, beside the story - never at runtime, which is why the map
+ *   carries no model dependency. Without one, `describeRoom`'s `picture` is
+ *   null and the image gets an empty `alt`.
  *
  * No DOM and no runtime imports, like the rest of this package: the server
  * joins it (`scan.ts`, `roomContent.ts`) and the browser joins it

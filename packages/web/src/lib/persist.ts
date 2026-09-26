@@ -1,26 +1,21 @@
 /**
- * The few things that survive a reload, and the reason so few do.
+ * The few things that survive a reload: the entries in `KEYS`.
  *
- * Everything in this app is runtime state by default - the camera, the current
- * ranking, the mode, the dev sliders. That is deliberate, not unfinished:
- * restoring a reader to a camera position they cannot remember choosing is
- * disorienting, and the opening view is derived from the display (`fitZoom`,
- * `main.tsx`) so it is right on whatever device is in front of them rather
- * than on the one they used last. The exceptions are the entries in `KEYS`,
- * mostly the reader's own choices rather than the map's state; each key's
- * comment carries why it earns storage.
+ * Everything else is runtime state - the camera, the ranking, the mode, the
+ * dev sliders. The opening view is derived from the display (`fitZoom`,
+ * `main.tsx`), so it suits the current device. Each key's comment says why it
+ * is stored.
  *
- * ### Why every call is wrapped
+ * ### Every call is wrapped
  *
- * `localStorage` is not a safe object. Safari in private mode throws on
- * `setItem`, a browser configured to block site data throws on the accessor
- * itself, and stored JSON can be anything by the time it is read back. None of
- * those are reasons for a search to fail, so a read that throws returns the
- * fallback and a write that throws is dropped: with storage unavailable the app
- * behaves as if nothing was ever stored, which is the whole requirement.
+ * `localStorage` can throw: Safari in private mode throws on `setItem`, and a
+ * browser blocking site data throws on the accessor. Stored JSON can also be
+ * anything when read back. A read that throws returns the fallback and a
+ * write that throws is dropped, so with storage unavailable the app behaves
+ * as if nothing was ever stored.
  *
- * No React, no DOM beyond the one accessor, so the failure modes are assertable
- * with an injected stub.
+ * No React, and no DOM beyond the one accessor, so the failure modes are
+ * testable with an injected stub.
  */
 
 /** The slice of the `Storage` interface this module actually calls, so a test stub need not fake the rest. */
@@ -45,14 +40,11 @@ export const KEYS = {
    */
   blockedTags: `${PREFIX}blockedTags`,
   /**
-   * The reader's own favorites, as room filenames.
+   * The reader's favorites, as room filenames (docs/agents/favorites.md,
+   * "Favorites are keyed by filename everywhere").
    *
-   * Kept here rather than on the server: the server records global counts and
-   * nothing per-visitor (`packages/server/favorites.ts`), so a personal list
-   * is only ever kept by the person it belongs to. Filenames rather than room
-   * ids because ids are positional - `scan.ts` sorts filenames and indexes
-   * them, so one image added to the corpus renumbers every id after it and a
-   * stored id would silently come back pointing at a different room.
+   * The server records global counts and nothing per-visitor
+   * (`packages/server/favorites.ts`), so the personal list lives only here.
    */
   favorites: `${PREFIX}favorites`,
   /**
