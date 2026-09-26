@@ -89,10 +89,11 @@ warns that the keys are probably not the image filenames.
   paragraphs. The overlay keeps its line breaks.
 - **`alt`** describes the picture for a reader who cannot see it. It is an
   image caption, not a story: it never feeds search. It is AI-generated and
-  human-reviewed, written offline alongside the story. The app treats it as
-  optional: without it the client's `<img>` gets an empty `alt`, and the
-  server-rendered catalog pages use the title. Every room in the live corpus
-  has one.
+  human-reviewed, written offline alongside the story. Every room in the live
+  corpus has one, so the server logs a warning at startup counting the rooms
+  that lack it, including rooms with no entry, and listing the first few by
+  filename. A room without one still serves: the client's `<img>` gets an
+  empty `alt`, and the server-rendered catalog pages use the title.
 - **`sensitive_content_tags`** lists the kinds of image or story content in
   the room that a reader might want to hide. The app has no fixed
   vocabulary: the block list in the help dialog offers every tag present in

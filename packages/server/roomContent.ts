@@ -13,10 +13,10 @@
  * startup and never rescans it, and re-parsing a multi-megabyte sidecar on
  * every catalog request would be waste, not freshness.
  *
- * The permalink table (`packages/map/slug.ts`) is built here rather than by
- * each route, so it is memoized alongside the titles it reads and the
- * duplicate-title warning is said once per process instead of once per
- * request.
+ * The permalink table (`packages/map/slug.ts`) is built here, so it is
+ * memoized alongside the titles it reads. The corpus's curation warnings -
+ * rooms that collide on a permalink, rooms with no alt text - come from this
+ * same load, so each is said once per process.
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -46,6 +46,13 @@ async function readSidecar(localFile: string, remoteUrl: string, imagesDir: stri
   if (!res.ok) throw new Error(`failed to fetch ${remoteUrl}: ${res.status} ${res.statusText}`);
   return res.json();
 }
+
+/**
+ * How many filenames the missing-alt warning lists. Its count is always
+ * exact; the cap keeps a large uncaptioned corpus from flooding the startup
+ * log.
+ */
+export const MISSING_ALT_LISTED = 20;
 
 /**
  * @param imagesDir the local corpus directory (local mode), or null (remote
@@ -84,6 +91,18 @@ async function loadUncached(manifest: Manifest, imagesDir: string | null): Promi
     logger.warn(
       { wanted: c.wanted, rooms: c.rooms },
       'more than one room asked for this permalink - two rooms share a title, or a title matches another room\'s filename'
+    );
+
+  // Alt text is the curation tools' job, and this is the only place a lapse
+  // becomes visible: the client gives the image an empty `alt`, which a screen
+  // reader skips as decorative, so nothing fails. A room with no sidecar entry
+  // lacks it too. The center and generic tiles are not in `rooms`
+  // (`scanDirectory`), so they are never counted.
+  const missingAlt = rooms.filter((r) => !metadata[r.id]?.alt).map((r) => r.file);
+  if (missingAlt.length)
+    logger.warn(
+      { missing: missingAlt.length, files: missingAlt.slice(0, MISSING_ALT_LISTED) },
+      'rooms with no alt text - the client marks their images decorative, so a screen reader skips them'
     );
 
   return { metadata, tagLinks, slugs };
