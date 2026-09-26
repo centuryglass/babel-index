@@ -1,7 +1,7 @@
 {
   "model": "Xenova/clip-vit-base-patch32",
   "dim": 512,
-  "count": 26,
+  "count": 27,
   "dtype": "int8",
   "scale": 127,
   "layout": "row-major",
@@ -31,7 +31,8 @@
     "023.webp",
     "024.webp",
     "025.webp",
-    "026.webp"
+    "026.webp",
+    "027.webp"
   ],
   "hashes": {
     "001.webp": "fdbe208fce9bed337cb89666cc6cc4dea149baf92bf8ecddb8d70a0ea7c12669",
@@ -59,6 +60,7 @@
     "023.webp": "d44df31cdf8796298ae5c7a5f8ef788c605b976b8631b05cfb2661ef1a8186e4",
     "024.webp": "bb6f1f6b21407a9d6090b8dbe3f0a4dfd09b47f685a991797c017d93500e22e7",
     "025.webp": "305ff3cd70f0f2f3a4447ad9038f3e6213aab1c25e7f5adb99120f7a66181c80",
-    "026.webp": "2c87831be63f4e97030441383b24f1735e5a6068ded51379da87f51d2f194b0f"
+    "026.webp": "2c87831be63f4e97030441383b24f1735e5a6068ded51379da87f51d2f194b0f",
+    "027.webp": "3da92c607e704738c34bea47b95fb87f855233634be9ae87aa2b8fb179e931e3"
   }
 }
