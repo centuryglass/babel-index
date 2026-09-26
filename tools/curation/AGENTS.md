@@ -20,6 +20,11 @@ a corpus directory needs, it doesn't run alongside the app.
   else builds on; the rest are entry points - see `README.md` for what each
   does and how to run it. `gui.py` + `__main__.py` are the desktop Qt review
   app; `mobile_app.py` is the LAN-servable alternative.
+- `story_engine/`: the staged story generator (read the image, pitch,
+  write), with per-tile JSON Lines traces. Kept free of Babel Index
+  specifics so it can be lifted out later; `babel_index_review/story_frame.py`
+  holds this project's configuration. Its module docstrings cover the
+  stages, and issue #385 tracks the ones still to come.
 - `tag/describe_image.py`: model dispatch (Claude / OpenRouter / local
   OpenAI-compatible server) shared by every tool that calls a vision or text
   model. Not curation-specific; if this repo ever needs a second Python tool
@@ -30,7 +35,9 @@ a corpus directory needs, it doesn't run alongside the app.
   `keyword_map.json` (the categorized/rename result of a prior pass over it) -
   bundled so the tools don't reach outside this repo for their input data.
   `banned_emdash_tokens.json` is a Gemma3 tokenizer logit-bias list consumed
-  by `tag/describe_image.py`'s local-server path.
+  by `tag/describe_image.py`'s local-server path. `story_payloads.json` and
+  `story_forms.json` are the story engine's weighted option lists, which the
+  maintainer tunes by hand.
 - `requirements.txt`: trimmed to the packages this subtree actually imports
   (`Flask`, `Pillow`, `PySide6`, `anthropic`, `pyexiv2`, `requests`) - not
   copied from the source repo's much larger one.
@@ -43,7 +50,8 @@ a corpus directory needs, it doesn't run alongside the app.
 - Every tool is run as `python -m babel_index_review.<name>` (or
   `python -m babel_index_review` for the GUI) from `tools/curation/` - that's
   what makes the bare `tag`/`lib`/`babel_index_review` imports resolve, and
-  it's why a relative default like `keyword_map.json` or `data/keyword_map.json`
+  it's why a relative default like `keyword_map.json`, `data/keyword_map.json`
+  or `data/story_forms.json`
   means "relative to wherever you launched the command," not relative to the
   tile directory (`-d DIR`) being operated on.
 - Model calls all route through `tag/describe_image.py`'s prefix convention

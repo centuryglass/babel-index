@@ -1,0 +1,18 @@
+[
+  {"name": "mystery", "description": "An unexplained fact the reader wants resolved, with enough clues to form a theory.", "weight": 1},
+  {"name": "conflict", "description": "Two parties want incompatible things, and the stakes are plain.", "weight": 1},
+  {"name": "reframing", "description": "Something familiar is seen from an angle that changes what it means.", "weight": 1},
+  {"name": "alien rule", "description": "The world works by a rule unlike ours, and the story shows one consequence of it.", "weight": 1},
+  {"name": "dilemma", "description": "Someone has to choose between two costs, and neither is obviously right.", "weight": 1},
+  {"name": "grief", "description": "Something or someone is gone, and the shape of the absence matters.", "weight": 1},
+  {"name": "comedy", "description": "A joke, a farce or an absurd escalation that ends on a punchline.", "weight": 1},
+  {"name": "revelation", "description": "One fact, delivered late or sideways, recasts everything before it.", "weight": 1},
+  {"name": "scheme", "description": "Someone is attempting something audacious, and we see how, or how it goes wrong.", "weight": 1},
+  {"name": "transgression", "description": "Someone breaks a rule or crosses a line, and something follows from it.", "weight": 1},
+  {"name": "wonder", "description": "A genuinely marvelous thing, made specific enough to believe.", "weight": 1},
+  {"name": "irony", "description": "The outcome inverts the intent.", "weight": 1},
+  {"name": "dread", "description": "A specific threat is near and getting nearer.", "weight": 1},
+  {"name": "tenderness", "description": "A bond between people shows through a small act or object.", "weight": 1},
+  {"name": "turning point", "description": "A single moment on which this world's history pivoted.", "weight": 1},
+  {"name": "puzzle", "description": "The reader is handed enough to work something out before being told.", "weight": 1}
+]
