@@ -14,13 +14,16 @@ Right panel: story editing for the selected tile.
   - Middle -- current story. Editable; edits autosave to metadata.json.
   - Bottom -- revision request. Editable; cleared on selection.
   - Pitches -- the staged story engine (``story_engine``, configured by
-    ``story_frame``). "Pitch" lists premises and the enigma the model found
-    in the image; "Write" (or a double-click) writes the selected one into the
-    story field in a form drawn by weight, or the form picked beside it.
+    ``story_frame``). "Pitch" lists ideas and the enigma the model found in
+    the image, all ticked; unticking one rejects it. "Write drafts" drafts
+    every ticked pitch in parallel, in forms drawn by weight or the form
+    picked beside it. Below the list, a critique box for the selected pitch
+    and a note line for the whole batch autosave (see ``story_critiques``
+    for the export).
+  - Drafts -- the drafts written from the shown batch. "Use draft" (or a
+    double-click) puts one in the story field, marked ★ in the list.
     Every step is traced to ``story_traces/``. Marking an engine-written
-    story Final, or clearing it, logs that outcome to the trace too. Below
-    the list, a critique box for the selected pitch and a note line for the
-    whole batch autosave to the trace (see ``story_critiques`` for the export).
+    story Final, or clearing it, logs that outcome to the trace too.
   - Alt text -- accessibility description, editable with its own autosave and
     "Generate alt" button (uses the model dropdown, ``core.default_alt_prompt``,
     stored as "alt" on the tile's metadata entry).
@@ -96,7 +99,7 @@ from PySide6.QtWidgets import (
 )
 
 from babel_index_review import core, story_frame
-from story_engine import PitchBatch
+from story_engine import Draft, PitchBatch
 from tag.describe_image import MODELS, DEFAULT_MODEL, LOCAL_PREFIX, available_models
 
 THUMB = 128           # thumbnail edge, px
@@ -342,6 +345,8 @@ class ReviewWindow(QMainWindow):
         # Each tile's latest pitch batch, restored from its trace on first
         # selection so pitches survive navigation and restarts.
         self._pitch_batches: dict[str, PitchBatch | None] = {}
+        self._drafts: dict[str, list[Draft]] = {}  # drafts of each tile's shown batch
+        self._rejected: dict[str, set[int]] = {}  # rejected pitch indices, same batch
         # Critique text per tile for its shown batch, keyed by pitch index
         # (None for the batch note), and which batch the editors belong to.
         self._critiques: dict[str, dict[int | None, str]] = {}
@@ -492,6 +497,7 @@ class ReviewWindow(QMainWindow):
         self._add_section(layout, "Revision request", self.revision_edit, weight=1)
 
         self._add_section(layout, "Pitches", self._build_pitch_panel(), weight=2)
+        self._add_section(layout, "Drafts", self._build_draft_panel(), weight=2)
 
         alt_body = QWidget()
         alt_row = QHBoxLayout(alt_body)
@@ -594,14 +600,14 @@ class ReviewWindow(QMainWindow):
             )
 
     def _build_pitch_panel(self) -> QWidget:
-        """The story engine's controls: pitch, form choice, write."""
+        """The story engine's pitch controls: pitch, review, form choice, write drafts."""
         body = QWidget()
         column = QVBoxLayout(body)
         column.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
         self.pitch_button = QPushButton("Pitch")
-        self.pitch_button.setToolTip("Pitch a fresh batch of premises.")
+        self.pitch_button.setToolTip("Pitch a fresh batch of ideas.")
         self.pitch_button.clicked.connect(self._on_pitch)
         row.addWidget(self.pitch_button)
         row.addStretch(1)
@@ -609,12 +615,15 @@ class ReviewWindow(QMainWindow):
         self.form_combo = QComboBox()
         self.form_combo.addItem("random (weighted)", None)
         if self.story_engine is not None:
-            for option in self.story_engine.frame.forms:
+            for option in self.story_engine.frame.forms.options:
                 self.form_combo.addItem(option.name, option.name)
         row.addWidget(self.form_combo)
-        self.write_button = QPushButton("Write")
-        self.write_button.setToolTip("Write the selected pitch into the story field (double-click also works).")
-        self.write_button.clicked.connect(self._on_write_pitch)
+        self.write_button = QPushButton("Write drafts")
+        self.write_button.setToolTip(
+            "Draft every ticked pitch that has no draft yet, in parallel. When all "
+            "of them have one, drafts a fresh round of all of them."
+        )
+        self.write_button.clicked.connect(self._on_write_drafts)
         row.addWidget(self.write_button)
         column.addLayout(row)
 
@@ -623,13 +632,14 @@ class ReviewWindow(QMainWindow):
         self.reading_label.setStyleSheet("color: #888;")
         column.addWidget(self.reading_label)
 
+        # Checked = kept. Unticking rejects a pitch, logged as a verdict.
         self.pitch_list = QListWidget()
         self.pitch_list.setWordWrap(True)
         self.pitch_list.setMinimumHeight(80)
         self.pitch_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.pitch_list.setSpacing(3)
         self.pitch_list.currentRowChanged.connect(self._on_pitch_row_changed)
-        self.pitch_list.itemDoubleClicked.connect(lambda _item: self._on_write_pitch())
+        self.pitch_list.itemChanged.connect(self._on_pitch_item_changed)
         column.addWidget(self.pitch_list, stretch=1)
 
         self.critique_edit = QPlainTextEdit()
@@ -644,6 +654,28 @@ class ReviewWindow(QMainWindow):
 
         if self.story_engine is None:
             self.reading_label.setText(self._engine_error)
+        return body
+
+    def _build_draft_panel(self) -> QWidget:
+        """The drafts written from the shown batch, and the button that picks one."""
+        body = QWidget()
+        column = QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 0, 0)
+        self.draft_list = QListWidget()
+        self.draft_list.setWordWrap(True)
+        self.draft_list.setMinimumHeight(80)
+        self.draft_list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.draft_list.setSpacing(4)
+        self.draft_list.currentRowChanged.connect(lambda _row: self._update_pitch_controls())
+        self.draft_list.itemDoubleClicked.connect(lambda _item: self._on_use_draft())
+        column.addWidget(self.draft_list, stretch=1)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self.use_draft_button = QPushButton("Use draft")
+        self.use_draft_button.setToolTip("Put the selected draft in the story field (double-click also works).")
+        self.use_draft_button.clicked.connect(self._on_use_draft)
+        row.addWidget(self.use_draft_button)
+        column.addLayout(row)
         return body
 
     # -- Hover preview overlay ----------------------------------------------
@@ -1306,7 +1338,7 @@ class ReviewWindow(QMainWindow):
         return story_frame.subject_for(key), webp_path, core.keyword_texts(self.index[key])
 
     def _show_pitch_state(self, key: str):
-        """Fill the Pitches panel for ``key``, restoring its last batch from the trace."""
+        """Fill the Pitches and Drafts panels for ``key`` from its latest batch."""
         engine = self.story_engine
         if engine is None:
             return
@@ -1318,14 +1350,19 @@ class ReviewWindow(QMainWindow):
         self.reading_label.setText(f"Enigma: {batch.reading.enigma}" if batch else "No pitches yet.")
         critiques = engine.critiques(subject, batch.run) if batch else {}
         self._critiques[key] = critiques
+        self._rejected[key] = engine.rejected(subject, batch.run) if batch else set()
+        self._drafts[key] = engine.drafts(subject, batch.run) if batch else []
         self._critique_run = (key, batch.run) if batch else None
         self._critique_index = None
 
         self._critique_loading = True
         self.pitch_list.clear()
         for i, pitch in enumerate(batch.pitches if batch else []):
-            item = QListWidgetItem(self._pitch_item_text(pitch, i in critiques))
+            item = QListWidgetItem(self._pitch_item_text(i, pitch, i in critiques))
             item.setData(Qt.ItemDataRole.UserRole, pitch)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            rejected = i in self._rejected[key]
+            item.setCheckState(Qt.CheckState.Unchecked if rejected else Qt.CheckState.Checked)
             self.pitch_list.addItem(item)
         self.pitch_list.setCurrentRow(-1)
         self.critique_edit.setPlainText("")
@@ -1333,12 +1370,44 @@ class ReviewWindow(QMainWindow):
         self._critique_loading = False
         self.batch_note_edit.setEnabled(batch is not None)
         self.critique_edit.setEnabled(False)
+        self._show_drafts(key)
+
+    def _show_drafts(self, key: str):
+        """List ``key``'s drafts by pitch, marking the one that is the current story."""
+        story = (self.index[key].get("story") or "").strip()
+        self.draft_list.clear()
+        for draft in sorted(self._drafts.get(key, []), key=lambda d: d.index):
+            tags = draft.form + (f" + {draft.constraint}" if draft.constraint else "")
+            mark = "★ " if draft.story.strip() == story else ""
+            item = QListWidgetItem(f"{mark}Pitch {draft.index + 1} · {tags}\n{draft.story}")
+            item.setData(Qt.ItemDataRole.UserRole, draft)
+            self.draft_list.addItem(item)
         self._update_pitch_controls()
 
     @staticmethod
-    def _pitch_item_text(pitch, critiqued: bool) -> str:
+    def _pitch_item_text(index: int, pitch, critiqued: bool) -> str:
         mark = "✎ " if critiqued else ""
-        return f"{mark}[{pitch.payload}] {pitch.premise}\n    Turn: {pitch.turn}\n    Anchor: {pitch.anchor}"
+        return (
+            f"{mark}{index + 1}. [{pitch.seed}] {pitch.pitch}\n"
+            f"    Hook: {pitch.hook}\n    Anchor: {pitch.anchor}"
+        )
+
+    def _on_pitch_item_changed(self, item: QListWidgetItem):
+        """Log a tick or untick as a verdict. Text changes also land here and are ignored."""
+        if self._critique_loading or self._critique_run is None or self.story_engine is None:
+            return
+        key, run = self._critique_run
+        index = self.pitch_list.row(item)
+        rejected = item.checkState() == Qt.CheckState.Unchecked
+        stored = self._rejected.setdefault(key, set())
+        if rejected == (index in stored):
+            return
+        self.story_engine.record_verdict(story_frame.subject_for(key), run, index, rejected)
+        if rejected:
+            stored.add(index)
+        else:
+            stored.discard(index)
+        self._update_pitch_controls()
 
     # -- Pitch critiques ------------------------------------------------------
     def _on_pitch_row_changed(self, row: int):
@@ -1384,16 +1453,24 @@ class ReviewWindow(QMainWindow):
             if index is not None and key == self.current_key:
                 item = self.pitch_list.item(index)
                 if item is not None:
-                    item.setText(self._pitch_item_text(item.data(Qt.ItemDataRole.UserRole), bool(text)))
+                    pitch = item.data(Qt.ItemDataRole.UserRole)
+                    item.setText(self._pitch_item_text(index, pitch, bool(text)))
+
+    # -- Drafting -------------------------------------------------------------
+    def _kept_indices(self) -> list[int]:
+        return [
+            i for i in range(self.pitch_list.count())
+            if self.pitch_list.item(i).checkState() == Qt.CheckState.Checked
+        ]
 
     def _update_pitch_controls(self):
-        if not hasattr(self, "pitch_button"):
-            return  # called during construction, before the panel exists
+        if not hasattr(self, "use_draft_button"):
+            return  # called during construction, before the panels exist
         ready = self.story_engine is not None and self.current_key is not None and not self._engine_busy
+        writable = ready and not self.final_check.isChecked()
         self.pitch_button.setEnabled(ready)
-        self.write_button.setEnabled(
-            ready and self.pitch_list.currentRow() >= 0 and not self.final_check.isChecked()
-        )
+        self.write_button.setEnabled(writable and bool(self._kept_indices()))
+        self.use_draft_button.setEnabled(writable and self.draft_list.currentRow() >= 0)
 
     def _set_engine_busy(self, busy: bool, label: str = ""):
         self._engine_busy = busy
@@ -1430,45 +1507,64 @@ class ReviewWindow(QMainWindow):
         if self.current_key == key:
             self._show_pitch_state(key)
 
-    def _on_write_pitch(self):
+    def _on_write_drafts(self):
         key = self.current_key
-        item = self.pitch_list.currentItem()
         batch = self._pitch_batches.get(key) if key else None
-        if key is None or item is None or batch is None or self._engine_busy or self.story_engine is None:
+        if key is None or batch is None or self._engine_busy or self.story_engine is None:
             return
         if self.final_check.isChecked():
+            return
+        kept = self._kept_indices()
+        drafted = {draft.index for draft in self._drafts.get(key, [])}
+        indices = [i for i in kept if i not in drafted] or kept
+        if not indices:
             return
         inputs = self._engine_inputs(key)
         if inputs is None:
             return
         subject, image, keywords = inputs
         engine, model = self.story_engine, self.model_combo.currentData()
-        pitch = item.data(Qt.ItemDataRole.UserRole)
         form = self.form_combo.currentData()
+        # A single-model local server can't serve concurrent requests.
+        workers = 1 if model.startswith(LOCAL_PREFIX) else len(indices)
         self._start_engine_call(
             key,
-            lambda: engine.write(subject, image, keywords, batch, pitch, model, form),
-            self._on_write_done,
-            "Writing…",
+            lambda: engine.write_drafts(subject, image, keywords, batch, indices, model, form, workers),
+            self._on_drafts_done,
+            f"Writing {len(indices)} draft{'s' if len(indices) != 1 else ''}…",
         )
 
-    def _on_write_done(self, key: str, result):
-        """Store the draft as the tile's (unfinalized) story, like Generate does."""
+    def _on_drafts_done(self, key: str, result):
         self._retire_worker()
-        story, form = result
+        drafts, errors = result
+        self._drafts.setdefault(key, []).extend(drafts)
         self._set_engine_busy(False)
-        entry = self.index[key]
-        entry["story"] = story
-        self._save_index_entry(key, entry)
-        self._refresh_tile(key)
         if self.current_key == key:
             self._show_pitch_state(key)
-            self.reading_label.setText(f"{self.reading_label.text()}  ·  Last draft form: {form}")
-            self._loading = True
-            self.story_edit.setPlainText(story)
-            self.revision_edit.setPlainText("")
-            self._loading = False
-            self._update_action_button()
+        if errors:
+            QMessageBox.warning(self, "Some drafts failed", "\n".join(errors))
+
+    def _on_use_draft(self):
+        """Store the selected draft as the tile's (unfinalized) story, like Generate does."""
+        key = self.current_key
+        item = self.draft_list.currentItem()
+        batch = self._pitch_batches.get(key) if key else None
+        if key is None or item is None or batch is None or self.story_engine is None:
+            return
+        if self.final_check.isChecked() or self._engine_busy:
+            return
+        draft = item.data(Qt.ItemDataRole.UserRole)
+        self.story_engine.record_choice(story_frame.subject_for(key), batch.run, draft)
+        entry = self.index[key]
+        entry["story"] = draft.story
+        self._save_index_entry(key, entry)
+        self._refresh_tile(key)
+        self._loading = True
+        self.story_edit.setPlainText(draft.story)
+        self.revision_edit.setPlainText("")
+        self._loading = False
+        self._show_drafts(key)
+        self._update_action_button()
 
     def _on_engine_error(self, key: str, message: str):
         self._retire_worker()
@@ -1480,18 +1576,19 @@ class ReviewWindow(QMainWindow):
     def _record_engine_outcome(self, key: str, outcome: str, story: str | None):
         """Log a Final or Clear on an engine-written story, for calibration.
 
-        A tile whose trace has no ``write`` event never touched the engine
-        and is skipped. ``edited`` marks a story changed by hand since its
-        latest draft.
+        A tile whose trace has no chosen draft never took a story from the
+        engine and is skipped. ``edited`` marks a story changed by hand since
+        the draft was chosen.
         """
         if self.story_engine is None or not story:
             return
         subject = story_frame.subject_for(key)
-        draft = self.story_engine.trace.latest(subject, "write")
-        if draft is None:
+        choice = self.story_engine.trace.latest(subject, "choose")
+        if choice is None:
             return
         self.story_engine.record_outcome(
-            subject, outcome, story, run=draft.get("run"), edited=story != draft.get("result")
+            subject, outcome, story, run=choice.get("run"), index=choice.get("index"),
+            edited=story.strip() != choice.get("story", "").strip(),
         )
 
     # -- Clear --------------------------------------------------------------

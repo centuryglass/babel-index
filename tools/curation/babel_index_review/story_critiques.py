@@ -1,14 +1,17 @@
 """
-Print every critiqued pitch batch in a tile directory as Markdown.
+Print every reviewed pitch batch in a tile directory as Markdown.
 
     python -m babel_index_review.story_critiques DIR [--out FILE]
 
-Critiques are written in the review GUI's Pitches panel and stored as
-``critique`` events in ``DIR/story_traces/``. This collects them with the
-batch they belong to, so the critiques can be read in one pass and distilled
-into pitch instructions. A batch appears if it has any critique or batch
-note; its uncritiqued pitches are listed too, since what drew no comment is
-also signal.
+Critiques, rejections and chosen drafts are recorded in the review GUI and
+stored in ``DIR/story_traces/``. This collects them with the batch they
+belong to, so they can be read in one pass and distilled into pitch
+instructions. A batch appears if it has any critique, batch note or
+rejection. Every pitch in it is listed, since what drew no comment is also
+signal, along with any drafts.
+
+Pitch fields are printed as stored, so batches from older pitch formats
+still export.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import argparse
 import os
 
 from babel_index_review import core, story_frame
-from story_engine import PitchBatch, TraceLog
+from story_engine import TraceLog
 
 
 def report(tile_dir: str) -> str:
@@ -34,36 +37,45 @@ def report(tile_dir: str) -> str:
         subject = name[: -len(".jsonl")]
         key = next((k for k in index if story_frame.subject_for(k) == subject), None)
         keywords = ", ".join(core.keyword_texts(index[key])) if key else "?"
-        for event in trace.events(subject):
+        events = trace.events(subject)
+        chosen = {(e.get("run"), e.get("story")) for e in events if e.get("stage") == "choose"}
+        for event in events:
             if event.get("stage") != "pitch":
                 continue
-            batch = PitchBatch.from_event(event)
-            if batch is None:
+            run = event["run"]
+            result = event.get("result")
+            if isinstance(result, dict):
+                reading, pitches = result.get("reading", {}), result.get("pitches", [])
+            else:
+                reading, pitches = {}, result or []
+            critiques = engine.critiques(subject, run)
+            rejected = engine.rejected(subject, run)
+            if not critiques and not rejected:
                 continue
-            critiques = engine.critiques(subject, batch.run)
-            if not critiques:
-                continue
-            lines = [
-                f"## {key or subject}, batch {batch.run} ({event.get('model')})",
-                f"Keywords: {keywords}",
-                f"Enigma: {batch.reading.enigma}",
-            ]
+            lines = [f"## {key or subject}, batch {run} ({event.get('model')})", f"Keywords: {keywords}"]
+            if reading.get("enigma"):
+                lines.append(f"Enigma: {reading['enigma']}")
             if None in critiques:
                 lines.append(f"**Batch note:** {critiques[None]}")
-            for i, pitch in enumerate(batch.pitches):
-                lines += [
-                    "",
-                    f"{i + 1}. [{pitch.payload}] {pitch.premise}",
-                    f"   - Turn: {pitch.turn}",
-                    f"   - Anchor: {pitch.anchor}",
-                    f"   - **Critique:** {critiques[i]}" if i in critiques else "   - (no critique)",
-                ]
+            drafts = engine.drafts(subject, run)
+            for i, pitch in enumerate(pitches):
+                fields = list(pitch.items())
+                head = f"[{fields[0][1]}] {fields[1][1]}" if len(fields) > 1 else str(pitch)
+                verdict = " **(rejected)**" if i in rejected else ""
+                lines += ["", f"{i + 1}. {head}{verdict}"]
+                lines += [f"   - {k.capitalize()}: {v}" for k, v in fields[2:]]
+                lines.append(f"   - **Critique:** {critiques[i]}" if i in critiques else "   - (no critique)")
+                for draft in (d for d in drafts if d.index == i):
+                    star = " ★ chosen" if (run, draft.story) in chosen else ""
+                    tags = draft.form + (f" + {draft.constraint}" if draft.constraint else "")
+                    body = draft.story.replace("\n", "\n     > ")
+                    lines.append(f"   - Draft ({tags}){star}:\n     > {body}")
             sections.append("\n".join(lines))
-    return "\n\n".join(sections) + "\n" if sections else "No critiques yet.\n"
+    return "\n\n".join(sections) + "\n" if sections else "No reviewed batches yet.\n"
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Print every critiqued pitch batch as Markdown.")
+    parser = argparse.ArgumentParser(description="Print every reviewed pitch batch as Markdown.")
     parser.add_argument("dir", help="Tile directory holding metadata.json and story_traces/.")
     parser.add_argument("--out", help="Write to this file instead of stdout.")
     args = parser.parse_args()

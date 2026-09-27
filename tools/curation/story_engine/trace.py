@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import uuid
 
@@ -27,6 +28,9 @@ class TraceLog:
 
     def __init__(self, directory: str):
         self.directory = directory
+        # Drafts are written from parallel threads; a long event line could
+        # otherwise interleave with another thread's.
+        self._lock = threading.Lock()
 
     def path(self, subject: str) -> str:
         return os.path.join(self.directory, f"{subject}.jsonl")
@@ -35,8 +39,9 @@ class TraceLog:
         """Timestamp ``event`` and append it as one line. Returns the stored event."""
         os.makedirs(self.directory, exist_ok=True)
         stored = {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), **event}
-        with open(self.path(subject), "a", encoding="utf-8") as file:
-            file.write(json.dumps(stored, ensure_ascii=False) + "\n")
+        line = json.dumps(stored, ensure_ascii=False) + "\n"
+        with self._lock, open(self.path(subject), "a", encoding="utf-8") as file:
+            file.write(line)
         return stored
 
     def events(self, subject: str) -> list[dict]:

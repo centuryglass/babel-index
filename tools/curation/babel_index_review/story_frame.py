@@ -1,10 +1,10 @@
 """
-Babel Index's configuration for ``story_engine``: the frame, the payload and
-form lists, and where traces go.
+Babel Index's configuration for ``story_engine``: the frame, the seed, form
+and constraint lists, and where traces go.
 
-The payload and form lists are ``data/story_payloads.json`` and
-``data/story_forms.json``, relative to the launch directory like every other
-``data/`` default here. Traces go to ``story_traces/`` inside the tile
+The lists are ``data/story_seeds.json``, ``data/story_forms.json`` and
+``data/story_constraints.json``, relative to the launch directory like every
+other ``data/`` default here. Traces go to ``story_traces/`` inside the tile
 directory, one ``<tile stem>.jsonl`` per tile. The corpus scanner lists only
 image files at a corpus root, so the subdirectory is ignored if that
 directory is later served.
@@ -17,8 +17,9 @@ import os
 from babel_index_review.core import BASE_SCENE
 from story_engine import Engine, Frame, TraceLog, load_options
 
-PAYLOADS_PATH = os.path.join("data", "story_payloads.json")
+SEEDS_PATH = os.path.join("data", "story_seeds.json")
 FORMS_PATH = os.path.join("data", "story_forms.json")
+CONSTRAINTS_PATH = os.path.join("data", "story_constraints.json")
 TRACE_DIR = "story_traces"
 
 SUBJECT = (
@@ -48,8 +49,9 @@ def build_frame() -> Frame:
         base_scene=BASE_SCENE,
         presentation=PRESENTATION,
         voice=VOICE,
-        payloads=load_options(PAYLOADS_PATH),
+        seeds=load_options(SEEDS_PATH),
         forms=load_options(FORMS_PATH),
+        constraints=load_options(CONSTRAINTS_PATH),
         style_rules=STYLE_RULES,
     )
 
