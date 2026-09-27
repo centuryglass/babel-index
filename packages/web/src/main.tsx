@@ -5,8 +5,10 @@
  * - `Library` owns the state the two readings share: reader settings and
  *   their persistence, search history, blocked tags, the sort mode, the
  *   derived layout and catalog order, and which room card, overlay or
- *   dialog is open. It wires that state into the hooks and passes the
- *   results to `MapView`, `CatalogView` and the dialogs.
+ *   dialog is open. The last group is a reducer (`lib/libraryState.ts`),
+ *   and `Library` dispatches to it. `Library` wires that state into the
+ *   hooks and passes the results to `MapView`, `CatalogView` and the
+ *   dialogs.
  * - The hooks own the behaviour, for example: `useMapCamera` the camera
  *   and gestures, `useMapRenderer`/`useMapRendererGL` the render loop,
  *   `useCorpus` the corpus sidecars, `useSearch` the ranking,
@@ -15,7 +17,7 @@
  * - Module-scope constants at the end are read once at page load, from the
  *   url and the server's route hint.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { favoriteOrder, favoriteStrength, favoriteCount, type SortMode } from '../../map/favorites.ts';
@@ -31,6 +33,7 @@ import { alphabeticalOrder } from './lib/catalog.ts';
 import { load, save, clear, KEYS } from './lib/persist.ts';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
 import { roomAtPoint, type RoomPick } from './lib/picking.ts';
+import { initLibraryState, reduce, type InitialRoute } from './lib/libraryState.ts';
 import { describeCell, describeRoom, describeCatalog, describeSort } from '../../map/describe.ts';
 import {
   bookAtPoint,
@@ -96,9 +99,6 @@ function App() {
   if (!manifest) return <div className="panel">Opening the library…</div>;
   return <Library manifest={manifest} />;
 }
-
-/** The card's open picking result - which room or generic cell it names. */
-type CardState = RoomPick;
 
 function Library({ manifest }: { manifest: ManifestResponse }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -499,63 +499,38 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   const resistanceAt = useCallback((x: number, y: number) => layout.resistanceAt(x, y), [layout]);
 
-  // The catalog's expanded room: tile at full size and the whole story -
-  // how a reader sees either without leaving the fixed-height rows (see
-  // `RoomOverlay`). Seeded once at mount from `INITIAL_ROUTE.room`, so a
-  // `/catalog/<slug>` or `/map/<slug>` permalink opens that room's overlay
-  // directly regardless of which mode it opens into (`INITIAL_MODE` decides
-  // that separately) - `order` is already final here, so the rank it opens
-  // with is the row's real position. Rendered in both readings for this
-  // reason; ordinary catalog use (`expandRoom`, below) only ever sets it
-  // while `mode === 'catalog'`, since nothing else in the map reading calls it.
-  const [overlay, setOverlay] = useState<{ id: number; rank: number } | null>(() => {
-    if ((INITIAL_ROUTE?.mode !== 'catalog' && INITIAL_ROUTE?.mode !== 'map') || !INITIAL_ROUTE.room) return null;
-    const room = manifest.rooms.find((r) => r.file === INITIAL_ROUTE.room);
-    if (!room) return null;
-    const rank = order.indexOf(room.id);
-    return { id: room.id, rank: rank === -1 ? 0 : rank };
-  });
-  const expandRoom = useCallback((id: number, rank: number) => setOverlay({ id, rank }), []);
+  // What is open: the room card, the catalog overlay, the dialogs and the
+  // catalog's spotlight row. The rules tying them together live in
+  // `libraryState.ts`'s `reduce`. Seeded once at mount from `INITIAL_ROUTE`,
+  // so a `/catalog/<slug>` or `/map/<slug>` permalink opens that room's
+  // overlay and `/help` or `/about` its dialog. `order` is already final
+  // here, so a permalinked overlay opens at the row's real position.
+  const [ui, dispatch] = useReducer(reduce, null, () =>
+    initLibraryState({
+      route: INITIAL_ROUTE,
+      rooms: manifest.rooms,
+      order,
+      seenHelpHint: load(KEYS.seenHelpHint, false),
+    })
+  );
+  const { card, overlay, catalogSpotlightId, helpOpen, showHelpHint, artistStatementOpen } = ui;
+  const expandRoom = useCallback((id: number, rank: number) => dispatch({ type: 'openOverlay', room: { id, rank } }), []);
+  const clearCatalogSpotlight = useCallback(() => dispatch({ type: 'spotlightHandled' }), []);
+  const openArtistStatement = useCallback(() => dispatch({ type: 'openArtistStatement' }), []);
 
-  // "Show in the catalog", the card's reciprocal of a row's "show on the
-  // map": a one-shot instruction for CatalogView to scroll to and mark this
-  // room, cleared once done. Names a row to jump to - `overlay` names a room
-  // to open full-size.
-  const [catalogSpotlightId, setCatalogSpotlightId] = useState<number | null>(null);
-  const clearCatalogSpotlight = useCallback(() => setCatalogSpotlightId(null), []);
-
-  // A reserved book on the center shelf opens this instead of running a
-  // search - see useCenterShelf.ts's CENTER_OVERRIDES and onOverride. Also
-  // opened on mount by a `/help` permalink (INITIAL_ROUTE.mode).
-  const [helpOpen, setHelpOpen] = useState(() => INITIAL_ROUTE?.mode === 'help');
-
-  // A one-time visual nudge toward the "READ ME" book, for a reader who has
-  // never opened it. The stored flag is written on this same mount, so a
-  // reload never re-nudges - opened or not. Opening help clears the nudge
-  // right away (`onOverride` in useCenterShelf.ts).
-  const [showHelpHint, setShowHelpHint] = useState(() => !load(KEYS.seenHelpHint, false));
+  // The help hint's stored flag is written on the mount that shows it, so a
+  // reload never re-nudges, opened or not.
   useEffect(() => {
     if (showHelpHint) save(KEYS.seenHelpHint, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The open book painted into a shelf gap - a distinct hotspot from the
-  // lettered books: a tap routed through `centerBookAtPoint` on the map, an
-  // ordinary click in the catalog. Also opened on mount by an `/about`
-  // permalink (INITIAL_ROUTE.mode).
-  const [artistStatementOpen, setArtistStatementOpen] = useState(() => INITIAL_ROUTE?.mode === 'about');
-  const openArtistStatement = useCallback(() => setArtistStatementOpen(true), []);
-
-  // The open room card, from right-click or long press. A modal dialog, so
-  // the state is only which room or generic cell it names - there is no
-  // anchor point, and a pan underneath the open card is harmless.
-  const [card, setCard] = useState<CardState | null>(null);
   const onPick = useCallback(
     (px: number, py: number, camera: Camera) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
-      setCard(roomAtPoint(px, py, camera, rect, layout, order));
+      dispatch({ type: 'openCard', card: roomAtPoint(px, py, camera, rect, layout, order) });
     },
     [layout, order]
   );
@@ -775,7 +750,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       camera: config.camera,
       setStatus,
       requestDraw,
-      onOpenCard: setCard,
+      onOpenCard: useCallback((pick: RoomPick) => dispatch({ type: 'openCard', card: pick }), []),
       goToSearch,
     });
 
@@ -789,7 +764,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     canvasRef,
     cam,
     catalogConfig: config.catalog,
-    onModeChange: useCallback(() => setCard(null), []),
+    onModeChange: useCallback(() => dispatch({ type: 'modeChange' }), []),
     initialMode: INITIAL_MODE,
   });
 
@@ -808,10 +783,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     setQuery,
     search,
     enterCatalog,
-    setHelpOpen: useCallback((open: boolean) => {
-      setHelpOpen(open);
-      if (open) setShowHelpHint(false);
-    }, []),
+    setHelpOpen: useCallback((open: boolean) => dispatch({ type: open ? 'openHelp' : 'closeHelp' }), []),
     forgetSearches,
   });
 
@@ -952,15 +924,11 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [favorites.enabled, favorites.isFavorite, favorites.countOf, favorites.toggle, mode, sortMode, requestAnimation]
   );
 
-  // A chip on a card is a live search. The card and the catalog overlay
-  // close first: the map is about to rearrange, and each names a position
-  // that would then hold a different room.
+  // A chip on a card or overlay is a live search, and closes both first
+  // (`reduce`'s `keywordSearch`).
   const searchKeyword = (text: string) => {
     setQuery(text);
-    setCard(null);
-    // The overlay names a rank, and a search rebuilds the ranking - leaving it
-    // open would have it describing a position that now holds another room.
-    setOverlay(null);
+    dispatch({ type: 'keywordSearch' });
     search(text);
   };
 
@@ -971,7 +939,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // into a room that right-click and long-press never gave them.
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
-      setCard({ id, rank, x, y });
+      dispatch({ type: 'openCard', card: { id, rank, x, y } });
       flyTo(x, y, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current));
     },
     [flyTo, config, canvasRef, cam]
@@ -1193,10 +1161,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         const cell = cellById.get(id);
         if (cell) openRoom(cell.x, cell.y, id, order.indexOf(id));
       },
-      closeCard: () => {
-        setCard(null);
-        setOverlay(null);
-      },
+      closeCard: () => dispatch({ type: 'closeRoom' }),
       goToSearch: () => goToSearch(),
     };
     (window as typeof window & { __babelDebug?: unknown }).__babelDebug = {
@@ -1344,7 +1309,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           entry={metadata?.[overlay.id] ?? null}
           src={urlFor(overlay.id, 0)}
           naturalSize={overlayNaturalSize}
-          onClose={() => setOverlay(null)}
+          onClose={() => dispatch({ type: 'closeOverlay' })}
           onKeyword={searchKeyword}
           highlight={highlight}
           tagLinks={tagLinks}
@@ -1365,15 +1330,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
                   label: 'show in the catalog',
                   shortLabel: 'catalog',
                   onClick: () => {
-                    setCatalogSpotlightId(overlay.id);
+                    dispatch({ type: 'showInCatalog', id: overlay.id });
                     enterCatalog();
-                    setOverlay(null);
                   },
                 }
               : (() => {
                   const cell = cellById.get(overlay.id);
                   return cell
-                    ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); setOverlay(null); } }
+                    ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); dispatch({ type: 'closeOverlay' }); } }
                     : null;
                 })()
           }
@@ -1382,7 +1346,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
       {helpOpen && (
         <HelpDialog
-          onClose={() => setHelpOpen(false)}
+          onClose={() => dispatch({ type: 'closeHelp' })}
           availableTags={availableTags}
           blockedTags={blockedTags}
           onToggleTag={toggleBlockedTag}
@@ -1391,7 +1355,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       )}
 
       {artistStatementOpen && (
-        <ArtistStatementOverlay onClose={() => setArtistStatementOpen(false)} />
+        <ArtistStatementOverlay onClose={() => dispatch({ type: 'closeArtistStatement' })} />
       )}
 
       {card && cardDescription && (
@@ -1401,7 +1365,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
           src={cardSrc}
           naturalSize={cardNaturalSize}
-          onClose={() => setCard(null)}
+          onClose={() => dispatch({ type: 'closeCard' })}
           onKeyword={searchKeyword}
           highlight={highlight}
           tagLinks={tagLinks}
@@ -1416,9 +1380,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
                   label: 'show in the catalog',
                   shortLabel: 'catalog',
                   onClick: () => {
-                    setCatalogSpotlightId(card.id);
+                    dispatch({ type: 'showInCatalog', id: card.id });
                     enterCatalog();
-                    setCard(null);
                   },
                 }
               : null
@@ -1451,13 +1414,13 @@ const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer:
  * once at module scope, so a visitor landing on one of those urls boots
  * straight into the matching interactive view instead of watching the
  * server-rendered content vanish when `bundle.js` takes over. `help`/`about`
- * only ever open their dialog over the map (see `helpOpen`/
- * `artistStatementOpen`'s initial state below) - unlike `catalog`/`map` they
- * never change `INITIAL_MODE`.
+ * only ever open their dialog over the map (`libraryState.ts`'s
+ * `initLibraryState`) - unlike `catalog`/`map` they never change
+ * `INITIAL_MODE`.
  */
 declare global {
   interface Window {
-    __INITIAL_ROUTE__?: { mode: 'catalog' | 'map'; room?: string } | { mode: 'help' } | { mode: 'about' };
+    __INITIAL_ROUTE__?: InitialRoute;
   }
 }
 const INITIAL_ROUTE = typeof window !== 'undefined' ? (window.__INITIAL_ROUTE__ ?? null) : null;
