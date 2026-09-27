@@ -14,8 +14,8 @@ Right panel: story editing for the selected tile.
   - Middle -- current story. Editable; edits autosave to metadata.json.
   - Bottom -- revision request. Editable; cleared on selection.
   - Pitches -- the staged story engine (``story_engine``, configured by
-    ``story_frame``). "Pitch" reads the image (cached per tile) and lists
-    premises; "Write" (or a double-click) writes the selected one into the
+    ``story_frame``). "Pitch" lists premises and the enigma the model found
+    in the image; "Write" (or a double-click) writes the selected one into the
     story field in a form drawn by weight, or the form picked beside it.
     Every step is traced to ``story_traces/``. Marking an engine-written
     story Final, or clearing it, logs that outcome to the trace too.
@@ -94,7 +94,7 @@ from PySide6.QtWidgets import (
 )
 
 from babel_index_review import core, story_frame
-from story_engine import Pitch, PitchBatch, Reading
+from story_engine import PitchBatch
 from tag.describe_image import MODELS, DEFAULT_MODEL, LOCAL_PREFIX, available_models
 
 THUMB = 128           # thumbnail edge, px
@@ -337,10 +337,9 @@ class ReviewWindow(QMainWindow):
         self._busy = False          # a Claude call is in flight
         self._alt_busy = False      # an alt-text call is in flight
         self._engine_busy = False   # a story-engine call is in flight
-        # Each tile's latest pitch batch and reading, restored from its trace
-        # on first selection so pitches survive navigation and restarts.
+        # Each tile's latest pitch batch, restored from its trace on first
+        # selection so pitches survive navigation and restarts.
         self._pitch_batches: dict[str, PitchBatch | None] = {}
-        self._readings: dict[str, Reading | None] = {}
         # A missing data/ list (launched from outside tools/curation) disables
         # the Pitches panel rather than the whole GUI.
         try:
@@ -585,20 +584,16 @@ class ReviewWindow(QMainWindow):
             )
 
     def _build_pitch_panel(self) -> QWidget:
-        """The story engine's controls: pitch, re-read, form choice, write."""
+        """The story engine's controls: pitch, form choice, write."""
         body = QWidget()
         column = QVBoxLayout(body)
         column.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
         self.pitch_button = QPushButton("Pitch")
-        self.pitch_button.setToolTip("Read the image if needed, then pitch a fresh batch of premises.")
+        self.pitch_button.setToolTip("Pitch a fresh batch of premises.")
         self.pitch_button.clicked.connect(self._on_pitch)
         row.addWidget(self.pitch_button)
-        self.reread_button = QPushButton("Re-read image")
-        self.reread_button.setToolTip("Discard the cached image reading and read it again.")
-        self.reread_button.clicked.connect(self._on_reread)
-        row.addWidget(self.reread_button)
         row.addStretch(1)
         row.addWidget(QLabel("Form"))
         self.form_combo = QComboBox()
@@ -1296,16 +1291,10 @@ class ReviewWindow(QMainWindow):
         if engine is None:
             return
         if key not in self._pitch_batches:
-            subject = story_frame.subject_for(key)
-            event = engine.trace.latest(subject, "pitch")
-            self._pitch_batches[key] = (
-                PitchBatch(event["run"], [Pitch(**p) for p in event["result"]]) if event else None
-            )
-            self._readings[key] = engine.cached_reading(subject)
-        reading = self._readings.get(key)
-        self.reading_label.setText(f"Enigma: {reading.enigma}" if reading else "Image not read yet.")
-        self.pitch_list.clear()
+            self._pitch_batches[key] = engine.latest_batch(story_frame.subject_for(key))
         batch = self._pitch_batches.get(key)
+        self.reading_label.setText(f"Enigma: {batch.reading.enigma}" if batch else "No pitches yet.")
+        self.pitch_list.clear()
         for pitch in batch.pitches if batch else []:
             item = QListWidgetItem(
                 f"[{pitch.payload}] {pitch.premise}\n    Turn: {pitch.turn}\n    Anchor: {pitch.anchor}"
@@ -1319,7 +1308,6 @@ class ReviewWindow(QMainWindow):
             return  # called during construction, before the panel exists
         ready = self.story_engine is not None and self.current_key is not None and not self._engine_busy
         self.pitch_button.setEnabled(ready)
-        self.reread_button.setEnabled(ready)
         self.write_button.setEnabled(
             ready and self.pitch_list.currentRow() >= 0 and not self.final_check.isChecked()
         )
@@ -1348,41 +1336,13 @@ class ReviewWindow(QMainWindow):
             return
         subject, image, keywords = inputs
         engine, model = self.story_engine, self.model_combo.currentData()
-
-        def run():
-            batch = engine.pitch(subject, image, keywords, model)
-            return batch, engine.cached_reading(subject)
-
-        self._start_engine_call(key, run, self._on_pitch_done, "Pitching…")
-
-    def _on_pitch_done(self, key: str, result):
-        self._retire_worker()
-        batch, reading = result
-        self._pitch_batches[key] = batch
-        self._readings[key] = reading
-        self._set_engine_busy(False)
-        if self.current_key == key:
-            self._show_pitch_state(key)
-
-    def _on_reread(self):
-        key = self.current_key
-        if key is None or self._engine_busy or self.story_engine is None:
-            return
-        inputs = self._engine_inputs(key)
-        if inputs is None:
-            return
-        subject, image, keywords = inputs
-        engine, model = self.story_engine, self.model_combo.currentData()
         self._start_engine_call(
-            key,
-            lambda: engine.read(subject, image, keywords, model, refresh=True),
-            self._on_reread_done,
-            "Reading the image…",
+            key, lambda: engine.pitch(subject, image, keywords, model), self._on_pitch_done, "Pitching…"
         )
 
-    def _on_reread_done(self, key: str, reading):
+    def _on_pitch_done(self, key: str, batch: PitchBatch):
         self._retire_worker()
-        self._readings[key] = reading
+        self._pitch_batches[key] = batch
         self._set_engine_busy(False)
         if self.current_key == key:
             self._show_pitch_state(key)
@@ -1404,7 +1364,7 @@ class ReviewWindow(QMainWindow):
         form = self.form_combo.currentData()
         self._start_engine_call(
             key,
-            lambda: engine.write(subject, image, keywords, batch.run, pitch, model, form),
+            lambda: engine.write(subject, image, keywords, batch, pitch, model, form),
             self._on_write_done,
             "Writing…",
         )

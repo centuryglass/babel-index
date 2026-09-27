@@ -76,9 +76,9 @@ tile's image and a subset of its metadata (keywords, story, title, alt) into
 The GUI's **Pitches** section runs the staged story engine
 (`story_engine/`, configured by `babel_index_review/story_frame.py`):
 
-1. **Pitch** reads the image once (cached per tile) and lists premises. Each
-   one carries a payload, an anchor in the image, and a turn: what the
-   reader gets out of it.
+1. **Pitch** lists premises, along with the enigma the model found in the
+   image. Each premise carries a payload, an anchor in the image, and a
+   turn: what the reader gets out of it.
 2. **Write**, or a double-click on a pitch, writes that pitch into the story
    field. The form is drawn by weight, or you can pick one in the dropdown
    beside the button.

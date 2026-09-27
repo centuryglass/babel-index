@@ -1,15 +1,20 @@
 """
-The staged story engine: read the image, pitch premises, write one.
+The staged story engine: pitch premises, then write one.
 
 Each stage is a separate model call with a narrow job, so no single prompt
 has to invent, choose and write at once. The stages:
 
-1. ``read``: notes on the image (its enigma, what departs from the base
-   scene, which keywords show). Cached per subject in the trace log.
-2. ``pitch``: one-line premises, one per payload drawn by weight. Each
+1. ``pitch``: a short reading of the image (its enigma, what the pitches
+   build on) and one premise per payload drawn by weight. Each premise
    carries a ``turn``, the event, revelation or idea the reader gets.
-3. Selection happens outside the engine (the review GUI, for now).
-4. ``write``: the story, from one pitch and a form drawn by weight.
+2. Selection happens outside the engine (the review GUI, for now).
+3. ``write``: the story, from one pitch, its batch's reading, and a form
+   drawn by weight.
+
+The reading is part of each pitch reply, not a cached stage of its own. The
+writer gets it so both calls work from one interpretation of the image,
+since a model's reasoning never carries between calls. A fresh reading per
+batch keeps re-pitched batches from anchoring on the same details.
 
 Everything project-specific lives in the ``Frame``, so the engine carries
 no knowledge of Babel Index. The writer never sees other stories: feeding it
@@ -58,23 +63,13 @@ class Frame:
 
 @dataclass
 class Reading:
+    """What the pitcher saw in the image, passed on to the writer."""
+
     enigma: str
-    differences: list[str]
-    details: list[str]
-    visible_keywords: list[str]
-    intersections: list[dict]
+    notes: list[str]
 
     def as_notes(self) -> str:
-        """The reading as plain bullet notes for a later prompt."""
-        lines = [f"- Enigma: {self.enigma}"]
-        lines += [f"- Departs from the base scene: {d}" for d in self.differences]
-        lines += [f"- Detail: {d}" for d in self.details]
-        shown = ", ".join(self.visible_keywords) or "none clearly"
-        lines.append(f"- Keywords visible in the image: {shown}")
-        lines += [
-            f"- Intersection ({', '.join(i['keywords'])}): {i['idea']}" for i in self.intersections
-        ]
-        return "\n".join(lines)
+        return "\n".join([f"- Enigma: {self.enigma}", *(f"- {note}" for note in self.notes)])
 
 
 @dataclass
@@ -88,43 +83,40 @@ class Pitch:
 @dataclass
 class PitchBatch:
     run: str
+    reading: Reading
     pitches: list[Pitch]
 
-
-# ---------------------------------------------------------------------------
-# Validators: raw parsed JSON -> dataclasses, or ReplyError
-# ---------------------------------------------------------------------------
-def _validate_reading(data: object) -> Reading:
-    if not isinstance(data, dict):
-        raise ReplyError("expected a JSON object")
-    intersections = data.get("intersections", [])
-    if not isinstance(intersections, list):
-        raise ReplyError("'intersections' must be a list")
-    cleaned = []
-    for i, item in enumerate(intersections):
-        if not isinstance(item, dict):
-            raise ReplyError(f"intersections[{i}] must be an object")
-        cleaned.append(
-            {
-                "keywords": require_str_list(item, "keywords", f"intersections[{i}]", allow_empty=False),
-                "idea": require_str(item, "idea", f"intersections[{i}]"),
-            }
+    @classmethod
+    def from_event(cls, event: dict) -> "PitchBatch | None":
+        """Rebuild a batch from its trace event, or None for an unreadable one."""
+        result = event.get("result")
+        if not isinstance(result, dict):
+            return None
+        return cls(
+            run=event["run"],
+            reading=Reading(**result["reading"]),
+            pitches=[Pitch(**p) for p in result["pitches"]],
         )
-    return Reading(
-        enigma=require_str(data, "enigma", "reading"),
-        differences=require_str_list(data, "differences", "reading"),
-        details=require_str_list(data, "details", "reading"),
-        visible_keywords=require_str_list(data, "visible_keywords", "reading"),
-        intersections=cleaned,
-    )
 
 
+# ---------------------------------------------------------------------------
+# Validator: raw parsed JSON -> (Reading, [Pitch]), or ReplyError
+# ---------------------------------------------------------------------------
 def _pitch_validator(payloads: list[Option], limits: dict[str, int]):
     names = {option.name.casefold(): option.name for option in payloads}
 
-    def validate(data: object) -> list[Pitch]:
-        if not isinstance(data, dict) or not isinstance(data.get("pitches"), list):
-            raise ReplyError("expected {\"pitches\": [...]}")
+    def validate(data: object) -> tuple[Reading, list[Pitch]]:
+        if not isinstance(data, dict):
+            raise ReplyError("expected a JSON object")
+        raw_reading = data.get("reading")
+        if not isinstance(raw_reading, dict):
+            raise ReplyError("expected a \"reading\" object")
+        reading = Reading(
+            enigma=require_str(raw_reading, "enigma", "reading"),
+            notes=require_str_list(raw_reading, "notes", "reading"),
+        )
+        if not isinstance(data.get("pitches"), list):
+            raise ReplyError("expected a \"pitches\" list")
         pitches = []
         overruns = []
         for i, item in enumerate(data["pitches"]):
@@ -147,7 +139,7 @@ def _pitch_validator(payloads: list[Option], limits: dict[str, int]):
             )
         if not pitches:
             raise ReplyError("no pitches")
-        return pitches
+        return reading, pitches
 
     return validate
 
@@ -159,32 +151,7 @@ def _bullets(options: list[Option]) -> str:
     return "\n".join(f"- {option.name}: {option.description}" for option in options)
 
 
-def read_prompt(frame: Frame, keywords: list[str]) -> str:
-    return (
-        f"{frame.subject}\n\n"
-        "Study this image and take notes for a writer who will build a short "
-        "story on it. You are not writing the story.\n\n"
-        f"Every image in the series shares a base scene: {frame.base_scene}. "
-        f"This one was generated from the keywords: {', '.join(keywords)}.\n\n"
-        "Reply with a JSON object with these fields:\n"
-        '- "enigma": the single most unexplained thing in the frame, the detail a '
-        "curious viewer would most want explained. One concrete sentence. If "
-        "nothing is strange, pick the detail that raises the most questions.\n"
-        '- "differences": what this image adds to the base scene or where it '
-        "departs from it. Concrete, most striking first, at most six.\n"
-        '- "details": other specific visible things a writer could build on: '
-        "objects, marks, materials, figures, light. At most six.\n"
-        '- "visible_keywords": the keywords that visibly shaped the image. '
-        "Keywords often have little visible effect; list only ones you can point to.\n"
-        '- "intersections": one or two pairings of keywords, or of a keyword and '
-        "a visible detail, whose collision suggests something neither suggests "
-        'alone. Each is {"keywords": [...], "idea": "one sentence"}.\n\n'
-        "Describe only what is there. If text or a figure is illegible or "
-        "ambiguous, say so rather than inventing it. Reply with only the JSON object."
-    )
-
-
-def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: list[Option]) -> str:
+def pitch_prompt(frame: Frame, keywords: list[str], payloads: list[Option]) -> str:
     limits = frame.pitch_limits
 
     def cap(key: str) -> str:
@@ -192,9 +159,16 @@ def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: 
 
     return (
         f"{frame.subject}\n{frame.presentation}\n\n"
-        f"Notes on this image:\n{reading.as_notes()}\n"
-        f"Keywords: {', '.join(keywords)}\n\n"
-        f"Pitch {len(payloads)} premises for a very short story, at most "
+        f"Every image in the series shares a base scene: {frame.base_scene}. "
+        f"This one was generated from the keywords: {', '.join(keywords)}.\n\n"
+        "Start by studying the image. Find its enigma: the single most "
+        "unexplained thing in the frame, the detail a curious viewer would most "
+        "want explained. Notice what departs from the base scene, which keywords "
+        "visibly shaped the image (often few do), and any pairing of keywords, "
+        "or of a keyword and a visible detail, whose collision suggests "
+        "something neither suggests alone. Describe only what is there; if text "
+        "or a figure is illegible or ambiguous, don't invent it.\n\n"
+        f"Then pitch {len(payloads)} premises for a very short story, at most "
         f"{frame.word_limit} words, to go with this image: one pitch for each "
         "payload below. A payload is what the reader gets out of the story.\n"
         f"{_bullets(payloads)}\n\n"
@@ -223,7 +197,11 @@ def pitch_prompt(frame: Frame, keywords: list[str], reading: Reading, payloads: 
         "anyone or anything, as long as it grows out of the image.\n"
         "- A reader grasps the premise in one pass.\n"
         "- The pitches differ from each other in subject and in shape, not just in payload.\n\n"
-        'Reply with only a JSON object: {"pitches": [...]}.'
+        "Reply with only a JSON object:\n"
+        '{"reading": {"enigma": "one sentence", "notes": ["a few short notes on '
+        'what the pitches build on: departures from the base scene, visible '
+        'keywords, intersections"]}, "pitches": [...]}\n'
+        "The reading is passed to the writer, so keep it to what's visible and useful."
     )
 
 
@@ -282,33 +260,16 @@ class Engine:
         self.trace = trace
         self.rng = rng or random.Random()
 
-    def cached_reading(self, subject: str) -> Reading | None:
-        event = self.trace.latest(subject, "read")
-        if event is None:
-            return None
-        return Reading(**event["result"])
-
-    def read(self, subject: str, image: str, keywords: list[str], model: str, refresh: bool = False) -> Reading:
-        """The cached reading, or a fresh one when there is none or ``refresh`` is set."""
-        if not refresh:
-            cached = self.cached_reading(subject)
-            if cached is not None:
-                return cached
-        prompt = read_prompt(self.frame, keywords)
-        reading, raws = llm.ask_json(image, prompt, model, _validate_reading)
-        self.trace.append(
-            subject,
-            {"stage": "read", "model": model, "prompt": prompt, "raw": raws, "result": asdict(reading)},
-        )
-        return reading
+    def latest_batch(self, subject: str) -> PitchBatch | None:
+        event = self.trace.latest(subject, "pitch")
+        return PitchBatch.from_event(event) if event else None
 
     def pitch(self, subject: str, image: str, keywords: list[str], model: str) -> PitchBatch:
-        """A fresh batch of pitches, reading the image first if it isn't cached."""
-        reading = self.read(subject, image, keywords, model)
+        """A fresh reading and batch of pitches."""
         payloads = draw(self.frame.payloads, self.frame.pitch_count, self.rng)
-        prompt = pitch_prompt(self.frame, keywords, reading, payloads)
+        prompt = pitch_prompt(self.frame, keywords, payloads)
         validate = _pitch_validator(self.frame.payloads, self.frame.pitch_limits)
-        pitches, raws = llm.ask_json(image, prompt, model, validate, retries=2)
+        (reading, pitches), raws = llm.ask_json(image, prompt, model, validate, retries=2)
         run = new_run_id()
         self.trace.append(
             subject,
@@ -319,10 +280,10 @@ class Engine:
                 "assigned_payloads": [option.name for option in payloads],
                 "prompt": prompt,
                 "raw": raws,
-                "result": [asdict(p) for p in pitches],
+                "result": {"reading": asdict(reading), "pitches": [asdict(p) for p in pitches]},
             },
         )
-        return PitchBatch(run, pitches)
+        return PitchBatch(run, reading, pitches)
 
     def draw_form(self) -> Option:
         return draw(self.frame.forms, 1, self.rng)[0]
@@ -332,25 +293,24 @@ class Engine:
         subject: str,
         image: str,
         keywords: list[str],
-        run: str,
+        batch: PitchBatch,
         pitch: Pitch,
         model: str,
         form: str | None = None,
     ) -> tuple[str, str]:
-        """Write a story from ``pitch``. Returns ``(story, form_name)``.
+        """Write a story from ``pitch`` in ``batch``. Returns ``(story, form_name)``.
 
         ``form`` names a form to use; ``None`` draws one by weight.
         """
-        reading = self.read(subject, image, keywords, model)
         chosen = by_name(self.frame.forms, form) if form else self.draw_form()
-        prompt = write_prompt(self.frame, keywords, reading, pitch, chosen)
+        prompt = write_prompt(self.frame, keywords, batch.reading, pitch, chosen)
         raw = llm.ask(image, [("user", prompt)], model)
         story = _clean_story(raw)
         self.trace.append(
             subject,
             {
                 "stage": "write",
-                "run": run,
+                "run": batch.run,
                 "model": model,
                 "pitch": asdict(pitch),
                 "form": chosen.name,

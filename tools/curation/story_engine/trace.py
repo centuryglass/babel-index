@@ -3,8 +3,8 @@ Per-subject trace logs: one JSON Lines file per subject, one event per line.
 
 Every stage appends an event holding its model, prompt, raw reply and parsed
 result, so a bad story can be traced back to the stage that went wrong and
-replayed from there. The log is append-only and is also the cache: the image
-reading is reused by finding the subject's latest ``read`` event.
+replayed from there. The log is append-only, and a caller restores state
+from it, e.g. the review GUI shows a tile's latest ``pitch`` batch.
 
 Events share a ``run`` id per pitch batch, so a batch's pitches, the drafts
 written from them, and the outcome can be grouped back together.
