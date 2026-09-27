@@ -96,6 +96,9 @@ npm run check:file-map             # docs/file_map.md vs the real tree, a requir
 npm run check:requirements         # docs/search_requirements.md vs the tests' [SR-nn] tags, a required check
 npm run check:requirements -- --list              # ... and print every requirement with the tests covering it
 npm run check:requirements -- --update-baseline   # ... lower the allowed-uncovered list once a gap is closed
+npm run check:comments             # comments and docs vs the mechanical "Comments and docs" rules, a required check
+npm run check:comments -- --list                  # ... and print every failing finding, baselined or not
+npm run check:comments -- --update-baseline       # ... lower the per-file allowance once findings are fixed
 npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
@@ -123,8 +126,8 @@ npm run generate:shelf-geometry     # Recalculate diegetic control bounds from t
   packages ship a `tsc` bin, and npm picks which one `node_modules/.bin/tsc`
   points at by an undocumented rule.
 - **Required checks:** `npm test` across the Node matrix, `e2e.yml`, lint,
-  typecheck, `check:file-map` and `check:requirements` all feed `ci.yml`'s
-  aggregate `ci` job.
+  typecheck, `check:file-map`, `check:requirements` and `check:comments` all
+  feed `ci.yml`'s aggregate `ci` job.
 
 ## Layout
 
@@ -186,6 +189,9 @@ inpainting pipeline.
 what is true of the code as it stands, quickly. It does not defend a design
 to a skeptic or argue against the version it replaced. These rules apply to
 code comments, this file, and everything under `docs/`.
+`npm run check:comments` enforces the mechanical ones (pointers resolve, em
+dashes, conviction and ghost words, closed issues), and
+`tools/check-comments/lib.ts` owns its word lists.
 
 - **Lead with the rule.** Line 1 of a comment is a standalone summary; a
   reader who stops there must lose no invariant.
@@ -253,7 +259,7 @@ path can match several rows; read every file it matches.
 | `packages/web/src/lib/render.ts`, `slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`, `gl/`, `webglFlag.ts`; `useMapRenderer.ts`, `useMapRendererGL.ts`; anything that changes what a cell draws | [`docs/agents/rendering.md`](docs/agents/rendering.md) |
 | `CatalogView.tsx`, `RoomOverlay.tsx`, `RoomDetails.tsx`, `MapView.tsx`; `packages/web/src/lib/catalog.ts`; `packages/map/slug.ts`, `scoring.ts`'s range finders; `packages/server/roomContent.ts`; catalog rules in `style.css`; the live region | [`docs/agents/catalog.md`](docs/agents/catalog.md) |
 | `deploy/`, `Dockerfile`; `.github/workflows/deploy.yml`, `release-please.yml`; `packages/server/app.ts`'s routes, `base-path.ts`, `version.ts`; any url the server or client hands the browser | [`docs/agents/deploy.md`](docs/agents/deploy.md) |
-| `packages/web/e2e/`; `.github/workflows/`; `tools/check-file-map/`, `tools/check-requirements/`; an `[SR-nn]` tag; a test beyond the unit test beside its module | [`docs/agents/testing.md`](docs/agents/testing.md) |
+| `packages/web/e2e/`; `.github/workflows/`; `tools/check-file-map/`, `tools/check-requirements/`, `tools/check-comments/`; an `[SR-nn]` tag; a test beyond the unit test beside its module | [`docs/agents/testing.md`](docs/agents/testing.md) |
 | A comment or documentation audit, when the maintainer asks for one | [`docs/agents/comment-audit.md`](docs/agents/comment-audit.md) |
 
 ## Tracking open work
