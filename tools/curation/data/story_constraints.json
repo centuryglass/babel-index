@@ -1,0 +1,14 @@
+[
+  {"name": "busy narrator", "description": "The narrator is in the middle of doing something else.", "weight": 1},
+  {"name": "a number", "description": "One number in the story matters a great deal.", "weight": 1},
+  {"name": "disapproval", "description": "The narrator disapproves of what they describe.", "weight": 1},
+  {"name": "enthusiast", "description": "The narrator is delighted by something nobody else cares about.", "weight": 1},
+  {"name": "wrong audience", "description": "It's written for one specific person, and the reader isn't them.", "weight": 1},
+  {"name": "unreliable", "description": "The narrator gets one important thing wrong, and the reader can tell.", "weight": 1},
+  {"name": "a meal", "description": "Someone in the story is eating.", "weight": 1},
+  {"name": "practical ending", "description": "It ends on a practical instruction.", "weight": 1},
+  {"name": "child narrator", "description": "The narrator is a child.", "weight": 1},
+  {"name": "a price", "description": "The story names a price.", "weight": 1},
+  {"name": "not human", "description": "The narrator isn't human, and doesn't explain it.", "weight": 1},
+  {"name": "long after", "description": "It's told long after the fact, by someone who has some of the details wrong.", "weight": 1}
+]

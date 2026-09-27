@@ -9,6 +9,7 @@ Entry points:
     conversation (initial prompt -> reply -> revision request -> ...), used for
     the babel-index story revision flow.
   - send_text(prompt) -- no image, plain text in, text out.
+  - converse_text(turns) -- no image, multi-turn.
 
 Both talk to Claude by default, while model ids prefixed with ``local:`` or
 ``openrouter:`` are routed instead to OpenAI-compatible servers (e.g. a llama.cpp
@@ -299,7 +300,9 @@ def _send(messages: list, model: str = DEFAULT_MODEL) -> str:
         max_tokens=MAX_TOKENS,
         messages=messages,
     )
-    return "".join(block.text for block in message.content if block.type == "text")
+    content = "".join(block.text for block in message.content if block.type == "text")
+    _raise_if_truncated("length" if message.stop_reason == "max_tokens" else None, content)
+    return content
 
 
 def _local_image_data(media_type: str, data: str) -> tuple[str, str]:
@@ -325,6 +328,20 @@ def _to_openai_content(block: dict) -> dict:
         url = f"data:{media_type};base64,{data}"
         return {"type": "image_url", "image_url": {"url": url}}
     return {"type": "text", "text": block["text"]}
+
+
+def _raise_if_truncated(finish_reason: str | None, content: str) -> None:
+    """Refuse a reply cut off at ``MAX_TOKENS``.
+
+    A reasoning model spends part of the budget thinking, so a reply can stop
+    mid-sentence while still returning text; passed through, that text reads
+    as a finished story.
+    """
+    if finish_reason == "length":
+        tail = content[-60:].replace("\n", " ")
+        raise RuntimeError(
+            f"the reply was cut off at the {MAX_TOKENS}-token limit (it ended: ...{tail!r})"
+        )
 
 
 def _send_openrouter(
@@ -362,11 +379,12 @@ def _send_openrouter(
     resp.raise_for_status()
     choice = resp.json()["choices"][0]
     content = (choice["message"].get("content") or "").strip()
+    reason = choice.get("finish_reason")
     if not content:
-        reason = choice.get("finish_reason")
         raise RuntimeError(
             f"OpenRouter returned no content (finish_reason={reason})"
         )
+    _raise_if_truncated(reason, content)
     return content
 
 
@@ -409,12 +427,21 @@ def _send_local(messages: list, model: str, base: str = LOCAL_API_BASE) -> str:
         elif reasoning:
             detail += f"; the answer may be stuck in a {len(reasoning)}-char reasoning block"
         raise RuntimeError(f"local model returned no content ({detail})")
+    _raise_if_truncated(choice.get("finish_reason"), content)
     return content
 
 
 def send_text(prompt: str, model: str = DEFAULT_MODEL) -> str:
     """Send a plain text prompt (no image) and return the model's reply."""
-    return _send([{"role": "user", "content": [{"type": "text", "text": prompt}]}], model=model)
+    return converse_text([("user", prompt)], model=model)
+
+
+def converse_text(turns: Sequence[Tuple[str, str]], model: str = DEFAULT_MODEL) -> str:
+    """Continue a text-only conversation of (role, text) turns and return the reply."""
+    if not turns:
+        raise ValueError("converse_text requires at least one turn")
+    messages = [{"role": role, "content": [{"type": "text", "text": text}]} for role, text in turns]
+    return _send(messages, model=model)
 
 
 def describe_image(
