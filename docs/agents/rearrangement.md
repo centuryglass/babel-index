@@ -76,7 +76,7 @@ you" routes here, and its conventions still apply.
 - **The frames are a build artifact, served like fixed art** from the shared
   dir (`assets/animation/`), resolved off `sharedBase`; `scan.ts` discovers
   nothing here. A missing manifest means no indicator, read as null
-  everywhere. The e2e suite's `--shared-dir` has no manifest, so e2e never
-  sees the indicator.
+  everywhere. The e2e server runs on the default `--shared-dir` (`assets/`),
+  whose manifest is tracked, so e2e plays the indicator.
 - **The dev panel's "loop loading animations" checkbox owns the screen while
   on** (`startDebug`): a rearrangement's `play()` no-ops.
