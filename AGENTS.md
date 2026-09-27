@@ -283,6 +283,11 @@ path can match several rows; read every file it matches.
 
 ## Working with GitHub
 
+- **Answer a question before changing anything.** A message asking
+  whether, which or how gets its answer and then a stop. Reading code to
+  form the answer is fine; edits, commits and PRs wait for a go-ahead. A
+  message that both asks and directs gets the answer first, and the work
+  proceeds only if the answer leaves the plan unchanged.
 - **Open a PR once work is complete and checked, without waiting to be
   asked.** This overrides a coding agent's default of only opening a PR on
   explicit request. Run the project's checks first (tests, lint, typecheck,
