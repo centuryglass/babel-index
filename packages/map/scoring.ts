@@ -1,21 +1,20 @@
 /**
- * Text scoring for search, and the blend that ranks the corpus by it and CLIP.
+ * Text matching for search, and the one calculation that turns it and CLIP
+ * into each room's match strength.
  *
  * The rules this implements are docs/search_rules.md; its "Overview: one
- * evaluation, two questions" is the design. Three invariants the code below
- * relies on:
+ * number" is the design. Three invariants the code below relies on:
  *
- * - One sort, not tiers. Every room is ranked by one weighted sum, and each
- *   ordering rule holds because the weights make its inequality true.
- * - Every signal is normalised before it is weighted. Partial and story
- *   readings are ratios in [0, 1], and `tagExact` is a count of exact terms.
- *   A CLIP cosine clusters in a narrow band on this corpus, so the CLIP term
- *   is min-maxed across the corpus for each query. The weights are
- *   `config.search.weights`.
- * - Ranking is relative; strength is absolute. Min-max puts some room at 1
- *   for any query, nonsense included, so `matchStrength` reads each signal's
- *   absolute form, CLIP's raw cosine among them. That is why
- *   `embeddingScores` dequantises.
+ * - One number places a room and sets the density around it. `rankHybrid`
+ *   sorts by `strength`, so the map's position and its reported strength
+ *   cannot disagree (docs/search_requirements.md SR-22).
+ * - Every pull is absolute. Each axis reads the room's own evidence against
+ *   fixed bounds, never against the rest of the corpus, so a query nothing
+ *   answers leaves every room near 0. CLIP reads its raw cosine, which is
+ *   why `embeddingScores` dequantises.
+ * - Precedence between signals comes from the weights and is checked by
+ *   tests, not by an algebraic guarantee: `scoring.test.ts` asserts each
+ *   ordering requirement on queries built to test it.
  *
  * No DOM. Imports: `ordering.ts`'s dot products, `any-ascii` for `fold`, and
  * `wink-lemmatizer`. The lemmatizer looks a word up per part of speech; a
@@ -43,7 +42,7 @@ import type {
 
 const { noun, verb, adjective } = winkLemmatizer;
 
-/** The anchor band `clipCurveStrength`/`matchStrength` read a raw cosine against. */
+/** The anchor band `clipCurveStrength` reads a raw cosine against. */
 export interface ClipBand {
   centre: number;
   high: number;
@@ -199,7 +198,7 @@ export function tokenise(text: unknown, { minLength = 3, stopwords = true }: Tok
  * side of it to pair with, so the rest of the query reads as ordinary words.
  *
  * The stopword/`minTokenLength` floor is not applied here - it still happens
- * per word for scoring (`tokenise` inside `storyScore`).
+ * per word for scoring (`rankHybrid`'s `tokenise` call).
  * Quoting changes how a term is matched, not the vocabulary floor.
  */
 export function parseQuery(raw: unknown): ParsedQuery {
@@ -336,7 +335,7 @@ export interface SearchIndexSource {
  * room id.
  *
  * Stories are kept as an ordered *sequence* of `{lemma, start, end}`, not a
- * bag - `storyScore`'s ratio only needs membership (`set`, kept alongside so
+ * bag - `storyWordMatches` only needs membership (`set`, kept alongside so
  * that stays an O(1) lookup), but the longest-contiguous-run measurement a
  * long story match needs (`longestMatchRun`, `storyPhraseRun`) has to know
  * which words sit next to which. Positions are into the folded story, not
@@ -355,7 +354,7 @@ export function buildSearchIndex(
   return (joined ?? []).map((entry) => {
     if (!entry) return null;
     // Lemmatised, not just tokenised: a search matches a story word by base
-    // form, so `cats` finds `cat` but `catalogue` does not. See `storyScore`.
+    // form, so `cats` finds `cat` but `catalogue` does not. See `storyWordMatches`.
     const sequence = tokeniseWithPositions(entry.story ?? '', { minLength }).map(({ word, start, end }) => ({
       lemma: lemmatise(word),
       start,
@@ -375,35 +374,28 @@ export function buildSearchIndex(
 }
 
 /**
- * How well a query matches a room's story, in [0, 1].
+ * How many of the query's distinct words appear in a room's story.
  *
- * Normalised by the query, not by the text - the opposite of the keyword
- * rule. Dividing a match by the length of the story would score the same hit
- * lower in a longer story; the question being asked is "how much of what you
- * asked for is in here".
+ * A count, not a share of the story or of the query: the same hit is worth
+ * the same in a long story as in a short one, and a word the query adds
+ * that the story lacks takes nothing away. Two tokens with one lemma count
+ * once.
  *
- * Each token is weighted by its own length, so `cartographer` counts for more
- * than `oil`. Matching is by lemma, so `room` finds `rooms`, `survey` finds
- * `surveyed`, and the reverse; `cat` does not match `catalogue`, nor
- * `animation` `animal`. The story index is lemmatised once at build time
- * (`buildSearchIndex`); the query's few tokens are lemmatised here, and
- * weighting stays keyed to the original token length so the query-
- * normalisation above still holds.
+ * Matching is by lemma, so `room` finds `rooms`, `survey` finds `surveyed`,
+ * and the reverse; `cat` does not match `catalogue`, nor `animation`
+ * `animal`. The story index is lemmatised once at build time
+ * (`buildSearchIndex`); the query's few tokens are lemmatised here.
  *
- * @param queryTokens raw (folded, untokenised-past-splitting) tokens
+ * @param queryTokens folded, tokenised query words
  * @param storyIndex the room's story
  */
-export function storyScore(queryTokens: string[], storyIndex: StoryIndex | null | undefined): number {
+export function storyWordMatches(queryTokens: string[], storyIndex: StoryIndex | null | undefined): number {
   const set = storyIndex?.set;
-  if (!set?.size || !queryTokens.length) return 0;
+  if (!set?.size) return 0;
 
   let matched = 0;
-  let total = 0;
-  for (const token of queryTokens) {
-    total += token.length;
-    if (set.has(lemmatise(token))) matched += token.length;
-  }
-  return total ? matched / total : 0;
+  for (const lemma of new Set(queryTokens.map(lemmatise))) if (set.has(lemma)) matched++;
+  return matched;
 }
 
 /**
@@ -469,7 +461,7 @@ export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined
 // Two range finders, one per match rule, shadowing the two scorers above
 // them. A keyword matches by substring and a story word by lemma; one
 // highlighter over both would mark text `classifyTagTerm` never looked at
-// and miss text `storyScore` credited. They live here rather than in a component
+// and miss text `storyWordMatches` credited. They live here rather than in a component
 // for one reason: a view that re-derives "what matched" drifts from the
 // thing that ranked, silently - marked text that scored nothing, or a ranked
 // room with nothing marked.
@@ -546,10 +538,10 @@ export function keywordMatchRanges(text: unknown, foldedQuery: string, queryToke
 }
 
 /**
- * Where a query matched a story, mirroring `storyScore`'s lemma rule.
+ * Where a query matched a story, mirroring `storyWordMatches`'s lemma rule.
  *
  * Walks the text on the same word boundary `tokenise` splits on, and marks a
- * word whose lemma is one of the query's. That is the same test `storyScore`
+ * word whose lemma is one of the query's. That is the same test `storyWordMatches`
  * makes against the pre-lemmatised index `buildSearchIndex` holds -
  * lemmatising here rather than reusing that set because this needs to know
  * which word in the original text matched, and the index has thrown the
@@ -558,7 +550,7 @@ export function keywordMatchRanges(text: unknown, foldedQuery: string, queryToke
  * Two details keep it faithful to what actually scored:
  *
  *   - words `tokenise` would have dropped are skipped, so a query token that
- *     lemmatises onto a stopword marks nothing - `storyScore` tests against
+ *     lemmatises onto a stopword marks nothing - `storyWordMatches` tests against
  *     the tokenised story, where that word is not present.
  *   - the whole matched word is marked, not the lemma. `survey` marks all of
  *     `surveyed`. Marking three quarters of a word reads as a rendering bug;
@@ -590,85 +582,44 @@ export function storyMatchRanges(
 
   return mergeRanges(hits);
 }
-
-/**
- * Min-max a score array onto [0, 1].
- *
- * A flat array carries no information, so it normalises to all-zero rather than
- * to all-one or a divide by zero: a signal that cannot distinguish anything
- * should not contribute a constant that outweighs one that can.
- */
-export function normaliseScores(scores: ArrayLike<number>): Float32Array {
-  const out = new Float32Array(scores.length);
-  if (!scores.length) return out;
-
-  let min = Infinity;
-  let max = -Infinity;
-  for (let i = 0; i < scores.length; i++) {
-    if (scores[i] < min) min = scores[i];
-    if (scores[i] > max) max = scores[i];
-  }
-  const span = max - min;
-  if (!(span > 0)) return out;
-
-  for (let i = 0; i < scores.length; i++) out[i] = (scores[i] - min) / span;
-  return out;
-}
-
 const clamp01 = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
 /**
- * How much summed partial-tag fraction fills the `P` budget.
+ * A soft OR over pulls in [0, 1]: `1 - (1-a)(1-b)...`.
  *
- * A formula constant, not a weight: changing it means re-checking every
- * inequality in docs/search_rules.md "Balancing signals against each other".
- * It caps how far extra partially-matching terms can inflate `tagPartialSum`,
- * which keeps the exact-tag margin `E > P + Pt + S + L + C` true for a query
- * of any length.
+ * Any one pull can carry the result alone, each extra pull only raises it,
+ * and a zero changes nothing. That last property is what keeps a room's
+ * strength from dropping when a query gains words it has nothing to do with
+ * (docs/search_requirements.md SR-17).
  */
-export const TAG_PARTIAL_SATURATION = 2;
+function softOr(pulls: Iterable<number>): number {
+  let miss = 1;
+  for (const p of pulls) miss *= 1 - clamp01(p);
+  return 1 - miss;
+}
 
 /**
- * The character band the long-story bonus ramps across: zero below `low`
- * (about one or two words), saturated at `high` (about a full clause).
+ * The character band a story run's pull ramps across: zero below `low`
+ * (about one long word, which `weights.story` already credits), full at
+ * `high` (about a full clause).
  *
- * A formula constant, not a weight; see `TAG_PARTIAL_SATURATION`.
+ * A formula constant, not a weight: `weights.storyLong` sets how strongly a
+ * full run pulls, and this sets what counts as full.
  */
 export const STORY_LONG_RANGE = { low: 16, high: 40 };
 
-/** The saturating curve `storyLongChars` feeds, shared by the ranking bonus and strength's `S` term. */
-function storyLongBonus01(chars: number): number {
+/** The ramp `STORY_LONG_RANGE` describes, in [0, 1]. */
+function storyRunCurve(chars: number): number {
   const { low, high } = STORY_LONG_RANGE;
   return clamp01((chars - low) / (high - low));
 }
 
 /**
- * Strength floor for a single matched story word - "cat" found once in a
- * story is real evidence, but not the near-certain reading a whole matched
- * clause earns. Unlike `CLIP_STRENGTH`, there is no corpus distribution to measure this
- * against; it is a judgement call, same as `map.contentRatio` or the slide
- * timings in `packages/config/config.ts`.
- */
-export const STORY_FLOOR = 0.5;
-
-/** The named parts `matchStrength` combines into one reading. */
-export interface StrengthParts {
-  /** best per-term tag reading, in [0, 1] - `K` in docs/search_rules.md */
-  tagStrength?: number;
-  /** the same best reading against the room's one title - `Kt` in docs/search_rules.md */
-  titleStrength?: number;
-  storyLongChars?: number;
-  storyMatched?: boolean;
-  cosine?: number | null;
-}
-
-/**
- * CLIP's raw cosine placed against the anchor band, as a strength in [0, 1]
- * (docs/search_rules.md "Computing strength" and "Image-content (CLIP)
- * matching"): 0 at or below `band.centre` (the no-opinion point), rising
- * linearly to 1 at `band.high` (a genuine match's typical confidence).
- *
- * This is both `matchStrength`'s `C` and `rankHybrid`'s `clipStrengthGate`.
+ * CLIP's raw cosine placed against the anchor band, in [0, 1]
+ * (docs/search_rules.md "Image-content (CLIP) matching"): 0 at or below
+ * `band.centre` (the no-opinion point), rising linearly to 1 at
+ * `band.high` (a genuine match's typical confidence). `weights.clip` scales
+ * it into CLIP's pull.
  *
  * @returns in [0, 1]
  */
@@ -692,83 +643,81 @@ export function strengthPercent(strength: number): number {
   return Math.min(100, Math.max(0, strength * 100));
 }
 
-/**
- * How strongly one room matches the search - one number in [0, 1], 0 for no
- * evidence (docs/search_rules.md, "Computing strength"). Nothing reads as a
- * mismatch: every signal can only find evidence for a room, never against it.
- *
- * A soft-OR of absolute readings, each computed from the room's raw
- * evidence rather than anything normalised across the corpus. This is the
- * number `ordering.ts`'s density gradient reads, not the ranking score:
- *
- *   - `K` (tags): the room's best reading over the query's terms - 1 for an
- *     exact match, the substring fraction for a partial one, 0 for none.
- *     Computed by the caller, since this and ranking read the same per-term
- *     classification. A maximum rather than a mean over the terms: a room
- *     whose tag the reader typed is a match whatever else the query asked
- *     about, and how much of the query a room explains is what ranking's
- *     `tagExact` count already decides (docs/search_requirements.md SR-17).
- *   - `Kt` (title): the same best reading as K, against the room's one
- *     title (a one-keyword index) - computed by the caller alongside K.
- *   - `S` (story): from absolute matched length, not the query-relative
- *     ratio the ranking uses. A single matched word sits at the moderate
- *     `STORY_FLOOR`, a full matched clause reaches 1; using the ratio here
- *     would make a one-word query that matches read as 100% certain.
- *   - `C` (CLIP): `clipCurveStrength` of the raw cosine.
- *
- * Strength is `1 - (1-K)(1-Kt)(1-S)(1-C)` - any one signal can carry it
- * alone, and two weak agreeing signals count for more than either alone.
- *
- * @param parts.tagStrength K, already in [0, 1]
- * @param parts.titleStrength Kt, already in [0, 1] - the same best reading as
- *   K, against the room's title instead of its keywords
- * @param parts.storyLongChars longest contiguous matched run, chars
- * @param parts.storyMatched did any story word match at all - a single
- *   matched word's `storyLongChars` can sit under the ramp's floor and read
- *   as the same "zero" a non-match would, so this is passed explicitly
- * @param parts.cosine raw CLIP cosine, or null/undefined
- * @param clip raw-cosine anchors
- * @returns in [0, 1]
- */
-export function matchStrength(
-  { tagStrength = 0, titleStrength = 0, storyLongChars = 0, storyMatched = false, cosine = null }: StrengthParts = {},
-  clip: ClipBand = CLIP_STRENGTH
-): number {
-  const K = clamp01(tagStrength);
-  const Kt = clamp01(titleStrength);
-  const S = storyMatched ? STORY_FLOOR + (1 - STORY_FLOOR) * storyLongBonus01(storyLongChars) : 0;
-  const C = clipCurveStrength(cosine, clip);
-  return 1 - (1 - K) * (1 - Kt) * (1 - S) * (1 - C);
+/** One room's pull on each axis, already weighted and in [0, 1] - what `matchStrength` combines. */
+export interface AxisPulls {
+  tag?: number;
+  title?: number;
+  story?: number;
+  clip?: number;
 }
 
-/** One room's row in `rankHybrid`'s working set, before the composite sort reorders it. */
+/**
+ * How strongly one room matches the search: one number in [0, 1] that both
+ * places the room and sets the map's density around it (docs/search_rules.md
+ * "Computing strength"). 0 is no evidence; nothing reads as a mismatch.
+ *
+ * A soft OR of the four axes' pulls (see `softOr`). Every pull is an
+ * absolute reading of the room's own evidence, never normalised across the
+ * corpus, so a query the corpus has no answer to leaves every room near 0
+ * (docs/search_requirements.md SR-19).
+ *
+ * @returns in [0, 1]
+ */
+export function matchStrength({ tag = 0, title = 0, story = 0, clip = 0 }: AxisPulls = {}): number {
+  return softOr([tag, title, story, clip]);
+}
+
+/** One room's row in `rankHybrid`'s working set, before the placement sort reorders it. */
 interface ScoredRow {
   id: number;
-  score: number;
+  strength: number;
+  tag: number;
+  title: number;
+  story: number;
+  clip: number;
   tagExact: number;
-  tagPartialSum: number;
   tagPartialCount: number;
   /** 0 or 1 - see docs/search_rules.md "Title matching" */
   titleExact: number;
-  /** the largest substring fraction over every term, not a sum - there is only one title */
+  /** the largest substring fraction over every term, not a combination - there is only one title */
   titlePartial: number;
-  storyRatio: number;
+  storyWords: number;
   storyLongChars: number;
-  clipNorm: number;
-  clipStrengthGate: number;
+  clipStrength: number;
   cosine: number | null;
-  strength: number;
+}
+
+/**
+ * Placement order: strength, then two tiebreaks among rooms that matched at
+ * all, then id.
+ *
+ * - More exact term matches first. Exact matches pull at `weights.tagExact`
+ *   and `weights.titleExact`, which default to 1 and saturate strength, so
+ *   this is where "more exact matches beat fewer" (SR-13) is decided.
+ * - Then the higher raw cosine.
+ * - Rooms at strength 0 skip both and keep id order, so a query nothing
+ *   matched does not reorder the map (SR-15, SR-19).
+ */
+function comparePlacement(a: ScoredRow, b: ScoredRow): number {
+  if (b.strength !== a.strength) return b.strength - a.strength;
+  if (a.strength > 0) {
+    const exact = b.tagExact + b.titleExact - (a.tagExact + a.titleExact);
+    if (exact) return exact;
+    const cosine = (b.cosine ?? -Infinity) - (a.cosine ?? -Infinity);
+    if (cosine) return cosine;
+  }
+  return a.id - b.id;
 }
 
 /** Ascending per-room comparators `rankAxis` sorts by - one per independent axis. */
 function compareTagAxis(x: ScoredRow, y: ScoredRow): number {
-  return x.tagExact - y.tagExact || x.tagPartialSum - y.tagPartialSum;
+  return x.tag - y.tag || x.tagExact - y.tagExact;
 }
 function compareTitleAxis(x: ScoredRow, y: ScoredRow): number {
-  return x.titleExact - y.titleExact || x.titlePartial - y.titlePartial;
+  return x.title - y.title;
 }
 function compareStoryAxis(x: ScoredRow, y: ScoredRow): number {
-  return x.storyRatio - y.storyRatio || x.storyLongChars - y.storyLongChars;
+  return x.story - y.story || x.storyLongChars - y.storyLongChars;
 }
 function compareClipAxis(x: ScoredRow, y: ScoredRow): number {
   return (x.cosine ?? -Infinity) - (y.cosine ?? -Infinity);
@@ -777,10 +726,10 @@ function compareClipAxis(x: ScoredRow, y: ScoredRow): number {
 /**
  * One signal's own ranking over `byId` (id-indexed, same shape `scored` has
  * when `rankHybrid` passes it in) - "this room ranks #4 by tag, tied with 2
- * others" (docs/search_rules.md "Reporting"), independent of whatever the
- * weighted sum decides. Competition ranking (`1, 2, 2, 4`, not
- * `1, 2, 2, 3`): a tie shares the rank the group's best position would have
- * gotten, so "#4" always means "3 rooms score higher", tie or no tie.
+ * others" (docs/search_rules.md "Reporting"), independent of the placement
+ * order. Competition ranking (`1, 2, 2, 4`, not `1, 2, 2, 3`): a tie shares
+ * the rank the group's best position would have gotten, so "#4" always
+ * means "3 rooms score higher", tie or no tie.
  *
  * @param byId one row per room, indexed by id
  * @param compare ascending on this axis
@@ -822,15 +771,23 @@ export interface RankHybridOpts {
 }
 
 /**
- * Rank the whole corpus by the blend of whatever signals are available.
+ * Evaluate the whole corpus against a query: one `strength` per room, and
+ * the order that places rooms by it.
  *
- * The weighted sum is the seven constants docs/search_rules.md "Balancing
- * signals against each other" names: `E` per exact tag, `P` for the
- * saturating partial-tag budget, `T` for an exact title match, `Pt` for the
- * partial-title budget, `S` for a short story match, `L` for the saturating
- * long-story bonus, `C` for CLIP (`clipNorm * clipStrengthGate` - relative
- * rank position times absolute confidence, so a query CLIP has no opinion
- * about cannot look confident just because it produced *some* top result).
+ * Each axis turns the room's evidence into a pull in [0, 1], scaled by its
+ * `config.search.weights` entry (docs/search_rules.md "Signal weights"), and
+ * `matchStrength` combines the four. Per axis:
+ *
+ *   - tag: a soft OR over the query's terms, each exact match pulling at
+ *     `tagExact` and each partial at `tagPartial` times the fraction of the
+ *     keyword it covers. The whole-query reading competes with it, and the
+ *     better one stands.
+ *   - title: the best single reading over every term and the whole query,
+ *     since a room has one title.
+ *   - story: a soft OR of `story` per matched query word and `storyLong`
+ *     times the run curve (`STORY_LONG_RANGE`).
+ *   - clip: `clip` times `clipCurveStrength` of the raw cosine.
+ *
  * A missing signal is omitted, not substituted: no embedding blob gives a
  * text-only ranking, and no metadata a CLIP-only one. Only a corpus with
  * neither needs the server's stub.
@@ -840,20 +797,16 @@ export interface RankHybridOpts {
  * @param opts.weights        `config.search.weights`
  * @param opts.embeddings the blob, roomCount * dim row-major
  * @param opts.vector the query vector, L2-normalised
- * @param opts.clipStrength raw-cosine anchors for CLIP's share of strength
- * @returns `strength` is parallel to `order`, i.e. by rank, which is how the map's
- *   density gradient wants it - and `breakdown` follows the same convention,
- *   every array indexed by rank rather than by room id.
+ * @param opts.clipStrength raw-cosine anchors for CLIP's curve
+ * @returns `order` sorts by `comparePlacement`, so `strength` (parallel to
+ *   `order`, by rank) is non-increasing. `breakdown` follows the same
+ *   by-rank convention; it is what the catalog shows under a room and what
+ *   `explainRanking` formats.
  *
- *   `breakdown` is what the catalog shows under a room and what
- *   `explainRanking` formats. It is always returned from the pass that
- *   sorted, so the explanation cannot disagree with the ranking.
- *
- *   `ranks`/`ties` are independent per-axis sorts of `breakdown`'s own
- *   numbers (tag: `tagExact`/`tagPartialSum`; title: `titleExact`/
- *   `titlePartial`; story: `story`/`storyLongChars`; clip: `cosine`), each
- *   parallel to `order` like `breakdown` - see `rankAxis` for what the
- *   per-axis rank and tie counts mean.
+ *   `ranks`/`ties` are independent per-axis sorts (tag: pull, then exact
+ *   count; title: pull; story: pull, then `storyLongChars`; clip: cosine),
+ *   each parallel to `order` - see `rankAxis` for what the per-axis rank and
+ *   tie counts mean.
  */
 export function rankHybrid({
   query,
@@ -865,7 +818,7 @@ export function rankHybrid({
   scale = 0,
   vector = null,
   index = null,
-  clipStrength = CLIP_STRENGTH,
+  clipStrength: clipBand = CLIP_STRENGTH,
 }: RankHybridOpts): RankHybridResult {
   const parsed = parseQuery(query);
   const queryTokens = tokenise(query, { minLength: minTokenLength });
@@ -877,19 +830,13 @@ export function rankHybrid({
 
   const { terms: tagTerms, whole: wholeQueryTerm } = tagTermsOf(parsed, queryTokens, minTokenLength);
 
-  // CLIP twice over, from one pass of dot products: raw cosines for
-  // strength, and the same column min-maxed for the blend. Two questions,
-  // two scalings - see this file's header, "Ranking is relative; strength is
-  // absolute".
-  let cosines = null;
-  let clipNormAll = null;
-  if (embeddings && dim > 0 && scale > 0 && vector) {
-    cosines = embeddingScores(embeddings, dim, scale, Float32Array.from(vector));
-    clipNormAll = normaliseScores(cosines);
-  }
+  const cosines =
+    embeddings && dim > 0 && scale > 0 && vector
+      ? embeddingScores(embeddings, dim, scale, Float32Array.from(vector))
+      : null;
 
-  const hasTerms = tagTerms.length > 0;
-  const hasText = Boolean(index?.some(Boolean)) && (hasTerms || queryTokens.length > 0);
+  const hasText = Boolean(index?.some(Boolean)) && (tagTerms.length > 0 || queryTokens.length > 0);
+  const storyWordPull = clamp01(weights.story);
 
   const scored: ScoredRow[] = new Array(count);
   let sawKeyword = false;
@@ -897,134 +844,115 @@ export function rankHybrid({
   let sawStory = false;
 
   for (let id = 0; id < count; id++) {
+    let tag = 0;
+    let title = 0;
+    let story = 0;
     let tagExact = 0;
-    let tagPartialSum = 0;
     let tagPartialCount = 0;
-    let tagBest = 0;
     let titleExact = 0;
     let titlePartial = 0;
-    let titleBest = 0;
-    let storyRatio = 0;
+    let storyWords = 0;
     let storyLongChars = 0;
-    let storyMatched = false;
 
-    if (hasText) {
-      const entry = index[id];
-      if (entry) {
-        const titleKeywords = entry.title ? [entry.title] : null;
-        for (const term of tagTerms) {
-          const { exact, partial } = classifyTagTerm(term, entry.keywords);
-          tagBest = Math.max(tagBest, exact ? 1 : partial);
-          if (exact) tagExact++;
-          else if (partial > 0) {
-            tagPartialSum += partial;
-            tagPartialCount++;
-          }
-
-          if (titleKeywords) {
-            const t = classifyTagTerm(term, titleKeywords);
-            titleBest = Math.max(titleBest, t.exact ? 1 : t.partial);
-            if (t.exact) titleExact = 1;
-            else if (t.partial > titlePartial) titlePartial = t.partial;
-          }
+    const entry = hasText ? index?.[id] : null;
+    if (entry) {
+      const titleKeywords = entry.title ? [entry.title] : null;
+      const tagPulls: number[] = [];
+      for (const term of tagTerms) {
+        const { exact, partial } = classifyTagTerm(term, entry.keywords);
+        if (exact) {
+          tagExact++;
+          tagPulls.push(weights.tagExact);
+        } else if (partial > 0) {
+          tagPartialCount++;
+          tagPulls.push(weights.tagPartial * partial);
         }
 
-        // Two readings, and the better one wins - the whole query against
-        // one whole keyword, beside the per-term pass above. An exact whole
-        // match is worth one exact match, never more: `brutalism mezzotint`
-        // hitting two separate keywords already scored 2 up there, and this
-        // must not pull that down.
-        if (wholeQueryTerm) {
-          const whole = classifyTagTerm(wholeQueryTerm, entry.keywords);
-          tagBest = Math.max(tagBest, whole.exact ? 1 : whole.partial);
-          if (whole.exact) tagExact = Math.max(tagExact, 1);
-          else if (whole.partial > 0 && tagExact === 0 && tagPartialCount === 0) {
-            tagPartialSum = whole.partial;
-            tagPartialCount = 1;
-          }
-
-          if (titleKeywords) {
-            const t = classifyTagTerm(wholeQueryTerm, titleKeywords);
-            titleBest = Math.max(titleBest, t.exact ? 1 : t.partial);
-            if (t.exact) titleExact = 1;
-            else if (t.partial > titlePartial) titlePartial = t.partial;
-          }
+        if (titleKeywords) {
+          const t = classifyTagTerm(term, titleKeywords);
+          if (t.exact) titleExact = 1;
+          else if (t.partial > titlePartial) titlePartial = t.partial;
         }
-
-        storyRatio = storyScore(queryTokens, entry.story);
-        storyMatched = storyRatio > 0;
-        storyLongChars = longestMatchRun(entry.story.sequence, queryLemmas);
-        for (const phrase of phraseLemmas)
-          storyLongChars = Math.max(storyLongChars, storyPhraseRun(entry.story.sequence, phrase));
-
-        if (tagExact > 0 || tagPartialSum > 0) sawKeyword = true;
-        if (titleExact > 0 || titlePartial > 0) sawTitle = true;
-        if (storyMatched) sawStory = true;
       }
+      tag = softOr(tagPulls);
+
+      // Two readings, and the better one wins - the whole query against one
+      // whole keyword, beside the per-term pass above. An exact whole match
+      // counts as one exact match, never more: `brutalism mezzotint` hitting
+      // two separate keywords already counted 2 up there, and this must not
+      // pull that down.
+      if (wholeQueryTerm) {
+        const whole = classifyTagTerm(wholeQueryTerm, entry.keywords);
+        const wholePull = whole.exact ? weights.tagExact : weights.tagPartial * whole.partial;
+        if (whole.exact) tagExact = Math.max(tagExact, 1);
+        else if (whole.partial > 0 && tagExact === 0 && tagPartialCount === 0) tagPartialCount = 1;
+        tag = Math.max(tag, wholePull);
+
+        if (titleKeywords) {
+          const t = classifyTagTerm(wholeQueryTerm, titleKeywords);
+          if (t.exact) titleExact = 1;
+          else if (t.partial > titlePartial) titlePartial = t.partial;
+        }
+      }
+      title = titleExact ? weights.titleExact : weights.titlePartial * titlePartial;
+
+      storyWords = storyWordMatches(queryTokens, entry.story);
+      storyLongChars = longestMatchRun(entry.story.sequence, queryLemmas);
+      for (const phrase of phraseLemmas)
+        storyLongChars = Math.max(storyLongChars, storyPhraseRun(entry.story.sequence, phrase));
+      story = softOr([1 - (1 - storyWordPull) ** storyWords, weights.storyLong * storyRunCurve(storyLongChars)]);
+
+      if (tagExact > 0 || tagPartialCount > 0) sawKeyword = true;
+      if (titleExact > 0 || titlePartial > 0) sawTitle = true;
+      if (storyWords > 0 || storyLongChars > 0) sawStory = true;
     }
 
     const cosine = cosines ? (cosines[id] ?? null) : null;
-    const clipNorm = clipNormAll ? (clipNormAll[id] ?? 0) : 0;
-    const clipStrengthGate = clipCurveStrength(cosine, clipStrength);
-    const storyLongBonus = storyLongBonus01(storyLongChars);
-    const tagStrength = hasTerms ? tagBest : 0;
-    const titleStrength = hasTerms ? titleBest : 0;
-
-    const score =
-      weights.tagExact * tagExact +
-      weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION) +
-      weights.titleExact * titleExact +
-      weights.titlePartial * titlePartial +
-      weights.story * storyRatio +
-      weights.storyLong * storyLongBonus +
-      weights.clip * clipNorm * clipStrengthGate;
+    const clipCurve = clipCurveStrength(cosine, clipBand);
+    const clip = weights.clip * clipCurve;
 
     scored[id] = {
       id,
-      score,
+      strength: matchStrength({ tag, title, story, clip }),
+      tag,
+      title,
+      story,
+      clip,
       tagExact,
-      tagPartialSum,
       tagPartialCount,
       titleExact,
       titlePartial,
-      storyRatio,
+      storyWords,
       storyLongChars,
-      clipNorm,
-      clipStrengthGate,
+      clipStrength: clipCurve,
       cosine,
-      strength: matchStrength(
-        { tagStrength, titleStrength, storyLongChars, storyMatched, cosine },
-        clipStrength
-      ),
     };
   }
 
   // Independent per-signal sorts of the numbers just computed, run before
-  // the composite sort below while `scored` is still id-indexed - so
-  // `rank`/`ties` come back indexed by room id, same as `scored` itself, and
-  // re-sorting for one display column never touches the composite `order`
+  // the placement sort below while `scored` is still id-indexed - so
+  // `rank`/`ties` come back indexed by room id, same as `scored` itself
   // (docs/search_rules.md "The corpus-wide result", "Reporting").
   const tagRanking = rankAxis(scored, compareTagAxis);
   const titleRanking = rankAxis(scored, compareTitleAxis);
   const storyRanking = rankAxis(scored, compareStoryAxis);
   const clipRanking = rankAxis(scored, compareClipAxis);
 
-  // Stable sort, so rooms that every signal is silent about keep their id
-  // order rather than shuffling.
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort(comparePlacement);
 
   const strength = new Float32Array(count);
   const breakdown: ScoreBreakdown = {
-    score: new Float32Array(count),
+    tag: new Float32Array(count),
+    title: new Float32Array(count),
+    story: new Float32Array(count),
+    clip: new Float32Array(count),
     tagExact: new Float32Array(count),
-    tagPartialSum: new Float32Array(count),
     tagPartialCount: new Int32Array(count),
     titleExact: new Float32Array(count),
     titlePartial: new Float32Array(count),
-    story: new Float32Array(count),
+    storyWords: new Int32Array(count),
     storyLongChars: new Float32Array(count),
-    clip: new Float32Array(count),
-    clipStrengthGate: new Float32Array(count),
+    clipStrength: new Float32Array(count),
     cosine: new Float32Array(count),
   };
   const ranks: SignalRanks = {
@@ -1042,16 +970,17 @@ export function rankHybrid({
   for (let rank = 0; rank < count; rank++) {
     const row = scored[rank];
     strength[rank] = row.strength;
-    breakdown.score[rank] = row.score;
+    breakdown.tag[rank] = row.tag;
+    breakdown.title[rank] = row.title;
+    breakdown.story[rank] = row.story;
+    breakdown.clip[rank] = row.clip;
     breakdown.tagExact[rank] = row.tagExact;
-    breakdown.tagPartialSum[rank] = row.tagPartialSum;
     breakdown.tagPartialCount[rank] = row.tagPartialCount;
     breakdown.titleExact[rank] = row.titleExact;
     breakdown.titlePartial[rank] = row.titlePartial;
-    breakdown.story[rank] = row.storyRatio;
+    breakdown.storyWords[rank] = row.storyWords;
     breakdown.storyLongChars[rank] = row.storyLongChars;
-    breakdown.clip[rank] = row.clipNorm;
-    breakdown.clipStrengthGate[rank] = row.clipStrengthGate;
+    breakdown.clipStrength[rank] = row.clipStrength;
     breakdown.cosine[rank] = row.cosine ?? NaN;
     ranks.tag[rank] = tagRanking.rank[row.id];
     ties.tag[rank] = tagRanking.ties[row.id];
@@ -1069,7 +998,7 @@ export function rankHybrid({
     breakdown,
     ranks,
     ties,
-    signals: { clip: Boolean(clipNormAll), keyword: sawKeyword, title: sawTitle, story: sawStory },
+    signals: { clip: Boolean(cosines), keyword: sawKeyword, title: sawTitle, story: sawStory },
   };
 }
 
@@ -1082,71 +1011,60 @@ export interface ExplainRankingOpts {
   strength: Float32Array;
   ranks: SignalRanks;
   ties: SignalRanks;
-  weights: Config['search']['weights'];
   total: number;
 }
 
 /**
- * One room's ranking, as a reader reads it rather than as the sum computed
- * it: one composite line ("#4 of 2,048, 73% match strength"), and one line
- * per axis that actually found something for this room - tag, title, story,
- * and CLIP whenever the corpus has embeddings at all - each carrying its own
- * independent rank/tie count from `rankHybrid`'s `ranks`/`ties`, not the
- * composite's.
+ * One room's ranking, as a reader reads it: one composite line ("#4 of
+ * 2,048, 73% match strength"), and one line per axis that actually found
+ * something for this room - tag, title, story, and CLIP whenever the corpus
+ * has embeddings at all - each carrying its own independent rank/tie count
+ * from `rankHybrid`'s `ranks`/`ties`, not the placement order's.
  *
- * `strength` is the only number here computed against absolute bounds
- * (docs/search_rules.md "Computing strength") rather than read straight off
- * `breakdown.score`. `contributions` exists so a reader can still ask "why"
- * without confusing that absolute number for one of the terms that produced
- * it: each is that axis's weighted term as a share of `breakdown.score`,
- * sorted greatest first, an axis that contributed nothing omitted rather
- * than shown as `0%` (docs/search_rules.md "Reporting").
+ * `contributions` answers "why": each axis's pull as a share of the four
+ * pulls added together, sorted greatest first, an axis that pulled nothing
+ * omitted rather than shown as `0%` (docs/search_rules.md "Reporting"). The
+ * soft OR that makes `strength` does not split into additive parts, so a
+ * share is of the pulls, not of `strength`.
  *
  * @param rank position in `order`
  * @param opts.breakdown from `rankHybrid`
  * @param opts.strength from `rankHybrid`
  * @param opts.ranks from `rankHybrid`
  * @param opts.ties from `rankHybrid`
- * @param opts.weights `config.search.weights`
  * @param opts.total rooms in the corpus (`result.order.length`)
  * @returns `null` when nothing at all matched this room - no tag, no title, no story, no CLIP data.
  */
 export function explainRanking(
   rank: number,
-  { breakdown, strength, ranks, ties, weights, total }: ExplainRankingOpts
+  { breakdown, strength, ranks, ties, total }: ExplainRankingOpts
 ): RankingExplanation | null {
   const at = (arr: ArrayLike<number> | null | undefined): number => (arr && rank < arr.length ? arr[rank] : 0);
 
   const tagExact = at(breakdown?.tagExact);
-  const tagPartialSum = at(breakdown?.tagPartialSum);
   const tagPartialCount = at(breakdown?.tagPartialCount);
   const titleExact = at(breakdown?.titleExact);
   const titlePartial = at(breakdown?.titlePartial);
-  const storyRatio = at(breakdown?.story);
+  const storyWords = at(breakdown?.storyWords);
   const storyLongChars = at(breakdown?.storyLongChars);
   const cosine = at(breakdown?.cosine);
 
   const hasTag = tagExact > 0 || tagPartialCount > 0;
   const hasTitle = titleExact > 0 || titlePartial > 0;
-  const hasStory = storyRatio > 0 || storyLongChars > 0;
+  const hasStory = storyWords > 0 || storyLongChars > 0;
   const hasClip = Number.isFinite(cosine);
   if (!hasTag && !hasTitle && !hasStory && !hasClip) return null;
 
-  const tagWeighted = weights.tagExact * tagExact + weights.tagPartial * clamp01(tagPartialSum / TAG_PARTIAL_SATURATION);
-  const titleWeighted = weights.titleExact * titleExact + weights.titlePartial * titlePartial;
-  const storyWeighted = weights.story * storyRatio + weights.storyLong * storyLongBonus01(storyLongChars);
-  const clipWeighted = hasClip ? weights.clip * at(breakdown?.clip) * at(breakdown?.clipStrengthGate) : 0;
-  const totalScore = at(breakdown?.score);
-
-  const contributionTerms: { key: 'clip' | 'tag' | 'title' | 'story'; weighted: number }[] = [
-    { key: 'clip', weighted: clipWeighted },
-    { key: 'tag', weighted: tagWeighted },
-    { key: 'title', weighted: titleWeighted },
-    { key: 'story', weighted: storyWeighted },
+  const pulls: { key: 'clip' | 'tag' | 'title' | 'story'; pull: number }[] = [
+    { key: 'clip', pull: hasClip ? at(breakdown?.clip) : 0 },
+    { key: 'tag', pull: at(breakdown?.tag) },
+    { key: 'title', pull: at(breakdown?.title) },
+    { key: 'story', pull: at(breakdown?.story) },
   ];
-  const contributions = contributionTerms
-    .filter((c) => c.weighted > 0 && totalScore > 0)
-    .map((c) => ({ key: c.key, label: CONTRIBUTION_LABELS[c.key], percent: Math.round((c.weighted / totalScore) * 100) }))
+  const pullSum = pulls.reduce((sum, p) => sum + p.pull, 0);
+  const contributions = pulls
+    .filter((p) => p.pull > 0 && pullSum > 0)
+    .map((p) => ({ key: p.key, label: CONTRIBUTION_LABELS[p.key], percent: Math.round((p.pull / pullSum) * 100) }))
     .sort((a, b) => b.percent - a.percent);
 
   return {
@@ -1162,7 +1080,7 @@ export function explainRanking(
       : null,
     story: hasStory ? { rank: ranks.story[rank], ties: ties.story[rank], length: storyLongChars } : null,
     clip: hasClip
-      ? { rank: ranks.clip[rank], ties: ties.clip[rank], cosine, percent: strengthPercent(at(breakdown?.clipStrengthGate)) }
+      ? { rank: ranks.clip[rank], ties: ties.clip[rank], cosine, percent: strengthPercent(at(breakdown?.clipStrength)) }
       : null,
   };
 }

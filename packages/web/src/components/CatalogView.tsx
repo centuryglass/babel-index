@@ -881,7 +881,6 @@ export function CatalogView({
               highlight={highlight}
               tagLinks={tagLinks}
               result={result}
-              weights={config.search.weights}
               favorite={favoriteFor(id)}
               narrow={narrow}
               ultraNarrow={ultraNarrow}
@@ -932,7 +931,7 @@ export function CatalogView({
  */
 function CatalogRow({
   id, rank, total, entry, src, thumbPx, cell,
-  onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, weights, favorite,
+  onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, favorite,
   narrow = false, ultraNarrow = false, spotlit = false,
 }: {
   id: number;
@@ -948,7 +947,6 @@ function CatalogRow({
   highlight: Highlight;
   tagLinks: Record<string, string> | null;
   result: SearchResult | null;
-  weights: Config['search']['weights'];
   favorite: FavoriteControl | null;
   /** whether the list is too narrow to carry the map link beside the name - see `NARROW_PX` */
   narrow?: boolean;
@@ -1111,7 +1109,7 @@ function CatalogRow({
               the story wraps around it (docs/agents/catalog.md, "A room row's
               thumbnail floats, and the story wraps around it").
 
-              `RoomDetails` gets `weights={null}` so it renders no score; the
+              `RoomDetails` renders no score without `showScore`; the
               row places `ScoreBreakdown` below the flow instead. "read the
               rest" is absolutely positioned at the flow's bottom edge.
             */}
@@ -1126,7 +1124,6 @@ function CatalogRow({
                 tagLinks={tagLinks}
                 rank={rank}
                 result={result}
-                weights={null}
                 chipOverflow={
                   hiddenChips > 0 ? { count: hiddenChips, onClick: () => onExpand(id, rank) } : null
                 }
@@ -1138,7 +1135,7 @@ function CatalogRow({
               )}
             </div>
 
-            <ScoreBreakdown rank={rank} result={result} weights={weights} layout="strip" />
+            <ScoreBreakdown rank={rank} result={result} layout="strip" />
           </>
         )}
       </div>

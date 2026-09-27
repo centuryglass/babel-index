@@ -71,10 +71,6 @@ conventions still apply.
   lowercasing change length, so highlighting maps positions through
   `scoring.ts`'s `foldWithMap`. A folded index used on the original text
   misplaces every mark on accented text.
-- **The CLIP row of a score breakdown must show its raw cosine.**
-  `breakdown.clip` is min-maxed per query, so some room scores 1.00 even for
-  `cghjj`. `explainRanking` prints the raw cosine beside it, with strength
-  on its own line.
 - **Namespace catalog CSS.** `.row` belongs to the dev panel, so an
   unprefixed `.row` rule reaches into its slider rows. The reverse also
   bites: the panel's global `button { flex: 1 }` stretches any button the

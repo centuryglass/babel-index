@@ -31,7 +31,6 @@ import { roomPath } from '../../../map/slug.ts';
 import { BASE_TILE } from '../lib/pyramid.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
-import type { Config } from '../../../config/config.ts';
 
 /**
  * Which room (or generic cell) this names. A map pick (`RoomPick`) also
@@ -135,7 +134,7 @@ export function RoomOverlay({
   highlight,
   tagLinks,
   result,
-  weights,
+  showScore = false,
   favorite = null,
   view = null,
   naturalSize = null,
@@ -162,7 +161,8 @@ export function RoomOverlay({
   } | null;
   tagLinks?: Record<string, string> | null;
   result?: SearchResult | null;
-  weights?: Config['search']['weights'] | null;
+  /** render the room's score breakdown - see `RoomDetails` */
+  showScore?: boolean;
   /** this room's favorite state, rendered in the head beside `view` */
   favorite?: FavoriteControl | null;
   /**
@@ -455,7 +455,7 @@ export function RoomOverlay({
               tagLinks={tagLinks}
               rank={'generic' in room ? undefined : room.rank}
               result={result}
-              weights={weights}
+              showScore={showScore}
               favorite={null}
             />
           </div>
