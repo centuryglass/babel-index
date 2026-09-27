@@ -322,6 +322,25 @@ class Engine:
         )
         return story, chosen.name
 
+    def record_critique(self, subject: str, run: str, index: int | None, text: str) -> None:
+        """Log a human critique of pitch ``index`` in batch ``run``.
+
+        ``index`` None is a note on the whole batch. A later critique of the
+        same target replaces an earlier one, and empty text clears it.
+        """
+        self.trace.append(subject, {"stage": "critique", "run": run, "index": index, "text": text})
+
+    def critiques(self, subject: str, run: str) -> dict[int | None, str]:
+        """The current critique text per pitch index (None for the batch) in ``run``."""
+        out: dict[int | None, str] = {}
+        for event in self.trace.events(subject):
+            if event.get("stage") == "critique" and event.get("run") == run:
+                if event["text"]:
+                    out[event["index"]] = event["text"]
+                else:
+                    out.pop(event["index"], None)
+        return out
+
     def record_outcome(self, subject: str, outcome: str, story: str | None = None, **extra) -> None:
         """Log a human decision (``accepted``, ``discarded``, ...) for calibration."""
         self.trace.append(subject, {"stage": "outcome", "outcome": outcome, "story": story, **extra})

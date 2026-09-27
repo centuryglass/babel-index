@@ -18,7 +18,9 @@ Right panel: story editing for the selected tile.
     in the image; "Write" (or a double-click) writes the selected one into the
     story field in a form drawn by weight, or the form picked beside it.
     Every step is traced to ``story_traces/``. Marking an engine-written
-    story Final, or clearing it, logs that outcome to the trace too.
+    story Final, or clearing it, logs that outcome to the trace too. Below
+    the list, a critique box for the selected pitch and a note line for the
+    whole batch autosave to the trace (see ``story_critiques`` for the export).
   - Alt text -- accessibility description, editable with its own autosave and
     "Generate alt" button (uses the model dropdown, ``core.default_alt_prompt``,
     stored as "alt" on the tile's metadata entry).
@@ -340,6 +342,12 @@ class ReviewWindow(QMainWindow):
         # Each tile's latest pitch batch, restored from its trace on first
         # selection so pitches survive navigation and restarts.
         self._pitch_batches: dict[str, PitchBatch | None] = {}
+        # Critique text per tile for its shown batch, keyed by pitch index
+        # (None for the batch note), and which batch the editors belong to.
+        self._critiques: dict[str, dict[int | None, str]] = {}
+        self._critique_run: tuple[str, str] | None = None  # (key, run)
+        self._critique_index: int | None = None  # pitch row the critique box holds
+        self._critique_loading = False
         # A missing data/ list (launched from outside tools/curation) disables
         # the Pitches panel rather than the whole GUI.
         try:
@@ -360,6 +368,8 @@ class ReviewWindow(QMainWindow):
         self._alt_save_timer.timeout.connect(self._flush_alt)
         self._title_save_timer = QTimer(self, singleShot=True, interval=600)
         self._title_save_timer.timeout.connect(self._flush_title)
+        self._critique_save_timer = QTimer(self, singleShot=True, interval=700)
+        self._critique_save_timer.timeout.connect(self._flush_critiques)
 
         # Pick up edits another process (a batch script, or a second GUI)
         # makes to metadata.json while this window is open. Re-added on every
@@ -618,9 +628,19 @@ class ReviewWindow(QMainWindow):
         self.pitch_list.setMinimumHeight(80)
         self.pitch_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.pitch_list.setSpacing(3)
-        self.pitch_list.currentRowChanged.connect(lambda _row: self._update_pitch_controls())
+        self.pitch_list.currentRowChanged.connect(self._on_pitch_row_changed)
         self.pitch_list.itemDoubleClicked.connect(lambda _item: self._on_write_pitch())
         column.addWidget(self.pitch_list, stretch=1)
+
+        self.critique_edit = QPlainTextEdit()
+        self.critique_edit.setPlaceholderText("Select a pitch to critique it.")
+        self.critique_edit.setMaximumHeight(90)
+        self.critique_edit.textChanged.connect(self._on_critique_changed)
+        column.addWidget(self.critique_edit)
+        self.batch_note_edit = QLineEdit()
+        self.batch_note_edit.setPlaceholderText("Notes on this whole batch")
+        self.batch_note_edit.textChanged.connect(self._on_critique_changed)
+        column.addWidget(self.batch_note_edit)
 
         if self.story_engine is None:
             self.reading_label.setText(self._engine_error)
@@ -1290,18 +1310,81 @@ class ReviewWindow(QMainWindow):
         engine = self.story_engine
         if engine is None:
             return
+        self._flush_critiques()
+        subject = story_frame.subject_for(key)
         if key not in self._pitch_batches:
-            self._pitch_batches[key] = engine.latest_batch(story_frame.subject_for(key))
+            self._pitch_batches[key] = engine.latest_batch(subject)
         batch = self._pitch_batches.get(key)
         self.reading_label.setText(f"Enigma: {batch.reading.enigma}" if batch else "No pitches yet.")
+        critiques = engine.critiques(subject, batch.run) if batch else {}
+        self._critiques[key] = critiques
+        self._critique_run = (key, batch.run) if batch else None
+        self._critique_index = None
+
+        self._critique_loading = True
         self.pitch_list.clear()
-        for pitch in batch.pitches if batch else []:
-            item = QListWidgetItem(
-                f"[{pitch.payload}] {pitch.premise}\n    Turn: {pitch.turn}\n    Anchor: {pitch.anchor}"
-            )
+        for i, pitch in enumerate(batch.pitches if batch else []):
+            item = QListWidgetItem(self._pitch_item_text(pitch, i in critiques))
             item.setData(Qt.ItemDataRole.UserRole, pitch)
             self.pitch_list.addItem(item)
+        self.pitch_list.setCurrentRow(-1)
+        self.critique_edit.setPlainText("")
+        self.batch_note_edit.setText(critiques.get(None, ""))
+        self._critique_loading = False
+        self.batch_note_edit.setEnabled(batch is not None)
+        self.critique_edit.setEnabled(False)
         self._update_pitch_controls()
+
+    @staticmethod
+    def _pitch_item_text(pitch, critiqued: bool) -> str:
+        mark = "✎ " if critiqued else ""
+        return f"{mark}[{pitch.payload}] {pitch.premise}\n    Turn: {pitch.turn}\n    Anchor: {pitch.anchor}"
+
+    # -- Pitch critiques ------------------------------------------------------
+    def _on_pitch_row_changed(self, row: int):
+        """Save the outgoing pitch's critique, then load the incoming one's.
+
+        Skipped while ``_show_pitch_state`` rebuilds the list, which resets
+        the editors itself; flushing then would pair one tile's editor text
+        with another tile's batch.
+        """
+        if self._critique_loading:
+            return
+        self._flush_critiques()
+        self._critique_index = row if row >= 0 else None
+        critiques = self._critiques.get(self._critique_run[0], {}) if self._critique_run else {}
+        self._critique_loading = True
+        self.critique_edit.setPlainText(critiques.get(row, "") if row >= 0 else "")
+        self._critique_loading = False
+        self.critique_edit.setEnabled(row >= 0)
+        self._update_pitch_controls()
+
+    def _on_critique_changed(self):
+        if not self._critique_loading:
+            self._critique_save_timer.start()
+
+    def _flush_critiques(self):
+        """Append any changed critique or batch note to the tile's trace."""
+        self._critique_save_timer.stop()
+        if self.story_engine is None or self._critique_run is None:
+            return
+        key, run = self._critique_run
+        stored = self._critiques.setdefault(key, {})
+        edits: list[tuple[int | None, str]] = [(None, self.batch_note_edit.text().strip())]
+        if self._critique_index is not None:
+            edits.append((self._critique_index, self.critique_edit.toPlainText().strip()))
+        for index, text in edits:
+            if text == stored.get(index, ""):
+                continue
+            self.story_engine.record_critique(story_frame.subject_for(key), run, index, text)
+            if text:
+                stored[index] = text
+            else:
+                stored.pop(index, None)
+            if index is not None and key == self.current_key:
+                item = self.pitch_list.item(index)
+                if item is not None:
+                    item.setText(self._pitch_item_text(item.data(Qt.ItemDataRole.UserRole), bool(text)))
 
     def _update_pitch_controls(self):
         if not hasattr(self, "pitch_button"):
@@ -1492,4 +1575,5 @@ class ReviewWindow(QMainWindow):
         self._flush_story()
         self._flush_alt()
         self._flush_title()
+        self._flush_critiques()
         super().closeEvent(event)

@@ -84,6 +84,15 @@ The GUI's **Pitches** section runs the staged story engine
    beside the button.
 3. Review, revise and finalize the draft as usual.
 
+To critique pitches, select one and type in the box under the list. The
+line below that holds a note on the whole batch. Both autosave, and a
+critiqued pitch is marked with ✎. To collect every critique into one
+Markdown report:
+
+```sh
+python -m babel_index_review.story_critiques DIR [--out critiques.md]
+```
+
 Payloads and forms are `data/story_payloads.json` and
 `data/story_forms.json`. Each entry has a relative `weight`; raise the ones
 that keep working and lower the ones that don't. Every step, plus each Final
