@@ -42,6 +42,14 @@
   --paper-edge: rgba(70, 54, 30, 0.28);
   --paper-accent: #7a4718;
   --paper-gutter: rgba(52, 38, 18, 0.32);
+  /*
+    The paper stock every cream sheet is cut from: `.paper-sheet`,
+    `.overlay-columns`, `.book-page`, and the wide `.book` spread, which
+    layers its gutter over `--paper-stock`.
+  */
+  --paper-stock: linear-gradient(158deg, var(--paper-hi), var(--paper));
+  --paper-border: 1px solid var(--paper-edge);
+  --paper-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
 }
 * { box-sizing: border-box; }
 /*
@@ -53,8 +61,8 @@
  * - Anything left claimable up the chain lets it take a two-finger gesture
  *   as page zoom and send a pointercancel instead of the pinch.
  * - Because it is an intersection, a descendant can only restrict it
- *   further, never re-enable it; the `:has()` rule below relaxes the chain
- *   itself.
+ *   further, never re-enable it; the `html:has(.overlay-scrim, .catalog)` rule
+ *   relaxes the chain itself.
  */
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #110302;
@@ -182,6 +190,9 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
   0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb),0.6); }
   50% { box-shadow: 0 0 5px 2px rgba(var(--accent-rgb),0.9); }
 }
+@media (prefers-reduced-motion: reduce) {
+  .center-books button.hint { animation: none; }
+}
 
 /*
  * The open book's hotspot, sized over the whole cell like `.center-books`.
@@ -202,7 +213,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .center-book path { fill: transparent; stroke: none; }
 .center-book.hover path { fill: rgba(var(--hover-glow-rgb),0.28); stroke: rgba(var(--hover-glow-rgb),0.55); stroke-width: 0.004; }
-.center-book:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.center-book:focus-visible { outline-offset: 1px; }
 
 /*
  * The favorites-sort switch and reorder button: one container over the
@@ -222,7 +233,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 .center-controls button.hover { background: rgba(var(--hover-glow-rgb),0.28); box-shadow: 0 0 0 1px rgba(var(--hover-glow-rgb),0.55); }
 .center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),0.75); }
-.center-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.center-controls button:focus-visible { outline-offset: 1px; }
 /*
  * A custom tooltip, not the native `title` popup, which never shows: the
  * button has `pointer-events: none` from `.center-controls`, so no
@@ -242,28 +253,15 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 }
 
 /*
- * The on-tile favorite badge's tooltip: one floating element, since a badge
- * is painted onto every tile and has no DOM button to anchor to.
- * - The render loop's pointermove listener positions it at the pointer
+ * The tooltips for controls painted onto the canvas: the on-tile favorite
+ * badge and the center tile's distill toggle. Each is one floating element,
+ * since what it labels has no DOM box to anchor to.
+ * - The render loop's pointermove listener positions each at the pointer
  *   (alongside `hoveredFavorite`).
  * - `display: none` is the default; the listener sets `block` only while
- *   the pointer is over a badge's traced silhouette.
+ *   the pointer is over the control's traced silhouette.
  */
-.favorite-tooltip {
-  position: absolute; display: none; pointer-events: none; z-index: 2;
-  transform: translate(-50%, -100%); margin-top: -8px;
-  padding: 4px 8px; white-space: nowrap;
-  background: var(--panel); border: 1px solid var(--edge); border-radius: 5px;
-  color: var(--ink); font-size: 11px; line-height: 1.3;
-}
-
-/*
- * The distill toggle's tooltip, one floating element like
- * `.favorite-tooltip`: the toggle is painted onto the center tile's corner
- * and has no element box to anchor to.
- */
-
-.distill-tooltip {
+.favorite-tooltip, .distill-tooltip {
   position: absolute; display: none; pointer-events: none; z-index: 2;
   transform: translate(-50%, -100%); margin-top: -8px;
   padding: 4px 8px; white-space: nowrap;
@@ -273,7 +271,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 
 .panel {
   position: absolute; top: 16px; left: 16px; width: 268px; padding: 14px 16px;
-  background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
+  background-color: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
   backdrop-filter: blur(8px);
 }
 .panel h1 { margin: 0 0 2px; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
@@ -321,7 +319,8 @@ input[type="search"]:focus { border-color: var(--accent); }
   Paper chrome for the panel: buttons and the ranked results both read as
   cream chips on the dark panel.
   Scoped to `.panel` so nothing outside the map-mode debug panel is touched
-  here; the catalog's own controls get the same look independently below.
+  here; the catalog's controls (`.paging button`, `.mode-toggle`) are styled
+  on their own.
 */
 .panel button {
   color: var(--paper-ink); background: var(--paper); border: 1px solid var(--paper-edge);
@@ -348,11 +347,9 @@ button {
   border: 1px solid var(--edge); border-radius: 5px; font: inherit; cursor: pointer;
 }
 button:hover { background: rgba(var(--accent-rgb),0.24); }
-.search-trigger { width: 100%; }
 /*
   The map's search affordance: a standalone circular badge in the top-left
-  corner, positioned without the panel. It must come after
-  `.search-trigger`, whose `width: 100%` it overrides.
+  corner, positioned without the panel.
 */
 .search-icon-button {
   position: absolute; top: 16px; left: 16px; width: 56px; height: 56px; z-index: 1;
@@ -416,8 +413,8 @@ button:hover { background: rgba(var(--accent-rgb),0.24); }
 /*
   The dialog chrome shared by `RoomOverlay`, `HelpDialog`,
   `ArtistStatementOverlay` and `BabelBookOverlay` - the scrim/dialog
-  pair is each one's own (`.overlay-scrim`/`.overlay` below), but the
-  head row inside it is one appearance.
+  pair is each one's own (`.overlay-scrim`/`.overlay`), but the head row
+  inside it is one appearance.
 */
 .card-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -638,7 +635,7 @@ mark {
 
 .catalog {
   position: absolute; inset: 0; display: flex; flex-direction: column;
-  background: #150805; touch-action: auto;
+  background-color: #150805; touch-action: auto;
   animation: catalog-in 240ms ease both;
 }
 /*
@@ -652,7 +649,6 @@ mark {
 @keyframes catalog-out { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .catalog, .catalog.leaving { animation: none; }
-  .center-books button.hint { animation: none; }
 }
 
 .catalog-bar {
@@ -663,12 +659,11 @@ mark {
 /*
   The bar's count names the query in full: the shelf link that repeats it
   is ellipsised, so this is where a reader confirms what was searched. The
-  query is bounded by `search.maxQueryLength`, and the row wraps rather
-  than push the paging control off the edge.
+  query is bounded by `search.maxQueryLength`; the count breaks anywhere
+  (`.catalog-count`'s `overflow-wrap`), and the row wraps rather than push
+  the paging control off the edge.
 */
-.catalog-bar-row.sub { flex-wrap: wrap; align-items: center; }
-.catalog-count { overflow-wrap: anywhere; }
-.catalog-bar-row.sub { margin-top: 8px; }
+.catalog-bar-row.sub { flex-wrap: wrap; align-items: center; margin-top: 8px; }
 .catalog-search { position: relative; flex: 1; margin: 0; }
 .catalog-search input[type="search"] {
   width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--paper-ink);
@@ -739,6 +734,7 @@ mark {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 .catalog-show {
+  flex: 0 0 auto;
   font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
   background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
   border-radius: 4px; padding: 4px 9px;
@@ -874,7 +870,6 @@ mark {
   right: calc(-1 * (var(--catalog-mat, 0px) + 8px));
   border-right: 1px solid var(--edge);
 }
-.catalog-tile-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-tile {
   display: block; width: var(--catalog-thumb); height: auto;
   border-radius: 2px; background: #14110d; transform-origin: 0 0;
@@ -906,7 +901,7 @@ mark {
 .catalog-center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .catalog-center-book path { fill: transparent; stroke: none; }
 .catalog-center-book:hover path { fill: rgba(var(--hover-glow-rgb),0.28); stroke: rgba(var(--hover-glow-rgb),0.55); stroke-width: 0.004; }
-.catalog-center-book:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.catalog-center-book:focus-visible { outline-offset: 1px; }
 /*
  * The global `button:hover` rule washes any plain button with a tan fill,
  * which reads as haze over a button that is a picture. Both catalog
@@ -930,7 +925,7 @@ mark {
   width: var(--distill-w, 0); height: var(--distill-h, 0);
 }
 .catalog-distill-toggle img { display: block; width: 100%; height: 100%; }
-.catalog-distill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.catalog-distill-toggle:focus-visible { outline-offset: 1px; }
 /* Shown only on a story the clamp actually cut - see CatalogRow. */
 .catalog-more {
   font: inherit; font-size: 10px; color: var(--accent); cursor: pointer;
@@ -948,24 +943,24 @@ mark {
   Wide enough for the tile at its native resolution (1024px, `BASE_TILE`)
   plus the padding/border around it - a viewport that size or larger
   shows the picture at full size, a smaller one shrinks it
-  (`.overlay-tile` below). Everything inside - tile and story alike -
+  (`.overlay-tile`). Everything inside - tile and story alike -
   scrolls as this one region: a long story and a native-resolution
   picture compete for the same space rather than each getting a fixed
   share.
 */
 .overlay {
   width: min(1060px, 100%); max-height: 100%; overflow-y: auto;
-  background: var(--panel); border: 1px solid var(--edge); border-radius: 6px;
+  background-color: var(--panel); border: 1px solid var(--edge); border-radius: 6px;
   padding: 14px 16px 16px;
 }
 /*
   A seamless leather grain over the dark chrome: the side panel, every
   dialog's `.overlay`, and the catalog backdrop.
   - The `overlay` blend mode blends against each surface's base colour, so
-    the tint still comes from `--panel` or `.catalog`'s background; the
-    image only adds grain.
-  - This rule must come after those three set their `background`
-    shorthands, which would otherwise reset `background-image`.
+    the tint still comes from `--panel` or `.catalog`'s `background-color`;
+    the image only adds grain.
+  - Those three set `background-color`, never the `background` shorthand,
+    which would reset `background-image` wherever it wins the cascade.
   - The url is relative, so it survives a subpath deploy.
   The map canvas is painted art and the scrim is translucent over it, so
   neither takes the grain.
@@ -978,9 +973,8 @@ mark {
 /*
   A cream sheet laid on the dark `.overlay` cover, as BookOverlay lays its
   `.book`. The `.card-head` stays on the cover, outside the paper.
-  - The same stock as `.book-page`, for dialogs that hold arbitrary content
-    (RoomOverlay, HelpDialog). Keep its gradient, border and shadow in step
-    with `.book-page` and `.overlay-columns`.
+  - The same stock (`--paper-stock`) as `.book-page`, for dialogs that hold
+    arbitrary content (RoomOverlay, HelpDialog).
   - Remapping the palette variables recolours the shared `RoomDetails` and
     help markup to dark ink without restating a colour per element.
 */
@@ -989,10 +983,10 @@ mark {
   --ink: var(--paper-ink);
   --dim: var(--paper-dim);
   --edge: var(--paper-edge);
-  background: linear-gradient(158deg, var(--paper-hi), var(--paper));
-  border: 1px solid var(--paper-edge); border-radius: 4px;
+  background: var(--paper-stock);
+  border: var(--paper-border); border-radius: 4px;
   padding: 22px 24px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+  box-shadow: var(--paper-shadow);
 }
 /*
   The light-gold accent (`--accent`) is tuned to read on the dark chrome;
@@ -1043,9 +1037,9 @@ mark {
 .overlay-columns {
   position: relative;
   display: block; padding: 22px 24px;
-  background: linear-gradient(158deg, var(--paper-hi), var(--paper));
-  border: 1px solid var(--paper-edge); border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+  background: var(--paper-stock);
+  border: var(--paper-border); border-radius: 4px;
+  box-shadow: var(--paper-shadow);
 }
 /*
   Hug the content instead of always claiming a fixed width - `fit-
@@ -1221,10 +1215,10 @@ mark {
 .book-page {
   min-width: 0;
   color: var(--paper-ink);
-  background: linear-gradient(158deg, var(--paper-hi), var(--paper));
-  border: 1px solid var(--paper-edge); border-radius: 4px;
+  background: var(--paper-stock);
+  border: var(--paper-border); border-radius: 4px;
   padding: 22px 24px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+  box-shadow: var(--paper-shadow);
 }
 /* Wide: one spread. The paper moves to the .book; the pages ride over it
    transparent, keeping only the inner padding that clears the gutter. */
@@ -1232,9 +1226,9 @@ mark {
   .book {
     grid-template-columns: 1fr 1fr; gap: 0;
     color: var(--paper-ink);
-    border: 1px solid var(--paper-edge); border-radius: 4px;
+    border: var(--paper-border); border-radius: 4px;
     padding: 26px 30px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+    box-shadow: var(--paper-shadow);
     background:
       linear-gradient(to right,
         transparent 40%,
@@ -1242,7 +1236,7 @@ mark {
         var(--paper-gutter) 50%,
         rgba(52,38,18,0.08) 54%,
         transparent 60%),
-      linear-gradient(158deg, var(--paper-hi), var(--paper));
+      var(--paper-stock);
   }
   .book-page {
     background: none; border: none; border-radius: 0;
@@ -1311,7 +1305,8 @@ mark {
   Light chrome pills at the spread's two corners, not the global stretched
   button - the same faint gold-wash the catalog's paging controls carry, so
   the nav reads as delicate as the book it sits under rather than two dark
-  slabs. prev holds the left edge, next the right (space-between above).
+  slabs. prev holds the left edge, next the right (`.book-nav`'s
+  `space-between`).
 */
 .book-nav button {
   flex: 0 0 auto; font-size: 11px; color: var(--dim); padding: 5px 14px;
@@ -1368,7 +1363,6 @@ mark {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   line-height: var(--catalog-title-line, 16px); text-overflow: clip;
 }
-.catalog-show { flex: 0 0 auto; }
 .catalog-name .favorite-toggle { flex: 0 0 auto; }
 .catalog-rank {
   color: var(--accent); font-variant-numeric: tabular-nums; font-size: 11px;
@@ -1600,7 +1594,7 @@ mark {
 */
 .catalog-center .shelf-links { display: contents; }
 .catalog-center .shelf-link { width: auto; margin: 0; min-width: 0; }
-/* Narrow only tightens the card's padding; the shared grid above is unchanged. */
+/* Narrow only tightens the card's padding; `.catalog-center.paper-sheet`'s grid is unchanged. */
 .catalog.narrow:not(.ultra-narrow) .catalog-center.paper-sheet { padding: 12px; }
 /*
   Below `ULTRA_NARROW_PX` the picture and a text column cannot share the
