@@ -790,6 +790,42 @@ test('strength is indexed by rank, not by room', () => {
   assert.equal(strength.length, 3);
 });
 
+test('a room is placed by the strength it reports, so strength never rises with rank [SR-22]', () => {
+  // One room per axis, in id order that disagrees with strength order: a
+  // partial tag, scattered story words, a confident CLIP match and an exact
+  // tag. Each rank's strength must be the soft OR of the pulls reported for
+  // that same rank, and no rank may report more than the one above it.
+  const { centre, high } = CLIP_STRENGTH;
+  const { order, strength, breakdown } = rankHybrid({
+    query: 'glass tower',
+    count: 5,
+    weights: WEIGHTS,
+    embeddings: atCosines(centre - 0.1, centre - 0.1, centre - 0.1, high + 0.1, centre - 0.1),
+    dim: 2,
+    scale: 127,
+    vector: CLIP_QUERY,
+    index: indexOf(
+      null,
+      [['glassblowing'], null],
+      [[], 'The tower leaned. Its glass had long since gone.'],
+      null,
+      [['glass'], null]
+    ),
+  });
+
+  assert.deepEqual(order, [4, 3, 2, 1, 0], 'exact tag, then CLIP, then story words, then partial tag');
+  for (let rank = 0; rank < order.length; rank++) {
+    const pulls = {
+      tag: breakdown.tag[rank],
+      title: breakdown.title[rank],
+      story: breakdown.story[rank],
+      clip: breakdown.clip[rank],
+    };
+    assert.ok(Math.abs(strength[rank] - matchStrength(pulls)) < 1e-6, `rank ${rank} reports its own pulls`);
+    if (rank > 0) assert.ok(strength[rank] <= strength[rank - 1], `rank ${rank} rose above rank ${rank - 1}`);
+  }
+});
+
 test('the strength bounds are configurable', () => {
   // They are the one part of the gradient that wants measuring against a real
   // corpus, which is why they are config rather than a constant in the blend.
