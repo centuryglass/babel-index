@@ -192,7 +192,8 @@ Every tracked file in the repo, with a line or two on what it is for.
     * `tiles.ts`: The tile cache - loading, eviction, and fallback levels.
     * `rooms.ts`: Maps a room and level to its image url or sheet cell.
     * `libraryState.ts`: `Library`'s shared state as a pure reducer - the
-      open card, overlay and dialogs, and the rules between them.
+      layout inputs, the sort, search history, blocked tags, paging and
+      what is open, and the rules between them.
     * `persist.ts`: localStorage state - search history, pagination
       settings, blocked tags, the reader's favorites and client id.
     * `touchDebug.ts`: On-screen pointer stream behind `?touchdebug`.

@@ -2,13 +2,13 @@
  * The app's entry point and composition root.
  *
  * - `App` fetches the manifest and renders `Library` once it arrives.
- * - `Library` owns the state the two readings share: reader settings and
- *   their persistence, search history, blocked tags, the sort mode, the
- *   derived layout and catalog order, and which room card, overlay or
- *   dialog is open. The last group is a reducer (`lib/libraryState.ts`),
- *   and `Library` dispatches to it. `Library` wires that state into the
- *   hooks and passes the results to `MapView`, `CatalogView` and the
- *   dialogs.
+ * - `Library` owns the state the two readings share. What changes on reader
+ *   intent (the layout inputs, the sort, search history, blocked tags,
+ *   paging, and which room card, overlay or dialog is open) is a reducer
+ *   (`lib/libraryState.ts`) that `Library` dispatches to. `Library` keeps
+ *   that state's persistence, the live region, and the order, layout and
+ *   catalog order derived from it, wires it all into the hooks, and passes
+ *   the results to `MapView`, `CatalogView` and the dialogs.
  * - The hooks own the behaviour, for example: `useMapCamera` the camera
  *   and gestures, `useMapRenderer`/`useMapRendererGL` the render loop,
  *   `useCorpus` the corpus sidecars, `useSearch` the ranking,
@@ -33,7 +33,7 @@ import { alphabeticalOrder } from './lib/catalog.ts';
 import { load, save, clear, KEYS } from './lib/persist.ts';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
 import { roomAtPoint, type RoomPick } from './lib/picking.ts';
-import { initLibraryState, reduce, type InitialRoute } from './lib/libraryState.ts';
+import { initLibraryState, overlayRank, reduce, type InitialRoute } from './lib/libraryState.ts';
 import { describeCell, describeRoom, describeCatalog, describeSort } from '../../map/describe.ts';
 import {
   bookAtPoint,
@@ -45,7 +45,6 @@ import {
   areSpinesLegible,
   overlapsViewport,
   fullyInViewport,
-  HISTORY_SLOT_COUNT,
   CENTER_OPENING_RECT,
   openingZoom,
   shuffleButtonAtPoint,
@@ -140,69 +139,59 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // the sliders start; nothing here restates those values as literals.
   const config = manifest.config as unknown as Config;
 
-  // How the catalog advances. Persisted: the reader's stored choice beats
-  // config's default, which only decides where a first visit starts.
-  const [paging, setPaging] = useState(() =>
-    load(KEYS.paging, config.catalog.paging, {
-      validate: (v) => v === 'scroll' || v === 'pages',
+  const [status, setStatus] = useState('');
+
+  // Everything that changes on reader intent: the layout inputs, the sort,
+  // search history, blocked tags, paging, and what is open. The rules tying
+  // them together are `libraryState.ts`'s `reduce`. Seeded once at mount
+  // from config, from what `persist.ts` stored, and from `INITIAL_ROUTE`, so
+  // a `/catalog/<slug>` or `/map/<slug>` permalink opens that room's overlay
+  // and `/help` or `/about` its dialog.
+  const [state, dispatch] = useReducer(reduce, null, () =>
+    initLibraryState({
+      route: INITIAL_ROUTE,
+      rooms: manifest.rooms,
+      total,
+      map: config.map,
+      now: Date.now(),
+      stored: {
+        history: load<string[]>(KEYS.history, [], {
+          validate: (v) => Array.isArray(v) && v.every((term) => typeof term === 'string'),
+        }),
+        blockedTags: load<string[]>(KEYS.blockedTags, URL_BLOCKED_TAGS, {
+          validate: (v) => Array.isArray(v) && v.every((t) => typeof t === 'string'),
+        }),
+        paging: load(KEYS.paging, config.catalog.paging, {
+          validate: (v) => v === 'scroll' || v === 'pages',
+        }),
+        seenHelpHint: load(KEYS.seenHelpHint, false),
+      },
     })
   );
-  useEffect(() => {
-    save(KEYS.paging, paging);
-  }, [paging]);
+  const {
+    roomCount, contentRatio, seed, orderSeed, sortMode, randomSortSeed, history, blockedTags, paging,
+    card, overlay, catalogSpotlightId, helpOpen, showHelpHint, artistStatementOpen,
+  } = state;
 
-  const [roomCount, setRoomCount] = useState(total);
-  const [contentRatio, setContentRatio] = useState(config.map.contentRatio);
-  const [seed, setSeed] = useState(config.map.slotSeed);
-  const [orderSeed, setOrderSeed] = useState(() => Date.now());
-  // Which of the four readings of the same ranking is in force. Session-only,
-  // unlike favorites: a favorite list is a standing choice about the library;
-  // "sorted by favorites right now" is not.
-  const [sortMode, setSortMode] = useState<SortMode>('relevance');
-  // The permutation `'random'` sorts by (see `favorites.ts`). Rerolled only
-  // when `changeSort` switches into it, so ordinary re-renders - a favorite
-  // toggle, a map/catalog switch - never reshuffle an order on screen.
-  const [randomSortSeed, setRandomSortSeed] = useState(() => Date.now());
-
-  const [status, setStatus] = useState('');
-  // Search history, newest first, one book per entry. Persisted because it
-  // titles the center shelf: the wall reads as a record of what this reader
-  // has asked the library, not keyword tags that reset each session.
-  //
-  // Read once at mount through a validator - storage is hand-editable and
-  // outlives any version of this code, so "it parsed" is not "it is a list
-  // of search terms". Capped at the wall's size; the wall is the only place
-  // it is shown.
-  const [history, setHistory] = useState(() =>
-    load<string[]>(KEYS.history, [], {
-      validate: (v) => Array.isArray(v) && v.every((term) => typeof term === 'string'),
-    }).slice(0, HISTORY_SLOT_COUNT)
-  );
-  const pushHistory = useCallback((term: string) => {
-    setHistory((prev) => [term, ...prev.filter((t) => t !== term)].slice(0, HISTORY_SLOT_COUNT));
-  }, []);
   // An emptied history removes the storage key rather than saving [].
   useEffect(() => {
     if (history.length) save(KEYS.history, history);
     else clear(KEYS.history);
   }, [history]);
-
-  // Sensitive-content tags the reader has blocked, from HelpDialog's panel.
-  // Persisted like `history` - a standing choice, not session state.
-  // `?blockTags` seeds this only when nothing is stored yet: after the
-  // reader's first manual choice, the link parameter is inert.
-  const [blockedTags, setBlockedTags] = useState(() =>
-    load<string[]>(KEYS.blockedTags, URL_BLOCKED_TAGS, {
-      validate: (v) => Array.isArray(v) && v.every((t) => typeof t === 'string'),
-    })
-  );
-  const toggleBlockedTag = useCallback((tag: string) => {
-    setBlockedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
-  }, []);
   useEffect(() => {
     if (blockedTags.length) save(KEYS.blockedTags, blockedTags);
     else clear(KEYS.blockedTags);
   }, [blockedTags]);
+  useEffect(() => {
+    save(KEYS.paging, paging);
+  }, [paging]);
+  // The help hint's stored flag is written on the mount that shows it, so a
+  // reload never re-nudges, opened or not.
+  useEffect(() => {
+    if (showHelpHint) save(KEYS.seenHelpHint, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const blockedTagSet = useMemo(() => new Set(blockedTags), [blockedTags]);
 
   // The corpus itself: metadata sidecar, embedding blob, and the search
@@ -235,13 +224,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // useSearch.ts's UseSearchOpts doc.
   const beginSearchPreloadRef = useRef<() => void>(() => {});
   const cancelSearchPreloadRef = useRef<() => void>(() => {});
-  // A search and a favorite sort are mutually exclusive (SR-41): starting a
-  // real search ends whatever sort was active, synchronously and before the
-  // fetch even lands, so the sort's own controls never sit lit while a
-  // search silently overrides them. useSearch calls this once it knows the
-  // term is non-empty - clearing the box takes the other path (`clearSearch`)
-  // and must not touch the sort at all.
-  const onSearchStart = useCallback(() => setSortMode('relevance'), []);
+  const onSearchStart = useCallback((term: string) => dispatch({ type: 'searchStarted', term }), []);
   const { query, setQuery, result, search, runSearch, clearSearch, highlight } = useSearch({
     total,
     searchConfig: config.search,
@@ -250,7 +233,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     requestAnimationRef,
     beginSearchPreloadRef,
     cancelSearchPreloadRef,
-    pushHistory,
     setStatus,
     onSearchStart,
   });
@@ -499,31 +481,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   const resistanceAt = useCallback((x: number, y: number) => layout.resistanceAt(x, y), [layout]);
 
-  // What is open: the room card, the catalog overlay, the dialogs and the
-  // catalog's spotlight row. The rules tying them together live in
-  // `libraryState.ts`'s `reduce`. Seeded once at mount from `INITIAL_ROUTE`,
-  // so a `/catalog/<slug>` or `/map/<slug>` permalink opens that room's
-  // overlay and `/help` or `/about` its dialog. `order` is already final
-  // here, so a permalinked overlay opens at the row's real position.
-  const [ui, dispatch] = useReducer(reduce, null, () =>
-    initLibraryState({
-      route: INITIAL_ROUTE,
-      rooms: manifest.rooms,
-      order,
-      seenHelpHint: load(KEYS.seenHelpHint, false),
-    })
-  );
-  const { card, overlay, catalogSpotlightId, helpOpen, showHelpHint, artistStatementOpen } = ui;
   const expandRoom = useCallback((id: number, rank: number) => dispatch({ type: 'openOverlay', room: { id, rank } }), []);
   const clearCatalogSpotlight = useCallback(() => dispatch({ type: 'spotlightHandled' }), []);
   const openArtistStatement = useCallback(() => dispatch({ type: 'openArtistStatement' }), []);
-
-  // The help hint's stored flag is written on the mount that shows it, so a
-  // reload never re-nudges, opened or not.
-  useEffect(() => {
-    if (showHelpHint) save(KEYS.seenHelpHint, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const onPick = useCallback(
     (px: number, py: number, camera: Camera) => {
@@ -550,6 +510,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     const room = manifest.rooms[overlay.id];
     return room?.w && room?.h ? { w: room.w, h: room.h } : null;
   }, [overlay, manifest]);
+
+  // The overlay's room, at the rank it shows (`overlayRank`).
+  const overlayRoom = overlay && { id: overlay.id, rank: overlayRank(overlay, order) };
 
   // The card's tile image: a real room by id, a generic cell by the same
   // positional face `render.ts` draws for its cell (`layout.genericIndexAt`
@@ -768,9 +731,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     initialMode: INITIAL_MODE,
   });
 
-  // The shelf's "forget searches" book wipes the whole wall at once.
-  // Declared here because `useCenterShelf` below is its only caller.
-  const forgetSearches = useCallback(() => setHistory([]), []);
+  const forgetSearches = useCallback(() => dispatch({ type: 'forgetSearches' }), []);
 
   // The center room's bookshelf. Called here because two of the actions a
   // book runs - `enterCatalog` and `search` - must exist first.
@@ -856,6 +817,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // Hides every generic room and lets the corpus rooms already on the map
   // pack into the space, then reverses. `useDistillMode.ts` explains the
   // contentRatio flip behind it and what the fade adds.
+  const setContentRatio = useCallback((ratio: number) => dispatch({ type: 'setContentRatio', ratio }), []);
   const { distillMode, toggleDistill, genericFade } = useDistillMode({
     defaultRatio: config.map.contentRatio,
     fadeMs: config.map.distillFadeMs,
@@ -971,22 +933,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [flyTo, config, exitCatalog, mapViewport, cam]
   );
 
-  // The panel's map controls are handlers, not inline markup: a reorder is
-  // seed bumps plus an animation request - machinery this file owns, not
-  // something a presenter should know.
-  //
-  // A full reshuffle: it rerolls `seed` (which cells are content slots)
-  // along with `orderSeed` (which room lands where), and drops the active
-  // search and favorite sort - both are placement inputs the new scatter
-  // would otherwise be laid out around. Leaving either in place would reroll
-  // everything except the one thing the reader is looking at.
-  // `startRearrangement` already treats a combined layout+order change as
-  // one arrangement (a search makes the same two), so no new animation path.
+  // The shuffle button. It ends an active search along with the sort, for
+  // the reason `LibraryAction`'s `reorder` gives. `startRearrangement`
+  // animates the combined layout and order change as one arrangement, as it
+  // does a search's.
   const reorder = useCallback(() => {
     requestAnimation('');
-    setOrderSeed((s) => s + 1);
-    setSeed((s) => s + 1);
-    setSortMode('relevance');
+    dispatch({ type: 'reorder' });
     clearSearch();
   }, [requestAnimation, clearSearch]);
   // A sort change swaps `order` and lets the sliding-tile animation carry the
@@ -998,14 +951,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const changeSort = useCallback(
     (next: SortMode) => {
       if (next === sortMode) return;
-      // Entering 'random' draws a fresh shuffle.
-      if (next === 'random') setRandomSortSeed(Date.now());
       // A search and a favorite sort are mutually exclusive (SR-41):
       // starting any sort ends an active search, the other half of
-      // `onSearchStart` above.
+      // `LibraryAction`'s `searchStarted`.
       if (next !== 'relevance' && result) clearSearch();
       requestAnimation(describeSort(next, favoriteCount(manifest.rooms, favorites.mine)));
-      setSortMode(next);
+      dispatch({ type: 'setSort', mode: next, randomSeed: Date.now() });
     },
     [sortMode, requestAnimation, manifest, favorites.mine, result, clearSearch]
   );
@@ -1021,7 +972,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   const rescatter = useCallback(() => {
     requestAnimation('');
-    setSeed((s) => s + 1);
+    dispatch({ type: 'rescatter' });
   }, [requestAnimation]);
   const recentre = useCallback(
     () => flyTo(0, 0, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current)),
@@ -1217,7 +1168,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         searchResults={searchResults}
         onOpenRoom={openRoom}
         roomCount={roomCount}
-        setRoomCount={setRoomCount}
+        setRoomCount={(count) => dispatch({ type: 'setRoomCount', count })}
         contentRatio={contentRatio}
         setContentRatio={setContentRatio}
         onReorder={reorder}
@@ -1251,7 +1202,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           onSearch={runSearch}
           onClearSearch={clearSearch}
           paging={paging}
-          setPaging={setPaging}
+          setPaging={(next) => dispatch({ type: 'setPaging', paging: next })}
           onExit={exitCatalog}
           onShowOnMap={showOnMap}
           onKeyword={searchKeyword}
@@ -1297,17 +1248,17 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         <span role="status">{status}</span>
       </div>
 
-      {overlay && (
+      {overlayRoom && (
         <RoomOverlay
-          room={overlay}
+          room={overlayRoom}
           desc={describeRoom(
-            overlay.id,
-            overlay.rank,
+            overlayRoom.id,
+            overlayRoom.rank,
             order.length,
-            metadata?.[overlay.id] ?? null
+            metadata?.[overlayRoom.id] ?? null
           )}
-          entry={metadata?.[overlay.id] ?? null}
-          src={urlFor(overlay.id, 0)}
+          entry={metadata?.[overlayRoom.id] ?? null}
+          src={urlFor(overlayRoom.id, 0)}
           naturalSize={overlayNaturalSize}
           onClose={() => dispatch({ type: 'closeOverlay' })}
           onKeyword={searchKeyword}
@@ -1315,8 +1266,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           tagLinks={tagLinks}
           result={result}
           showScore
-          favorite={favoriteFor(overlay.id)}
-          shareSlug={roomSlugs[overlay.id] ?? null}
+          favorite={favoriteFor(overlayRoom.id)}
+          shareSlug={roomSlugs[overlayRoom.id] ?? null}
           shareMode={mode}
           // The reciprocal follows the ambient reading, not which UI opened
           // this overlay - ordinarily that's the same thing (a catalog row
@@ -1330,12 +1281,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
                   label: 'show in the catalog',
                   shortLabel: 'catalog',
                   onClick: () => {
-                    dispatch({ type: 'showInCatalog', id: overlay.id });
+                    dispatch({ type: 'showInCatalog', id: overlayRoom.id });
                     enterCatalog();
                   },
                 }
               : (() => {
-                  const cell = cellById.get(overlay.id);
+                  const cell = cellById.get(overlayRoom.id);
                   return cell
                     ? { label: 'show on the map', shortLabel: 'map', onClick: () => { showOnMap(cell.x, cell.y); dispatch({ type: 'closeOverlay' }); } }
                     : null;
@@ -1349,7 +1300,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           onClose={() => dispatch({ type: 'closeHelp' })}
           availableTags={availableTags}
           blockedTags={blockedTags}
-          onToggleTag={toggleBlockedTag}
+          onToggleTag={(tag) => dispatch({ type: 'toggleBlockedTag', tag })}
           blockedCount={blockedCount}
         />
       )}

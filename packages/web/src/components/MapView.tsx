@@ -155,7 +155,7 @@ export function MapView({
   onMapKeyDown: KeyboardEventHandler<HTMLCanvasElement>;
   onKeyword: (keyword: string) => void;
   centreSlots: Slot[];
-  /** True until the reader has ever opened the help book - see main.tsx's `showHelpHint`. */
+  /** True until the reader has ever opened the help book - see `libraryState.ts`'s `showHelpHint`. */
   showHelpHint: boolean;
   bookFocus: number;
   setBookFocus: (index: number) => void;
