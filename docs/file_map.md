@@ -309,6 +309,9 @@ imports at bundle time.
   seeded `debugActions.ts` session (`npm run profile:chrome`).
 - `tools/perf-capture/README.md`: Flags, why it is Chrome-only, and how to
   read the metrics.
+- `tools/style-snapshot/index.ts`: Scratch tool for the `style.css` split:
+  records every element's computed style across the app's states, and diffs
+  two recordings. No npm script, no tests; its header has the usage.
 - `tools/check-file-map`: `npm run check:file-map` - diffs this file against
   `git ls-files`.
   * `index.ts`: CLI; its header has the rules.
