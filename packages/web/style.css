@@ -617,12 +617,6 @@ mark {
 .score p { margin: 2px 0; font-variant-numeric: tabular-nums; }
 .score .score-composite { color: var(--ink); font-weight: 500; }
 .clip-strength { color: var(--dim); }
-/*
-  Set apart from the score's sum: every row in the sum is relative to this
-  query's corpus, and this one is measured against absolute bounds, so it
-  is not another term.
-*/
-.score .sure th, .score .sure td { color: var(--dim); font-style: italic; }
 .forget { width: 100%; }
 
 /*
@@ -1005,6 +999,9 @@ mark {
   on cream it washes out, so the focus ring and the favorited-star state
   take the paper's inked rust instead. The faint gold washes on chips and
   `<mark>` keep working over cream unchanged.
+  A `:focus-visible` rule for something on a sheet can undo this. If it
+  sets the outline colour (the `outline` shorthand does) and is more
+  specific or comes later, the gold comes back on cream.
 */
 .paper-sheet :focus-visible { outline-color: var(--paper-accent); }
 .paper-sheet .favorite-toggle.on { color: var(--paper-accent); border-color: var(--paper-accent); }
@@ -1187,16 +1184,13 @@ mark {
 }
 /*
   Collapsed by default (see HelpDialog.tsx) - a reader who never opens
-  this should see one quiet line, not a checklist. `summary` gets its
-  own focus ring because a native `<details>` disclosure triangle is
-  otherwise the only visual cue that it is interactive at all.
+  this should see one quiet line, not a checklist.
 */
 .help-block-panel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--edge); }
 .help-block-panel summary {
   font-size: 11px; color: var(--ink); letter-spacing: 0.04em;
   text-transform: uppercase; cursor: pointer;
 }
-.help-block-panel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .help-block-panel[open] summary { margin-bottom: 8px; }
 .help-block-note { margin: 0 0 8px; font-size: 11px; line-height: 1.5; color: var(--dim); }
 .help-block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
