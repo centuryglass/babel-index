@@ -386,6 +386,9 @@ async function snapshot(outPath: string) {
   }
 }
 
+/** Each run's server takes a free port, which resolved `url()`s carry. */
+const sameHost = (value: string) => value.replace(/127\.0\.0\.1:\d+/g, 'HOST');
+
 async function diff(aPath: string, bPath: string) {
   const a: Snapshot = JSON.parse(await readFile(aPath, 'utf8'));
   const b: Snapshot = JSON.parse(await readFile(bPath, 'utf8'));
@@ -410,7 +413,7 @@ async function diff(aPath: string, bPath: string) {
       const rb = b.rows[sb[path]];
       a.props.forEach((p, i) => {
         const j = bProp.get(p);
-        if (j !== undefined && ra[i] !== rb[j]) lines.push(`${state}: ${path} ${p}: ${ra[i]} -> ${rb[j]}`);
+        if (j !== undefined && sameHost(ra[i]) !== sameHost(rb[j])) lines.push(`${state}: ${path} ${p}: ${ra[i]} -> ${rb[j]}`);
       });
     }
   }
