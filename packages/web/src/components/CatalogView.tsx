@@ -235,10 +235,13 @@ const SCORE_DETAIL_LINES = 4;
 /**
  * The strip's line pitch and its top chrome (border and spacing above the
  * first line). Must match `.score-strip` and `.score-strip p` in style.css,
- * like `CHIP_LINE_PX`.
+ * like `CHIP_LINE_PX`. A line is the 10px font at the body's 1.5 line height
+ * (15px) plus the `p`'s 1px top and bottom margins, which don't collapse
+ * inside the `.score-details` grid. The chrome is `.score-strip`'s 6px margin,
+ * 1px border and 6px padding.
  */
-const SCORE_LINE_PX = 15;
-const SCORE_PAD_PX = 8;
+const SCORE_LINE_PX = 17;
+const SCORE_PAD_PX = 13;
 /** The gap between score columns: `.score-details`'s `column-gap` and `.score-one-row`'s. */
 const SCORE_GAP_PX = 22;
 /**
