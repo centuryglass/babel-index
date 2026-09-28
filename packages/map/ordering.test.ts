@@ -349,6 +349,31 @@ test('the peak is how much wallpaper survives the surest cluster', () => {
   assert.ok(half.slots[19].d < graded(null).slots[19].d, 'but still tighter than no gradient');
 });
 
+test('every strength from peakAt up packs at the peak', () => {
+  // A CLIP-only room tops out at `search.weights.clip`; with `peakAt` there,
+  // it packs as tightly as an exact match.
+  const at = (s: number) => Float32Array.from({ length: 200 }, (_, i) => (i < 20 ? s : 0));
+  const exact = graded(at(1), { density: { peakAt: 0.85 } });
+  const clip = graded(at(0.85), { density: { peakAt: 0.85 } });
+  assert.deepEqual(clip.slots, exact.slots);
+  assert.ok(graded(at(0.85)).slots[19].d > clip.slots[19].d, 'with peakAt 1 the same rooms pack less tightly');
+});
+
+test('the ramp leaves the baseline at the floor with no step', () => {
+  // A rank just over the floor is admitted at a threshold just over the
+  // baseline, so it lands where it would with no gradient at all.
+  const faint = Float32Array.from({ length: 200 }, (_, i) => (i < 20 ? 0.0501 : 0));
+  assert.deepEqual(graded(faint).slots, graded(null).slots);
+  assert.equal(graded(faint).gradedCount, 20, 'it is still graded, only barely');
+});
+
+test('an inverted or out-of-range ramp is refused', () => {
+  const strength = new Float32Array(200).fill(0.5);
+  assert.throws(() => graded(strength, { density: { peakAt: 0.05 } }), RangeError);
+  assert.throws(() => graded(strength, { density: { peakAt: 1.2 } }), RangeError);
+  assert.throws(() => graded(strength, { density: { peak: 1.1 } }), RangeError);
+});
+
 test('a sparser map makes the same search more legible, not less [SR-23]', () => {
   // The cluster is the same size whatever the ratio, so the sparser the
   // wallpaper, the more the cluster stands out against it.
@@ -382,6 +407,7 @@ test('the pruned sweep places rooms exactly where an unpruned walk would', () =>
     const aspect = [1, 0.75, 1.4][Math.floor(rand() * 3)];
     const seed = Math.floor(rand() * 50);
     const peak = [1, 0.9, 0.4][Math.floor(rand() * 3)];
+    const peakAt = [1, 0.85, 0.5][Math.floor(rand() * 3)];
     const shape = Math.floor(rand() * 4);
     const strength = Float32Array.from({ length: roomCount }, (_, i) =>
       shape === 0 ? (i < 3 ? 1 : 0)
@@ -390,12 +416,12 @@ test('the pruned sweep places rooms exactly where an unpruned walk would', () =>
       : Math.max(0, 1 - i / roomCount)
     );
     const opts = { roomCount, contentRatio, seed, aspect };
-    const got = createLayout({ ...opts, density: { strength, peak } }).slots;
-    const want = unprunedWalk({ ...opts, strength, peak });
+    const got = createLayout({ ...opts, density: { strength, peak, peakAt } }).slots;
+    const want = unprunedWalk({ ...opts, strength, peak, peakAt });
     assert.deepEqual(
       got.map((s) => `${s.x},${s.y}`),
       want,
-      `trial ${trial}: ${JSON.stringify({ ...opts, peak, shape })}`
+      `trial ${trial}: ${JSON.stringify({ ...opts, peak, peakAt, shape })}`
     );
   }
 });
@@ -405,12 +431,13 @@ test('the pruned sweep places rooms exactly where an unpruned walk would', () =>
  * rank being placed at that rank's own threshold. The definition the optimised
  * sweep has to agree with, written the slow obvious way.
  */
-function unprunedWalk({ roomCount, contentRatio, seed, aspect, strength, peak, floor = 0.05 }) {
+function unprunedWalk({ roomCount, contentRatio, seed, aspect, strength, peak, peakAt = 1, floor = 0.05 }) {
   const ramp = [];
   let cap = 1;
   for (let i = 0; i < roomCount; i++) {
     cap = Math.min(cap, Math.max(0, Math.min(1, strength[i])));
-    ramp.push(cap < floor ? contentRatio : contentRatio + (Math.max(peak, contentRatio) - contentRatio) * cap);
+    const t = Math.min(1, Math.max(0, (cap - floor) / (peakAt - floor)));
+    ramp.push(contentRatio + (Math.max(peak, contentRatio) - contentRatio) * t);
   }
 
   const R = Math.ceil(Math.sqrt((roomCount * aspect) / (contentRatio * Math.PI)) * 3) + 20;

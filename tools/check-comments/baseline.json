@@ -45,13 +45,10 @@
     "conviction": 2
   },
   "packages/map/scoring.test.ts": {
-    "conviction": 5
+    "conviction": 3
   },
   "packages/map/scoring.ts": {
     "conviction": 1
-  },
-  "packages/map/searchResult.ts": {
-    "conviction": 5
   },
   "packages/pipeline/index.ts": {
     "conviction": 1

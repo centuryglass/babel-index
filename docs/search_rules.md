@@ -322,8 +322,12 @@ term matches, then by the raw cosine; rooms at `0` keep id order, so a query
 nothing matched leaves the map as it was.
 
 **Strength is non-increasing along the placement order.** `ordering.ts`'s
-`densityRamp` reads it rank by rank, snapping anything under
-`search.density.floor` (default `STRENGTH_FLOOR`) to the baseline.
+`densityRamp` reads it rank by rank.
+
+**Density runs linearly between two strength anchors.** Anything at or under
+`search.density.floor` (default `STRENGTH_FLOOR`) sits at the baseline, and
+anything at or over `search.density.peakAt` (default `0.85`, CLIP's weight)
+packs at `search.density.peak`.
 
 ## Reporting
 

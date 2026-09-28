@@ -25,11 +25,14 @@ conventions still apply.
 - **Keyword partials divide by the keyword; story matches count words.**
   `art` matches only 3/11 of `art nouveau`, and a hit in a long story is
   worth the same as in a short one.
-- **The density gradient is one formula**
-  (`contentRatio + (peak - contentRatio) * strength`, walking outward), not
-  special cases for cluster, falloff and no-match. Strength must stay
-  non-increasing with rank, and anything under `STRENGTH_FLOOR` snaps to the
-  baseline; both are asserted.
+- **The density gradient is one formula**, not special cases for cluster,
+  falloff and no-match: a linear ramp from the baseline at `floor` to `peak`
+  at `peakAt`, clamped at both ends (`ordering.ts`'s `densityRamp`), walking
+  outward. Strength must stay non-increasing with rank, and anything at or
+  under `floor` is the baseline; both are asserted.
+- **`search.density.peakAt` tracks `search.weights.clip`.** A CLIP-only room
+  never exceeds that weight, so re-tuning the weight without `peakAt` changes
+  whether a genuine image match packs solid.
 - **Distance from the center carries one meaning at a time, so a search and
   a favorite sort are mutually exclusive** (`docs/search_requirements.md`
   SR-24, SR-27, SR-28, SR-41).

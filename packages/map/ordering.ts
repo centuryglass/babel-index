@@ -23,10 +23,11 @@
  *
  * `contentRatio` is a *baseline*, not a constant. A search may hand in a
  * `density.strength` array - one number per rank, in [0, 1] - and the
- * acceptance threshold for the rank being placed becomes
- * `contentRatio + (peak - contentRatio) * strength`, so a rank the search is
- * sure about is admitted into nearly every cell it passes and a rank it knows
- * nothing about is scattered at the baseline. Walking outward with that
+ * acceptance threshold for the rank being placed runs linearly between two
+ * anchors: `contentRatio` at strength `floor` and below, `peak` at strength
+ * `peakAt` and above. A rank the search is sure about is admitted into nearly
+ * every cell it passes and a rank it knows nothing about is scattered at the
+ * baseline. Walking outward with that
  * threshold turns a strength profile directly into a density profile: certain
  * matches pack tight against the center, and the packing loosens back to the
  * user's chosen sparseness as the search's confidence falls off.
@@ -130,24 +131,33 @@ export const STRENGTH_FLOOR = 0.05;
 /**
  * Turn a per-rank strength into a per-rank acceptance threshold.
  *
- * Two adjustments to the profile as it is read:
+ * The threshold is `contentRatio + (peak - contentRatio) * t`, where `t` is
+ * strength rescaled so `floor` reads 0 and `peakAt` reads 1, clamped to
+ * [0, 1]:
  *
- *   - strength is made non-increasing with rank, by a running minimum.
- *     `rankHybrid` already sorts by strength, so a search profile passes
- *     through unchanged; the minimum keeps density falling outward for any
- *     profile that is not sorted.
- *   - anything under `floor` becomes the baseline itself, not a value slightly
- *     above it. See `STRENGTH_FLOOR`.
+ *   - every strength from `peakAt` up packs at `peak`.
+ *   - anything at or under `floor` is the baseline itself (see
+ *     `STRENGTH_FLOOR`), and the ramp leaves it with no step.
+ *   - the threshold never exceeds 1, which `collectSlots`'s radius estimate
+ *     relies on.
+ *
+ * Strength is made non-increasing with rank as it is read, by a running
+ * minimum. `rankHybrid` already sorts by strength, so a search profile passes
+ * through unchanged; the minimum keeps density falling outward for any profile
+ * that is not sorted.
  *
  * @param strength per rank, in [0, 1]
  * @param contentRatio the baseline density
- * @param peak         density offered to a rank of strength 1
+ * @param peak         density offered to a rank of strength `peakAt` or more
+ * @param peakAt       strength at which the ramp reaches `peak`; above `floor`
+ * @param floor        strength at which the ramp leaves the baseline
  * @returns threshold for the rank being placed
  */
 function densityRamp(
   strength: ArrayLike<number> | null | undefined,
   contentRatio: number,
   peak: number,
+  peakAt: number,
   floor: number
 ): (rank: number) => number {
   if (!strength?.length) return () => contentRatio;
@@ -161,7 +171,8 @@ function densityRamp(
     const raw = Number(strength[i]);
     const c = Math.min(cap, Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0);
     cap = c;
-    ramp[i] = c < floor ? contentRatio : contentRatio + (top - contentRatio) * c;
+    const t = Math.min(1, Math.max(0, (c - floor) / (peakAt - floor)));
+    ramp[i] = contentRatio + (top - contentRatio) * t;
   }
   // Ranks past the profile are baseline, which is also what an absent profile
   // gives - so a short array is a partial gradient rather than an error.
@@ -186,9 +197,11 @@ export interface Slot {
 export interface DensityOptions {
   /** per rank, in [0, 1] */
   strength?: ArrayLike<number>;
-  /** density offered to a rank of strength 1 */
+  /** density offered to a rank of strength `peakAt` or more, in (0, 1] */
   peak?: number;
-  /** strength under which nothing clusters */
+  /** strength at which the ramp reaches `peak`, above `floor` and at most 1 */
+  peakAt?: number;
+  /** strength at or under which nothing clusters */
   floor?: number;
 }
 
@@ -266,12 +279,13 @@ export function createLayout({
   if (!(aspect > 0 && Number.isFinite(aspect)))
     throw new RangeError('aspect must be a positive, finite ratio');
 
-  const ramp = densityRamp(
-    density?.strength,
-    contentRatio,
-    density?.peak ?? 1,
-    density?.floor ?? STRENGTH_FLOOR
-  );
+  const peak = density?.peak ?? 1;
+  const peakAt = density?.peakAt ?? 1;
+  const floor = density?.floor ?? STRENGTH_FLOOR;
+  if (!(peak > 0 && peak <= 1)) throw new RangeError('density.peak must be in (0, 1]');
+  if (!(floor >= 0 && floor < peakAt && peakAt <= 1))
+    throw new RangeError('density needs 0 <= floor < peakAt <= 1');
+  const ramp = densityRamp(density?.strength, contentRatio, peak, peakAt, floor);
 
   const slots = collectSlots(roomCount, contentRatio, seed, aspect, ramp);
 
