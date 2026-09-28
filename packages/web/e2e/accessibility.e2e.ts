@@ -15,7 +15,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import AxeBuilder from '@axe-core/playwright';
 import {
-  SEARCH_TIMEOUT, axFind, axNodes, closeLibrary, landed, openLibrary, settled, waitFor,
+  SEARCH_TIMEOUT, axFind, axNodes, closeLibrary, landed, openLibrary, recentre, recordHud, settled, waitFor,
 } from './support.ts';
 
 describe('the library, in a browser: accessibility', { concurrency: false }, () => {
@@ -301,21 +301,35 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test('reduced motion rebuilds the library instead of sliding it [SR-31]', async () => {
     const { page } = session;
-    // Asserted through the camera, since watching for the absence of an
-    // animation would race. A normal rearrangement zooms out in place to plan
-    // the slide against the cells on screen, then flies back to the reader's
-    // zoom (`startRearrangement`, `useRearrangement.ts`). Reduced motion
-    // returns before that flight, so the camera must not move at all.
+    // Two checks: the HUD never reports a rearrangement, and the camera does
+    // not move. Only the HUD can show a slide: under reduced motion every
+    // flight lands in one frame (`useMapCamera.ts`'s `beginFlightTo`), so a
+    // rearrangement's zoom out and back (`startRearrangement`,
+    // `useRearrangement.ts`) leaves no trace on the settled camera.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     try {
-      // Somewhere clearly not the center, so "did not move" is unambiguous.
+      // `recentre` lands at the overview zoom. A rearrangement started any
+      // closer in zooms out to it for the slide.
+      const centred = await recentre(page, session.flightMs);
+
+      // Off the center and closer in than the overview, so a camera flown
+      // home or left parked for a slide fails the checks below.
       await page.mouse.move(700, 420);
       await page.mouse.down();
       for (let i = 1; i <= 8; i++) await page.mouse.move(700 - i * 25, 420 - i * 15);
       await page.mouse.up();
+      // The wheel zooms about the pointer, and the canvas's midpoint is the
+      // camera's own x/y, so this zooms without panning.
+      await page.mouse.move(640, 400);
+      await page.mouse.wheel(0, -600);
+      await waitFor(
+        async () => (await settled(page)).zoom > centred.zoom,
+        5000,
+        'the wheel never zoomed in past the overview'
+      );
       const before = await settled(page);
       assert.ok(
-        Math.abs(before.x) > 0.2 || Math.abs(before.y) > 0.2,
+        Math.abs(before.x - centred.x) > 0.2 || Math.abs(before.y - centred.y) > 0.2,
         `the drag must leave the center, got (${before.x}, ${before.y})`
       );
 
@@ -325,9 +339,16 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // ask for. Rescatter only bumps the layout seed, which rebuilds
       // `layout` and always triggers a rearrangement on its own, with no
       // search to clear.
+      //
+      // The click's own commit starts any rearrangement (the layout effect in
+      // `useRearrangement.ts`), so `settled()` waits one out and the record
+      // spans it.
+      const hudLog = await recordHud(page);
       await page.getByRole('button', { name: 'rescatter' }).click();
       const after = await settled(page);
+      const slid = (await hudLog.stop()).find((text) => /^(\[gl\] )?rearranging/.test(text));
 
+      assert.equal(slid, undefined, 'reduced motion must rebuild the library at once, not slide it');
       assert.ok(
         Math.abs(after.x - before.x) < 1e-6 && Math.abs(after.y - before.y) < 1e-6,
         `reduced motion must not fly the camera home: (${before.x}, ${before.y}) -> (${after.x}, ${after.y})`
@@ -338,11 +359,9 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       );
     } finally {
       await page.emulateMedia({ reducedMotion: null });
+      // Put the reader back on the center for whatever runs next.
+      await recentre(page, session.flightMs);
     }
-
-    // Put the reader back on the center for whatever runs next.
-    await page.getByRole('button', { name: 'center' }).click();
-    await landed(page, session.flightMs);
   });
 
   test('keyboard focus is visible', async () => {

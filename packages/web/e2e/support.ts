@@ -360,6 +360,33 @@ export function sampleCamera(page, ms) {
 }
 
 /**
+ * Every text the HUD shows from this call until `stop()`, in order.
+ *
+ * A MutationObserver records each write as it lands, so a state that comes
+ * and goes between two of the caller's reads is still on record. Start it
+ * before the action under test and stop it once that action has settled.
+ */
+export async function recordHud(page) {
+  const log = await page.evaluateHandle(() => {
+    const el = document.getElementById('hud');
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(el.textContent));
+    observer.observe(el, { childList: true, characterData: true, subtree: true });
+    return { seen, observer };
+  });
+  return {
+    async stop() {
+      const texts = await log.evaluate(({ seen, observer }) => {
+        observer.disconnect();
+        return seen;
+      });
+      await log.dispose();
+      return texts;
+    },
+  };
+}
+
+/**
  * The accessibility tree as the browser actually computed it.
  *
  * An accessible name is computed from labels, roles, `aria-labelledby` and
