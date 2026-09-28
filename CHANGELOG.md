@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.9.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.8.0...babel-index-v1.9.0) (2026-09-28)
+
+
+### Features
+
+* add a 27th sample room rendered entirely in code ([#381](https://github.com/centuryglass/babel-index/issues/381)) ([5436888](https://github.com/centuryglass/babel-index/commit/543688825bd48df4624e2503e1803d347217b816))
+* **curation:** add a staged story engine with pitch selection in the review GUI ([#389](https://github.com/centuryglass/babel-index/issues/389)) ([5c30576](https://github.com/centuryglass/babel-index/commit/5c30576a550e72195f9399cf56c26e7721962e86))
+* **search:** place and cluster rooms by one match strength ([#399](https://github.com/centuryglass/babel-index/issues/399)) ([291170b](https://github.com/centuryglass/babel-index/commit/291170b9c082048c1fd69e11c815a07d14829af8))
+* **search:** ramp density between a floor and a peakAt strength anchor ([#403](https://github.com/centuryglass/babel-index/issues/403)) ([f30fd15](https://github.com/centuryglass/babel-index/commit/f30fd15265aec34e44e7472f4175f0f967e229f9)), closes [#400](https://github.com/centuryglass/babel-index/issues/400)
+* warn at startup about rooms with no alt text ([#388](https://github.com/centuryglass/babel-index/issues/388)) ([d06bacc](https://github.com/centuryglass/babel-index/commit/d06bacca4812d559c11ce634b15ac2a755059691)), closes [#379](https://github.com/centuryglass/babel-index/issues/379)
+
+
+### Bug Fixes
+
+* keep the help dialog's content-settings focus ring in the paper accent ([#394](https://github.com/centuryglass/babel-index/issues/394)) ([671f93d](https://github.com/centuryglass/babel-index/commit/671f93d061db342e469e040a707555a367cd20e9))
+
 ## [1.8.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.7.0...babel-index-v1.8.0) (2026-09-25)
 
 
