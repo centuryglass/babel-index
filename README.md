@@ -254,6 +254,7 @@ npm run lint
 npm run typecheck
 npm run check:file-map       # docs/file_map.md lists every tracked file
 npm run check:requirements   # docs/search_requirements.md keeps its test coverage
+npm run check:comments       # comment and doc pointers resolve; style rules hold
 ```
 
 [`docs/architecture.md`](docs/architecture.md#testing-and-ci) lists which of

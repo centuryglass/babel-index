@@ -16,6 +16,15 @@ still apply.
   has no failing assertion and is counted apart from the gaps.
 - **`check:file-map` diffs `docs/file_map.md` against `git ls-files`** (see
   `AGENTS.md`, "Layout"; `tools/check-file-map/index.ts`'s header has the exact rules).
+- **`check:comments` reads comments and markdown, never literals.** It
+  parses each code file with TypeScript to blank strings, templates, regexes
+  and JSX text, so user-facing text can hold an em dash. Pointers,
+  em dashes and conviction words fail against `baseline.json`, a per-file,
+  per-rule count; ghost words and closed-issue citations only warn, and the
+  closed-issue rule runs only where the issue cache exists. A path the
+  checker cannot judge (a bare name several files share, a gitignored
+  output) is skipped; a file that names paths on another branch is listed in
+  `index.ts`'s `EXEMPT`.
 - **`npm run test:parity` is a deploy gate, not a merge gate.** The
   `.parity.ts` suffix matches neither the unit nor the e2e glob. `deploy.yml`
   runs it before the ssh call, and a failure stops the deploy. It runs on a

@@ -319,6 +319,12 @@ imports at bundle time.
     comparison.
   * `baseline.json`: Requirements known to be uncovered. Losing coverage
     fails the check; gaining it prints the command to lower this list.
+- `tools/check-comments`: `npm run check:comments` - checks comments and
+  markdown against `AGENTS.md`'s mechanical "Comments and docs" rules.
+  * `index.ts`: CLI; its header has the severities and the baseline rules.
+  * `lib.ts`: Pure comment extraction, the rules and their word lists.
+  * `baseline.json`: Per-file, per-rule counts of failing findings already
+    in the tree. More fails the check; fewer prints the command to lower it.
 - `tools/curation`: Python/Qt tools that turn a batch of generated tiles into
   `metadata.json` (keywords, stories, alt text, titles, sensitive tags). A
   separate ecosystem with its own `AGENTS.md`/`CLAUDE.md` and `README.md`;
@@ -343,7 +349,7 @@ imports at bundle time.
   * `babel-index.nginx.conf`: Reference copy of the VPS's babel-index nginx
     location blocks, not synced automatically.
 - `.github/workflows/ci.yml`: The required `ci` check - test matrix, lint
-  (with `check:file-map` and `check:requirements`), typecheck, and a
+  (with the three `check:` scripts), typecheck, and a
   change-gated call into `e2e.yml`. Its `audit` job is informational.
 - `.github/workflows/e2e.yml`: The browser smoke test, called from `ci.yml`
   and manually dispatchable.

@@ -1,0 +1,143 @@
+{
+  ".claude/scripts/issues.mjs": {
+    "pointer": 1
+  },
+  "AGENTS.md": {
+    "pointer": 1
+  },
+  "docs/concept.md": {
+    "conviction": 2
+  },
+  "docs/file_map.md": {
+    "pointer": 1
+  },
+  "docs/search_requirements.md": {
+    "conviction": 2
+  },
+  "docs/search_rules.md": {
+    "conviction": 6
+  },
+  "packages/config/load.ts": {
+    "conviction": 1
+  },
+  "packages/map/board.ts": {
+    "conviction": 1
+  },
+  "packages/map/describe.test.ts": {
+    "conviction": 2
+  },
+  "packages/map/illusion.test.ts": {
+    "conviction": 3
+  },
+  "packages/map/metadata.test.ts": {
+    "conviction": 2
+  },
+  "packages/map/metadata.ts": {
+    "conviction": 2
+  },
+  "packages/map/nextRoom.test.ts": {
+    "conviction": 1
+  },
+  "packages/map/nextRoom.ts": {
+    "conviction": 1
+  },
+  "packages/map/ordering.test.ts": {
+    "conviction": 2
+  },
+  "packages/map/scoring.test.ts": {
+    "conviction": 5
+  },
+  "packages/map/scoring.ts": {
+    "conviction": 1
+  },
+  "packages/map/searchResult.ts": {
+    "conviction": 5
+  },
+  "packages/pipeline/index.ts": {
+    "conviction": 1
+  },
+  "packages/server/app.test.ts": {
+    "conviction": 2
+  },
+  "packages/server/log-file.test.ts": {
+    "conviction": 1
+  },
+  "packages/server/remote.ts": {
+    "conviction": 1
+  },
+  "packages/web/e2e/accessibility.e2e.ts": {
+    "conviction": 1
+  },
+  "packages/web/e2e/catalog.e2e.ts": {
+    "conviction": 1
+  },
+  "packages/web/e2e/render-parity.parity.ts": {
+    "conviction": 1
+  },
+  "packages/web/e2e/shelf.e2e.ts": {
+    "conviction": 3
+  },
+  "packages/web/src/hooks/useDialog.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/hooks/useMapRenderer.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/hooks/useMapRendererGL.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/hooks/useSearch.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/camera.test.ts": {
+    "conviction": 5
+  },
+  "packages/web/src/lib/camera.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/catalog.test.ts": {
+    "conviction": 2
+  },
+  "packages/web/src/lib/gl/context.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/gl/glowTexture.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/glRenderer.test.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/loadingAnimation.test.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/pyramid.test.ts": {
+    "conviction": 3
+  },
+  "packages/web/src/lib/pyramid.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/render.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/rooms.ts": {
+    "conviction": 2
+  },
+  "packages/web/src/lib/svgPath.ts": {
+    "conviction": 1
+  },
+  "packages/web/src/lib/tiles.test.ts": {
+    "conviction": 6
+  },
+  "tools/center-animation/lib.ts": {
+    "conviction": 1
+  },
+  "tools/center-placement/lib/geometry.ts": {
+    "conviction": 2
+  },
+  "tools/check-requirements/lib.ts": {
+    "conviction": 2
+  },
+  "tools/upload/upload-r2.ts": {
+    "conviction": 1
+  }
+}

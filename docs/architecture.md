@@ -154,9 +154,10 @@ size. The rooms the slide will show are fetched before it starts.
 | `npm run typecheck`          | `tsc --noEmit`; `typescript` is pinned to `^6` (see `AGENTS.md`'s "Commands") | merge    |
 | `npm run check:file-map`     | `docs/file_map.md` lists every tracked file                                    | merge    |
 | `npm run check:requirements` | no requirement in `docs/search_requirements.md` loses the test coverage it had     | merge    |
+| `npm run check:comments`     | comment pointers resolve, and no new em dash or conviction word lands          | merge    |
 | `npm run test:parity`        | Canvas2D and WebGL draw the same map                                           | deploy   |
 
-`ci.yml`'s aggregate `ci` job is the merge gate; the two `check:` scripts
+`ci.yml`'s aggregate `ci` job is the merge gate; the three `check:` scripts
 run inside its lint job. CodeQL (`codeql.yml`) and dependency review
 (`dependency-review.yml`) run as separate workflows, and `docker-build.yml`
 builds the Dockerfile for each release, without blocking the deploy.

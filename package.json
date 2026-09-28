@@ -18,6 +18,7 @@
     "test": "node --import ./build/register.mjs --test $(find packages tools -name '*.test.mjs' -o -name '*.test.ts')",
     "check:file-map": "node --import ./build/register.mjs tools/check-file-map/index.ts",
     "check:requirements": "node --import ./build/register.mjs tools/check-requirements/index.ts",
+    "check:comments": "node --import ./build/register.mjs tools/check-comments/index.ts",
     "test:e2e": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.e2e.ts",
     "test:parity": "node --import ./build/register.mjs --test --test-concurrency=1 packages/web/e2e/*.parity.ts",
     "lint": "eslint .",
