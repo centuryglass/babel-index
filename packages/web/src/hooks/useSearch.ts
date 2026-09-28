@@ -9,8 +9,9 @@
  * `useRearrangement` needs `announce`, and `useRearrangement` returns those
  * three functions, so this hook runs first.
  *
- * `history`/`pushHistory` belong to `main.tsx`, since the shelf and the forget
- * controls read and write history too.
+ * Search history and the sort belong to `libraryState.ts`, since the shelf,
+ * the forget controls and the sort switches read and write them too. A real
+ * search reaches both through `onSearchStart`.
  */
 import { useMemo, useRef, useState, type FormEventHandler } from 'react';
 import {
@@ -41,19 +42,18 @@ interface UseSearchOpts {
    */
   beginSearchPreloadRef: { current: () => void };
   cancelSearchPreloadRef: { current: () => void };
-  pushHistory: (term: string) => void;
   /** the live region, for the one path a search cannot route through
    * `requestAnimation`'s announcement: a fetch that fails rearranges
    * nothing, so it has to speak for itself. */
   setStatus: (message: string) => void;
   /**
-   * Called once a real (non-empty) search term is about to run, before the
-   * fetch - a search and a favorite sort are mutually exclusive
-   * (`docs/search_requirements.md` SR-41), and `main.tsx` is what owns the
-   * sort, so this is the one hook this module knows nothing more about.
-   * Not called for the clear-x, which ends a search rather than starting one.
+   * Called with the trimmed term once a real (non-empty) search is about to
+   * run, before the fetch, so the history entry and the end of a favorite
+   * sort (`libraryState.ts`'s `searchStarted`) survive a search that never
+   * resolves. Not called for the clear-x, which ends a search rather than
+   * starting one.
    */
-  onSearchStart: () => void;
+  onSearchStart: (term: string) => void;
 }
 
 export function useSearch({
@@ -64,7 +64,6 @@ export function useSearch({
   requestAnimationRef,
   beginSearchPreloadRef,
   cancelSearchPreloadRef,
-  pushHistory,
   setStatus,
   onSearchStart,
 }: UseSearchOpts) {
@@ -104,12 +103,7 @@ export function useSearch({
       return;
     }
     // A real search is a history entry, and the frontmost book from now on.
-    // Done before the fetch, so a click on that book is remembered even if
-    // the ranking that follows is a stub. Ending an active favorite sort
-    // happens here too, for the same reason: both survive a search that
-    // never resolves.
-    pushHistory(term.trim());
-    onSearchStart();
+    onSearchStart(term.trim());
     // Start the indicator/badge spinner now, ahead of the fetch and the
     // ranking that follows - see `beginSearchPreloadRef`'s own doc for why
     // that beat would otherwise go unfilled.

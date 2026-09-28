@@ -116,13 +116,14 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
     }
   );
 
-  // Both favorite-sort modes go through the same exclusivity code in
-  // `main.tsx` (`onSearchStart`, `changeSort`) - neither is special-cased on
-  // `'mine'` vs `'count'` - but the two are functionally distinct enough
-  // (`'mine'` reads the reader's own set, `'count'` the global store) that a
-  // fix landing for one and not the other is a real failure mode, not a
-  // hypothetical one. Run the same check against both rather than trusting
-  // that symmetry in the source carries over to the browser.
+  // Both favorite-sort modes go through the same exclusivity code
+  // (`libraryState.ts`'s `searchStarted`, `main.tsx`'s `changeSort`) -
+  // neither is special-cased on `'mine'` vs `'count'` - but the two are
+  // functionally distinct enough (`'mine'` reads the reader's own set,
+  // `'count'` the global store) that a fix landing for one and not the other
+  // is a real failure mode, not a hypothetical one. Run the same check
+  // against both rather than trusting that symmetry in the source carries
+  // over to the browser.
   for (const mode of ['mine', 'count']) {
     test(
       `a search and 'sort by ${mode}' are mutually exclusive: starting either one ends the other [SR-41]`,

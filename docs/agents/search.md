@@ -37,7 +37,8 @@ conventions still apply.
   a favorite sort are mutually exclusive** (`docs/search_requirements.md`
   SR-24, SR-27, SR-28, SR-41).
   - A real (non-empty) search ends an active favorite sort: `useSearch.ts`'s
-    `search` calls `onSearchStart` before the fetch.
+    `search` calls `onSearchStart` before the fetch, and `libraryState.ts`'s
+    `searchStarted` returns the sort to `'relevance'`.
   - A favorite sort or `'random'` ends an active search: `changeSort` calls
     `clearSearch()` for any mode but `'relevance'`.
   - Clearing the search box (the clear-x, an empty submit) is not starting a

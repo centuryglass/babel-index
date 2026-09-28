@@ -23,7 +23,7 @@
  *
  * See also:
  * - `useCenterShelf.ts`: the behaviors tied to these elements
- * - `../main.tsx`: search history state
+ * - `libraryState.ts`: search history state
  *
  * No DOM: the compositing takes a 2d context but reads nothing back.
  */

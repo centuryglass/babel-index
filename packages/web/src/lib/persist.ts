@@ -149,7 +149,7 @@ export function save(key: string, value: unknown, { store }: { store?: StorageLi
   }
 }
 
-/** Forget one stored value. Used by the panel's "forget searches" control. */
+/** Forget one stored value. Callers clear a list's key once the list empties. */
 export function clear(key: string, { store }: { store?: StorageLike | null } = {}): boolean {
   const s = storage(store);
   if (!s) return false;
