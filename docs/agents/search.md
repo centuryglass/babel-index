@@ -6,10 +6,15 @@ conventions still apply.
 
 ## Search and the density gradient
 
-- **Search blends three signals into one sort; it does not tier them.**
-  Every signal is normalised to [0, 1] before weighting, and the CLIP term
-  is min-maxed across the corpus for that query. Tiering keyword hits ahead
-  of everything would let one weak partial beat a room CLIP is certain about.
+- **One number, `strength`, both places a room and sets the density around
+  it.** `rankHybrid` sorts by it, so there is no second ranking score to
+  reconcile. A rule about which signal wins (an exact tag over CLIP, a long
+  story run over CLIP) holds because of `config.search.weights`, and
+  `scoring.test.ts` checks each one on a built query: re-tuning a weight
+  means re-running those tests, not re-deriving an inequality.
+- **Search combines its signals; it does not tier them.** Tiering keyword
+  hits ahead of everything would let one weak partial beat a room CLIP is
+  confident about.
 - **A query is matched term by term and as one whole string, and the better
   reading wins.** `rankHybrid` classifies each term against a room's
   keywords and title, then the whole folded query the same way, so a
@@ -17,9 +22,9 @@ conventions still apply.
   chip searches its text unquoted, and many real keywords are multi-word. A
   whole-query match counts as one exact match, so two separate exact tags
   still outrank one matched phrase.
-- **Keyword partials divide by the keyword; story matches divide by the
-  query.** `art` matches only 3/11 of `art nouveau`, but a hit in a long
-  story is worth the same as in a short one.
+- **Keyword partials divide by the keyword; story matches count words.**
+  `art` matches only 3/11 of `art nouveau`, and a hit in a long story is
+  worth the same as in a short one.
 - **The density gradient is one formula**
   (`contentRatio + (peak - contentRatio) * strength`, walking outward), not
   special cases for cluster, falloff and no-match. Strength must stay
@@ -39,11 +44,11 @@ conventions still apply.
     `packages/map/favorites.ts`'s `favoriteStrength`), and nothing composes
     the two. `'relevance'` and `'random'` claim no strength and leave the
     map uniform.
-- **Strength is absolute; ranking is relative. Don't feed one the other's
-  numbers.** The blend min-maxes CLIP, so some room scores 1 for *any*
-  query; a gradient driven by that clusters nonsense as confidently as an
-  exact match. `matchStrength` reads raw cosines against absolute bounds
-  (`CLIP_STRENGTH`, config `search.density.clipCentre/High`).
+- **Every pull is absolute; never normalise one across the corpus.**
+  Min-max puts some room at 1 for *any* query, and a gradient driven by that
+  clusters nonsense as confidently as an exact match. CLIP reads its raw
+  cosine against absolute bounds (`CLIP_STRENGTH`, config
+  `search.density.clipCentre/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.**
   `scan.ts` rejects a blob whose row count drifted. The sidecar joins per
   file, so a partial match is just partial - but `matched: 0` against

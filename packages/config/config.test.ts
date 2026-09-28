@@ -144,27 +144,10 @@ test('an overlay changes only what it names', () => {
   assert.deepEqual(c.notes, []);
 });
 
-test('the default weights satisfy every cross-signal inequality docs/search_rules.md names', () => {
-  // Comparable because each signal is an absolute ratio or count by the time it
-  // is weighted, with CLIP min-maxed to [0, 1] first. That is the property the
-  // seven constants are chosen to express, so it is checked against the numbers
-  // rather than by eyeballing a re-tune.
-  const { tagExact, tagPartial, titleExact, titlePartial, story, storyLong, clip } = DEFAULTS.search.weights;
-  assert.ok(
-    tagExact > tagPartial + titlePartial + story + storyLong + clip,
-    'one exact tag always outranks everything else combined'
-  );
-  assert.ok(
-    titleExact > tagPartial + titlePartial + story + storyLong + clip,
-    'one exact title match always outranks everything else combined'
-  );
-  assert.ok(titleExact > tagExact, 'an exact title match is prioritized slightly over an exact tag match');
-  assert.ok(titleExact < 2 * tagExact, 'two exact tag matches still beat one exact title match');
-  assert.ok(
-    storyLong > clip + tagPartial + titlePartial,
-    'a long story match outranks CLIP, a maxed partial tag, and a maxed partial title together'
-  );
-  assert.ok(clip * 0.5 >= tagPartial, 'a reasonably certain CLIP match clears the partial-tag budget');
+test('a search weight above 1 falls back, since a soft OR has no use for a pull past full strength', () => {
+  const c = resolveConfig({ search: { weights: { clip: 5 } } }, { zoomLimits: LIMITS });
+  assert.equal(c.search.weights.clip, DEFAULTS.search.weights.clip);
+  assert.equal(c.notes.length, 1);
 });
 
 test('the shipped defaults are valid against the real limits', () => {

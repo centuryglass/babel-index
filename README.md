@@ -93,17 +93,13 @@ confidence. A query the library can answer clusters tightly. A query it
 cannot stays diffuse. The map tells you how much to trust the result before
 you have read a single room.
 
-Ranking and strength are separate measurements. Ranking blends CLIP image
-embeddings, keyword matches and story text into one relative order. Its
-CLIP term is min-maxed across the corpus for each query, so some room
-always gets full CLIP credit, whatever was searched for.
-
-Strength is absolute. It is a soft-OR of four readings - tag, title, story
-and CLIP - each measured against a fixed, corpus-calibrated bound, not
-against the other results. A nonsense query scores near zero instead of
-producing an artificial "best match", and the density gradient stays flat
-when the search has little to say. A corpus with no `embeddings.bin` still
-reports strength from its text signals alone.
+One number, match strength, decides both where a room lands and how densely
+matches pack around it. It is a soft OR of four readings - tag, title, story
+and CLIP image embeddings - each measured against a fixed, corpus-calibrated
+bound, not against the other results. A nonsense query scores near zero
+instead of producing an artificial "best match", and the density gradient
+stays flat when the search has little to say. A corpus with no
+`embeddings.bin` still reports strength from its text signals alone.
 
 [`docs/search_rules.md`](docs/search_rules.md) is the full specification;
 [`packages/map/scoring.ts`](packages/map/scoring.ts) and

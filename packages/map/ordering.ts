@@ -132,10 +132,10 @@ export const STRENGTH_FLOOR = 0.05;
  *
  * Two adjustments to the profile as it is read:
  *
- *   - strength is made non-increasing with rank. The ordering is best-first
- *     by definition, so a rank more certain than the one above it is a
- *     contradiction; the running minimum is which of the two to believe.
- *     Density then falls monotonically outward whatever shape the blend had.
+ *   - strength is made non-increasing with rank, by a running minimum.
+ *     `rankHybrid` already sorts by strength, so a search profile passes
+ *     through unchanged; the minimum keeps density falling outward for any
+ *     profile that is not sorted.
  *   - anything under `floor` becomes the baseline itself, not a value slightly
  *     above it. See `STRENGTH_FLOOR`.
  *

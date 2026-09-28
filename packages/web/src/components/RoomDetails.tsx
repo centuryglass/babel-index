@@ -25,7 +25,6 @@ import { explainRanking } from '../../../map/scoring.ts';
 import type { RoomMeta } from '../../../map/metadata.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange, RankingExplanation } from '../../../map/searchResult.ts';
-import type { Config } from '../../../config/config.ts';
 
 /**
  * Text with the matched spans marked.
@@ -148,7 +147,7 @@ function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
  * Why this room ranked where it did - see `ScoreLines`, `explainRanking`.
  *
  * Exported because the catalog row renders it outside `RoomDetails` (which
- * it calls with `weights={null}` so it renders no score): the row's score
+ * renders without `showScore`, so it draws no score): the row's score
  * strip sits in normal flow beneath a fixed-height flow area, not inside
  * it, so its top rule lands below the tile rather than beside it. The card
  * and the overlay still let `RoomDetails` render it inline, since neither
@@ -157,12 +156,10 @@ function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
 export function ScoreBreakdown({
   rank,
   result,
-  weights,
   layout = 'table',
 }: {
   rank: number | null;
   result: SearchResult | null;
-  weights: Config['search']['weights'];
   layout?: 'table' | 'strip';
 }) {
   if (!result?.breakdown || !result.ranks || !result.ties || rank == null || rank < 0) return null;
@@ -171,7 +168,6 @@ export function ScoreBreakdown({
     strength: result.strength,
     ranks: result.ranks,
     ties: result.ties,
-    weights,
     total: result.order.length,
   });
   if (!explanation) return null;
@@ -239,7 +235,7 @@ export function RoomDetails({
   highlight = null,
   rank = null,
   result = null,
-  weights = null,
+  showScore = false,
   scoreLayout = 'table',
   showPicture = false,
   chipOverflow = null,
@@ -263,7 +259,8 @@ export function RoomDetails({
   rank?: number | null;
   /** the current search, for the breakdown */
   result?: SearchResult | null;
-  weights?: Config['search']['weights'] | null;
+  /** render the score breakdown for `rank` - a catalog row leaves it off and places its own */
+  showScore?: boolean;
   /** a card has room for the table; a catalog row needs the one-line strip, or it clips */
   scoreLayout?: 'table' | 'strip';
   /**
@@ -367,8 +364,8 @@ export function RoomDetails({
         <p className="story dim">No keywords recorded for this room.</p>
       )}
 
-      {weights && (
-        <ScoreBreakdown rank={rank} result={result} weights={weights} layout={scoreLayout} />
+      {showScore && (
+        <ScoreBreakdown rank={rank} result={result} layout={scoreLayout} />
       )}
     </>
   );

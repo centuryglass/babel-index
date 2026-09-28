@@ -30,11 +30,9 @@
  *     could see that.
  *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
  *     hard zoom range, in code so config cannot widen it.
- *   - `packages/map/scoring.ts`'s `TAG_PARTIAL_SATURATION`/`STORY_LONG_RANGE`:
- *     they shape the score terms `search.weights` balances in the inequalities
- *     `docs/search_rules.md` "Balancing signals against each other" states and
- *     `scoring.test.ts` checks. Moving one means re-checking them all.
- *     `STORY_FLOOR` sits beside them and feeds strength, not the score.
+ *   - `packages/map/scoring.ts`'s `STORY_LONG_RANGE`: what counts as a full
+ *     story run, which `search.weights.storyLong` then weighs. Moving it means
+ *     re-running the ordering tests in `scoring.test.ts`.
  *   - `packages/web/src/lib/center.ts`'s spine sizing (`SPINE_SIZE_SCALE`,
  *     `SPINE_HALO_SCALE`, `SPINE_HALO_FLOOR`) and opening fit
  *     (`OPENING_MARGIN`): the same kind of tuning as `center` below, not
@@ -478,29 +476,27 @@ export const DEFAULTS: Defaults = {
 
   search: {
     /**
-     * The seven constants `docs/search_rules.md` "Balancing signals against each
-     * other" names `E`, `P`, `T`, `Pt`, `S`, `L`, `C`: one exact tag, the
-     * saturating partial-tag budget, one exact title match, the partial-title
-     * budget, a short story match, the saturating long-story bonus, and CLIP.
-     * Every non-CLIP signal is already an absolute ratio or count; CLIP is
-     * min-maxed across the corpus for that query before its weight applies, and
-     * `packages/map/scoring.ts`'s header is why a raw cosine cannot be weighted
-     * directly.
+     * How strongly each kind of evidence pulls a room toward the center, each
+     * in [0, 1] (`docs/search_rules.md` "Signal weights"). An exact match
+     * pulls at its full weight, a partial match at its weight times the
+     * fraction of the keyword or title it covers, a matched story word at
+     * `story` and a full story run at `storyLong`, and CLIP at `clip` times
+     * its curve. `packages/map/scoring.ts`'s `matchStrength` combines them.
      *
-     * Each is chosen so the inequalities in `docs/search_rules.md` "Balancing
-     * signals against each other" hold with margin rather than at the
-     * boundary. `config.test.ts` and `scoring.test.ts` assert them against
-     * these numbers, so a re-tune that breaks one fails a test instead of
-     * quietly changing the ranking.
+     * The ordering requirements between signals (an exact match ahead of a
+     * CLIP-only room, a long story run ahead of CLIP) hold because of these
+     * numbers. `scoring.test.ts` checks each one on a built query, so a
+     * re-tune that breaks one fails a test instead of quietly changing the
+     * map.
      */
     weights: {
-      tagExact: 5,
-      tagPartial: 0.45,
-      titleExact: 5.5,
-      titlePartial: 0.2,
-      story: 0.4,
-      storyLong: 2,
-      clip: 1,
+      tagExact: 1,
+      tagPartial: 0.6,
+      titleExact: 1,
+      titlePartial: 0.6,
+      story: 0.35,
+      storyLong: 0.95,
+      clip: 0.85,
     },
 
     /**
@@ -544,7 +540,7 @@ export const DEFAULTS: Defaults = {
      */
     density: {
       /**
-       * Density offered to a rank the search is certain about. 1 packs perfect
+       * Density offered to a rank at full strength. 1 packs full-strength
        * matches into every cell they meet, so a handful of exact hits reads as a
        * solid block against the center. Lower it to keep some wallpaper showing
        * through even the surest cluster.
@@ -662,21 +658,21 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     },
     search: {
       weights: {
-        tagExact: nonNegative(weightsIn.tagExact, DEFAULTS.search.weights.tagExact, 'search.weights.tagExact', notes),
-        tagPartial: nonNegative(
+        tagExact: unitInterval(weightsIn.tagExact, DEFAULTS.search.weights.tagExact, 'search.weights.tagExact', notes),
+        tagPartial: unitInterval(
           weightsIn.tagPartial, DEFAULTS.search.weights.tagPartial, 'search.weights.tagPartial', notes
         ),
-        titleExact: nonNegative(
+        titleExact: unitInterval(
           weightsIn.titleExact, DEFAULTS.search.weights.titleExact, 'search.weights.titleExact', notes
         ),
-        titlePartial: nonNegative(
+        titlePartial: unitInterval(
           weightsIn.titlePartial, DEFAULTS.search.weights.titlePartial, 'search.weights.titlePartial', notes
         ),
-        story: nonNegative(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
-        storyLong: nonNegative(
+        story: unitInterval(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
+        storyLong: unitInterval(
           weightsIn.storyLong, DEFAULTS.search.weights.storyLong, 'search.weights.storyLong', notes
         ),
-        clip: nonNegative(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
+        clip: unitInterval(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
       },
       minTokenLength: tokenLength(
         searchIn.minTokenLength, DEFAULTS.search.minTokenLength, 'search.minTokenLength', notes
@@ -964,9 +960,21 @@ function clipTextDtype(value: unknown, notes: string[]): string {
 }
 
 /**
- * Any non-negative number - a search weight (zero is a legitimate "ignore
- * this signal"), or a camera rate/factor (zero is a legitimate "this input
- * does nothing", the same reasoning `duration()` gives zero).
+ * A number in [0, 1] - a search weight, where zero is a legitimate "ignore
+ * this signal" and a pull above 1 would mean nothing to a soft OR.
+ */
+function unitInterval(value: unknown, fallback: number, path: string, notes: string[]): number {
+  const n = number(value, fallback, path, notes);
+  if (!(n >= 0 && n <= 1)) {
+    notes.push(`${path} should be in [0, 1]; using ${fallback}`);
+    return fallback;
+  }
+  return n;
+}
+
+/**
+ * Any non-negative number - a camera rate/factor, where zero is a legitimate
+ * "this input does nothing", the same reasoning `duration()` gives zero.
  */
 function nonNegative(value: unknown, fallback: number, path: string, notes: string[]): number {
   const n = number(value, fallback, path, notes);

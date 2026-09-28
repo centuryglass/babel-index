@@ -18,7 +18,7 @@ export interface StorySequenceEntry {
  *
  * - `sequence` keeps story order, which the contiguous-run measurements
  *   (`scoring.ts`'s `longestMatchRun`, `storyPhraseRun`) need.
- * - `set` holds the same lemmas for `storyScore`'s O(1) membership test,
+ * - `set` holds the same lemmas for `storyWordMatches`' O(1) membership test,
  *   built once so no query rebuilds it.
  */
 export interface StoryIndex {
@@ -70,25 +70,31 @@ export interface RankSignals {
   story: boolean;
 }
 
-/** Per-signal scores, one array per rank - see `rankHybrid`'s doc comment. */
+/**
+ * What each room's strength was built from, one array per rank - see
+ * `rankHybrid`'s doc comment. `tag`/`title`/`story`/`clip` are the axes'
+ * weighted pulls `matchStrength` combines; the rest are the raw evidence
+ * behind them, for display.
+ */
 export interface ScoreBreakdown {
-  score: Float32Array;
+  tag: Float32Array;
+  title: Float32Array;
+  story: Float32Array;
+  clip: Float32Array;
+  /** how many query terms matched a keyword exactly (the whole-query reading counts as one) */
   tagExact: Float32Array;
-  tagPartialSum: Float32Array;
-  /** how many terms `tagPartialSum` sums over - a count, not a fraction */
+  /** how many terms matched a keyword as a substring, not exactly - a count, not a fraction */
   tagPartialCount: Int32Array;
   /** 0 or 1 - did some term match the room's title exactly (docs/search_rules.md "Title matching") */
   titleExact: Float32Array;
-  /** the largest substring fraction over every term tested against the title, not a sum - there is only one title */
+  /** the largest substring fraction over every term tested against the title, not a combination - there is only one title */
   titlePartial: Float32Array;
-  /** `storyRatio` - query-relative, the ranking's short-story term */
-  story: Float32Array;
-  /** longest contiguous matched run, in characters - the long-story term */
+  /** how many of the query's distinct words the story contains (`storyWordMatches`) */
+  storyWords: Int32Array;
+  /** longest contiguous matched run, in characters */
   storyLongChars: Float32Array;
-  /** `clipNorm` - min-max normalised across the corpus for this query */
-  clip: Float32Array;
-  /** CLIP's absolute strength curve (`clipCurveStrength`), in [0, 1] - also what the CLIP row's reported percentage reads */
-  clipStrengthGate: Float32Array;
+  /** CLIP's curve (`clipCurveStrength`), in [0, 1], before `weights.clip` - what the CLIP row's reported percentage reads */
+  clipStrength: Float32Array;
   cosine: Float32Array;
 }
 
@@ -110,7 +116,7 @@ export interface SignalRanks {
 export interface RankHybridResult {
   /** Room ids, best first. */
   order: number[];
-  /** Parallel to `order` (by rank, not id) - what the density gradient reads. */
+  /** Parallel to `order` (by rank, not id), and non-increasing - what the density gradient reads. */
   strength: Float32Array;
   breakdown: ScoreBreakdown;
   ranks: SignalRanks;
@@ -141,15 +147,16 @@ export interface MatchRange {
 }
 
 /**
- * One axis's share of the total weighted score, per docs/search_rules.md
- * "Reporting" - a percentage of the score, not of anything absolute.
+ * One axis's pull as a share of the four axes' pulls added together, per
+ * docs/search_rules.md "Reporting" - a percentage of the pulls, not of
+ * `strength`, which a soft OR does not split into parts.
  * `RankingExplanation.contributions` sorts these greatest first and omits
- * any axis that contributed nothing.
+ * any axis that pulled nothing.
  */
 export interface ContributionShare {
   key: 'clip' | 'tag' | 'title' | 'story';
   label: string;
-  /** this axis's weighted term as a share of `breakdown.score`, 0-100 */
+  /** this axis's pull as a share of all four pulls, 0-100 */
   percent: number;
 }
 

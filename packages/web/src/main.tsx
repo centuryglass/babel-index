@@ -1314,7 +1314,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           highlight={highlight}
           tagLinks={tagLinks}
           result={result}
-          weights={config.search.weights}
+          showScore
           favorite={favoriteFor(overlay.id)}
           shareSlug={roomSlugs[overlay.id] ?? null}
           shareMode={mode}
@@ -1370,7 +1370,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           highlight={highlight}
           tagLinks={tagLinks}
           result={result}
-          weights={config.search.weights}
+          showScore
           favorite={'id' in card ? favoriteFor(card.id) : null}
           shareSlug={'id' in card ? roomSlugs[card.id] ?? null : null}
           shareMode="map"
