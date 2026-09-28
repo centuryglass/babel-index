@@ -135,6 +135,7 @@ interface SearchWeights {
 
 interface SearchDensity {
   peak: number;
+  peakAt: number;
   floor: number;
   clipCentre: number;
   clipHigh: number;
@@ -488,6 +489,9 @@ export const DEFAULTS: Defaults = {
      * numbers. `scoring.test.ts` checks each one on a built query, so a
      * re-tune that breaks one fails a test instead of quietly changing the
      * map.
+     *
+     * `search.density.peakAt` is set to `clip`; raising `clip` past it packs
+     * the top of CLIP's range at one density.
      */
     weights: {
       tagExact: 1,
@@ -540,7 +544,7 @@ export const DEFAULTS: Defaults = {
      */
     density: {
       /**
-       * Density offered to a rank at full strength. 1 packs full-strength
+       * Density offered to a rank of strength `peakAt` or more. 1 packs those
        * matches into every cell they meet, so a handful of exact hits reads as a
        * solid block against the center. Lower it to keep some wallpaper showing
        * through even the surest cluster.
@@ -548,7 +552,16 @@ export const DEFAULTS: Defaults = {
       peak: 1,
 
       /**
-       * Strength under this clusters nothing at all. `STRENGTH_FLOOR`
+       * Strength at which the ramp reaches `peak`; every strength above it packs
+       * the same. It matches `search.weights.clip`, a CLIP-only room's highest
+       * strength, so a genuine image match packs solid. Raising `weights.clip`
+       * without raising this flattens the top of CLIP's range into `peak`.
+       */
+      peakAt: 0.85,
+
+      /**
+       * Strength at which the ramp leaves the baseline; anything at or under it
+       * clusters nothing. Must be below `peakAt`. `STRENGTH_FLOOR`
        * (`packages/map/ordering.ts`) is where the reasoning is written down.
        */
       floor: STRENGTH_FLOOR,
@@ -796,21 +809,32 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
  *
  * A `peak` below `map.contentRatio` is not rejected here because the layout
  * treats the baseline as a floor anyway - a gradient may add density, never
- * remove it - so the worst such a config can do is switch the effect off. An
- * inverted cosine band gets a note and falls back: `clipHigh <= clipCentre`
- * means CLIP contributes no strength at all, which from the map looks like a
- * corpus with no embeddings blob.
+ * remove it - so the worst such a config can do is switch the effect off.
+ *
+ * Two inverted pairs get a note and fall back together:
+ *   - `floor >= peakAt` leaves the ramp no width, and `createLayout()` throws
+ *     on it.
+ *   - `clipHigh <= clipCentre` means CLIP contributes no strength at all,
+ *     which from the map looks like a corpus with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {
   const d = DEFAULTS.search.density;
   const out = {
     peak: ratio(src.peak, d.peak, 'search.density.peak', notes),
-    floor: ratio(src.floor, d.floor, 'search.density.floor', notes),
+    peakAt: ratio(src.peakAt, d.peakAt, 'search.density.peakAt', notes),
+    floor: unitInterval(src.floor, d.floor, 'search.density.floor', notes),
     clipCentre: number(src.clipCentre, d.clipCentre, 'search.density.clipCentre', notes),
     clipHigh: number(src.clipHigh, d.clipHigh, 'search.density.clipHigh', notes),
   };
   // `clipLow` was a setting in older configs; say it no longer applies.
   if (src.clipLow !== undefined) notes.push('search.density.clipLow is not a setting; ignored');
+  if (!(out.peakAt > out.floor)) {
+    notes.push(
+      `search.density.peakAt ${out.peakAt} is not above floor ${out.floor}; using ${d.peakAt}/${d.floor}`
+    );
+    out.peakAt = d.peakAt;
+    out.floor = d.floor;
+  }
   if (!(out.clipHigh > out.clipCentre)) {
     notes.push(
       `search.density.clipHigh ${out.clipHigh} is not above clipCentre ${out.clipCentre}; ` +

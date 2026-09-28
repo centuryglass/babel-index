@@ -257,6 +257,24 @@ test('a nonsense peak or floor falls back and says so', () => {
   assert.equal(c.notes.length, 2, c.notes.join('; '));
 });
 
+test('an inverted ramp is reported and both anchors fall back together', () => {
+  const c = resolveConfig({ search: { density: { peakAt: 0.3, floor: 0.4 } } }, { zoomLimits: LIMITS });
+  assert.equal(c.search.density.peakAt, DEFAULTS.search.density.peakAt);
+  assert.equal(c.search.density.floor, DEFAULTS.search.density.floor);
+  assert.ok(c.notes.some((n) => n.includes('peakAt') && n.includes('floor')), c.notes.join('; '));
+});
+
+test('a zero floor is accepted, and peakAt stays a ratio', () => {
+  const c = resolveConfig({ search: { density: { floor: 0, peakAt: 1.2 } } }, { zoomLimits: LIMITS });
+  assert.equal(c.search.density.floor, 0);
+  assert.equal(c.search.density.peakAt, DEFAULTS.search.density.peakAt);
+  assert.equal(c.notes.length, 1, c.notes.join('; '));
+});
+
+test("peakAt defaults to CLIP's weight, so a genuine image match packs solid", () => {
+  assert.equal(DEFAULTS.search.density.peakAt, DEFAULTS.search.weights.clip);
+});
+
 test('the default gradient bounds bracket a real CLIP cosine', () => {
   // Not a preference but a measurement, and the one number here most likely to
   // move: image-text cosines have to be able to land inside the band for the

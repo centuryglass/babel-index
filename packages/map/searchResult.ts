@@ -52,7 +52,7 @@ export interface Term {
 
 /** `parseQuery()`'s return value. */
 export interface ParsedQuery {
-  /** the query exactly as typed */
+  /** the query as typed */
   raw: string;
   /** fold(raw) - the whole query, which `rankHybrid` classifies as one term against a whole keyword */
   folded: string;
@@ -81,11 +81,11 @@ export interface ScoreBreakdown {
   title: Float32Array;
   story: Float32Array;
   clip: Float32Array;
-  /** how many query terms matched a keyword exactly (the whole-query reading counts as one) */
+  /** how many query terms were exact keyword matches (the whole-query reading counts as one) */
   tagExact: Float32Array;
-  /** how many terms matched a keyword as a substring, not exactly - a count, not a fraction */
+  /** how many terms matched a keyword as a substring only - a count, not a fraction */
   tagPartialCount: Int32Array;
-  /** 0 or 1 - did some term match the room's title exactly (docs/search_rules.md "Title matching") */
+  /** 0 or 1 - did some term match the room's whole title (docs/search_rules.md "Title matching") */
   titleExact: Float32Array;
   /** the largest substring fraction over every term tested against the title, not a combination - there is only one title */
   titlePartial: Float32Array;
@@ -164,9 +164,9 @@ export interface ContributionShare {
 export interface TagRankingSummary {
   rank: number;
   ties: number;
-  /** count of terms that matched a keyword exactly */
+  /** count of terms that were exact keyword matches */
   exact: number;
-  /** count of terms that matched a keyword as a substring, not exactly */
+  /** count of terms that matched a keyword as a substring only */
   partial: number;
 }
 
@@ -179,7 +179,7 @@ export interface TagRankingSummary {
 export interface TitleRankingSummary {
   rank: number;
   ties: number;
-  /** did some term match the title exactly */
+  /** did some term match the whole title */
   exact: boolean;
   /** the best substring fraction over every term, 0 when nothing matched */
   partial: number;
