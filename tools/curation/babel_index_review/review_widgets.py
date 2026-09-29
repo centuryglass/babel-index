@@ -16,6 +16,7 @@ import os
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
+    QEvent,
     QModelIndex,
     QPersistentModelIndex,
     QSize,
@@ -48,6 +49,7 @@ from PySide6.QtWidgets import (
 from story_engine import DraftEntry, PitchEntry
 
 THUMB_SIZE = QSize(64, 48)
+DRAFT_LINES = 15  # a draft card's text box height; longer drafts scroll
 
 # Status colors, shared by the tile table and the draft cards.
 COLOR_FINAL = "#4caf7a"
@@ -408,6 +410,31 @@ class GrowingTextEdit(QTextEdit):
         self.setFixedHeight(max(self._min_height, height))
 
 
+class FixedLinesTextEdit(QPlainTextEdit):
+    """A plain-text editor a fixed number of lines tall, scrolling past that.
+
+    The height follows the font, so the app-wide font scaling keeps the line
+    count.
+    """
+
+    def __init__(self, lines: int, parent=None):
+        super().__init__(parent)
+        self._lines = lines
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._fit()
+
+    def _fit(self) -> None:
+        margins = self.contentsMargins()
+        document_margin = 2 * self.document().documentMargin()
+        height = self.fontMetrics().lineSpacing() * self._lines + document_margin
+        self.setFixedHeight(round(height) + margins.top() + margins.bottom())
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange:
+            self._fit()
+
+
 # ---------------------------------------------------------------------------
 # Pitch row
 # ---------------------------------------------------------------------------
@@ -605,7 +632,7 @@ class DraftCard(QFrame):
         self.revised.setWordWrap(True)
         self.revised.setStyleSheet(f"color: {COLOR_REVISED};")
 
-        self.text = GrowingTextEdit(min_height=60)
+        self.text = FixedLinesTextEdit(DRAFT_LINES)
         self.text.setFrameShape(QFrame.Shape.NoFrame)
         self.text.textChanged.connect(lambda: self.textEdited.emit(self.draft_id, self.text.toPlainText()))
 
