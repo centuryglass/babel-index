@@ -74,6 +74,22 @@ the same rules and near-duplicate check as `titles.py`, treating the tile's
 current title as taken and asking before it replaces a non-empty one. Hold
 Ctrl over the image to zoom it to the whole window.
 See `babel_index_review/gui.py`'s module docstring for the layout.
+
+Each keyword is a button, a quick reference for what the models know about
+it:
+
+- **Click** a keyword to list every model's explanation of it, with an
+  **Explain with** button and a model picker. The picker starts on the pitch
+  model, or the draft model while the Drafts tab is open. For a model that
+  already has an explanation, the button reads **Re-explain** and asks before
+  replacing it.
+- **Right-click** to explain it with the current pitch or draft model.
+- **Hover** to see one explanation: the active model's if it has one.
+  An underlined keyword has at least one explanation.
+
+Explanations are kept in `DIR/llm_tag_descriptions.json`, keyed by keyword
+and then model id, and are never fed into a story prompt. Several can run at
+once, and a second window picks them up.
 `--sample-update` adds a "Save to samples" button that copies the selected
 tile's image and a subset of its metadata (keywords, story, title, alt) into
 `assets/corpus-sample`, for hand-picking a representative demo corpus.
@@ -169,8 +185,8 @@ regardless of `--workers`, since a single-model `llama-server` can't usefully
 serve concurrent requests. Every tile's result is still written to
 `metadata.json` one at a time by a single thread as it completes, so an
 interrupted run (Ctrl+C included) loses nothing beyond whatever was still
-in flight at that moment. `metadata.json` reads and writes are also safe
-across *processes*: two of these tools (or one alongside the GUI) can run
+in flight at that moment. `metadata.json` (and `llm_tag_descriptions.json`)
+reads and writes are also safe across *processes*: two of these tools (or one alongside the GUI) can run
 against the same `DIR` at once without one process's save overwriting
 another's.
 

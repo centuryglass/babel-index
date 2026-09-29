@@ -1,6 +1,7 @@
 """
 Widgets for the story review window (``gui.py``): the tile table, the image
-panel, and the pitch rows and draft cards of the story-engine panel.
+panel, the keyword chips and their explanation panel, and the pitch rows and
+draft cards of the story-engine panel.
 
 Each widget shows the state it is handed and reports edits through signals.
 None of them reads or writes a file, so the window owns every save and every
@@ -19,6 +20,7 @@ from PySide6.QtCore import (
     QEvent,
     QModelIndex,
     QPersistentModelIndex,
+    QPoint,
     QSize,
     QSortFilterProxyModel,
     Qt,
@@ -28,6 +30,7 @@ from PySide6.QtGui import QColor, QFont, QIcon, QImageReader, QPainter, QPalette
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
@@ -42,6 +45,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QTextEdit,
     QToolButton,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -796,6 +800,161 @@ class DraftChips(QWidget):
                 chip.setStyleSheet(f"QToolButton {{ color: {COLOR_MUTED}; }}")
             chip.toggled.connect(lambda on, d=draft_id: self.toggled.emit(d, on))
             self._layout.addWidget(chip)
+
+
+# ---------------------------------------------------------------------------
+# Keyword chips and explanations
+# ---------------------------------------------------------------------------
+class KeywordChips(QWidget):
+    """One button per keyword: click to open its explanations, right-click for a menu.
+
+    A chip whose keyword has any stored explanation is underlined. Tooltips
+    come from ``tooltip_fn(keyword)`` at hover time, so they follow the
+    window's active model without a refresh.
+    """
+
+    clicked = Signal(str)
+    menu_requested = Signal(str, QPoint)  # (keyword, global position)
+
+    def __init__(self, tooltip_fn, parent=None):
+        super().__init__(parent)
+        self._tooltip_fn = tooltip_fn
+        self._chips: dict[str, QToolButton] = {}
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(4)
+
+    def set_keywords(self, keywords: list[tuple[str, str]]) -> None:
+        """``keywords``: ``(text, type)`` pairs in display order."""
+        for chip in self._chips.values():
+            chip.hide()
+            chip.deleteLater()
+        self._chips.clear()
+        for text, kind in keywords:
+            chip = QToolButton(self)
+            chip.setText(f"{text} ({kind})" if kind else text)
+            chip.setCheckable(True)
+            chip.setAccessibleName(f"Keyword {text}")
+            chip.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            chip.clicked.connect(lambda _on, k=text: self.clicked.emit(k))
+            chip.customContextMenuRequested.connect(
+                lambda pos, k=text, c=chip: self.menu_requested.emit(k, c.mapToGlobal(pos))
+            )
+            chip.installEventFilter(self)
+            self._layout.addWidget(chip)
+            self._chips[text] = chip
+
+    def set_state(self, explained: set[str], open_keyword: str | None) -> None:
+        for text, chip in self._chips.items():
+            chip.setChecked(text == open_keyword)
+            font = chip.font()
+            font.setUnderline(text in explained)
+            chip.setFont(font)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.ToolTip:
+            for text, chip in self._chips.items():
+                if chip is obj:
+                    QToolTip.showText(event.globalPos(), self._tooltip_fn(text), chip)
+                    return True
+        return super().eventFilter(obj, event)
+
+
+class TagExplainPanel(QFrame):
+    """Every stored explanation of one keyword, and a button to ask a model for another.
+
+    The button reads "Re-explain" when the picked model already has an entry;
+    the window asks before replacing it.
+    """
+
+    explain_requested = Signal(str, str)  # (keyword, model id)
+    closed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.keyword: str | None = None
+        self._explanations: dict = {}
+        self._busy: set[str] = set()
+
+        self.title = QLabel()
+        self.title.setStyleSheet("font-weight: bold;")
+        close = icon_button("close", "Close explanations", self)
+        close.clicked.connect(self.closed.emit)
+        header = QHBoxLayout()
+        header.addWidget(self.title)
+        header.addStretch(1)
+        header.addWidget(close)
+
+        self._entries = QVBoxLayout()
+        self._entries.setSpacing(10)
+
+        self.explain_button = QPushButton()
+        self.explain_button.clicked.connect(self._on_explain)
+        self.model_combo = QComboBox()
+        self.model_combo.currentIndexChanged.connect(lambda _i: self._update_button())
+        footer = QHBoxLayout()
+        footer.addWidget(self.explain_button)
+        footer.addWidget(self.model_combo)
+        footer.addStretch(1)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 8)
+        layout.addLayout(header)
+        layout.addLayout(self._entries)
+        layout.addLayout(footer)
+
+    def model_label(self, model: str) -> str:
+        index = self.model_combo.findData(model)
+        return self.model_combo.itemText(index) if index >= 0 else model
+
+    def show_keyword(self, keyword: str, explanations: dict, busy: set[str]) -> None:
+        """Show ``keyword``'s ``{model id: {"text", "created"}}``; ``busy`` holds the models still explaining it."""
+        self.keyword = keyword
+        self._explanations = explanations
+        self._busy = busy
+        self.title.setText(keyword)
+        while self._entries.count():
+            item = self._entries.takeAt(0)
+            widget = item.widget() if item else None
+            if widget is not None:
+                # Hidden and unparented now: deleteLater alone leaves it drawn under the new entries.
+                widget.hide()
+                widget.setParent(None)
+                widget.deleteLater()
+        if not explanations:
+            empty = QLabel("No explanations yet.")
+            empty.setStyleSheet(f"color: {COLOR_MUTED};")
+            self._entries.addWidget(empty)
+        for model in sorted(explanations, key=lambda m: self.model_label(m).casefold()):
+            entry = explanations[model]
+            source = QLabel(f"{self.model_label(model)} · {entry.get('created', '')[:10]}")
+            source.setStyleSheet(f"color: {COLOR_MUTED};")
+            text = QLabel(entry.get("text", ""))
+            text.setWordWrap(True)
+            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            group = QWidget()
+            group_layout = QVBoxLayout(group)
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(2)
+            group_layout.addWidget(source)
+            group_layout.addWidget(text)
+            self._entries.addWidget(group)
+        self._update_button()
+
+    def _update_button(self) -> None:
+        model = self.model_combo.currentData()
+        if model in self._busy:
+            self.explain_button.setText("Working…")
+            self.explain_button.setEnabled(False)
+            return
+        self.explain_button.setText("Re-explain with" if model in self._explanations else "Explain with")
+        self.explain_button.setEnabled(self.keyword is not None and model is not None)
+
+    def _on_explain(self) -> None:
+        model = self.model_combo.currentData()
+        if self.keyword is not None and model:
+            self.explain_requested.emit(self.keyword, model)
 
 
 class HistoryDialog(QDialog):
