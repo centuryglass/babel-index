@@ -19,9 +19,11 @@ a corpus directory needs, it doesn't run alongside the app.
   layout, keyword normalization, story prompt, Claude calls) that everything
   else builds on; the rest are entry points - see `README.md` for what each
   does and how to run it. `gui.py` + `__main__.py` are the desktop Qt review
-  app; `mobile_app.py` is the LAN-servable alternative.
-- `story_engine/`: the staged story generator (pitch, then draft in
-  parallel), with per-tile JSON Lines traces. Kept free of Babel Index
+  app, with its widgets in `review_widgets.py`; `mobile_app.py` is the
+  LAN-servable alternative.
+- `story_engine/`: the staged story generator (pitch, draft, revise), with
+  each tile's review state in a workspace file (`workspace.py`) and a JSON
+  Lines trace of its model calls. Kept free of Babel Index
   specifics so it can be lifted out later; `babel_index_review/story_frame.py`
   holds this project's configuration. Its module docstrings cover the
   stages, and issue #385 tracks the ones still to come.
@@ -76,7 +78,9 @@ a corpus directory needs, it doesn't run alongside the app.
   apply here** - this subtree never touches `packages/`'s optional
   `@huggingface/transformers` dependency; it's a fully separate curation step
   that runs before a corpus exists, not part of serving one.
-- **The desktop GUI (`babel_index_review.gui`) needs a real display** (Qt);
-  it can't be smoke-tested headlessly the way the rest of this repo's e2e
-  suite runs in CI. `mobile_app.py` is the one piece here servable/testable
-  over plain HTTP.
+- **The desktop GUI (`babel_index_review.gui`) has no automated tests.** It
+  runs headlessly under `QT_QPA_PLATFORM=offscreen`, and `window.grab()`
+  saves a screenshot, so a scratch script with `story_engine.llm.ask`
+  stubbed can drive it and check the layout without a display or model
+  calls. Point it at a copy of a tile directory: the GUI writes
+  `metadata.json` and `story_traces/` as it goes.

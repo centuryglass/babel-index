@@ -1,11 +1,11 @@
 """
 Babel Index's configuration for ``story_engine``: the frame, the seed, form
-and constraint lists, and where traces go.
+and constraint lists, and where traces and workspaces go.
 
 The lists are ``data/story_seeds.json``, ``data/story_forms.json`` and
 ``data/story_constraints.json``, relative to the launch directory like every
-other ``data/`` default here. Traces go to ``story_traces/`` inside the tile
-directory, one ``<tile stem>.jsonl`` per tile. The corpus scanner lists only
+other ``data/`` default here. Traces and workspaces go to ``story_traces/``
+inside the tile directory, as ``<tile stem>.jsonl`` and ``<tile stem>.json``. The corpus scanner lists only
 image files at a corpus root, so the subdirectory is ignored if that
 directory is later served.
 """
@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 
 from babel_index_review.core import BASE_SCENE
-from story_engine import Engine, Frame, TraceLog, load_options
+from story_engine import Engine, Frame, TraceLog, WorkspaceStore, load_options
 
 SEEDS_PATH = os.path.join("data", "story_seeds.json")
 FORMS_PATH = os.path.join("data", "story_forms.json")
@@ -58,6 +58,11 @@ def build_frame() -> Frame:
 
 def build_engine(tile_dir: str) -> Engine:
     return Engine(build_frame(), TraceLog(os.path.join(tile_dir, TRACE_DIR)))
+
+
+def build_store(tile_dir: str) -> WorkspaceStore:
+    directory = os.path.join(tile_dir, TRACE_DIR)
+    return WorkspaceStore(directory, TraceLog(directory))
 
 
 def subject_for(key: str) -> str:

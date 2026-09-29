@@ -1,184 +1,135 @@
 """
 Qt story-review interface for the babel-index tiles.
 
-Left panel: a scrolling grid of every tile in ``metadata.json``.
-  - Green outline: story reviewed and finalized.
-  - No outline:    story present but not reviewed.
-  - Red outline:   story absent.
-  - Grey "missing": the webp is gone from disk.
-Clicking a tile selects it; the selected tile gets a thicker highlighted border.
+Three columns, laid out for a 1920x1080 window:
 
-Right panel: story editing for the selected tile.
-  - Top    -- initial prompt. Resets to the keyword-seeded default on every
-              selection. Editable (used for the next Generate call).
-  - Middle -- current story. Editable; edits autosave to metadata.json.
-  - Bottom -- revision request. Editable; cleared on selection.
-  - Pitches -- the staged story engine (``story_engine``, configured by
-    ``story_frame``). "Pitch" lists ideas and the enigma the model found in
-    the image, all ticked; unticking one rejects it. "Write drafts" drafts
-    every ticked pitch in parallel, in forms drawn by weight or the form
-    picked beside it. Below the list, a critique box for the selected pitch
-    and a note line for the whole batch autosave (see ``story_critiques``
-    for the export).
-  - Drafts -- the drafts written from the shown batch. "Use draft" (or a
-    double-click) puts one in the story field, marked ★ in the list.
-    Every step is traced to ``story_traces/``. Marking an engine-written
-    story Final, or clearing it, logs that outcome to the trace too.
-  - Alt text -- accessibility description, editable with its own autosave and
-    "Generate alt" button (uses the model dropdown, ``core.default_alt_prompt``,
-    stored as "alt" on the tile's metadata entry).
-  - Title -- short evocative title, editable with its own autosave, stored as
-    "title" on the tile's metadata entry (see ``babel_index_review.titles``
-    for the batch generator).
-  - Below that -- sensitive content tag checkboxes (gore, body-horror, horror,
-    death, insects/arthropods, trypophobia), stored as an optional
-    "sensitive_content_tags" list on the tile's metadata entry (omitted when
-    empty).
+- **Tiles** (left): a sortable table of every tile in ``metadata.json``
+  (thumbnail, name, title, keywords, status), with a text filter and a
+  status filter.
+- **Tile** (middle): the selected image, then the tile's own fields: title,
+  Final, keywords, the story, and collapsible Alt text and Sensitive content
+  sections. Holding Ctrl over the image zooms it to the whole window.
+- **Story engine** (right): the tile's workspace (``story_engine.workspace``):
+  the reading, a Pitches tab and a Drafts tab. The target workflow is
+  ``docs/story_workflow.md``.
 
-Far bottom:
-  - "Final" toggle: marks/unmarks the story finalized (green). Finalizing
-    advances the selection to the next un-finalized tile.
-  - Generate / Revise button (state-dependent, see ``_update_action_button``).
-  - "Delete": confirms, then wipes the tile from disk, grid, and metadata.
+Every text field autosaves. Tile fields go to ``metadata.json`` through
+``core.update_index``; the reading, pitches and drafts go to the tile's
+workspace file. Model calls run on a thread pool, several at once (pitching,
+drafting and revising on different drafts all overlap), and each result is
+applied on the GUI thread to whichever tile it was made for.
 
-Story generation runs on a background thread so the UI stays responsive.
+The chosen draft and the story are one text: editing either edits both. A
+Final tile is locked against choosing, revising, clearing and editing the
+story; the rest of the engine panel stays usable.
 
 ``ReviewWindow(tile_dir, content_review=...)`` accepts an optional one-time
 display filter: "flagged" shows only tiles with a non-empty
-``sensitive_content_tags``, "unflagged" shows only tiles without one. This
-never touches ``metadata.json`` -- it just narrows which keys the grid and
-navigation ever see; every entry stays loaded and intact on disk.
-
-``sample_update=True`` (the ``--sample-update`` CLI flag) adds a "Save to
-samples" button beside Clear/Delete that copies the selected tile's image and
-a subset of its metadata into ``assets/corpus-sample``
-(``core.add_to_sample_corpus``), for hand-picking a representative demo
-corpus without a separate script.
+``sensitive_content_tags``, "unflagged" only tiles without one. It narrows
+which keys the table ever sees; every entry stays loaded and intact on disk.
+``sample_update=True`` adds a "Save to samples" button
+(``core.add_to_sample_corpus``).
 """
 
 from __future__ import annotations
 
+import copy
+import itertools
 import json
 import os
-import sys
-from typing import cast
+from typing import Callable, cast
 
 from PySide6.QtCore import (
-    Qt,
     QFileSystemWatcher,
+    QItemSelectionModel,
     QObject,
-    QPoint,
-    QRect,
     QRunnable,
+    QSettings,
+    Qt,
     QThreadPool,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
-    QApplication,
     QScrollArea,
-    QSizePolicy,
+    QSlider,
+    QSpinBox,
     QSplitter,
+    QTableView,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from babel_index_review import core, story_frame
-from story_engine import Draft, PitchBatch
-from tag.describe_image import MODELS, DEFAULT_MODEL, LOCAL_PREFIX, available_models
-
-THUMB = 128           # thumbnail edge, px
-CELL = THUMB + 22     # cell footprint incl. border/margins, for column math
+from babel_index_review.review_widgets import (
+    COLOR_MUTED,
+    THUMB_SIZE,
+    CollapsibleSection,
+    DraftCard,
+    DraftChips,
+    GrowingTextEdit,
+    HistoryDialog,
+    ImagePanel,
+    PitchRow,
+    TileFilterProxy,
+    TileTableModel,
+    set_text_quietly,
+)
+from story_engine import DraftEntry, PitchEntry, Reading, Workspace
+from story_engine.workspace import new_id, now
+from tag.describe_image import DEFAULT_MODEL, LOCAL_PREFIX, MODELS, available_models
 
 SENSITIVE_TAGS = core.SENSITIVE_TAGS
-
-# Tile outline colours by state.
-COLOR_FINAL = "#2ecc71"      # green: finalized
-COLOR_UNREVIEWED = "#555a63"  # subtle: story present, not reviewed
-COLOR_MISSING_STORY = "#e74c3c"  # red: no story
-COLOR_MISSING_IMAGE = "#7f8c8d"  # grey: webp gone
-COLOR_SELECTED = "#3498db"   # blue highlight ring on the selected tile
-
-
-def tile_state(entry: dict, exists: bool) -> str:
-    """Classify a tile for outline colouring."""
-    if not exists:
-        return "missing_image"
-    if entry.get("final"):
-        return "final"
-    if entry.get("story"):
-        return "unreviewed"
-    return "missing_story"
-
-
-_STATE_COLOR = {
-    "final": COLOR_FINAL,
-    "unreviewed": COLOR_UNREVIEWED,
-    "missing_story": COLOR_MISSING_STORY,
-    "missing_image": COLOR_MISSING_IMAGE,
-}
-
-
-def _print_progress(done: int, total: int, width: int = 30):
-    """Overwrite one console line with a ``[####----] done/total`` bar.
-
-    Only ``_populate_grid`` calls this -- it's the one step slow enough on a
-    big tile directory (thumbnail decode per tile) to be worth feedback
-    before the window ever appears on screen.
-    """
-    if total == 0 or not sys.stdout.isatty():
-        return
-    filled = width * done // total
-    bar = "#" * filled + "-" * (width - filled)
-    end = "\n" if done == total else ""
-    print(f"\rLoading tiles [{bar}] {done}/{total}", end=end, flush=True)
+SETTINGS = ("babel-index", "story-review")
+MAX_PARALLEL_CALLS = 16
 
 
 # ---------------------------------------------------------------------------
-# Background Claude calls
+# Background model calls
 # ---------------------------------------------------------------------------
-class _WorkerSignals(QObject):
-    done = Signal(str, object)  # (key, result) -- key travels in the payload so the
-    error = Signal(str, str)  # slot can be a bound method (queued, main thread)
+class _CallSignals(QObject):
+    done = Signal(int, object)  # (token, result)
+    error = Signal(int, str)  # (token, message)
 
 
 class _CallWorker(QRunnable):
     """Run a blocking callable off the GUI thread, reporting via signals.
 
-    The result signals are connected to bound methods of the (main-thread)
-    window, which gives them a receiver context and so a queued connection --
-    the slots run on the GUI thread. A bare lambda would have no receiver
-    context and default to a DirectConnection, running the slot on this worker
-    thread and crashing the moment it touched a Qt widget.
+    The signals are connected to bound methods of the (main-thread) window,
+    which gives them a receiver context and so a queued connection: the slots
+    run on the GUI thread. A bare lambda would have no receiver context and
+    default to a DirectConnection, running the slot on this worker thread and
+    crashing the moment it touched a Qt widget.
     """
 
-    def __init__(self, key, fn, *args):
+    def __init__(self, token: int, fn: Callable[[], object]):
         super().__init__()
-        self._key = key
+        self._token = token
         self._fn = fn
-        self._args = args
-        self.signals = _WorkerSignals()
+        self.signals = _CallSignals()
 
     def run(self):
         try:
-            self.signals.done.emit(self._key, self._fn(*self._args))
+            self.signals.done.emit(self._token, self._fn())
         except Exception as err:  # surfaced to the user, never crashes the thread
-            self.signals.error.emit(self._key, str(err))
+            self.signals.error.emit(self._token, str(err))
 
 
 class _ModelLoaderSignals(QObject):
@@ -198,117 +149,11 @@ class _ModelLoader(QRunnable):
         self.signals.done.emit(self._fn())
 
 
-# ---------------------------------------------------------------------------
-# Grid tile
-# ---------------------------------------------------------------------------
-class TileButton(QFrame):
-    """One clickable thumbnail in the grid, coloured by review state."""
-
-    clicked = Signal(str)   # emits the tile key
-    entered = Signal(str)   # cursor entered the tile
-    left = Signal(str)      # cursor left the tile
-
-    def __init__(self, key: str, pixmap: QPixmap | None):
-        super().__init__()
-        self.key = key
-        self._selected = False
-        self._state = "missing_story"
-
-        # Room for the 4px selected border + 4px layout margin on each side.
-        self.setFixedSize(THUMB + 16, THUMB + 16)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        label = QLabel(self)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if pixmap is not None and not pixmap.isNull():
-            label.setPixmap(pixmap)
-        else:
-            label.setText("missing")
-            label.setStyleSheet("color: #bbb;")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.addWidget(label)
-
-    def set_state(self, state: str):
-        self._state = state
-        self._apply_style()
-
-    def set_selected(self, selected: bool):
-        self._selected = selected
-        self._apply_style()
-
-    def _apply_style(self):
-        if self._selected:
-            color, width, bg = COLOR_SELECTED, 4, "rgba(52,152,219,0.18)"
-        else:
-            color, width, bg = _STATE_COLOR[self._state], 3, "transparent"
-        self.setStyleSheet(
-            f"TileButton {{ border: {width}px solid {color};"
-            f" border-radius: 5px; background: {bg}; }}"
-        )
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.key)
-        super().mousePressEvent(event)
-
-    def enterEvent(self, event):
-        self.entered.emit(self.key)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.left.emit(self.key)
-        super().leaveEvent(event)
-
-
-# ---------------------------------------------------------------------------
-# Collapsible editor section
-# ---------------------------------------------------------------------------
-class CollapsibleSection(QWidget):
-    """A titled header that folds its body away, freeing vertical space.
-
-    The header is a flat toggle button with an arrow that points down when open
-    and right when collapsed. `body` is any widget - a plain text box, or a row
-    holding one plus a button. Collapsing hides the body and drops the section's
-    vertical size policy to Fixed so the panel layout stops handing it stretch;
-    `ReviewWindow` reads `is_open()` to redistribute that freed space evenly
-    among the sections still open.
-    """
-
-    toggled = Signal(bool)  # re-emitted so the window can rebalance stretch
-
-    def __init__(self, title: str, body: QWidget):
-        super().__init__()
-        self.body = body
-        self.weight = 1  # its share of vertical space while open; set by the window
-
-        self.toggle = QToolButton()
-        self.toggle.setText(title)
-        self.toggle.setCheckable(True)
-        self.toggle.setChecked(True)
-        self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.toggle.setArrowType(Qt.ArrowType.DownArrow)
-        self.toggle.setAutoRaise(True)
-        self.toggle.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
-        self.toggle.toggled.connect(self._on_toggled)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-        layout.addWidget(self.toggle)
-        layout.addWidget(body, stretch=1)
-
-    def is_open(self) -> bool:
-        return self.toggle.isChecked()
-
-    def _on_toggled(self, checked: bool):
-        self.body.setVisible(checked)
-        self.toggle.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
-        self.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Expanding if checked else QSizePolicy.Policy.Fixed,
-        )
-        self.toggled.emit(checked)
+def _discard(widget: QWidget) -> None:
+    """Take a widget off screen now; ``deleteLater`` alone leaves it drawn until the event loop turns."""
+    widget.hide()
+    widget.setParent(None)
+    widget.deleteLater()
 
 
 # ---------------------------------------------------------------------------
@@ -326,55 +171,62 @@ class ReviewWindow(QMainWindow):
         self.content_review = content_review
         self.sample_update = sample_update
         self.index = core.load_index(tile_dir)
+        self.settings = QSettings(*SETTINGS)
 
-        # A one-time display filter: which keys the grid/navigation ever see.
+        # A one-time display filter: which keys the table/navigation ever see.
         # `self.index` always keeps every entry loaded from disk untouched --
         # this only narrows what's shown, never what's saved.
-        all_keys = sorted(self.index)
+        keys = sorted(self.index)
         if content_review == "flagged":
-            all_keys = [k for k in all_keys if self.index[k].get("sensitive_content_tags")]
+            keys = [k for k in keys if self.index[k].get("sensitive_content_tags")]
         elif content_review == "unflagged":
-            all_keys = [k for k in all_keys if not self.index[k].get("sensitive_content_tags")]
-        self.keys: list[str] = all_keys
-        self.tiles: dict[str, TileButton] = {}
+            keys = [k for k in keys if not self.index[k].get("sensitive_content_tags")]
         self.current_key: str | None = None
-        self._loading = False       # suppress autosave while populating fields
-        self._busy = False          # a Claude call is in flight
-        self._alt_busy = False      # an alt-text call is in flight
-        self._engine_busy = False   # a story-engine call is in flight
-        # Each tile's latest pitch batch, restored from its trace on first
-        # selection so pitches survive navigation and restarts.
-        self._pitch_batches: dict[str, PitchBatch | None] = {}
-        self._drafts: dict[str, list[Draft]] = {}  # drafts of each tile's shown batch
-        self._rejected: dict[str, set[int]] = {}  # rejected pitch indices, same batch
-        # Critique text per tile for its shown batch, keyed by pitch index
-        # (None for the batch note), and which batch the editors belong to.
-        self._critiques: dict[str, dict[int | None, str]] = {}
-        self._critique_run: tuple[str, str] | None = None  # (key, run)
-        self._critique_index: int | None = None  # pitch row the critique box holds
-        self._critique_loading = False
+        self._loading = False  # suppress autosave while populating fields
+
         # A missing data/ list (launched from outside tools/curation) disables
-        # the Pitches panel rather than the whole GUI.
+        # the engine panel rather than the whole GUI.
         try:
             self.story_engine = story_frame.build_engine(tile_dir)
+            self.store = story_frame.build_store(tile_dir)
             self._engine_error = ""
         except (OSError, ValueError, KeyError) as err:
             self.story_engine = None
+            self.store = None
             self._engine_error = f"Story engine unavailable: {err}"
-        self._columns = 0
-        self._hovered_key: str | None = None  # tile under the cursor, if any
 
-        self.pool = QThreadPool.globalInstance()
-        self._workers: set[_CallWorker] = set()  # keep workers alive until they
-        # finish, so their signals object survives cross-thread delivery
+        # Per-subject engine state. Workspaces are cached once loaded; the
+        # pending maps are what the panels show as in flight.
+        self._workspaces: dict[str, Workspace] = {}
+        self._hidden: dict[str, set[str]] = {}  # draft ids hidden by the chips
+        self._pitching: dict[str, int] = {}  # subject -> pitches requested
+        self._reading_busy: set[str] = set()
+        self._writing: dict[str, list[str | None]] = {}  # subject -> pitch ids being drafted
+        self._revising: dict[str, dict[str, str]] = {}  # subject -> {draft id: request}
+        self._hand_edited: set[str] = set()  # drafts whose pre-edit text is already in history
+        self._pitch_rows: dict[str, PitchRow] = {}
+        self._draft_cards: dict[str, DraftCard] = {}
+        self._unsent_requests: dict[str, str] = {}  # draft id -> request text, across tile switches
+
+        # Model calls. Network-bound, so many run at once; a single-model
+        # local server can't serve concurrent requests, so its calls queue.
+        self.pool = QThreadPool(self)
+        self.pool.setMaxThreadCount(MAX_PARALLEL_CALLS)
+        self.local_pool = QThreadPool(self)
+        self.local_pool.setMaxThreadCount(1)
+        self._tokens = itertools.count()
+        self._calls: dict[int, tuple[_CallWorker, Callable, Callable]] = {}
+        self._loaders: set[_ModelLoader] = set()
+
         self._save_timer = QTimer(self, singleShot=True, interval=600)
         self._save_timer.timeout.connect(self._flush_story)
         self._alt_save_timer = QTimer(self, singleShot=True, interval=600)
         self._alt_save_timer.timeout.connect(self._flush_alt)
         self._title_save_timer = QTimer(self, singleShot=True, interval=600)
         self._title_save_timer.timeout.connect(self._flush_title)
-        self._critique_save_timer = QTimer(self, singleShot=True, interval=700)
-        self._critique_save_timer.timeout.connect(self._flush_critiques)
+        self._workspace_save_timer = QTimer(self, singleShot=True, interval=600)
+        self._workspace_save_timer.timeout.connect(self._flush_workspace)
+        self._dirty_subject: str | None = None
 
         # Pick up edits another process (a batch script, or a second GUI)
         # makes to metadata.json while this window is open. Re-added on every
@@ -386,363 +238,462 @@ class ReviewWindow(QMainWindow):
             self._fs_watcher.addPath(self._metadata_path)
         self._fs_watcher.fileChanged.connect(self._on_metadata_changed)
 
-        self.setWindowTitle(f"babel-index review — {os.path.basename(os.path.abspath(tile_dir))}")
-        self.resize(1200, 800)
+        self.setWindowTitle(f"babel-index review: {os.path.basename(os.path.abspath(tile_dir))}")
+        self.resize(1920, 1040)
+        self.model = TileTableModel(tile_dir, keys, lambda key: self.index[key], self)
         self._build_ui()
         self._build_overlay()
         self._install_shortcuts()
-        self._populate_grid()
-        self._refresh_models()  # replace the static list with the live one
+        self._set_models(MODELS)
+        self._refresh_models()
+        self._update_counts()
 
-        # Qt only reports a held modifier when some *other* event happens to
+        # Qt only reports a held modifier when some other event happens to
         # carry it, so key-press/release alone is unreliable (and never fires
-        # while the cursor sits still over a tile). Poll the real hardware
-        # modifier state instead, and react whenever Ctrl/Shift changes.
-        self._last_mods = Qt.KeyboardModifier.NoModifier
+        # while the cursor sits still). Poll the real hardware modifier state
+        # instead, and react whenever Ctrl changes.
+        self._image_hovered = False
+        self._ctrl_held = False
         self._mod_timer = QTimer(self, interval=100)
         self._mod_timer.timeout.connect(self._poll_modifiers)
         self._mod_timer.start()
 
-        if self.keys:
-            self.select_tile(self.keys[0])
-        self._update_action_button()
+        first = self._visible_keys()
+        if first:
+            self.select_tile(first[0])
 
     # -- UI construction ----------------------------------------------------
     def _build_ui(self):
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        columns = QSplitter(Qt.Orientation.Horizontal)
+        columns.addWidget(self._build_tile_list())
+        self.middle = QSplitter(Qt.Orientation.Vertical)
+        self.image_panel = ImagePanel()
+        self.image_panel.entered.connect(lambda: self._set_image_hover(True))
+        self.image_panel.left.connect(lambda: self._set_image_hover(False))
+        self.middle.addWidget(self.image_panel)
+        self.middle.addWidget(self._build_tile_editor())
+        self.middle.setSizes([624, 400])
+        self.middle.setStretchFactor(0, 3)
+        self.middle.setStretchFactor(1, 2)
+        columns.addWidget(self.middle)
+        columns.addWidget(self._build_engine_panel())
+        columns.setSizes([380, 832, 708])
+        columns.setStretchFactor(0, 0)
+        columns.setStretchFactor(1, 1)
+        columns.setStretchFactor(2, 1)
+        self.setCentralWidget(columns)
 
-        # Left: scrolling grid.
-        self.grid_host = QWidget()
-        self.grid = QGridLayout(self.grid_host)
-        self.grid.setContentsMargins(8, 8, 8, 8)
-        self.grid.setSpacing(6)
-        self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.counts_label = QLabel()
+        self.trace_label = QLabel()
+        self.trace_label.setStyleSheet(f"color: {COLOR_MUTED};")
+        self.statusBar().addWidget(self.counts_label)
+        self.statusBar().addPermanentWidget(self.trace_label)
 
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setWidget(self.grid_host)
-        self.scroll_area.setMinimumWidth(CELL * 2 + 40)
-        splitter.addWidget(self.scroll_area)
-
-        # Right: editor.
-        splitter.addWidget(self._build_editor())
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
-        splitter.setSizes([720, 480])
-
-        # Wrap the splitter so a slim top bar can hold the zoom-lock toggle in
-        # the upper-right corner.
-        container = QWidget()
-        outer = QVBoxLayout(container)
-        outer.setContentsMargins(6, 4, 6, 0)
-        outer.setSpacing(4)
-        topbar = QHBoxLayout()
-        nav_buttons = (
-            ("<<", "Previous non-final tile", lambda: self._navigate_skip_final(-1)),
-            ("<", "Previous tile", lambda: self._navigate(-1)),
-            (">", "Next tile", lambda: self._navigate(1)),
-            (">>", "Next non-final tile", lambda: self._navigate_skip_final(1)),
-        )
-        for label, tooltip, handler in nav_buttons:
-            button = QPushButton(label)
-            button.setToolTip(tooltip)
-            button.setMaximumWidth(32)
-            button.clicked.connect(handler)
-            topbar.addWidget(button)
-        topbar.addStretch(1)
-        self.zoom_lock_check = QCheckBox("Zoom active tile")
-        self.zoom_lock_check.setToolTip(
-            "Keep the selected tile zoomed in the grid pane (same framing as "
-            "holding Shift). Use the arrow keys to move between tiles."
-        )
-        self.zoom_lock_check.toggled.connect(self._on_zoom_lock_toggled)
-        topbar.addWidget(self.zoom_lock_check)
-        outer.addLayout(topbar)
-        outer.addWidget(splitter)
-        self.setCentralWidget(container)
-
-    def _build_editor(self) -> QWidget:
+    def _build_tile_list(self) -> QWidget:
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(4, 4, 0, 0)
+        filters = QHBoxLayout()
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Filter by name, title, keyword")
+        self.filter_edit.setClearButtonEnabled(True)
+        filters.addWidget(self.filter_edit, stretch=1)
+        self.status_combo = QComboBox()
+        for label, status in (
+            ("All", "all"), ("Not final", "notfinal"), ("Story, not final", "unreviewed"), ("No story", "nostory"),
+        ):
+            self.status_combo.addItem(label, status)
+        filters.addWidget(self.status_combo)
+        layout.addLayout(filters)
+
+        self.proxy = TileFilterProxy(self)
+        self.proxy.setSourceModel(self.model)
+        self.filter_edit.textChanged.connect(self.proxy.set_text)
+        self.status_combo.currentIndexChanged.connect(
+            lambda _i: self.proxy.set_status(self.status_combo.currentData())
+        )
+        self.table = QTableView()
+        self.table.setModel(self.proxy)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        self.table.setIconSize(THUMB_SIZE)
+        self.table.setWordWrap(False)
+        self.table.verticalHeader().hide()
+        self.table.verticalHeader().setDefaultSectionSize(THUMB_SIZE.height() + 6)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.resizeSection(0, 140)
+        header.resizeSection(1, 120)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(3, 28)
+        self.table.selectionModel().currentRowChanged.connect(self._on_table_row_changed)
+        layout.addWidget(self.table, stretch=1)
+        return panel
+
+    def _build_tile_editor(self) -> QWidget:
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(8, 6, 8, 6)
+
+        header = QHBoxLayout()
+        for label, tooltip, handler in (
+            ("<<", "Previous non-final tile", lambda: self._navigate_skip_final(-1)),
+            ("<", "Previous tile (Ctrl+Left)", lambda: self._navigate(-1)),
+            (">", "Next tile (Ctrl+Right)", lambda: self._navigate(1)),
+            (">>", "Next non-final tile", lambda: self._navigate_skip_final(1)),
+        ):
+            button = QToolButton()
+            button.setText(label)
+            button.setToolTip(tooltip)
+            button.clicked.connect(handler)
+            header.addWidget(button)
+        self.name_label = QLabel()
+        self.name_label.setStyleSheet("font-family: monospace; font-weight: bold;")
+        header.addWidget(self.name_label)
+        header.addWidget(QLabel("Title"))
+        self.title_edit = QLineEdit()
+        self.title_edit.setPlaceholderText("(untitled)")
+        self.title_edit.textChanged.connect(self._on_title_changed)
+        header.addWidget(self.title_edit, stretch=1)
+        self.final_button = QPushButton("Mark final")
+        self.final_button.setCheckable(True)
+        self.final_button.toggled.connect(self._on_final_toggled)
+        header.addWidget(self.final_button)
+        layout.addLayout(header)
 
         self.keyword_label = QLabel()
         self.keyword_label.setWordWrap(True)
-        self.keyword_label.setStyleSheet("color: #888;")
+        self.keyword_label.setStyleSheet(f"color: {COLOR_MUTED};")
         layout.addWidget(self.keyword_label)
 
-        layout.addWidget(QLabel("Title"))
-        self.title_edit = QLineEdit()
-        self.title_edit.textChanged.connect(self._on_title_changed)
-        layout.addWidget(self.title_edit)
-
-        # The four multi-line boxes are collapsible. `_editor_layout` /
-        # `_edit_sections` let `_redistribute_editor_space` hand the vertical
-        # stretch to whichever sections are still open, evenly.
-        self._editor_layout = layout
-        self._edit_sections: list[CollapsibleSection] = []
-
-        self.prompt_edit = QPlainTextEdit()
-        self.prompt_edit.setMinimumHeight(60)
-        self.prompt_edit.textChanged.connect(self._update_action_button)
-        self._add_section(layout, "Initial prompt", self.prompt_edit, weight=1)
+        story_header = QHBoxLayout()
+        story_title = QLabel("Story")
+        story_title.setStyleSheet("font-weight: bold;")
+        story_header.addWidget(story_title)
+        self.provenance_label = QLabel()
+        self.provenance_label.setStyleSheet(f"color: {COLOR_MUTED};")
+        story_header.addWidget(self.provenance_label)
+        story_header.addStretch(1)
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.clicked.connect(self._on_clear)
+        story_header.addWidget(self.clear_button)
+        layout.addLayout(story_header)
 
         self.story_edit = QPlainTextEdit()
-        self.story_edit.setMinimumHeight(80)
+        self.story_edit.setMinimumHeight(150)
         self.story_edit.textChanged.connect(self._on_story_changed)
-        self._add_section(layout, "Story", self.story_edit, weight=2)
-
-        self.revision_edit = QPlainTextEdit()
-        self.revision_edit.setMinimumHeight(60)
-        self.revision_edit.textChanged.connect(self._update_action_button)
-        self._add_section(layout, "Revision request", self.revision_edit, weight=1)
-
-        self._add_section(layout, "Pitches", self._build_pitch_panel(), weight=2)
-        self._add_section(layout, "Drafts", self._build_draft_panel(), weight=2)
+        layout.addWidget(self.story_edit, stretch=1)
 
         alt_body = QWidget()
-        alt_row = QHBoxLayout(alt_body)
-        alt_row.setContentsMargins(0, 0, 0, 0)
+        alt_layout = QVBoxLayout(alt_body)
+        alt_layout.setContentsMargins(0, 0, 0, 0)
         self.alt_edit = QPlainTextEdit()
-        self.alt_edit.setMinimumHeight(50)
+        self.alt_edit.setMinimumHeight(90)
         self.alt_edit.textChanged.connect(self._on_alt_changed)
-        alt_row.addWidget(self.alt_edit, stretch=1)
+        alt_layout.addWidget(self.alt_edit)
+        alt_row = QHBoxLayout()
         self.alt_generate_button = QPushButton("Generate alt")
-        self.alt_generate_button.setMaximumWidth(90)
         self.alt_generate_button.clicked.connect(self._on_generate_alt)
-        alt_row.addWidget(self.alt_generate_button, alignment=Qt.AlignmentFlag.AlignTop)
-        self._add_section(layout, "Alt text", alt_body, weight=1)
+        alt_row.addWidget(self.alt_generate_button)
+        self.alt_model_combo = QComboBox()
+        alt_row.addWidget(self.alt_model_combo)
+        alt_row.addStretch(1)
+        alt_layout.addLayout(alt_row)
+        self.alt_section = CollapsibleSection("Alt text", alt_body)
+        layout.addWidget(self.alt_section)
 
-        sensitive_row = QHBoxLayout()
-        sensitive_row.addWidget(QLabel("Sensitive content:"))
+        tags_body = QWidget()
+        tags_grid = QGridLayout(tags_body)
+        tags_grid.setContentsMargins(16, 0, 0, 0)
         self.sensitive_checks: dict[str, QCheckBox] = {}
-        for tag in SENSITIVE_TAGS:
+        for i, tag in enumerate(SENSITIVE_TAGS):
             check = QCheckBox(tag)
             check.toggled.connect(self._on_sensitive_toggled)
-            sensitive_row.addWidget(check)
+            tags_grid.addWidget(check, i // 3, i % 3)
             self.sensitive_checks[tag] = check
-        sensitive_row.addStretch(1)
-        layout.addLayout(sensitive_row)
+        self.tags_section = CollapsibleSection("Sensitive content", tags_body)
+        layout.addWidget(self.tags_section)
 
-        sortbar = QHBoxLayout()
-
-        self.final_check = QCheckBox("Final")
-        self.final_check.toggled.connect(self._on_final_toggled)
-        sortbar.addWidget(self.final_check)
-
+        footer = QHBoxLayout()
         self.inpaint_check = QCheckBox("Needs inpainting")
         self.inpaint_check.toggled.connect(self._on_inpaint_toggled)
-        sortbar.addWidget(self.inpaint_check)
-
-        # Live tally of tile review states, left-aligned next to the toggle.
-        self.counts_label = QLabel()
-        self.counts_label.setStyleSheet("color: #888;")
-        sortbar.addWidget(self.counts_label)
-        sortbar.addStretch(1)
-        layout.addLayout(sortbar)
-
-
-        # Text-generation model selector. Opus 5 is the default; the others are
-        # here for experimentation, including a free local-server option when a
-        # local server is running. Populated from the static MODELS list up
-        # front, then refreshed live from the API + local server (_refresh_models).
-        controls = QHBoxLayout()
-        controls.addWidget(QLabel("Model"))
-        self.model_combo = QComboBox()
-        self._set_models(MODELS)
-        controls.addWidget(self.model_combo)
-        controls.addStretch(1)
-
-        self.action_button = QPushButton("Generate")
-        self.action_button.clicked.connect(self._on_action)
-        controls.addWidget(self.action_button)
-
-        self.clear_button = QPushButton("Clear")
-        self.clear_button.setMaximumWidth(80)
-        self.clear_button.clicked.connect(self._on_clear)
-        controls.addWidget(self.clear_button)
-
+        footer.addWidget(self.inpaint_check)
+        footer.addStretch(1)
         if self.sample_update:
-            self.sample_button = QPushButton("Save to samples")
-            self.sample_button.setToolTip(
-                "Copy this tile and its keywords/story/title/alt into assets/corpus-sample."
-            )
-            self.sample_button.clicked.connect(self._on_save_to_sample)
-            controls.addWidget(self.sample_button)
+            sample_button = QPushButton("Save to samples")
+            sample_button.setToolTip("Copy this tile and its keywords/story/title/alt into assets/corpus-sample.")
+            sample_button.clicked.connect(self._on_save_to_sample)
+            footer.addWidget(sample_button)
+        delete_button = QPushButton("Delete tile")
+        delete_button.clicked.connect(self._on_delete)
+        footer.addWidget(delete_button)
+        layout.addLayout(footer)
 
-        self.delete_button = QPushButton("Delete")
-        self.delete_button.setMaximumWidth(80)
-        self.delete_button.clicked.connect(self._on_delete)
-        controls.addWidget(self.delete_button)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(body)
+        return scroll
 
-        layout.addLayout(controls)
-        self._redistribute_editor_space()
+    def _build_engine_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 4, 4, 0)
+        if self.story_engine is None:
+            message = QLabel(self._engine_error)
+            message.setWordWrap(True)
+            layout.addWidget(message)
+            layout.addStretch(1)
+            self.engine_body = None
+            return panel
+
+        top = QHBoxLayout()
+        self.engine_counts = QLabel()
+        self.engine_counts.setStyleSheet(f"color: {COLOR_MUTED};")
+        top.addWidget(self.engine_counts)
+        top.addStretch(1)
+        self.settings_button = QToolButton()
+        self.settings_button.setText("Engine settings")
+        self.settings_button.setCheckable(True)
+        top.addWidget(self.settings_button)
+        self.pitch_button = QPushButton("Pitch more")
+        self.pitch_button.clicked.connect(self._on_pitch_more)
+        top.addWidget(self.pitch_button)
+        self.pitch_count = QSpinBox()
+        self.pitch_count.setRange(1, 12)
+        self.pitch_count.setValue(self.story_engine.frame.pitch_count)
+        self.pitch_count.setToolTip("How many pitches to add")
+        top.addWidget(self.pitch_count)
+        layout.addLayout(top)
+
+        self.settings_frame = QFrame()
+        self.settings_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        grid = QGridLayout(self.settings_frame)
+        self.pitch_model_combo = QComboBox()
+        self.draft_model_combo = QComboBox()
+        self.revise_model_combo = QComboBox()
+        self.form_combo = QComboBox()
+        self.form_combo.addItem("Drawn by weight", None)
+        for option in self.story_engine.frame.forms.options:
+            self.form_combo.addItem(option.name, option.name)
+        self.chance_slider = QSlider(Qt.Orientation.Horizontal)
+        self.chance_slider.setRange(0, 100)
+        self.chance_slider.setSingleStep(5)
+        self.chance_slider.setPageStep(25)
+        self.chance_label = QLabel()
+        self.chance_slider.valueChanged.connect(lambda v: self.chance_label.setText(f"{v}%"))
+        self.chance_slider.setValue(round(self.story_engine.frame.constraint_chance * 100))
+        chance_row = QHBoxLayout()
+        chance_row.addWidget(self.chance_slider, stretch=1)
+        chance_row.addWidget(self.chance_label)
+        self.instructions_edit = QLineEdit()
+        self.instructions_edit.setPlaceholderText("Extra rules or ideas for the next pitch call (optional)")
+        grid.addWidget(QLabel("Pitch model"), 0, 0)
+        grid.addWidget(self.pitch_model_combo, 0, 1)
+        grid.addWidget(QLabel("Draft model"), 0, 2)
+        grid.addWidget(self.draft_model_combo, 0, 3)
+        grid.addWidget(QLabel("Revise model"), 1, 0)
+        grid.addWidget(self.revise_model_combo, 1, 1)
+        grid.addWidget(QLabel("Form"), 1, 2)
+        grid.addWidget(self.form_combo, 1, 3)
+        grid.addWidget(QLabel("Constraint chance"), 2, 0)
+        grid.addLayout(chance_row, 2, 1)
+        grid.addWidget(QLabel("Pitch instructions"), 2, 2)
+        grid.addWidget(self.instructions_edit, 2, 3)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(3, 1)
+        self.settings_frame.hide()
+        self.settings_button.toggled.connect(self.settings_frame.setVisible)
+        layout.addWidget(self.settings_frame)
+
+        reading_header = QHBoxLayout()
+        self.reading_toggle = QToolButton()
+        self.reading_toggle.setText("Reading")
+        self.reading_toggle.setCheckable(True)
+        self.reading_toggle.setAutoRaise(True)
+        self.reading_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.reading_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.reading_toggle.setStyleSheet("QToolButton { font-weight: bold; border: none; }")
+        reading_header.addWidget(self.reading_toggle)
+        hint = QLabel("used by every later pitch and draft call")
+        hint.setStyleSheet(f"color: {COLOR_MUTED};")
+        reading_header.addWidget(hint)
+        reading_header.addStretch(1)
+        self.reading_button = QPushButton("Regenerate reading")
+        self.reading_button.clicked.connect(self._on_regenerate_reading)
+        reading_header.addWidget(self.reading_button)
+        layout.addLayout(reading_header)
+        self.enigma_edit = GrowingTextEdit(min_height=30)
+        self.enigma_edit.setPlaceholderText("No reading yet. Pitch more makes one.")
+        self.enigma_edit.textChanged.connect(self._on_reading_edited)
+        layout.addWidget(self.enigma_edit)
+        self.notes_edit = GrowingTextEdit(min_height=60)
+        self.notes_edit.setPlaceholderText("Notes, one per line")
+        self.notes_edit.textChanged.connect(self._on_reading_edited)
+        self.notes_edit.hide()
+        layout.addWidget(self.notes_edit)
+
+        def toggle_notes(on: bool):
+            self.notes_edit.setVisible(on)
+            self.reading_toggle.setArrowType(Qt.ArrowType.DownArrow if on else Qt.ArrowType.RightArrow)
+
+        self.reading_toggle.toggled.connect(toggle_notes)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_pitch_tab(), "Pitches")
+        self.tabs.addTab(self._build_draft_tab(), "Drafts")
+        layout.addWidget(self.tabs, stretch=1)
+        self.engine_body = panel
         return panel
 
-    def _add_section(self, layout: QVBoxLayout, title: str, body: QWidget, weight: int):
-        """Wrap `body` in a collapsible section and track it for rebalancing.
+    def _build_pitch_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        toolbar = QHBoxLayout()
+        add = QPushButton("Add pitch")
+        add.clicked.connect(self._on_add_pitch)
+        toolbar.addWidget(add)
+        toolbar.addStretch(1)
+        keep_all = QPushButton("Keep all")
+        keep_all.clicked.connect(self._on_keep_all)
+        toolbar.addWidget(keep_all)
+        self.draft_kept_button = QPushButton()
+        self.draft_kept_button.clicked.connect(self._on_draft_kept)
+        toolbar.addWidget(self.draft_kept_button)
+        self._pitch_toolbar_buttons = [add, keep_all]
+        layout.addLayout(toolbar)
 
-        `weight` is the section's share of the vertical space while open (story
-        gets 2 to the others' 1); collapsed sections drop to 0. Tweak these to
-        change the default balance.
-        """
-        section = CollapsibleSection(title, body)
-        section.weight = weight
-        section.toggled.connect(self._redistribute_editor_space)
-        self._edit_sections.append(section)
-        layout.addWidget(section, stretch=weight)
+        host = QWidget()
+        self.pitch_layout = QVBoxLayout(host)
+        self.pitch_layout.setContentsMargins(0, 0, 0, 0)
+        self.pitch_empty = QLabel("No pitches yet. Pitch more writes a reading and the first pitches.")
+        self.pitch_empty.setStyleSheet(f"color: {COLOR_MUTED};")
+        self.pitch_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.pitch_pending = QLabel()
+        self.pitch_pending.setStyleSheet("color: #6f9fe0;")
+        self.pitch_layout.addWidget(self.pitch_empty)
+        self.pitch_layout.addWidget(self.pitch_pending)
+        self.pitch_layout.addStretch(1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(host)
+        layout.addWidget(scroll, stretch=1)
+        return tab
 
-    def _redistribute_editor_space(self):
-        """Give the vertical stretch only to open sections, each by its weight,
-        so they share the space collapsed ones gave back in that proportion."""
-        for section in self._edit_sections:
-            self._editor_layout.setStretchFactor(
-                section, section.weight if section.is_open() else 0
-            )
+    def _build_draft_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel("Show"))
+        self.chips = DraftChips()
+        self.chips.toggled.connect(self._on_chip_toggled)
+        toolbar.addWidget(self.chips)
+        show_all = QToolButton()
+        show_all.setText("All")
+        show_all.clicked.connect(self._on_show_all_drafts)
+        toolbar.addWidget(show_all)
+        toolbar.addStretch(1)
+        self.drafting_label = QLabel()
+        self.drafting_label.setStyleSheet("color: #6f9fe0;")
+        toolbar.addWidget(self.drafting_label)
+        self.add_draft_button = QPushButton("Add draft")
+        self.add_draft_button.clicked.connect(self._on_add_draft)
+        toolbar.addWidget(self.add_draft_button)
+        layout.addLayout(toolbar)
 
-    def _build_pitch_panel(self) -> QWidget:
-        """The story engine's pitch controls: pitch, review, form choice, write drafts."""
-        body = QWidget()
-        column = QVBoxLayout(body)
-        column.setContentsMargins(0, 0, 0, 0)
+        host = QWidget()
+        outer = QVBoxLayout(host)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.draft_grid = QGridLayout()
+        self.draft_grid.setSpacing(10)
+        self.draft_grid.setColumnStretch(0, 1)
+        self.draft_grid.setColumnStretch(1, 1)
+        self.draft_empty = QLabel()
+        self.draft_empty.setStyleSheet(f"color: {COLOR_MUTED};")
+        self.draft_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self.draft_empty)
+        outer.addLayout(self.draft_grid)
+        outer.addStretch(1)
+        self.draft_scroll = QScrollArea()
+        self.draft_scroll.setWidgetResizable(True)
+        self.draft_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.draft_scroll.setWidget(host)
+        layout.addWidget(self.draft_scroll, stretch=1)
+        return tab
 
-        row = QHBoxLayout()
-        self.pitch_button = QPushButton("Pitch")
-        self.pitch_button.setToolTip("Pitch a fresh batch of ideas.")
-        self.pitch_button.clicked.connect(self._on_pitch)
-        row.addWidget(self.pitch_button)
-        row.addStretch(1)
-        row.addWidget(QLabel("Form"))
-        self.form_combo = QComboBox()
-        self.form_combo.addItem("random (weighted)", None)
-        if self.story_engine is not None:
-            for option in self.story_engine.frame.forms.options:
-                self.form_combo.addItem(option.name, option.name)
-        row.addWidget(self.form_combo)
-        self.write_button = QPushButton("Write drafts")
-        self.write_button.setToolTip(
-            "Draft every ticked pitch that has no draft yet, in parallel. When all "
-            "of them have one, drafts a fresh round of all of them."
-        )
-        self.write_button.clicked.connect(self._on_write_drafts)
-        row.addWidget(self.write_button)
-        column.addLayout(row)
-
-        self.reading_label = QLabel()
-        self.reading_label.setWordWrap(True)
-        self.reading_label.setStyleSheet("color: #888;")
-        column.addWidget(self.reading_label)
-
-        # Checked = kept. Unticking rejects a pitch, logged as a verdict.
-        self.pitch_list = QListWidget()
-        self.pitch_list.setWordWrap(True)
-        self.pitch_list.setMinimumHeight(80)
-        self.pitch_list.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.pitch_list.setSpacing(3)
-        self.pitch_list.currentRowChanged.connect(self._on_pitch_row_changed)
-        self.pitch_list.itemChanged.connect(self._on_pitch_item_changed)
-        column.addWidget(self.pitch_list, stretch=1)
-
-        self.critique_edit = QPlainTextEdit()
-        self.critique_edit.setPlaceholderText("Select a pitch to critique it.")
-        self.critique_edit.setMaximumHeight(90)
-        self.critique_edit.textChanged.connect(self._on_critique_changed)
-        column.addWidget(self.critique_edit)
-        self.batch_note_edit = QLineEdit()
-        self.batch_note_edit.setPlaceholderText("Notes on this whole batch")
-        self.batch_note_edit.textChanged.connect(self._on_critique_changed)
-        column.addWidget(self.batch_note_edit)
-
-        if self.story_engine is None:
-            self.reading_label.setText(self._engine_error)
-        return body
-
-    def _build_draft_panel(self) -> QWidget:
-        """The drafts written from the shown batch, and the button that picks one."""
-        body = QWidget()
-        column = QVBoxLayout(body)
-        column.setContentsMargins(0, 0, 0, 0)
-        self.draft_list = QListWidget()
-        self.draft_list.setWordWrap(True)
-        self.draft_list.setMinimumHeight(80)
-        self.draft_list.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.draft_list.setSpacing(4)
-        self.draft_list.currentRowChanged.connect(lambda _row: self._update_pitch_controls())
-        self.draft_list.itemDoubleClicked.connect(lambda _item: self._on_use_draft())
-        column.addWidget(self.draft_list, stretch=1)
-        row = QHBoxLayout()
-        row.addStretch(1)
-        self.use_draft_button = QPushButton("Use draft")
-        self.use_draft_button.setToolTip("Put the selected draft in the story field (double-click also works).")
-        self.use_draft_button.clicked.connect(self._on_use_draft)
-        row.addWidget(self.use_draft_button)
-        column.addLayout(row)
-        return body
-
-    # -- Hover preview overlay ----------------------------------------------
+    # -- Full-window zoom -----------------------------------------------------
     def _build_overlay(self):
-        """A large tile preview shown while Ctrl/Shift is held over a tile.
+        """The selected image over the whole window while Ctrl is held over the image panel.
 
-        Ctrl expands the tile over the whole window; Shift limits it to the
-        grid pane so the story text stays visible. The label is transparent to
-        the mouse so the tile beneath keeps receiving hover events (no flicker).
+        The label is transparent to the mouse so the panel beneath keeps
+        receiving hover events (no flicker).
         """
         self.overlay = QLabel(self)
         self.overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.overlay.setStyleSheet(
-            "background: rgba(20,20,24,0.92); border: 2px solid #3498db;"
-        )
+        self.overlay.setStyleSheet("background: rgba(12,12,14,0.96);")
         self.overlay.hide()
-        self._overlay_key: str | None = None
-        self._overlay_source: QPixmap | None = None
 
-    def _on_tile_entered(self, key: str):
-        self._hovered_key = key
+    def _set_image_hover(self, hovered: bool):
+        self._image_hovered = hovered
         self._update_overlay()
 
-    def _on_tile_left(self, key: str):
-        if self._hovered_key == key:
-            self._hovered_key = None
+    def _poll_modifiers(self):
+        # queryKeyboardModifiers() reads the live hardware state, unlike
+        # keyboardModifiers() which only reflects the last delivered event.
+        held = bool(QGuiApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
+        if held != self._ctrl_held:
+            self._ctrl_held = held
             self._update_overlay()
 
-    def _on_zoom_lock_toggled(self, _checked: bool):
-        self._update_overlay()
+    def _update_overlay(self):
+        source = self.image_panel.source
+        if not (self._image_hovered and self._ctrl_held) or source.isNull():
+            self.overlay.hide()
+            return
+        rect = self.centralWidget().geometry()
+        self.overlay.setGeometry(rect)
+        self.overlay.setPixmap(
+            source.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        )
+        self.overlay.show()
+        self.overlay.raise_()
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if getattr(self, "overlay", None) is not None and self.overlay.isVisible():
+            self._update_overlay()
+
+    # -- Shortcuts --------------------------------------------------------------
     def _install_shortcuts(self):
-        """Ctrl+Left/Right step through tiles from anywhere in the window.
+        """Ctrl+Left/Right step through tiles and Ctrl+=/-/0 scale fonts, from anywhere in the window.
 
-        A WindowContext shortcut fires no matter which child widget holds focus,
-        so navigation works while the cursor is in a text box or on the model
-        combo -- no focus juggling, and no clash with the plain arrow keys those
-        widgets use for editing/selection.
+        A WindowContext shortcut fires no matter which child widget holds
+        focus, so it works while the cursor is in a text box, with no clash
+        with the plain arrow keys those widgets use for editing.
         """
-        for keys, delta in (
-            (QKeySequence("Ctrl+Left"), -1),
-            (QKeySequence("Ctrl+Right"), 1),
-        ):
+        bindings: list[tuple[QKeySequence, Callable[[], None]]] = [
+            (QKeySequence("Ctrl+Left"), lambda: self._navigate(-1)),
+            (QKeySequence("Ctrl+Right"), lambda: self._navigate(1)),
+            (QKeySequence("Ctrl+0"), self._reset_font_scale),
+        ]
+        # Bound to every key a keyboard layout might route "+"/"-" through
+        # (the shifted "=" key sends "+" on some layouts without triggering a
+        # separate KeypadPlus).
+        for keys in ("Ctrl+=", "Ctrl++", "Ctrl+Shift+="):
+            bindings.append((QKeySequence(keys), lambda: self._adjust_font_scale(1)))
+        bindings.append((QKeySequence(QKeySequence.StandardKey.ZoomIn), lambda: self._adjust_font_scale(1)))
+        bindings.append((QKeySequence("Ctrl+-"), lambda: self._adjust_font_scale(-1)))
+        bindings.append((QKeySequence(QKeySequence.StandardKey.ZoomOut), lambda: self._adjust_font_scale(-1)))
+        for keys, handler in bindings:
             shortcut = QShortcut(keys, self)
             shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-            shortcut.activated.connect(lambda d=delta: self._navigate(d))
-
-        # Ctrl+=/Ctrl++ grow, Ctrl+- shrinks, Ctrl+0 resets -- the same keys
-        # browsers use for page zoom. Bound to every key a keyboard layout
-        # might route "+"/"-" through (the shifted "=" key sends "+" on some
-        # layouts/platforms without triggering a separate KeypadPlus).
-        for keys, delta in (
-            (QKeySequence("Ctrl+="), 1),
-            (QKeySequence("Ctrl++"), 1),
-            (QKeySequence("Ctrl+Shift+="), 1),
-            (QKeySequence(QKeySequence.StandardKey.ZoomIn), 1),
-            (QKeySequence("Ctrl+-"), -1),
-            (QKeySequence(QKeySequence.StandardKey.ZoomOut), -1),
-        ):
-            shortcut = QShortcut(keys, self)
-            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-            shortcut.activated.connect(lambda d=delta: self._adjust_font_scale(d))
-
-        reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), self)
-        reset_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-        reset_shortcut.activated.connect(self._reset_font_scale)
+            shortcut.activated.connect(handler)
 
     def _adjust_font_scale(self, step: int):
         """Grow/shrink every widget's font by one point, app-wide.
@@ -750,186 +701,110 @@ class ReviewWindow(QMainWindow):
         Applied to QApplication rather than this window's font because Qt
         widgets resolve an unset font from their parent at construction time,
         not live -- rescaling only `self` would leave already-built children
-        at their original size. `_base_font_point_size` is captured once (the
-        size the app launched with) so repeated shrink/grow/reset never
-        drifts from a rounded intermediate value.
+        at their original size.
         """
         app = cast(QApplication, QApplication.instance())
         font = app.font()
         new_size = max(self._MIN_FONT_POINT_SIZE, font.pointSize() + step)
-        if new_size == font.pointSize():
-            return
-        font.setPointSize(new_size)
-        app.setFont(font)
+        if new_size != font.pointSize():
+            font.setPointSize(new_size)
+            app.setFont(font)
 
     def _reset_font_scale(self):
         app = cast(QApplication, QApplication.instance())
         font = app.font()
-        if font.pointSize() == self._base_font_point_size:
-            return
-        font.setPointSize(self._base_font_point_size)
-        app.setFont(font)
+        if font.pointSize() != self._base_font_point_size:
+            font.setPointSize(self._base_font_point_size)
+            app.setFont(font)
 
-    def _navigate(self, delta: int):
-        """Select the tile `delta` steps from the current one (wrapping)."""
-        if not self.keys or self.current_key not in self.keys:
-            return
-        idx = (self.keys.index(self.current_key) + delta) % len(self.keys)
-        self.select_tile(self.keys[idx])
-
-    def _navigate_skip_final(self, delta: int):
-        """Select the next/previous non-finalized tile (wrapping)."""
-        if not self.keys or self.current_key not in self.keys:
-            return
-        idx = self.keys.index(self.current_key)
-        for step in range(1, len(self.keys) + 1):
-            key = self.keys[(idx + delta * step) % len(self.keys)]
-            if not self.index[key].get("final"):
-                self.select_tile(key)
-                return
-
-    def _poll_modifiers(self):
-        # queryKeyboardModifiers() reads the live hardware state, unlike
-        # keyboardModifiers() which only reflects the last delivered event.
-        mods = QGuiApplication.queryKeyboardModifiers() & (
-            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
-        )
-        if mods != self._last_mods:
-            self._last_mods = mods
-            self._update_overlay()
-
-    def _preview_rect(self, whole: bool) -> QRect:
-        """Target rect (window coords): the full central area, or just the grid."""
-        if whole:
-            return self.centralWidget().geometry()
-        top_left = self.scroll_area.mapTo(self, QPoint(0, 0))
-        return QRect(top_left, self.scroll_area.size())
-
-    def _update_overlay(self):
-        mods = QGuiApplication.queryKeyboardModifiers()
-        # Ctrl takes priority over Shift when both are held.
-        whole = bool(mods & Qt.KeyboardModifier.ControlModifier)
-        limited = bool(mods & Qt.KeyboardModifier.ShiftModifier)
-        key = self._hovered_key
-
-        # A manual Ctrl/Shift hover preview wins when present. Otherwise, if the
-        # zoom-lock toggle is on, keep the active (selected) tile zoomed in the
-        # grid pane -- the same framing Shift gives.
-        if key is not None and (whole or limited):
-            pass
-        elif self.zoom_lock_check.isChecked() and self.current_key is not None:
-            key, whole, limited = self.current_key, False, True
-        else:
-            key = None
-
-        if key is None or not (whole or limited) or not self._exists(key):
-            self.overlay.hide()
-            self._overlay_key = None
-            self._overlay_source = None
-            return
-
-        # Cache the full-resolution pixmap so a modifier toggle or resize does
-        # not reload it from disk each time.
-        if key != self._overlay_key:
-            self._overlay_source = QPixmap(os.path.join(self.tile_dir, key))
-            self._overlay_key = key
-        if self._overlay_source is None or self._overlay_source.isNull():
-            self.overlay.hide()
-            return
-
-        rect = self._preview_rect(whole)
-        self.overlay.setGeometry(rect)
-        self.overlay.setPixmap(
-            self._overlay_source.scaled(
-                rect.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+    # -- Model selectors --------------------------------------------------------
+    def _model_combos(self) -> dict[str, QComboBox]:
+        """Each model picker by its settings key. The engine's are absent when it failed to load."""
+        combos = {"alt_model": self.alt_model_combo}
+        if self.story_engine is not None:
+            combos.update(
+                pitch_model=self.pitch_model_combo,
+                draft_model=self.draft_model_combo,
+                revise_model=self.revise_model_combo,
             )
-        )
-        self.overlay.show()
-        self.overlay.raise_()
+        return combos
 
-    # -- Model selector -----------------------------------------------------
     def _set_models(self, models: dict):
-        """Repopulate the model dropdown, preserving the current selection.
+        """Repopulate every model picker, keeping each one's pick.
 
         Sorted alphabetically (case-insensitive) by label, except local-server
-        entries (model id starts with `local:`), which always sort first.
+        entries (model id starts with `local:`), which always sort first. A
+        picker with no current pick takes its saved one, else the default.
         """
         if not models:
             return
-        current = self.model_combo.currentData()
-        self.model_combo.blockSignals(True)
-        self.model_combo.clear()
-        ordered = sorted(
-            models.items(),
-            key=lambda item: (not item[1].startswith(LOCAL_PREFIX), item[0].casefold()),
-        )
-        for label, model_id in ordered:
-            self.model_combo.addItem(label, model_id)
-        # Keep the prior pick if it survived the refresh, else fall back to the
-        # default model, else the first entry.
-        index = self.model_combo.findData(current) if current else -1
-        if index < 0:
-            index = self.model_combo.findData(DEFAULT_MODEL)
-        self.model_combo.setCurrentIndex(max(index, 0))
-        self.model_combo.blockSignals(False)
+        ordered = sorted(models.items(), key=lambda item: (not item[1].startswith(LOCAL_PREFIX), item[0].casefold()))
+        for setting, combo in self._model_combos().items():
+            # Sized by a fixed character count, not the longest label, so a
+            # long model name can't widen its column and squeeze the image.
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(16)
+            current = combo.currentData() or self.settings.value(setting, DEFAULT_MODEL)
+            combo.blockSignals(True)
+            combo.clear()
+            for label, model_id in ordered:
+                combo.addItem(label, model_id)
+            index = combo.findData(current)
+            if index < 0:
+                index = combo.findData(DEFAULT_MODEL)
+            combo.setCurrentIndex(max(index, 0))
+            combo.blockSignals(False)
+            combo.currentIndexChanged.connect(
+                lambda _i, s=setting, c=combo: self.settings.setValue(s, c.currentData())
+            )
 
     def _refresh_models(self):
         """Kick off a background query for the live model list."""
         loader = _ModelLoader(available_models)
-        loader.signals.done.connect(self._set_models)
+        loader.setAutoDelete(False)
+        self._loaders.add(loader)
+        loader.signals.done.connect(self._on_models_loaded)
         self.pool.start(loader)
 
-    # -- Grid ---------------------------------------------------------------
-    def _thumb(self, key: str) -> QPixmap | None:
-        path = os.path.join(self.tile_dir, key)
-        if not os.path.exists(path):
-            return None
-        pix = QPixmap(path)
-        if pix.isNull():
-            return None
-        return pix.scaled(THUMB, THUMB, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    def _on_models_loaded(self, models: dict):
+        self._loaders.clear()
+        for combo in self._model_combos().values():
+            try:
+                combo.currentIndexChanged.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+        self._set_models(models)
 
-    def _populate_grid(self):
-        total = len(self.keys)
-        for i, key in enumerate(self.keys):
-            tile = TileButton(key, self._thumb(key))
-            tile.set_state(tile_state(self.index[key], self._exists(key)))
-            tile.clicked.connect(self.select_tile)
-            tile.entered.connect(self._on_tile_entered)
-            tile.left.connect(self._on_tile_left)
-            self.tiles[key] = tile
-            _print_progress(i + 1, total)
-        self._reflow(force=True)
-        self._update_counts()
+    # -- Tile table -------------------------------------------------------------
+    def _visible_keys(self) -> list[str]:
+        """Keys in the table's current filter and sort order."""
+        return [
+            self.proxy.index(row, 0).data(TileTableModel.KEY_ROLE) for row in range(self.proxy.rowCount())
+        ]
 
-    def _reflow(self, force: bool = False):
-        """Lay tiles out in as many columns as the viewport allows."""
-        width = self.scroll_area.viewport().width()
-        columns = max(1, (width - 16) // CELL)
-        if columns == self._columns and not force:
+    def _on_table_row_changed(self, current, _previous):
+        if current.isValid():
+            self.select_tile(current.data(TileTableModel.KEY_ROLE))
+
+    def _sync_table_selection(self, key: str):
+        row = self.model.row_of(key)
+        if row < 0:
             return
-        self._columns = columns
-        while self.grid.count():
-            self.grid.takeAt(0)
-        for i, key in enumerate(self.keys):
-            self.grid.addWidget(self.tiles[key], i // columns, i % columns)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reflow()
-        overlay = getattr(self, "overlay", None)
-        if overlay is not None and overlay.isVisible():
-            self._update_overlay()
+        index = self.proxy.mapFromSource(self.model.index(row, 0))
+        if not index.isValid() or self.table.currentIndex().row() == index.row():
+            return
+        self.table.selectionModel().setCurrentIndex(
+            index, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows
+        )
+        self.table.scrollTo(index)
 
     def _refresh_tile(self, key: str):
-        if key in self.tiles:
-            self.tiles[key].set_state(tile_state(self.index[key], self._exists(key)))
+        self.model.refresh(key)
         self._update_counts()
 
     def _update_counts(self):
-        """Refresh the final/unreviewed/empty/total tally label."""
         final = unreviewed = empty = 0
-        for key in self.keys:
+        for key in self.model.keys:
             entry = self.index[key]
             if entry.get("final"):
                 final += 1
@@ -938,81 +813,88 @@ class ReviewWindow(QMainWindow):
             else:
                 empty += 1
         self.counts_label.setText(
-            f"final {final} · unreviewed {unreviewed} · "
-            f"empty {empty} · total {len(self.keys)}"
+            f"{final} final · {unreviewed} story, not final · {empty} without story · {len(self.model.keys)} total"
         )
 
     def _exists(self, key: str) -> bool:
         return os.path.exists(os.path.join(self.tile_dir, key))
 
-    # -- Selection ----------------------------------------------------------
-    def select_tile(self, key: str):
-        if key not in self.index:
+    def _navigate(self, delta: int):
+        """Select the tile `delta` rows from the current one in the table (wrapping)."""
+        keys = self._visible_keys()
+        if not keys:
             return
-        if self.current_key == key:
-            return
-        self._flush_story()  # persist any pending edit on the outgoing tile
-        self._flush_alt()
-        self._flush_title()
+        idx = keys.index(self.current_key) if self.current_key in keys else -1
+        self.select_tile(keys[(idx + delta) % len(keys)])
 
-        if self.current_key in self.tiles:
-            self.tiles[self.current_key].set_selected(False)
+    def _navigate_skip_final(self, delta: int):
+        """Select the next/previous non-final tile in the table (wrapping)."""
+        keys = self._visible_keys()
+        if not keys:
+            return
+        idx = keys.index(self.current_key) if self.current_key in keys else -1
+        for step in range(1, len(keys) + 1):
+            key = keys[(idx + delta * step) % len(keys)]
+            if not self.index[key].get("final"):
+                self.select_tile(key)
+                return
+
+    # -- Selection --------------------------------------------------------------
+    def select_tile(self, key: str):
+        if key not in self.index or key == self.current_key:
+            return
+        self._flush_all()
         self.current_key = key
-        self.tiles[key].set_selected(True)
-        self._ensure_visible(key)
+        self._sync_table_selection(key)
+        self._hand_edited.clear()
 
         entry = self.index[key]
         self._loading = True
-        idx = self.keys.index(key)
+        self.name_label.setText(key)
         self.keyword_label.setText(
-            f"#{key}  Keywords: " + ", ".join(
-                f"{kw['text']} ({kw['type']})" for kw in entry.get("keywords", [])
-            )
+            "Keywords: " + " · ".join(f"{kw['text']} ({kw['type']})" for kw in entry.get("keywords", []))
         )
         self.title_edit.setText(entry.get("title") or "")
-        self.prompt_edit.setPlainText(core.default_prompt(core.keyword_texts(entry)))
         self.story_edit.setPlainText(entry.get("story") or "")
-        self.revision_edit.setPlainText("")
         self.alt_edit.setPlainText(entry.get("alt") or "")
-        self.final_check.setChecked(bool(entry.get("final")))
+        self.final_button.setChecked(bool(entry.get("final")))
         self.inpaint_check.setChecked(bool(entry.get("needs_inpainting")))
         tags = set(entry.get("sensitive_content_tags") or [])
         for tag, check in self.sensitive_checks.items():
             check.setChecked(tag in tags)
         self._loading = False
+        self._update_tile_summaries()
+        self.image_panel.set_image(os.path.join(self.tile_dir, key))
+        self.trace_label.setText(f"Trace: {story_frame.TRACE_DIR}/{story_frame.subject_for(key)}.jsonl")
 
-        self._show_pitch_state(key)
-        self._update_action_button()
-        if self.zoom_lock_check.isChecked():
-            self._update_overlay()  # keep the locked zoom on the new tile
+        if self.story_engine is not None:
+            for row in self._pitch_rows.values():
+                _discard(row)
+            self._pitch_rows.clear()
+            for card in self._draft_cards.values():
+                self._unsent_requests[card.draft_id] = card.request.text()
+                _discard(card)
+            self._draft_cards.clear()
+            self._refresh_engine()
+        self._update_locks()
 
-    def _ensure_visible(self, key: str):
-        self.scroll_area.ensureWidgetVisible(self.tiles[key])
+    def _update_tile_summaries(self):
+        alt = self.alt_edit.toPlainText().strip()
+        self.alt_section.summary.setText(f"{len(alt.split())} words" if alt else "empty")
+        tags = [tag for tag, check in self.sensitive_checks.items() if check.isChecked()]
+        self.tags_section.summary.setText(", ".join(tags) if tags else "none")
 
-    def _advance_to_next_unfinal(self):
-        """Select the next non-finalized tile after the current one (wrapping)."""
-        if not self.keys:
-            return
-        start = self.keys.index(self.current_key) if self.current_key in self.keys else -1
-        ordered = self.keys[start + 1:] + self.keys[: start + 1]
-        for key in ordered:
-            if not self.index[key].get("final"):
-                self.select_tile(key)
-                return
+    def _is_final(self) -> bool:
+        return self.current_key is not None and bool(self.index[self.current_key].get("final"))
 
-    def _advance_to_next_reviewable(self):
-        """Select the next tile that is neither empty nor final (wrapping)."""
-        if not self.keys:
-            return
-        start = self.keys.index(self.current_key) if self.current_key in self.keys else -1
-        ordered = self.keys[start + 1:] + self.keys[: start + 1]
-        for key in ordered:
-            entry = self.index[key]
-            if entry.get("story") and not entry.get("final"):
-                self.select_tile(key)
-                return
+    def _update_locks(self):
+        final = self._is_final()
+        self.final_button.setText("Final ✓" if final else "Mark final")
+        self.final_button.setEnabled(bool(self.story_edit.toPlainText().strip()) or final)
+        self.story_edit.setReadOnly(final)
+        self.clear_button.setEnabled(not final and bool(self.story_edit.toPlainText().strip()))
 
-    # -- Merge-safe persistence ----------------------------------------------
+    # -- Merge-safe persistence ---------------------------------------------------
     def _save_index_entry(self, key: str, entry: dict | None) -> None:
         """Persist ``entry`` as ``key``'s metadata, merging with disk.
 
@@ -1025,6 +907,7 @@ class ReviewWindow(QMainWindow):
         ``entry=None`` deletes the key. Updates ``self.index`` to the merged
         result so it reflects whatever else was just picked up from disk.
         """
+
         def mutate(fresh: dict) -> dict:
             if entry is None:
                 fresh.pop(key, None)
@@ -1034,16 +917,20 @@ class ReviewWindow(QMainWindow):
 
         self.index = core.update_index(self.tile_dir, mutate)
 
-    # -- External changes (another process editing metadata.json) -----------
+    def _flush_all(self):
+        self._flush_story()
+        self._flush_alt()
+        self._flush_title()
+        self._flush_workspace()
+
+    # -- External changes (another process editing metadata.json) ---------------
     def _on_metadata_changed(self, _path: str):
-        if self._metadata_path not in self._fs_watcher.files() and os.path.exists(
-            self._metadata_path
-        ):
+        if self._metadata_path not in self._fs_watcher.files() and os.path.exists(self._metadata_path):
             self._fs_watcher.addPath(self._metadata_path)  # re-add after replace-via-rename
 
         # A malformed read means we caught the file mid-write (or it's genuinely
         # corrupt); either way an empty {} here would reconcile as "every tile
-        # removed" and tear the whole grid down. Skip this event and wait for
+        # removed" and tear the whole table down. Skip this event and wait for
         # the next fire once the writer has finished rather than acting on it.
         try:
             fresh = core.load_index(self.tile_dir, strict=True)
@@ -1058,61 +945,40 @@ class ReviewWindow(QMainWindow):
             fresh[self.current_key] = self.index[self.current_key]
 
         added = [key for key in fresh if key not in self.index]
-        removed = [key for key in self.index if key not in fresh]
+        removed = [key for key in self.index if key not in fresh and key != self.current_key]
         changed = [
             key for key in fresh
             if key != self.current_key and key in self.index and fresh[key] != self.index[key]
         ]
-        if not added and not removed and not changed:
-            self.index = fresh
-            return
-
         self.index = fresh
-        filtered_out = set()
-        if self.content_review == "flagged":
-            filtered_out = {k for k in added if not (fresh[k] or {}).get("sensitive_content_tags")}
-        elif self.content_review == "unflagged":
-            filtered_out = {k for k in added if (fresh[k] or {}).get("sensitive_content_tags")}
-
         for key in removed:
-            if key == self.current_key:
-                continue  # don't rip the open tile out from under the editor
-            self._remove_tile(key)
+            self.model.remove(key)
         for key in added:
-            if key in filtered_out:
+            flagged = bool((fresh[key] or {}).get("sensitive_content_tags"))
+            if (self.content_review == "flagged" and not flagged) or (self.content_review == "unflagged" and flagged):
                 continue
-            self._add_tile(key)
-        if added or removed:
-            self.keys.sort()
-            self._reflow(force=True)
+            self.model.add(key)
         for key in changed:
-            self._refresh_tile(key)
-        self._update_counts()
+            self.model.refresh(key)
+        if added or removed or changed:
+            self._update_counts()
 
-    def _add_tile(self, key: str):
-        if key in self.tiles:
-            return
-        self.keys.append(key)
-        tile = TileButton(key, self._thumb(key))
-        tile.set_state(tile_state(self.index[key], self._exists(key)))
-        tile.clicked.connect(self.select_tile)
-        tile.entered.connect(self._on_tile_entered)
-        tile.left.connect(self._on_tile_left)
-        self.tiles[key] = tile
-
-    def _remove_tile(self, key: str):
-        tile = self.tiles.pop(key, None)
-        if tile is not None:
-            tile.setParent(None)
-            tile.deleteLater()
-        if key in self.keys:
-            self.keys.remove(key)
-
-    # -- Story autosave -----------------------------------------------------
+    # -- Tile fields ----------------------------------------------------------------
     def _on_story_changed(self):
-        if not self._loading:
-            self._save_timer.start()
-            self._update_action_button()
+        if self._loading:
+            return
+        self._save_timer.start()
+        self._update_locks()
+        # The chosen draft and the story are one text.
+        subject, workspace = self._current_workspace()
+        if workspace is not None and subject is not None:
+            draft = workspace.draft(workspace.chosen)
+            if draft is not None:
+                self._hand_edit(draft, self.story_edit.toPlainText())
+                self._mark_workspace_dirty(subject)
+                card = self._draft_cards.get(draft.id)
+                if card is not None:
+                    set_text_quietly(card.text, draft.story)
 
     def _flush_story(self):
         self._save_timer.stop()
@@ -1120,13 +986,24 @@ class ReviewWindow(QMainWindow):
             return
         entry = self.index[self.current_key]
         text = self.story_edit.toPlainText()
-        stored = entry.get("story") or ""
-        if text != stored:
+        if text != (entry.get("story") or ""):
             entry["story"] = text or None
             self._save_index_entry(self.current_key, entry)
             self._refresh_tile(self.current_key)
 
-    # -- Title autosave -------------------------------------------------------
+    def _set_story(self, key: str, text: str | None):
+        """Store ``text`` as ``key``'s story now, and show it if ``key`` is selected."""
+        entry = self.index[key]
+        entry["story"] = text or None
+        self._save_index_entry(key, entry)
+        self._refresh_tile(key)
+        if key == self.current_key:
+            self._save_timer.stop()
+            self._loading = True
+            self.story_edit.setPlainText(text or "")
+            self._loading = False
+            self._update_locks()
+
     def _on_title_changed(self):
         if not self._loading:
             self._title_save_timer.start()
@@ -1137,15 +1014,15 @@ class ReviewWindow(QMainWindow):
             return
         entry = self.index[self.current_key]
         text = self.title_edit.text().strip()
-        stored = entry.get("title") or ""
-        if text != stored:
+        if text != (entry.get("title") or ""):
             entry["title"] = text or None
             self._save_index_entry(self.current_key, entry)
+            self._refresh_tile(self.current_key)
 
-    # -- Alt text autosave / generation --------------------------------------
     def _on_alt_changed(self):
         if not self._loading:
             self._alt_save_timer.start()
+            self._update_tile_summaries()
 
     def _flush_alt(self):
         self._alt_save_timer.stop()
@@ -1153,68 +1030,59 @@ class ReviewWindow(QMainWindow):
             return
         entry = self.index[self.current_key]
         text = self.alt_edit.toPlainText()
-        stored = entry.get("alt") or ""
-        if text != stored:
+        if text != (entry.get("alt") or ""):
             entry["alt"] = text or None
             self._save_index_entry(self.current_key, entry)
 
     def _on_generate_alt(self):
-        if self.current_key is None or self._alt_busy:
-            return
         key = self.current_key
+        if key is None or not self.alt_generate_button.isEnabled():
+            return
         webp_path = os.path.join(self.tile_dir, key)
         if not os.path.exists(webp_path):
             QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
             return
-
-        entry = self.index[key]
-        prompt = core.default_alt_prompt(core.keyword_texts(entry))
-        model = self.model_combo.currentData()
-
-        worker = _CallWorker(key, core.generate_alt_text, webp_path, prompt, model)
-        worker.setAutoDelete(False)
-        self._workers.add(worker)
-        worker.signals.done.connect(self._on_generate_alt_done)
-        worker.signals.error.connect(self._on_generate_alt_error)
-        self._alt_busy = True
+        prompt = core.default_alt_prompt(core.keyword_texts(self.index[key]))
+        model = self.alt_model_combo.currentData()
         self.alt_generate_button.setEnabled(False)
         self.alt_generate_button.setText("Working…")
-        self.pool.start(worker)
 
-    def _on_generate_alt_done(self, key: str, text: str):
-        self._retire_worker()
-        self._alt_busy = False
+        def done(text: str):
+            self._reset_alt_button()
+            entry = self.index[key]
+            entry["alt"] = text.strip()
+            self._save_index_entry(key, entry)
+            if self.current_key == key:
+                self._loading = True
+                self.alt_edit.setPlainText(text.strip())
+                self._loading = False
+                self._update_tile_summaries()
+
+        def failed(message: str):
+            self._reset_alt_button()
+            QMessageBox.critical(self, "Alt text generation failed", message)
+
+        self._run(lambda: core.generate_alt_text(webp_path, prompt, model), model, done, failed)
+
+    def _reset_alt_button(self):
         self.alt_generate_button.setEnabled(True)
         self.alt_generate_button.setText("Generate alt")
-        entry = self.index[key]
-        entry["alt"] = text.strip()
-        self._save_index_entry(key, entry)
-        if self.current_key == key:
-            self._loading = True
-            self.alt_edit.setPlainText(text.strip())
-            self._loading = False
 
-    def _on_generate_alt_error(self, key: str, message: str):
-        self._retire_worker()
-        self._alt_busy = False
-        self.alt_generate_button.setEnabled(True)
-        self.alt_generate_button.setText("Generate alt")
-        QMessageBox.critical(self, "Alt text generation failed", message)
-
-    # -- Final toggle -------------------------------------------------------
     def _on_final_toggled(self, checked: bool):
         if self._loading or self.current_key is None:
             return
-        entry = self.index[self.current_key]
+        key = self.current_key
+        self._flush_story()
+        entry = self.index[key]
         entry["final"] = checked
-        self._save_index_entry(self.current_key, entry)
-        self._refresh_tile(self.current_key)
-        self._update_action_button()
+        self._save_index_entry(key, entry)
+        self._refresh_tile(key)
+        self._update_locks()
+        self._refresh_engine()
         if checked:
-            self._record_engine_outcome(self.current_key, "accepted", entry.get("story"))
-            self._advance_to_next_unfinal()
+            self._record_outcome(key, "accepted", entry.get("story"))
+            self._navigate_skip_final(1)
 
-    # -- Needs-inpainting toggle --------------------------------------------
     def _on_inpaint_toggled(self, checked: bool):
         if self._loading or self.current_key is None:
             return
@@ -1225,7 +1093,6 @@ class ReviewWindow(QMainWindow):
             entry.pop("needs_inpainting", None)
         self._save_index_entry(self.current_key, entry)
 
-    # -- Sensitive content tags ----------------------------------------------
     def _on_sensitive_toggled(self, _checked: bool):
         if self._loading or self.current_key is None:
             return
@@ -1236,391 +1103,26 @@ class ReviewWindow(QMainWindow):
         else:
             entry.pop("sensitive_content_tags", None)
         self._save_index_entry(self.current_key, entry)
+        self._update_tile_summaries()
 
-    # -- Generate / Revise --------------------------------------------------
-    def _update_action_button(self):
-        """Set the action button's label and enabled state per the spec."""
-        self._update_pitch_controls()
-        if self.current_key is None:
-            self.action_button.setEnabled(False)
-            self.clear_button.setEnabled(False)
-            return
-
-        story = self.story_edit.toPlainText().strip()
-        prompt = self.prompt_edit.toPlainText().strip()
-        revision = self.revision_edit.toPlainText().strip()
-        is_final = self.final_check.isChecked()
-
-        self.clear_button.setEnabled(not is_final)
-
-        if not story:
-            self.action_button.setText("Generate")
-            enabled = bool(prompt)
-        else:
-            self.action_button.setText("Revise")
-            enabled = bool(revision)
-
-        self.action_button.setEnabled(enabled and not is_final and not self._busy)
-
-    def _on_action(self):
-        if self.current_key is None or self._busy:
-            return
-        key = self.current_key
-        webp_path = os.path.join(self.tile_dir, key)
-        if not os.path.exists(webp_path):
-            QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
-            return
-
-        prompt = self.prompt_edit.toPlainText()
-        story = self.story_edit.toPlainText().strip()
-        model = self.model_combo.currentData()
-
-        if not story:
-            worker = _CallWorker(key, core.generate_story, webp_path, prompt, model)
-        else:
-            revision = self.revision_edit.toPlainText()
-            worker = _CallWorker(
-                key, core.revise_story, webp_path, prompt, story, revision, model
-            )
-
-        worker.setAutoDelete(False)
-        self._workers.add(worker)
-        worker.signals.done.connect(self._on_action_done)
-        worker.signals.error.connect(self._on_action_error)
-        self._set_busy(True)
-        self.pool.start(worker)
-
-    def _retire_worker(self):
-        """Drop the just-finished worker so it (and its signals) can be freed."""
-        signals = self.sender()
-        for worker in list(self._workers):
-            if worker.signals is signals:
-                self._workers.discard(worker)
-                break
-
-    def _on_action_done(self, key: str, text: str):
-        self._retire_worker()
-        self._set_busy(False)
-        # The user may have navigated away while Claude was working; write the
-        # story back to the tile it was requested for, and only touch the
-        # editor if that tile is still selected.
-        entry = self.index[key]
-        entry["story"] = text
-        self._save_index_entry(key, entry)
-        self._refresh_tile(key)
-        if self.current_key == key:
-            self._loading = True
-            self.story_edit.setPlainText(text)
-            self.revision_edit.setPlainText("")
-            self._loading = False
-            self._update_action_button()
-
-    def _on_action_error(self, key: str, message: str):
-        self._retire_worker()
-        self._set_busy(False)
-        QMessageBox.critical(self, "Story generation failed", message)
-
-    def _set_busy(self, busy: bool):
-        self._busy = busy
-        if busy:
-            self.action_button.setEnabled(False)
-            self.action_button.setText("Working…")
-        else:
-            self._update_action_button()  # restores the Generate/Revise label
-
-    # -- Story engine ---------------------------------------------------------
-    def _engine_inputs(self, key: str) -> tuple[str, str, list[str]] | None:
-        """(subject, image path, keywords) for ``key``, or None if the image is gone."""
-        webp_path = os.path.join(self.tile_dir, key)
-        if not os.path.exists(webp_path):
-            QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
-            return None
-        return story_frame.subject_for(key), webp_path, core.keyword_texts(self.index[key])
-
-    def _show_pitch_state(self, key: str):
-        """Fill the Pitches and Drafts panels for ``key`` from its latest batch."""
-        engine = self.story_engine
-        if engine is None:
-            return
-        self._flush_critiques()
-        subject = story_frame.subject_for(key)
-        if key not in self._pitch_batches:
-            self._pitch_batches[key] = engine.latest_batch(subject)
-        batch = self._pitch_batches.get(key)
-        self.reading_label.setText(f"Enigma: {batch.reading.enigma}" if batch else "No pitches yet.")
-        critiques = engine.critiques(subject, batch.run) if batch else {}
-        self._critiques[key] = critiques
-        self._rejected[key] = engine.rejected(subject, batch.run) if batch else set()
-        self._drafts[key] = engine.drafts(subject, batch.run) if batch else []
-        self._critique_run = (key, batch.run) if batch else None
-        self._critique_index = None
-
-        self._critique_loading = True
-        self.pitch_list.clear()
-        for i, pitch in enumerate(batch.pitches if batch else []):
-            item = QListWidgetItem(self._pitch_item_text(i, pitch, i in critiques))
-            item.setData(Qt.ItemDataRole.UserRole, pitch)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            rejected = i in self._rejected[key]
-            item.setCheckState(Qt.CheckState.Unchecked if rejected else Qt.CheckState.Checked)
-            self.pitch_list.addItem(item)
-        self.pitch_list.setCurrentRow(-1)
-        self.critique_edit.setPlainText("")
-        self.batch_note_edit.setText(critiques.get(None, ""))
-        self._critique_loading = False
-        self.batch_note_edit.setEnabled(batch is not None)
-        self.critique_edit.setEnabled(False)
-        self._show_drafts(key)
-
-    def _show_drafts(self, key: str):
-        """List ``key``'s drafts by pitch, marking the one that is the current story."""
-        story = (self.index[key].get("story") or "").strip()
-        self.draft_list.clear()
-        for draft in sorted(self._drafts.get(key, []), key=lambda d: d.index):
-            tags = draft.form + (f" + {draft.constraint}" if draft.constraint else "")
-            mark = "★ " if draft.story.strip() == story else ""
-            item = QListWidgetItem(f"{mark}Pitch {draft.index + 1} · {tags}\n{draft.story}")
-            item.setData(Qt.ItemDataRole.UserRole, draft)
-            self.draft_list.addItem(item)
-        self._update_pitch_controls()
-
-    @staticmethod
-    def _pitch_item_text(index: int, pitch, critiqued: bool) -> str:
-        mark = "✎ " if critiqued else ""
-        return (
-            f"{mark}{index + 1}. [{pitch.seed}] {pitch.pitch}\n"
-            f"    Hook: {pitch.hook}\n    Anchor: {pitch.anchor}"
-        )
-
-    def _on_pitch_item_changed(self, item: QListWidgetItem):
-        """Log a tick or untick as a verdict. Text changes also land here and are ignored."""
-        if self._critique_loading or self._critique_run is None or self.story_engine is None:
-            return
-        key, run = self._critique_run
-        index = self.pitch_list.row(item)
-        rejected = item.checkState() == Qt.CheckState.Unchecked
-        stored = self._rejected.setdefault(key, set())
-        if rejected == (index in stored):
-            return
-        self.story_engine.record_verdict(story_frame.subject_for(key), run, index, rejected)
-        if rejected:
-            stored.add(index)
-        else:
-            stored.discard(index)
-        self._update_pitch_controls()
-
-    # -- Pitch critiques ------------------------------------------------------
-    def _on_pitch_row_changed(self, row: int):
-        """Save the outgoing pitch's critique, then load the incoming one's.
-
-        Skipped while ``_show_pitch_state`` rebuilds the list, which resets
-        the editors itself; flushing then would pair one tile's editor text
-        with another tile's batch.
-        """
-        if self._critique_loading:
-            return
-        self._flush_critiques()
-        self._critique_index = row if row >= 0 else None
-        critiques = self._critiques.get(self._critique_run[0], {}) if self._critique_run else {}
-        self._critique_loading = True
-        self.critique_edit.setPlainText(critiques.get(row, "") if row >= 0 else "")
-        self._critique_loading = False
-        self.critique_edit.setEnabled(row >= 0)
-        self._update_pitch_controls()
-
-    def _on_critique_changed(self):
-        if not self._critique_loading:
-            self._critique_save_timer.start()
-
-    def _flush_critiques(self):
-        """Append any changed critique or batch note to the tile's trace."""
-        self._critique_save_timer.stop()
-        if self.story_engine is None or self._critique_run is None:
-            return
-        key, run = self._critique_run
-        stored = self._critiques.setdefault(key, {})
-        edits: list[tuple[int | None, str]] = [(None, self.batch_note_edit.text().strip())]
-        if self._critique_index is not None:
-            edits.append((self._critique_index, self.critique_edit.toPlainText().strip()))
-        for index, text in edits:
-            if text == stored.get(index, ""):
-                continue
-            self.story_engine.record_critique(story_frame.subject_for(key), run, index, text)
-            if text:
-                stored[index] = text
-            else:
-                stored.pop(index, None)
-            if index is not None and key == self.current_key:
-                item = self.pitch_list.item(index)
-                if item is not None:
-                    pitch = item.data(Qt.ItemDataRole.UserRole)
-                    item.setText(self._pitch_item_text(index, pitch, bool(text)))
-
-    # -- Drafting -------------------------------------------------------------
-    def _kept_indices(self) -> list[int]:
-        return [
-            i for i in range(self.pitch_list.count())
-            if self.pitch_list.item(i).checkState() == Qt.CheckState.Checked
-        ]
-
-    def _update_pitch_controls(self):
-        if not hasattr(self, "use_draft_button"):
-            return  # called during construction, before the panels exist
-        ready = self.story_engine is not None and self.current_key is not None and not self._engine_busy
-        writable = ready and not self.final_check.isChecked()
-        self.pitch_button.setEnabled(ready)
-        self.write_button.setEnabled(writable and bool(self._kept_indices()))
-        self.use_draft_button.setEnabled(writable and self.draft_list.currentRow() >= 0)
-
-    def _set_engine_busy(self, busy: bool, label: str = ""):
-        self._engine_busy = busy
-        if busy:
-            self.reading_label.setText(label)
-        self._update_pitch_controls()
-
-    def _start_engine_call(self, key: str, fn, done, label: str):
-        worker = _CallWorker(key, fn)
-        worker.setAutoDelete(False)
-        self._workers.add(worker)
-        worker.signals.done.connect(done)
-        worker.signals.error.connect(self._on_engine_error)
-        self._set_engine_busy(True, label)
-        self.pool.start(worker)
-
-    def _on_pitch(self):
-        key = self.current_key
-        if key is None or self._engine_busy or self.story_engine is None:
-            return
-        inputs = self._engine_inputs(key)
-        if inputs is None:
-            return
-        subject, image, keywords = inputs
-        engine, model = self.story_engine, self.model_combo.currentData()
-        self._start_engine_call(
-            key, lambda: engine.pitch(subject, image, keywords, model), self._on_pitch_done, "Pitching…"
-        )
-
-    def _on_pitch_done(self, key: str, batch: PitchBatch):
-        self._retire_worker()
-        self._pitch_batches[key] = batch
-        self._set_engine_busy(False)
-        if self.current_key == key:
-            self._show_pitch_state(key)
-
-    def _on_write_drafts(self):
-        key = self.current_key
-        batch = self._pitch_batches.get(key) if key else None
-        if key is None or batch is None or self._engine_busy or self.story_engine is None:
-            return
-        if self.final_check.isChecked():
-            return
-        kept = self._kept_indices()
-        drafted = {draft.index for draft in self._drafts.get(key, [])}
-        indices = [i for i in kept if i not in drafted] or kept
-        if not indices:
-            return
-        inputs = self._engine_inputs(key)
-        if inputs is None:
-            return
-        subject, image, keywords = inputs
-        engine, model = self.story_engine, self.model_combo.currentData()
-        form = self.form_combo.currentData()
-        # A single-model local server can't serve concurrent requests.
-        workers = 1 if model.startswith(LOCAL_PREFIX) else len(indices)
-        self._start_engine_call(
-            key,
-            lambda: engine.write_drafts(subject, image, keywords, batch, indices, model, form, workers),
-            self._on_drafts_done,
-            f"Writing {len(indices)} draft{'s' if len(indices) != 1 else ''}…",
-        )
-
-    def _on_drafts_done(self, key: str, result):
-        self._retire_worker()
-        drafts, errors = result
-        self._drafts.setdefault(key, []).extend(drafts)
-        self._set_engine_busy(False)
-        if self.current_key == key:
-            self._show_pitch_state(key)
-        if errors:
-            QMessageBox.warning(self, "Some drafts failed", "\n".join(errors))
-
-    def _on_use_draft(self):
-        """Store the selected draft as the tile's (unfinalized) story, like Generate does."""
-        key = self.current_key
-        item = self.draft_list.currentItem()
-        batch = self._pitch_batches.get(key) if key else None
-        if key is None or item is None or batch is None or self.story_engine is None:
-            return
-        if self.final_check.isChecked() or self._engine_busy:
-            return
-        draft = item.data(Qt.ItemDataRole.UserRole)
-        self.story_engine.record_choice(story_frame.subject_for(key), batch.run, draft)
-        entry = self.index[key]
-        entry["story"] = draft.story
-        self._save_index_entry(key, entry)
-        self._refresh_tile(key)
-        self._loading = True
-        self.story_edit.setPlainText(draft.story)
-        self.revision_edit.setPlainText("")
-        self._loading = False
-        self._show_drafts(key)
-        self._update_action_button()
-
-    def _on_engine_error(self, key: str, message: str):
-        self._retire_worker()
-        self._set_engine_busy(False)
-        if self.current_key == key:
-            self._show_pitch_state(key)
-        QMessageBox.critical(self, "Story engine failed", message)
-
-    def _record_engine_outcome(self, key: str, outcome: str, story: str | None):
-        """Log a Final or Clear on an engine-written story, for calibration.
-
-        A tile whose trace has no chosen draft never took a story from the
-        engine and is skipped. ``edited`` marks a story changed by hand since
-        the draft was chosen.
-        """
-        if self.story_engine is None or not story:
-            return
-        subject = story_frame.subject_for(key)
-        choice = self.story_engine.trace.latest(subject, "choose")
-        if choice is None:
-            return
-        self.story_engine.record_outcome(
-            subject, outcome, story, run=choice.get("run"), index=choice.get("index"),
-            edited=story.strip() != choice.get("story", "").strip(),
-        )
-
-    # -- Clear --------------------------------------------------------------
     def _on_clear(self):
-        """Wipe the current story and jump to the next reviewable tile.
-
-        No confirmation (the button is disabled for finalized tiles, so an
-        approved story is never at risk).
-        """
-        if self.current_key is None:
-            return
-        entry = self.index[self.current_key]
-        if entry.get("final"):
-            return
-        self._save_timer.stop()
-        self._record_engine_outcome(self.current_key, "discarded", self.story_edit.toPlainText())
-        entry["story"] = None
-        self._save_index_entry(self.current_key, entry)
-        self._loading = True
-        self.story_edit.setPlainText("")
-        self._loading = False
-        self._refresh_tile(self.current_key)
-        self._update_action_button()
-        self._advance_to_next_reviewable()
-
-    # -- Save to samples ------------------------------------------------------
-    def _on_save_to_sample(self):
-        if self.current_key is None:
-            return
+        """Wipe the story and unmark the chosen draft; the drafts themselves stay."""
         key = self.current_key
-        webp_path = os.path.join(self.tile_dir, key)
-        if not os.path.exists(webp_path):
+        if key is None or self._is_final():
+            return
+        self._record_outcome(key, "discarded", self.story_edit.toPlainText())
+        subject, workspace = self._current_workspace()
+        if workspace is not None and subject is not None and workspace.chosen:
+            workspace.chosen = None
+            self._save_workspace(subject)
+        self._set_story(key, None)
+        self._refresh_engine()
+
+    def _on_save_to_sample(self):
+        key = self.current_key
+        if key is None:
+            return
+        if not self._exists(key):
             QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
             return
         try:
@@ -1628,15 +1130,12 @@ class ReviewWindow(QMainWindow):
         except OSError as err:
             QMessageBox.critical(self, "Save to samples failed", str(err))
             return
-        QMessageBox.information(
-            self, "Saved to samples", f"Copied {key} to assets/corpus-sample as {name}."
-        )
+        QMessageBox.information(self, "Saved to samples", f"Copied {key} to assets/corpus-sample as {name}.")
 
-    # -- Delete -------------------------------------------------------------
     def _on_delete(self):
-        if self.current_key is None:
-            return
         key = self.current_key
+        if key is None:
+            return
         reply = QMessageBox.question(
             self,
             "Delete tile",
@@ -1646,31 +1145,636 @@ class ReviewWindow(QMainWindow):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-
+        keys = self._visible_keys()
+        pos = keys.index(key) if key in keys else 0
         path = os.path.join(self.tile_dir, key)
         if os.path.exists(path):
             os.remove(path)
+        self._save_timer.stop()
+        self._title_save_timer.stop()
+        self._alt_save_timer.stop()
         self._save_index_entry(key, None)
-
-        tile = self.tiles.pop(key)
-        tile.setParent(None)
-        tile.deleteLater()
-        pos = self.keys.index(key)
-        self.keys.remove(key)
         self.current_key = None
-        self._reflow(force=True)
+        self.model.remove(key)
         self._update_counts()
+        remaining = self._visible_keys()
+        if remaining:
+            self.select_tile(remaining[min(pos, len(remaining) - 1)])
 
-        if self.keys:
-            self.select_tile(self.keys[min(pos, len(self.keys) - 1)])
+    # -- Model calls ----------------------------------------------------------------
+    def _run(self, fn: Callable[[], object], model: str | None, on_done: Callable, on_error: Callable) -> None:
+        """Run ``fn`` on a worker thread; ``on_done(result)`` or ``on_error(message)`` runs on this thread."""
+        token = next(self._tokens)
+        worker = _CallWorker(token, fn)
+        worker.setAutoDelete(False)  # kept in _calls until it reports, so its signals survive delivery
+        self._calls[token] = (worker, on_done, on_error)
+        worker.signals.done.connect(self._on_call_done)
+        worker.signals.error.connect(self._on_call_error)
+        pool = self.local_pool if model and model.startswith(LOCAL_PREFIX) else self.pool
+        pool.start(worker)
+
+    def _on_call_done(self, token: int, result: object):
+        _worker, on_done, _on_error = self._calls.pop(token)
+        on_done(result)
+
+    def _on_call_error(self, token: int, message: str):
+        _worker, _on_done, on_error = self._calls.pop(token)
+        on_error(message)
+
+    # -- Workspaces -------------------------------------------------------------------
+    def _workspace(self, subject: str) -> Workspace:
+        if subject not in self._workspaces:
+            assert self.store is not None
+            workspace = self.store.load(subject)
+            self._workspaces[subject] = workspace
+            self._hidden[subject] = {d.id for d in workspace.drafts if d.dropped}
+        return self._workspaces[subject]
+
+    def _current_workspace(self) -> tuple[str | None, Workspace | None]:
+        if self.current_key is None or self.store is None:
+            return None, None
+        subject = story_frame.subject_for(self.current_key)
+        return subject, self._workspace(subject)
+
+    def _save_workspace(self, subject: str):
+        if self.store is not None and subject in self._workspaces:
+            if self._dirty_subject == subject:
+                self._workspace_save_timer.stop()
+                self._dirty_subject = None
+            self.store.save(subject, self._workspaces[subject])
+
+    def _mark_workspace_dirty(self, subject: str):
+        """Save ``subject``'s workspace after a pause in typing."""
+        if self._dirty_subject not in (None, subject):
+            self._flush_workspace()
+        self._dirty_subject = subject
+        self._workspace_save_timer.start()
+
+    def _flush_workspace(self):
+        self._workspace_save_timer.stop()
+        if self._dirty_subject is not None:
+            subject, self._dirty_subject = self._dirty_subject, None
+            self._save_workspace(subject)
+
+    def _key_for(self, subject: str) -> str | None:
+        return next((k for k in self.index if story_frame.subject_for(k) == subject), None)
+
+    def _engine_inputs(self, key: str) -> tuple[str, str, list[str]] | None:
+        """(subject, image path, keywords) for ``key``, or None if the image is gone."""
+        image = os.path.join(self.tile_dir, key)
+        if not os.path.exists(image):
+            QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
+            return None
+        return story_frame.subject_for(key), image, core.keyword_texts(self.index[key])
+
+    def _hand_edit(self, draft: DraftEntry, text: str):
+        """Apply a typed change to ``draft``, keeping its pre-edit text once per editing session."""
+        if text == draft.story:
+            return
+        if draft.id not in self._hand_edited and draft.story:
+            draft.replace_story(text, "hand edit")
+            self._hand_edited.add(draft.id)
         else:
-            self._update_action_button()
+            draft.story = text
 
-    # -- Shutdown -----------------------------------------------------------
+    # -- Engine panel -------------------------------------------------------------------
+    def _refresh_engine(self):
+        """Bring the engine panel in line with the current tile's workspace."""
+        if self.story_engine is None:
+            return
+        subject, workspace = self._current_workspace()
+        if subject is None or workspace is None:
+            return
+        locked = self._is_final()
+        self.engine_counts.setText(f"{len(workspace.pitches)} pitches, {len(workspace.drafts)} drafts")
+        pitching = self._pitching.get(subject)
+        self.pitch_button.setEnabled(pitching is None and not locked)
+        self.reading_button.setEnabled(subject not in self._reading_busy and workspace.reading is not None and not locked)
+        self.reading_button.setText("Regenerating…" if subject in self._reading_busy else "Regenerate reading")
+        reading = workspace.reading
+        set_text_quietly(self.enigma_edit, reading.enigma if reading else "")
+        set_text_quietly(self.notes_edit, "\n".join(reading.notes) if reading else "")
+        self.enigma_edit.setReadOnly(locked or reading is None)
+        self.notes_edit.setReadOnly(locked or reading is None)
+        self._refresh_pitches(subject, workspace, locked)
+        self._refresh_drafts(subject, workspace, locked)
+        self._update_provenance(workspace)
+
+    def _refresh_pitches(self, subject: str, workspace: Workspace, locked: bool):
+        drafted = {d.pitch_id for d in workspace.drafts}
+        writing = self._writing.get(subject, [])
+        for pitch_id in [pid for pid in self._pitch_rows if workspace.pitch(pid) is None]:
+            _discard(self._pitch_rows.pop(pitch_id))
+        for number, pitch in enumerate(workspace.pitches, 1):
+            row = self._pitch_rows.get(pitch.id)
+            if row is None:
+                row = PitchRow(pitch.id)
+                row.keptChanged.connect(self._on_pitch_kept)
+                row.noteChanged.connect(self._on_pitch_note)
+                row.fieldsEdited.connect(self._on_pitch_fields)
+                row.deleteRequested.connect(self._on_delete_pitch)
+                self._pitch_rows[pitch.id] = row
+            if pitch.id in writing:
+                status = "drafting…"
+            elif pitch.id in drafted:
+                status = "drafted"
+            else:
+                status = "not drafted yet" if pitch.kept else "dropped"
+            row.update_from(pitch, number, status, locked)
+            # Insert in list order, ahead of the empty/pending labels and the stretch.
+            if self.pitch_layout.indexOf(row) != number - 1:
+                self.pitch_layout.insertWidget(number - 1, row)
+        self.pitch_empty.setVisible(not workspace.pitches and self._pitching.get(subject) is None)
+        count = self._pitching.get(subject)
+        self.pitch_pending.setVisible(count is not None)
+        if count is not None:
+            first = len(workspace.pitches) + 1
+            self.pitch_pending.setText(f"Pitching {count} more; they will be added as pitches {first} to {first + count - 1}.")
+        undrafted = [p for p in workspace.undrafted_kept() if p.id not in writing]
+        self.draft_kept_button.setText(f"Draft kept pitches ({len(undrafted)} new)")
+        self.draft_kept_button.setEnabled(bool(undrafted) and not locked)
+        for button in self._pitch_toolbar_buttons:
+            button.setEnabled(not locked)
+
+    def _refresh_drafts(self, subject: str, workspace: Workspace, locked: bool):
+        hidden = self._hidden.setdefault(subject, set())
+        revising = self._revising.get(subject, {})
+        for draft_id in [did for did in self._draft_cards if workspace.draft(did) is None]:
+            _discard(self._draft_cards.pop(draft_id))
+        while self.draft_grid.count():
+            self.draft_grid.takeAt(0)
+        chips = []
+        position = 0
+        for number, draft in enumerate(workspace.drafts, 1):
+            chosen = draft.id == workspace.chosen
+            chips.append((draft.id, number, draft.id not in hidden, "chosen" if chosen else "dropped" if draft.dropped else ""))
+            card = self._draft_cards.get(draft.id)
+            if card is None:
+                card = self._new_draft_card(draft.id)
+            pitch = workspace.pitch(draft.pitch_id)
+            if pitch is not None:
+                pitch_text = f"Pitch {workspace.pitch_number(pitch.id)}, {pitch.seed}: {pitch.pitch}"
+            elif draft.pitch_id is None:
+                pitch_text = "Written by hand"
+            else:
+                pitch_text = "From a deleted pitch"
+            card.update_from(
+                draft, number, pitch_text, chosen, revising.get(draft.id), locked and chosen,
+                can_redraft=pitch is not None and not locked,
+            )
+            if draft.id in hidden:
+                card.hide()
+                continue
+            card.show()
+            self.draft_grid.addWidget(card, position // 2, position % 2)
+            position += 1
+        self.chips.set_drafts(chips)
+        writing = len(self._writing.get(subject, []))
+        self.drafting_label.setText(f"Writing {writing} draft{'s' if writing != 1 else ''}…" if writing else "")
+        self.add_draft_button.setEnabled(not locked)
+        self.draft_empty.setVisible(position == 0)
+        if not workspace.drafts:
+            self.draft_empty.setText("No drafts yet. Review the pitches, then draft the kept ones.")
+        else:
+            self.draft_empty.setText("Every draft is hidden. Pick drafts to show above.")
+
+    def _new_draft_card(self, draft_id: str) -> DraftCard:
+        card = DraftCard(draft_id)
+        card.textEdited.connect(self._on_draft_text)
+        card.reviseRequested.connect(self._on_revise)
+        card.chooseRequested.connect(self._on_choose)
+        card.dropToggled.connect(self._on_drop_toggled)
+        card.duplicateRequested.connect(self._on_duplicate)
+        card.redraftRequested.connect(self._on_redraft)
+        card.historyRequested.connect(self._on_history)
+        card.hideRequested.connect(lambda did: self._on_chip_toggled(did, False))
+        card.deleteRequested.connect(self._on_delete_draft)
+        card.objectionEditRequested.connect(self._on_objection_edit)
+        card.objectionPassed.connect(self._on_objection_pass)
+        card.request.setText(self._unsent_requests.pop(draft_id, ""))
+        self._draft_cards[draft_id] = card
+        return card
+
+    def _update_provenance(self, workspace: Workspace):
+        draft = workspace.draft(workspace.chosen)
+        if draft is not None:
+            number = workspace.draft_number(draft.id)
+            pitch_number = workspace.pitch_number(draft.pitch_id)
+            source = f", pitch {pitch_number}" if pitch_number else ""
+            revised = ", revised" if any(v["reason"].startswith("revise") for v in draft.history) else ""
+            self.provenance_label.setText(f"from draft {number} ({draft.form}{source}){revised}")
+        elif self.story_edit.toPlainText().strip():
+            self.provenance_label.setText("not from a draft")
+        else:
+            self.provenance_label.setText("")
+
+    # -- Reading --------------------------------------------------------------------------
+    def _on_reading_edited(self):
+        subject, workspace = self._current_workspace()
+        if subject is None or workspace is None or workspace.reading is None:
+            return
+        workspace.reading = Reading(
+            enigma=self.enigma_edit.toPlainText().strip(),
+            notes=[line.strip() for line in self.notes_edit.toPlainText().splitlines() if line.strip()],
+        )
+        self._mark_workspace_dirty(subject)
+
+    def _on_regenerate_reading(self):
+        key = self.current_key
+        if key is None or self.story_engine is None:
+            return
+        inputs = self._engine_inputs(key)
+        if inputs is None:
+            return
+        subject, image, keywords = inputs
+        engine, model = self.story_engine, self.pitch_model_combo.currentData()
+        self._reading_busy.add(subject)
+
+        def done(reading: Reading):
+            self._reading_busy.discard(subject)
+            self._workspace(subject).reading = reading
+            self._save_workspace(subject)
+            self._refresh_if_current(subject)
+
+        def failed(message: str):
+            self._reading_busy.discard(subject)
+            self._refresh_if_current(subject)
+            QMessageBox.critical(self, "Reading failed", message)
+
+        self._run(lambda: engine.read(subject, image, keywords, model), model, done, failed)
+        self._refresh_engine()
+
+    def _refresh_if_current(self, subject: str):
+        if self.current_key is not None and story_frame.subject_for(self.current_key) == subject:
+            self._refresh_engine()
+
+    # -- Pitches -----------------------------------------------------------------------------
+    def _on_pitch_more(self):
+        key = self.current_key
+        if key is None or self.story_engine is None:
+            return
+        inputs = self._engine_inputs(key)
+        if inputs is None:
+            return
+        subject, image, keywords = inputs
+        if subject in self._pitching:
+            return
+        workspace = self._workspace(subject)
+        engine, model = self.story_engine, self.pitch_model_combo.currentData()
+        count = self.pitch_count.value()
+        reading = workspace.reading
+        existing = [p.as_pitch() for p in workspace.pitches]
+        extra = self.instructions_edit.text()
+        self._pitching[subject] = count
+
+        def done(result):
+            new_reading, pitches = result
+            self._pitching.pop(subject, None)
+            target = self._workspace(subject)
+            if new_reading is not None and target.reading is None:
+                target.reading = new_reading
+            stamp = now()
+            target.pitches += [
+                PitchEntry(new_id(), p.seed, p.pitch, p.hook, p.anchor, source=model, created=stamp) for p in pitches
+            ]
+            self._save_workspace(subject)
+            self._refresh_if_current(subject)
+
+        def failed(message: str):
+            self._pitching.pop(subject, None)
+            self._refresh_if_current(subject)
+            QMessageBox.critical(self, "Pitching failed", message)
+
+        self._run(
+            lambda: engine.pitch(subject, image, keywords, model, count, reading, existing, extra), model, done, failed
+        )
+        self.tabs.setCurrentIndex(0)
+        self._refresh_engine()
+
+    def _on_pitch_kept(self, pitch_id: str, kept: bool):
+        subject, workspace = self._current_workspace()
+        pitch = workspace.pitch(pitch_id) if workspace else None
+        if subject is None or pitch is None:
+            return
+        pitch.kept = kept
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    def _on_pitch_note(self, pitch_id: str, text: str):
+        subject, workspace = self._current_workspace()
+        pitch = workspace.pitch(pitch_id) if workspace else None
+        if subject is None or pitch is None:
+            return
+        pitch.note = text
+        self._mark_workspace_dirty(subject)
+
+    def _on_pitch_fields(self, pitch_id: str, fields: dict):
+        subject, workspace = self._current_workspace()
+        pitch = workspace.pitch(pitch_id) if workspace else None
+        if subject is None or pitch is None:
+            return
+        pitch.seed, pitch.pitch, pitch.hook, pitch.anchor = (
+            fields["seed"], fields["pitch"], fields["hook"], fields["anchor"],
+        )
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    def _on_delete_pitch(self, pitch_id: str):
+        subject, workspace = self._current_workspace()
+        pitch = workspace.pitch(pitch_id) if workspace else None
+        if subject is None or workspace is None or pitch is None:
+            return
+        drafts = sum(1 for d in workspace.drafts if d.pitch_id == pitch_id)
+        if drafts:
+            reply = QMessageBox.question(
+                self, "Delete pitch",
+                f"Delete pitch {workspace.pitch_number(pitch_id)}? Its {drafts} draft(s) stay, marked as from a deleted pitch.",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        workspace.pitches.remove(pitch)
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    def _on_add_pitch(self):
+        subject, workspace = self._current_workspace()
+        if subject is None or workspace is None:
+            return
+        pitch = PitchEntry(new_id(), "own idea", "", "", "", source="hand", created=now())
+        workspace.pitches.append(pitch)
+        self._save_workspace(subject)
+        self._refresh_engine()
+        self._pitch_rows[pitch.id].start_editing()
+
+    def _on_keep_all(self):
+        subject, workspace = self._current_workspace()
+        if subject is None or workspace is None:
+            return
+        for pitch in workspace.pitches:
+            pitch.kept = True
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    # -- Drafting --------------------------------------------------------------------------
+    def _on_draft_kept(self):
+        subject, workspace = self._current_workspace()
+        if subject is None or workspace is None:
+            return
+        writing = self._writing.get(subject, [])
+        for pitch in workspace.undrafted_kept():
+            if pitch.id not in writing:
+                self._start_write(pitch.id)
+        self.tabs.setCurrentIndex(1)
+
+    def _start_write(self, pitch_id: str):
+        key = self.current_key
+        if key is None or self.story_engine is None:
+            return
+        inputs = self._engine_inputs(key)
+        if inputs is None:
+            return
+        subject, image, keywords = inputs
+        workspace = self._workspace(subject)
+        pitch = workspace.pitch(pitch_id)
+        if pitch is None:
+            return
+        engine, model = self.story_engine, self.draft_model_combo.currentData()
+        form = self.form_combo.currentData()
+        chance = self.chance_slider.value() / 100
+        reading, brief, note = workspace.reading, pitch.as_pitch(), pitch.note
+        self._writing.setdefault(subject, []).append(pitch_id)
+
+        def finish():
+            writing = self._writing.get(subject, [])
+            if pitch_id in writing:
+                writing.remove(pitch_id)
+
+        def done(draft):
+            finish()
+            target = self._workspace(subject)
+            entry = DraftEntry(
+                new_id(), pitch_id, draft.form, draft.constraint, draft.story,
+                prompt=draft.prompt, model=model, created=now(),
+            )
+            target.drafts.append(entry)
+            self._save_workspace(subject)
+            self._refresh_if_current(subject)
+
+        def failed(message: str):
+            finish()
+            self._refresh_if_current(subject)
+            QMessageBox.warning(self, "Draft failed", f"Pitch {workspace.pitch_number(pitch_id)}: {message}")
+
+        self._run(
+            lambda: engine.write(subject, image, keywords, reading, brief, model, form, chance, note, pitch_id),
+            model, done, failed,
+        )
+        self._refresh_engine()
+
+    def _on_redraft(self, draft_id: str):
+        _subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if draft is not None and draft.pitch_id is not None:
+            self._start_write(draft.pitch_id)
+
+    def _on_add_draft(self):
+        subject, workspace = self._current_workspace()
+        if subject is None or workspace is None:
+            return
+        draft = DraftEntry(new_id(), None, "by hand", None, "", model="hand", created=now())
+        workspace.drafts.append(draft)
+        self._hidden.setdefault(subject, set()).discard(draft.id)
+        self._save_workspace(subject)
+        self._refresh_engine()
+        self._draft_cards[draft.id].text.setFocus()
+
+    def _on_draft_text(self, draft_id: str, text: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or workspace is None or draft is None or text == draft.story:
+            return
+        self._hand_edit(draft, text)
+        self._mark_workspace_dirty(subject)
+        if draft.id == workspace.chosen and self.current_key is not None and not self._is_final():
+            self._loading = True
+            self.story_edit.setPlainText(text)
+            self._loading = False
+            self._save_timer.start()
+
+    def _on_duplicate(self, draft_id: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or workspace is None or draft is None:
+            return
+        copy_ = copy.deepcopy(draft)
+        copy_.id, copy_.created, copy_.objection = new_id(), now(), None
+        workspace.drafts.insert(workspace.drafts.index(draft) + 1, copy_)
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    def _on_history(self, draft_id: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or workspace is None or draft is None:
+            return
+        dialog = HistoryDialog(draft, workspace.draft_number(draft_id) or 0, self)
+        if dialog.exec() and dialog.chosen_text is not None and not (self._is_final() and draft.id == workspace.chosen):
+            draft.replace_story(dialog.chosen_text, "restore")
+            self._hand_edited.discard(draft.id)
+            self._save_workspace(subject)
+            if draft.id == workspace.chosen and self.current_key is not None:
+                self._set_story(self.current_key, draft.story)
+            self._refresh_engine()
+
+    def _on_drop_toggled(self, draft_id: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or draft is None:
+            return
+        draft.dropped = not draft.dropped
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    def _on_delete_draft(self, draft_id: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or workspace is None or draft is None:
+            return
+        number = workspace.draft_number(draft_id)
+        reply = QMessageBox.question(self, "Delete draft", f"Delete draft {number} and its earlier versions?")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        workspace.drafts.remove(draft)
+        if workspace.chosen == draft_id:
+            workspace.chosen = None  # the story itself stays in metadata.json
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    def _on_chip_toggled(self, draft_id: str, shown: bool):
+        subject, _workspace = self._current_workspace()
+        if subject is None:
+            return
+        hidden = self._hidden.setdefault(subject, set())
+        if shown:
+            hidden.discard(draft_id)
+        else:
+            hidden.add(draft_id)
+        self._refresh_engine()
+
+    def _on_show_all_drafts(self):
+        subject, _workspace = self._current_workspace()
+        if subject is not None:
+            self._hidden[subject] = set()
+            self._refresh_engine()
+
+    # -- Choosing ------------------------------------------------------------------------------
+    def _on_choose(self, draft_id: str):
+        key = self.current_key
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if key is None or subject is None or workspace is None or draft is None or self._is_final():
+            return
+        workspace.chosen = draft_id
+        self._save_workspace(subject)
+        if self.story_engine is not None:
+            self.story_engine.record_choice(subject, draft_id, draft.story)
+        self._set_story(key, draft.story)
+        self._refresh_engine()
+
+    def _record_outcome(self, key: str, outcome: str, story: str | None):
+        """Log a Final or Clear on an engine-written story, for calibration.
+
+        A tile whose workspace has no chosen draft never took a story from the
+        engine and is skipped. ``edited`` marks a story changed by hand since
+        the draft was chosen.
+        """
+        if self.story_engine is None or self.store is None or not story:
+            return
+        subject = story_frame.subject_for(key)
+        workspace = self._workspace(subject)
+        draft = workspace.draft(workspace.chosen)
+        if draft is None:
+            return
+        edited = any(v["reason"] in ("hand edit", "restore") for v in draft.history)
+        self.story_engine.record_outcome(subject, outcome, story, draft_id=draft.id, edited=edited)
+
+    # -- Revising --------------------------------------------------------------------------------
+    def _on_revise(self, draft_id: str, request: str):
+        key = self.current_key
+        if key is None or self.story_engine is None:
+            return
+        inputs = self._engine_inputs(key)
+        if inputs is None:
+            return
+        subject, image, keywords = inputs
+        workspace = self._workspace(subject)
+        draft = workspace.draft(draft_id)
+        revising = self._revising.setdefault(subject, {})
+        if draft is None or draft_id in revising:
+            return
+        engine, model = self.story_engine, self.revise_model_combo.currentData()
+        pitch = workspace.pitch(draft.pitch_id)
+        prompt = draft.prompt or engine.context_prompt(
+            keywords, workspace.reading, pitch.as_pitch() if pitch else None, pitch.note if pitch else ""
+        )
+        story = draft.story
+        revising[draft_id] = request
+        card = self._draft_cards.get(draft_id)
+        if card is not None:
+            card.take_request()
+
+        def done(revision):
+            revising.pop(draft_id, None)
+            target = self._workspace(subject).draft(draft_id)
+            if target is None:
+                return  # deleted while the call ran
+            if revision.story is not None and revision.story.strip() == target.story.strip():
+                target.objection = {"request": request, "reply": "The writer sent the draft back unchanged."}
+            elif revision.story is not None:
+                target.replace_story(revision.story, f"revise: {request}")
+                target.objection = None
+                self._hand_edited.discard(draft_id)
+                target_key = self._key_for(subject)
+                if self._workspace(subject).chosen == draft_id and target_key is not None:
+                    if not self.index[target_key].get("final"):
+                        self._set_story(target_key, target.story)
+            else:
+                target.objection = {"request": request, "reply": revision.objection or ""}
+            self._save_workspace(subject)
+            self._refresh_if_current(subject)
+
+        def failed(message: str):
+            revising.pop(draft_id, None)
+            self._refresh_if_current(subject)
+            QMessageBox.warning(self, "Revision failed", message)
+
+        self._run(lambda: engine.revise(subject, image, prompt, story, request, model, draft_id), model, done, failed)
+        self._refresh_engine()
+
+    def _on_objection_edit(self, draft_id: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or draft is None or not draft.objection:
+            return
+        request = draft.objection["request"]
+        draft.objection = None
+        self._save_workspace(subject)
+        self._refresh_engine()
+        card = self._draft_cards.get(draft_id)
+        if card is not None:
+            card.set_request(request)
+
+    def _on_objection_pass(self, draft_id: str):
+        subject, workspace = self._current_workspace()
+        draft = workspace.draft(draft_id) if workspace else None
+        if subject is None or draft is None:
+            return
+        draft.objection = None
+        self._save_workspace(subject)
+        self._refresh_engine()
+
+    # -- Shutdown ------------------------------------------------------------------------------
     def closeEvent(self, event):
         self._mod_timer.stop()
-        self._flush_story()
-        self._flush_alt()
-        self._flush_title()
-        self._flush_critiques()
+        self._flush_all()
         super().closeEvent(event)

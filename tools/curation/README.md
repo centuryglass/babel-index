@@ -66,34 +66,43 @@ story on every tile that still lacks one, `--workers N` many at a time
 python -m babel_index_review DIR [--content-review flagged|unflagged] [--sample-update]
 ```
 
-The full Qt review GUI: browse tiles in a grid, generate/revise/finalize
-stories, generate alt text, and set sensitive-content tags by hand. See
-`babel_index_review/gui.py`'s module docstring for the panel layout.
+The full Qt review GUI, laid out for a 1920x1080 window: a filterable table
+of tiles on the left, the selected image and the tile's own fields (title,
+Final, story, alt text, sensitive-content tags) in the middle, and the story
+engine on the right. Hold Ctrl over the image to zoom it to the whole window.
+See `babel_index_review/gui.py`'s module docstring for the layout.
 `--sample-update` adds a "Save to samples" button that copies the selected
 tile's image and a subset of its metadata (keywords, story, title, alt) into
 `assets/corpus-sample`, for hand-picking a representative demo corpus.
 
-The GUI's **Pitches** and **Drafts** sections run the staged story engine
-(`story_engine/`, configured by `babel_index_review/story_frame.py`):
+The story engine panel (`story_engine/`, configured by
+`babel_index_review/story_frame.py`) follows
+[`docs/story_workflow.md`](docs/story_workflow.md):
 
-1. **Pitch** lists six ideas, along with the enigma the model found in the
-   image. Each one grows from a seed (an angle question, a human behavior, a
-   displacement or a payload) and carries a hook, the thing a reader keeps,
-   and an anchor in the image.
-2. Untick the pitches with obvious flaws, overdone patterns, or ideas that
-   just aren't to your taste. Pitch review is a coarse filter: plenty of
-   stories that work on the page look like nothing as a pitch.
-3. **Write drafts** drafts every ticked pitch in parallel. Each draft gets a
-   form drawn by weight (or the one picked in the dropdown), and sometimes an
-   odd constraint. Pressing it again drafts only the pitches with no draft
-   yet, or a fresh round of all of them once each has one.
-4. In **Drafts**, **Use draft** (or a double-click) puts a draft in the story
-   field, marked ★. Review, revise and finalize it as usual.
+1. **Pitch more** asks for the number of pitches in the box beside it. The
+   first call also writes the **reading**: the image's enigma and a few
+   notes. Later calls reuse the reading and add to the same list. Edit the
+   reading in place to fix a mistake, or regenerate it alone.
+2. On **Pitches**, untick the ones with obvious flaws, overdone patterns, or
+   ideas that just aren't to your taste. A note on a pitch goes to the writer
+   with it. You can also edit, add and delete pitches by hand.
+3. **Draft kept pitches** drafts every kept pitch that has no draft yet, in
+   parallel. Each draft gets a form drawn by weight (or the one set in
+   Engine settings), and sometimes an odd constraint.
+4. On **Drafts**, the numbered buttons pick which drafts are shown, two to a
+   row. Edit a draft in place, or type a revision request under it and press
+   **Revise**; requests on different drafts run at the same time. A writer
+   can object to a request instead of making it. **Choose** makes a draft the
+   story, and from then on the two are one text. Mark it Final to accept it.
 
-To critique a pitch, select it and type in the box under the list. The line
-below that holds a note on the whole batch. Both autosave, and a critiqued
-pitch is marked with ✎. To collect every reviewed batch (critiques,
-rejections, drafts and the chosen one) into one Markdown report:
+Engine settings holds a model for each stage, the form, the odd-constraint
+chance, and extra instructions for the next pitch call. Model picks are
+remembered between sessions.
+
+Each tile's reading, pitches and drafts are kept in
+`DIR/story_traces/<tile>.json`, and every model call, choice and outcome is
+logged to `DIR/story_traces/<tile>.jsonl`. To collect every reviewed tile's
+pitches, notes and drafts into one Markdown report:
 
 ```sh
 python -m babel_index_review.story_critiques DIR [--out critiques.md]
@@ -102,9 +111,7 @@ python -m babel_index_review.story_critiques DIR [--out critiques.md]
 Seeds, forms and constraints are `data/story_seeds.json`,
 `data/story_forms.json` and `data/story_constraints.json`. Each entry has a
 relative `weight`, and seed kinds have their own weights too; raise the ones
-that keep working and lower the ones that don't. Every step, plus each Final
-or Clear on an engine-written story, is logged to
-`DIR/story_traces/<tile>.jsonl`.
+that keep working and lower the ones that don't.
 
 **Review from a phone**
 

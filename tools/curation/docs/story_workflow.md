@@ -15,8 +15,8 @@ builds its prompt, so the full text is one click away.
    |
  1. Import ............ keywords only, story absent
    |
- 2. Pitch ............. reading of the image + 6 pitches, each from a seed
-   |
+ 2. Pitch ............. reading of the image + 6 pitches, each from a seed;
+   |                    "Pitch more" appends to the same list
  3. Novelty filter .... flags premises too close to the corpus   [deferred]
    |
  4. Pitch review ...... drop obvious failures, sharpen near misses
@@ -34,8 +34,9 @@ builds its prompt, so the full text is one click away.
 10. Record ............ tag the story into corpus memory         [not built]
 ```
 
-Every stage appends an event to the tile's trace, so any story can be traced
-back through the draft, pitch and reading that produced it.
+A tile's reading, pitches and drafts live in one workspace file that grows
+as the tile is worked on, so leaving a tile and coming back loses nothing.
+Model calls are also logged to a trace (see "The trace").
 
 ## Principles
 
@@ -66,11 +67,13 @@ comments and the maintainer's local `story_preferences.md`.
 | Engine stages, prompts, validators | [`story_engine/engine.py`](../story_engine/engine.py) |
 | JSON reply parsing and retry | [`story_engine/llm.py`](../story_engine/llm.py) |
 | Weighted option lists | [`story_engine/options.py`](../story_engine/options.py) |
+| Workspace: one tile's reading, pitches, drafts and choice | [`story_engine/workspace.py`](../story_engine/workspace.py) |
 | Trace log | [`story_engine/trace.py`](../story_engine/trace.py) |
 | Babel Index's frame: subject, presentation, voice, style rules | [`babel_index_review/story_frame.py`](../babel_index_review/story_frame.py) |
 | The base scene every image shares | `core.py`'s `BASE_SCENE` |
 | Seeds, forms, constraints | `data/story_seeds.json`, `data/story_forms.json`, `data/story_constraints.json` |
 | Model backends | `tag/describe_image.py` |
+| Workspaces on disk | `DIR/story_traces/<tile stem>.json` |
 | Traces on disk | `DIR/story_traces/<tile stem>.jsonl` |
 
 ## 1. Import
@@ -90,8 +93,9 @@ story.
 
 ## 2. Pitch
 
-**Does:** one vision-model call per batch reads the image and returns a short
-**reading** plus six **pitches**.
+**Does:** the first vision-model call for a tile reads the image and returns
+a short **reading** plus six **pitches**. Later calls reuse the reading and
+append more pitches to the same list.
 
 The engine first draws a **seed menu** from `data/story_seeds.json`:
 `pitch_count + seed_menu` seeds (6 + 4 by default). The model picks the six
@@ -126,12 +130,16 @@ the model, which retries (up to two retries).
 
 **Choices:**
 - **Model.** Pitching is a good fit for a cheap model.
-- **Re-pitch.** A new batch always gets a fresh reading and a fresh seed
-  menu, so it doesn't anchor on the last batch's details. Earlier batches
-  and their drafts stay available.
+- **Pitch more.** Asks for a set number of further pitches (6 by default).
+  The call gets the current reading and the pitches already on the list, so
+  it doesn't repeat them, and its seed menu skips seeds already used where
+  enough remain. New pitches are appended; nothing is replaced.
+- **Edit the reading** by hand to correct a real flaw, or **regenerate** it
+  alone. Either change applies to every later pitch and draft call; pitches
+  and drafts already written keep what they have.
 
-**Output:** a pitch batch with a `run` id. The reading goes on to the writer
-so both calls share one interpretation of the image.
+**Output:** the reading, and pitches appended to the tile's list. The reading
+goes on to the writer so both calls share one interpretation of the image.
 
 ## 3. Novelty filter (deferred)
 
@@ -165,15 +173,14 @@ missing.
   few words can redirect it ("needs a reason anyone would put up with
   this"). Notes also feed `story_preferences.md` and prompt tuning. They are
   never required.
-- An optional note on the whole batch, for tuning only.
 - Edit a pitch by hand.
 - Add a pitch of your own, without having to drop one first.
 - Delete a pitch.
-- Re-pitch if nothing is worth drafting.
+- Pitch more if nothing is worth drafting.
 - **Owner:** `human`, `llm` or `auto` (keep everything).
 
-**Output:** in the trace, a verdict per pitch, any notes, and any hand-made
-pitch edits, additions or deletions.
+**Output:** in the workspace, each pitch's kept flag and note, and any
+hand edits, additions or deletions.
 
 ## 5. Draft
 
@@ -185,9 +192,9 @@ pitch edits, additions or deletions.
   words"). Constraints break a model out of a rut, and keep drafts from
   sounding alike when one keyword dominates.
 
-**Prompt:** `engine.py`'s `write_prompt`. The writer sees the reading, one
-pitch with its review note, the form and the rules, and nothing about other
-stories. The rules:
+**Prompt:** `engine.py`'s `write_prompt`. The writer sees the current
+reading, one pitch with its review note, the form and the rules, and nothing
+about other stories. The rules:
 - the hook arrives within the first two sentences;
 - detail can carry its own small idea, but no chains of detail where each
   particular explains the one before;
@@ -204,12 +211,13 @@ stories. The rules:
 **Choices:**
 - **Form override:** force one form for this round instead of drawing.
 - **Constraint chance:** set per round, from never to always.
-- **Redraft:** a fresh round for the same pitches draws new forms and
-  constraints. Drafting only the pitches without a draft yet is the
-  default.
+- **Draft kept pitches** drafts every kept pitch without a draft yet.
+- **Redraft** one draft: a new draft from the same pitch, with a new form and
+  constraint drawn. The old draft stays.
 - **Model.** Drafting benefits from a stronger model than pitching.
 
-**Output:** drafts tagged with their pitch, form and constraint.
+**Output:** drafts appended to the workspace, tagged with their pitch, form
+and constraint.
 
 ## 6. Check (not built)
 
@@ -235,10 +243,11 @@ it on the chosen draft, or both.
 - **Hand edit** a draft. Renaming a character or dropping two words is
   faster by hand than by prompt.
 - **Revision request:** a short instruction ("cut the second sentence",
-  "make the clerk less competent"), sent to one draft or to several in
-  parallel. The revision call continues the writer's own conversation, with
-  its reading, pitch, form and rules, and says plainly that only the named
-  change is wanted. The request and result are traced.
+  "make the clerk less competent") written on one draft and sent at once.
+  Requests on different drafts run in parallel, since a reply can take a
+  minute or two. The revision call continues the writer's own conversation,
+  with its reading, pitch, form and rules, and says plainly that only the
+  named change is wanted. The draft keeps its earlier versions.
 - **Objection:** the writer may answer a revision request by explaining
   what the flagged passage was meant to do, instead of changing it. The
   reviewer then rewrites the request, or passes the draft as it is. A
@@ -248,8 +257,8 @@ it on the chosen draft, or both.
 - **Delete** a draft. Its pitch can be redrafted.
 - **Owner:** `human` by default.
 
-**Output:** `revise` events in the trace, and hand edits, additions and
-deletions.
+**Output:** revised drafts and their earlier versions in the workspace,
+`revise` events in the trace, and hand edits, additions and deletions.
 
 ## 8. Choose
 
@@ -259,18 +268,20 @@ and picks one. This is where the real selection happens.
 **Choices:**
 - Pick a draft. It becomes the tile's story, unfinalized. More critique
   rounds can follow on it.
-- Redraft (back to stage 5), or re-pitch (back to stage 2).
+- Redraft (back to stage 5), or pitch more (back to stage 2).
 - Discard the chosen story and go back to the drafts or pitches.
-- Leave the tile for later. Nothing is lost; the trace holds every batch.
+- Leave the tile for later. Nothing is lost; the workspace holds every
+  pitch and draft.
 - **Owner:** `human` or `llm`.
 
-**Output:** a `choose` event, and the draft in `metadata.json`'s `story`.
+**Output:** the chosen draft's id in the workspace, a `choose` event, and
+the draft in `metadata.json`'s `story`.
 
 ## 9. Accept
 
 **Does:** marking the story **Final** accepts it. The trace records the
-outcome (`accepted`), which batch and draft it came from, and whether it was
-edited by hand after being chosen. Clearing an engine-written story records
+outcome (`accepted`), which draft it came from, and whether it was edited by
+hand after being chosen. Clearing an engine-written story records
 `discarded`.
 
 **Choices:** Final, or not yet. A final story is locked against Generate,
@@ -329,21 +340,34 @@ The maintainer tunes the engine between sessions:
   (`python -m babel_index_review.story_critiques DIR`) are distilled into
   `story_preferences.md`, then into `pitch_prompt` and `write_prompt`.
 
+## The workspace
+
+`DIR/story_traces/<tile stem>.json`, rewritten on every change. It is the
+review GUI's state for the tile:
+- the current reading;
+- every pitch, with its seed, fields, kept flag, note and where it came from
+  (a model call or a hand-written pitch);
+- every draft, with its pitch, form, constraint, text, the writer's prompt,
+  earlier versions and any open objection;
+- the chosen draft's id.
+
+Pitches and drafts have ids that never change, so a hand edit never loses a
+mark. A tile with a trace but no workspace (one reviewed before the
+workspace existed) is imported from its trace on first open.
+
 ## The trace
 
 `DIR/story_traces/<tile stem>.jsonl`, one JSON event per line, append-only.
-Events of one pitch batch share its `run` id.
+It logs each model call (prompt, raw reply, parsed result) and each choice
+and outcome, for debugging and calibration. Nothing reads it back except the
+one-time workspace import.
 
 | Stage | Holds |
 | --- | --- |
-| `pitch` | model, offered seeds, prompt, raw replies, reading and pitches |
-| `verdict` | pitch index, kept or rejected (latest wins) |
-| `critique` | pitch index or batch, note text (latest wins); a pitch's note goes to its writer |
-| `write` | pitch index, form, constraint, prompt, raw reply, story |
+| `pitch` | model, offered seeds, prompt, raw replies, reading (first call only) and pitches |
+| `reading` | a reading regenerated on its own |
+| `write` | pitch id, form, constraint, prompt, raw reply, story |
 | `check` | lint and critic findings (once built) |
-| `revise` | draft, request, and either the result or the writer's objection (once built) |
+| `revise` | draft id, request, and either the result or the writer's objection |
 | `choose` | the chosen draft |
 | `outcome` | `accepted` or `discarded`, edited or not |
-
-Hand edits, additions, duplications and deletions of pitches and drafts
-need events of their own. Their shape is open (issue #385).
