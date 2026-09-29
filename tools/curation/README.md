@@ -69,7 +69,10 @@ python -m babel_index_review DIR [--content-review flagged|unflagged] [--sample-
 The full Qt review GUI, laid out for a 1920x1080 window: a filterable table
 of tiles on the left, the selected image and the tile's own fields (title,
 Final, story, alt text, sensitive-content tags) in the middle, and the story
-engine on the right. Hold Ctrl over the image to zoom it to the whole window.
+engine on the right. The Generate button beside the title proposes one with
+the same rules and near-duplicate check as `titles.py`, treating the tile's
+current title as taken and asking before it replaces a non-empty one. Hold
+Ctrl over the image to zoom it to the whole window.
 See `babel_index_review/gui.py`'s module docstring for the layout.
 `--sample-update` adds a "Save to samples" button that copies the selected
 tile's image and a subset of its metadata (keywords, story, title, alt) into
