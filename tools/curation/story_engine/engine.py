@@ -218,6 +218,10 @@ def pitch_prompt(frame: Frame, keywords: list[str], offered: list[Option], count
         "reckless or incompetent is fine; acting only to serve the plot is not.\n"
         "- A strange mechanism is best when people live with it: they use it, "
         "exploit it, work around it, or have made it routine.\n"
+        "- A strange rule, practice or mechanism answers at least one of its "
+        "whys (why it exists, why it works that way, why people put up with it), "
+        "and usually not all of them. One that exists only to hand out a penalty "
+        "or a reward is arbitrary.\n"
         "- Small, specific stakes over large, abstract ones. Drama about strangers "
         "the reader knows nothing about rarely lands.\n"
         "- Leave questions open on purpose, but not by accident. If the first "
@@ -254,6 +258,12 @@ def write_prompt(
         "reader nothing is welcome: an unexplained name that hints at a larger "
         "world, an image that adds rhythm. Avoid chains of detail, where each "
         "particular exists to explain the one before it; that is what slows a reader down.",
+        "A strange rule, practice or mechanism answers at least one of its whys, "
+        "and usually not all of them. One that exists only to hand out a penalty "
+        "or a reward reads as arbitrary.",
+        "Leave a question open only when it has several good answers and the story "
+        "gives at least one of its means, motive or consequence. Don't end on a new "
+        "mystery the story hasn't set up.",
         frame.voice,
         "Don't describe the image. It is shown beside the story.",
         f"The image was generated from the keywords {', '.join(keywords)}. Take tone "

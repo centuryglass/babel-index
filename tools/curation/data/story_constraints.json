@@ -10,5 +10,7 @@
   {"name": "child narrator", "description": "The narrator is a child.", "weight": 1},
   {"name": "a price", "description": "The story names a price.", "weight": 1},
   {"name": "not human", "description": "The narrator isn't human, and doesn't explain it.", "weight": 1},
-  {"name": "long after", "description": "It's told long after the fact, by someone who has some of the details wrong.", "weight": 1}
+  {"name": "long after", "description": "It's told long after the fact, by someone who has some of the details wrong.", "weight": 1},
+  {"name": "75 words", "description": "Use no more than 75 words.", "weight": 1},
+  {"name": "30 words", "description": "Use no more than 30 words.", "weight": 1}
 ]
