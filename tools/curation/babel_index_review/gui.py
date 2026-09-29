@@ -10,8 +10,8 @@ Three columns, laid out for a 1920x1080 window:
   Final, keywords, the story, and collapsible Alt text and Sensitive content
   sections. Holding Ctrl over the image zooms it to the whole window.
 - **Story engine** (right): the tile's workspace (``story_engine.workspace``):
-  the reading, a Pitches tab and a Drafts tab. The target workflow is
-  ``docs/story_workflow.md``.
+  the reading, a Pitches tab and a Drafts tab. It follows the current
+  workflow in ``docs/story_workflow.md``.
 
 Every text field autosaves. Tile fields go to ``metadata.json`` through
 ``core.update_index``; the reading, pitches and drafts go to the tile's
@@ -1682,7 +1682,7 @@ class ReviewWindow(QMainWindow):
         self._refresh_engine()
 
     def _record_outcome(self, key: str, outcome: str, story: str | None):
-        """Log a Final or Clear on an engine-written story, for calibration.
+        """Log a Final or Clear on an engine-written story, for tuning.
 
         A tile whose workspace has no chosen draft never took a story from the
         engine and is skipped. ``edited`` marks a story changed by hand since

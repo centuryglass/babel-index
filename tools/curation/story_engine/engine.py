@@ -555,5 +555,5 @@ class Engine:
         self.trace.append(subject, {"stage": "choose", "draft_id": draft_id, "story": story})
 
     def record_outcome(self, subject: str, outcome: str, story: str | None = None, **extra) -> None:
-        """Log a human decision (``accepted``, ``discarded``, ...) for calibration."""
+        """Log a human decision (``accepted``, ``discarded``, ...) for tuning."""
         self.trace.append(subject, {"stage": "outcome", "outcome": outcome, "story": story, **extra})
