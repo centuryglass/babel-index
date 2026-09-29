@@ -26,9 +26,10 @@ a corpus directory needs, it doesn't run alongside the app.
   Lines trace of its model calls. Kept free of Babel Index
   specifics so it can be lifted out later; `babel_index_review/story_frame.py`
   holds this project's configuration. Its module docstrings cover the
-  stages, and issue #385 tracks the ones still to come.
-- `docs/story_workflow.md`: the target story workflow, stage by stage, from
-  import to a final story. Read it before changing the engine or the
+  stages, and `docs/story_workflow.md`'s "Proposed additions" lists the
+  ones still to come.
+- `docs/story_workflow.md`: the story workflow, stage by stage, from import
+  to a final story, then the proposed additions. Read it before changing the engine or the
   review GUI's story panels.
 - `tag/describe_image.py`: model dispatch (Claude / OpenRouter / local
   OpenAI-compatible server) shared by every tool that calls a vision or text

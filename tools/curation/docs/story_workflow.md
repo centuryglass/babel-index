@@ -1,9 +1,10 @@
 # Story workflow
 
 How a tile gets from a freshly generated image with no story to a finalized
-story in `metadata.json`. This describes the intended workflow of the staged
-story engine. Some stages are not built yet: issue #385 tracks the engine
-work, and issue #409 the review GUI that will match this shape.
+story in `metadata.json`, through the staged story engine. "Current
+workflow" describes what the engine and review GUI do now. "Proposed
+additions" describes planned stages and tools, each tracked by an open
+issue.
 
 Prompts are summarized here, not copied. Each stage names the function that
 builds its prompt, so the full text is one click away.
@@ -17,21 +18,17 @@ builds its prompt, so the full text is one click away.
    |
  2. Pitch ............. reading of the image + 6 pitches, each from a seed;
    |                    "Pitch more" appends to the same list
- 3. Novelty filter .... flags premises too close to the corpus   [deferred]
+ 3. Pitch review ...... drop obvious failures, sharpen near misses
    |
- 4. Pitch review ...... drop obvious failures, sharpen near misses
-   |
- 5. Draft ............. one draft per kept pitch, in parallel
-   |
- 6. Check ............. lint, optional LLM critic                [not built]
-   |
- 7. Critique .......... hand edits and revision requests, on any
+ 4. Draft ............. one draft per kept pitch, in parallel
+   |                    [proposed: lint every draft, #414]
+   |                    [proposed: automatic critique, #415]
+ 5. Critique .......... hand edits and revision requests, on any
    |                    drafts, repeated as often as needed
- 8. Choose ............ pick one draft (or re-pitch / redraft);
+ 6. Choose ............ pick one draft (or re-pitch / redraft);
    |                    critique can continue on it afterwards
- 9. Accept ............ mark Final
-   |
-10. Record ............ tag the story into corpus memory         [not built]
+ 7. Accept ............ mark Final
+   |                    [proposed: record into corpus memory, #414]
 ```
 
 A tile's reading, pitches and drafts live in one workspace file that grows
@@ -47,9 +44,10 @@ comments and the maintainer's local `story_preferences.md`.
   angle, voice and one line that sticks, and none of that survives being
   compressed into a premise. So pitch review only removes obvious failures,
   and the real choice happens between finished drafts.
-- **The writer never sees the corpus.** A model shown past stories copies
-  their patterns. Novelty is policed outside the writer, by the novelty
-  filter and the maintainer's review, never by a ban list in the prompt.
+- **The writer never reads past stories.** A pattern repeated many times in
+  a model's context gets copied. A short ban instruction ("don't use the
+  name Vane or Vance") works in most cases, so rules distilled from the
+  corpus may go into the writer's prompt (see "Lint rules").
 - **Each model call has one narrow job.** No single call has to read,
   invent, choose and write at once.
 - **Human judgment is cheap to give.** Writing prose critiques is tiring.
@@ -57,8 +55,6 @@ comments and the maintainer's local `story_preferences.md`.
 - **A hand edit beats a request.** The reviewer can edit, add, duplicate
   and delete pitches and drafts directly. Asking a model to delete two
   words costs more than deleting them.
-- **Every judging point has a configurable owner** (see "Evaluators"), and
-  the trace records the decision the same way whoever makes it.
 
 ## Where things live
 
@@ -76,7 +72,9 @@ comments and the maintainer's local `story_preferences.md`.
 | Workspaces on disk | `DIR/story_traces/<tile stem>.json` |
 | Traces on disk | `DIR/story_traces/<tile stem>.jsonl` |
 
-## 1. Import
+## Current workflow
+
+### 1. Import
 
 **Does:** `python -m babel_index_review.tile_process DIR` turns each loose
 `.png` in `DIR` into `NNNNN.webp`. It reads the three style keywords from
@@ -91,7 +89,7 @@ story.
 
 **Output:** `metadata.json` entry `{"keywords": [...]}`.
 
-## 2. Pitch
+### 2. Pitch
 
 **Does:** the first vision-model call for a tile reads the image and returns
 a short **reading** plus six **pitches**. Later calls reuse the reading and
@@ -141,20 +139,7 @@ the model, which retries (up to two retries).
 **Output:** the reading, and pitches appended to the tile's list. The reading
 goes on to the writer so both calls share one interpretation of the image.
 
-## 3. Novelty filter (deferred)
-
-**Does:** compares each pitch against **corpus memory** (stage 10), which the
-writer never sees, and flags rather than bans:
-- premises too similar to existing ones (see issue #385's comment on
-  premise similarity: embed a content-stripped schema of each premise, then
-  have an LLM judge the nearest few);
-- trope tags already over their weight, penalized by inverse frequency;
-- overused openers and n-grams.
-
-Until reviewing pitches becomes a chore, the maintainer's pitch review is
-the novelty filter.
-
-## 4. Pitch review
+### 3. Pitch review
 
 **Does:** a coarse filter, and a chance to sharpen near misses. Every pitch
 starts kept. The reviewer drops pitches with:
@@ -177,12 +162,11 @@ missing.
 - Add a pitch of your own, without having to drop one first.
 - Delete a pitch.
 - Pitch more if nothing is worth drafting.
-- **Owner:** `human`, `llm` or `auto` (keep everything).
 
 **Output:** in the workspace, each pitch's kept flag and note, and any
 hand edits, additions or deletions.
 
-## 5. Draft
+### 4. Draft
 
 **Does:** writes one draft per kept pitch, all in parallel. Each draft gets:
 - a **form** drawn by weight from `data/story_forms.json` (anecdote, letter,
@@ -219,25 +203,11 @@ about other stories. The rules:
 **Output:** drafts appended to the workspace, tagged with their pitch, form
 and constraint.
 
-## 6. Check (not built)
+### 5. Critique
 
-**Does:** screens drafts automatically before anyone reads them.
-1. **Deterministic lint:** em dashes, banned n-grams, word budget, names
-   reused from the corpus, overused openers. Low priority, since these are
-   easy to fix by hand.
-2. **Critic (optional):** an LLM reads each sentence against the pitch's
-   hook and flags chains of detail that slow a reader down, and a hook that
-   arrives late. A flagged draft goes to stage 7 with the critic's findings
-   as its revision request.
-
-**Choices:** whether the critic runs, and whether lint failures block or
-only annotate.
-
-## 7. Critique
-
-**Does:** fixes what the reviewer (or the stage 6 critic) found, on any
-number of drafts, in as many rounds as needed. It runs before Choose, after
-it on the chosen draft, or both.
+**Does:** fixes what the reviewer found, on any number of drafts, in as many
+rounds as needed. It runs before Choose, after it on the chosen draft, or
+both.
 
 **Choices:**
 - **Hand edit** a draft. Renaming a character or dropping two words is
@@ -250,17 +220,15 @@ it on the chosen draft, or both.
   named change is wanted. The draft keeps its earlier versions.
 - **Objection:** the writer may answer a revision request by explaining
   what the flagged passage was meant to do, instead of changing it. The
-  reviewer then rewrites the request, or passes the draft as it is. A
-  critic that misreads a twist would otherwise remove it.
+  reviewer then rewrites the request, or passes the draft as it is.
 - **Add a draft:** write one by hand, or duplicate an existing draft to try
   different requests on each copy.
 - **Delete** a draft. Its pitch can be redrafted.
-- **Owner:** `human` by default.
 
 **Output:** revised drafts and their earlier versions in the workspace,
 `revise` events in the trace, and hand edits, additions and deletions.
 
-## 8. Choose
+### 6. Choose
 
 **Does:** the reviewer reads the drafts side by side, with the image visible,
 and picks one. This is where the real selection happens.
@@ -268,33 +236,25 @@ and picks one. This is where the real selection happens.
 **Choices:**
 - Pick a draft. It becomes the tile's story, unfinalized. More critique
   rounds can follow on it.
-- Redraft (back to stage 5), or pitch more (back to stage 2).
+- Redraft (back to stage 4), or pitch more (back to stage 2).
 - Discard the chosen story and go back to the drafts or pitches.
 - Leave the tile for later. Nothing is lost; the workspace holds every
   pitch and draft.
-- **Owner:** `human` or `llm`.
 
 **Output:** the chosen draft's id in the workspace, a `choose` event, and
 the draft in `metadata.json`'s `story`.
 
-## 9. Accept
+### 7. Accept
 
 **Does:** marking the story **Final** accepts it. The trace records the
 outcome (`accepted`), which draft it came from, and whether it was edited by
 hand after being chosen. Clearing an engine-written story records
 `discarded`.
 
-**Choices:** Final, or not yet. A final story is locked against Generate,
-Revise and Clear until it is unmarked.
+**Choices:** Final, or not yet. A Final tile is locked against choosing,
+revising, clearing and editing the story until it is unmarked.
 
-## 10. Record (not built)
-
-**Does:** tags the accepted story into corpus memory: its tropes, seed, form
-and constraint, plus opener and n-gram statistics. Existing stories are
-backfilled once. Corpus memory feeds the novelty filter (stage 3) and the
-weight-tuning report (see "Tuning"). The writer never reads it.
-
-## After the story
+### After the story
 
 Once stories are final, the rest of the tile's metadata follows. These are
 outside the story engine, but they read the story:
@@ -304,43 +264,24 @@ outside the story engine, but they read the story:
   and keywords only.
 - **Sensitive-content tags:** `python -m babel_index_review.sensitive_tags DIR`.
 
-## Evaluators
-
-Each judging point has an owner:
-
-| Judging point | Stage | Default owner |
-| --- | --- | --- |
-| Novelty flags | 3 | `llm` (once built) |
-| Pitch review | 4 | `human` |
-| Critic | 6 | `llm`, optional |
-| Critique | 7 | `human` |
-| Draft choice | 8 | `human` |
-| Final accept | 9 | `human` |
-
-- `human`: shown in the review GUI, with the image visible.
-- `llm`: a judging model, usually stronger than the pitching model.
-- `auto`: pass everything through.
-
-Human decisions are recorded in the same trace format an LLM judge would
-produce, so they become calibration data. The live site's favorite counts
-are a second calibration signal. The open question is where human judgment
-pays off: if an early human pick means fewer drafts are thrown away later,
-the traces should show it.
-
-## Tuning
+### Tuning
 
 The maintainer tunes the engine between sessions:
-- **Weights.** Raise seeds, forms and constraints that keep producing chosen
-  stories; lower those that don't. A weight of 0 removes an entry from draws
-  but keeps it available by hand. A report over the traces gives choice and
-  accept rates per seed, form and constraint.
-- **Lists.** Add or remove entries in the `data/story_*.json` files. No code
-  change needed.
+- **Weights.** Edit the weights in the `data/story_*.json` files. A weight
+  of 0 removes an entry from draws but keeps it available by hand.
+- **Lists.** Add or remove entries in the same files. No code change needed.
 - **Prompts.** Notes from pitch review and the critique export
   (`python -m babel_index_review.story_critiques DIR`) are distilled into
   `story_preferences.md`, then into `pitch_prompt` and `write_prompt`.
 
-## The workspace
+### Other story paths
+
+The mobile app (`mobile_app.py`), `tile_process.py --generate-stories` and
+`subagent_stories.py` still write stories with the old single-prompt
+generator, `core.default_prompt`, and skip every stage above. Issue #413
+decides whether each is ported to the engine, kept or deleted.
+
+### The workspace
 
 `DIR/story_traces/<tile stem>.json`, rewritten on every change. It is the
 review GUI's state for the tile:
@@ -355,7 +296,7 @@ Pitches and drafts have ids that never change, so a hand edit never loses a
 mark. A tile with a trace but no workspace (one reviewed before the
 workspace existed) is imported from its trace on first open.
 
-## The trace
+### The trace
 
 `DIR/story_traces/<tile stem>.jsonl`, one JSON event per line, append-only.
 It logs each model call (prompt, raw reply, parsed result) and each choice
@@ -367,7 +308,86 @@ one-time workspace import.
 | `pitch` | model, offered seeds, prompt, raw replies, reading (first call only) and pitches |
 | `reading` | a reading regenerated on its own |
 | `write` | pitch id, form, constraint, prompt, raw reply, story |
-| `check` | lint and critic findings (once built) |
 | `revise` | draft id, request, and either the result or the writer's objection |
 | `choose` | the chosen draft |
 | `outcome` | `accepted` or `discarded`, edited or not |
+
+## Proposed additions
+
+### Corpus memory (#414)
+
+When a story is accepted, it is tagged into corpus memory:
+- its tropes and payload, from an LLM call;
+- its seed, form and constraint, from the workspace;
+- opener and n-gram statistics across the corpus.
+
+Existing stories are backfilled once. The writer never reads corpus memory.
+
+### Lint rules (#414)
+
+- A prompt guides an LLM through analyzing corpus memory and turning it into
+  lint rules. A review GUI menu option runs the update.
+- Each rule is a plain-text description ("Don't use the name Vane or
+  Vance"), with a deterministic check where one is possible. Rules with no
+  check are allowed.
+- The maintainer can add, edit and remove rules in the GUI. A rule the
+  maintainer added stays until the maintainer removes it; an update from
+  the LLM replaces only rules the LLM wrote.
+- An engine setting, on by default, puts every rule's description into
+  `write_prompt`.
+- Every draft is linted against the rules that have a check. A failing draft
+  is still shown as usual, with an indicator listing each failed check.
+- Rules with no check are used only in the writer's prompt and in the LLM
+  critique.
+- The old planned checks (em dashes, word budget, names reused from the
+  corpus, overused openers, banned n-grams) become ordinary rules.
+
+### Automatic critique (#415)
+
+A failed lint becomes a revision request, sent through stage 5's revision
+path. Two engine settings:
+- **Automatic critique:** on, a failed lint sends the request at once. Off,
+  an Automatic critique button on each draft sends it.
+- **LLM critique:** on, an LLM reads the draft, every rule and the failed
+  checks, critiques the draft and writes the request, or finds nothing
+  worth revising. The button is enabled on every draft. Off, the request is
+  built from the failed checks alone, and the button is enabled only on
+  drafts that fail the lint.
+
+There are no automatic loops:
+- An automatic revision runs at most once in sequence on a draft.
+- A revised draft that fails the lint again, for any reason, is marked as
+  needing attention.
+- The writer may object to an automatic request, as to a manual one.
+
+### Weight report (#412)
+
+A modal window reports acceptance rates for every seed, seed kind, form and
+constraint, with the counts behind each rate. It edits their weights and adds
+new entries, saving back to the `data/story_*.json` files.
+
+### Evaluators (not tracked by an issue)
+
+Each judging point would get a configurable owner:
+- `human`: shown in the review GUI, with the image visible;
+- `llm`: a judging model, usually stronger than the pitching model;
+- `auto`: pass everything through.
+
+| Judging point | Stage | Default owner |
+| --- | --- | --- |
+| Pitch review | 3 | `human` |
+| Critique | 5 | `human` |
+| Draft choice | 6 | `human` |
+| Final accept | 7 | `human` |
+
+Human decisions are recorded in the trace in the same format an LLM judge
+would produce, so they become calibration data. The live site's favorite
+counts are a second calibration signal. The open question is where human
+judgment pays off: if an early human pick means fewer drafts are thrown
+away later, the traces should show it.
+
+### Extraction (#416)
+
+The engine and the review GUI may move into a repository of their own, with
+everything Babel Index specific behind configuration. This is icebox work,
+after everything else here.
