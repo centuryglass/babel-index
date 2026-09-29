@@ -39,7 +39,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     window = ReviewWindow(args.dir, content_review=args.content_review, sample_update=args.sample_update)
-    window.show()
+    window.showMaximized()
     return app.exec()
 
 

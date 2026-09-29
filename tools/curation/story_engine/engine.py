@@ -1,25 +1,30 @@
 """
-The staged story engine: pitch premises, then draft several at once.
+The staged story engine: pitch premises, draft them, revise drafts.
 
 Each stage is a separate model call with a narrow job, so no single prompt
 has to invent, choose and write at once. The stages:
 
-1. ``pitch``: a short reading of the image (its enigma, what the pitches
-   build on) and one high-concept pitch per seed, each seed chosen by the
-   model from a weighted menu. A pitch carries a ``hook``: what the reader
-   keeps, which may be a turn, a deliberate open question, a joke, a
-   recognizable behavior or an image.
+1. ``pitch``: one high-concept pitch per seed, each seed chosen by the model
+   from a weighted menu. A pitch carries a ``hook``: what the reader keeps,
+   which may be a turn, a deliberate open question, a joke, a recognizable
+   behavior or an image. The first pitch call for an image also returns a
+   short reading of it (its enigma, what the pitches build on); later calls
+   are given that reading and the pitches so far, and add to them.
 2. A human rejects pitches with obvious flaws. Pitch review is a coarse
    filter only: many stories that work on the page read as nothing in pitch
    form, so the real choice happens between drafts.
-3. ``write``: one draft per surviving pitch, written in parallel, each in a
-   form drawn by weight and sometimes with an odd constraint.
-4. A human chooses a draft (outside the engine).
+3. ``write``: one draft per kept pitch, each in a form drawn by weight and
+   sometimes with an odd constraint.
+4. ``revise``: one targeted change to one draft, continuing its writer's
+   conversation. The writer may object instead of making the change.
+5. A human chooses a draft (outside the engine).
 
-The reading is part of each pitch reply, not a cached stage of its own. The
-writer gets it so both calls work from one interpretation of the image,
-since a model's reasoning never carries between calls. A fresh reading per
-batch keeps re-pitched batches from anchoring on the same details.
+The writer gets the reading so both calls work from one interpretation of
+the image, since a model's reasoning never carries between calls. ``read``
+regenerates the reading alone.
+
+Every method here makes one model call and returns its result; keeping the
+pitch and draft lists is ``workspace.py``'s job.
 
 Everything project-specific lives in the ``Frame``, so the engine carries
 no knowledge of Babel Index. The writer never sees other stories: feeding it
@@ -29,13 +34,12 @@ the corpus makes it copy the corpus's patterns.
 from __future__ import annotations
 
 import random
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 
 from story_engine import llm
 from story_engine.llm import ReplyError, require_str, require_str_list
 from story_engine.options import Option, OptionSet
-from story_engine.trace import TraceLog, new_run_id
+from story_engine.trace import TraceLog
 
 
 @dataclass
@@ -51,7 +55,8 @@ class Frame:
     - ``seed_menu``: how many more seeds to offer than there are pitches.
       The model picks the ones that suit the image; a seed forced onto an
       image that can't support it produces a contrived premise.
-    - ``constraint_chance``: the probability a draft gets an odd constraint.
+    - ``constraint_chance``: the default probability a draft gets an odd
+      constraint; ``Engine.write`` takes a per-call override.
     - ``pitch_limits``: word caps on each pitch field, enforced by the
       validator. A model stretches a sentence limit indefinitely, but a
       counted cap comes back with the exact overrun and gets fixed on retry.
@@ -94,49 +99,46 @@ class Pitch:
 
 
 @dataclass
-class PitchBatch:
-    run: str
-    reading: Reading
-    pitches: list[Pitch]
-
-    @classmethod
-    def from_event(cls, event: dict) -> "PitchBatch | None":
-        """Rebuild a batch from its trace event, or None for an older or unreadable format."""
-        try:
-            result = event["result"]
-            return cls(
-                run=event["run"],
-                reading=Reading(**result["reading"]),
-                pitches=[Pitch(**p) for p in result["pitches"]],
-            )
-        except (KeyError, TypeError):
-            return None
-
-
-@dataclass
 class Draft:
-    index: int  # the pitch's position in its batch
+    """A written draft, with the prompt a revision continues from."""
+
     form: str
     constraint: str | None
     story: str
+    prompt: str
+
+
+@dataclass
+class Revision:
+    """A revision reply: the revised story, or the writer's objection to the request."""
+
+    story: str | None
+    objection: str | None
 
 
 # ---------------------------------------------------------------------------
-# Validator: raw parsed JSON -> (Reading, [Pitch]), or ReplyError
+# Validators: raw parsed JSON -> engine values, or ReplyError
 # ---------------------------------------------------------------------------
-def _pitch_validator(offered: list[Option], count: int, limits: dict[str, int]):
+def _reading_from(data: object) -> Reading:
+    if not isinstance(data, dict):
+        raise ReplyError("expected a JSON object")
+    raw_reading = data.get("reading")
+    if not isinstance(raw_reading, dict):
+        raise ReplyError("expected a \"reading\" object")
+    return Reading(
+        enigma=require_str(raw_reading, "enigma", "reading"),
+        notes=require_str_list(raw_reading, "notes", "reading"),
+    )
+
+
+def _pitch_validator(offered: list[Option], count: int, limits: dict[str, int], with_reading: bool):
+    """Checks a pitch reply: ``(reading or None, pitches)``."""
     names = {option.name.casefold(): option.name for option in offered}
 
-    def validate(data: object) -> tuple[Reading, list[Pitch]]:
+    def validate(data: object) -> tuple[Reading | None, list[Pitch]]:
         if not isinstance(data, dict):
             raise ReplyError("expected a JSON object")
-        raw_reading = data.get("reading")
-        if not isinstance(raw_reading, dict):
-            raise ReplyError("expected a \"reading\" object")
-        reading = Reading(
-            enigma=require_str(raw_reading, "enigma", "reading"),
-            notes=require_str_list(raw_reading, "notes", "reading"),
-        )
+        reading = _reading_from(data) if with_reading else None
         if not isinstance(data.get("pitches"), list):
             raise ReplyError("expected a \"pitches\" list")
         pitches = []
@@ -177,27 +179,88 @@ def _bullets(options: list[Option]) -> str:
     return "\n".join(f"- {option.name}: {option.description}" for option in options)
 
 
-def pitch_prompt(frame: Frame, keywords: list[str], offered: list[Option], count: int) -> str:
+def _image_intro(frame: Frame, keywords: list[str]) -> str:
+    return (
+        f"{frame.subject}\n{frame.presentation}\n\n"
+        f"Every image in the series shares a base scene: {frame.base_scene}. "
+        f"This one was generated from the keywords: {', '.join(keywords)}.\n\n"
+    )
+
+
+_STUDY = (
+    "Study the image. Find its enigma: the single most unexplained thing in "
+    "the frame, the detail a curious viewer would most want explained. Notice "
+    "what departs from the base scene, which keywords visibly shaped the image "
+    "(often few do), and where the ordinary and the strange meet in it. "
+    "Describe only what is there; if text or a figure is illegible or "
+    "ambiguous, don't invent it."
+)
+
+_READING_SHAPE = (
+    '{"reading": {"enigma": "one sentence", "notes": ["a few short notes on '
+    'what the pitches build on"]}'
+)
+
+
+def reading_prompt(frame: Frame, keywords: list[str]) -> str:
+    """Asks for the reading alone, to replace one that missed something."""
+    return (
+        _image_intro(frame, keywords)
+        + _STUDY
+        + "\n\nThe notes are passed to a writer who will pitch and write very "
+        "short stories for this image, so keep them to what's visible and useful.\n\n"
+        "Reply with only a JSON object:\n" + _READING_SHAPE + "}"
+    )
+
+
+def pitch_prompt(
+    frame: Frame,
+    keywords: list[str],
+    offered: list[Option],
+    count: int,
+    reading: Reading | None = None,
+    existing: list[Pitch] | None = None,
+    extra: str = "",
+) -> str:
+    """The pitch call's prompt.
+
+    With no ``reading`` the reply also carries one. With a ``reading`` the
+    model works from it, and ``existing`` lists the pitches it must not
+    repeat. ``extra`` is the editor's own instructions for this call.
+    """
     limits = frame.pitch_limits
 
     def cap(key: str) -> str:
         return f" At most {limits[key]} words." if key in limits else ""
 
+    if reading is None:
+        start = "Start here. " + _STUDY + "\n\nThen pitch"
+    else:
+        start = (
+            f"Notes from an earlier look at this image:\n{reading.as_notes()}\n\n"
+            "Work from these notes and the image. Pitch"
+        )
+    listed = ""
+    if existing:
+        listed = (
+            "\n\nThese pitches are already on the list. Yours are added to them, "
+            "so don't repeat their ideas:\n"
+            + "\n".join(f"- [{p.seed}] {p.pitch}" for p in existing)
+        )
+    editor = f"\n\nAn extra instruction from the editor:\n{extra.strip()}" if extra.strip() else ""
+    reply_shape = (
+        _READING_SHAPE + ', "pitches": [...]}\n'
+        "The reading is passed to the writer, so keep it to what's visible and useful."
+        if reading is None
+        else '{"pitches": [...]}'
+    )
     return (
-        f"{frame.subject}\n{frame.presentation}\n\n"
-        f"Every image in the series shares a base scene: {frame.base_scene}. "
-        f"This one was generated from the keywords: {', '.join(keywords)}.\n\n"
-        "Start by studying the image. Find its enigma: the single most "
-        "unexplained thing in the frame, the detail a curious viewer would most "
-        "want explained. Notice what departs from the base scene, which keywords "
-        "visibly shaped the image (often few do), and where the ordinary and the "
-        "strange meet in it. Describe only what is there; if text or a figure is "
-        "illegible or ambiguous, don't invent it.\n\n"
-        f"Then pitch {count} ideas for a very short story, at most "
+        _image_intro(frame, keywords)
+        + f"{start} {count} ideas for a very short story, at most "
         f"{frame.word_limit} words, to go with this image. Each grows from a "
         f"different seed. Choose the {count} seeds below that this image "
         "supports best, and skip the ones it would have to be forced into:\n"
-        f"{_bullets(offered)}\n\n"
+        f"{_bullets(offered)}{listed}\n\n"
         "Each pitch is a JSON object:\n"
         '- "seed": the name of the seed it grows from.\n'
         '- "pitch": the idea in one high-concept line, the way a writer pitches '
@@ -235,22 +298,22 @@ def pitch_prompt(frame: Frame, keywords: list[str], offered: list[Option], count
         "but the anchor must be visible.\n"
         "- The story need not be about this room or its books, as long as it "
         "grows out of the image.\n"
-        "- The pitches differ from each other in subject and in shape.\n\n"
-        "Reply with only a JSON object:\n"
-        '{"reading": {"enigma": "one sentence", "notes": ["a few short notes on '
-        'what the pitches build on"]}, "pitches": [...]}\n'
-        "The reading is passed to the writer, so keep it to what's visible and useful."
+        f"- The pitches differ from each other in subject and in shape.{editor}\n\n"
+        "Reply with only a JSON object:\n" + reply_shape
     )
 
 
 def write_prompt(
     frame: Frame,
     keywords: list[str],
-    reading: Reading,
-    pitch: Pitch,
-    form: Option,
+    reading: Reading | None,
+    pitch: Pitch | None,
+    form: Option | None,
     constraint: Option | None,
+    note: str = "",
 ) -> str:
+    """The writer's prompt. ``pitch`` and ``form`` are None for a hand-written draft,
+    whose revisions still need the writer's rules as context."""
     rules = [
         "The hook arrives within the first two sentences. What follows builds on it; nothing delays it.",
         "Keep the story light to read. Each detail can carry its own small "
@@ -274,21 +337,52 @@ def write_prompt(
     ]
     if constraint is not None:
         rules.append(f"An extra constraint for this one: {constraint.description}")
+    if pitch is None:
+        brief = "Write a story for this image.\n\n"
+    else:
+        brief = (
+            "Write the story from this pitch:\n"
+            f"- Pitch: {pitch.pitch}\n"
+            f"- Hook: {pitch.hook}\n"
+            f"- Anchor: {pitch.anchor}\n"
+            + (f"- Editor's note on the pitch: {note.strip()}\n" if note.strip() else "")
+            + "\nThe pitch is a starting point. Keep its hook, but where the pitch is "
+            "thin, the texture and voice you bring are what make it work. The pitch "
+            "fields are notes to you, not text: don't reuse their wording.\n\n"
+        )
     return (
         f"{frame.subject}\n{frame.presentation}\n\n"
-        f"Notes on this image:\n{reading.as_notes()}\n\n"
-        "Write the story from this pitch:\n"
-        f"- Pitch: {pitch.pitch}\n"
-        f"- Hook: {pitch.hook}\n"
-        f"- Anchor: {pitch.anchor}\n\n"
-        "The pitch is a starting point. Keep its hook, but where the pitch is "
-        "thin, the texture and voice you bring are what make it work. The pitch "
-        "fields are notes to you, not text: don't reuse their wording.\n\n"
-        f"Form: {form.name}. {form.description}\n\n"
-        "Rules:\n" + "\n".join(f"- {rule}" for rule in rules) + "\n\n"
+        + (f"Notes on this image:\n{reading.as_notes()}\n\n" if reading else "")
+        + brief
+        + (f"Form: {form.name}. {form.description}\n\n" if form else "")
+        + "Rules:\n" + "\n".join(f"- {rule}" for rule in rules) + "\n\n"
         "Reply with only the story: no title, no preamble, no quotation marks "
         "around it, no markdown. Plain line breaks are fine where the form needs them."
     )
+
+
+def revise_prompt(request: str) -> str:
+    return (
+        "Revise the story you just wrote. Make only the change asked for below, "
+        "and keep everything else as it is, word for word where you can.\n\n"
+        f"The change: {request.strip()}\n\n"
+        "If you think the change would damage what the passage is doing (a "
+        "twist, a joke or a setup the request has misread), don't make it. "
+        "Reply instead with OBJECTION: followed by a sentence or two on what "
+        "the passage is meant to do.\n\n"
+        "Otherwise reply with only the full revised story: no preamble, no "
+        "quotation marks around it, no markdown. The same rules apply as before."
+    )
+
+
+_OBJECTION = "objection:"
+
+
+def _parse_revision(raw: str) -> Revision:
+    text = raw.strip()
+    if text.casefold().startswith(_OBJECTION):
+        return Revision(story=None, objection=text[len(_OBJECTION):].strip())
+    return Revision(story=_clean_story(text), objection=None)
 
 
 def _clean_story(text: str) -> str:
@@ -302,12 +396,12 @@ def _clean_story(text: str) -> str:
 # Engine
 # ---------------------------------------------------------------------------
 class Engine:
-    """Runs the stages for one frame, logging each to ``trace``.
+    """Runs the stages for one frame, logging each model call to ``trace``.
 
     ``subject`` is the trace log's per-image id; ``image`` is the file sent
-    to the model. Every method that calls a model blocks on the network, so a
-    GUI calls them off its main thread. Only the trace file is written; where
-    a chosen story is stored is the caller's business.
+    to the model. Every method that calls a model blocks on the network and
+    touches no shared state but the trace, so a GUI runs several at once off
+    its main thread.
     """
 
     def __init__(self, frame: Frame, trace: TraceLog, rng: random.Random | None = None):
@@ -315,64 +409,96 @@ class Engine:
         self.trace = trace
         self.rng = rng or random.Random()
 
-    # -- Pitching --------------------------------------------------------------
-    def pitch(self, subject: str, image: str, keywords: list[str], model: str) -> PitchBatch:
-        """A fresh reading and batch of pitches."""
-        count = self.frame.pitch_count
-        offered = self.frame.seeds.draw(count + self.frame.seed_menu, self.rng)
+    # -- Reading and pitching --------------------------------------------------
+    def read(self, subject: str, image: str, keywords: list[str], model: str) -> Reading:
+        """A reading of the image on its own."""
+        prompt = reading_prompt(self.frame, keywords)
+        reading, raws = llm.ask_json(image, prompt, model, _reading_from, retries=2)
+        self.trace.append(
+            subject,
+            {"stage": "reading", "model": model, "prompt": prompt, "raw": raws, "result": asdict(reading)},
+        )
+        return reading
+
+    def pitch(
+        self,
+        subject: str,
+        image: str,
+        keywords: list[str],
+        model: str,
+        count: int | None = None,
+        reading: Reading | None = None,
+        existing: list[Pitch] | None = None,
+        extra: str = "",
+    ) -> tuple[Reading | None, list[Pitch]]:
+        """``count`` pitches, and a reading when none is given.
+
+        With a ``reading``, the model works from it and adds to ``existing``,
+        and the seed menu leaves out seeds ``existing`` already used while
+        enough others remain. Returns ``(new reading or None, pitches)``.
+        """
+        count = count or self.frame.pitch_count
+        used = {p.seed for p in existing or []}
+        menu = count + self.frame.seed_menu
+        offered = self.frame.seeds.draw(menu, self.rng, exclude=used)
+        if len(offered) < menu:
+            offered += self.frame.seeds.draw(
+                menu - len(offered), self.rng, exclude={o.name for o in offered}
+            )
         count = min(count, len(offered))
-        prompt = pitch_prompt(self.frame, keywords, offered, count)
-        validate = _pitch_validator(offered, count, self.frame.pitch_limits)
-        (reading, pitches), raws = llm.ask_json(image, prompt, model, validate, retries=2)
-        run = new_run_id()
+        prompt = pitch_prompt(self.frame, keywords, offered, count, reading, existing, extra)
+        validate = _pitch_validator(offered, count, self.frame.pitch_limits, with_reading=reading is None)
+        (new_reading, pitches), raws = llm.ask_json(image, prompt, model, validate, retries=2)
+        result: dict = {"pitches": [asdict(p) for p in pitches]}
+        if new_reading is not None:
+            result["reading"] = asdict(new_reading)
         self.trace.append(
             subject,
             {
                 "stage": "pitch",
-                "run": run,
                 "model": model,
                 "offered_seeds": [option.name for option in offered],
                 "prompt": prompt,
                 "raw": raws,
-                "result": {"reading": asdict(reading), "pitches": [asdict(p) for p in pitches]},
+                "result": result,
             },
         )
-        return PitchBatch(run, reading, pitches)
+        return new_reading, pitches
 
-    def latest_batch(self, subject: str) -> PitchBatch | None:
-        event = self.trace.latest(subject, "pitch")
-        return PitchBatch.from_event(event) if event else None
-
-    # -- Drafting --------------------------------------------------------------
+    # -- Drafting and revising -------------------------------------------------
     def write(
         self,
         subject: str,
         image: str,
         keywords: list[str],
-        batch: PitchBatch,
-        index: int,
+        reading: Reading | None,
+        pitch: Pitch,
         model: str,
         form: str | None = None,
+        constraint_chance: float | None = None,
+        note: str = "",
+        pitch_id: str | None = None,
     ) -> Draft:
-        """Write one draft from pitch ``index`` of ``batch``.
+        """Write one draft from ``pitch``.
 
-        ``form`` names a form to use; ``None`` draws one by weight. A drawn
-        draft also gets an odd constraint with ``constraint_chance``.
+        ``form`` names a form to use; ``None`` draws one by weight. A draft
+        gets an odd constraint with ``constraint_chance`` (the frame's when
+        None). ``note`` is the reviewer's note on the pitch, passed to the
+        writer. ``pitch_id`` only labels the trace event.
         """
-        pitch = batch.pitches[index]
         chosen = self.frame.forms.by_name(form) if form else self.frame.forms.draw(1, self.rng)[0]
+        chance = self.frame.constraint_chance if constraint_chance is None else constraint_chance
         constraint = None
-        if self.frame.constraints and self.rng.random() < self.frame.constraint_chance:
+        if self.frame.constraints and self.rng.random() < chance:
             constraint = self.frame.constraints.draw(1, self.rng)[0]
-        prompt = write_prompt(self.frame, keywords, batch.reading, pitch, chosen, constraint)
+        prompt = write_prompt(self.frame, keywords, reading, pitch, chosen, constraint, note)
         raw = llm.ask(image, [("user", prompt)], model)
-        draft = Draft(index, chosen.name, constraint.name if constraint else None, _clean_story(raw))
+        draft = Draft(chosen.name, constraint.name if constraint else None, _clean_story(raw), prompt)
         self.trace.append(
             subject,
             {
                 "stage": "write",
-                "run": batch.run,
-                "index": index,
+                "pitch_id": pitch_id,
                 "model": model,
                 "pitch": asdict(pitch),
                 "form": draft.form,
@@ -385,75 +511,48 @@ class Engine:
         )
         return draft
 
-    def write_drafts(
+    def context_prompt(self, keywords: list[str], reading: Reading | None, pitch: Pitch | None, note: str = "") -> str:
+        """A writer's prompt for a draft that has none, e.g. one written by hand."""
+        return write_prompt(self.frame, keywords, reading, pitch, None, None, note)
+
+    def revise(
         self,
         subject: str,
         image: str,
-        keywords: list[str],
-        batch: PitchBatch,
-        indices: list[int],
+        prompt: str,
+        story: str,
+        request: str,
         model: str,
-        form: str | None = None,
-        workers: int = 6,
-    ) -> tuple[list[Draft], list[str]]:
-        """Write a draft for each pitch in ``indices`` in parallel.
+        draft_id: str | None = None,
+    ) -> Revision:
+        """Make one targeted change to ``story``, or return the writer's objection.
 
-        Returns ``(drafts, errors)``, drafts in ``indices`` order. One failed
-        call costs only its own draft.
+        Continues the writer's conversation: ``prompt`` (the draft's writer
+        prompt), then ``story`` as the writer's own reply, then the request.
+        ``story`` is the draft's current text, hand edits included.
         """
-        drafts: list[Draft] = []
-        errors: list[str] = []
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            futures = [
-                pool.submit(self.write, subject, image, keywords, batch, i, model, form) for i in indices
-            ]
-            for i, future in zip(indices, futures):
-                try:
-                    drafts.append(future.result())
-                except Exception as err:  # reported to the caller with the pitch it belongs to
-                    errors.append(f"pitch {i + 1}: {err}")
-        return drafts, errors
-
-    def drafts(self, subject: str, run: str) -> list[Draft]:
-        """Every draft written from batch ``run``, oldest first."""
-        return [
-            Draft(e["index"], e["form"], e.get("constraint"), e["result"])
-            for e in self.trace.events(subject)
-            if e.get("stage") == "write" and e.get("run") == run and "index" in e
-        ]
+        turns = [("user", prompt), ("assistant", story), ("user", revise_prompt(request))]
+        raw = llm.ask(image, turns, model)
+        revision = _parse_revision(raw)
+        self.trace.append(
+            subject,
+            {
+                "stage": "revise",
+                "draft_id": draft_id,
+                "model": model,
+                "request": request,
+                "story": story,
+                "raw": [raw],
+                "result": revision.story,
+                "objection": revision.objection,
+            },
+        )
+        return revision
 
     # -- Human judgments -------------------------------------------------------
-    def _latest_per_target(self, subject: str, run: str, stage: str) -> dict:
-        out = {}
-        for event in self.trace.events(subject):
-            if event.get("stage") == stage and event.get("run") == run:
-                out[event["index"]] = event
-        return out
-
-    def record_verdict(self, subject: str, run: str, index: int, rejected: bool) -> None:
-        """Log a pitch rejected (or restored) at review. A later verdict replaces an earlier one."""
-        self.trace.append(subject, {"stage": "verdict", "run": run, "index": index, "rejected": rejected})
-
-    def rejected(self, subject: str, run: str) -> set[int]:
-        latest = self._latest_per_target(subject, run, "verdict")
-        return {index for index, event in latest.items() if event["rejected"]}
-
-    def record_critique(self, subject: str, run: str, index: int | None, text: str) -> None:
-        """Log a human critique of pitch ``index`` in batch ``run``.
-
-        ``index`` None is a note on the whole batch. A later critique of the
-        same target replaces an earlier one, and empty text clears it.
-        """
-        self.trace.append(subject, {"stage": "critique", "run": run, "index": index, "text": text})
-
-    def critiques(self, subject: str, run: str) -> dict[int | None, str]:
-        """The current critique text per pitch index (None for the batch) in ``run``."""
-        latest = self._latest_per_target(subject, run, "critique")
-        return {index: event["text"] for index, event in latest.items() if event["text"]}
-
-    def record_choice(self, subject: str, run: str, draft: Draft) -> None:
-        """Log the draft a human chose as the tile's story."""
-        self.trace.append(subject, {"stage": "choose", "run": run, **asdict(draft)})
+    def record_choice(self, subject: str, draft_id: str, story: str) -> None:
+        """Log the draft a human chose as the image's story."""
+        self.trace.append(subject, {"stage": "choose", "draft_id": draft_id, "story": story})
 
     def record_outcome(self, subject: str, outcome: str, story: str | None = None, **extra) -> None:
         """Log a human decision (``accepted``, ``discarded``, ...) for calibration."""

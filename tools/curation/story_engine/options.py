@@ -35,13 +35,18 @@ class OptionSet:
     options: list[Option]
     kind_weights: dict[str, float]
 
-    def draw(self, k: int, rng: random.Random | None = None) -> list[Option]:
+    def draw(self, k: int, rng: random.Random | None = None, exclude: set[str] | None = None) -> list[Option]:
         """Draw up to ``k`` distinct options, by kind weight then option weight.
 
-        Returns fewer than ``k`` when fewer options have a positive weight.
+        Options named in ``exclude`` are skipped. Returns fewer than ``k``
+        when fewer options are left with a positive weight.
         """
         rng = rng or random.Random()
-        pool = [o for o in self.options if o.weight > 0 and self.kind_weights.get(o.kind, 0) > 0]
+        exclude = exclude or set()
+        pool = [
+            o for o in self.options
+            if o.weight > 0 and self.kind_weights.get(o.kind, 0) > 0 and o.name not in exclude
+        ]
         picked = []
         while pool and len(picked) < k:
             kinds = sorted({o.kind for o in pool})

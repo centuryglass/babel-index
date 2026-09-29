@@ -1,13 +1,12 @@
 """
 Per-subject trace logs: one JSON Lines file per subject, one event per line.
 
-Every stage appends an event holding its model, prompt, raw reply and parsed
-result, so a bad story can be traced back to the stage that went wrong and
-replayed from there. The log is append-only, and a caller restores state
-from it, e.g. the review GUI shows a tile's latest ``pitch`` batch.
-
-Events share a ``run`` id per pitch batch, so a batch's pitches, the drafts
-written from them, and the outcome can be grouped back together.
+Every model call appends an event holding its model, prompt, raw reply and
+parsed result, so a bad story can be traced back to the call that went wrong
+and replayed from there. Choices and outcomes are logged too, for
+calibration. The log is append-only and write-only in normal use: review
+state lives in the workspace (``workspace.py``), which reads a trace only to
+import a subject reviewed before workspaces existed.
 """
 
 from __future__ import annotations
@@ -16,11 +15,6 @@ import json
 import os
 import threading
 import time
-import uuid
-
-
-def new_run_id() -> str:
-    return uuid.uuid4().hex[:12]
 
 
 class TraceLog:
@@ -28,7 +22,7 @@ class TraceLog:
 
     def __init__(self, directory: str):
         self.directory = directory
-        # Drafts are written from parallel threads; a long event line could
+        # Model calls finish on parallel threads; a long event line could
         # otherwise interleave with another thread's.
         self._lock = threading.Lock()
 

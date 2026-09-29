@@ -10,7 +10,7 @@ keywords. This module owns everything the batch importer
   - keyword extraction from A1111 prompt metadata + normalization via
     ``keyword_map.json``,
   - the default story prompt, and
-  - the Claude calls that generate and revise stories.
+  - the model calls that generate stories and alt text.
 
 ``metadata.json`` is keyed by webp filename; ``docs/corpus.md`` in the repo
 root specifies every field, including the curation-only ones (``final``,
@@ -37,7 +37,7 @@ from lib.image_metadata import (
     get_a1111_params,
     parse_a1111_params,
 )
-from tag.describe_image import describe_image, converse_about_image, DEFAULT_MODEL
+from tag.describe_image import describe_image, DEFAULT_MODEL
 from util.metadata import do_update as copy_metadata
 
 INDEX_JSON = "metadata.json"
@@ -500,17 +500,3 @@ def generate_alt_text(webp_path: str, prompt: str, model: str = DEFAULT_MODEL) -
     """Generate accessibility alt text for a tile from a single prompt."""
     return describe_image(webp_path, prompt, model=model)
 
-
-def revise_story(
-    webp_path: str,
-    prompt: str,
-    story: str,
-    revision_request: str,
-    model: str = DEFAULT_MODEL,
-) -> str:
-    """Revise an existing story via a prompt -> story -> revision exchange."""
-    return converse_about_image(
-        webp_path,
-        [("user", prompt), ("assistant", story), ("user", revision_request)],
-        model=model,
-    )
