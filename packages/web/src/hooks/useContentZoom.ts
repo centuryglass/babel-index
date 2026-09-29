@@ -135,7 +135,7 @@ export function useContentZoom(viewportRef: RefObject<HTMLElement | null>, reset
     const onPointerDown = (e: PointerEvent) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       // At rest, a single finger is left alone entirely so the region's own
-      // vertical scroll (`pan-y`, see style.css) - or a plain click on its
+      // vertical scroll (`pan-y`, see css/base.css) - or a plain click on its
       // content - can take the same pointer.
       if (pointers.size === 1 && cameraRef.current.scale <= 1) return;
       if (pointers.size === 1) {

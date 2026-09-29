@@ -1,0 +1,659 @@
+/*
+ * The catalog view: the bar, the paged list and its fixed-height rows, the
+ * center room's shelf row, and the pager. `CatalogView.tsx`'s pixel
+ * constants mirror rules here by name, and its row-height arithmetic
+ * depends on them.
+ */
+/*
+  Sized to its text, like every other catalog-bar control, against the
+  global `button { flex: 1 }`. The label and the select share one pill, so
+  the text reads as naming the control; two boxes of the same weight read
+  as two buttons. Being a control, it gets the button chrome and radius of
+  its neighbours.
+*/
+.catalog-sort {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; font-size: 11px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 4px;
+}
+.catalog-sort-label { color: var(--dim); }
+.catalog-sort select {
+  font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
+  background: none; border: none; padding: 0; margin: 0;
+}
+/*
+  The pager's "page N of M" - a short text label, same squared/lightly-
+  padded treatment as `.catalog-count` rather than the roomier rounded
+  chrome a control gets: nothing inside it is interactive.
+*/
+.pager-count {
+  padding: 2px 6px; color: var(--dim); font-size: 11px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 2px;
+}
+.pager-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.catalog {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  background-color: #150805; touch-action: auto;
+  animation: catalog-in 240ms ease both;
+}
+/*
+  The cross-fade half of the map-to-catalog transition; `useModeTransition.ts`
+  runs the FLIP on the first row's thumbnail. The rest of the list only
+  fades, and the whole transition falls back to this fade when the center
+  tile was off screen.
+*/
+@keyframes catalog-in { from { opacity: 0; } to { opacity: 1; } }
+.catalog.leaving { animation: catalog-out var(--catalog-out, 380ms) ease both; }
+@keyframes catalog-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .catalog, .catalog.leaving { animation: none; }
+}
+
+.catalog-bar {
+  flex: 0 0 auto; padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--edge); backdrop-filter: blur(6px);
+}
+.catalog-bar-row { display: flex; gap: 10px; align-items: center; }
+/*
+  The bar's count names the query in full: the shelf link that repeats it
+  is ellipsised, so this is where a reader confirms what was searched. The
+  query is bounded by `search.maxQueryLength`; the count breaks anywhere
+  (`.catalog-count`'s `overflow-wrap`), and the row wraps rather than push
+  the paging control off the edge.
+*/
+.catalog-bar-row.sub { flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.catalog-search { position: relative; flex: 1; margin: 0; }
+.catalog-search input[type="search"] {
+  width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--paper-ink);
+  background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 4px;
+}
+.catalog-search input[type="search"]:focus { border-color: var(--paper-accent); outline: none; }
+.catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
+/*
+  A text label, not a button: fit to its text, squared and lightly padded,
+  so it reads as a caption on the dark bar rather than something pressable.
+  `margin-right: auto` pushes the sort and paging group to the row's right
+  end.
+*/
+.catalog-count {
+  flex: 0 1 auto; margin: 0 auto 0 0; padding: 2px 6px; overflow-wrap: anywhere;
+  color: var(--dim); font-size: 11px;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 2px;
+}
+/*
+  The count, the sort and the paging control fit on one line at this
+  width only because none of them insists on its own: the count gives up
+  its fit-to-text sizing and ellipsises (its text is trimmed to match -
+  see `narrow` in CatalogView), the sort keeps only its select, and the
+  paging buttons tighten. Wrapped instead, the three of them cost two
+  lines of a bar that is already a sixth of a phone's screen before the
+  first room.
+*/
+.catalog.narrow .catalog-bar-row.sub { flex-wrap: nowrap; align-items: center; }
+/*
+  The first bar row is already tight under `narrow` - "the map", the search
+  field and "forget searches" - so the zoom buttons drop entirely rather
+  than force a wrap. Pinch-to-zoom itself (useContentZoom.ts) still works;
+  only the button path is gone, and `narrow` correlates heavily with touch.
+*/
+.catalog.narrow .zoom-controls { display: none; }
+.catalog.narrow .catalog-count {
+  /* Narrow fills by flex-grow instead of the wide layout's auto margin -
+     the two together would leave nothing for `flex-grow` to expand into. */
+  flex: 1 1 4em; margin-right: 0; min-width: 0; overflow-wrap: normal;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.catalog.narrow .paging button { padding: 4px 7px; }
+.catalog-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.catalog-note { color: var(--dim); }
+
+.paging { display: flex; gap: 4px; }
+/*
+  Sized to their text, against the global `button { flex: 1 }`, which
+  would stretch the pager's buttons and the top bar's toggle across the row.
+*/
+.catalog .mode-toggle, .paging button, .pager button { flex: 0 0 auto; }
+/*
+  Light-on-dark, like `.card-id` and `.card-close` in a dialog head: these
+  sit directly on the dark bar and backdrop. `.catalog-show` is styled
+  separately; it sits inside a room row's `.paper-sheet` card and keeps a
+  gold wash over the cream.
+*/
+.paging button, .mode-toggle, .pager button {
+  font: inherit; font-size: 11px; color: var(--ink); cursor: pointer;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; padding: 4px 9px;
+}
+.paging button:hover, .mode-toggle:hover, .pager button:hover {
+  background: rgba(var(--accent-rgb),0.22); border-color: var(--accent);
+}
+.paging button.on {
+  color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+/*
+  The panel's `.forget { width: 100% }` suits its block-layout `.buttons`
+  row. The catalog bar is flex, so it needs the same sized-to-text override
+  as `.mode-toggle`, or it stretches and pushes the toggle onto the next
+  line.
+*/
+
+.catalog .forget {
+  width: auto; flex: 0 0 auto; font: inherit; font-size: 11px; color: var(--ink);
+  cursor: pointer; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; padding: 4px 9px;
+}
+.catalog .forget:hover { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+
+.catalog-scroll { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+.catalog-list { list-style: none; margin: 0; padding: 0; }
+
+/*
+  Every row is `--catalog-row` tall.
+  - The spacers standing in for unmounted pages are computed from that
+    height, so a row that grew with its story would make the scroll
+    position jump on every recycle. The story is clamped to fit; the room
+    card holds all of it.
+  - Prefixed `.catalog-` so no rule here reaches the dev panel's `.row`
+    (docs/agents/catalog.md, "Namespace catalog CSS"). `.chips`, `.story`
+    and `.score` come from RoomDetails and are shared by design.
+*/
+.catalog-row {
+  display: flex; gap: 14px; align-items: flex-start;
+  height: var(--catalog-row); padding: 7px 16px;
+  overflow: hidden;
+}
+/*
+  A room's thumbnail floats inside its card, so the story's line boxes
+  shrink beside the picture and run the card's full width below it. Two
+  rigid columns cannot do that: on a phone the text column sets the height
+  and the row is mostly dark background under a small tile.
+
+  `.catalog-head` and `.chips` are flex containers, so each establishes its own
+  formatting context and sits beside the float rather than running under it -
+  the title and the tags keep the narrow column, and only the prose wraps.
+*/
+.catalog-row .catalog-tile-button { float: left; margin: 0 16px 8px 0; }
+/*
+  Each room rides on a cream sheet (`.paper-sheet`), so the list reads as a
+  stack of cards on the dark gaps between rows; the row's vertical padding
+  is the gap. The picture sits on the sheet, like a plate on a printed page.
+  `.paper-sheet`'s dialog padding is trimmed to a row's scale here, and
+  `CatalogView`'s `CARD_PAD` must match it, or the fixed row height clips
+  the card's score strip and "read the rest" button.
+*/
+.catalog-row .catalog-body.paper-sheet { padding: 12px 16px; }
+/*
+  A narrow row is already tight on height - a small tile, a wrapped title,
+  the same fixed chrome as a wide row - so its vertical inset is trimmed to
+  match `CatalogView.tsx`'s `CARD_PAD_NARROW` (16px, both halves), giving the
+  chip/story clamps real room instead of leaving it as unused padding.
+*/
+.catalog.narrow .catalog-row .catalog-body.paper-sheet { padding: 8px 16px; }
+/*
+  The gold accents (`--accent`) read on dark chrome but wash out on cream,
+  so the rank and "read the rest" drop to the paper's inked rust, the same
+  move the overlays' sheets make.
+*/
+.catalog-body.paper-sheet .catalog-rank,
+.catalog-body.paper-sheet .catalog-more { color: var(--paper-accent); }
+.catalog-body.paper-sheet .clip-strength { color: var(--paper-dim); }
+/*
+  Picks out the row "Show in the catalog" (`RoomOverlay`'s view toggle)
+  lands on. A background pulse, not a border: a border shifts layout unless
+  every row reserves it, and the marker is transient (`SPOTLIGHT_MS`,
+  `CatalogView.tsx`).
+*/
+.catalog-row.spotlight { animation: catalog-spotlight 1.6s ease-out; }
+@keyframes catalog-spotlight {
+  0% { background: rgba(var(--accent-rgb),0.32); }
+  100% { background: transparent; }
+}
+/*
+  The tile is a button that enlarges the room. A bare <img> with a click
+  handler is unreachable by keyboard and announces as an image.
+
+  The thin cream mat around every thumbnail is a border, not padding, so it
+  sits outside the containing block that the center row's open-book hotspot
+  and distill toggle measure against; their origin stays the image's edge.
+  `--catalog-mat` (`MAT_PAD`, CatalogView.tsx) is counted in the row height
+  like `CARD_PAD`, so the card matches the mat's full height and the gap
+  between rows does not widen.
+*/
+.catalog-tile-button {
+  flex: 0 0 auto; padding: 0; background: var(--paper);
+  border: var(--catalog-mat, 0px) solid var(--paper);
+  cursor: zoom-in; line-height: 0; border-radius: 3px;
+}
+/*
+  The same plate-on-a-page framing the room overlay's tile gets
+  (`.overlay-tile`): the cream mat, then a hairline edge and a soft drop
+  shadow. `box-shadow`, not more border or padding, so it adds no layout
+  space: the row height and the hotspot insets still measure against the
+  mat's edge.
+*/
+.catalog-tile-button, .catalog-tile-wrap {
+  box-shadow: 0 0 0 1px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
+}
+/*
+  The one divider between the picture and the wrapping story, mirroring the
+  room overlay's split-column rule (`.overlay-columns.columns .overlay-body`'s
+  `border-left`). The thumbnail floats, so this is a vertical line in the gap
+  the float's right margin opens, drawn on a pseudo-element so it spans the
+  picture's height without taking part in the wrap. Skipped on the center
+  row (its picture sits in a grid, not a float) and under ultra-narrow (the
+  tile goes full width with no text beside it). `--edge` resolves to
+  `--paper-edge` inside the card's `.paper-sheet`, the same ink the overlay's
+  divider takes.
+*/
+/*
+  The float needs `z-index: 1`, not only `position: relative`, or the tile
+  is unclickable wherever the story runs taller than it.
+  - A relatively positioned float with `z-index: auto` still paints as a
+    plain float (CSS2.1 Appendix E step 3), under the wrapping `.story`
+    (step 5).
+  - The story's block box spans the full row width, so it covers the float
+    and wins hit-testing.
+  An explicit stack level moves the float into the positioned paint step.
+*/
+.catalog-row:not(.catalog-center) .catalog-tile-button { position: relative; z-index: 1; }
+.catalog:not(.ultra-narrow) .catalog-row:not(.catalog-center) .catalog-tile-button::after {
+  content: ''; position: absolute; top: 0; bottom: 0;
+  right: calc(-1 * (var(--catalog-mat, 0px) + 8px));
+  border-right: 1px solid var(--edge);
+}
+.catalog-tile {
+  display: block; width: var(--catalog-thumb); height: auto;
+  border-radius: 2px; background: #14110d; transform-origin: 0 0;
+}
+/*
+  Only the center row's thumbnail wraps its tile - it is the one room
+  whose art carries an addressable hotspot (the open book), so it is the
+  one thumbnail that needs a positioning parent at all.
+*/
+.catalog-tile-wrap {
+  position: relative; line-height: 0;
+  background: var(--paper); border: var(--catalog-mat, 0px) solid var(--paper);
+  border-radius: 3px;
+}
+/*
+  The open book's hotspot, filling the catalog's center thumbnail. The
+  traced SVG path inside is the highlight shape, stretched per axis like
+  the map's `.center-book`.
+  - Real `:hover` and `:focus-visible` work here, unlike on the map: this
+    sits in a scrolling list, with no canvas pan to protect.
+  - `inset: 0` measures from the wrap's padding edge, which is the image's
+    edge because the mat is a border. The hotspot lands on the image
+    whatever `--catalog-mat` is.
+*/
+.catalog-center-book {
+  position: absolute; inset: 0; margin: 0; padding: 0; border: none;
+  background: none; cursor: pointer; width: 100%; height: 100%;
+}
+.catalog-center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.catalog-center-book path { fill: transparent; stroke: none; }
+.catalog-center-book:hover path { fill: rgba(var(--hover-glow-rgb),0.28); stroke: rgba(var(--hover-glow-rgb),0.55); stroke-width: 0.004; }
+.catalog-center-book:focus-visible { outline-offset: 1px; }
+/*
+ * The global `button:hover` rule washes any plain button with a tan fill,
+ * which reads as haze over a button that is a picture. Both catalog
+ * thumbnail overlays opt out (docs/agents/catalog.md, "Namespace catalog
+ * CSS").
+ */
+.catalog-center-book:hover, .catalog-distill-toggle:hover { background: none; }
+/*
+ * The distill toggle on the catalog's center-row thumbnail, anchored to the
+ * tile's bottom-right corner.
+ * - Sized as a fraction of the thumbnail (`--distill-w`/`--distill-h`,
+ *   `iconSize / BASE_TILE` from CatalogView), matching the map, where the
+ *   icon scales with the tile. The center-row grid can then size the
+ *   picture with no pixel rect to keep in step.
+ * - Both vars are `0` until the `<img>` decodes, so the button has no
+ *   footprint before then.
+ */
+.catalog-distill-toggle {
+  position: absolute; right: 0; bottom: 0; margin: 0; padding: 0; border: none;
+  background: none; cursor: pointer;
+  width: var(--distill-w, 0); height: var(--distill-h, 0);
+}
+.catalog-distill-toggle img { display: block; width: 100%; height: 100%; }
+.catalog-distill-toggle:focus-visible { outline-offset: 1px; }
+/* Shown only on a story the clamp actually cut - see CatalogRow. */
+.catalog-more {
+  font: inherit; font-size: 10px; color: var(--accent); cursor: pointer;
+  background: none; border: none; padding: 2px 0; text-decoration: underline;
+}
+
+/*
+  Stretches the cream card to the row's full height, so every card is the
+  same height instead of shrinking to its story. The row itself stays
+  fixed-height. The center row unwraps its body with `display: contents`
+  (`.catalog-center .catalog-body`), so this box does not exist there.
+*/
+.catalog-body { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; align-self: stretch; }
+/*
+  The room's identity and the way out to the map share one row, with space
+  under it, so the link is not a thumb's width from the keyword chips.
+*/
+.catalog-head {
+  display: flex; align-items: baseline;
+  gap: 12px; margin-bottom: 9px;
+}
+.catalog-name {
+  margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+  flex: 1 1 auto;
+  /* One line: a name breaking in two would push the whole row down. */
+  white-space: nowrap; overflow: hidden;
+}
+.catalog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/*
+  A narrow row drops the map link (`CatalogRow`'s `narrow`) and gives the
+  name a second line, clamped at two. `TITLE_LINE_PX` pays for it so the
+  row stays as tall as every other; `--catalog-title-line` is the same
+  number, so what is reserved and what is drawn cannot drift.
+*/
+.catalog.narrow .catalog-name { white-space: normal; }
+.catalog.narrow .catalog-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  line-height: var(--catalog-title-line, 16px); text-overflow: clip;
+}
+.catalog-name .favorite-toggle { flex: 0 0 auto; }
+.catalog-rank {
+  color: var(--accent); font-variant-numeric: tabular-nums; font-size: 11px;
+  min-width: 2.2em;
+}
+.catalog-sub { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
+/*
+  Not line-clamped: `-webkit-line-clamp` needs `display: -webkit-box`, which
+  establishes a formatting context and will not flow around the floated
+  thumbnail. The measured `max-height` cuts the story instead, and the fade
+  on `.clipped` shows the cut.
+*/
+.catalog-row .story {
+  display: block; line-height: var(--catalog-line, 19px); margin-bottom: 5px;
+  /*
+    `CatalogRow` sets `max-height` inline, measured to fill the flow area's
+    leftover height, so the story yields before the score strip beneath it.
+
+    `overflow: clip`, not `hidden`: `hidden` establishes a block formatting
+    context, which sits beside the floated tile as a rectangle and leaves
+    the space beneath the tile empty. `clip` lets the line boxes flow around
+    the tile and still cuts at the ceiling.
+  */
+  overflow: clip;
+}
+/*
+  A cut story ends in a fade to the cream card. The mask is on the story
+  itself, so it lands on the story's measured bottom edge and never fades
+  the floated tile. Only on rows `CatalogRow` measured as cut (`.clipped`).
+*/
+.catalog-row .catalog-body.clipped .story {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+}
+/*
+  The fixed-height area that carries the tile, name, chips and story. Its
+  height (`--catalog-flow-h`, CatalogView) is the tile's or the text minimum's,
+  whichever is taller; the score strip sits in normal flow below it, so the
+  strip's top rule always lands under the tile rather than beside it and the
+  strip gets the card's full width. `overflow: hidden` both clips the story to
+  this height and contains the floated tile (a block formatting context), and
+  `position: relative` is what "read the rest" anchors to.
+*/
+.catalog-flow { position: relative; height: var(--catalog-flow-h); overflow: hidden; }
+/*
+  "read the rest" is absolutely positioned so measuring whether to show it does
+  not feed back into the height it is measured against, and it sits at the flow
+  area's bottom edge - the story's own cut - which is where the fade lands too.
+*/
+.catalog-row .catalog-more {
+  position: absolute; right: 12px; bottom: 0; z-index: 1;
+  padding: 1px 6px; border-radius: 4px; background: var(--paper);
+}
+/*
+  The keywords a fixed-height row could not fit, as a count rather than a
+  silent cut. Pinned to the chips box's own bottom right, over a short wash of
+  the card's paper, so adding it never pushes another chip out of view - the
+  usual way a "+N" lies about its own number.
+*/
+.catalog-row .chip-more {
+  position: absolute; right: 0; bottom: 0;
+  background: var(--paper); border-color: var(--paper-edge);
+  box-shadow: -7px 0 7px 2px var(--paper);
+}
+/*
+  The chips' height cap, `--catalog-chips-max` (`CatalogView.tsx`'s
+  `chipLines`/`CHIP_LINE_PX`), is derived from what the row leaves over,
+  like the rest of the row's height. More keywords than fit are clipped
+  rather than growing the row, and the pinned `+N` counts them.
+*/
+.catalog-row .chips {
+  position: relative;
+  margin-bottom: 5px; max-height: var(--catalog-chips-max, 48px);
+  overflow: hidden; align-content: flex-start;
+}
+/*
+  The score: a full-width composite strength line plus short per-axis lines
+  flowed into columns. `CatalogView.tsx`'s `scoreStripHeight` reserves the
+  worst case on every row, so rows stay the same height. Each line never
+  wraps; it ellipsises, since a second visual line would break that height.
+*/
+.score-strip { margin: 6px 0 0; padding: 6px 0 0; border-top: 1px solid var(--edge); font-size: 10px; color: var(--dim); }
+.score-strip p {
+  margin: 1px 0; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.score-strip .score-composite { color: var(--ink); font-weight: 500; }
+.score-strip .clip-strength { color: #6a5f4c; }
+/*
+  `.score-one-row`: the row is wide enough for every detail to have its own
+  column, so the strip becomes one flex row, the composite line first and
+  the details grid beside it.
+*/
+.catalog.score-one-row .score-strip { display: flex; align-items: baseline; column-gap: 22px; }
+.catalog.score-one-row .score-strip .score-composite { flex: 0 0 auto; }
+.catalog.score-one-row .score-details { grid-template-columns: repeat(4, max-content); }
+/*
+  Below `ULTRA_NARROW_PX` (CatalogView.tsx) a row has no width for a
+  thumbnail beside any text, so it becomes a stack: the name row, then the
+  picture, both full width. `CatalogRow` renders no chips or story in this
+  shape; `.catalog-details-link` opens the room overlay instead.
+
+  A room row's tile width is `--catalog-row-thumb` (`CatalogView.tsx`'s
+  `rowThumbPx`), separate from the center room's `--catalog-thumb`: the two
+  diverge here, where a room row's tile takes the row's full width
+  (`ultraThumbWidth`).
+*/
+.catalog-row:not(.catalog-center) .catalog-tile { width: var(--catalog-row-thumb); }
+.catalog.ultra-narrow .catalog-row .catalog-tile-button { float: none; display: block; margin: 0; }
+/*
+  Fixed to `--catalog-ultra-head` (`ULTRA_HEAD_PX`): the row's height is
+  arithmetic (`stackedRowHeight`), so what renders must match what JS
+  reserved. Centering turns unused reserve into even spacing instead of a
+  gap at the bottom.
+*/
+.catalog.ultra-narrow .catalog-row .catalog-head {
+  height: var(--catalog-ultra-head); margin-bottom: 0;
+  align-items: center; overflow: hidden;
+}
+/*
+  An ultra-narrow head is the row's full width, so it reverts `.narrow`'s
+  two-line title clamp to one ellipsised line. It must override, since an
+  `.ultra-narrow` catalog is always also `.narrow`
+  (`ULTRA_NARROW_PX < NARROW_PX`).
+*/
+.catalog.ultra-narrow .catalog-row .catalog-name { white-space: nowrap; }
+.catalog.ultra-narrow .catalog-row .catalog-title {
+  display: block; -webkit-line-clamp: unset; text-overflow: ellipsis; white-space: nowrap;
+}
+/*
+  As wide as the picture, not the card: `--catalog-row-thumb` is the width
+  `.catalog-tile` draws at. The mat is invisible against the paper card, so
+  a full-width link would read as wider than the picture above it. The auto
+  horizontal margins center it.
+*/
+.catalog-details-link {
+  display: flex; align-items: center; justify-content: center;
+  height: var(--catalog-ultra-details); width: var(--catalog-row-thumb);
+  margin: var(--catalog-ultra-gap, 0) auto 0; box-sizing: border-box;
+  border: 1px solid var(--paper-edge); border-radius: 4px; background: none;
+  color: var(--paper-accent); font: inherit; font-size: 11px; cursor: pointer;
+}
+.catalog-details-link:hover { background: rgba(var(--accent-rgb),0.12); }
+
+/*
+  The center room's row: the shelf, as links. The one row that sizes
+  itself: the shelf's `HISTORY_SLOT_COUNT` titles wrap to as many lines as
+  the width needs, since cropping them would hide the newest searches. Safe
+  because this row is not paged; the scroll arithmetic takes its measured
+  height as its lead.
+*/
+.catalog-center {
+  height: auto; min-height: var(--catalog-row);
+}
+/*
+  Above ultra-narrow, the picture, the title, the index-shelf line and the
+  spines share one column grid, so the spine columns beside the picture and
+  beneath it land on the same grid lines.
+  - `.paper-sheet` is on the row, so one cream card holds everything;
+    `.catalog-body` is `display: contents`, so its children are grid items.
+  - The picture spans `--pic-cols` by `--pic-rows`. CatalogView's layout
+    effect fits both from the resolved tracks, rounding columns up so the
+    picture never snaps below its natural width.
+  - The title and index-shelf line take the columns to its right. The spines
+    auto-flow into every cell left: beside the picture, then full width
+    below it.
+  - `--shelf-col` is each column's minimum and `1fr` stretches them, so the
+    columns stay uniform and aligned.
+  - Tab order follows DOM order, not grid placement.
+
+  The margin restores the 16px gutter `.catalog-row`'s padding gives a room
+  row, since the grid needs its own padding. The 7px top matches the gap a
+  room row's top padding leaves below this card; the bottom gap is the next
+  row's top padding.
+
+  This rule is also the tiebreaker for the center row's `padding`:
+  `.catalog-row` and `.paper-sheet` both set it at equal specificity in
+  different partials, so without this more specific rule the import order
+  would decide.
+*/
+.catalog-center.paper-sheet {
+  display: grid; margin: 7px 16px 0; padding: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--shelf-col, 12ch), 1fr));
+  grid-auto-rows: 24px; column-gap: 4px; row-gap: 4px;
+  align-content: start;
+}
+.catalog-center .catalog-body { display: contents; }
+.catalog-center .catalog-tile-wrap {
+  grid-column: 1 / span var(--pic-cols, 2);
+  grid-row: 1 / span var(--pic-rows, 4);
+  align-self: start;
+}
+.catalog-center .catalog-tile { width: 100%; height: auto; }
+/*
+  The title and the index-shelf line sit in the columns right of the
+  picture (`--pic-next` is the grid line just past it).
+*/
+.catalog-center .catalog-name {
+  grid-column: var(--pic-next, 3) / -1;
+  grid-row: 1 / span var(--title-rows, 1);
+  margin: 0; align-self: center;
+}
+.catalog-center .catalog-sub {
+  grid-column: var(--pic-next, 3) / -1;
+  grid-row: var(--sub-start, 2) / span var(--sub-rows, 1);
+  margin: 0; align-self: center;
+}
+/*
+  The shelf's wrapper is `display: contents`, so each spine is a grid item
+  of the row, auto-placed into the cells left over; a wrapper box would sit
+  beside the picture as one rigid column. `min-width: 0` lets a long title
+  ellipsise instead of widening its column.
+*/
+.catalog-center .shelf-links { display: contents; }
+.catalog-center .shelf-link { width: auto; margin: 0; min-width: 0; }
+/* Narrow only tightens the card's padding; `.catalog-center.paper-sheet`'s grid is unchanged. */
+.catalog.narrow:not(.ultra-narrow) .catalog-center.paper-sheet { padding: 12px; }
+/*
+  Below `ULTRA_NARROW_PX` the picture and a text column cannot share the
+  width, so the grid becomes one stacked column of named areas.
+  - The title comes first, since a caption reads before what it names.
+  - The picture goes full width, then the index-shelf line.
+  - The shelf is its own scrolling grid box (`.shelf-links`); a phone has
+    no room to wrap spines around the picture.
+  - `grid-auto-rows: auto` undoes the fixed row height.
+*/
+.catalog.ultra-narrow .catalog-center.paper-sheet {
+  padding: 16px;
+  grid-template-columns: 1fr;
+  grid-auto-rows: auto;
+  grid-template-areas:
+    "name"
+    "tile"
+    "sub"
+    "shelf";
+}
+.catalog.ultra-narrow .catalog-center .catalog-tile-wrap { grid-area: tile; align-self: stretch; }
+.catalog.ultra-narrow .catalog-center .catalog-name { grid-area: name; }
+.catalog.ultra-narrow .catalog-center .catalog-sub { grid-area: sub; }
+/*
+  A harder cap than `.shelf-links`' own: on a phone, that cap plus the
+  picture is most of the screen, and a reader would arrive at a wall of
+  remembered searches instead of the library. The shelf scrolls and is
+  ordered newest first, so the cap costs only the oldest titles'
+  visibility.
+*/
+.catalog.ultra-narrow .catalog-center .shelf-links {
+  grid-area: shelf; display: grid; max-height: 22vh; overflow-y: auto;
+}
+.catalog.ultra-narrow .catalog-center .shelf-link { min-width: 0; }
+/*
+  A grid of equal cells, not a wrapped row of pills sized to their text:
+  the wall it stands for is a grid of identical spines. The column width
+  comes from the longest title on it (`shelfColumnCh`).
+*/
+.shelf-links {
+  display: grid; align-content: start; gap: 4px;
+  /*
+    `min(..., 48%)` guarantees at least two columns however narrow the
+    display; one column would put the whole shelf above the first room.
+    The titles ellipsise, so a narrow column costs text, not layout.
+  */
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--shelf-col, 12ch), 48%), 1fr));
+  /*
+    Capped, so the shelf never sets the row's height. On a wide display it
+    stays under the cap.
+  */
+  max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
+}
+.shelf-link {
+  font: inherit; font-size: 10px; cursor: pointer; padding: 3px 6px;
+  border-radius: 3px; border: 1px solid transparent;
+  background: rgba(var(--accent-rgb),0.08); color: var(--dim);
+  /* One line, ellipsised - a long search term must not set the row's height. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left;
+}
+.shelf-link.history { color: var(--ink); border-color: var(--edge); }
+/*
+  An override does something other than search, so it must not look like
+  the tags around it, and the difference cannot be colour alone. The
+  underline is a placeholder style.
+*/
+.shelf-link.override { color: var(--accent); border-color: var(--accent); text-decoration: underline; }
+.shelf-link:hover { background: rgba(var(--accent-rgb),0.22); }
+/*
+  The center row's shelf sits on a cream sheet (`.catalog-center.paper-sheet`).
+  The default and history links follow the remapped `--dim`/`--ink`/`--edge`,
+  but the override links' gold washes out on cream, so they take the paper's
+  inked rust, as the rank and "read the rest" do.
+*/
+.catalog-center.paper-sheet .shelf-link.override { color: var(--paper-accent); border-color: var(--paper-accent); }
+
+.catalog-spacer { padding: 0; border: none; }
+.pager {
+  display: flex; gap: 12px; align-items: center; justify-content: center;
+  padding: 14px; font-size: 11px;
+}
+.pager button[disabled] { opacity: 0.35; cursor: default; }

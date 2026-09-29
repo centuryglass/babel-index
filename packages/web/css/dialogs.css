@@ -1,0 +1,306 @@
+/*
+ * The dialog chrome every overlay shares (`.overlay-scrim`, `.overlay`,
+ * `.card-*`), the room overlay, and the help dialog.
+ */
+/*
+  The dialog chrome shared by `RoomOverlay`, `HelpDialog`,
+  `ArtistStatementOverlay` and `BabelBookOverlay` - the scrim/dialog
+  pair is each one's own (`.overlay-scrim`/`.overlay`), but the head row
+  inside it is one appearance.
+*/
+.card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
+  flex: none;
+  /*
+    Stacked above every `.zoom-scope` sibling. A zoomed scope grows visually
+    without reserving layout space, so it can otherwise paint over the head
+    and swallow clicks on its buttons; `.overlay`'s `overflow-y: auto` clips
+    only at the overlay's boundary, not between siblings.
+  */
+  position: relative; z-index: 1;
+}
+/*
+  The card head sits on the dialog's dark cover, as the catalog bar sits on
+  the dark backdrop, so it is light-on-dark like `.favorite-toggle` and
+  `.catalog-show`. A paper fill here pulls the eye to the frame instead of
+  what it frames.
+*/
+.card-id {
+  padding: 2px 6px; color: var(--dim); font-size: 10px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge); border-radius: 4px;
+}
+.card-id b { font-weight: 700; color: var(--ink); }
+.card-close {
+  flex: none; width: 20px; height: 20px; padding: 0; line-height: 1;
+  font-size: 15px; color: var(--ink); background: rgba(var(--accent-rgb),0.08);
+  border: 1px solid var(--edge); border-radius: 4px; cursor: pointer;
+}
+.card-close:hover { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+/*
+  The room overlay's head carries its two actions - the favorite toggle and
+  the other reading's link ("show on the map" / "show in the catalog") -
+  in the head rather than on a row of their own. The star tucks in right
+  after the name (which truncates rather than pushing it off); `.room-head-end`
+  takes the row's slack so the link and close button group at the far right.
+  The actions drop their own vertical margins since the head already spaces
+  itself. On a narrow display the link swaps its full phrase for the short
+  relabel, which its accessible name keeps regardless.
+*/
+.room-head-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.room-head .catalog-show { flex: none; }
+.catalog-show-short { display: none; }
+@media (max-width: 600px) {
+  .room-head .catalog-show-full { display: none; }
+  .room-head .catalog-show-short { display: inline; }
+  /*
+    Drops the zoom buttons from every dialog's `.card-head` on a narrow
+    display, which has no room for them beside the title and close button.
+    Pinch-to-zoom (useContentZoom.ts) still works, and a narrow viewport is
+    almost always a touch one.
+  */
+  .card-head .zoom-controls { display: none; }
+}
+/*
+  The title and the favorite count share one chip: they are one fact about
+  the room, and a rectangle beside a pill reads as two buttons when the
+  title is not one. The nested `.card-id` and favorite toggle lose their
+  own background and border; the toggle keeps its hit target and hover/on
+  colour.
+*/
+.room-id {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 4px 8px; background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; flex: 0 1 auto;
+}
+.room-id .card-id {
+  flex: 0 1 auto; min-width: 0; padding: 0; background: none; border: none; border-radius: 0;
+  /*
+    A long title wraps rather than truncating - a title cut to "…" on a
+    narrow phone is unreadable and the room has no other place that shows
+    it whole. Two lines is the cap so the head still fits in the row
+    budget `card-head` reserves; anything longer still overflows into
+    ellipsis rather than pushing the head taller without bound.
+  */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; text-overflow: ellipsis; white-space: normal;
+}
+.room-id .favorite { margin: 0; flex: none; padding-left: 6px; border-left: 1px solid var(--edge); }
+.room-id .favorite-toggle {
+  padding: 0; background: none; border: none; border-radius: 0;
+}
+.room-id .favorite-toggle:hover { background: none; }
+.room-id .favorite-toggle.on { background: none; }
+.overlay-scrim {
+  position: fixed; inset: 0; z-index: 20; display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+  background: rgba(6,5,4,0.82); overflow-y: auto; touch-action: auto;
+}
+/*
+  Wide enough for the tile at its native resolution (1024px, `BASE_TILE`)
+  plus the padding/border around it - a viewport that size or larger
+  shows the picture at full size, a smaller one shrinks it
+  (`.overlay-tile`). Everything inside - tile and story alike -
+  scrolls as this one region: a long story and a native-resolution
+  picture compete for the same space rather than each getting a fixed
+  share.
+*/
+.overlay {
+  width: min(1060px, 100%); max-height: 100%; overflow-y: auto;
+  background-color: var(--panel); border: 1px solid var(--edge); border-radius: 6px;
+  padding: 14px 16px 16px;
+}
+.overlay:focus { outline: none; }
+/*
+  Shown at native resolution, shrunk to fit a narrower dialog and never
+  enlarged, the same rule the map's opening view follows.
+  - Leave `width` unset; do not write `width: auto`. Unset, the
+    `width`/`height` attributes' presentational hint stays live and
+    `max-width` caps it, so a pending `<img>` sizes correctly from the
+    first paint. Chromium renders a still-loading `<img>` at 0x0 when
+    `width: auto` and `height: auto` are both written.
+  - Size the `<img>` itself, not a wrapper. Inside `.overlay.columns`
+    (`width: fit-content`), a wrapper's percentage width cannot take part in
+    shrink-to-fit the way a replaced element's intrinsic size can, and the
+    split dialog collapses.
+  - The three-layer `box-shadow` (paper mat, hairline, drop shadow) reads as
+    a plate on the page. It adds no layout space for `decideColumns` or
+    `measureScale` to account for.
+  Zoom is not set here: `RoomOverlay` scopes one content zoom to the whole
+  `.overlay-columns` pair.
+*/
+.overlay-tile {
+  display: block; max-width: 100%; height: auto;
+  margin: 4px auto 14px; border-radius: 1px; background: #14110d;
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-edge), 0 2px 6px rgba(0,0,0,0.4);
+}
+/*
+  Nothing clipped here: this is where the whole story lives. Redundant with
+  the clamp being scoped to `.catalog-row`, and kept as a second guard: the
+  e2e assertion fails only when both are gone, so one can be lost silently.
+*/
+.overlay-body .story { display: block; overflow: visible; white-space: pre-line; }
+/*
+  One paper sheet holds the tile and the text together, stacked or split,
+  so they read as one page. `.overlay-body` carries `.paper-sheet` only for
+  its ink variables; `.overlay-body.paper-sheet` switches off its card so
+  none nests inside this one.
+*/
+.overlay-columns {
+  position: relative;
+  display: block; padding: 22px 24px;
+  background: var(--paper-stock);
+  border: var(--paper-border); border-radius: 4px;
+  box-shadow: var(--paper-shadow);
+}
+/*
+  Hug the content instead of always claiming a fixed width - `fit-
+  content` so a small generic tile's dialog doesn't open with a wide
+  empty margin down the text column just because some other room's
+  tile happens to be bigger. `.overlay`'s own width, not
+  `.overlay-columns`'s, so the head and actions row widen with it too.
+*/
+.overlay.columns { width: fit-content; max-width: min(1500px, 96vw); }
+/*
+  The split layout. `RoomOverlay`'s `decideColumns` adds `.columns`, never a
+  media query: it switches only when the stacked pair overflows the scrim,
+  so a story that fits never moves.
+  - The tile keeps its natural height, and the text page (`.overlay-body`,
+    `align-self: stretch`) fills to match, so the page does not resize per
+    story.
+  - Only the body stretches on the cross axis. The tile has no set height
+    and would lose its aspect ratio.
+  - `align-items: center` centers a tile shorter than the text column.
+*/
+.overlay-columns.columns { display: flex; align-items: center; gap: 0; }
+/*
+  The tile keeps its natural size (`flex-basis: auto` reads it from the
+  image) rather than filling what the text column leaves; `.overlay-tile`'s
+  `max-width: 100%` still lets it shrink.
+*/
+.overlay-columns.columns .overlay-tile { flex: 0 1 auto; min-width: 0; margin: 0 24px 0 0; }
+/*
+  A capped reading width, so a short story is not stranded in a wide
+  column; the dialog's `fit-content` leaves no slack to fill. The
+  border-left is the one divider between tile and text, drawn on the shared
+  paper.
+*/
+.overlay-columns.columns .overlay-body {
+  flex: 0 1 400px; width: 400px; min-width: 260px; align-self: stretch;
+  padding: 0 0 0 24px; border-left: 1px solid var(--edge);
+  display: flex; flex-direction: column;
+}
+/*
+  Pins the score to the bottom of the stretched body column, so a short
+  story's slack sits between the story and the score. When the story fills
+  the height, the auto margin collapses to zero.
+*/
+.overlay-columns.columns .overlay-body .score { margin-top: auto; }
+/*
+  Strips `.paper-sheet`'s background, border, shadow and padding, since
+  `.overlay-columns` already draws the card. The remapped colour variables
+  still cascade.
+*/
+.overlay-body.paper-sheet { background: none; border: none; box-shadow: none; border-radius: 0; padding: 0; }
+/*
+  Stacked only: the divider between tile and text runs across the page, in
+  the gap the tile's bottom margin opens.
+*/
+.overlay-columns:not(.columns) .overlay-body { border-top: 1px solid var(--edge); padding-top: 14px; }
+/*
+  Split view only: `RoomOverlay`'s `measureScale` raises `--split-text-scale`
+  past 1 until the story fills the slack beside a taller tile (see
+  RoomOverlay's file header).
+  - Sizes are `calc()` off the ordinary size, so the variable is the only
+    thing that moves them. Layouts that never set it read the usual size.
+  - Only the story scales. Scaled chips spill a line that fit onto two, and
+    the score's detail lines read worse wrapped.
+*/
+.overlay-columns.columns { --split-text-scale: 1; }
+.overlay-columns.columns .overlay-body .story { font-size: calc(12px * var(--split-text-scale)); }
+/*
+  The overlay's score details: one column, or two content-sized columns in
+  the stacked layout once its full dialog width holds two.
+  - `max-content` tracks never shrink, so without the width gate a phone
+    pushes the second column off the card.
+  - 422px is two `.score-line` caps (`--score-col`'s default, unset in the
+    overlay) plus `.score-details`'s `column-gap`. Change either and this
+    moves with it.
+  The split layout keeps one column, and the composite line stays full
+  width in both.
+*/
+.overlay-columns .overlay-body .score-details { grid-template-columns: max-content; }
+.overlay-columns:not(.columns) .overlay-body .score { container-type: inline-size; }
+@container (min-width: 422px) {
+  .overlay-columns:not(.columns) .overlay-body .score-details { grid-template-columns: repeat(2, max-content); }
+}
+/*
+  Copies the room's permalink (`app.ts`'s room routes, `main.tsx`'s
+  `INITIAL_ROUTE`). Pinned to the cream page's bottom-right corner, since
+  the head is full.
+  - `.overlay-columns` is `position: relative` so this anchors to the page,
+    stacked or split, and not to `.overlay` or `.overlay-scrim`.
+  - Outside `--split-text-scale`, which is for prose, so the label keeps
+    its size.
+*/
+
+.share-button {
+  position: absolute; right: 10px; bottom: 10px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 11px; color: var(--paper-dim); cursor: pointer;
+  background: rgba(255,255,255,0.4); border: 1px solid var(--paper-edge);
+  border-radius: 4px; padding: 4px 8px; line-height: 1.2;
+}
+.share-button:hover { color: var(--paper-ink); background: rgba(255,255,255,0.6); border-color: var(--paper-accent); }
+.share-button.copied { color: var(--paper-accent); border-color: var(--paper-accent); }
+/* Icon only below this width - same breakpoint the head's own "view" link collapses at. */
+@media (max-width: 600px) {
+  .share-button-full { display: none; }
+}
+
+/* The help dialog reuses .overlay/.card-head; only the prose is its own. */
+.help-overlay { width: min(520px, 100%); }
+/*
+  Here `.card-id` is the dialog's title, with nothing brighter on the line,
+  so it takes `--ink`. Elsewhere it stays `--dim` to read as secondary
+  beside a room's title.
+*/
+.help-overlay .card-id { color: var(--ink); }
+.help-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink); }
+.help-body p:last-child { margin-bottom: 0; }
+.help-keys {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 6px;
+  margin: 0 0 10px; font-size: 12px; line-height: 1.4;
+}
+.help-keys dt { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.help-keys dd { margin: 0; color: var(--dim); }
+/*
+  Landscape gets a wider dialog in two CSS columns instead of one long
+  scroll.
+  - Gated on a minimum width as well as orientation, so a narrow landscape
+    phone keeps one readable column.
+  - `column-fill` stays `balance`; `break-inside: avoid` keeps each
+    paragraph or group whole, so there is no per-paragraph placement to
+    keep in sync with the copy.
+*/
+@media (orientation: landscape) and (min-width: 560px) {
+  .help-overlay { width: min(820px, 94vw); }
+  .help-body { columns: 2; column-gap: 28px; column-rule: 1px solid var(--edge); }
+  .help-body p, .help-keys-group { break-inside: avoid; }
+}
+/*
+  Collapsed by default (see HelpDialog.tsx) - a reader who never opens
+  this should see one quiet line, not a checklist.
+*/
+.help-block-panel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--edge); }
+.help-block-panel summary {
+  font-size: 11px; color: var(--ink); letter-spacing: 0.04em;
+  text-transform: uppercase; cursor: pointer;
+}
+.help-block-panel[open] summary { margin-bottom: 8px; }
+.help-block-note { margin: 0 0 8px; font-size: 11px; line-height: 1.5; color: var(--dim); }
+.help-block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.help-block-list label {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); cursor: pointer;
+}

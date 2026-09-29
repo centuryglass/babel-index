@@ -101,7 +101,8 @@ export interface CreateAppOptions {
   /** read on each request, so editing the page needs no restart */
   readIndexHtml?: () => Promise<string>;
   /** read on each request, so editing a margin or a color needs no restart
-   *  either - see packages/web/style.css, index.html's one stylesheet link */
+   *  either - index.html's one stylesheet link, assembled from its partials
+   *  by `stylesheet.ts` */
   readStyleCss?: () => Promise<string>;
   /** dev convenience: serve the live-reload client and expose
    *  `app.locals.broadcastReload` for a rebuild to call */

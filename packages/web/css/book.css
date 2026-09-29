@@ -1,0 +1,140 @@
+/*
+ * `BookOverlay`'s open book and the two dialogs built on it: the artist's
+ * statement and the Babel book, including the one stacked over the other.
+ */
+/*
+  The open book both reading dialogs share (BookOverlay): two pages side by
+  side when the dialog is wide enough, one column when it is not.
+  - The collapse is a container query on the dialog's width, not a device
+    gate, so a shrunk desktop window collapses too.
+  - BookOverlay reports the same 680px threshold to JS, so the Babel book
+    advances a spread at a time by the matching amount.
+
+  The book's look lives here: cream paper (`--paper-*`) inside the dark
+  `.overlay` cover, lifted off it with a shadow.
+  - Stacked, each page is a separate sheet; the paper is on `.book-page`.
+  - Wide, the pages join into one spread with a shadowed gutter down the
+    seam; the paper moves to `.book` and the pages go transparent.
+  - A single page (the Babel book collapsed) is one sheet.
+  A page curl or a different stock is a change to this block, not to the
+  markup.
+*/
+.book-overlay { container: book / inline-size; }
+/* Stacked: separate sheets. */
+.book { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.book-page {
+  min-width: 0;
+  color: var(--paper-ink);
+  background: var(--paper-stock);
+  border: var(--paper-border); border-radius: 4px;
+  padding: 22px 24px;
+  box-shadow: var(--paper-shadow);
+}
+/* Wide: one spread. The paper moves to the .book; the pages ride over it
+   transparent, keeping only the inner padding that clears the gutter. */
+@container book (min-width: 680px) {
+  .book {
+    grid-template-columns: 1fr 1fr; gap: 0;
+    color: var(--paper-ink);
+    border: var(--paper-border); border-radius: 4px;
+    padding: 26px 30px;
+    box-shadow: var(--paper-shadow);
+    background:
+      linear-gradient(to right,
+        transparent 40%,
+        rgba(52,38,18,0.08) 46%,
+        var(--paper-gutter) 50%,
+        rgba(52,38,18,0.08) 54%,
+        transparent 60%),
+      var(--paper-stock);
+  }
+  .book-page {
+    background: none; border: none; border-radius: 0;
+    box-shadow: none; padding: 0;
+  }
+  .book > .book-page:first-child { padding-right: 34px; }
+  .book > .book-page + .book-page { padding-left: 34px; }
+}
+
+/* The artist's statement: wider than the help dialog because it carries
+   two reading columns, not one. */
+.statement-overlay { width: min(1100px, 100%); }
+/*
+  No title bar - the open book names itself. The lone close button keeps
+  to the corner without the divider a titled head draws, but still needs
+  clearance below it: `.card-close` is a bordered square, not a bare
+  glyph, so a zero margin here would sit its border flush against the book.
+*/
+.statement-overlay .card-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 12px; }
+.statement-page p { margin: 0 0 11px; font-size: 12px; line-height: 1.6; color: var(--paper-ink); }
+.statement-page p:last-child { margin-bottom: 0; }
+/* Running head, printed-book style: small italic line set well above the
+   text block and centered on its own page. Verso carries the book title
+   in caps, recto the "chapter" - decorative, so hidden from the reader. */
+.statement-page .statement-head {
+  margin: 0 0 22px; text-align: center; font-style: italic;
+  font-size: 11px; letter-spacing: 0.08em; color: var(--paper-ink); opacity: 0.65;
+}
+.statement-story .statement-head { text-transform: uppercase; }
+.statement-page a { color: var(--paper-accent); text-decoration: underline; }
+.statement-page a:hover, .statement-link:hover { color: #4a2a0e; }
+/*
+  The shell one-liner. `overflow-x: auto` keeps it one scrollable line
+  rather than wrapping mid-flag, which would misread as multiple commands.
+  A faint inked panel on the paper rather than a dark terminal block.
+*/
+.statement-code {
+  margin: 0 0 11px; padding: 8px 10px; overflow-x: auto;
+  background: rgba(60,44,20,0.07); border: 1px solid var(--paper-edge); border-radius: 4px;
+  font-size: 11px; line-height: 1.4; color: var(--paper-ink);
+}
+/* The statement's inline control that opens the Babel book - reads as link-text in the prose. */
+.statement-link {
+  display: inline; padding: 0; border: none; background: none;
+  font: inherit; color: var(--paper-accent); text-decoration: underline; cursor: pointer;
+}
+.statement-link:hover { background: none; }
+
+/* The Library of Babel book: the same open book, its pages fixed-width
+   monospace inked on the paper. Wide enough that two full 80-column pages
+   sit side by side without clipping; a page still scrolls on its own if
+   the dialog is forced narrower than a line. */
+.babel-overlay { width: min(1280px, 100%); }
+.babel-page {
+  margin: 0; overflow-x: auto; white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.4; color: var(--paper-ink);
+}
+/* The page-nav sits under the book on the dark cover, its top border
+   dividing it from the pages. */
+.book-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--edge);
+}
+/*
+  Light chrome pills at the spread's two corners, not the global stretched
+  button - the same faint gold-wash the catalog's paging controls carry, so
+  the nav reads as delicate as the book it sits under rather than two dark
+  slabs. prev holds the left edge, next the right (`.book-nav`'s
+  `space-between`).
+*/
+.book-nav button {
+  flex: 0 0 auto; font-size: 11px; color: var(--dim); padding: 5px 14px;
+  background: rgba(var(--accent-rgb),0.08);
+}
+.book-nav button:hover { color: var(--ink); background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+.book-nav button[disabled] { opacity: 0.35; cursor: default; }
+
+/*
+  One overlay opening another (the statement opens the Babel book). The
+  book's scrim sits above the base z-index; the statement gets `behind`,
+  dimmed and set back so the book reads as on top of it. Only the look is
+  here: which dialog reacts to Escape is the dialog stack's job
+  (useDialog).
+*/
+.overlay-scrim.stacked { z-index: 30; }
+.overlay-scrim.behind .statement-overlay { opacity: 0.55; }
+@media (prefers-reduced-motion: no-preference) {
+  .statement-overlay { transition: opacity 0.18s ease, transform 0.18s ease; }
+  .overlay-scrim.behind .statement-overlay { transform: translateY(-8px) scale(0.985); }
+}

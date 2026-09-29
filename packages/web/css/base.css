@@ -1,0 +1,241 @@
+/*
+ * The app-wide foundation, first in the cascade: the `:root` tokens, the
+ * reset, the `touch-action` chain from `html` to `#root`, the global
+ * `button`, search-field and focus-ring rules, the scoped zoom surface and
+ * its buttons, the visually hidden helpers, and the two surfaces other areas
+ * draw on: the leather grain and the `.paper-sheet` stock.
+ */
+:root {
+  color-scheme: dark;
+  --ink: #fdf4e5;
+  --dim: #e1d9cc;
+  --panel: rgba(18, 5, 3, 0.88);
+  --edge: rgba(180, 160, 120, 0.42);
+  /*
+    The gold chrome accent - the search badge, focus rings, the favorited
+    star, the faint washes behind chips and hovered controls. One value in
+    two forms: --accent as a hex for solid strokes/text, --accent-rgb as the
+    bare channels so a translucent wash is rgba(var(--accent-rgb), a). Tuned
+    to read on the dark chrome; it washes out on the cream paper sheets, so
+    those swap to --paper-accent (see .paper-sheet).
+  */
+  --accent: #c49654;
+  --accent-rgb: 196, 150, 84;
+  /*
+    The brighter gold the open book and the shelf controls glow with on
+    hover - the same value `packages/web/src/lib/cssVars.ts`'s
+    `HOVER_GLOW_RGB` draws on the canvas (the favorite badge, the distill
+    toggle), so the DOM overlay and the tile art agree. `cssVars.ts`'s
+    `applyCssVars()` overwrites this at startup; the literal below is only a
+    no-JS fallback and must be kept equal to `HOVER_GLOW_RGB` by hand.
+  */
+  --hover-glow-rgb: 200, 169, 95;
+  /*
+    Paper: the open book's pages read as warm cream sheets with dark ink,
+    set inside the dark cover the rest of the app uses. A separate variable
+    set from --ink/--panel, so it can become a full light theme without
+    being unpicked from the book markup.
+  */
+  --paper: #ece2cb;
+  --paper-rgb: 236, 226, 203;
+  --paper-hi: #f4ecd9;
+  --paper-ink: #2c2620;
+  --paper-dim: #5a4f3b;
+  --paper-edge: rgba(70, 54, 30, 0.28);
+  --paper-accent: #7a4718;
+  --paper-gutter: rgba(52, 38, 18, 0.32);
+  /*
+    The paper stock every cream sheet is cut from: `.paper-sheet`,
+    `.overlay-columns`, `.book-page`, and the wide `.book` spread, which
+    layers its gutter over `--paper-stock`.
+  */
+  --paper-stock: linear-gradient(158deg, var(--paper-hi), var(--paper));
+  --paper-border: 1px solid var(--paper-edge);
+  --paper-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 0 46px rgba(70,52,26,0.10);
+}
+* { box-sizing: border-box; }
+/*
+ * touch-action and overscroll-behavior are set on every ancestor of the
+ * canvas, not only the canvas.
+ * - The browser decides at touch-start whether a gesture is its own, from
+ *   the intersection of the touch-action of the hit element and all its
+ *   ancestors.
+ * - Anything left claimable up the chain lets it take a two-finger gesture
+ *   as page zoom and send a pointercancel instead of the pinch.
+ * - Because it is an intersection, a descendant can only restrict it
+ *   further, never re-enable it; the `html:has(.overlay-scrim, .catalog)` rule
+ *   relaxes the chain itself.
+ */
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: #110302;
+  touch-action: none; overscroll-behavior: none;
+}
+body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+#root, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/*
+ * #root clips the center cell's DOM overlays, which would otherwise grow
+ * the page on a phone (docs/agents/map.md, "The center cell's DOM overlays
+ * are sized to the whole cell").
+ * - `html`/`body`'s `overflow: hidden` does not reach those overlays: #root
+ *   is positioned, so it is their containing block.
+ * - Unclipped, a mobile browser grows the layout viewport to fit them. Every
+ *   `position: fixed` `.overlay-scrim` then covers several screens, and the
+ *   map paints small once a dialog closes.
+ * - `clip`, not `hidden`: `hidden` makes #root a scroll container, and
+ *   focusing an off-screen shelf book (roving tabindex) then scrolls the
+ *   whole app sideways.
+ * - A browser without `clip` drops the declaration, which fails safe.
+ */
+#root { touch-action: none; overflow: clip; }
+/*
+  While a dialog or the catalog is mounted, the whole chain relaxes to
+  `pan-y` so their regions can scroll vertically. `.overlay-scrim` is shared
+  by every dialog, so this one rule covers them all; the map's gestures are
+  untouched otherwise.
+
+  `pan-y`, not `auto`: native page zoom must never be granted at the
+  document level.
+  - Native zoom inside a dialog detaches the fixed and absolutely positioned
+    map chrome from the page as soon as the reader also pans.
+  - Firefox Mobile does not reliably discard a leftover native zoom once a
+    dialog closes, even when the viewport meta is reset.
+  Content that needs magnifying gets a scoped zoom instead (`.zoom-scope`,
+  `useContentZoom.ts`).
+*/
+html:has(.overlay-scrim, .catalog),
+body:has(.overlay-scrim, .catalog),
+#root:has(.overlay-scrim, .catalog) {
+  touch-action: pan-y;
+}
+/*
+  The shared scoped pinch-zoom surface: a room overlay's tile and story
+  together, a help or book dialog's page, the catalog list.
+  - `transform-origin: 0 0` is required by the anchor-preserving zoom math
+    in `contentZoomCamera.ts`.
+  - At rest, `pan-y` lets a one-finger drag scroll the region. Once zoomed
+    (`.zoomed`, `touch-action: none`), the same drag pans the content.
+*/
+.zoom-scope { transform-origin: 0 0; touch-action: pan-y; }
+.zoom-scope.zoomed { touch-action: none; }
+
+/*
+ * The clear-x, shared markup between both search homes (SearchForm.tsx)
+ * but sized per home here, same as the input itself. Only mounted while
+ * there is something to clear, so no `display` toggle is needed.
+ */
+.search-clear {
+  position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+  width: 18px; height: 18px; padding: 0; margin: 0; border: none;
+  background: none; cursor: pointer; line-height: 0;
+}
+.search-clear svg { width: 100%; height: 100%; display: block; }
+/* The native WebKit clear-x would sit on top of ours and only clear
+   the text, not the ranking - suppressed everywhere in favor of it. */
+input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+input[type="search"] {
+  width: 100%; padding: 7px 9px; background: rgba(0,0,0,0.4); color: var(--ink);
+  border: 1px solid var(--edge); border-radius: 5px; font: inherit;
+}
+input[type="search"]:focus { border-color: var(--accent); }
+/*
+ * One focus ring for everything, and it must stay visible. A border-colour
+ * shift alone is not an indicator: at low contrast it disappears against
+ * the panel.
+ * - The offset keeps the ring off the control's border, so the two do not
+ *   read as one thicker edge.
+ * - `:focus-visible`, not `:focus`, so a mouse click leaves no ring behind.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Present to assistive technology, absent to the eye. `display: none` and
+ * `visibility: hidden` both drop the node out of the accessibility tree
+ * along with the pixels, which is the opposite of what this is for.
+ */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/*
+  `flex: 1` is for the dev panel's button rows, where buttons share the
+  width evenly, but this selector matches every button in the document.
+  Any other button in a flex container stretches unless it opts out, as
+  the catalog's controls do (docs/agents/catalog.md, "Namespace catalog
+  CSS").
+*/
+button {
+  flex: 1; padding: 6px 8px; background: rgba(var(--accent-rgb),0.12); color: var(--ink);
+  border: 1px solid var(--edge); border-radius: 5px; font: inherit; cursor: pointer;
+}
+button:hover { background: rgba(var(--accent-rgb),0.24); }
+/*
+  The non-pinch path to a dialog's or the catalog's `useContentZoom` scope.
+  Native browser zoom is never granted (see the `html:has(.overlay-scrim,
+  .catalog)` rule), so a mouse-and-keyboard reader needs a control here.
+*/
+.zoom-controls { display: inline-flex; flex: none; gap: 4px; }
+.zoom-controls button {
+  flex: none; font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; padding: 3px 8px; line-height: 1.3;
+}
+.zoom-controls button:hover:not(:disabled) { background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+.zoom-controls button:disabled { opacity: 0.4; cursor: default; }
+
+/* One live region for the whole app, visually hidden, never unmounted. */
+.live {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/*
+  A seamless leather grain over the dark chrome: the side panel, every
+  dialog's `.overlay`, and the catalog backdrop.
+  - The `overlay` blend mode blends against each surface's base colour, so
+    the tint still comes from `--panel` or `.catalog`'s `background-color`;
+    the image only adds grain.
+  - Those three set `background-color`, never the `background` shorthand,
+    which would reset `background-image` wherever it wins the cascade.
+  - The url is relative, so it survives a subpath deploy.
+  The map canvas is painted art and the scrim is translucent over it, so
+  neither takes the grain.
+*/
+.panel, .overlay, .catalog {
+  background-image: url(shared/leather_texture_tile.png);
+  background-blend-mode: overlay;
+}
+/*
+  A cream sheet laid on the dark `.overlay` cover, as BookOverlay lays its
+  `.book`. The `.card-head` stays on the cover, outside the paper.
+  - The same stock (`--paper-stock`) as `.book-page`, for dialogs that hold
+    arbitrary content (RoomOverlay, HelpDialog).
+  - Remapping the palette variables recolours the shared `RoomDetails` and
+    help markup to dark ink without restating a colour per element.
+*/
+.paper-sheet {
+  color: var(--paper-ink);
+  --ink: var(--paper-ink);
+  --dim: var(--paper-dim);
+  --edge: var(--paper-edge);
+  background: var(--paper-stock);
+  border: var(--paper-border); border-radius: 4px;
+  padding: 22px 24px;
+  box-shadow: var(--paper-shadow);
+}
+/*
+  The light-gold accent (`--accent`) is tuned to read on the dark chrome;
+  on cream it washes out, so the focus ring and the favorited-star state
+  take the paper's inked rust instead. The faint gold washes on chips and
+  `<mark>` keep working over cream unchanged.
+  A `:focus-visible` rule for something on a sheet can undo this. If it
+  sets the outline colour (the `outline` shorthand does) and is more
+  specific or comes later, the gold comes back on cream.
+*/
+.paper-sheet :focus-visible { outline-color: var(--paper-accent); }
+.paper-sheet .favorite-toggle.on { color: var(--paper-accent); border-color: var(--paper-accent); }

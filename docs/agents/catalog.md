@@ -37,7 +37,7 @@ conventions still apply.
   turns the spacers into estimates. A row is a fixed-height flow area plus
   the score strip below it, so match strength is never pushed off the card.
   The center room's row is the exception, sized to its content outside the
-  paging arithmetic. `catalog.ts`, `CatalogView.tsx` and `style.css`'s
+  paging arithmetic. `catalog.ts`, `CatalogView.tsx` and `css/catalog.css`'s
   `.catalog-flow`/`.score-strip` comments carry the layout mechanics.
 - **A room row's thumbnail floats, and the story wraps around it.** So the
   story is cut by a measured `max-height`/`overflow: clip`, not
@@ -45,7 +45,7 @@ conventions still apply.
   wrap), and "did this row cut something" asks the story's own
   `scrollHeight`, not the card's. The center room's row can't float: its
   picture and spines share one CSS grid so both land on the same column
-  lines. `style.css`'s `.catalog-row .story` comment has the details.
+  lines. `css/catalog.css`'s `.catalog-row .story` comment has the details.
 - **What a row cannot show, it counts.** `chipLines` sizes the chip box from
   the row's real leftover height, and whatever doesn't fit becomes a `+N`
   chip (`RoomDetails`'s `chipOverflow`) that opens the room. The counter is

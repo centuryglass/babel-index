@@ -45,7 +45,7 @@ export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithou
  * is running - what a reader browsing away from the center tile sees
  * during a preload, since the center-tile indicator only plays when its
  * book is on screen (docs/agents/rearrangement.md, "The loading indicator").
- * Unlike `SearchOrbitArrow` it carries no per-frame state (`style.css`'s
+ * Unlike `SearchOrbitArrow` it carries no per-frame state (`css/map.css`'s
  * `.search-icon-button.preparing` gates a plain CSS animation), so it needs no
  * ref and is plain markup rather than injected SVG.
  */

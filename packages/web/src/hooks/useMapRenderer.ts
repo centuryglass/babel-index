@@ -210,7 +210,7 @@ export function useMapRenderer({
     // so a reader who just tabbed onto the map sees the press landed.
     // `:focus-visible` keeps a mouse click from lighting a permanent
     // reticle - the same selector the center tile's DOM controls use for
-    // their outlines (`style.css`).
+    // their outlines (`css/base.css`).
     let focusVisible = document.activeElement === canvas && canvas.matches(':focus-visible');
 
     // The canvas and search-arrow rects are cached and refreshed by their own
@@ -473,7 +473,7 @@ export function useMapRenderer({
 
     // This listener only decides what highlights; the canvas keeps every
     // gesture. The elements it hovers - `centerBookRef` and the `.center-books`
-    // buttons - are `pointer-events: none` (style.css), so a pan that starts
+    // buttons - are `pointer-events: none` (css/map.css), so a pan that starts
     // over them still pans and a click still reaches `main.tsx`'s `onTap` ->
     // `centerBookAtPoint`/`bookAtPoint`. That is also why this path needs no
     // slop/gesture arbitration: a hover is not a candidate for anything.

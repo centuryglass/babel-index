@@ -80,10 +80,10 @@ function CheckIcon() {
 
 /**
  * Copies the room permalink to the clipboard. Pinned over the page's corner
- * (style.css's `.share-button`).
+ * (css/dialogs.css's `.share-button`).
  *
  * `copied` swaps the icon as well as the label, because the label is hidden
- * at a narrow width (`.share-button-full` in style.css). `aria-label`/`title`
+ * at a narrow width (`.share-button-full` in css/dialogs.css). `aria-label`/`title`
  * carry the same words either way, so the accessible name never depends on
  * layout.
  */
@@ -169,7 +169,7 @@ export function RoomOverlay({
    * The other reading's link to this room: "show on the map" from the
    * catalog, "show in the catalog" from the map. `null` for a room past the
    * map's slider (no cell to fly to) or a generic cell. `shortLabel` is what
-   * style.css swaps in on a narrow display
+   * css/dialogs.css swaps in on a narrow display
    * (`.room-head .catalog-show-full/short`); `label` stays the accessible
    * name.
    */
@@ -424,7 +424,7 @@ export function RoomOverlay({
 
             `width`/`height` come from `tileSize`, so the box matches what
             will load. The CSS scales it down to fit (`.overlay-tile` in
-            style.css).
+            css/dialogs.css).
 
             `onLoad` re-measures, since an unloaded `<img>` has no height.
             Both calls are needed: if `decideColumns` flips `columns`, the

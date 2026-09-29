@@ -10,7 +10,7 @@
  * mounted, how tall a spacer is, which pyramid level a thumbnail asks for -
  * lives in `lib/catalog.ts`, tested without a browser. This file renders the
  * list and listens to its scroll. The exception is the pixel constants
- * below: each mirrors a value in `style.css`, and the fixed row height (and
+ * below: each mirrors a value in `css/catalog.css`, and the fixed row height (and
  * so every spacer) is computed from them. Change one side without the other
  * and the spacers stop matching the rows they stand in for.
  *
@@ -87,7 +87,7 @@ const ULTRA_NARROW_PX = 400;
 /**
  * A room row's horizontal insets, both sides: `2 * (ROW_H_PAD + CARD_H_PAD)`.
  * Mirrors the `.catalog-row` and `.catalog-row .catalog-body.paper-sheet`
- * padding in style.css.
+ * padding in css/catalog.css.
  */
 const ULTRA_ROW_HPAD = 64;
 /**
@@ -102,7 +102,7 @@ const ultraThumbWidth = (available: number, matPad: number): number =>
 /**
  * The center row's margin and padding, one side each. Mirrors
  * `.catalog.ultra-narrow .catalog-center.paper-sheet`'s padding and
- * `.catalog-center.paper-sheet`'s horizontal margin in style.css.
+ * `.catalog-center.paper-sheet`'s horizontal margin in css/catalog.css.
  */
 const CENTRE_MARGIN = 16;
 const CENTRE_PAD = 16;
@@ -126,9 +126,9 @@ const centreUltraThumbWidth = (available: number, matPad: number): number =>
 const thumbWidth = (available: number): number =>
   Math.round(Math.min(240, Math.max(120, available * (available < NARROW_PX ? 0.34 : 0.26))));
 
-// --- pixel constants mirrored from style.css --------------------------------
+// --- pixel constants mirrored from css/catalog.css -------------------------
 //
-// Each constant below must match the style.css rule it names. The fixed row
+// Each constant below must match the css/catalog.css rule it names. The fixed row
 // height `rowPx` is summed from them, and every spacer is a multiple of
 // `rowPx`, so a mismatch misplaces the scroll position of every unmounted
 // page.
@@ -154,7 +154,7 @@ const CARD_PAD = 24;
 const CARD_PAD_NARROW = 16;
 
 /**
- * The thumbnail's cream mat, one side: the `border` style.css draws from
+ * The thumbnail's cream mat, one side: the `border` css/catalog.css draws from
  * `--catalog-mat`. A border, not padding, so the center thumbnail's
  * absolutely positioned overlays (the open-book hotspot, the distill toggle)
  * stay aligned to the image. Charged to the row height like `CARD_PAD`.
@@ -179,7 +179,7 @@ const STORY_LINE_PX = 19;
  * to CSS as `--catalog-ultra-head`/`--catalog-ultra-details`. Fixed, not
  * content-sized, because `stackedRowHeight` sums them.
  *
- * The head is one line: style.css overrides `.narrow`'s two-line title clamp
+ * The head is one line: css/catalog.css overrides `.narrow`'s two-line title clamp
  * for `.ultra-narrow`, where the head has the row's full width.
  */
 const ULTRA_HEAD_PX = 32;
@@ -228,13 +228,13 @@ const TEXT_MIN = TEXT_CHROME_PX + CHIP_LINES_MAX_NARROW * CHIP_LINE_PX + STORY_L
  * lines a room's score has, because a row height that varied per room would
  * break the spacer arithmetic.
  *
- * `.catalog.score-one-row .score-details` in style.css repeats this count as
+ * `.catalog.score-one-row .score-details` in css/catalog.css repeats this count as
  * `repeat(4, max-content)`; change both together.
  */
 const SCORE_DETAIL_LINES = 4;
 /**
  * The strip's line pitch and its top chrome (border and spacing above the
- * first line). Must match `.score-strip` and `.score-strip p` in style.css,
+ * first line). Must match `.score-strip` and `.score-strip p` in css/catalog.css,
  * like `CHIP_LINE_PX`. A line is the 10px font at the body's 1.5 line height
  * (15px) plus the `p`'s 1px top and bottom margins, which don't collapse
  * inside the `.score-details` grid. The chrome is `.score-strip`'s 6px margin,
@@ -299,7 +299,7 @@ const SHELF_MIN_CH = 9;
 const SHELF_MAX_CH = 18;
 
 /**
- * How long "show in the catalog" picks out a row. style.css's
+ * How long "show in the catalog" picks out a row. css/catalog.css's
  * `.catalog-row.spotlight` animation (`catalog-spotlight`) runs the same
  * duration; change both together.
  */
@@ -408,7 +408,7 @@ export function CatalogView({
   const [distillIconSize, setDistillIconSize] = useState({ w: 0, h: 0 });
   // The center row's grid placement: the cover picture spans `picCols` x
   // `picRows` cells of the grid the spine buttons flow through, so picture
-  // and spines share column lines (style.css's `.catalog-center.paper-sheet`).
+  // and spines share column lines (css/catalog.css's `.catalog-center.paper-sheet`).
   // `picNext`/`subStart` are the grid lines the title and index-shelf line
   // start on, precomputed because a grid line cannot take a `calc()`. The
   // grid-fitting layout effect fills these in; the defaults serve the first
@@ -456,7 +456,7 @@ export function CatalogView({
   // The center row's thumbnail width. A room row's is `rowThumbPx`.
   const thumbPx = ultraNarrow ? centreUltraThumbWidth(geom.width, matPad) : thumbWidth(geom.width);
   // The distill toggle's size as a percentage of the thumbnail, anchored
-  // bottom-right in style.css. The map's canvas overlay
+  // bottom-right in css/catalog.css. The map's canvas overlay
   // (`distillToggle.ts`'s `distillIconScreenRect`) scales the icon by the
   // tile's pixels per `BASE_TILE` pixel, so its share of the tile is
   // `iconSize / BASE_TILE` at any thumbnail size.
