@@ -113,8 +113,9 @@ npm run generate:shelf-geometry     # Recalculate diegetic control bounds from t
   itself.
 - **No compiled output ever hits disk.** The demo server bundles the client
   with esbuild at startup (`packages/server/index.ts`), so editing a web
-  source means restarting `npm run demo`. `packages/web/style.css` and
-  `index.html` are re-read on every request and need only a browser refresh.
+  source means restarting `npm run demo`. `packages/web/style.css` (with the
+  `packages/web/css/` partials it imports) and `index.html` are re-read on
+  every request and need only a browser refresh.
   The demo fails to start if its port is in use.
 - **Linting is syntax-only.** It uses typescript-eslint's non-type-checked
   `recommended` config, since `npm run typecheck` owns type correctness.
@@ -252,12 +253,12 @@ path can match several rows; read every file it matches.
 
 | When the change touches | Read |
 | --- | --- |
-| `packages/map/` layout, ordering or placement; `packages/web/src/lib/camera.ts`, `center.ts`, `libraryState.ts`, `pyramid.ts`, `tiles.ts`; `useMapCamera.ts`, `useCenterShelf.ts`, `main.tsx`; `packages/config/`; `packages/pipeline/`; `packages/server/scan.ts`; `tools/center-placement/`, `tools/center-animation/`; shared art under `assets/`; the center cell's overlays in `style.css`; zoom, panning, gestures | [`docs/agents/map.md`](docs/agents/map.md) |
+| `packages/map/` layout, ordering or placement; `packages/web/src/lib/camera.ts`, `center.ts`, `libraryState.ts`, `pyramid.ts`, `tiles.ts`; `useMapCamera.ts`, `useCenterShelf.ts`, `main.tsx`; `packages/config/`; `packages/pipeline/`; `packages/server/scan.ts`; `tools/center-placement/`, `tools/center-animation/`; shared art under `assets/`; the center cell's overlays in `css/map.css`; zoom, panning, gestures | [`docs/agents/map.md`](docs/agents/map.md) |
 | `packages/map/scoring.ts`, `searchResult.ts`, `metadata.ts`; `useSearch.ts`, `useCorpus.ts`, `RoomDetails.tsx`; `tools/embed/`; embeddings, `metadata.json`, `tagLinks.json`; search strength or the sort modes (`main.tsx`, `libraryState.ts`) | [`docs/agents/search.md`](docs/agents/search.md) |
 | `packages/server/favorites.ts`, `rate-buckets.ts`, `app.ts`'s favorite routes, `--trust-proxy`; `packages/map/favorites.ts`; `useFavorites.ts`, `persist.ts`, `favoriteBadge.ts`; the on-map badge in either renderer | [`docs/agents/favorites.md`](docs/agents/favorites.md) |
 | `packages/map/board.ts`, `illusion.ts`, `moves.ts`; `useRearrangement.ts`, `loadingAnimation.ts`, `SearchIcon.tsx`; `slide.ts`, `glSlideRenderer.ts`; `flyTo` callers; `assets/animation/` | [`docs/agents/rearrangement.md`](docs/agents/rearrangement.md) |
 | `packages/web/src/lib/render.ts`, `slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`, `gl/`, `webglFlag.ts`; `useMapRenderer.ts`, `useMapRendererGL.ts`; anything that changes what a cell draws | [`docs/agents/rendering.md`](docs/agents/rendering.md) |
-| `CatalogView.tsx`, `RoomOverlay.tsx`, `RoomDetails.tsx`, `MapView.tsx`; `packages/web/src/lib/catalog.ts`; `packages/map/slug.ts`, `scoring.ts`'s range finders; `packages/server/roomContent.ts`; catalog rules in `style.css`; the live region | [`docs/agents/catalog.md`](docs/agents/catalog.md) |
+| `CatalogView.tsx`, `RoomOverlay.tsx`, `RoomDetails.tsx`, `MapView.tsx`; `packages/web/src/lib/catalog.ts`; `packages/map/slug.ts`, `scoring.ts`'s range finders; `packages/server/roomContent.ts`; `css/catalog.css`; the live region | [`docs/agents/catalog.md`](docs/agents/catalog.md) |
 | `deploy/`, `Dockerfile`; `.github/workflows/deploy.yml`, `release-please.yml`; `packages/server/app.ts`'s routes, `base-path.ts`, `version.ts`; any url the server or client hands the browser | [`docs/agents/deploy.md`](docs/agents/deploy.md) |
 | `packages/web/e2e/`; `.github/workflows/`; `tools/check-file-map/`, `tools/check-requirements/`, `tools/check-comments/`; an `[SR-nn]` tag; a test beyond the unit test beside its module | [`docs/agents/testing.md`](docs/agents/testing.md) |
 | A comment or documentation audit, when the maintainer asks for one | [`docs/agents/comment-audit.md`](docs/agents/comment-audit.md) |

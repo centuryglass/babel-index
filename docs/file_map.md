@@ -89,6 +89,8 @@ Every tracked file in the repo, with a line or two on what it is for.
   * `catalogPage.ts`: HTML builders for the SSR catalog list and room
     permalink pages, paged with `packages/web/src/lib/catalog.ts`.
   * `seo.ts`: `robots.txt` and `sitemap.xml` builders.
+  * `stylesheet.ts`: Assembles `/style.css` per request by inlining the
+    `css/` partials `packages/web/style.css` imports.
   * `staticPages.tsx`: SSR bodies for `/help` and `/about`, rendering
     `HelpBody`/`ArtistStatementPages` with `renderToStaticMarkup`.
 - `packages/web`: Browser-side code, the only place DOM is expected. `src/`
@@ -97,7 +99,21 @@ Every tracked file in the repo, with a line or two on what it is for.
   `lib/camera.ts`).
   * `index.html`: The HTML shell. `app.ts`'s `renderPage` fills its `%%...%%`
     placeholders per request; its comments say what each carries.
-  * `style.css`: All of the app's CSS, re-read on every request.
+  * `style.css`: The stylesheet index: its header, then one import per
+    `css/` partial in cascade order. `packages/server/stylesheet.ts` inlines
+    them into one `/style.css` on every request.
+  - `css/`: The app's CSS, one partial per area.
+    * `base.css`: `:root` tokens, the reset, the `touch-action` chain,
+      global controls and focus ring, the leather grain and `.paper-sheet`.
+    * `map.css`: The canvas, the center cell's overlays, the search badge
+      and the debug panel.
+    * `room.css`: `RoomDetails` pieces shared by the overlay and catalog
+      rows.
+    * `dialogs.css`: Shared dialog chrome, the room overlay and the help
+      dialog.
+    * `book.css`: The open book, the artist's statement and the Babel book.
+    * `catalog.css`: The catalog view; `CatalogView.tsx` mirrors its sizes.
+    * `ssr.css`: The server-rendered catalog and room pages.
   * `public/`: App-level static assets (favicons, touch and manifest icons,
     `site.webmanifest`, the OG card image), served by `app.ts`'s
     `publicDir` mount.
@@ -309,9 +325,6 @@ imports at bundle time.
   seeded `debugActions.ts` session (`npm run profile:chrome`).
 - `tools/perf-capture/README.md`: Flags, why it is Chrome-only, and how to
   read the metrics.
-- `tools/style-snapshot/index.ts`: Scratch tool for the `style.css` split:
-  records every element's computed style across the app's states, and diffs
-  two recordings. No npm script, no tests; its header has the usage.
 - `tools/check-file-map`: `npm run check:file-map` - diffs this file against
   `git ls-files`.
   * `index.ts`: CLI; its header has the rules.

@@ -126,12 +126,12 @@ function ScoreLines({ explanation }: { explanation: RankingExplanation }) {
       </p>
       {/*
         The per-axis lines are wrapped so they can flow into columns
-        (`.score-details` in style.css) while the composite "match
+        (`.score-details` in css/room.css) while the composite "match
         strength" line above stays full width. The catalog row picks a
         column count from its width (`--score-cols`, `scoreLayoutFor`);
         the overlay's stacked layout takes two, and its side-by-side
         split keeps one, where there is no room for more (both rules live
-        under `.overlay-columns` in style.css).
+        under `.overlay-columns` in css/dialogs.css).
       */}
       <div className="score-details">
         {tagText && <p className="score-line">{tagText}</p>}

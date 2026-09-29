@@ -48,7 +48,9 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
    straight into the matching view.
 2. **Bundle.** The page loads `/bundle.js`, which the server built in
    memory at startup (see [No compile step](#no-compile-step)).
-   `style.css` is not bundled; like `index.html`, it is re-read per request.
+   `/style.css` is not bundled; like `index.html`, it is re-read per request,
+   with `packages/server/stylesheet.ts` inlining the `css/` partials it
+   imports.
 3. **Corpus.** The client fetches `/api/manifest` (room list, asset urls,
    resolved config), then fetches `metadata.json` and `embeddings.bin`
    directly by url and builds its search index in the browser.

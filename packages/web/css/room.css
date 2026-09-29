@@ -1,0 +1,117 @@
+/*
+ * The `RoomDetails` pieces the room overlay and the catalog's rows share:
+ * the favorite control, the keyword chips, the story and its match marks,
+ * the score lines, the `.catalog-show` link and the alt-text caption.
+ */
+/*
+  The favorite control, in the overlay and in a catalog row's head - one
+  appearance in both, since the thing it reports (this room's global
+  count) is the same fact wherever it is met. The filled star is
+  `aria-hidden`; `aria-pressed` and the label are what a reader
+  actually hears.
+*/
+.favorite { display: flex; margin-bottom: 8px; }
+.catalog-name .favorite { margin: 0; }
+.favorite-toggle {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
+  color: var(--dim); background: rgba(var(--accent-rgb),0.08);
+  border: 1px solid var(--edge); border-radius: 999px;
+}
+.favorite-toggle:hover { color: var(--ink); background: rgba(var(--accent-rgb),0.22); border-color: var(--accent); }
+.favorite-toggle.on { color: var(--accent); background: rgba(var(--accent-rgb),0.24); border-color: var(--accent); }
+.favorite-count { font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+/*
+  A keyword too long for its column ellipsises rather than being sliced.
+  `flex-wrap` still decides the line breaks, so this only shrinks a chip that
+  is already alone on its line and still too wide - which without the shrink
+  overflows the text column and is cut mid-glyph by the card's own
+  `overflow: hidden`. Nothing is lost to the ellipsis: the full keyword is in
+  the chip's `title` and in the link's accessible name.
+*/
+.chip {
+  flex: 0 1 auto; min-width: 0; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 3px 8px; font-size: 11px;
+  background: rgba(var(--accent-rgb),0.14); border: 1px solid var(--edge); border-radius: 999px;
+  color: var(--ink); cursor: pointer;
+}
+.chip:hover { background: rgba(var(--accent-rgb),0.3); border-color: var(--accent); }
+/*
+  A chip with a recorded external link grows a second, narrower pill
+  fused to it - the search action and "read more about this" stay two
+  separate controls (one is a button, one is a link that leaves the
+  page) rather than one guessing which the reader meant.
+*/
+.chip-group { display: inline-flex; min-width: 0; max-width: 100%; }
+.chip-group .chip { border-radius: 999px 0 0 999px; border-right: none; }
+.chip-link {
+  flex: 0 0 auto; display: flex; align-items: center; padding: 3px 6px;
+  font-size: 10px; line-height: 1; text-decoration: none;
+  background: rgba(var(--accent-rgb),0.14); border: 1px solid var(--edge);
+  border-radius: 0 999px 999px 0; color: var(--dim);
+}
+.chip-link:hover { background: rgba(var(--accent-rgb),0.3); border-color: var(--accent); color: var(--ink); }
+.story { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
+/*
+  A match, marked where it matched, as a wash of the accent: a story with
+  many hits should still read as prose, which a solid block fill prevents.
+  `<mark>`'s UA default of yellow on black is unreadable on this palette,
+  so both colours are restated.
+*/
+mark {
+  background: rgba(var(--accent-rgb),0.26); color: var(--ink);
+  border-radius: 2px; padding: 0 1px;
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.35);
+}
+.chip mark { background: rgba(var(--accent-rgb),0.45); box-shadow: none; }
+
+/*
+  Why a room ranked where it did - see RoomDetails' ScoreBreakdown. One
+  short line per axis that found something, not a table: the composite
+  line's tooltip (tap-and-hold on mobile) carries the per-signal
+  percentage breakdown, so nothing here restates it as a second row.
+*/
+.score { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--edge); font-size: 11px; color: var(--dim); }
+.score p { margin: 2px 0; font-variant-numeric: tabular-nums; }
+.score .score-composite { color: var(--ink); font-weight: 500; }
+.clip-strength { color: var(--dim); }
+.catalog-show {
+  flex: 0 0 auto;
+  font: inherit; font-size: 11px; color: var(--dim); cursor: pointer;
+  background: rgba(var(--accent-rgb),0.08); border: 1px solid var(--edge);
+  border-radius: 4px; padding: 4px 9px;
+}
+/*
+  The detail lines, in a grid of content-sized, left-aligned columns with
+  just enough gap to read as distinct. Rows fill `--score-cols` columns at a
+  time, so the row count from CatalogView's `scoreLayoutFor` fixes the
+  height. The composite line sits on its own line above, except under
+  `.score-one-row`.
+*/
+.score-details {
+  display: grid; grid-template-columns: repeat(var(--score-cols, 2), max-content);
+  justify-content: start; column-gap: 22px; row-gap: 0;
+}
+/*
+  A detail column is capped at `--score-col` (CatalogView's `SCORE_DETAIL_COL_PX`,
+  the same width the fit math budgets per column), so a rare long line
+  ellipsises there instead of widening its column past what was reserved and
+  spilling out of the card. The common lines are well under the cap and take
+  only their own width, left-aligned.
+*/
+.score-details .score-line { min-width: 0; max-width: var(--score-col, 200px); }
+.catalog-show.dim { border: none; background: none; padding: 4px 0; font-style: italic; }
+
+.story.dim { color: var(--dim); font-style: italic; }
+/*
+ * The sidecar's optional caption, rendered only in the map canvas's
+ * fallback content (`RoomDetails`'s `showPicture` prop). It is seen only in
+ * a browser without canvas support. Every other consumer puts the same text
+ * on an `<img alt>`.
+ */
+.picture {
+  margin: 0 0 8px; padding-left: 8px; font-size: 11.5px; line-height: 1.5;
+  color: var(--dim); border-left: 2px solid var(--edge);
+}

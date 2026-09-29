@@ -144,7 +144,7 @@ export function buildUploadList(
   // Fixed app art, not part of any corpus's manifest.shared: the badges and
   // toggles resolve off `manifest.sharedBase` in packages/web/src/lib/rooms.ts,
   // the leather texture behind the dark chrome via a relative `url(shared/...)`
-  // in packages/web/style.css. Always uploaded, unlike the manifest-gated
+  // in packages/web/css/base.css. Always uploaded, unlike the manifest-gated
   // center/generic tiles - there is no manifest field to gate on.
   for (const file of [
     'fav_on.png', 'fav_off.png',

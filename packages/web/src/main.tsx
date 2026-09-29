@@ -123,7 +123,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // The artist's-statement hotspot, sized over the whole cell. The traced
   // `CENTER_BOOK_PATH` SVG inside is the visual shape; taps reach it through
   // the canvas (`centerBookAtPoint`), so the button itself stays
-  // `pointer-events: none` (see style.css).
+  // `pointer-events: none` (see css/map.css).
   const centerBookRef = useRef<HTMLButtonElement>(null);
   // The reorder button and favorites-sort switch, laid out in percentages
   // the same way `booksRef`'s buttons are.

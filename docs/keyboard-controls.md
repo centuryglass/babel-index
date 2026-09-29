@@ -80,8 +80,8 @@ listens for `focus`/`blur` on the canvas:
 - On `blur`, it hides the ring.
 
 `:focus-visible`, not `:focus`, keeps a mouse click on the map from lighting
-up the ring, matching every other focus ring in the app (`style.css`'s
-`:focus-visible` rules).
+up the ring, matching every other focus ring in the app (`css/base.css`'s
+`:focus-visible` rule).
 
 **Precedence rules:**
 - A pointer/wheel/touch event always interrupts an in-flight keyboard-

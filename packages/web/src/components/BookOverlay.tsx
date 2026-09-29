@@ -20,7 +20,7 @@ import { useDialog, useScrimDismiss } from '../hooks/useDialog.ts';
 import { useContentZoom } from '../hooks/useContentZoom.ts';
 import { ZoomControls } from './ZoomControls.tsx';
 
-// Must match `@container book (min-width: ...)` in style.css - the width below
+// Must match `@container book (min-width: ...)` in css/book.css - the width below
 // which the spread collapses to a single column.
 const WIDE_MIN = 680;
 

@@ -129,7 +129,7 @@ still apply.
   `.center-book` and `.center-controls` are several screens wide at reading
   zoom. A phone responds to that by shrinking the page scale, which drags
   every dialog and the map's paint size with it. `#root`'s `overflow: clip`
-  in `style.css` prevents it (its comment explains why `clip` and not
+  in `css/base.css` prevents it (its comment explains why `clip` and not
   `hidden`); `map-gestures.e2e.ts`'s "zooming in never grows the page past
   the viewport" guards it.
 - **`onTap` loses to a pan, a flight, and a long-press.** It fires only on a

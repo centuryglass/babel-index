@@ -66,6 +66,7 @@ import { portInUse } from './port.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
 import { resolveCommit } from './version.ts';
+import { assembleStylesheet } from './stylesheet.ts';
 import type { Express } from 'express';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -249,7 +250,7 @@ app = createApp({
   config,
   getBundleJs: () => bundleJs,
   readIndexHtml: () => readFile(join(webDir, 'index.html'), 'utf8'),
-  readStyleCss: () => readFile(join(webDir, 'style.css'), 'utf8'),
+  readStyleCss: () => assembleStylesheet(join(webDir, 'style.css')),
   publicDir: join(webDir, 'public'),
   watch,
   basePath,
