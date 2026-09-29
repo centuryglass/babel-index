@@ -263,17 +263,15 @@ def index_path(tile_dir: str) -> str:
     return os.path.join(tile_dir, INDEX_JSON)
 
 
-def load_index(tile_dir: str, strict: bool = False) -> dict:
-    """Load ``metadata.json`` from ``tile_dir``.
+def load_json(path: str, strict: bool = False) -> dict:
+    """Load a JSON object from ``path``, or {} for an absent file.
 
-    Returns {} for an absent file. A malformed file (e.g. a partial read of a
-    concurrent write, or genuine corruption) raises ``json.JSONDecodeError``
-    when ``strict`` is set, so a caller can tell "no metadata" apart from
-    "couldn't read the metadata" and avoid acting on an empty result; the
-    default stays tolerant, printing and returning {} for the batch callers
-    that just want best-effort.
+    A malformed file (e.g. a partial read of a concurrent write, or genuine
+    corruption) raises ``json.JSONDecodeError`` when ``strict`` is set, so a
+    caller can tell "no data" apart from "couldn't read the data" and avoid
+    acting on an empty result; the default stays tolerant, printing and
+    returning {} for the batch callers that just want best-effort.
     """
-    path = index_path(tile_dir)
     if not os.path.exists(path):
         return {}
     with open(path, encoding="utf-8") as file:
@@ -286,22 +284,21 @@ def load_index(tile_dir: str, strict: bool = False) -> dict:
             return {}
 
 
-def save_index(tile_dir: str, index: dict) -> None:
-    """Write ``index`` back to ``metadata.json`` (pretty, UTF-8 preserved).
+def save_json(path: str, data: dict) -> None:
+    """Write ``data`` to ``path`` (pretty, UTF-8 preserved), atomically.
 
-    The write is atomic: it lands in a temp file in the same directory and is
-    then ``os.replace``d over the target, so a concurrent reader (another tool,
+    The write lands in a temp file in the same directory and is then
+    ``os.replace``d over the target, so a concurrent reader (another tool,
     or the GUI's file watcher) always sees either the whole old file or the
     whole new one, never a truncated file mid-write. An in-place ``open(...,
     "w")`` would expose a zero-byte window that reads back as
     ``Expecting value: line 1 column 1``.
     """
-    path = index_path(tile_dir)
     directory = os.path.dirname(path) or "."
-    fd, tmp = tempfile.mkstemp(prefix=".metadata.", suffix=".tmp", dir=directory)
+    fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as file:
-            json.dump(index, file, ensure_ascii=False, indent=2)
+            json.dump(data, file, ensure_ascii=False, indent=2)
             file.flush()
             os.fsync(file.fileno())
         os.replace(tmp, path)
@@ -312,16 +309,15 @@ def save_index(tile_dir: str, index: dict) -> None:
 
 
 @contextlib.contextmanager
-def _index_lock(tile_dir: str):
-    """Hold an exclusive lock on ``metadata.json.lock`` for the block's duration.
+def _json_lock(path: str):
+    """Hold an exclusive lock on ``<path>.lock`` for the block's duration.
 
-    Only serializes access between cooperating processes that go through this
-    lock (i.e. ``update_index`` below) - it doesn't protect ``load_index``/
-    ``save_index`` called directly, which is why those two stay as the plain,
-    unlocked primitives everything already uses for a single in-memory run.
+    Only serializes access between writers that go through this lock (i.e.
+    ``update_json`` below) - it doesn't protect ``load_json``/``save_json``
+    called directly, which is why those stay as the plain, unlocked
+    primitives everything already uses for a single in-memory run.
     """
-    lock_path = index_path(tile_dir) + ".lock"
-    with open(lock_path, "w") as lock_file:
+    with open(path + ".lock", "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
             yield
@@ -329,19 +325,34 @@ def _index_lock(tile_dir: str):
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
-def update_index(tile_dir: str, mutate_fn: Callable[[dict], dict]) -> dict:
-    """Read-modify-write ``metadata.json`` under an exclusive lock.
+def update_json(path: str, mutate_fn: Callable[[dict], dict]) -> dict:
+    """Read-modify-write the JSON object at ``path`` under an exclusive lock.
 
     Re-reads the file fresh (picking up anything another process just wrote)
-    before calling ``mutate_fn(fresh_index) -> fresh_index`` and saving the
-    result, so two processes touching the same ``metadata.json`` at once
-    (two batch scripts, or a script alongside the GUI) merge rather than
-    blindly overwrite each other's unrelated changes. Returns the saved index.
+    before calling ``mutate_fn(fresh) -> fresh`` and saving the result, so
+    two writers touching the same file at once (two batch scripts, a script
+    alongside the GUI, or two GUI threads) merge rather than blindly
+    overwrite each other's unrelated changes. Returns the saved object.
     """
-    with _index_lock(tile_dir):
-        index = mutate_fn(load_index(tile_dir))
-        save_index(tile_dir, index)
-        return index
+    with _json_lock(path):
+        data = mutate_fn(load_json(path))
+        save_json(path, data)
+        return data
+
+
+def load_index(tile_dir: str, strict: bool = False) -> dict:
+    """Load ``metadata.json`` from ``tile_dir``; ``load_json`` has the ``strict`` rules."""
+    return load_json(index_path(tile_dir), strict)
+
+
+def save_index(tile_dir: str, index: dict) -> None:
+    """Write ``index`` back to ``metadata.json`` atomically (see ``save_json``)."""
+    save_json(index_path(tile_dir), index)
+
+
+def update_index(tile_dir: str, mutate_fn: Callable[[dict], dict]) -> dict:
+    """Read-modify-write ``metadata.json`` under an exclusive lock (see ``update_json``)."""
+    return update_json(index_path(tile_dir), mutate_fn)
 
 
 def load_keyword_map(path: str = DEFAULT_KEYWORD_MAP) -> dict:

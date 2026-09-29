@@ -10,6 +10,9 @@ Three columns, laid out for a 1920x1080 window:
   Final, keywords, the story, and collapsible Alt text and Sensitive content
   sections. The title's Generate button runs ``titles.propose_title``.
   Holding Ctrl over the image zooms it to the whole window.
+  Each keyword is a chip: hovering shows a model's explanation of it
+  (``tag_explainer``), clicking opens every stored explanation with a button
+  to ask for another, and right-clicking offers the pitch and draft models.
 - **Story engine** (right): the tile's workspace (``story_engine.workspace``):
   the reading, a Pitches tab and a Drafts tab. It follows the current
   workflow in ``docs/story_workflow.md``.
@@ -35,6 +38,7 @@ which keys the table ever sees; every entry stays loaded and intact on disk.
 from __future__ import annotations
 
 import copy
+import html
 import itertools
 import json
 import os
@@ -43,6 +47,7 @@ from typing import Callable, cast
 from PySide6.QtCore import (
     QFileSystemWatcher,
     QItemSelectionModel,
+    QMetaObject,
     QObject,
     QRunnable,
     QSettings,
@@ -64,6 +69,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -78,7 +84,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from babel_index_review import core, story_frame, titles
+from babel_index_review import core, story_frame, tag_explainer, titles
 from babel_index_review.review_widgets import (
     COLOR_MUTED,
     THUMB_SIZE,
@@ -88,7 +94,9 @@ from babel_index_review.review_widgets import (
     GrowingTextEdit,
     HistoryDialog,
     ImagePanel,
+    KeywordChips,
     PitchRow,
+    TagExplainPanel,
     TileFilterProxy,
     TileTableModel,
     set_text_quietly,
@@ -209,6 +217,10 @@ class ReviewWindow(QMainWindow):
         self._draft_cards: dict[str, DraftCard] = {}
         self._unsent_requests: dict[str, str] = {}  # draft id -> request text, across tile switches
         self._titling: set[str] = set()  # keys with a title generation in flight
+        self.tag_notes = tag_explainer.load(tile_dir)
+        self._explaining: set[tuple[str, str]] = set()  # (keyword, model id) in flight
+        self._open_keyword: str | None = None
+        self._model_setting_connections: dict[str, QMetaObject.Connection] = {}
 
         # Model calls. Network-bound, so many run at once; a single-model
         # local server can't serve concurrent requests, so its calls queue.
@@ -238,7 +250,13 @@ class ReviewWindow(QMainWindow):
         self._fs_watcher = QFileSystemWatcher(self)
         if os.path.exists(self._metadata_path):
             self._fs_watcher.addPath(self._metadata_path)
-        self._fs_watcher.fileChanged.connect(self._on_metadata_changed)
+        self._fs_watcher.fileChanged.connect(self._on_watched_file_changed)
+        # The explanations file may not exist yet, or a second GUI may create
+        # it, so the directory is watched too and the file added once it appears.
+        self._tag_notes_path = tag_explainer.descriptions_path(tile_dir)
+        self._fs_watcher.addPath(tile_dir)
+        self._fs_watcher.directoryChanged.connect(self._on_tile_dir_changed)
+        self._watch_tag_notes()
 
         self.setWindowTitle(f"babel-index review: {os.path.basename(os.path.abspath(tile_dir))}")
         self.resize(1920, 1040)
@@ -373,10 +391,21 @@ class ReviewWindow(QMainWindow):
         header.addWidget(self.final_button)
         layout.addLayout(header)
 
-        self.keyword_label = QLabel()
-        self.keyword_label.setWordWrap(True)
-        self.keyword_label.setStyleSheet(f"color: {COLOR_MUTED};")
-        layout.addWidget(self.keyword_label)
+        keyword_row = QHBoxLayout()
+        keywords_title = QLabel("Keywords")
+        keywords_title.setStyleSheet(f"color: {COLOR_MUTED};")
+        keyword_row.addWidget(keywords_title)
+        self.keyword_chips = KeywordChips(self._keyword_tooltip)
+        self.keyword_chips.clicked.connect(self._on_keyword_clicked)
+        self.keyword_chips.menu_requested.connect(self._on_keyword_menu)
+        keyword_row.addWidget(self.keyword_chips)
+        keyword_row.addStretch(1)
+        layout.addLayout(keyword_row)
+        self.tag_panel = TagExplainPanel()
+        self.tag_panel.explain_requested.connect(self._on_explain_requested)
+        self.tag_panel.closed.connect(lambda: self._open_tag_panel(None))
+        self.tag_panel.hide()
+        layout.addWidget(self.tag_panel)
 
         story_header = QHBoxLayout()
         story_title = QLabel("Story")
@@ -554,6 +583,7 @@ class ReviewWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_pitch_tab(), "Pitches")
         self.tabs.addTab(self._build_draft_tab(), "Drafts")
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs, stretch=1)
         self.engine_body = panel
         return panel
@@ -728,7 +758,11 @@ class ReviewWindow(QMainWindow):
     # -- Model selectors --------------------------------------------------------
     def _model_combos(self) -> dict[str, QComboBox]:
         """Each model picker by its settings key. The engine's are absent when it failed to load."""
-        combos = {"alt_model": self.alt_model_combo, "title_model": self.title_model_combo}
+        combos = {
+            "alt_model": self.alt_model_combo,
+            "title_model": self.title_model_combo,
+            "explain_model": self.tag_panel.model_combo,
+        }
         if self.story_engine is not None:
             combos.update(
                 pitch_model=self.pitch_model_combo,
@@ -762,9 +796,10 @@ class ReviewWindow(QMainWindow):
                 index = combo.findData(DEFAULT_MODEL)
             combo.setCurrentIndex(max(index, 0))
             combo.blockSignals(False)
-            combo.currentIndexChanged.connect(
+            self._model_setting_connections[setting] = combo.currentIndexChanged.connect(
                 lambda _i, s=setting, c=combo: self.settings.setValue(s, c.currentData())
             )
+        self._refresh_keywords()
 
     def _refresh_models(self):
         """Kick off a background query for the live model list."""
@@ -776,11 +811,11 @@ class ReviewWindow(QMainWindow):
 
     def _on_models_loaded(self, models: dict):
         self._loaders.clear()
-        for combo in self._model_combos().values():
-            try:
-                combo.currentIndexChanged.disconnect()
-            except (RuntimeError, TypeError):
-                pass
+        # Only the settings connections: the explain panel listens to its own combo.
+        for setting, combo in self._model_combos().items():
+            connection = self._model_setting_connections.pop(setting, None)
+            if connection is not None:
+                QObject.disconnect(connection)
         self._set_models(models)
 
     # -- Tile table -------------------------------------------------------------
@@ -859,9 +894,8 @@ class ReviewWindow(QMainWindow):
         entry = self.index[key]
         self._loading = True
         self.name_label.setText(key)
-        self.keyword_label.setText(
-            "Keywords: " + " · ".join(f"{kw['text']} ({kw['type']})" for kw in entry.get("keywords", []))
-        )
+        self.keyword_chips.set_keywords([(kw["text"], kw.get("type", "")) for kw in entry.get("keywords", [])])
+        self._open_tag_panel(None)
         self.title_edit.setText(entry.get("title") or "")
         self.story_edit.setPlainText(entry.get("story") or "")
         self.alt_edit.setPlainText(entry.get("alt") or "")
@@ -935,6 +969,12 @@ class ReviewWindow(QMainWindow):
         self._flush_workspace()
 
     # -- External changes (another process editing metadata.json) ---------------
+    def _on_watched_file_changed(self, path: str):
+        if path == self._tag_notes_path:
+            self._on_tag_notes_changed()
+        else:
+            self._on_metadata_changed(path)
+
     def _on_metadata_changed(self, _path: str):
         if self._metadata_path not in self._fs_watcher.files() and os.path.exists(self._metadata_path):
             self._fs_watcher.addPath(self._metadata_path)  # re-add after replace-via-rename
@@ -1260,6 +1300,135 @@ class ReviewWindow(QMainWindow):
         remaining = self._visible_keys()
         if remaining:
             self.select_tile(remaining[min(pos, len(remaining) - 1)])
+
+    # -- Keyword explanations -----------------------------------------------------------
+    def _watch_tag_notes(self) -> bool:
+        """Watch the explanations file once it exists; True when the watch is new.
+
+        Also re-adds the watch after a replace-via-rename dropped it.
+        """
+        if os.path.exists(self._tag_notes_path) and self._tag_notes_path not in self._fs_watcher.files():
+            return self._fs_watcher.addPath(self._tag_notes_path)
+        return False
+
+    def _on_tile_dir_changed(self, _path: str):
+        if self._watch_tag_notes():
+            self._on_tag_notes_changed()
+
+    def _on_tag_notes_changed(self):
+        self._watch_tag_notes()
+        try:
+            self.tag_notes = tag_explainer.load(self.tile_dir, strict=True)
+        except json.JSONDecodeError:
+            return  # caught mid-write; the next fire has the whole file
+        self._refresh_keywords()
+
+    def _active_model(self) -> str | None:
+        """The model a keyword's explanation is for: the Drafts tab's draft model, else the pitch model."""
+        if self.story_engine is None:
+            return None
+        combo = self.draft_model_combo if self.tabs.currentIndex() == 1 else self.pitch_model_combo
+        return combo.currentData()
+
+    def _keyword_kind(self, keyword: str) -> str:
+        if self.current_key is None:
+            return ""
+        for kw in self.index[self.current_key].get("keywords", []):
+            if kw["text"] == keyword:
+                return kw.get("type", "")
+        return ""
+
+    def _keyword_tooltip(self, keyword: str) -> str:
+        kind = html.escape(self._keyword_kind(keyword))
+        found = tag_explainer.preferred(self.tag_notes.get(keyword, {}), self._active_model())
+        if found is None:
+            return f"<p>{kind}</p><p>No explanation yet. Click to ask a model, or right-click for the pitch and draft models.</p>"
+        model, entry = found
+        paragraphs = "".join(f"<p>{html.escape(p)}</p>" for p in entry.get("text", "").split("\n") if p.strip())
+        return f"<p><b>{html.escape(self.tag_panel.model_label(model))}</b></p>{paragraphs}"
+
+    def _refresh_keywords(self):
+        self.keyword_chips.set_state({k for k, v in self.tag_notes.items() if v}, self._open_keyword)
+        keyword = self._open_keyword
+        if keyword is not None:
+            busy = {model for k, model in self._explaining if k == keyword}
+            self.tag_panel.show_keyword(keyword, self.tag_notes.get(keyword, {}), busy)
+
+    def _open_tag_panel(self, keyword: str | None):
+        """Show ``keyword``'s explanations with the active model picked, or close the panel for None."""
+        self._open_keyword = keyword
+        self.tag_panel.setVisible(keyword is not None)
+        if keyword is not None:
+            self._pick_explain_model()
+        self._refresh_keywords()
+
+    def _pick_explain_model(self):
+        index = self.tag_panel.model_combo.findData(self._active_model())
+        if index >= 0:
+            self.tag_panel.model_combo.setCurrentIndex(index)
+
+    def _on_tab_changed(self, _index: int):
+        if self._open_keyword is not None:
+            self._pick_explain_model()
+
+    def _on_keyword_clicked(self, keyword: str):
+        self._open_tag_panel(None if keyword == self._open_keyword else keyword)
+
+    def _on_keyword_menu(self, keyword: str, pos):
+        menu = QMenu(self)
+        menu.addAction("Show explanations", lambda: self._open_tag_panel(keyword))
+        if self.story_engine is not None:
+            # A model picked for both stages gets one entry naming both.
+            stages: dict[str, tuple[str, list[str]]] = {}
+            for stage, combo in (("pitch", self.pitch_model_combo), ("draft", self.draft_model_combo)):
+                model = combo.currentData()
+                if model:
+                    stages.setdefault(model, (combo.currentText(), []))[1].append(stage)
+            menu.addSeparator()
+            explained = self.tag_notes.get(keyword, {})
+            for model, (label, names) in stages.items():
+                text = f"Explain with {' and '.join(names)} model ({label})"
+                if (keyword, model) in self._explaining:
+                    text += ": working"
+                elif model in explained:
+                    text += ": already explained"
+                action = menu.addAction(text, lambda m=model: self._explain_tag(keyword, m))
+                action.setEnabled((keyword, model) not in self._explaining and model not in explained)
+        menu.exec(pos)
+
+    def _on_explain_requested(self, keyword: str, model: str):
+        if model in self.tag_notes.get(keyword, {}):
+            reply = QMessageBox.question(
+                self,
+                "Re-explain keyword",
+                f"Replace {self.tag_panel.model_label(model)}'s explanation of {keyword}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self._explain_tag(keyword, model)
+
+    def _explain_tag(self, keyword: str, model: str):
+        """Ask ``model`` about ``keyword`` in the background and store the answer."""
+        if (keyword, model) in self._explaining:
+            return
+        kind = self._keyword_kind(keyword)
+        self._explaining.add((keyword, model))
+        self._refresh_keywords()
+
+        def done(text: str):
+            self._explaining.discard((keyword, model))
+            self.tag_notes = tag_explainer.record(self.tile_dir, keyword, model, text)
+            self._watch_tag_notes()
+            self._refresh_keywords()
+
+        def failed(message: str):
+            self._explaining.discard((keyword, model))
+            self._refresh_keywords()
+            QMessageBox.critical(self, "Keyword explanation failed", message)
+
+        self._run(lambda: tag_explainer.explain(keyword, kind, model), model, done, failed)
 
     # -- Model calls ----------------------------------------------------------------
     def _run(self, fn: Callable[[], object], model: str | None, on_done: Callable, on_error: Callable) -> None:
