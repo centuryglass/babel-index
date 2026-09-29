@@ -50,8 +50,9 @@ comments and the maintainer's local `story_preferences.md`.
   corpus may go into the writer's prompt (see "Lint rules").
 - **Each model call has one narrow job.** No single call has to read,
   invent, choose and write at once.
-- **Human judgment is cheap to give.** Writing prose critiques is tiring.
-  Every judging point asks for a quick decision, with notes optional.
+- **Judging stays with the reviewer, and is cheap to give.** Pitch review,
+  draft choice and accept are always made by hand. Writing prose critiques
+  is tiring, so each asks for a quick decision, with notes optional.
 - **A hand edit beats a request.** The reviewer can edit, add, duplicate
   and delete pitches and drafts directly. Asking a model to delete two
   words costs more than deleting them.
@@ -300,7 +301,7 @@ workspace existed) is imported from its trace on first open.
 
 `DIR/story_traces/<tile stem>.jsonl`, one JSON event per line, append-only.
 It logs each model call (prompt, raw reply, parsed result) and each choice
-and outcome, for debugging and calibration. Nothing reads it back except the
+and outcome, for debugging and tuning. Nothing reads it back except the
 one-time workspace import.
 
 | Stage | Holds |
@@ -365,26 +366,6 @@ There are no automatic loops:
 A modal window reports acceptance rates for every seed, seed kind, form and
 constraint, with the counts behind each rate. It edits their weights and adds
 new entries, saving back to the `data/story_*.json` files.
-
-### Evaluators (not tracked by an issue)
-
-Each judging point would get a configurable owner:
-- `human`: shown in the review GUI, with the image visible;
-- `llm`: a judging model, usually stronger than the pitching model;
-- `auto`: pass everything through.
-
-| Judging point | Stage | Default owner |
-| --- | --- | --- |
-| Pitch review | 3 | `human` |
-| Critique | 5 | `human` |
-| Draft choice | 6 | `human` |
-| Final accept | 7 | `human` |
-
-Human decisions are recorded in the trace in the same format an LLM judge
-would produce, so they become calibration data. The live site's favorite
-counts are a second calibration signal. The open question is where human
-judgment pays off: if an early human pick means fewer drafts are thrown
-away later, the traces should show it.
 
 ### Extraction (#416)
 

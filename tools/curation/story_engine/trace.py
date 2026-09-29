@@ -4,7 +4,7 @@ Per-subject trace logs: one JSON Lines file per subject, one event per line.
 Every model call appends an event holding its model, prompt, raw reply and
 parsed result, so a bad story can be traced back to the call that went wrong
 and replayed from there. Choices and outcomes are logged too, for
-calibration. The log is append-only and write-only in normal use: review
+tuning. The log is append-only and write-only in normal use: review
 state lives in the workspace (``workspace.py``), which reads a trace only to
 import a subject reviewed before workspaces existed.
 """
