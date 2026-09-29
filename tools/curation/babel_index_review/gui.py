@@ -812,10 +812,9 @@ class ReviewWindow(QMainWindow):
     def _on_models_loaded(self, models: dict):
         self._loaders.clear()
         # Only the settings connections: the explain panel listens to its own combo.
-        for setting, combo in self._model_combos().items():
-            connection = self._model_setting_connections.pop(setting, None)
-            if connection is not None:
-                QObject.disconnect(connection)
+        for connection in self._model_setting_connections.values():
+            QObject.disconnect(connection)
+        self._model_setting_connections.clear()
         self._set_models(models)
 
     # -- Tile table -------------------------------------------------------------
