@@ -260,7 +260,7 @@ revising, clearing and editing the story until it is unmarked.
 Once stories are final, the rest of the tile's metadata follows. These are
 outside the story engine, but they read the story:
 - **Title:** `python -m babel_index_review.titles DIR`, from the image and
-  final story.
+  final story, or one tile at a time with the review GUI's Generate button.
 - **Alt text:** `python -m babel_index_review.alt_text DIR`, from the image
   and keywords only.
 - **Sensitive-content tags:** `python -m babel_index_review.sensitive_tags DIR`.

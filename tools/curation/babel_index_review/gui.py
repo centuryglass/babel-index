@@ -8,7 +8,8 @@ Three columns, laid out for a 1920x1080 window:
   status filter.
 - **Tile** (middle): the selected image, then the tile's own fields: title,
   Final, keywords, the story, and collapsible Alt text and Sensitive content
-  sections. Holding Ctrl over the image zooms it to the whole window.
+  sections. The title's Generate button runs ``titles.propose_title``.
+  Holding Ctrl over the image zooms it to the whole window.
 - **Story engine** (right): the tile's workspace (``story_engine.workspace``):
   the reading, a Pitches tab and a Drafts tab. It follows the current
   workflow in ``docs/story_workflow.md``.
@@ -77,7 +78,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from babel_index_review import core, story_frame
+from babel_index_review import core, story_frame, titles
 from babel_index_review.review_widgets import (
     COLOR_MUTED,
     THUMB_SIZE,
@@ -207,6 +208,7 @@ class ReviewWindow(QMainWindow):
         self._pitch_rows: dict[str, PitchRow] = {}
         self._draft_cards: dict[str, DraftCard] = {}
         self._unsent_requests: dict[str, str] = {}  # draft id -> request text, across tile switches
+        self._titling: set[str] = set()  # keys with a title generation in flight
 
         # Model calls. Network-bound, so many run at once; a single-model
         # local server can't serve concurrent requests, so its calls queue.
@@ -359,6 +361,12 @@ class ReviewWindow(QMainWindow):
         self.title_edit.setPlaceholderText("(untitled)")
         self.title_edit.textChanged.connect(self._on_title_changed)
         header.addWidget(self.title_edit, stretch=1)
+        self.title_generate_button = QPushButton("Generate")
+        self.title_generate_button.setToolTip("Propose a title from the image and story (titles.py's rules)")
+        self.title_generate_button.clicked.connect(self._on_generate_title)
+        header.addWidget(self.title_generate_button)
+        self.title_model_combo = QComboBox()
+        header.addWidget(self.title_model_combo)
         self.final_button = QPushButton("Mark final")
         self.final_button.setCheckable(True)
         self.final_button.toggled.connect(self._on_final_toggled)
@@ -720,7 +728,7 @@ class ReviewWindow(QMainWindow):
     # -- Model selectors --------------------------------------------------------
     def _model_combos(self) -> dict[str, QComboBox]:
         """Each model picker by its settings key. The engine's are absent when it failed to load."""
-        combos = {"alt_model": self.alt_model_combo}
+        combos = {"alt_model": self.alt_model_combo, "title_model": self.title_model_combo}
         if self.story_engine is not None:
             combos.update(
                 pitch_model=self.pitch_model_combo,
@@ -893,6 +901,9 @@ class ReviewWindow(QMainWindow):
         self.final_button.setEnabled(bool(self.story_edit.toPlainText().strip()) or final)
         self.story_edit.setReadOnly(final)
         self.clear_button.setEnabled(not final and bool(self.story_edit.toPlainText().strip()))
+        titling = self.current_key in self._titling
+        self.title_generate_button.setEnabled(not titling and bool(self.story_edit.toPlainText().strip()))
+        self.title_generate_button.setText("Working…" if titling else "Generate")
 
     # -- Merge-safe persistence ---------------------------------------------------
     def _save_index_entry(self, key: str, entry: dict | None) -> None:
@@ -1018,6 +1029,95 @@ class ReviewWindow(QMainWindow):
             entry["title"] = text or None
             self._save_index_entry(self.current_key, entry)
             self._refresh_tile(self.current_key)
+
+    def _confirm_title_replace(self, key: str, old: str) -> bool:
+        reply = QMessageBox.question(
+            self,
+            "Replace title",
+            f'Replace {key}\'s title "{old}" with a generated one?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return reply == QMessageBox.StandardButton.Yes
+
+    def _on_generate_title(self):
+        """Ask ``titles.propose_title`` for a title, blocking every title already in the index.
+
+        The tile's own current title is blocked too, so generating again
+        always proposes something new. A non-empty title is replaced only
+        after confirmation, asked again on arrival if it changed meanwhile.
+        """
+        key = self.current_key
+        if key is None or key in self._titling:
+            return
+        self._flush_story()
+        self._flush_title()
+        entry = self.index[key]
+        story = entry.get("story")
+        if not story:
+            return
+        image = os.path.join(self.tile_dir, key)
+        if not os.path.exists(image):
+            QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
+            return
+        old = entry.get("title") or ""
+        if old and not self._confirm_title_replace(key, old):
+            return
+        registry = titles.TitleRegistry(e["title"] for e in self.index.values() if e.get("title"))
+        model = self.title_model_combo.currentData()
+        self._titling.add(key)
+        self._update_locks()
+
+        def finish():
+            self._titling.discard(key)
+            if key == self.current_key:
+                self._update_locks()
+
+        def done(title: str | None):
+            finish()
+            if key not in self.index:
+                return
+            if title is None:
+                QMessageBox.warning(
+                    self, "Title generation failed",
+                    f"No valid title for {key} after {titles.MAX_ATTEMPTS} attempts.",
+                )
+                return
+            if key == self.current_key:
+                self._flush_title()
+            # Another tile may have claimed a near-duplicate while this call ran.
+            others = titles.TitleRegistry(
+                e["title"] for k, e in self.index.items() if k != key and e.get("title")
+            )
+            conflict = others.conflict(title)
+            if conflict is not None:
+                QMessageBox.warning(
+                    self, "Title generation failed",
+                    f'"{title}" is too close to "{conflict}", claimed while {key} was generating.',
+                )
+                return
+            current = self.index[key].get("title") or ""
+            if current and current != old and not self._confirm_title_replace(key, current):
+                return
+            self._set_title(key, title)
+
+        def failed(message: str):
+            finish()
+            QMessageBox.critical(self, "Title generation failed", message)
+
+        self._run(lambda: titles.propose_title(image, story, registry, model, key=key), model, done, failed)
+
+    def _set_title(self, key: str, title: str):
+        """Store ``title`` as ``key``'s title now, and show it if ``key`` is selected."""
+        entry = self.index[key]
+        entry["title"] = title
+        self._save_index_entry(key, entry)
+        self._refresh_tile(key)
+        if key == self.current_key:
+            self._title_save_timer.stop()
+            self._loading = True
+            self.title_edit.setText(title)
+            self._loading = False
 
     def _on_alt_changed(self):
         if not self._loading:
