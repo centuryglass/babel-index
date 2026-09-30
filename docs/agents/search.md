@@ -12,6 +12,11 @@ conventions still apply.
   story run over CLIP) holds because of `config.search.weights`, and
   `scoring.test.ts` checks each one on a built query: re-tuning a weight
   means re-running those tests, not re-deriving an inequality.
+- **Any change to what search returns fails `scoring.fixture.test.ts` until
+  `npm run generate:search-fixture` rewrites `search-fixture/report.json`.**
+  That covers weights, `search.density`, `CLIP_STRENGTH`, tokenising and the
+  formula. Regenerate in the same PR and read the diff: it is the change's
+  effect on real queries over the real collection.
 - **Search combines its signals; it does not tier them.** Tiering keyword
   hits ahead of everything would let one weak partial beat a room CLIP is
   confident about.

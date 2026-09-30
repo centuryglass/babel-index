@@ -267,6 +267,13 @@ Every tracked file in the repo, with a line or two on what it is for.
     the map.
   * `describe.ts`: Screen-reader messages.
   * `prng.ts`: Seedable RNG (mulberry32) and string-to-seed hash (FNV-1a).
+  * `scoring.fixture.test.ts`: Search against `search-fixture/`, the real
+    collection's snapshot; listed because it is not beside a module of its
+    own name.
+  * `search-fixture`: A committed snapshot of the real collection's search
+    inputs (no images), a fixed query set with precomputed CLIP text
+    vectors, and `report.json`, the reviewed summary of every query's
+    result. Its `README.md` has the query groups and refresh workflow.
   * `wink-lemmatizer-stub.d.ts`: Type-only stand-in for the untyped
     `wink-lemmatizer`, mapped in by `jsconfig.json`'s `paths`; its header
     says why.
@@ -304,6 +311,14 @@ imports at bundle time.
 - `tools/embed/cosine-range.ts`: Measures CLIP's raw cosine range on a real
   collection, to calibrate `CLIP_STRENGTH` and `search.density`.
   * `cosine-stats.ts`: Its pure percentile and calibration arithmetic.
+- `tools/embed/text-tower.ts`: The CLIP text tower for offline tools, loaded
+  and normalised the way `/api/search` embeds a live query.
+- `tools/search-fixture`: `npm run generate:search-fixture` - refreshes
+  `packages/map/search-fixture/`.
+  * `index.ts`: CLI - snapshot a collection, embed new queries, write the
+    report, or `--check` for drift.
+  * `fixture.ts`: Loads and cross-checks the fixture, ranks its queries the
+    way `useSearch.ts` does, and builds `report.json`; shared with the test.
 - `tools/upload`: Syncs a collection to Cloudflare R2, incrementally by content
   hash.
   * `upload-r2.ts`: CLI; credentials from the environment.
