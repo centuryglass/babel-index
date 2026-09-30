@@ -186,7 +186,7 @@ export function useMapCursor({
   // reader's swipe navigation reaches regardless of tabindex.
   const cursorRoom = layout.roomAt(cursor.x, cursor.y, order);
   const cursorEntry = cursorRoom.center || cursorRoom.generic ? null : (metadata?.[cursorRoom.id] ?? null);
-  // Named here, not in the view, so `describeRoom` has one caller per reading of the corpus and the map cannot drift from the catalog
+  // Named here, not in the view, so `describeRoom` has one caller per reading of the collection and the map cannot drift from the catalog
   // about what a room is called.
   const cursorDesc =
     cursorEntry && !cursorRoom.center && !cursorRoom.generic

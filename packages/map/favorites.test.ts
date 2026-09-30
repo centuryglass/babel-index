@@ -44,7 +44,7 @@ test('a room nobody has favorited sorts as zero rather than dropping out', () =>
   assert.deepEqual(order, [0, 1], 'no counts at all is the base order, not an empty list');
 });
 
-test('a favorite for a file this corpus does not have is simply not found', () => {
+test('a favorite for a file this collection does not have is simply not found', () => {
   const order = favoriteOrder([0, 1], {
     mode: 'mine',
     files,

@@ -84,7 +84,7 @@ the process without reading the source.
 ## Commands
 
 ```sh
-npm run demo                       # http://localhost:5173, against assets/corpus-sample/
+npm run demo                       # http://localhost:5173, against assets/tile-collection-sample/
 npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--port 5173] [--config config.json] [--base-path /babel-index/]
 npm run demo -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
 npm test                           # node --test, ~1s, no browser and no network
@@ -154,6 +154,11 @@ inpainting pipeline.
   `eslint.config.js`, `deploy/health-check.mjs` (run on the VPS), and
   `.claude/scripts/issues.mjs`. A new file is TypeScript unless it shares
   that constraint.
+- **"Collection" names the set of rooms a server scans**: images, pyramid
+  levels and sidecars ([`docs/tile-collection.md`](docs/tile-collection.md)).
+  Identifiers and paths always say `tileCollection` or `tile-collection`,
+  since a bare `collection` reads as a generic data structure. Prose says
+  "collection" once context makes it clear.
 - **Loose data gets an honest type.** Where data is loose by design, type it
   as loosely as it is (`object`, `unknown`, a partial shape) until
   there is a real type to write. A strict type that fights the code's
@@ -170,7 +175,7 @@ inpainting pipeline.
   bundles the client at startup.
 - **Fixtures are synthesised, not committed.**
   `packages/server/image-fixtures.ts` builds PNG/JPEG/WebP headers byte by
-  byte. Don't make tests depend on `assets/corpus-sample/`.
+  byte. Don't make tests depend on `assets/tile-collection-sample/`.
 - **Formatting:** two-space indent, semicolons, single quotes, trailing
   commas in multi-line literals. Follow the file you're in.
 - **A bug found during unrelated work gets fixed or filed, never just
@@ -254,7 +259,7 @@ path can match several rows; read every file it matches.
 | When the change touches | Read |
 | --- | --- |
 | `packages/map/` layout, ordering or placement; `packages/web/src/lib/camera.ts`, `center.ts`, `libraryState.ts`, `pyramid.ts`, `tiles.ts`; `useMapCamera.ts`, `useCenterShelf.ts`, `main.tsx`; `packages/config/`; `packages/pipeline/`; `packages/server/scan.ts`; `tools/center-placement/`, `tools/center-animation/`; shared art under `assets/`; the center cell's overlays in `css/map.css`; zoom, panning, gestures | [`docs/agents/map.md`](docs/agents/map.md) |
-| `packages/map/scoring.ts`, `searchResult.ts`, `metadata.ts`; `useSearch.ts`, `useCorpus.ts`, `RoomDetails.tsx`; `tools/embed/`; embeddings, `metadata.json`, `tagLinks.json`; search strength or the sort modes (`main.tsx`, `libraryState.ts`) | [`docs/agents/search.md`](docs/agents/search.md) |
+| `packages/map/scoring.ts`, `searchResult.ts`, `metadata.ts`; `useSearch.ts`, `useTileCollection.ts`, `RoomDetails.tsx`; `tools/embed/`; embeddings, `metadata.json`, `tagLinks.json`; search strength or the sort modes (`main.tsx`, `libraryState.ts`) | [`docs/agents/search.md`](docs/agents/search.md) |
 | `packages/server/favorites.ts`, `rate-buckets.ts`, `app.ts`'s favorite routes, `--trust-proxy`; `packages/map/favorites.ts`; `useFavorites.ts`, `persist.ts`, `favoriteBadge.ts`; the on-map badge in either renderer | [`docs/agents/favorites.md`](docs/agents/favorites.md) |
 | `packages/map/board.ts`, `illusion.ts`, `moves.ts`; `useRearrangement.ts`, `loadingAnimation.ts`, `SearchIcon.tsx`; `slide.ts`, `glSlideRenderer.ts`; `flyTo` callers; `assets/animation/` | [`docs/agents/rearrangement.md`](docs/agents/rearrangement.md) |
 | `packages/web/src/lib/render.ts`, `slide.ts`, `glRenderer.ts`, `glSlideRenderer.ts`, `gl/`, `webglFlag.ts`; `useMapRenderer.ts`, `useMapRendererGL.ts`; anything that changes what a cell draws | [`docs/agents/rendering.md`](docs/agents/rendering.md) |

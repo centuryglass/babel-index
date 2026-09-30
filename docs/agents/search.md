@@ -48,7 +48,7 @@ conventions still apply.
     `packages/map/favorites.ts`'s `favoriteStrength`), and nothing composes
     the two. `'relevance'` and `'random'` claim no strength and leave the
     map uniform.
-- **Every pull is absolute; never normalise one across the corpus.**
+- **Every pull is absolute; never normalise one across the collection.**
   Min-max puts some room at 1 for *any* query, and a gradient driven by that
   clusters nonsense as confidently as an exact match. CLIP reads its raw
   cosine against absolute bounds (`CLIP_STRENGTH`, config
@@ -61,8 +61,8 @@ conventions still apply.
   the real `<img alt>` (`RoomOverlay`, the catalog thumbnail) and never feeds
   the search index. The map canvas's fallback content (`RoomDetails`'s
   `showPicture`) renders it as a paragraph, since it has no `<img>`. Don't
-  write placeholder captions into `assets/corpus-sample/`.
+  write placeholder captions into `assets/tile-collection-sample/`.
 - **`tagLinks.json` is a flat keyword -> url map, not joined to anything.**
   It is hand-edited and optional; `scan.ts` only counts its keys, and a
-  corpus without one renders chips with no "more about this" link.
-  `RoomDetails.tsx` receives it as a prop (see `useCorpus.ts`).
+  collection without one renders chips with no "more about this" link.
+  `RoomDetails.tsx` receives it as a prop (see `useTileCollection.ts`).

@@ -7,7 +7,7 @@
  *                    [--base-path /babel-index/]
  *
  * Point it at a directory of images and it serves a browsable library. No
- * database, no bucket, no upload step - the directory is the corpus, so a
+ * database, no bucket, no upload step - the directory is the collection, so a
  * local demo works before any hosting exists.
  *
  * `--base-path` is for serving this under a subpath of a shared domain
@@ -19,11 +19,11 @@
  * manifest (`scan.ts`'s `IMAGES_BASE`/`SHARED_BASE`) - see
  * `packages/server/base-path.ts`. Defaults to `/`, the plain own-origin case.
  *
- * Or point it at a corpus already uploaded with tools/upload/upload-r2.ts:
+ * Or point it at a collection already uploaded with tools/upload/upload-r2.ts:
  *
- *   npm run demo -- --remote https://assets.example.com --prefix corpus-sample
+ *   npm run demo -- --remote https://assets.example.com --prefix tile-collection-sample
  *
- * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the corpus
+ * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the collection
  * and shared tiles both come from the remote host (see remote.ts), and the
  * manifest's urls point the browser there directly; this server serves
  * nothing under `/images`/`/shared`.
@@ -79,23 +79,23 @@ const basePath = normalizeBasePath(argv['base-path'] as string | undefined);
 
 const remoteBase = (argv.remote as string | undefined) ?? null;
 if (remoteBase && argv.images) {
-  logger.error('--remote and --images are mutually exclusive - the corpus comes from one place or the other.');
+  logger.error('--remote and --images are mutually exclusive - the tile collection comes from one place or the other.');
   process.exit(1);
 }
 if (remoteBase && !argv.prefix) {
-  logger.error('--remote requires --prefix (the corpus prefix used when it was uploaded).');
+  logger.error('--remote requires --prefix (the tile collection prefix used when it was uploaded).');
   process.exit(1);
 }
 
-// Defaults to the sample corpus committed to the repo, so `npm run demo` works
+// Defaults to the sample collection committed to the repo, so `npm run demo` works
 // with no arguments and no external files. Unused entirely in --remote mode.
-const imagesDir = remoteBase ? null : resolve(process.cwd(), (argv.images as string | undefined) ?? 'assets/corpus-sample');
+const imagesDir = remoteBase ? null : resolve(process.cwd(), (argv.images as string | undefined) ?? 'assets/tile-collection-sample');
 if (!remoteBase && !existsSync(imagesDir)) {
   logger.error({ imagesDir }, 'no such directory');
   process.exit(1);
 }
-// The shared tiles (center + generic tiles) live outside the corpus, in the
-// repo's assets by default, so the center render can be shared across corpora
+// The shared tiles (center + generic tiles) live outside the collection, in the
+// repo's assets by default, so the center render can be shared across collections
 // and changed without touching --images. See scan.ts.
 const sharedDir = remoteBase ? null : resolve(process.cwd(), (argv['shared-dir'] as string | undefined) ?? 'assets');
 // Optional debugging convenience, off by default. `npm run demo:watch` runs
@@ -172,7 +172,7 @@ logger.info(
     genericTiles: manifest.shared.generic.length,
     genericDistillTiles: manifest.shared.genericDistill.filter(Boolean).length,
   },
-  'corpus scanned'
+  'tile collection scanned'
 );
 // A shared directory with no center means the map has no blank tile to draw at
 // the origin or to fall back on - worth saying, since it reads on the map as a
@@ -190,7 +190,7 @@ if (manifest.metadata) {
 }
 
 // The sidecar is read here so roomContent.ts's curation warnings land in the
-// startup log, beside the rest of what this corpus turned out to be. The
+// startup log, beside the rest of what this collection turned out to be. The
 // catalog routes share this one memoized load.
 await loadRoomContent(manifest, imagesDir);
 

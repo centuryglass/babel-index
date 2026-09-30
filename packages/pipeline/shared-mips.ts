@@ -1,6 +1,6 @@
 /**
  * Writes pyramid levels for the shared tiles. `npm run generate:mips --
- * --images <dir> --shared-dir <dir>` calls this after the corpus itself.
+ * --images <dir> --shared-dir <dir>` calls this after the collection itself.
  *
  * Each file gets the same per-file `<width>/<file>` ladder `mips.ts`'s
  * `writeMips` writes for a room, rooted at the shared directory:

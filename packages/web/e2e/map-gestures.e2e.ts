@@ -8,7 +8,7 @@
  * This is the only layer that catches "the canvas renders nothing" - the
  * failure no unit test can see, because every piece can be correct while the
  * thing on screen is a black rectangle. It drives the real demo server, in a
- * real browser, against the sample corpus.
+ * real browser, against the sample collection.
  *
  * None of the files in this directory are part of `npm test`; run them
  * explicitly:
@@ -156,7 +156,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
   test('the pyramid engages: zooming out drops to a coarser level', async () => {
     const { page } = session;
     // The unit tests prove the policy; this proves it is wired to the real
-    // canvas against a real corpus with real level directories on disk. Without
+    // canvas against a real collection with real level directories on disk. Without
     // it the pyramid could be selecting levels nothing ever fetches.
     await page.mouse.move(640, 400);
     for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 600);
@@ -201,7 +201,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     await rooms.press('End'); // every room back
     const most = await settled(page);
     assert.ok(most.edge > fewest.edge, `more rooms must push the edge out: ${fewest.edge} -> ${most.edge}`);
-    assert.ok(Math.abs(most.edge - start.edge) < 1e-9, 'the same corpus size must give the same edge');
+    assert.ok(Math.abs(most.edge - start.edge) < 1e-9, 'the same collection size must give the same edge');
 
     await ratio.focus();
     await ratio.press('Home'); // 2% non-generic
@@ -385,7 +385,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
 
     const chips = card.locator('.chip');
-    assert.equal(await chips.count(), 3, 'the sample corpus gives every room three keywords');
+    assert.equal(await chips.count(), 3, 'the sample collection gives every room three keywords');
     assert.ok(await card.locator('.story').textContent(), 'the card shows a story');
 
     // Escape closes.

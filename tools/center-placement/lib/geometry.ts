@@ -3,7 +3,7 @@ import { MEASURED } from './measured.ts';
 /**
  * Layout of one center tile, as pixels for a tile of a given size. The center
  * is the only tile traced exactly (docs/agents/map.md, "Tile geometry"); a
- * corpus room needs only a bounding box.
+ * collection room needs only a bounding box.
  *
  * Two kinds of number come out of `layout()`:
  *

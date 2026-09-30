@@ -34,7 +34,7 @@ import type { RoomMeta } from '../../../map/metadata.ts';
 import type { MatchRange } from '../../../map/searchResult.ts';
 import type { Manifest } from '../../../map/manifest.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import type { CorpusErrorSource } from '../hooks/useCorpus.ts';
+import type { TileCollectionErrorSource } from '../hooks/useTileCollection.ts';
 
 /** One slot on the center shelf, as `assignTitles()` (`center.ts`) returns it - or the row/column position it never fills. */
 type Slot = CentreSlot | null;
@@ -78,7 +78,7 @@ export function MapView({
   manifest,
   total,
   described,
-  corpusErrors,
+  tileCollectionErrors,
   status,
   query,
   setQuery,
@@ -135,7 +135,7 @@ export function MapView({
   manifest: Manifest;
   total: number;
   described: number;
-  corpusErrors: CorpusErrorSource[];
+  tileCollectionErrors: TileCollectionErrorSource[];
   status: string;
   query: string;
   setQuery: (query: string) => void;
@@ -429,9 +429,9 @@ export function MapView({
           offline · {total} rooms in {manifest.directory?.split('/').slice(-1)[0]}
           {described > 0 && <> · {described} described</>}
         </p>
-        {corpusErrors.length > 0 && (
-          <p className="sub corpus-error">
-            failed to load {corpusErrors.join(', ')} - search is running degraded
+        {tileCollectionErrors.length > 0 && (
+          <p className="sub tile-collection-error">
+            failed to load {tileCollectionErrors.join(', ')} - search is running degraded
           </p>
         )}
 
@@ -500,7 +500,7 @@ export function MapView({
           <input
             id="non-generic"
             type="range" min="2" max="100" value={Math.round(contentRatio * 100)}
-            aria-valuetext={`${Math.round(contentRatio * 100)}% of cells hold a corpus room`}
+            aria-valuetext={`${Math.round(contentRatio * 100)}% of cells hold a room from the collection`}
             onChange={(e) => setContentRatio(Number(e.target.value) / 100)}
           />
         </div>

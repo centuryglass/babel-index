@@ -30,7 +30,7 @@ const rect = { width: 1280, height: 720 };
 const cam = { x: 3.25, y: -7.5, zoom: 220 };
 
 /**
- * The same camera at cell shapes the corpus is not in. Nothing may assume a
+ * The same camera at cell shapes the collection is not in. Nothing may assume a
  * cell's width equals its height, so the invariants here are checked at every
  * shape rather than only the square one.
  */

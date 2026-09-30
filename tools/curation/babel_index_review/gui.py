@@ -32,7 +32,7 @@ display filter: "flagged" shows only tiles with a non-empty
 ``sensitive_content_tags``, "unflagged" only tiles without one. It narrows
 which keys the table ever sees; every entry stays loaded and intact on disk.
 ``sample_update=True`` adds a "Save to samples" button
-(``core.add_to_sample_corpus``).
+(``core.add_to_tile_collection_sample``).
 """
 
 from __future__ import annotations
@@ -462,7 +462,7 @@ class ReviewWindow(QMainWindow):
         footer.addStretch(1)
         if self.sample_update:
             sample_button = QPushButton("Save to samples")
-            sample_button.setToolTip("Copy this tile and its keywords/story/title/alt into assets/corpus-sample.")
+            sample_button.setToolTip("Copy this tile and its keywords/story/title/alt into assets/tile-collection-sample.")
             sample_button.clicked.connect(self._on_save_to_sample)
             footer.addWidget(sample_button)
         delete_button = QPushButton("Delete tile")
@@ -1265,11 +1265,11 @@ class ReviewWindow(QMainWindow):
             QMessageBox.warning(self, "Missing image", f"{key} is not on disk.")
             return
         try:
-            name = core.add_to_sample_corpus(self.tile_dir, key, self.index[key])
+            name = core.add_to_tile_collection_sample(self.tile_dir, key, self.index[key])
         except OSError as err:
             QMessageBox.critical(self, "Save to samples failed", str(err))
             return
-        QMessageBox.information(self, "Saved to samples", f"Copied {key} to assets/corpus-sample as {name}.")
+        QMessageBox.information(self, "Saved to samples", f"Copied {key} to assets/tile-collection-sample as {name}.")
 
     def _on_delete(self):
         key = self.current_key

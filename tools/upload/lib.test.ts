@@ -49,7 +49,7 @@ function manifest(): Manifest {
 }
 
 test('buildUploadList covers rooms at every non-zero level, sidecars, and shared assets', () => {
-  const uploads = buildUploadList(manifest(), { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const uploads = buildUploadList(manifest(), { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   const keys = uploads.map((u) => u.key).sort();
   assert.deepEqual(keys, [
     'sample/001.jpg',
@@ -75,15 +75,15 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
   ]);
 
   const level0 = uploads.find((u) => u.key === 'sample/001.jpg');
-  assert.equal(level0.local, 'corpus/001.jpg');
+  assert.equal(level0.local, 'tile-collection/001.jpg');
   const level1 = uploads.find((u) => u.key === 'sample/512/001.jpg');
-  assert.equal(level1.local, 'corpus/512/001.jpg');
+  assert.equal(level1.local, 'tile-collection/512/001.jpg');
 });
 
-test('buildUploadList covers the shared tiles at every non-zero level too, mirroring the corpus loop', () => {
+test('buildUploadList covers the shared tiles at every non-zero level too, mirroring the collection loop', () => {
   const m = manifest();
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
-  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   const keys = uploads.map((u) => u.key).sort();
   assert.ok(keys.includes('shared/512/center_tile.png'));
   assert.ok(keys.includes('shared/generic/512/a.jpg'));
@@ -98,7 +98,7 @@ test('buildUploadList covers the distill tiles at every non-zero level too, off 
   const m = manifest();
   // shared.levels stays flat: distillLevels having a rung must not depend on it.
   m.shared.distillLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
-  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   const keys = uploads.map((u) => u.key).sort();
   assert.ok(keys.includes('shared/generic_distill/512/a.jpg'));
   assert.ok(!keys.includes('shared/512/center_tile.png'), 'shared.levels stayed flat');
@@ -116,13 +116,13 @@ test('buildUploadList uploads one entry per sheet file for a sheet-packed level,
     dir: null,
     sheet: { tileW: 256, tileH: 192, cols: 2, rows: 1, roomsPerSheet: 2, sheetCount: 1, dir: '256-sheets', ext: 'jpg' },
   });
-  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   const keys = uploads.map((u) => u.key).sort();
   assert.ok(keys.includes('sample/256-sheets/sheet-0000.jpg'));
   assert.ok(!keys.some((k) => k.includes('/256/')), 'a sheet-packed level never uploads per-room files');
 
   const sheet = uploads.find((u) => u.key === 'sample/256-sheets/sheet-0000.jpg');
-  assert.equal(sheet.local, 'corpus/256-sheets/sheet-0000.jpg');
+  assert.equal(sheet.local, 'tile-collection/256-sheets/sheet-0000.jpg');
 });
 
 test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have, but always uploads the fixed favorite badge, distill toggle, clear-history book, and leather texture art', () => {
@@ -135,7 +135,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
     levels: [{ level: 0, dir: null }], distillLevels: [{ level: 0, dir: null }],
     favoriteLevels: [{ level: 0, dir: null }],
   };
-  const uploads = buildUploadList(m, { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample' }, join);
+  const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(
     uploads.map((u) => u.key).sort(),
     [
@@ -159,7 +159,7 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
 test('buildUploadList uploads the loading-animation manifest and one entry per sheet when the caller found one', () => {
   const uploads = buildUploadList(
     manifest(),
-    { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample', animation: animation() },
+    { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample', animation: animation() },
     join
   );
   const byKey = new Map(uploads.map((u) => [u.key, u.local]));
@@ -171,7 +171,7 @@ test('buildUploadList uploads the loading-animation manifest and one entry per s
 test('buildUploadList uploads no animation entries when the caller found no manifest', () => {
   const uploads = buildUploadList(
     manifest(),
-    { imagesDir: 'corpus', sharedDir: 'assets', prefix: 'sample', animation: null },
+    { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample', animation: null },
     join
   );
   assert.ok(!uploads.some((u) => u.key.startsWith('shared/animation/')));

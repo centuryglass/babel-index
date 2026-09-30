@@ -1,9 +1,10 @@
-# Corpus format
+# Tile collection format
 
-A corpus is a directory of room images plus two optional JSON sidecars:
-`metadata.json` for each room's text, and `tagLinks.json` for keyword links.
-`npm run demo -- --images <dir>` serves any such directory, and
-[`assets/corpus-sample/`](../assets/corpus-sample) is a complete example.
+A tile collection is a directory of room images plus two optional JSON
+sidecars: `metadata.json` for each room's text, and `tagLinks.json` for
+keyword links. `npm run demo -- --images <dir>` serves any such directory,
+and [`assets/tile-collection-sample/`](../assets/tile-collection-sample) is a
+complete example.
 
 ```text
 <dir>/
@@ -22,7 +23,7 @@ produce `metadata.json`.
 
 Every image in the directory is a room. A room's id is its position in the
 sorted filename list, so adding or removing one image renumbers every room
-after it. Anything that has to survive a corpus change is therefore keyed by
+after it. Anything that has to survive a collection change is therefore keyed by
 filename, never by id:
 
 - `metadata.json` entries;
@@ -31,7 +32,7 @@ filename, never by id:
 
 `embeddings.bin` is the exception: its rows follow id order, so it must be
 regenerated whenever the set of images changes. The server ignores a blob
-whose row count no longer matches the corpus, and search falls back to
+whose row count no longer matches the collection, and search falls back to
 keywords and story.
 
 ## `metadata.json`
@@ -73,7 +74,7 @@ warns that the keys are probably not the image filenames.
 | `alt` | string | The room image's `alt` text. |
 | `sensitive_content_tags` | array of strings | Tags a reader can choose to block. |
 
-- **`title`** should be unique across the corpus. A room without one is
+- **`title`** should be unique across the collection. A room without one is
   called "Room {id}" and its permalink is its filename stem. Two rooms with
   the same title both stay reachable: each permalink gets its filename stem
   as a suffix, and the server logs a warning at startup. The same happens
@@ -83,21 +84,21 @@ warns that the keys are probably not the image filenames.
   - `text` is the keyword itself. Clicking a chip searches for it.
   - `type` is a category label, such as `artist` or `medium/material`. The
     app shows it only in the chip's hover tooltip; search ignores it.
-  - The corpus convention is three keywords per room. Nothing enforces the
+  - The collection convention is three keywords per room. Nothing enforces the
     count, but other counts are largely untested.
 - **`story`** is a short piece of fiction about the room, usually one or two
   paragraphs. The overlay keeps its line breaks.
 - **`alt`** describes the picture for a reader who cannot see it. It is an
   image caption, not a story: it never feeds search. It is AI-generated and
   human-reviewed, written offline alongside the story. Every room in the live
-  corpus has one, so the server logs a warning at startup counting the rooms
+  collection has one, so the server logs a warning at startup counting the rooms
   that lack it, including rooms with no entry, and listing the first few by
   filename. A room without one still serves: the client's `<img>` gets an
   empty `alt`, and the server-rendered catalog pages use the title.
 - **`sensitive_content_tags`** lists the kinds of image or story content in
   the room that a reader might want to hide. The app has no fixed
   vocabulary: the block list in the help dialog offers every tag present in
-  the corpus, and shows nothing when there are none. A missing key and an
+  the collection, and shows nothing when there are none. A missing key and an
   empty array mean the same thing, no known sensitive content.
 
 ### Fields for curation tools

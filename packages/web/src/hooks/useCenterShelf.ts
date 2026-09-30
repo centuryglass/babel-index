@@ -59,7 +59,7 @@ export function useCenterShelf({
   setHelpOpen,
   forgetSearches,
 }: UseCenterShelfOpts) {
-  // The pool of stable random corpus keywords that letter the books history
+  // The pool of stable random collection keywords that letter the books history
   // and the overrides have not claimed. `pickTags` is pure and seeded by
   // `slotSeed`, so this is a memo, not per-frame work.
   const tags = useMemo(() => pickTags(metadata, slotSeed), [metadata, slotSeed]);

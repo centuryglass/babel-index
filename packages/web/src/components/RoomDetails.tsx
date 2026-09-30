@@ -103,7 +103,7 @@ function ClipLine({ clip }: { clip: NonNullable<RankingExplanation['clip']> }) {
  * greatest first, omitting anything that contributed nothing
  * (`contributions`, docs/search_rules.md "Reporting"). Then one visible
  * line per axis that actually found something - tag, title, story, and
- * (whenever the corpus has embeddings at all) CLIP - each carrying that
+ * (whenever the collection has embeddings at all) CLIP - each carrying that
  * axis's own independent rank and tie count (`result.ranks`/`ties`), not
  * the composite's.
  *
@@ -246,7 +246,7 @@ export function RoomDetails({
   desc: Description | null;
   /** a chip runs this search */
   onKeyword: (keyword: string) => void;
-  /** keyword -> external link, from the corpus's optional tagLinks.json (see useCorpus.ts) -
+  /** keyword -> external link, from the collection's optional tagLinks.json (see useTileCollection.ts) -
    * a keyword with an entry grows a second "more about this" pill fused to it */
   tagLinks?: Record<string, string> | null;
   /** this room's favorite state, or null where the deployment records none */
@@ -355,7 +355,7 @@ export function RoomDetails({
       )}
 
       {/*
-        "No keywords recorded" is a claim about a corpus room's metadata. A
+        "No keywords recorded" is a claim about a collection room's metadata. A
         generic cell has none by definition and has already said so through
         `desc.description` - repeating it here would read as a second,
         contradictory explanation for the same shelf.

@@ -71,8 +71,8 @@ async function attempt() {
   if (!health.ok) throw new Fatal(`the new revision is up and reporting itself unhealthy: ${JSON.stringify(health)}`);
   if (!health.rooms)
     throw new Fatal(
-      'the new revision is up and serving an EMPTY corpus - check the unit file\'s --images path ' +
-        'and that the corpus directory is still where it was.'
+      'the new revision is up and serving an EMPTY tile collection - check the unit file\'s --images path ' +
+        'and that the collection directory is still where it was.'
     );
   return null;
 }

@@ -14,7 +14,7 @@ import * as fixture from './image-fixtures.ts';
 import type { AddressInfo } from 'node:net';
 
 /**
- * Bring up the real app on an ephemeral port against a throwaway corpus.
+ * Bring up the real app on an ephemeral port against a throwaway collection.
  * No browser and no bundler: the endpoints are the thing under test.
  */
 async function serving(
@@ -74,7 +74,7 @@ function rawGet(port: number, path: string): Promise<{ status: number; text: str
 
 // --- health -----------------------------------------------------------------
 
-test('/api/health reports the revision it was given, and the corpus it found', async () => {
+test('/api/health reports the revision it was given, and the collection it found', async () => {
   await serving(
     async ({ get }) => {
       const res = await get('/api/health');
@@ -174,7 +174,7 @@ test('every url in the manifest actually serves', async () => {
   });
 });
 
-test('shared tiles are served from a shared directory outside the corpus', async () => {
+test('shared tiles are served from a shared directory outside the collection', async () => {
   // The demo shape: the rooms are one directory, the shared tiles another.
   const rootFiles = {
     'rooms/001.jpg': fixture.jpeg(512, 512),
@@ -200,7 +200,7 @@ test('shared tiles are served from a shared directory outside the corpus', async
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
       const m = await (await fetch(`${origin}/api/manifest`)).json();
-      assert.equal(m.count, 2, 'the shared tiles are not corpus rooms');
+      assert.equal(m.count, 2, 'the shared tiles are not collection rooms');
       assert.equal(m.shared.center.url, 'shared/center_tile.png');
       assert.deepEqual(m.shared.generic.map((v) => v.url), ['shared/generic/v1.webp']);
       for (const { url } of [m.shared.center, ...m.shared.generic]) {
@@ -315,7 +315,7 @@ test('a query over maxQueryLength is truncated server-side, not just in the brow
   );
 });
 
-test('the ranking survives corpus growth without depending on corpus size', async () => {
+test('the ranking survives collection growth without depending on collection size', async () => {
   // Ids are what the ranking is keyed on, so a room's score must not depend on
   // how many other rooms happen to be present.
   const rooms = (n) => Array.from({ length: n }, (_, id) => ({ id }));
@@ -324,7 +324,7 @@ test('the ranking survives corpus growth without depending on corpus size', asyn
   assert.deepEqual(large.filter((id) => id < 10), small);
 });
 
-test('the ranking is a permutation at every size, including the empty corpus', async () => {
+test('the ranking is a permutation at every size, including the empty tile collection', async () => {
   for (const n of [0, 1, 2, 500]) {
     const order = stubRanking(Array.from({ length: n }, (_, id) => ({ id })), 'x');
     assert.deepEqual([...order].sort((a, b) => a - b), Array.from({ length: n }, (_, i) => i));
@@ -349,7 +349,7 @@ test('stubRanking hashes at most 2048 characters, regardless of query length', a
 
 // --- static images ----------------------------------------------------------
 
-test('/images serves the corpus and 404s the rest', async () => {
+test('/images serves the collection and 404s the rest', async () => {
   await serving(async ({ get }) => {
     const res = await get('/images/001.jpg');
     assert.equal(res.status, 200);
@@ -379,7 +379,7 @@ test('/images will not serve anything outside the images directory', async () =>
         ]) {
           const res = await rawGet(port, path);
           assert.ok(res.status >= 300, `${path} served with ${res.status}`);
-          assert.ok(!res.text.includes(secret), `${path} leaked a file outside the corpus`);
+          assert.ok(!res.text.includes(secret), `${path} leaked a file outside the collection`);
           assert.ok(!res.text.includes('root:'), `${path} leaked /etc/passwd`);
         }
       } finally {
@@ -551,7 +551,7 @@ test('GET /catalog lists real room links and titles, alphabetically, with correc
       const res = await get('/catalog');
       assert.equal(res.status, 200);
       const html = await res.text();
-      // No metadata in this corpus, so every room is addressed by its stem.
+      // No metadata in this collection, so every room is addressed by its stem.
       assert.match(html, /href="\/catalog\/001"/);
       assert.match(html, /href="\/catalog\/002"/);
       assert.match(html, /href="\/catalog\/003"/);
@@ -664,7 +664,7 @@ test('a titled room\'s stem and a stale slug redirect and stay on the /map prefi
 });
 
 test('a titled room\'s filename stem still resolves, redirecting to the title url', async () => {
-  // The stability half of the permalink scheme: a title is corpus data and can
+  // The stability half of the permalink scheme: a title is collection data and can
   // be rewritten, and the stem is what `scan.ts` reads off the directory.
   await serving(
     async ({ get }) => {
@@ -866,7 +866,7 @@ test('a write with no client id, or one too short to trust, is rejected', async 
   });
 });
 
-test('a room this corpus does not have cannot be favorited', async () => {
+test('a room this collection does not have cannot be favorited', async () => {
   await withStore(async (favorites) => {
     await serving(
       async ({ base, get }) => {

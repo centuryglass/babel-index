@@ -95,10 +95,10 @@ you have read a single room.
 
 One number, match strength, decides both where a room lands and how densely
 matches pack around it. It is a soft OR of four readings - tag, title, story
-and CLIP image embeddings - each measured against a fixed, corpus-calibrated
+and CLIP image embeddings - each measured against a fixed, collection-calibrated
 bound, not against the other results. A nonsense query scores near zero
 instead of producing an artificial "best match", and the density gradient
-stays flat when the search has little to say. A corpus with no
+stays flat when the search has little to say. A collection with no
 `embeddings.bin` still reports strength from its text signals alone.
 
 [`docs/search_rules.md`](docs/search_rules.md) is the full specification;
@@ -108,7 +108,7 @@ stays flat when the search has little to say. A corpus with no
 ## The Catalog
 
 Not everyone wants to fly around a map. The catalog is a second reading of
-the same corpus: a conventional search box and a paged, ranked list of every
+the same collection: a conventional search box and a paged, ranked list of every
 unique room.
 
 ![The catalog view: a search bar, the index shelf's contents as a row of
@@ -157,7 +157,7 @@ The parts most worth a look:
   them before every deploy.
 - **Rearrangement is a sliding-tile illusion.** Only rows and columns on
   screen actually slide; everything else is swapped out of sight, so the
-  animation's cost tracks the viewport, not the corpus.
+  animation's cost tracks the viewport, not the collection.
 - **Favorites are sets, not counters.** The server keeps a salted hash of a
   random browser-generated id per room, so a repeated favorite or removal
   changes nothing, and no one's personal list can be rebuilt from the
@@ -172,7 +172,7 @@ Requires Node 20 or newer.
 
 ```sh
 npm install
-npm run demo        # http://localhost:5173, against assets/corpus-sample/
+npm run demo        # http://localhost:5173, against assets/tile-collection-sample/
 ```
 
 CLIP search needs `@huggingface/transformers`, an optional dependency whose
@@ -184,7 +184,7 @@ Every flag is optional:
 
 | Flag                     | Effect                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------ |
-| `--images <dir>`         | serve this directory as the corpus (default `assets/corpus-sample`)                             |
+| `--images <dir>`         | serve this directory as the collection (default `assets/tile-collection-sample`)                             |
 | `--shared-dir <dir>`     | where the center and generic tiles live (default `assets`)                                       |
 | `--center <file>`        | name the center tile, if it isn't `center_tile.*` or `center.*`                                  |
 | `--port <n>`             | listen port (default 5173); startup fails if it is taken                                        |
@@ -192,7 +192,7 @@ Every flag is optional:
 | `--favorites <file>`     | record global favorite counts in this JSON file; without it, no favorite controls appear        |
 | `--trust-proxy <value>`  | Express `trust proxy`; set `1` behind a reverse proxy that sends `X-Forwarded-For`              |
 | `--base-path <path>`     | serve under a subpath behind a prefix-stripping proxy, e.g. `/babel-index/`                     |
-| `--remote <url> --prefix <name>` | read a corpus uploaded with `npm run upload:r2` instead of `--images`                    |
+| `--remote <url> --prefix <name>` | read a collection uploaded with `npm run upload:r2` instead of `--images`                    |
 
 Behind a reverse proxy, pass `--trust-proxy 1`: favorite writes are
 rate-limited by address, and without it every visitor shares the proxy's
@@ -216,7 +216,7 @@ npm run generate:embeddings -- --images <dir>   # CLIP embeddings (needs the opt
 ```
 
 Titles, keywords and stories come from a `metadata.json` beside the
-images, specified in [`docs/corpus.md`](docs/corpus.md);
+images, specified in [`docs/tile-collection.md`](docs/tile-collection.md);
 [`tools/curation/`](tools/curation/README.md) holds the tools that produce
 it.
 
@@ -267,9 +267,9 @@ these gate a merge and which gate a deploy.
 | `packages/pipeline/` | the resolution-pyramid generator                                                  |
 | `build/`             | the Node loader hook that runs `.ts`/`.tsx` sources directly                      |
 | `deploy/`            | the VPS deploy script, its health check, and the nginx config                     |
-| `infra/`             | Terraform for the Cloudflare R2 bucket the live corpus is served from             |
+| `infra/`             | Terraform for the Cloudflare R2 bucket the live collection is served from             |
 | `tools/`             | offline CLIs: embeddings, R2 upload, tile geometry, doc checks, curation (Python) |
-| `assets/`            | the sample corpus and the shared center and generic tiles                         |
+| `assets/`            | the sample collection and the shared center and generic tiles                         |
 
 [`docs/file_map.md`](docs/file_map.md) describes every file.
 
@@ -277,7 +277,7 @@ these gate a merge and which gate a deploy.
 
 - [`docs/architecture.md`](docs/architecture.md) - a five-minute system overview: request flow, deploy, rendering, CI
 - [`docs/api.md`](docs/api.md) - the `/api/*` request/response contract
-- [`docs/corpus.md`](docs/corpus.md) - the corpus directory, `metadata.json` and `tagLinks.json`
+- [`docs/tile-collection.md`](docs/tile-collection.md) - the collection directory, `metadata.json` and `tagLinks.json`
 - [`docs/user-guide.md`](docs/user-guide.md) - every control in the library, annotated
 - [`docs/search_rules.md`](docs/search_rules.md) - what a search does, in full
 - [`docs/search_requirements.md`](docs/search_requirements.md) - what search must achieve for a reader, with test coverage tracked per requirement
@@ -290,11 +290,11 @@ these gate a merge and which gate a deploy.
 
 ## License
 
-This repository - the code, tile geometry, sample corpus, and every document
+This repository - the code, tile geometry, sample collection, and every document
 in it - is released under [the Unlicense](LICENSE): a public-domain
 dedication with no conditions attached.
 
-The full corpus of generated rooms hosted live at
+The full collection of generated rooms hosted live at
 [centuryglass.us/babel-index](https://centuryglass.us/babel-index/) (images,
 keywords, and story text - synced to R2 by `tools/upload`, not checked into
 this repo) is dedicated to the public domain under

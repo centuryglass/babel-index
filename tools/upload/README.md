@@ -1,6 +1,6 @@
 # tools/upload - Cloudflare R2 sync
 
-Uploads a corpus - room images at every generated pyramid level, the
+Uploads a collection - room images at every generated pyramid level, the
 keyword/story sidecar, the optional keyword -> external-link map, the CLIP
 embeddings blob, and the shared center/generic tiles - to Cloudflare R2.
 
@@ -25,7 +25,7 @@ you need something else (a custom domain, a local S3-compatible test server).
 ## Run
 
 ```sh
-npm run upload:r2                                # assets/corpus-sample/, prefix "corpus-sample"
+npm run upload:r2                                # assets/tile-collection-sample/, prefix "tile-collection-sample"
 npm run upload:r2 -- --images <dir> [--shared-dir assets] \
   [--prefix <name>] [--bucket <name>] [--center center.jpg] [--dry-run]
 ```
@@ -43,7 +43,7 @@ shape as a local scan:
 <prefix>/001.jpg                  level 0 (flat)
 <prefix>/512/001.jpg              level 1
 <prefix>/metadata.json
-<prefix>/tagLinks.json            only if the corpus has one
+<prefix>/tagLinks.json            only if the collection has one
 <prefix>/embeddings.bin
 <prefix>/embeddings.json
 <prefix>/manifest.json            the scanDirectory() result, read by --remote
@@ -54,9 +54,9 @@ shared/animation/manifest.json    only if the loading indicator is built
 shared/animation/sheets/*.png     the loading-animation frame sheets
 ```
 
-`prefix` defaults to the basename of `--images`, so different corpora don't
+`prefix` defaults to the basename of `--images`, so different collections don't
 collide in one bucket. The shared tiles live outside any prefix, at the
-bucket root, since multiple corpora can point at the same center/generic
+bucket root, since multiple collections can point at the same center/generic
 assets. The loading-animation manifest and sheets ride up the same way, read
 from `<shared-dir>/animation/`; a shared dir without one (no indicator built)
 uploads nothing there.
@@ -69,7 +69,7 @@ so the bucket needs no listing API: the scan runs once, here, at upload time.
 
 A run's manifest - key -> sha256 of the bytes uploaded under that key - is
 written back to `<prefix>/upload-manifest.json`. The next run hashes every
-local file the corpus touches and skips any whose hash still matches the
+local file the collection touches and skips any whose hash still matches the
 manifest's record, so touching a handful of images costs a handful of PUTs,
 not a full re-upload. Nothing is ever deleted from R2 by this tool.
 
@@ -77,12 +77,12 @@ The hash compared is the uploaded file's own bytes (`contentHash` from
 `packages/pipeline/mips.ts`), so a pyramid level re-encoded at a different
 JPEG quality uploads even though its source image is unchanged.
 
-Every run also lists the bucket (scoped to this corpus's prefix and to
+Every run also lists the bucket (scoped to this collection's prefix and to
 `shared/`) and re-uploads any key missing from that listing regardless of
 its recorded hash; `diffAgainstManifest` in `lib.ts` owns that rule.
 
-The pure decision logic (which files make up a corpus upload, and which of
-those are new/changed) lives in `lib.ts`, tested without any real corpus or
+The pure decision logic (which files make up a collection upload, and which of
+those are new/changed) lives in `lib.ts`, tested without any real collection or
 bucket in `lib.test.ts`.
 
 ## Cache purge
@@ -122,5 +122,5 @@ page still shows stale data (or CORS errors) after this tool prints
 
 Hashing and uploading both run several files at once, through the
 bounded-concurrency `createLimiter` from `packages/server/search-cache.ts`.
-A corpus is many small files, and running them one at a time pays full
+A collection is many small files, and running them one at a time pays full
 round-trip latency per file.

@@ -312,7 +312,7 @@ export const DEFAULTS: Defaults = {
 
   map: {
     /**
-     * Fraction of cells that may hold a corpus room; the rest are copies of the
+     * Fraction of cells that may hold a collection room; the rest are copies of the
      * generic. Low enough that finding a distinct room feels like finding
      * something. A search's density gradient lifts the middle of the map away
      * from this baseline - see `search.density`.
@@ -342,11 +342,11 @@ export const DEFAULTS: Defaults = {
     /**
      * How long a rearrangement takes, in milliseconds.
      *
-     * Duration is the viewport's, not the corpus's
+     * Duration is the viewport's, not the collection's
      * (docs/agents/rearrangement.md, "The reorder animation"): the planner
      * slides only the lines that cross the on-camera rectangle and everything
      * else is an invisible swap, so these numbers set the whole animation
-     * whatever the corpus size. `packages/web/src/lib/slide.ts` is how a plan
+     * whatever the collection size. `packages/web/src/lib/slide.ts` is how a plan
      * is laid out in time, and `packages/map/illusion.ts` is why a wave's lines
      * are free to move at once.
      *
@@ -425,7 +425,7 @@ export const DEFAULTS: Defaults = {
      * How many pages stay mounted either side of the one being read - the DOM
      * budget in one number. One either side is enough that a fast scroll never
      * outruns the mount, and the mounted set stays a window rather than the
-     * whole corpus of rows.
+     * whole tile collection of rows.
      *
      * Zero is what pagination passes, which is the knob that makes the two modes
      * one code path. `windowFor` (`catalog.ts`) widens it when a screenful spans
@@ -505,7 +505,7 @@ export const DEFAULTS: Defaults = {
 
     /**
      * Query tokens shorter than this never match. Without a floor, `a` matches
-     * most keywords in the corpus by substring and the partial-match score stops
+     * most keywords in the collection by substring and the partial-match score stops
      * meaning anything.
      */
     minTokenLength: 3,
@@ -515,7 +515,7 @@ export const DEFAULTS: Defaults = {
      *
      * A guard against a plausible accident rather than an attack: pasting a tag
      * list into the search field. Scoring is O(tokens x keywords) per room, so a
-     * two-thousand-token query against a five-thousand-room corpus is tens of
+     * two-thousand-token query against a five-thousand-room collection is tens of
      * millions of substring tests on the main thread, and the page simply stops.
      *
      * A bound is also what lets everything that displays a query stay sane - the
@@ -533,7 +533,7 @@ export const DEFAULTS: Defaults = {
      *
      * Server-side only: it governs `packages/server/app.ts`'s text tower, not the
      * vision tower `tools/embed/embed.ts` runs offline, which stays fp32 because it
-     * runs once per corpus rather than per request.
+     * runs once per collection rather than per request.
      */
     clipTextDtype: 'fp32',
 
@@ -815,7 +815,7 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
  *   - `floor >= peakAt` leaves the ramp no width, and `createLayout()` throws
  *     on it.
  *   - `clipHigh <= clipCentre` means CLIP contributes no strength at all,
- *     which from the map looks like a corpus with no embeddings blob.
+ *     which from the map looks like a collection with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {
   const d = DEFAULTS.search.density;

@@ -84,7 +84,7 @@ function absoluteAsset(origin: string, path: string): string {
 export interface CreateAppOptions {
   /** the initial scan (see scan.ts or remote.ts) */
   manifest: Manifest;
-  /** directory the corpus is served from (local mode); omit in remote mode,
+  /** directory the collection is served from (local mode); omit in remote mode,
    *  where the manifest's urls already point directly at R2/Cloudflare and
    *  this server never serves images at all (see remote.ts) */
   imagesDir?: string | null;
@@ -108,7 +108,7 @@ export interface CreateAppOptions {
    *  `app.locals.broadcastReload` for a rebuild to call */
   watch?: boolean;
   /** directory of app-level static assets (favicon, touch icon, manifest,
-   *  OG/Twitter card image) - see packages/web/public. Not corpus content, so
+   *  OG/Twitter card image) - see packages/web/public. Not collection content, so
    *  it is unrelated to imagesDir/sharedDir; served at the same root paths
    *  index.html's icon/manifest links use.
    *
@@ -205,7 +205,7 @@ export function createApp({
    *
    * `commit` is the reason this exists at all: a 200 from the old process
    * is indistinguishable from a 200 from the new one (see version.ts).
-   * `rooms` is the second half - a corpus the scan came up empty on serves
+   * `rooms` is the second half - a collection the scan came up empty on serves
    * a perfectly healthy library with nothing in it, which is what a wrong
    * --images path on a restarted unit looks like from outside.
    *
@@ -274,7 +274,7 @@ export function createApp({
   }
 
   // Which room files exist, for the favorite routes to validate against. Fixed
-  // for the process's lifetime, like the manifest it reads: the corpus is
+  // for the process's lifetime, like the manifest it reads: the collection is
   // scanned once at startup (index.ts) and nothing re-reads it while serving.
   const roomFiles = new Set(manifest.rooms.map((room) => room.file));
 
@@ -289,7 +289,7 @@ export function createApp({
    *
    * Two fallbacks return a deterministic pseudo-ranking, so the mechanic -
    * type a term, watch the library rearrange around the center - survives
-   * without a model: no blob for this corpus, or the text tower failing to
+   * without a model: no blob for this collection, or the text tower failing to
    * load (offline with nothing cached). Both are labelled `stub`, so the UI
    * can say the order means nothing.
    */
@@ -339,7 +339,7 @@ export function createApp({
    * their browser (`persist.ts`) and the server never assembles a
    * per-visitor view. The writes carry no body, so no body parser is
    * mounted; the room is named in the path and validated against the
-   * corpus, which is also what keeps an arbitrary string out of the store.
+   * collection, which is also what keeps an arbitrary string out of the store.
    *
    * Identity and throttling sit on different keys (docs/agents/favorites.md,
    * "Favorite writes are rate-limited by `req.ip`"):
@@ -388,7 +388,7 @@ export function createApp({
     // cannot climb out of the images directory.
     app.use('/images', express.static(imagesDir, { maxAge: '1h', immutable: true }));
 
-    // The shared tiles (center + generic tiles) live outside the corpus, so
+    // The shared tiles (center + generic tiles) live outside the collection, so
     // they get their own mount. When sharedDir is the images directory the two
     // overlap harmlessly - the manifest still addresses shared tiles via /shared.
     app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
@@ -606,7 +606,7 @@ export function createApp({
         if (asked !== slugs.slugs[id]) {
           // 302, not 301: a browser caches a permanent redirect forever, so a
           // retitled room would leave a reader's own cache sending them to a
-          // url this corpus no longer has - the failure the stem alias exists
+          // url this collection no longer has - the failure the stem alias exists
           // to prevent. Nothing on the site links a stem, and the sitemap
           // lists only canonical urls, so there is little for a crawler to
           // consolidate here anyway.
@@ -643,7 +643,7 @@ export function createApp({
      * the center shelf - a no-JS/crawler-readable page plus an
      * `initialRoute` hint so `main.tsx` opens the matching dialog once JS
      * takes over (the same pattern as `/catalog` above, with a static
-     * bodyHtml since neither page has per-corpus content).
+     * bodyHtml since neither page has per-collection content).
      */
     app.get('/help', (req, res, next) => {
       const { title, description, bodyHtml } = renderHelpPage(base);

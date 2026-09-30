@@ -14,7 +14,7 @@ There is no database, no framework server and no separate build step.
 ```
 Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
    |                                      |
-   |                                      +-- corpus: local disk (--images)
+   |                                      +-- collection: local disk (--images)
    |                                      |   or a manifest from R2 (--remote)
    |                                      |
    |                                      +-- optional CLIP text tower
@@ -25,15 +25,15 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
 ```
 
 - **Client**: `packages/web` - a React app drawing the map on a canvas,
-  plus the "catalog", a conventional list view of the same corpus.
+  plus the "catalog", a conventional list view of the same collection.
 - **Server**: `packages/server` - Express routes for the manifest, search,
   favorites, health, the admin log viewer, and server-rendered catalog,
   room, help and about pages for crawlers and no-JS readers.
 - **Shared logic**: `packages/map` (placement, ranking, scoring; no DOM)
   and `packages/config` (tunable numbers) are imported by both client and
   server, so each piece of ranking math has one implementation.
-- **Corpus**: a directory of room images at several resolutions, a
-  `metadata.json` sidecar (titles, keywords, stories) and an
+- **Tile collection** ("the collection"): a directory of room images at
+  several resolutions, a `metadata.json` sidecar (titles, keywords, stories) and an
   `embeddings.bin` of CLIP image embeddings. `packages/pipeline` builds the
   resolution pyramid; `tools/embed` builds the embeddings.
 
@@ -51,7 +51,7 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
    `/style.css` is not bundled; like `index.html`, it is re-read per request,
    with `packages/server/stylesheet.ts` inlining the `css/` partials it
    imports.
-3. **Corpus.** The client fetches `/api/manifest` (room list, asset urls,
+3. **Collection.** The client fetches `/api/manifest` (room list, asset urls,
    resolved config), then fetches `metadata.json` and `embeddings.bin`
    directly by url and builds its search index in the browser.
 4. **Search.** The client sends the query text to `/api/search`, which runs
@@ -79,21 +79,21 @@ The cost is that a client edit needs a restart under `npm run demo`.
 `npm run demo:watch` removes it: it restarts the process on a server edit,
 rebuilds the bundle on a client edit, and reloads the open page either way.
 
-## Where the corpus lives
+## Where the collection lives
 
-The server reads the corpus in one of two modes, chosen by flag:
+The server reads the collection in one of two modes, chosen by flag:
 
 - **Local** (`--images <dir>`): `scan.ts` walks the directory and the server
   serves it under `/images`, with the shared art (center tile, generic
   tiles) under `/shared`. `npm run demo` defaults to
-  `assets/corpus-sample/`, so a clone runs with no external services.
+  `assets/tile-collection-sample/`, so a clone runs with no external services.
 - **Remote** (`--remote <url> --prefix <name>`): `remote.ts` fetches the
-  manifest that `tools/upload/upload-r2.ts` wrote when it synced the corpus
+  manifest that `tools/upload/upload-r2.ts` wrote when it synced the collection
   to Cloudflare R2 (incrementally, by content hash), and rewrites every url
   in it to point at that host. The browser fetches tiles, metadata and
   embeddings from R2 directly; this server never proxies them.
 
-The live site runs in remote mode. The corpus is large, static and
+The live site runs in remote mode. The collection is large, static and
 read-heavy, so keeping it off the app server means a redeploy never moves
 image data, and Cloudflare serves it at close to zero bandwidth cost.
 `infra/` holds the Terraform for the bucket and its cache and rate-limit
@@ -143,7 +143,7 @@ headless Chromium's software WebGL2, so it needs no GPU.
 A rearrangement (re-sorting the map after a search or a shuffle) is a
 sliding-tile illusion, not an instant relayout. `packages/map/illusion.ts`
 plans whole-row and whole-column rotations inside the viewport and swaps
-everything else out of sight, so visible cost never scales with corpus
+everything else out of sight, so visible cost never scales with collection
 size. The rooms the slide will show are fetched before it starts.
 
 ## Testing and CI

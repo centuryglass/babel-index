@@ -4,6 +4,6 @@ output "r2_bucket_name" {
 }
 
 output "assets_hostname" {
-  description = "Hostname the bucket is bound to, once enable_zone_protections is true. This is what a future R2-backed demo server would read the corpus from."
+  description = "Hostname the bucket is bound to, once enable_zone_protections is true. This is what a future R2-backed demo server would read the tile collection from."
   value       = var.enable_zone_protections ? var.assets_hostname : null
 }

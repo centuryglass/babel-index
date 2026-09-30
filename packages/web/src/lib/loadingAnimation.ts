@@ -311,9 +311,9 @@ export function createLoadingAnimation(
 /**
  * Fetch and decode the loading-animation manifest and its sheets from
  * `<sharedBase>/animation/`. Returns null when there is no manifest to load (a
- * corpus deployed without the indicator), when it is malformed, or when no sheet
+ * collection deployed without the indicator), when it is malformed, or when no sheet
  * decodes - every one of which means "play no indicator", never a thrown error
- * on the corpus-load path. A non-positive `frameDurationMs` falls back to 100ms
+ * on the collection-load path. A non-positive `frameDurationMs` falls back to 100ms
  * per frame rather than rejecting the manifest. `sharedBase` is relative (see
  * `scan.ts`), so the urls built here inherit the subpath deployment's
  * `<base href>`.

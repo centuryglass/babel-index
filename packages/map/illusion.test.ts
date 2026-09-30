@@ -268,7 +268,7 @@ test('every distinct value trapped on camera at the start', () => {
 
 test('only the region is ever slid; everything else is swapped', () => {
   // The property the animation depends on: visible work is bounded by the
-  // viewport, not by the corpus. A shift of a line that does not cross the
+  // viewport, not by the collection. A shift of a line that does not cross the
   // region would be wasted motion off camera, and there are none.
   const r = rng(5);
   const W = 40;

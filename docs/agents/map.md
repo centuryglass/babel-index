@@ -36,9 +36,9 @@ still apply.
   metric: a circular boundary around an elliptical spread of rooms is empty
   at top and bottom.
 - **The center room is cell (0, 0)**, and `packages/map` never assigns a
-  corpus room there.
-- **Corpus size and generic ratio are runtime parameters** to
-  `createLayout()`. Growing the corpus keeps existing slots in place and
+  collection room there.
+- **Collection size and generic ratio are runtime parameters** to
+  `createLayout()`. Growing the collection keeps existing slots in place and
   appends further out; the sliders depend on that, and `ordering.test.ts`
   asserts it.
 - **Only four things recompute placement.** A relevance re-sort is a swap of
@@ -59,7 +59,7 @@ still apply.
   always draws the blank `center_tile.png` (the `CENTER` tile id). Every
   generic cell draws one of the inpainted generic tiles (`genericId(i)`),
   never the blank tile. `genericId(-1)` is `CENTER`, the fallback only for a
-  corpus with no generic tiles.
+  collection with no generic tiles.
 - **Which generic tile a cell shows depends only on its coordinate.**
   `layout.genericIndexAt(x, y)` is a seeded hash of the coordinate, so a
   reorder never changes a generic cell's face. That lets `board.ts` and
@@ -71,7 +71,7 @@ still apply.
   `--shared-dir` (default `assets/`): the center by name (`center_tile.*`,
   else `center.*`, else `--center`), and the generic tiles as every image in
   `generic/`. They ride in the manifest as `shared: { center, generic }` and
-  are served from `/shared/`, not `/images/`. A `center.*` in the corpus dir
+  are served from `/shared/`, not `/images/`. A `center.*` in the collection dir
   counts as a generic tile only when `sharedDir === imagesDir`.
 - **Shared art has its own pyramids, in separate manifest arrays that are
   not interchangeable.** `generate:mips --shared-dir`
@@ -89,7 +89,7 @@ still apply.
 
   `main.tsx` pins the center at level 0 and each generic or distill tile at
   the coarsest level its own array has - never a hardcoded `FALLBACK_LEVEL`,
-  since a corpus with no shared pyramid has only level 0. `drawGenericFade`
+  since a collection with no shared pyramid has only level 0. `drawGenericFade`
   (and its GL and slide counterparts) draws the distill alternate at the
   base tile's level: distill is a mode toggle, visible at any zoom.
 

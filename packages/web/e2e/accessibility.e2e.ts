@@ -59,7 +59,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // map and a centered camera, so the restore is in `finally` (see
     // docs/agents/testing.md, "Test cleanup belongs in `finally`").
     try {
-      // "clockwork" is a keyword in the sample corpus's own metadata, so it
+      // "clockwork" is a keyword in the sample collection's own metadata, so it
       // ranks real results rather than falling back to CLIP alone. A query
       // with zero matches would test the empty state instead. The live-region
       // and reduced-motion tests later in this file need this search to stay
@@ -395,9 +395,9 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
   test("a room's picture caption becomes real <img alt> text in the catalog and overlay, and nothing is invented when it is absent", async () => {
     const { page } = session;
-    // The sample corpus ships a caption for every room (the curation tools
+    // The sample collection ships a caption for every room (the curation tools
     // produce it upstream of this repo), so the present case runs end to end
-    // (fetch, join, `describeRoom`, `<img alt>`) against the corpus as it
+    // (fetch, join, `describeRoom`, `<img alt>`) against the collection as it
     // ships. The absent case, where nothing may be invented in the caption's
     // place, is produced by routing the sidecar's `alt` back out.
     const openCatalogHere = async () => {
@@ -411,7 +411,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       await settled(page);
     };
 
-    // Every caption the corpus actually ships, so the assertions can check "a
+    // Every caption the collection actually ships, so the assertions can check "a
     // real one reached the screen" without pinning which room lands in row 1 or
     // what its exact text is - both free to move as the sample set does. Read it
     // the way the app does - `api/manifest`, then `manifest.metadata.url` - so
@@ -426,7 +426,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
         .map((room) => room.alt)
         .filter((alt): alt is string => typeof alt === 'string' && alt.length > 0)
     );
-    assert.ok(captions.size > 0, 'the sample corpus must ship captions for this test to mean anything');
+    assert.ok(captions.size > 0, 'the sample collection must ship captions for this test to mean anything');
 
     // As it ships: the room's own caption reaches the tag, unchanged. Row 0 is
     // the center; row 1 is the first real room.

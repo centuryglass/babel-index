@@ -15,10 +15,10 @@ npm run profile:chrome -- --server http://localhost:5173   # profile a server yo
 ```
 
 `--server` points this at a demo server you launched yourself, e.g. one
-serving a real dataset (`npm run demo -- --images /path/to/your/corpus`).
+serving a real dataset (`npm run demo -- --images /path/to/your/collection`).
 With `--server` this tool spawns nothing and kills nothing; without it, it
 boots and tears down its own server against `--images` (default
-`assets/corpus-sample`).
+`assets/tile-collection-sample`).
 
 Output lands in `out/<renderer>-<seed>-<timestamp>/`:
 
@@ -44,7 +44,7 @@ Output lands in `out/<renderer>-<seed>-<timestamp>/`:
 | `--seed <string>` | `babel-perf` | same seed -> same scripted sequence, see `debugActions.ts` |
 | `--duration <ms>` | `60000` | how long the scripted session runs |
 | `--renderer <canvas2d\|webgl>` | `webgl` | which map renderer to profile - adds `&webgl=1` or `&webgl=0` to the page URL |
-| `--images <dir>` | `assets/corpus-sample` | corpus the demo server serves - ignored if `--server` is given |
+| `--images <dir>` | `assets/tile-collection-sample` | collection the demo server serves - ignored if `--server` is given |
 | `--server <url>` | (none) | profile an already-running demo server instead of spawning one |
 | `--sample-interval <ms>` | `1000` | how often `Performance.getMetrics` is sampled |
 | `--headed` | off | run with a visible window instead of headless |

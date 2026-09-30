@@ -31,7 +31,7 @@ test('a page carries each room with its rank in the whole ranking, not in the pa
 test('the last page is short, and a page past the end is empty rather than an error', () => {
   assert.equal(pageOf(order, 2, 10).length, 7);
   assert.deepEqual(pageOf(order, 9, 10), []);
-  // A corpus that shrank under a stored page number must not throw.
+  // A collection that shrank under a stored page number must not throw.
   assert.deepEqual(pageOf([], 3, 10), []);
 });
 

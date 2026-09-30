@@ -103,7 +103,7 @@ export function describeRoom(id: number, rank: number, total: number, entry: Roo
     // optional `alt`. Separate from `description`: the story is fiction
     // about the room and the caption is a report of the image, and
     // collapsing them would let a reader take one for the other. Null far
-    // more often than not - most corpora do not carry the field at all -
+    // more often than not - most collections do not carry the field at all -
     // and every consumer has to read as well without it as with it.
     picture: entry?.alt ?? null,
   };
@@ -117,7 +117,7 @@ export function describeRoom(id: number, rank: number, total: number, entry: Roo
  * use; what carries the information is the search made spatial, and that is
  * a fact the layout already knows. `gradedCount` is the size of the cluster
  * the density gradient lifted above the baseline - so "9 clustered near the
- * center" versus "spread evenly" says in one clause whether the corpus
+ * center" versus "spread evenly" says in one clause whether the collection
  * could answer the query, which is what the motion was for.
  *
  * Says nothing about the animation, or about whether there was one: reduced

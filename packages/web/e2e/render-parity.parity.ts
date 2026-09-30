@@ -1,5 +1,5 @@
 /**
- * Render-mode parity: drive the same corpus, viewport and camera through both
+ * Render-mode parity: drive the same collection, viewport and camera through both
  * the Canvas2D renderer and the WebGL one (`?webgl=0` vs `?webgl` -
  * `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`), and check the two draw
  * the same map. This is the real-GPU check behind the lockstep invariant in
@@ -179,7 +179,7 @@ describe('render-mode parity: Canvas2D vs WebGL draw the same map', { concurrenc
   before(async () => {
     // Favorites on both so the on-map favorite badge (and, under GL, its glow
     // texture path) is actually drawn on every real room in the zoomed scene.
-    // Both sessions get the identical viewport and corpus openLibrary fixes, so
+    // Both sessions get the identical viewport and collection openLibrary fixes, so
     // the only variable between them is the renderer.
     [c2d, gl] = await Promise.all([
       openLibrary({ favorites: true, webgl: false }),

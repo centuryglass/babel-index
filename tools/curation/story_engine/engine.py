@@ -28,7 +28,7 @@ pitch and draft lists is ``workspace.py``'s job.
 
 Everything project-specific lives in the ``Frame``, so the engine carries
 no knowledge of Babel Index. The writer never sees other stories: feeding it
-the corpus makes it copy the corpus's patterns.
+the collection makes it copy the collection's patterns.
 """
 
 from __future__ import annotations

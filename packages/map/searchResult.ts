@@ -99,7 +99,7 @@ export interface ScoreBreakdown {
 }
 
 /**
- * One signal's own ranking over the corpus, independent of the composite
+ * One signal's own ranking over the collection, independent of the composite
  * `order`, and - like `ScoreBreakdown` - parallel to `order` by rank, not by
  * id. 1-based competition ranking with a per-rank tie count; see `rankAxis`
  * in `scoring.ts` for the rule, and docs/search_rules.md "Reporting" for how
@@ -112,7 +112,7 @@ export interface SignalRanks {
   clip: Int32Array;
 }
 
-/** `rankHybrid()`'s return value: a completed ranking over the whole corpus. */
+/** `rankHybrid()`'s return value: a completed ranking over the whole collection. */
 export interface RankHybridResult {
   /** Room ids, best first. */
   order: number[];
@@ -127,7 +127,7 @@ export interface RankHybridResult {
 /**
  * `useSearch.ts`'s `result` state: a ranking bound to the term it was run
  * for, or the no-signal stub (`strength`/`breakdown`/`signals`/`ranks`/`ties`
- * all `null`) when the corpus has neither embeddings nor keywords to rank
+ * all `null`) when the collection has neither embeddings nor keywords to rank
  * with.
  */
 export interface SearchResult {
@@ -197,7 +197,7 @@ export interface StoryRankingSummary {
 export interface ClipRankingSummary {
   rank: number;
   ties: number;
-  /** the raw cosine - absolute, not relative to this query's corpus */
+  /** the raw cosine - absolute, not relative to this query's collection */
   cosine: number;
   /** the strength curve as a clamped percentage (docs/search_rules.md "Reporting") */
   percent: number;
@@ -212,7 +212,7 @@ export interface ClipRankingSummary {
 export interface RankingExplanation {
   /** 1-based - "#4 of 2048" */
   rank: number;
-  /** corpus size - the "of 2048" in "#4 of 2048" */
+  /** collection size - the "of 2048" in "#4 of 2048" */
   total: number;
   /** the composite `strength`, as a clamped percentage */
   percent: number;

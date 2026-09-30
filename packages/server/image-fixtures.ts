@@ -4,7 +4,7 @@
  * These are headers, not images: enough bytes for `imageSize` to answer, and
  * nothing that would decode. Built here rather than committed as binaries so
  * the dimensions under test are visible in the test itself, and no test
- * depends on `assets/corpus-sample/` staying as it is today.
+ * depends on `assets/tile-collection-sample/` staying as it is today.
  */
 
 /** PNG: 8-byte signature, then IHDR carries the size in the first chunk. */

@@ -1,7 +1,7 @@
 /**
  * Pure decision logic for the R2 upload tool: which files need uploading, and
  * under what keys. No filesystem and no network here, so the rules are
- * testable without a corpus on disk or a bucket to talk to; `upload-r2.ts`
+ * testable without a collection on disk or a bucket to talk to; `upload-r2.ts`
  * does the I/O.
  */
 import type { Manifest } from '../../packages/map/manifest.ts';
@@ -17,11 +17,11 @@ export interface UploadEntry {
  * The loading-animation manifest and every sheet it names, under
  * `shared/animation/`.
  *
- * The corpus `Manifest` does not describe these files, so the caller loads
+ * The tile collection's `Manifest` does not describe these files, so the caller loads
  * the on-disk animation manifest itself and hands it in. Null (no manifest on
  * disk) uploads nothing - the same "no indicator deployed" case the client
  * (`loadingAnimation.ts`) tolerates as a 404. Like the rest of `shared/`,
- * these are shared across corpora, so no corpus prefix gates them.
+ * these are shared across collections, so no collection prefix gates them.
  */
 function animationKeys(animation: AnimationManifest | null | undefined): string[] {
   if (!animation) return [];
@@ -40,16 +40,16 @@ export interface HashedUploadEntry extends UploadEntry {
 export type JoinPath = (...parts: string[]) => string;
 
 /**
- * Every (local path, remote key) pair a corpus upload touches, derived from a
+ * Every (local path, remote key) pair a collection upload touches, derived from a
  * `scanDirectory()` manifest the same way the demo server and `tools/embed`
- * read it - "what files make up a corpus" has one definition, so a change to
+ * read it - "what files make up a collection" has one definition, so a change to
  * the scan's shape lands here too.
  *
  * Keys mirror the local layout (`<prefix>/<file>`, `<prefix>/<level-dir>/<file>`)
  * so `packages/server/remote.ts` can resolve a room's url the same way
  * `packages/web/src/lib/rooms.ts` does locally. Shared assets (the center tile
- * and the generics) live outside any one corpus's prefix, at `shared/...`,
- * matching the demo server's `/shared/` mount, so multiple corpora point at
+ * and the generics) live outside any one collection's prefix, at `shared/...`,
+ * matching the demo server's `/shared/` mount, so multiple collections point at
  * the same tiles.
  *
  * `join` is path.join, injected so this stays free of node:path and testable
@@ -141,7 +141,7 @@ export function buildUploadList(
         });
   }
 
-  // Fixed app art, not part of any corpus's manifest.shared: the badges and
+  // Fixed app art, not part of any collection's manifest.shared: the badges and
   // toggles resolve off `manifest.sharedBase` in packages/web/src/lib/rooms.ts,
   // the leather texture behind the dark chrome via a relative `url(shared/...)`
   // in packages/web/css/base.css. Always uploaded, unlike the manifest-gated
@@ -209,7 +209,7 @@ export function diffAgainstManifest(
 
 /**
  * The keys a browser reads with `fetch()` rather than an `<img>` tag: the
- * corpus sidecars in `packages/web/src/hooks/useCorpus.ts` and the animation
+ * collection sidecars in `packages/web/src/hooks/useTileCollection.ts` and the animation
  * files in `loadingAnimation.ts`, gated on the same manifest fields as
  * `buildUploadList`.
  *

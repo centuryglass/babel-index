@@ -1,6 +1,6 @@
 # infra - Cloudflare R2, applied locally
 
-Terraform for the R2 bucket `tools/upload/upload-r2.ts` syncs the corpus
+Terraform for the R2 bucket `tools/upload/upload-r2.ts` syncs the collection
 into, plus the abuse protection in front of it. There is no CI/CD wiring
 here: this is applied by hand, from your own machine, with
 credentials that never touch a GitHub Actions runner or secret store.
@@ -17,7 +17,7 @@ real bill, not just a slowdown. The defenses here, cheapest first:
    lever. A cached GET is served by Cloudflare and never becomes a billed R2
    Class B operation at all.
 2. **WAF rate limiting** (`cloudflare_ruleset.rate_limit_assets`) - throttles
-   an IP that's hammering the corpus hostname before it reaches R2.
+   an IP that's hammering the collection hostname before it reaches R2.
 3. **A billing alert** (`cloudflare_notification_policy.r2_spend_alert`,
    optional) - not a kill switch (R2 has none), but tells you something is
    wrong before the invoice does.
@@ -95,12 +95,12 @@ apply. They are the kind of detail that drifts between provider versions:
   traffic shaped like Bot Fight Mode targets shows up.
 - `assets_hostname` is currently the only path-scoping the rate limit and
   cache rules use (`http.host eq ...`). If the bucket ever serves more than
-  the corpus under that hostname, narrow the `expression` in
+  the collection under that hostname, narrow the `expression` in
   `abuse-protection.tf` to a path pattern too.
 - Nothing here puts a Worker in front of R2 to check auth/referrer/signed
   URLs before proxying - the bucket is public read once
   `enable_zone_protections` binds it to a hostname. Add that layer if the
-  corpus needs to not be fully public.
+  collection needs to not be fully public.
 - `cloudflare_r2_bucket_cors`'s schema was confirmed against the provider's
   own docs at the exact version pinned in `versions.tf` (v5.24.0) - `rules`
   is a list of `{ id, allowed: { methods, origins, headers }, expose_headers,

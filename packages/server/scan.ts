@@ -11,7 +11,7 @@ const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * Where a local scan's urls are rooted - the one place "what does a
  * room/shared/blob url look like" is decided. `remote.ts` rewrites both the
  * manifest's `imagesBase`/`sharedBase` fields and every url built from these
- * constants when serving a corpus from R2/Cloudflare instead of disk;
+ * constants when serving a collection from R2/Cloudflare instead of disk;
  * `createUrlFor` (packages/web/src/lib/rooms.ts) reads `imagesBase` off the
  * manifest rather than restating the string.
  *
@@ -30,7 +30,7 @@ export const METADATA_FILE = 'metadata.json';
 
 /**
  * Keyword -> external-link map (e.g. a Wikipedia page for "Cubism"), hand-
- * edited rather than generated. Optional, like the sidecar above - a corpus
+ * edited rather than generated. Optional, like the sidecar above - a collection
  * with no file here just shows chips with no "more about this" link.
  */
 export const TAG_LINKS_FILE = 'tagLinks.json';
@@ -54,7 +54,7 @@ export const GENERIC_DIR = 'generic';
 export const GENERIC_DISTILL_DIR = 'generic_distill';
 
 /**
- * The favorite badge's two faces - fixed app art, not scanned corpus content,
+ * The favorite badge's two faces - fixed app art, not scanned collection content,
  * but `discoverFavoriteLevels` checks for these two exact names to find the
  * badge's pyramid. Mirrors the literal filenames `rooms.ts` resolves the
  * badge's level-0 urls from; kept as a separate copy because the two modules
@@ -110,21 +110,21 @@ export async function imageSize(path: string): Promise<ImageSize | null> {
 }
 
 /**
- * Which of the pyramid's levels have actually been generated for this corpus.
+ * Which of the pyramid's levels have actually been generated for this collection.
  *
  * The generator writes `<dir>/<width>/<file>` for every level below the
  * source and leaves level 0 flat, so discovery is: work out what the ladder
  * *would* produce at this source size, then keep the rungs whose directory
  * is there. Level 0 is always present - it is the flat files
  * themselves - which is what keeps "point it at a directory of images" true
- * for a corpus that has never been near the pipeline.
+ * for a collection that has never been near the pipeline.
  *
  * A level at or above `SHEETS.fromLevel` is checked as sheet-packed first:
- * `<dir>/<width>-sheets/` holding every `sheet-NNNN.jpg` the corpus's room
+ * `<dir>/<width>-sheets/` holding every `sheet-NNNN.jpg` the collection's room
  * count requires (`sheetPlan`, from `packages/pipeline/layout.ts` - the same
  * formula the pipeline used to write them). A level is one or the other,
  * never both: an incomplete or missing sheets directory falls back to the
- * per-file `<width>/` check, which is what lets a corpus mid-rollout (mips
+ * per-file `<width>/` check, which is what lets a collection mid-rollout (mips
  * written, sheets not yet packed) still serve that level per-file rather
  * than not at all.
  *
@@ -136,7 +136,7 @@ export async function imageSize(path: string): Promise<ImageSize | null> {
  * sheets are checked for completeness.
  *
  * @param source level-0 dimensions
- * @param roomCount how many rooms the corpus has, to know how many sheets a
+ * @param roomCount how many rooms the collection has, to know how many sheets a
  *   sheet-packed level should hold
  */
 export async function discoverLevels(dir: string, source: ImageSize | null, roomCount = 0): Promise<LevelInfo[]> {
@@ -199,7 +199,7 @@ export async function discoverLevels(dir: string, source: ImageSize | null, room
  * are present; the badge is never sheet-packed, so this only ever checks the
  * per-file shape `discoverLevels` does for a level below `SHEETS.fromLevel`.
  *
- * @param source the corpus's reference tile size, same as `discoverLevels` gets
+ * @param source the collection's reference tile size, same as `discoverLevels` gets
  */
 async function discoverFavoriteLevels(sharedDir: string, source: ImageSize | null): Promise<LevelInfo[]> {
   if (!source?.w || !source?.h) return [{ level: 0, w: null, h: null, dir: null }];
@@ -255,7 +255,7 @@ export function resolveCenterFile(files: string[], center?: string): string | nu
  *
  * The center is served at cell (0, 0) and reserved for the search box and
  * controls, so it is always the plain center render - see `resolveCenterFile`.
- * `allowFirst` covers the case where the shared assets live in the corpus
+ * `allowFirst` covers the case where the shared assets live in the collection
  * directory itself: with nothing named center present, the first image
  * stands in.
  *
@@ -269,7 +269,7 @@ export function resolveCenterFile(files: string[], center?: string): string | nu
  * missing entries or absent entirely.
  *
  * `levels` is filled in by the caller (`scanDirectory`), once it has settled
- * on the corpus's reference size - see that function's own comment.
+ * on the collection's reference size - see that function's own comment.
  */
 async function scanShared(
   sharedDir: string,
@@ -300,20 +300,20 @@ async function scanShared(
 }
 
 /**
- * Scan a directory into a corpus manifest.
+ * Scan a directory into a tile collection manifest.
  *
  * Ids are the positions in the sorted filename list - stable across
  * restarts, which is what the map's slot assignment keys on, and they
- * renumber when the corpus changes (docs/agents/favorites.md, "Favorites").
+ * renumber when the collection changes (docs/agents/favorites.md, "Favorites").
  *
  * The shared tiles - the blank center and the generic tiles - live in
- * `sharedDir`, which defaults to the corpus directory itself: there, a
+ * `sharedDir`, which defaults to the collection directory itself: there, a
  * `center.*` in the images folder doubles as the generic wallpaper. Usually
  * it points at the repo's `assets/`, so the center render is shared across
- * corpora and reached from outside `--images`.
+ * collections and reached from outside `--images`.
  *
  * @param opts.center names the center tile; opts.sharedDir is where the
- *   shared tiles live (default: the corpus directory)
+ *   shared tiles live (default: the collection directory)
  */
 export async function scanDirectory(
   dir: string,
@@ -323,26 +323,26 @@ export async function scanDirectory(
 
   if (!files.length) throw new Error(`no images found in ${dir}`);
 
-  // When the shared tiles are the corpus directory itself, the center may be
+  // When the shared tiles are the collection directory itself, the center may be
   // one of these files and the first image can stand in for a missing center.
   const sameDir = resolve(sharedDir) === resolve(dir);
   const sharedAssets = await scanShared(sharedDir, { center, allowFirst: sameDir });
 
-  // A center living in the corpus directory is not also a ranked room: being
+  // A center living in the tile collection directory is not also a ranked room: being
   // wallpaper and a search result at once would put it everywhere and in the
   // ranking too. A center living elsewhere excludes nothing.
   const excluded = sameDir && sharedAssets.center ? sharedAssets.center.file : null;
-  const corpus = files.filter((f) => f !== excluded);
+  const roomFiles = files.filter((f) => f !== excluded);
 
   const rooms: Room[] = await Promise.all(
-    corpus.map(async (file, id) => {
+    roomFiles.map(async (file, id) => {
       const path = join(dir, file);
       const [size, st] = await Promise.all([imageSize(path).catch(() => null), stat(path)]);
       return { id, file, url: `${IMAGES_BASE}/${encodeURIComponent(file)}`, bytes: st.size, ...(size ?? {}) };
     })
   );
 
-  // The ladder is measured off the corpus, not the shared tiles: a shared tile
+  // The ladder is measured off the collection, not the shared tiles: a shared tile
   // is one file and may be any shape, while the rooms are what the map is
   // mostly made of. Fall back to a shared tile only when no room reported a size.
   const source =
@@ -377,7 +377,7 @@ export async function scanDirectory(
     discoverFavoriteLevels(sharedDir, sharedSize),
   ]);
   // Only intersect against a tree that actually has something to pyramid -
-  // a corpus with generic tiles but no separate center (or vice versa) must
+  // a collection with generic tiles but no separate center (or vice versa) must
   // not have its real levels vetoed by the other tree's untouched level 0.
   const genericLevelNumbers = new Set(genericLevels.map((l) => l.level));
   const sharedLevels =
@@ -389,7 +389,7 @@ export async function scanDirectory(
 
   // If tools/embed has left a blob alongside the images, surface its metadata
   // so the client can fetch it and rank in the browser. A stale blob - one
-  // whose count no longer matches the corpus - is ignored rather than
+  // whose count no longer matches the collection - is ignored rather than
   // trusted: its rows are keyed on room ids that have since moved, so it
   // would rank the wrong rooms. Missing or unreadable, search falls back to
   // the stub.
@@ -409,7 +409,7 @@ export async function scanDirectory(
   }
 
   // The keyword/story sidecar, joined per filename: a miss is just a room
-  // without keywords, so a corpus that has grown or been renamed does not
+  // without keywords, so a collection that has grown or been renamed does not
   // invalidate it wholesale. Only {url, matched, entries} rides in the
   // manifest - the client blocks on that fetch before its first frame, and
   // the sidecar itself can be megabytes. The coverage pair is what keeps
@@ -441,7 +441,7 @@ export async function scanDirectory(
     /**
      * Where every url in this manifest is rooted; `createUrlFor` reads these
      * instead of hardcoding paths, so `remote.ts` can repoint a remotely
-     * served corpus at R2/Cloudflare without the client needing a second url
+     * served collection at R2/Cloudflare without the client needing a second url
      * builder - see `IMAGES_BASE`.
      */
     imagesBase: IMAGES_BASE,

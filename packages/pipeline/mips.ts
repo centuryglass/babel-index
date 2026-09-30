@@ -2,7 +2,7 @@
  * Writing the resolution pyramid to disk.
  *
  * The client picks a level per frame (`packages/web/src/lib/pyramid.ts`); this
- * is the job that makes those levels exist. It runs once per corpus, offline:
+ * is the job that makes those levels exist. It runs once per collection, offline:
  * resizing 10,000 rooms is a CPU-bound job, and a server that resizes on
  * request has put that job on the request path.
  *
@@ -16,7 +16,7 @@
  * Every scaled level is written with its source's content hash embedded in the
  * JPEG EXIF (`ImageDescription`). A rerun hashes the source again and skips any
  * level whose file already carries that hash, so touching a few images in a
- * large corpus costs a few resizes. Level 0 is never gated by this: in place it
+ * large collection costs a few resizes. Level 0 is never gated by this: in place it
  * is not rewritten, and to a separate `--out` it is copied byte for byte.
  */
 import { mkdir, copyFile, readdir, stat, readFile } from 'node:fs/promises';
@@ -75,7 +75,7 @@ async function embeddedHash(file: string): Promise<string | null> {
  *
  * Level 0 is written only when `outDir` is not the image's own directory: in
  * place, the flat source already is level 0, and to a separate `--out` it is
- * copied so a staged corpus holds every level for upload.
+ * copied so a staged collection holds every level for upload.
  *
  * `lanczos3` is sharp's default kernel, spelled out because a box filter
  * aliases the art's fine book spines into moire.
@@ -162,7 +162,7 @@ export interface SourceSize extends Size {
 /**
  * Check every source matches the first one's exact pixel dimensions.
  *
- * A corpus of mixed sizes cannot tile: the map draws one cell shape, sized
+ * A collection of mixed sizes cannot tile: the map draws one cell shape, sized
  * from the first source (`index.ts` plans levels and every sheet's
  * `tileSize` from `sizes[0]`), so a room of another size is stretched,
  * letterboxed, or throws off a shared sheet's row pitch - and none of that is

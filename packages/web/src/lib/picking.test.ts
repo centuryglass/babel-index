@@ -34,7 +34,7 @@ test('the picked room follows the ranking, not the cell', () => {
 });
 
 test('the center room is never picked', () => {
-  // It is the controls, not a corpus room, and it has no metadata to show.
+  // It is the controls, not a collection room, and it has no metadata to show.
   const p = centreOf(0, 0);
   assert.equal(roomAtPoint(p.x, p.y, cam, rect, layout, order), null);
 });

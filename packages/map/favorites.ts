@@ -29,7 +29,7 @@
  * ### Keys are filenames, not ids
  *
  * The reason is docs/agents/favorites.md's "Favorites are keyed by filename
- * everywhere": room ids are positional and renumber when the corpus grows. Ids
+ * everywhere": room ids are positional and renumber when the collection grows. Ids
  * are the currency inside a session, so this module is handed `files` - the id
  * -> filename lookup, i.e. `manifest.rooms` - and does the crossing itself, in
  * one place.
@@ -109,7 +109,7 @@ function liftKey({ mode, files, counts, mine, randomSeed }: FavoriteSortInput): 
   return (id: number) => counts[files[id]?.file ?? ''] ?? 0;
 }
 
-/** How many of `mine` this corpus has rooms for - what the sort would move to the front. */
+/** How many of `mine` this collection has rooms for - what the sort would move to the front. */
 export function favoriteCount(files: { file: string }[], mine: ReadonlySet<string>): number {
   return files.reduce((n, room) => n + (mine.has(room.file) ? 1 : 0), 0);
 }

@@ -70,7 +70,7 @@ variable "rate_limit_mitigation_timeout_seconds" {
 }
 
 variable "cache_edge_ttl_seconds" {
-  description = "How long Cloudflare's edge caches a corpus asset before treating a repeat GET as a fresh R2 Class B operation. Uploaded filenames are content-addressed by tools/upload's manifest (a changed file gets uploaded under the same key, but the corpus is otherwise static), so a long TTL is safe; purge manually after a re-upload if you need the edge to pick it up sooner."
+  description = "How long Cloudflare's edge caches a collection asset before treating a repeat GET as a fresh R2 Class B operation. Uploaded filenames are content-addressed by tools/upload's manifest (a changed file gets uploaded under the same key, but the corpus is otherwise static), so a long TTL is safe; purge manually after a re-upload if you need the edge to pick it up sooner."
   type        = number
   default     = 86400
 }

@@ -41,7 +41,7 @@ jobs:
         run: |
           changed="$(git diff --name-only "$BASE" "$HEAD")"
           echo "$changed"
-          # Everything the demo server bundles or serves, plus the corpus
+          # Everything the demo server bundles or serves, plus the sample tile collection
           # it's served from and the workflows that run it.
           # `tools/center-placement/lib` is imported by
           # `packages/web/src/lib/center.ts`, and `packages/pipeline/layout.ts`

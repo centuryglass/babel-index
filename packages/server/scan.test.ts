@@ -7,10 +7,10 @@ import { imageSize, scanDirectory, discoverLevels } from './scan.ts';
 import * as fixture from './image-fixtures.ts';
 
 /**
- * A throwaway corpus in a temp directory. Names may contain a `/`, which is how
+ * A throwaway tile collection in a temp directory. Names may contain a `/`, which is how
  * a test builds the pyramid's `<width>/` level directories.
  */
-async function corpus<T>(files: Record<string, Buffer | string>, run: (dir: string) => Promise<T>): Promise<T> {
+async function tileCollection<T>(files: Record<string, Buffer | string>, run: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), 'babel-scan-'));
   try {
     for (const [name, body] of Object.entries(files)) {
@@ -24,7 +24,7 @@ async function corpus<T>(files: Record<string, Buffer | string>, run: (dir: stri
   }
 }
 
-const sized = (buf, name = 'x.bin') => corpus({ [name]: buf }, (dir) => imageSize(join(dir, name)));
+const sized = (buf, name = 'x.bin') => tileCollection({ [name]: buf }, (dir) => imageSize(join(dir, name)));
 
 // --- header parsing ---------------------------------------------------------
 
@@ -36,7 +36,7 @@ test('reads PNG dimensions from IHDR', async () => {
 test('reads JPEG dimensions by walking to the frame header', async () => {
   assert.deepEqual(await sized(fixture.jpeg(1024, 1024)), { w: 1024, h: 1024 });
   // A wide image: proves width and height are not transposed, which a square
-  // test corpus would never catch.
+  // test collection would never catch.
   assert.deepEqual(await sized(fixture.jpeg(1920, 1080)), { w: 1920, h: 1080 });
   // Progressive JPEGs use SOF2, and are most of what a diffusion pipeline emits.
   assert.deepEqual(await sized(fixture.jpeg(640, 480, { marker: 0xc2 })), { w: 640, h: 480 });
@@ -82,7 +82,7 @@ const three = () => ({
 });
 
 test('scans a directory into a manifest', async () => {
-  await corpus({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
+  await tileCollection({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.mode, 'offline');
     assert.equal(m.directory, dir);
@@ -103,11 +103,11 @@ test('scans a directory into a manifest', async () => {
   });
 });
 
-test('the center tile is center.* by default, and is not also a corpus room', async () => {
-  await corpus({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
+test('the center tile is center.* by default, and is not also a collection room', async () => {
+  await tileCollection({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.shared.center.file, 'center.png');
-    // Served from /shared, even when the shared directory is the corpus directory.
+    // Served from /shared, even when the shared directory is the collection directory.
     assert.deepEqual(m.shared.center, { file: 'center.png', url: 'shared/center.png', w: 1024, h: 1024 });
     // Being both the generic wallpaper and a search result would put the same
     // picture everywhere and in the ranking too.
@@ -117,7 +117,7 @@ test('the center tile is center.* by default, and is not also a corpus room', as
 
 test('--center picks the center tile, by filename or by stem', async () => {
   for (const center of ['002.png', '002']) {
-    await corpus(three(), async (dir) => {
+    await tileCollection(three(), async (dir) => {
       const m = await scanDirectory(dir, { center });
       assert.equal(m.shared.center.file, '002.png', `--center ${center}`);
       assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '003.webp']);
@@ -126,8 +126,8 @@ test('--center picks the center tile, by filename or by stem', async () => {
   }
 });
 
-test('with no center at all, the first file stands in - but only when it lives with the corpus', async () => {
-  await corpus(three(), async (dir) => {
+test('with no center at all, the first file stands in - but only when it lives with the collection', async () => {
+  await tileCollection(three(), async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.shared.center.file, '001.jpg');
     assert.equal(m.count, 2);
@@ -135,14 +135,14 @@ test('with no center at all, the first file stands in - but only when it lives w
 });
 
 test('a --center that matches nothing falls back rather than failing', async () => {
-  await corpus({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
+  await tileCollection({ ...three(), 'center.png': fixture.png(1024, 1024) }, async (dir) => {
     const m = await scanDirectory(dir, { center: 'nope.jpg' });
     assert.equal(m.shared.center.file, 'center.png');
   });
 });
 
 test('the generic tiles are the sorted generic folder, served from /shared', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...three(),
       'center_tile.png': fixture.png(1024, 768),
@@ -159,14 +159,14 @@ test('the generic tiles are the sorted generic folder, served from /shared', asy
           ['v2.webp', 'shared/generic/v2.webp'],
         ]
       );
-      // The generic tiles are wallpaper, not corpus - they never become rooms.
+      // The generic tiles are wallpaper, not collection - they never become rooms.
       assert.ok(!m.rooms.some((r) => r.file.startsWith('v')));
     }
   );
 });
 
 test('no generic folder means no generic tiles, not a failure', async () => {
-  await corpus({ ...three(), 'center_tile.png': fixture.png(1024, 768) }, async (dir) => {
+  await tileCollection({ ...three(), 'center_tile.png': fixture.png(1024, 768) }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.deepEqual(m.shared.generic, []);
     assert.deepEqual(m.shared.genericDistill, []);
@@ -174,7 +174,7 @@ test('no generic folder means no generic tiles, not a failure', async () => {
 });
 
 test('distill mode\'s paired alternates are matched to the generic tiles by filename stem, not directory order', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...three(),
       'center_tile.png': fixture.png(1024, 768),
@@ -200,7 +200,7 @@ test('distill mode\'s paired alternates are matched to the generic tiles by file
 });
 
 test('a generic tile with no matching distill alternate gets a null entry, not a dropped index', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...three(),
       'center_tile.png': fixture.png(1024, 768),
@@ -217,10 +217,10 @@ test('a generic tile with no matching distill alternate gets a null entry, not a
   );
 });
 
-test('a shared directory outside the corpus leaves every corpus image a room', async () => {
+test('a shared directory outside the collection leaves every collection image a room', async () => {
   // The demo shape: --images points at the rooms, --shared-dir at the shared
-  // assets. Nothing in the corpus is a generic tile, so nothing is excluded.
-  await corpus(
+  // assets. Nothing in the collection is a generic tile, so nothing is excluded.
+  await tileCollection(
     {
       'rooms/001.jpg': fixture.jpeg(512, 512),
       'rooms/002.jpg': fixture.jpeg(512, 512),
@@ -230,7 +230,7 @@ test('a shared directory outside the corpus leaves every corpus image a room', a
     async (dir) => {
       const m = await scanDirectory(join(dir, 'rooms'), { sharedDir: dir });
       assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '002.jpg']);
-      assert.equal(m.count, 2, 'the shared tiles do not steal a corpus slot');
+      assert.equal(m.count, 2, 'the shared tiles do not steal a collection slot');
       assert.equal(m.shared.center.file, 'center_tile.png');
       assert.deepEqual(m.shared.generic.map((v) => v.file), ['v1.webp']);
     }
@@ -238,7 +238,7 @@ test('a shared directory outside the corpus leaves every corpus image a room', a
 });
 
 test('ids are stable across scans, because the map keys slots on them', async () => {
-  await corpus(three(), async (dir) => {
+  await tileCollection(three(), async (dir) => {
     const a = await scanDirectory(dir);
     const b = await scanDirectory(dir);
     assert.deepEqual(a.rooms, b.rooms);
@@ -253,7 +253,7 @@ test('ids are stable across scans, because the map keys slots on them', async ()
 });
 
 test('non-image files are ignored, whatever their case', async () => {
-  await corpus(
+  await tileCollection(
     {
       '001.JPG': fixture.jpeg(512, 512),
       '002.JPEG': fixture.jpeg(512, 512),
@@ -270,7 +270,7 @@ test('non-image files are ignored, whatever their case', async () => {
 });
 
 test('subdirectories are not walked into', async () => {
-  await corpus(three(), async (dir) => {
+  await tileCollection(three(), async (dir) => {
     await mkdir(join(dir, 'thumbs'));
     await writeFile(join(dir, 'thumbs', '900.jpg'), fixture.jpeg(64, 64));
     const m = await scanDirectory(dir);
@@ -280,7 +280,7 @@ test('subdirectories are not walked into', async () => {
 });
 
 test('filenames that need escaping survive the round trip into a url', async () => {
-  await corpus(
+  await tileCollection(
     { 'center.png': fixture.png(8, 8), 'a room #1.jpg': fixture.jpeg(32, 32), 'x&y=2.png': fixture.png(16, 16) },
     async (dir) => {
       const m = await scanDirectory(dir);
@@ -294,7 +294,7 @@ test('filenames that need escaping survive the round trip into a url', async () 
 });
 
 test('a room whose header cannot be read still appears, without a size', async () => {
-  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.truncatedJpeg() }, async (dir) => {
+  await tileCollection({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.truncatedJpeg() }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.count, 1);
     assert.equal(m.rooms[0].file, '001.jpg');
@@ -304,20 +304,20 @@ test('a room whose header cannot be read still appears, without a size', async (
 });
 
 test('an empty directory fails with a message naming it', async () => {
-  await corpus({}, async (dir) => {
+  await tileCollection({}, async (dir) => {
     await assert.rejects(scanDirectory(dir), (err) => err instanceof Error && err.message.includes(dir));
   });
-  await corpus({ 'readme.txt': 'no images here' }, async (dir) => {
+  await tileCollection({ 'readme.txt': 'no images here' }, async (dir) => {
     await assert.rejects(scanDirectory(dir), /no images found/);
   });
 });
 
-test('a missing directory fails rather than returning an empty corpus', async () => {
+test('a missing directory fails rather than returning an empty tile collection', async () => {
   await assert.rejects(scanDirectory(join(tmpdir(), 'babel-does-not-exist-9e3779b1')));
 });
 
 test('a directory with one image serves it as the center tile and has no rooms', async () => {
-  await corpus({ 'only.png': fixture.png(64, 64) }, async (dir) => {
+  await tileCollection({ 'only.png': fixture.png(64, 64) }, async (dir) => {
     const m = await scanDirectory(dir);
     assert.equal(m.shared.center.file, 'only.png');
     assert.deepEqual(m.rooms, []);
@@ -327,7 +327,7 @@ test('a directory with one image serves it as the center tile and has no rooms',
 
 // --- the resolution pyramid on disk -----------------------------------------
 
-/** A corpus of 1024x768 rooms, plus whatever level directories are asked for. */
+/** A collection of 1024x768 rooms, plus whatever level directories are asked for. */
 const pyramid = (extra = {}) => ({
   'center.jpg': fixture.jpeg(1024, 768),
   '001.jpg': fixture.jpeg(1024, 768),
@@ -335,17 +335,17 @@ const pyramid = (extra = {}) => ({
   ...extra,
 });
 
-test('a flat corpus is a valid level 0 and reports nothing else', async () => {
-  // "Point it at a directory of images" has to keep working for a corpus that
+test('a flat tile collection is a valid level 0 and reports nothing else', async () => {
+  // "Point it at a directory of images" has to keep working for a collection that
   // has never been through the pipeline.
-  await corpus(pyramid(), async (dir) => {
+  await tileCollection(pyramid(), async (dir) => {
     const { levels } = await scanDirectory(dir);
     assert.deepEqual(levels, [{ level: 0, w: 1024, h: 768, dir: null }]);
   });
 });
 
 test('generated levels are discovered, with their sizes', async () => {
-  await corpus(
+  await tileCollection(
     pyramid({
       '512/001.jpg': fixture.jpeg(512, 384),
       '256/001.jpg': fixture.jpeg(256, 192),
@@ -371,21 +371,21 @@ test('generated levels are discovered, with their sizes', async () => {
 test('a half-generated pyramid reports only the rungs that exist', async () => {
   // Interrupt the generator and this is what is on disk. Claiming a level that
   // is not there would make every cell at that zoom a 404.
-  await corpus(pyramid({ '512/001.jpg': fixture.jpeg(512, 384), '128/001.jpg': fixture.jpeg(128, 96) }), async (dir) => {
+  await tileCollection(pyramid({ '512/001.jpg': fixture.jpeg(512, 384), '128/001.jpg': fixture.jpeg(128, 96) }), async (dir) => {
     const { levels } = await scanDirectory(dir);
     assert.deepEqual(levels.map((l) => l.level), [0, 1, 3]);
   });
 });
 
 test('an empty level directory is not a level', async () => {
-  await corpus(pyramid({ '512/notes.txt': 'nothing to serve here' }), async (dir) => {
+  await tileCollection(pyramid({ '512/notes.txt': 'nothing to serve here' }), async (dir) => {
     const { levels } = await scanDirectory(dir);
     assert.deepEqual(levels.map((l) => l.level), [0], 'a directory with no images is not a rung');
   });
 });
 
 test('a directory that is not on the ladder is ignored', async () => {
-  await corpus(pyramid({ '300/001.jpg': fixture.jpeg(300, 225) }), async (dir) => {
+  await tileCollection(pyramid({ '300/001.jpg': fixture.jpeg(300, 225) }), async (dir) => {
     const { levels } = await scanDirectory(dir);
     assert.deepEqual(levels.map((l) => l.level), [0], '300 is not a width the ladder produces');
   });
@@ -395,7 +395,7 @@ test('a directory that is not on the ladder is ignored', async () => {
 
 test('a complete sheets directory is discovered as a sheet-packed level', async () => {
   // 2 rooms need only sheet-0000 at the default roomsPerSheet=256.
-  await corpus(
+  await tileCollection(
     pyramid({
       '512/001.jpg': fixture.jpeg(512, 384),
       '256/001.jpg': fixture.jpeg(256, 192),
@@ -423,8 +423,8 @@ test('a complete sheets directory is discovered as a sheet-packed level', async 
 
 test('an incomplete sheets directory falls back to a per-file directory', async () => {
   // Mid-rollout: mips written per-file, sheets not yet fully packed for this
-  // level - the directory exists but is missing the sheet the corpus needs.
-  await corpus(
+  // level - the directory exists but is missing the sheet the collection needs.
+  await tileCollection(
     pyramid({
       '128/001.jpg': fixture.jpeg(128, 96),
       '128-sheets/notes.txt': 'not a sheet yet',
@@ -439,24 +439,24 @@ test('an incomplete sheets directory falls back to a per-file directory', async 
 });
 
 test('a missing sheets directory with no per-file fallback is not a level', async () => {
-  await corpus(pyramid({}), async (dir) => {
+  await tileCollection(pyramid({}), async (dir) => {
     const { levels } = await scanDirectory(dir);
     assert.deepEqual(levels.map((l) => l.level), [0], 'level 3 has neither sheets nor per-file tiles');
   });
 });
 
 test('level directories are not mistaken for rooms', async () => {
-  await corpus(pyramid({ '512/001.jpg': fixture.jpeg(512, 384) }), async (dir) => {
+  await tileCollection(pyramid({ '512/001.jpg': fixture.jpeg(512, 384) }), async (dir) => {
     const m = await scanDirectory(dir);
     assert.deepEqual(m.rooms.map((r) => r.file), ['001.jpg', '002.jpg']);
-    assert.equal(m.count, 2, 'the pyramid must not inflate the corpus');
+    assert.equal(m.count, 2, 'the pyramid must not inflate the collection');
   });
 });
 
 test('the ladder is measured off the rooms, not off the generic', async () => {
   // The generic is one file and may be any shape; the rooms are what the map is
   // made of, so they are what the level widths have to match.
-  await corpus(
+  await tileCollection(
     { 'center.jpg': fixture.jpeg(640, 480), '001.jpg': fixture.jpeg(1024, 768), '512/001.jpg': fixture.jpeg(512, 384) },
     async (dir) => {
       const { levels } = await scanDirectory(dir);
@@ -474,14 +474,14 @@ test('an unreadable source size degrades to level 0 rather than guessing', async
 // --- the shared tiles' own pyramid ------------------------------------------
 
 test('a flat shared directory (no pyramid generated) reports only level 0', async () => {
-  await corpus(pyramid(), async (dir) => {
+  await tileCollection(pyramid(), async (dir) => {
     const { shared } = await scanDirectory(dir);
     assert.deepEqual(shared.levels.map((l) => l.level), [0]);
   });
 });
 
 test('shared.levels is discovered off --shared-dir, and picks up a level the center has', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...pyramid(),
       '512/center.jpg': fixture.jpeg(512, 384),
@@ -495,7 +495,7 @@ test('shared.levels is discovered off --shared-dir, and picks up a level the cen
 });
 
 test('a level the generic tiles do not all have is not offered, even when the center has it', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...pyramid(),
       '512/center.jpg': fixture.jpeg(512, 384),
@@ -510,7 +510,7 @@ test('a level the generic tiles do not all have is not offered, even when the ce
 });
 
 test('once both trees have a level, it is offered', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...pyramid(),
       '512/center.jpg': fixture.jpeg(512, 384),
@@ -524,8 +524,8 @@ test('once both trees have a level, it is offered', async () => {
   );
 });
 
-test('a shared directory outside the corpus is discovered the same way', async () => {
-  await corpus(
+test('a shared directory outside the collection is discovered the same way', async () => {
+  await tileCollection(
     {
       'rooms/001.jpg': fixture.jpeg(1024, 768),
       'rooms/002.jpg': fixture.jpeg(1024, 768),
@@ -542,7 +542,7 @@ test('a shared directory outside the corpus is discovered the same way', async (
 });
 
 test('a flat generic_distill directory (no pyramid generated) reports only level 0', async () => {
-  await corpus(
+  await tileCollection(
     { ...pyramid(), 'generic/v1.webp': fixture.webpVp8(1024, 768), 'generic_distill/v1.jpg': fixture.jpeg(1024, 768) },
     async (dir) => {
       const { shared } = await scanDirectory(dir);
@@ -552,7 +552,7 @@ test('a flat generic_distill directory (no pyramid generated) reports only level
 });
 
 test('distillLevels is discovered off generic_distill/, independent of shared.levels', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...pyramid(),
       'generic/v1.webp': fixture.webpVp8(1024, 768),
@@ -570,14 +570,14 @@ test('distillLevels is discovered off generic_distill/, independent of shared.le
 });
 
 test('no generic_distill directory at all reports only level 0, not a throw', async () => {
-  await corpus(pyramid(), async (dir) => {
+  await tileCollection(pyramid(), async (dir) => {
     const { shared } = await scanDirectory(dir);
     assert.deepEqual(shared.distillLevels.map((l) => l.level), [0]);
   });
 });
 
 test('favoriteLevels is discovered off fav_on.png/fav_off.png in the tile-width directories, independent of shared.levels or distillLevels', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...pyramid(),
       'generic/v1.webp': fixture.webpVp8(1024, 768),
@@ -597,7 +597,7 @@ test('favoriteLevels is discovered off fav_on.png/fav_off.png in the tile-width 
 });
 
 test('a level directory with only one of the two badge faces is not a favorite level', async () => {
-  await corpus(
+  await tileCollection(
     {
       ...pyramid(),
       'fav_on.png': fixture.png(92, 198),
@@ -613,7 +613,7 @@ test('a level directory with only one of the two badge faces is not a favorite l
 });
 
 test('no scaled favorite art at all reports only level 0, not a throw', async () => {
-  await corpus(pyramid(), async (dir) => {
+  await tileCollection(pyramid(), async (dir) => {
     const { shared } = await scanDirectory(dir);
     assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0]);
   });
@@ -621,14 +621,14 @@ test('no scaled favorite art at all reports only level 0, not a throw', async ()
 
 // --- embeddings blob --------------------------------------------------------
 
-test('a corpus without a blob reports no embeddings', async () => {
-  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+test('a collection without a blob reports no embeddings', async () => {
+  await tileCollection({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
     assert.equal((await scanDirectory(dir)).embeddings, null);
   });
 });
 
 test('an embeddings sidecar is surfaced with a servable url', async () => {
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -652,7 +652,7 @@ test('an embeddings sidecar with no scale is treated as no blob', async () => {
   // `tools/embed/embed.ts` always writes `scale` (issue #231); a sidecar
   // missing it is unreadable rather than guessed at - a wrong scale would
   // misreport the density gradient's absolute confidence silently.
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -665,10 +665,10 @@ test('an embeddings sidecar with no scale is treated as no blob', async () => {
   );
 });
 
-test('a stale blob whose count no longer matches the corpus is ignored', async () => {
+test('a stale blob whose count no longer matches the collection is ignored', async () => {
   // The rows are keyed on room ids; a wrong-length blob would rank the wrong
   // rooms, so a mismatch must degrade to the stub rather than be trusted.
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -683,14 +683,14 @@ test('a stale blob whose count no longer matches the corpus is ignored', async (
 
 // --- keyword/story sidecar --------------------------------------------------
 
-test('a corpus without a sidecar reports no metadata', async () => {
-  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+test('a collection without a sidecar reports no metadata', async () => {
+  await tileCollection({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
     assert.equal((await scanDirectory(dir)).metadata, null);
   });
 });
 
 test('a metadata sidecar is surfaced with a servable url and its coverage', async () => {
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -713,7 +713,7 @@ test('a sidecar covering only some rooms is kept, unlike a stale blob', async ()
   // The asymmetry is the point. A blob's rows are positional, so a mismatch has
   // to be thrown away wholesale; this is joined per filename, so a partial one
   // is simply partial and every entry that does match still lands.
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -732,7 +732,7 @@ test('a sidecar covering only some rooms is kept, unlike a stale blob', async ()
 test('a sidecar that matches nothing is reported rather than hidden', async () => {
   // matched 0 against entries 2 is the signal that the keys have drifted; from
   // the map it is indistinguishable from having no sidecar at all.
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -747,7 +747,7 @@ test('a sidecar that matches nothing is reported rather than hidden', async () =
 });
 
 test('a malformed sidecar degrades to no metadata rather than throwing', async () => {
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -761,14 +761,14 @@ test('a malformed sidecar degrades to no metadata rather than throwing', async (
 
 // --- tag links ---------------------------------------------------------
 
-test('a corpus without a tagLinks.json reports no tagLinks', async () => {
-  await corpus({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
+test('a collection without a tagLinks.json reports no tagLinks', async () => {
+  await tileCollection({ 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) }, async (dir) => {
     assert.equal((await scanDirectory(dir)).tagLinks, null);
   });
 });
 
 test('a tagLinks.json is surfaced with a servable url and its count', async () => {
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),
@@ -787,7 +787,7 @@ test('a tagLinks.json is surfaced with a servable url and its count', async () =
 });
 
 test('a malformed tagLinks.json degrades to no tagLinks rather than throwing', async () => {
-  await corpus(
+  await tileCollection(
     {
       'center.png': fixture.png(8, 8),
       '001.jpg': fixture.jpeg(8, 8),

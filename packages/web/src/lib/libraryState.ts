@@ -37,7 +37,7 @@ export interface OverlayRoom {
 type Paging = Config['catalog']['paging'];
 
 export interface LibraryState {
-  /** How many corpus rooms the map places, from the dev panel's slider. `main.tsx` clamps it to the corpus size. */
+  /** How many collection rooms the map places, from the dev panel's slider. `main.tsx` clamps it to the collection size. */
   roomCount: number;
   /**
    * Config's `map.contentRatio` baseline, moved by the dev panel's slider and
@@ -165,7 +165,7 @@ export interface LibraryInit {
   route: InitialRoute | null;
   /** The manifest's rooms, to resolve a permalink's file stem to an id. */
   rooms: readonly { id: number; file: string }[];
-  /** The corpus size, where the room-count slider starts. */
+  /** The tile collection size, where the room-count slider starts. */
   total: number;
   /** Config's starting ratio and slot seed. */
   map: Pick<Config['map'], 'contentRatio' | 'slotSeed'>;

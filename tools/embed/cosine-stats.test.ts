@@ -1,6 +1,6 @@
 /**
  * Tests for `cosine-stats.ts`: pure arithmetic over arrays, so the calibration
- * math is covered here without a corpus or a CLIP download.
+ * math is covered here without a collection or a CLIP download.
  */
 
 import { test } from 'node:test';

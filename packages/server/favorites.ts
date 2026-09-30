@@ -41,7 +41,7 @@ interface Snapshot {
 /**
  * What `app.ts` is handed. Everything is by room file, never by room id:
  * ids are positional (scan.ts sorts filenames and indexes them), so adding
- * one image to a corpus would silently renumber every favorite recorded
+ * one image to a collection would silently renumber every favorite recorded
  * against an id.
  */
 export interface FavoriteStore {

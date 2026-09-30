@@ -2,7 +2,7 @@
 
 Runs the CLIP **image** tower over a directory of room images, once, offline,
 and writes a static blob the browser ranks against at search time. This is the
-pipeline's `embed` stage: the expensive half of search, done per corpus rather
+pipeline's `embed` stage: the expensive half of search, done per collection rather
 than per request.
 
 It is Node, not Python: it uses the same `@huggingface/transformers` CLIP model
@@ -15,7 +15,7 @@ ranking compares vectors from two different spaces.
 ## Run
 
 ```sh
-npm run generate:embeddings                        # against assets/corpus-sample/
+npm run generate:embeddings                        # against assets/tile-collection-sample/
 npm run generate:embeddings -- --images <dir> [--center center.jpg] [--shared-dir assets] [--out <dir>]
 ```
 
@@ -34,8 +34,8 @@ Writes two files, next to the images by default:
 Reruns are incremental: each source file is hashed, and any file whose hash
 matches `embeddings.json`'s record from the previous run has its row copied
 from the old blob instead of being run back through the vision tower, so
-touching a few images in a large corpus costs a few inferences, not the whole
-corpus. If nothing changed, the tool doesn't even need
+touching a few images in a large collection costs a few inferences, not the whole
+collection. If nothing changed, the tool doesn't even need
 `@huggingface/transformers` installed. Changing `MODEL_ID` invalidates every
 cached row, since vectors from different models aren't comparable.
 

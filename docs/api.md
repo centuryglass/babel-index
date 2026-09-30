@@ -17,7 +17,7 @@ inline in `app.ts`, and this page gives those shapes.
 
 | Route                            | Mounted when                              | Purpose                                  |
 | -------------------------------- | ----------------------------------------- | ---------------------------------------- |
-| `GET /api/manifest`              | always                                    | corpus, shared art, resolved config      |
+| `GET /api/manifest`              | always                                    | collection, shared art, resolved config      |
 | `GET /api/search`                | always                                    | CLIP text vector for a query             |
 | `GET /api/favorites`             | `--favorites`                             | global favorite counts                   |
 | `POST /api/favorites/:file`      | `--favorites`                             | favorite a room                          |
@@ -29,7 +29,7 @@ inline in `app.ts`, and this page gives those shapes.
 
 ## `GET /api/manifest`
 
-The corpus manifest, plus resolved client config and favorites-store
+The collection manifest, plus resolved client config and favorites-store
 status. The client blocks on this fetch before it can render anything, so
 every page load calls it once.
 
@@ -38,7 +38,7 @@ every page load calls it once.
   sidecar coverage, `favorites: { enabled: boolean } | null`, and `config`
   (the server's resolved `Config` with its `notes`/`source` fields
   stripped).
-- The corpus is scanned once, at startup, so the response changes only when
+- The collection is scanned once, at startup, so the response changes only when
   the process restarts. No `Cache-Control` header is set.
 
 ## `GET /api/search`
@@ -46,7 +46,7 @@ every page load calls it once.
 Runs the CLIP text tower on a query and returns the query vector. Ranking,
 which blends this vector with keyword and story matches, runs in the
 browser against `embeddings.bin`; this endpoint does only the part that
-cannot. When the corpus has no embeddings, or the model is missing or fails
+cannot. When the collection has no embeddings, or the model is missing or fails
 to load, it returns a deterministic stub ranking instead (`stubRanking()`
 in `app.ts`), so the rearrangement still happens.
 
@@ -55,7 +55,7 @@ in `app.ts`), so the rearrangement still happens.
 - **Response**, one of:
   - `{ query: string, order: null }` - empty query.
   - `{ stub: true, query: string, order: number[] }` - no embeddings for
-    this corpus; `order` is room ids, best first.
+    this collection; `order` is room ids, best first.
   - `{ stub: false, query: string, vector: number[] }` - a 512-dim
     unit-length CLIP text embedding.
   - `{ stub: true, query: string, order: number[], note: string }` - CLIP
@@ -80,7 +80,7 @@ Every room with at least one favorite, keyed by filename.
 ## `POST /api/favorites/:file`
 
 This visitor favorites the named room. `:file` is the room's filename, not
-its numeric id: ids are positional and renumber when the corpus changes.
+its numeric id: ids are positional and renumber when the collection changes.
 
 - **Headers**: `X-Favorite-Client` - a random id the browser mints once per
   visitor (`persist.ts`'s `getOrCreateFavoriteClientId`), matching

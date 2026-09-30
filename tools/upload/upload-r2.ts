@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Upload a corpus to Cloudflare R2: room images at every generated pyramid
+ * Upload a tile collection to Cloudflare R2: room images at every generated pyramid
  * level, the keyword/story sidecar, the CLIP embeddings blob, the shared
  * center/generic tiles, and the `scanDirectory()` manifest that
  * `packages/server/remote.ts` reads. tools/upload/README.md owns the usage,
@@ -65,7 +65,7 @@ function makeClient() {
 
 /**
  * The on-disk loading-animation manifest under `<sharedDir>/animation/`, or
- * null when there is none - a corpus deployed without the indicator. Handed
+ * null when there is none - a collection deployed without the indicator. Handed
  * to `buildUploadList` and `crossOriginFetchedKeys`; see `animationKeys` in
  * lib.ts for which keys ride on it and why null uploads nothing.
  */
@@ -106,16 +106,16 @@ async function listKeys(client: S3Client, bucket: string, prefix: string): Promi
 
 /**
  * Keys actually present in the bucket that this run could occupy, in two
- * namespaces: `<prefix>/...` for the corpus and `shared/...` for the shared
- * assets - the latter live outside any corpus prefix, so they need their own
+ * namespaces: `<prefix>/...` for the collection and `shared/...` for the shared
+ * assets - the latter live outside any collection prefix, so they need their own
  * listing.
  */
 async function listExistingKeys(client: S3Client, bucket: string, prefix: string): Promise<Set<string>> {
-  const [corpus, shared] = await Promise.all([
+  const [tileCollection, shared] = await Promise.all([
     listKeys(client, bucket, `${prefix}/`),
     listKeys(client, bucket, 'shared/'),
   ]);
-  return new Set([...corpus, ...shared]);
+  return new Set([...tileCollection, ...shared]);
 }
 
 interface CloudflarePurgeConfig {
@@ -175,7 +175,7 @@ async function putFile(client: S3Client, bucket: string, key: string, path: stri
 
 async function main() {
   const argv = parseArgs(process.argv.slice(2));
-  const imagesDir = resolve(process.cwd(), (argv.images as string) ?? 'assets/corpus-sample');
+  const imagesDir = resolve(process.cwd(), (argv.images as string) ?? 'assets/tile-collection-sample');
   const sharedDir = resolve(process.cwd(), (argv['shared-dir'] as string) ?? 'assets');
   const prefix = (argv.prefix as string) ?? basename(imagesDir);
   const dryRun = Boolean(argv['dry-run']);
@@ -184,7 +184,7 @@ async function main() {
   const manifest = await scanDirectory(imagesDir, { center: argv.center as string | undefined, sharedDir });
   const animation = await loadAnimationManifest(sharedDir);
   const uploads = buildUploadList(manifest, { imagesDir, sharedDir, prefix, animation }, join);
-  console.log(`${uploads.length} file(s) make up this corpus (prefix "${prefix}")`);
+  console.log(`${uploads.length} file(s) make up this collection (prefix "${prefix}")`);
 
   const limiter = createLimiter(CONCURRENCY);
   const hashes = new Map<string, string>();
@@ -253,7 +253,7 @@ async function main() {
   }
 
   // The public manifest - what packages/server/remote.ts fetches to serve
-  // this corpus with --remote. Written every run, not hash-diffed: it is
+  // this collection with --remote. Written every run, not hash-diffed: it is
   // small, and it must reflect this scan even when the room bytes it
   // describes didn't change (a metadata-only or embeddings-only rerun still
   // needs it current).

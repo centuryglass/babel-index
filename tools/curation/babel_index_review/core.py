@@ -12,7 +12,7 @@ keywords. This module owns everything the batch importer
   - the default story prompt, and
   - the model calls that generate stories and alt text.
 
-``metadata.json`` is keyed by webp filename; ``docs/corpus.md`` in the repo
+``metadata.json`` is keyed by webp filename; ``docs/tile-collection.md`` in the repo
 root specifies every field, including the curation-only ones (``final``,
 ``needs_inpainting``). Fields other than ``keywords`` are absent
 until the tool that writes them has run.
@@ -43,11 +43,11 @@ from util.metadata import do_update as copy_metadata
 INDEX_JSON = "metadata.json"
 DEFAULT_KEYWORD_MAP = "data/keyword_map.json"
 
-# The repo's demo corpus (packages/server's --images default), for the
+# The repo's demo collection (packages/server's --images default), for the
 # review GUI's --sample-update "save to samples" button. This file lives at
 # tools/curation/babel_index_review/core.py, three levels below the repo root.
-SAMPLE_CORPUS_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "corpus-sample")
+TILE_COLLECTION_SAMPLE_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "tile-collection-sample")
 )
 
 # Fields worth carrying from a curated tile onto a hand-picked sample: the
@@ -453,15 +453,15 @@ def ingest_tiles(tile_dir: str, keyword_map: dict, index: Optional[dict] = None)
 
 
 # ---------------------------------------------------------------------------
-# Sample corpus updates (review GUI's --sample-update button)
+# Sample collection updates (review GUI's --sample-update button)
 # ---------------------------------------------------------------------------
 def _next_sample_name(sample_dir: str, index: dict, ext: str) -> str:
-    """First free zero-padded ``NNN<ext>`` name, matching the corpus's width.
+    """First free zero-padded ``NNN<ext>`` name, matching the collection's width.
 
-    The sample corpus predates this tool's 5-digit ``NNNNN.webp`` ingest
+    The sample collection predates this tool's 5-digit ``NNNNN.webp`` ingest
     naming and uses 3-digit stems (``001.jpg``); a new tile keeps whatever
     width is already there (read from the first numeric stem found) so it
-    doesn't stick out, falling back to 3 for an empty corpus.
+    doesn't stick out, falling back to 3 for an empty collection.
     """
     width = 3
     stems = {os.path.splitext(name)[0] for name in os.listdir(sample_dir)} if os.path.isdir(
@@ -480,13 +480,13 @@ def _next_sample_name(sample_dir: str, index: dict, ext: str) -> str:
         i += 1
 
 
-def add_to_sample_corpus(
-    src_tile_dir: str, key: str, entry: dict, sample_dir: str = SAMPLE_CORPUS_DIR
+def add_to_tile_collection_sample(
+    src_tile_dir: str, key: str, entry: dict, sample_dir: str = TILE_COLLECTION_SAMPLE_DIR
 ) -> str:
-    """Copy tile ``key`` and a subset of its metadata into the sample corpus.
+    """Copy tile ``key`` and a subset of its metadata into the sample collection.
 
     No locking and no pyramid/embedding regeneration -- this is a manual,
-    occasional curation action on a small demo corpus, not something run
+    occasional curation action on a small demo collection, not something run
     concurrently with anything else touching it. Returns the new filename.
     """
     os.makedirs(sample_dir, exist_ok=True)

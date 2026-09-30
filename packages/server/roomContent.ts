@@ -1,5 +1,5 @@
 /**
- * Loading a corpus's keyword/story sidecar and tag-link map, in real parsed
+ * Loading a tile collection's keyword/story sidecar and tag-link map, in real parsed
  * form, for the SSR catalog routes - `scan.ts` and `remote.ts` ship only
  * `{url, ...counts}` for both, keeping the manifest small (see the
  * `metadata` note in `scanDirectory`).
@@ -9,12 +9,12 @@
  * `TAG_LINKS_FILE` names in the images directory), while remote mode only
  * has the already-rebased absolute urls `remote.ts` put on the manifest.
  *
- * Loaded once and memoized per manifest: the server scans a corpus once at
+ * Loaded once and memoized per manifest: the server scans a collection once at
  * startup and never rescans it, and re-parsing a multi-megabyte sidecar on
  * every catalog request would be waste, not freshness.
  *
  * The permalink table (`packages/map/slug.ts`) is built here, so it is
- * memoized alongside the titles it reads. The corpus's curation warnings -
+ * memoized alongside the titles it reads. The collection's curation warnings -
  * rooms that collide on a permalink, rooms with no alt text - come from this
  * same load, so each is said once per process.
  */
@@ -30,7 +30,7 @@ import type { RoomMeta } from '../map/metadata.ts';
 export interface RoomContent {
   /** Indexed by room id, as `joinMetadata` returns it; null where absent entirely. */
   metadata: (RoomMeta | null)[];
-  /** Keyword -> external link, or null when the corpus has no tagLinks.json. */
+  /** Keyword -> external link, or null when the collection has no tagLinks.json. */
   tagLinks: Record<string, string> | null;
   /** Every room's permalink, built from the titles just loaded. */
   slugs: SlugTable;
@@ -49,13 +49,13 @@ async function readSidecar(localFile: string, remoteUrl: string, imagesDir: stri
 
 /**
  * How many filenames the missing-alt warning lists. Its count is always
- * exact; the cap keeps a large uncaptioned corpus from flooding the startup
+ * exact; the cap keeps a large uncaptioned collection from flooding the startup
  * log.
  */
 export const MISSING_ALT_LISTED = 20;
 
 /**
- * @param imagesDir the local corpus directory (local mode), or null (remote
+ * @param imagesDir the local collection directory (local mode), or null (remote
  *   mode) - mirrors `createApp`'s own `imagesDir` option.
  */
 async function loadUncached(manifest: Manifest, imagesDir: string | null): Promise<RoomContent> {
@@ -108,7 +108,7 @@ async function loadUncached(manifest: Manifest, imagesDir: string | null): Promi
   return { metadata, tagLinks, slugs };
 }
 
-// Keyed by manifest identity (a process only ever scans one corpus, but tests
+// Keyed by manifest identity (a process only ever scans one collection, but tests
 // build more than one `Manifest` per process) rather than a single bare
 // promise - the same reasoning `app.ts`'s `textTowerPromises` documents.
 const cache = new WeakMap<Manifest, Promise<RoomContent>>();

@@ -1,5 +1,5 @@
 /**
- * The corpus manifest's shape: what `scan.ts`'s `scanDirectory()` (or
+ * The tile collection manifest's shape: what `scan.ts`'s `scanDirectory()` (or
  * `remote.ts`, rewriting a remote scan's urls) produces, what `/api/manifest`
  * serves with `config` and `favorites` added, and what every consumer in
  * `packages/web` and `packages/map` reads.
@@ -13,7 +13,7 @@ export interface ImageSize {
   h: number;
 }
 
-/** One room: a corpus image, its url, and its size if it could be read. */
+/** One room: a collection image, its url, and its size if it could be read. */
 export interface Room extends Partial<ImageSize> {
   id: number;
   file: string;
@@ -124,7 +124,7 @@ export interface MetadataInfo {
 
 /**
  * The keyword -> external-link map, if `TAG_LINKS_FILE` was found in the
- * corpus directory. Unlike `MetadataInfo` there is no per-room coverage to
+ * collection directory. Unlike `MetadataInfo` there is no per-room coverage to
  * report - it's a flat vocabulary lookup, not something joined to a room.
  */
 export interface TagLinksInfo {
@@ -132,7 +132,7 @@ export interface TagLinksInfo {
   count: number;
 }
 
-/** A corpus manifest, as `scanDirectory()`/`scanRemote()` produce it. */
+/** A tile collection manifest, as `scanDirectory()`/`scanRemote()` produce it. */
 export interface Manifest {
   mode: 'offline' | 'remote';
   /** The scanned local directory; absent from a remote manifest (`scanRemote` drops it). */
@@ -158,7 +158,7 @@ export interface FavoritesInfo {
 /**
  * The manifest as served by `/api/manifest`: the scan plus the client config
  * and the favorite-store status, both added by `app.ts` on the way out - the
- * corpus has nothing to say about either. A null `favorites` means no store
+ * collection has nothing to say about either. A null `favorites` means no store
  * was configured and the routes are not mounted, which the client reads as
  * "render no favorite control" - a different statement from a count of zero
  * (docs/agents/favorites.md, "No store, no feature").

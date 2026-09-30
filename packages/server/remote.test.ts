@@ -54,13 +54,13 @@ function sampleManifest(): Manifest {
   };
 }
 
-test('scanRemote fetches the manifest.json a corpus was uploaded with', async () => {
+test('scanRemote fetches the manifest.json a collection was uploaded with', async () => {
   await remoteHost(
-    { '/corpus-sample/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' } },
+    { '/tile-collection-sample/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' } },
     async (base) => {
-      const manifest = await scanRemote(base, 'corpus-sample');
+      const manifest = await scanRemote(base, 'tile-collection-sample');
       assert.equal(manifest.mode, 'remote');
-      assert.equal(manifest.source, `${base}/corpus-sample/manifest.json`);
+      assert.equal(manifest.source, `${base}/tile-collection-sample/manifest.json`);
       assert.equal(manifest.count, 1);
       // The local scan's own bookkeeping (where it ran, offline) is not a fact
       // about how it's being served now.
@@ -71,15 +71,15 @@ test('scanRemote fetches the manifest.json a corpus was uploaded with', async ()
 
 test('scanRemote points every url directly at the remote host, not through this server', async () => {
   await remoteHost(
-    { '/corpus-sample/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' } },
+    { '/tile-collection-sample/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' } },
     async (base) => {
-      const manifest = await scanRemote(base, 'corpus-sample');
-      assert.equal(manifest.imagesBase, `${base}/corpus-sample`);
+      const manifest = await scanRemote(base, 'tile-collection-sample');
+      assert.equal(manifest.imagesBase, `${base}/tile-collection-sample`);
       assert.equal(manifest.sharedBase, `${base}/shared`);
-      assert.equal(manifest.rooms[0].url, `${base}/corpus-sample/001.jpg`);
-      assert.equal(manifest.embeddings.url, `${base}/corpus-sample/embeddings.bin`);
-      assert.equal(manifest.metadata.url, `${base}/corpus-sample/metadata.json`);
-      assert.equal(manifest.tagLinks.url, `${base}/corpus-sample/tagLinks.json`);
+      assert.equal(manifest.rooms[0].url, `${base}/tile-collection-sample/001.jpg`);
+      assert.equal(manifest.embeddings.url, `${base}/tile-collection-sample/embeddings.bin`);
+      assert.equal(manifest.metadata.url, `${base}/tile-collection-sample/metadata.json`);
+      assert.equal(manifest.tagLinks.url, `${base}/tile-collection-sample/tagLinks.json`);
       assert.equal(manifest.shared.center.url, `${base}/shared/center.png`);
       assert.equal(manifest.shared.generic[0].url, `${base}/shared/generic/g1.png`);
       assert.equal(manifest.shared.genericDistill[0].url, `${base}/shared/generic_distill/g1.jpg`);
@@ -91,18 +91,18 @@ test('scanRemote points every url directly at the remote host, not through this 
 
 test('scanRemote tolerates a trailing slash on the base url', async () => {
   await remoteHost(
-    { '/corpus-sample/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' } },
+    { '/tile-collection-sample/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' } },
     async (base) => {
-      const manifest = await scanRemote(`${base}/`, 'corpus-sample');
+      const manifest = await scanRemote(`${base}/`, 'tile-collection-sample');
       assert.equal(manifest.count, 1);
-      assert.equal(manifest.rooms[0].url, `${base}/corpus-sample/001.jpg`);
+      assert.equal(manifest.rooms[0].url, `${base}/tile-collection-sample/001.jpg`);
     }
   );
 });
 
 test('scanRemote raises a clear error when the manifest is missing', async () => {
   await remoteHost({}, async (base) => {
-    await assert.rejects(() => scanRemote(base, 'corpus-sample'), /404/);
+    await assert.rejects(() => scanRemote(base, 'tile-collection-sample'), /404/);
   });
 });
 
@@ -121,16 +121,16 @@ test('a sheet-packed level round-trips through rebase untouched - it carries no 
   });
 
   await remoteHost(
-    { '/corpus-sample/manifest.json': { body: JSON.stringify(manifest), type: 'application/json' } },
+    { '/tile-collection-sample/manifest.json': { body: JSON.stringify(manifest), type: 'application/json' } },
     async (base) => {
-      const remote = await scanRemote(base, 'corpus-sample');
+      const remote = await scanRemote(base, 'tile-collection-sample');
       const level2 = remote.levels.find((l) => l.level === 2);
       assert.ok(level2);
       assert.deepEqual(level2.sheet, manifest.levels[1].sheet, 'sheet geometry must pass through unchanged');
       assert.ok(level2.sheet);
       // The only thing that changed is imagesBase, which the client combines
       // with sheet.dir itself - proving the full url a room resolves to.
-      assert.equal(`${remote.imagesBase}/${level2.sheet.dir}/sheet-0000.jpg`, `${base}/corpus-sample/256-sheets/sheet-0000.jpg`);
+      assert.equal(`${remote.imagesBase}/${level2.sheet.dir}/sheet-0000.jpg`, `${base}/tile-collection-sample/256-sheets/sheet-0000.jpg`);
     }
   );
 });

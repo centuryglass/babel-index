@@ -1,5 +1,5 @@
 /**
- * Compute CLIP image embeddings for a corpus of room images, offline.
+ * Compute CLIP image embeddings for a collection of room images, offline.
  *
  * The image tower runs here, once, and ships as a static blob the browser ranks
  * against; only the text tower runs at request time, in the demo server's
@@ -23,7 +23,7 @@
  * `embeddings.json` carries a `hashes` map (filename -> content hash) alongside
  * `order`. A rerun hashes every source file and copies the row of any file whose
  * hash and model both match, rather than running it back through the vision
- * tower, so touching a few images in a large corpus costs a few inferences. A
+ * tower, so touching a few images in a large collection costs a few inferences. A
  * model change matches nothing, so every row is re-embedded. This mirrors the
  * content-hash cache in packages/pipeline/mips.ts, and `contentHash()` is shared
  * with it rather than reimplemented.
@@ -38,7 +38,7 @@ import { contentHash } from '../../packages/pipeline/mips.ts';
  * Must be the model `TEXT_MODEL` (packages/server/app.ts) loads for the text
  * tower, or the two towers point into different spaces and every ranking is
  * nonsense. Changing this also invalidates every cached row, so the next run
- * re-embeds the whole corpus.
+ * re-embeds the whole collection.
  */
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 const QUANT_SCALE = 127; // int8 half-range
@@ -90,7 +90,7 @@ async function loadVisionTower(): Promise<typeof import('@huggingface/transforme
         'It pulls in onnxruntime-node, which publishes binaries for Windows, macOS and Linux ' +
         'only - so on Android/Termux, or any other platform it does not build for, npm skips ' +
         'it and the rest of the install still succeeds.\n' +
-        'Generate embeddings.bin on a supported machine and copy it into the corpus directory; ' +
+        'Generate embeddings.bin on a supported machine and copy it into the collection directory; ' +
         'the demo server reads the blob and does not need this package. Search still works ' +
         'without it, ranking by keywords and story rather than by CLIP.'
     ), { expected: true });
@@ -140,7 +140,7 @@ async function loadCache(binPath: string, jsonPath: string): Promise<EmbeddingCa
 
 async function main() {
   const argv = parseArgs(process.argv.slice(2));
-  const imagesDir = argv.images ?? 'assets/corpus-sample';
+  const imagesDir = argv.images ?? 'assets/tile-collection-sample';
   const outDir = argv.out ?? imagesDir;
   // Must match the server's `--shared-dir` (packages/server/index.ts, which
   // defaults to `assets` too), or the room set embedded here and the set the
@@ -151,7 +151,7 @@ async function main() {
   // One source of truth for which files are rooms and in what id order.
   const manifest = await scanDirectory(imagesDir, { center: argv.center, sharedDir });
   const files = manifest.rooms.map((r) => r.file);
-  if (!files.length) throw new Error(`no corpus rooms in ${imagesDir}`);
+  if (!files.length) throw new Error(`no collection rooms in ${imagesDir}`);
   console.log(`${files.length} rooms (center tile: ${manifest.shared.center?.file ?? '(none)'}), model ${MODEL_ID}`);
 
   const binPath = join(outDir, 'embeddings.bin');

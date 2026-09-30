@@ -9,7 +9,7 @@
  *   sorts by `strength`, so the map's position and its reported strength
  *   cannot disagree (docs/search_requirements.md SR-22).
  * - Every pull is absolute. Each axis reads the room's own evidence against
- *   fixed bounds, never against the rest of the corpus, so a query nothing
+ *   fixed bounds, never against the rest of the collection, so a query nothing
  *   answers leaves every room near 0. CLIP reads its raw cosine, which is
  *   why `embeddingScores` dequantises.
  * - Precedence between signals comes from the weights and is checked by
@@ -69,7 +69,7 @@ export function lemmatise(word: string): string {
  * no-opinion point (0), `high` is a genuine match's typical confidence (1).
  * Linear between them, 0 below `centre` - see `clipCurveStrength`.
  *
- * Both are measured against a real corpus via
+ * Both are measured against a real collection via
  * `tools/embed/cosine-range.ts` (CLIP ViT-B/32), read off
  * `cosine-range-report.json`:
  *   - `centre` is the median of the overall keyword x room distribution
@@ -112,7 +112,7 @@ export const STOPWORDS = new Set([
  * Lowercase, strip diacritics, transliterate to ASCII, collapse whitespace.
  *
  * Decomposing to NFD and dropping the combining marks means `rosé` and `rose`
- * are the same word, which matters for a corpus whose vocabulary is full of art
+ * are the same word, which matters for a collection whose vocabulary is full of art
  * terms borrowed from French and German. NFD only exposes marks riding on a
  * base letter, though - `ł`, `ø`, `đ` are letters in their own right with
  * nothing to strip, so `Zdzisław` survives NFD unchanged. `any-ascii` is the
@@ -134,7 +134,7 @@ const COMBINING = /[\u0300-\u036f]/g;
  * not an original index - every step of folding can change length.
  * Decomposed `cafe\u0301` is five characters and folds to four; `\u0130`
  * lowercases to two from one. Used as one another, every highlight on a
- * corpus with an accent in it lands slightly wrong.
+ * collection with an accent in it lands slightly wrong.
  *
  * So this folds one code point at a time and records, for each UTF-16 unit
  * of the output, the index of the source unit that produced it. `map.length`
@@ -174,7 +174,7 @@ export function foldWithMap(text: unknown): { folded: string; map: number[] } {
 
 /** Options shared by `tokenise` and `tokeniseWithPositions`. */
 export interface TokeniseOpts {
-  /** tokens shorter than this are dropped, or `a` matches most keywords in the corpus by substring */
+  /** tokens shorter than this are dropped, or `a` matches most keywords in the collection by substring */
   minLength?: number;
   /** drop stopwords (true by default) */
   stopwords?: boolean;
@@ -658,7 +658,7 @@ export interface AxisPulls {
  *
  * A soft OR of the four axes' pulls (see `softOr`). Every pull is an
  * absolute reading of the room's own evidence, never normalised across the
- * corpus, so a query the corpus has no answer to leaves every room near 0
+ * collection, so a query the collection has no answer to leaves every room near 0
  * (docs/search_requirements.md SR-19).
  *
  * @returns in [0, 1]
@@ -771,7 +771,7 @@ export interface RankHybridOpts {
 }
 
 /**
- * Evaluate the whole corpus against a query: one `strength` per room, and
+ * Evaluate the whole collection against a query: one `strength` per room, and
  * the order that places rooms by it.
  *
  * Each axis turns the room's evidence into a pull in [0, 1], scaled by its
@@ -789,11 +789,11 @@ export interface RankHybridOpts {
  *   - clip: `clip` times `clipCurveStrength` of the raw cosine.
  *
  * A missing signal is omitted, not substituted: no embedding blob gives a
- * text-only ranking, and no metadata a CLIP-only one. Only a corpus with
+ * text-only ranking, and no metadata a CLIP-only one. Only a collection with
  * neither needs the server's stub.
  *
  * @param opts.query          the raw query string
- * @param opts.count          rooms in the corpus
+ * @param opts.count          rooms in the collection
  * @param opts.weights        `config.search.weights`
  * @param opts.embeddings the blob, roomCount * dim row-major
  * @param opts.vector the query vector, L2-normalised
@@ -932,7 +932,7 @@ export function rankHybrid({
   // Independent per-signal sorts of the numbers just computed, run before
   // the placement sort below while `scored` is still id-indexed - so
   // `rank`/`ties` come back indexed by room id, same as `scored` itself
-  // (docs/search_rules.md "The corpus-wide result", "Reporting").
+  // (docs/search_rules.md "The collection-wide result", "Reporting").
   const tagRanking = rankAxis(scored, compareTagAxis);
   const titleRanking = rankAxis(scored, compareTitleAxis);
   const storyRanking = rankAxis(scored, compareStoryAxis);
@@ -1017,7 +1017,7 @@ export interface ExplainRankingOpts {
 /**
  * One room's ranking, as a reader reads it: one composite line ("#4 of
  * 2,048, 73% match strength"), and one line per axis that actually found
- * something for this room - tag, title, story, and CLIP whenever the corpus
+ * something for this room - tag, title, story, and CLIP whenever the collection
  * has embeddings at all - each carrying its own independent rank/tie count
  * from `rankHybrid`'s `ranks`/`ties`, not the placement order's.
  *
@@ -1032,7 +1032,7 @@ export interface ExplainRankingOpts {
  * @param opts.strength from `rankHybrid`
  * @param opts.ranks from `rankHybrid`
  * @param opts.ties from `rankHybrid`
- * @param opts.total rooms in the corpus (`result.order.length`)
+ * @param opts.total rooms in the collection (`result.order.length`)
  * @returns `null` when nothing at all matched this room - no tag, no title, no story, no CLIP data.
  */
 export function explainRanking(

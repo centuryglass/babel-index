@@ -1,15 +1,15 @@
 /**
- * Distill mode: hide every generic room and let the corpus rooms already on
+ * Distill mode: hide every generic room and let the collection rooms already on
  * the map pack together to fill the space, then reverse it.
  *
  * The heavy lifting - moving rooms without ever looking like a teleport - is
  * the sliding-tile animation `useRearrangement.ts` already drives off a
  * `layout`/`order` change; distill mode is a `contentRatio` flip (1 to pack
- * every corpus room into the smallest area near the origin, back to
+ * every collection room into the smallest area near the origin, back to
  * `defaultRatio` to restore the usual sparseness) asked for through
  * `requestAnimation`, like the reorder button or a favorite sort. The flip
  * animates cleanly even though it changes which physical cells are occupied:
- * the corpus's room-id multiset never changes, only where each id sits, and
+ * the collection's room-id multiset never changes, only where each id sits, and
  * `buildRearrangement` tolerates that - it is what a favorite sort does on
  * every activation.
  *
@@ -23,7 +23,7 @@
  * The sequence is asymmetric.
  *
  * - Entering: fade the generics out first, then flip the ratio and let the
- *   slide carry the corpus rooms inward - by the time anything moves, every
+ *   slide carry the collection rooms inward - by the time anything moves, every
  *   generic cell is already fully faded, so nothing flashes its art mid-ride.
  * - Leaving: flip the ratio and let the slide bring the sparser arrangement
  *   back first (generic cells reappear on camera as any other value would -

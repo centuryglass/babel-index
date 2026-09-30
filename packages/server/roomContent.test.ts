@@ -152,7 +152,7 @@ test('rooms with no alt text are named in one warning, whether their entry lacks
   }
 });
 
-test('a corpus whose every room has alt text warns about nothing', async (t) => {
+test('a collection whose every room has alt text warns about nothing', async (t) => {
   const warn = t.mock.method(logger, 'warn', (_obj: unknown, _msg?: string) => {});
   const dir = await mkdtemp(join(tmpdir(), 'babel-room-content-'));
   try {

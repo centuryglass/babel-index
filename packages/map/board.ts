@@ -18,13 +18,13 @@
  *
  *   - It has to hold every slot of both layouts, because a room the new order
  *     wants on camera has to be findable somewhere. A search reranks the whole
- *     corpus, so the room that lands beside the center may have been at the far
+ *     collection, so the room that lands beside the center may have been at the far
  *     edge a moment ago.
  *   - It has to be at least four times the on-camera rectangle: the cells
  *     outside the region are where values are parked, and a board too small
  *     starves that pool mid-plan. `illusion.ts`'s `validate` refuses it.
  *
- * The second binds on a small corpus and the first on a large one, so the board
+ * The second binds on a small collection and the first on a large one, so the board
  * takes the larger. Neither costs anything to animate: every move outside the
  * region is a swap.
  *
@@ -42,7 +42,7 @@
  *
  * A room the new arrangement wants on camera has to already be somewhere on the
  * board. It always is when the two orders are permutations of the same placed
- * set - the reorder button, and any search at full corpus size. It is not when
+ * set - the reorder button, and any search at full collection size. It is not when
  * the "rooms on the map" slider has been pulled back, because then a reorder
  * changes which rooms are placed at all, and a room that was not on the map
  * cannot slide in from a cell it was never in. That case returns null and the

@@ -52,7 +52,7 @@ Every tracked file in the repo, with a line or two on what it is for.
   * `app.ts`: Express routes - manifest, search, favorites, logs, images,
     SSR pages. `docs/api.md` must change with any `/api/*` shape.
   * `scan.ts`: Scans an images directory (and `--shared-dir`) into the
-    corpus manifest.
+    collection manifest.
   * `remote.ts`: Reads a manifest from a remote host (R2) instead of a local
     directory, rebasing its urls.
   * `port.ts`: `portInUse`, so a second `npm run demo` fails instead of
@@ -117,7 +117,7 @@ Every tracked file in the repo, with a line or two on what it is for.
   * `public/`: App-level static assets (favicons, touch and manifest icons,
     `site.webmanifest`, the OG card image), served by `app.ts`'s
     `publicDir` mount.
-  * `src/main.tsx`: React entry point - loads the corpus, derives the layout,
+  * `src/main.tsx`: React entry point - loads the collection, derives the layout,
     wires the hooks together, and renders the map and catalog views. Reads
     the SSR routes' `window.__INITIAL_ROUTE__` seed once at startup.
   * `src/assets.d.ts`: Module declarations for the `.svg` (raw text) and
@@ -150,7 +150,7 @@ Every tracked file in the repo, with a line or two on what it is for.
     * `ZoomControls.tsx`: Zoom in/reset/out buttons for a `useContentZoom`
       scope - the non-pinch path for a mouse-and-keyboard reader.
   - `src/hooks/`: The subsystems `main.tsx` wires together.
-    * `useCorpus.ts`: Loads the metadata sidecar and embedding blob and
+    * `useTileCollection.ts`: Loads the metadata sidecar and embedding blob and
       builds the search index.
     * `useFavorites.ts`: The reader's favorites (localStorage), the global
       counts (`/api/favorites`), and the toggle that changes both.
@@ -246,12 +246,12 @@ Every tracked file in the repo, with a line or two on what it is for.
 - `packages/map`: Map layout and room data, no DOM.
   * `ordering.ts`: Room placement, the search density gradient, ranking by
     embedding, pan resistance.
-  * `nextRoom.ts`: Ctrl+arrow's walk to the next corpus room in a
+  * `nextRoom.ts`: Ctrl+arrow's walk to the next collection room in a
     direction.
   * `metadata.ts`: Normalizing and joining per-room keyword/story data.
   * `slug.ts`: Room permalinks - building slugs from titles and resolving
     them (and filename-stem aliases) back to rooms.
-  * `manifest.ts`: The corpus manifest's types (`Manifest`, `Room`,
+  * `manifest.ts`: The collection manifest's types (`Manifest`, `Room`,
     `SharedAssets`, ...). Types only.
   * `moves.ts`: The rearrangement's types (`Move`, `Board`,
     `Rearrangement`, ...), shared by `illusion.ts`, `board.ts` and
@@ -298,13 +298,13 @@ imports at bundle time.
   sprite sheets plus `manifest.json` (`npm run generate:animation`).
   * `index.ts`: CLI - discover cycles, crop, pack, write sheets and manifest.
   * `lib.ts`: Pure crop, grid and cell-fraction math, and the manifest type.
-- `tools/embed/embed.ts`: Computes CLIP image embeddings for a corpus
+- `tools/embed/embed.ts`: Computes CLIP image embeddings for a collection
   (`npm run generate:embeddings`).
 - `tools/embed/README.md`: How to run `embed.ts` and `cosine-range.ts`.
 - `tools/embed/cosine-range.ts`: Measures CLIP's raw cosine range on a real
-  corpus, to calibrate `CLIP_STRENGTH` and `search.density`.
+  collection, to calibrate `CLIP_STRENGTH` and `search.density`.
   * `cosine-stats.ts`: Its pure percentile and calibration arithmetic.
-- `tools/upload`: Syncs a corpus to Cloudflare R2, incrementally by content
+- `tools/upload`: Syncs a collection to Cloudflare R2, incrementally by content
   hash.
   * `upload-r2.ts`: CLI; credentials from the environment.
   * `lib.ts`: Pure upload-list and diff logic.
@@ -401,7 +401,7 @@ imports at bundle time.
 - `assets/animation`: Loading-animation frame cycles (`<cycle>/`, source
   only) and the generated `sheets/` and `manifest.json` served from
   `/shared/animation/`.
-- `assets/corpus-sample`: A minimal demo corpus with metadata, embeddings,
+- `assets/tile-collection-sample`: A minimal demo collection with metadata, embeddings,
   pyramid and tag links.
 
 ### Reference:
@@ -410,7 +410,7 @@ imports at bundle time.
 
 ### Docs:
 - `docs/api.md`: The `/api/*` request/response contract.
-- `docs/corpus.md`: The corpus directory format: `metadata.json` fields,
+- `docs/tile-collection.md`: The collection directory format: `metadata.json` fields,
   `tagLinks.json`, and filename keying.
 - `docs/architecture.md`: The five-minute, human-facing system overview.
 - `docs/user-guide.md`: Every control, annotated with screenshots - the

@@ -258,7 +258,7 @@ export interface TileCache {
  * worker that shares none of this module's scope. `createImageBitmap` from a
  * `Blob` (not an `<img>` - that makes Firefox decode synchronously on the
  * caller) is what keeps the decode off the render thread. CORS is enforced
- * because it is a `fetch`; the remote corpus host already serves the tile bases
+ * because it is a `fetch`; the remote collection host already serves the tile bases
  * with it (see `packages/server/remote.ts`), and a same-origin deployment needs none.
  */
 async function decodeOnThread(url: string): Promise<ImageBitmap> {
@@ -494,8 +494,8 @@ export function createTileCache({
     }
 
     const loc = locateTile(id, level);
-    // No location means this level was never generated for this corpus. Recording
-    // a miss would be recording a fact about the corpus in a per-tile cache.
+    // No location means this level was never generated for this collection. Recording
+    // a miss would be recording a fact about the collection in a per-tile cache.
     if (loc == null) return null;
 
     const store = bucket(level);
@@ -530,7 +530,7 @@ export function createTileCache({
 
   /**
    * The nearest level this room has art for at all, which is not always the one
-   * asked for: a corpus that has never been through the pipeline has only level
+   * asked for: a collection that has never been through the pipeline has only level
    * 0, so every request for a coarser tile has to resolve to it or the cell
    * would wait forever for a file that does not exist.
    *

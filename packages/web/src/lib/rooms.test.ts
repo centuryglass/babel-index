@@ -46,7 +46,7 @@ test('a per-file level resolves to a bare url with no rect', () => {
   assert.deepEqual(locate(0, 1), { url: 'images/512/001.jpg', rect: null });
 });
 
-test('a level the corpus does not have resolves to null', () => {
+test('a level the collection does not have resolves to null', () => {
   const locate = createTileLocator(manifest());
   assert.equal(locate(0, 2), null);
 });
@@ -74,7 +74,7 @@ test('a level in shared.levels resolves by inserting <width>/ before the filenam
   assert.deepEqual(locate(genericId(1), 1), { url: 'shared/generic/512/g2.png', rect: null });
 });
 
-test('a level shared.levels does not have resolves to null, same as a missing corpus level', () => {
+test('a level shared.levels does not have resolves to null, same as a missing collection level', () => {
   const m = manifest();
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const locate = createTileLocator(m);
@@ -115,7 +115,7 @@ test('shared.distillLevels is independent of shared.levels - the base ladder hav
 });
 
 test('the favorite badge faces resolve off sharedBase at level 0, even absent from manifest.shared', () => {
-  // Fixed app art, not a scanned corpus asset - so unlike the center and the
+  // Fixed app art, not a scanned collection asset - so unlike the center and the
   // generic tiles, `manifest.shared.center`/`generic` never describe them.
   // They still have their own pyramid (`favoriteLevels`), so with no
   // `m.shared.favoriteLevels` set this falls back to level 0 only, same as

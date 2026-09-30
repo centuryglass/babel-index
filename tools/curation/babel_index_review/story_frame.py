@@ -5,8 +5,8 @@ and constraint lists, and where traces and workspaces go.
 The lists are ``data/story_seeds.json``, ``data/story_forms.json`` and
 ``data/story_constraints.json``, relative to the launch directory like every
 other ``data/`` default here. Traces and workspaces go to ``story_traces/``
-inside the tile directory, as ``<tile stem>.jsonl`` and ``<tile stem>.json``. The corpus scanner lists only
-image files at a corpus root, so the subdirectory is ignored if that
+inside the tile directory, as ``<tile stem>.jsonl`` and ``<tile stem>.json``. The collection scanner lists only
+image files at a collection root, so the subdirectory is ignored if that
 directory is later served.
 """
 

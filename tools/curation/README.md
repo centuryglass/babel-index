@@ -1,10 +1,10 @@
 # Curation tools
 
 Python/Qt tools for turning a batch of generated tile images into the
-`metadata.json` this project's corpus format expects: keyword extraction,
+`metadata.json` this project's collection format expects: keyword extraction,
 story generation and review, alt text, title generation, and sensitive-content
 tagging. These are offline curation tools that run against a working tile
-directory before it becomes (or updates) a corpus under `--images`/`assets/` -
+directory before it becomes (or updates) a collection under `--images`/`assets/` -
 nothing here is imported by `packages/`.
 
 See `AGENTS.md` in this directory for the coding-agent-facing notes
@@ -40,7 +40,7 @@ the current numbers.
 
 Everything below is run as `python -m babel_index_review.<tool>` from
 `tools/curation/`, against a tile directory `DIR` holding `NNNNN.webp` files
-plus a `metadata.json` sidecar (see [`docs/corpus.md`](../../docs/corpus.md)
+plus a `metadata.json` sidecar (see [`docs/tile-collection.md`](../../docs/tile-collection.md)
 for the exact schema). `DIR` is always the first positional
 argument, never a flag.
 
@@ -92,7 +92,7 @@ and then model id, and are never fed into a story prompt. Several can run at
 once, and a second window picks them up.
 `--sample-update` adds a "Save to samples" button that copies the selected
 tile's image and a subset of its metadata (keywords, story, title, alt) into
-`assets/corpus-sample`, for hand-picking a representative demo corpus.
+`assets/tile-collection-sample`, for hand-picking a representative demo collection.
 
 The story engine panel (`story_engine/`, configured by
 `babel_index_review/story_frame.py`) follows
