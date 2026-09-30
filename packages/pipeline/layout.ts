@@ -13,8 +13,8 @@
  *   <dir>/128-sheets/sheet-0000.jpg   packed from `SHEETS.fromLevel` up
  *
  * Width names the directory because width is the axis the client's ladder is
- * expressed in and a corpus shares one aspect, so it identifies the level
- * unambiguously. Level 0 stays flat so a corpus that has never been through the
+ * expressed in and a collection shares one aspect, so it identifies the level
+ * unambiguously. Level 0 stays flat so a collection that has never been through the
  * pipeline still reads as a valid level 0, and running in place costs no
  * duplicated bytes.
  */
@@ -56,7 +56,7 @@ export interface SheetPosition {
 /**
  * What levels a source image of these dimensions should produce, finest first.
  *
- * Sizes come from the source, not from `BASE_TILE`: a corpus rendered at any
+ * Sizes come from the source, not from `BASE_TILE`: a collection rendered at any
  * size gets the levels it can hold. Each level is the source divided by the
  * ladder's divisor on both axes together, which keeps the aspect exact.
  *
@@ -96,7 +96,7 @@ export function sheetFileName(sheetIndex: number, ext = 'jpg'): string {
 }
 
 /**
- * How many sheets a corpus of this size needs, and the grid each one holds.
+ * How many sheets a collection of this size needs, and the grid each one holds.
  * Throws on a `cols` x `rows` that does not hold `roomsPerSheet`.
  */
 export function sheetPlan(roomCount: number, config: SheetConfig = SHEETS): SheetPlan {

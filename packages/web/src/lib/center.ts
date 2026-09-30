@@ -275,7 +275,7 @@ export function areSpinesLegible(cellRect: Rect): boolean {
  *
  * A book with no title is stepped over rather than landed on: it is a control
  * with nothing to say. `assignTitles` leaves one only where history has not
- * reached and the corpus has no tags left to cycle.
+ * reached and the collection has no tags left to cycle.
  *
  * `from` may sit outside the wall, which is how Home and End are expressed: -1
  * with `dx: 1` is the first titled book, `BOOK_COUNT` with `dx: -1` the last.
@@ -474,7 +474,7 @@ export interface Slot {
 export interface AssignTitlesOpts {
   /** past searches, newest first */
   history?: string[];
-  /** a stable random selection of corpus keywords - see `pickTags` */
+  /** a stable random selection of collection keywords - see `pickTags` */
   tags?: string[];
   /** reserved books with a distinct function, keyed by flat book id */
   overrides?: Record<number, { text: string; action: string }>;
@@ -549,11 +549,11 @@ interface KeywordSource {
 }
 
 /**
- * A stable random selection of keyword texts from the corpus, enough to letter
+ * A stable random selection of keyword texts from the collection, enough to letter
  * the whole wall.
  *
  * Seeded from the `seed` argument and the pool's size, so the wall does not
- * reshuffle on every render but does reshuffle when the corpus's keyword set
+ * reshuffle on every render but does reshuffle when the collection's keyword set
  * changes. Deduped, because the same keyword on many rooms is one tag. Bounded at
  * `BOOK_COUNT`; `assignTitles` cycles a shorter pool to fill the rest.
  */

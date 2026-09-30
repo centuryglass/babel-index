@@ -88,7 +88,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
 
       // And the composite line names both the rank and the match strength
       // behind it - measured against absolute bounds rather than against
-      // this query's corpus, the number that keeps a min-maxed 1.00 from
+      // this query's collection, the number that keeps a min-maxed 1.00 from
       // reading as a strong match.
       const strip = await top.locator('.score-strip').textContent();
       assert.match(strip, /^#\d+ of \d+,/);
@@ -354,12 +354,12 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
     // runs taller than the float. There the story's own block box spans the
     // full row width, even beside the float, and can win hit-testing and
     // swallow the click. 900x700 lands inside that window against the sample
-    // corpus; the default 1280-wide session doesn't.
+    // collection; the default 1280-wide session doesn't.
     await page.setViewportSize({ width: 900, height: 700 });
     try {
       await openCatalog();
       try {
-        // The first non-center row, at 900x700 against the sample corpus -
+        // The first non-center row, at 900x700 against the sample collection -
         // room 1's own story runs past the float. A
         // plain `.click()` fails the way a real pointer would if the story is
         // still on top - Playwright refuses rather than force it through.

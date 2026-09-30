@@ -307,7 +307,7 @@ test('the center room is never drawn anywhere but the center', () => {
   assert.ok(renderer);
 });
 
-test('duration is set by the viewport, not by the corpus', () => {
+test('duration is set by the viewport, not by the collection', () => {
   const small = createSlideshow({
     board: { width: 1, height: 1, cells: [] },
     moves: rearrangement(50, 1, 2).moves,
@@ -320,13 +320,13 @@ test('duration is set by the viewport, not by the corpus', () => {
     apply: () => {},
     timing: TIMING,
   });
-  // The claim is one-sided: growing the corpus must never lengthen this. It
-  // may well shorten it, and does - a small corpus keeps most of its distinct
+  // The claim is one-sided: growing the collection must never lengthen this. It
+  // may well shorten it, and does - a small collection keeps most of its distinct
   // rooms on screen at once, so more of them have to be rotated out of the
   // region before they can be staged, and each of those is a slide the big
-  // corpus does not pay for.
+  // collection does not pay for.
   const ratio = large.totalMs / small.totalMs;
-  assert.ok(ratio <= 1.05, `a 16x corpus made the animation ${ratio.toFixed(2)}x longer`);
+  assert.ok(ratio <= 1.05, `a 16x collection made the animation ${ratio.toFixed(2)}x longer`);
   // And it is a showpiece, not a stall: seconds, not tens of seconds.
   assert.ok(small.totalMs < 3000, `${Math.round(small.totalMs)}ms is too long to sit through`);
 });

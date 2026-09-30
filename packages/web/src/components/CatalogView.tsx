@@ -1,5 +1,5 @@
 /**
- * The catalog: the corpus as one list, alphabetical at rest
+ * The catalog: the collection as one list, alphabetical at rest
  * (`alphabeticalOrder`, `lib/catalog.ts`) and ranked like the map while a
  * search runs. The map shows where the reader stands; the catalog shows the
  * whole ranking, each room once. Neither is a fallback for the other, and

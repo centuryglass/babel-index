@@ -26,7 +26,7 @@ import type { Config } from '../../../config/config.ts';
 import type { SearchIndex, SearchResult, RankSignals, MatchRange } from '../../../map/searchResult.ts';
 
 interface UseSearchOpts {
-  /** corpus size */
+  /** tile collection size */
   total: number;
   /** `config.search` */
   searchConfig: Config['search'];
@@ -85,7 +85,7 @@ export function useSearch({
   // Every query passes through here, whether it came from the box, a keyword
   // chip, a book on the shelf or a catalog row - so this is the one place the
   // length cap has to hold. Scoring is O(tokens x keywords) per room, and a
-  // pasted tag list against a full corpus is tens of millions of substring
+  // pasted tag list against a full collection is tens of millions of substring
   // tests on the main thread, which does not degrade, it stops. The input has
   // a `maxLength` too, but that only covers typing: a chip, a book and a
   // restored history entry all reach this without touching the box.
@@ -129,11 +129,11 @@ export function useSearch({
     // already claimed the map.
     if (seq !== searchSeq.current) return;
 
-    // Three signals, blended into one sort over the whole corpus. Any of them
+    // Three signals, blended into one sort over the whole collection. Any of them
     // may be missing - no blob, no metadata - and a ranking from the rest is
     // still a real ranking, so the only case that needs the server's stub is
     // having neither. The note says which of the three it actually was, rather
-    // than implying more than the corpus can support.
+    // than implying more than the collection can support.
     const blob = res.vector ? embeddings.current : null;
     if (blob || searchIndex) {
       const { order, strength, breakdown, ranks, ties, signals } = rankHybrid({
@@ -160,7 +160,7 @@ export function useSearch({
     } else {
       // The stub ranking is a hash, so it is not certain of anything and must
       // not pretend to be: no profile, and the map stays evenly scattered.
-      requestAnimationRef.current('stub ranking — no embeddings and no keywords in this corpus');
+      requestAnimationRef.current('stub ranking — no embeddings and no keywords in this collection');
       // No breakdown: a hash-ordered stub has no signals to explain, and an
       // explanation of a ranking nothing decided would be an invented one.
       setResult({ order: res.order, strength: null, breakdown: null, ranks: null, ties: null, signals: null, term });
@@ -195,7 +195,7 @@ export function useSearch({
     // `tagTermsOf` decides for both (docs/search_requirements.md SR-35). A
     // query with no eligible term - `a`, `the` - scores nothing and so marks
     // nothing, where the raw folded query would have substring-matched most
-    // of the corpus.
+    // of the collection.
     const { terms, whole } = tagTermsOf(parseQuery(term), tokens, searchConfig.minTokenLength);
     const foldedQuery = whole?.folded ?? '';
     if (!terms.length && !tokens.length) return null;
@@ -217,7 +217,7 @@ export function useSearch({
  * What actually decided this ranking, in the panel's own voice.
  *
  * `signals` reports which of the four found anything for this query, not
- * which were available - a corpus full of keywords that none of them matched
+ * which were available - a collection full of keywords that none of them matched
  * should not claim the ranking was keyword-driven.
  */
 export function describeSignals({ clip, keyword, title, story }: RankSignals, hasText: boolean): string {

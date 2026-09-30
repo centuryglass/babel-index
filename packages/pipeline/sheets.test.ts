@@ -26,7 +26,7 @@ const CONFIG = { roomsPerSheet: 4, cols: 2, rows: 2 };
 
 // --- the plan ----------------------------------------------------------------
 
-test('sheetCount covers the corpus, rounding up', () => {
+test('sheetCount covers the collection, rounding up', () => {
   assert.equal(sheetPlan(0, CONFIG).sheetCount, 0);
   assert.equal(sheetPlan(4, CONFIG).sheetCount, 1);
   assert.equal(sheetPlan(5, CONFIG).sheetCount, 2);

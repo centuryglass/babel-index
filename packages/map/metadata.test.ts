@@ -119,7 +119,7 @@ test('the join is by filename and indexed by room id', () => {
 
 test('a renamed or added room loses only its own entry', () => {
   // The whole reason this is keyed on filename rather than on row order: the
-  // embedding blob has to be thrown away when the corpus moves, and this does
+  // embedding blob has to be thrown away when the collection moves, and this does
   // not. Room 1 gets no entry and room 3 is brand new; the rest still land.
   const grown = [...rooms, { id: 3, file: '004.jpg', url: 'images/004.jpg', bytes: 0 }];
   const joined = joinMetadata(grown, { '001.jpg': { story: 'a' }, '004.jpg': { story: 'd' } });
@@ -127,7 +127,7 @@ test('a renamed or added room loses only its own entry', () => {
   assert.equal(joined[3].story, 'd');
 });
 
-test('entries for files not in the corpus are ignored', () => {
+test('entries for files not in the collection are ignored', () => {
   const joined = joinMetadata(rooms, { 'nope.jpg': { story: 'orphan' } });
   assert.deepEqual(joined, [null, null, null]);
 });
@@ -197,7 +197,7 @@ test('countBlocked counts rooms, not tags', () => {
   assert.equal(countBlocked(null, new Set(['gore'])), 0);
 });
 
-test('availableSensitiveTags is every tag in the corpus, deduped and sorted', () => {
+test('availableSensitiveTags is every tag in the collection, deduped and sorted', () => {
   const metadata = [
     normaliseEntry({ story: 'a', sensitive_content_tags: ['nudity', 'gore'] }),
     null,

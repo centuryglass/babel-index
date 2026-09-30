@@ -1,5 +1,5 @@
 /**
- * Reading a corpus from a remote host (R2 behind a public domain, e.g.
+ * Reading a tile collection from a remote host (R2 behind a public domain, e.g.
  * assets.centuryglass.us) instead of a local directory.
  *
  * `tools/upload/upload-r2.ts` writes the exact `scanDirectory()` result to
@@ -19,13 +19,13 @@
  * scoped to the R2 hostname - see that traffic.
  *
  * The R2/Cloudflare host must serve `imagesBase`/`sharedBase` with CORS
- * allowing this app's origin - `useCorpus.ts` reads `embeddings.bin` and
+ * allowing this app's origin - `useTileCollection.ts` reads `embeddings.bin` and
  * `metadata.json` (and `tagLinks.json`) via `fetch()`, which enforces CORS
  * unlike a plain `<img>` tag.
  */
 import type { Manifest } from '../map/manifest.ts';
 
-/** The manifest filename `upload-r2.ts` writes under a corpus's prefix. */
+/** The manifest filename `upload-r2.ts` writes under a collection's prefix. */
 export const REMOTE_MANIFEST_NAME = 'manifest.json';
 
 /**
@@ -39,7 +39,7 @@ function rebase(url: string, oldBase: string, newBase: string): string {
 
 /**
  * @param baseUrl e.g. https://assets.centuryglass.us
- * @param prefix  the corpus prefix used at upload time
+ * @param prefix  the collection prefix used at upload time
  * @returns a manifest shaped like scanDirectory()'s, with every url pointing
  *   directly at the remote host
  */

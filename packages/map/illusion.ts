@@ -2,7 +2,7 @@
  * Plan a row/column sliding-tile rearrangement of the map, so no tile ever
  * appears to glide over a backdrop.
  *
- * A cell is a wall, not a slot - the generic room is as much a wall as a corpus
+ * A cell is a wall, not a slot - the generic room is as much a wall as a collection
  * room, and most of them (all but `contentRatio`) being identical is a fact
  * about the art, not licence to treat them as empty. A single tile crossing the map would read as floating
  * above wallpaper, and the grid would stop being somewhere you stand. A whole

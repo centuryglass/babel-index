@@ -1,4 +1,7 @@
-# The bucket tools/upload/upload-r2.ts syncs the corpus into.
+# The bucket tools/upload/upload-r2.ts syncs the tile collection into.
+# The `corpus` resource addresses here and the default bucket name keep the
+# project's old term: renaming an address needs a `moved` block, and
+# renaming the bucket creates a new, empty one.
 resource "cloudflare_r2_bucket" "corpus" {
   account_id = var.cloudflare_account_id
   name       = var.r2_bucket_name

@@ -51,9 +51,9 @@
  * plan is laid out in time; what the numbers should be is somebody else's
  * question.
  *
- * The visible cost is the region's, not the corpus's: only lines crossing the
+ * The visible cost is the region's, not the collection's: only lines crossing the
  * on-camera rectangle ever slide. The duration is set by the viewport, and
- * corpus size does not enter into it.
+ * collection size does not enter into it.
  */
 import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
@@ -193,7 +193,7 @@ export function buildTimeline(moves: Move[], timing: Config['slide']): Timeline 
       // the last of them at its completion, ordered completions are ordered
       // application - the plan is honoured to the letter while the picture
       // stops being a queue. The extraction rotations ride on this: a small
-      // corpus keeps most of its rooms on camera, so it needs many of them.
+      // collection keeps most of its rooms on camera, so it needs many of them.
       let cursor = at + (stage.wave ? i * timing.stagger : 0);
       let previousEnd = cursor;
       for (const run of lane.runs) {

@@ -49,7 +49,7 @@ test('the four directions are independent', () => {
   }
 });
 
-test('a corpus with only wallpaper never finds a room', () => {
+test('a collection with only wallpaper never finds a room', () => {
   const empty = createLayout({ roomCount: 0, contentRatio: 0.5, seed: 1, aspect: ASPECT });
   const found = nextRoom(empty, { x: 0, y: 0 }, { dx: 1, dy: 0 });
   assert.equal(found, null);

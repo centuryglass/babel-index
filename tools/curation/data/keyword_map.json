@@ -1224,9 +1224,9 @@
     "category": "LoRA model",
     "rename": "lora:Surreal Harmony"
   },
-  "<lora:Emotive_Corporate:1>": {
+  "<lora:Emotive_Collectionste:1>": {
     "category": "LoRA model",
-    "rename": "lora:Emotive_Corporate"
+    "rename": "lora:Emotive_Collectionste"
   },
   "<lora:bichu-v0612:1> oil painting": {
     "category": "LoRA model",
@@ -2353,7 +2353,7 @@
   "cork": {
     "category": "medium/material"
   },
-  "Corporate Memphis": {
+  "Collectionste Memphis": {
     "category": "movement/style"
   },
   "corroded": {

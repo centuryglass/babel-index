@@ -266,7 +266,7 @@ test('the cell grid covers the full viewport with no gaps, at any zoom or fracti
   }
 });
 
-test('a flat corpus renders exactly as it did before the pyramid', () => {
+test('a flat tile collection renders exactly as it did before the pyramid', () => {
   // Only level 0 on disk. Every level resolves to it, so the map still works -
   // which is what keeps "point it at a directory of images" true.
   const w = world({ only: [0] });

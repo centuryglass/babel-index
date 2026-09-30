@@ -1,5 +1,5 @@
 /**
- * The corpus data derived from the manifest: the keyword/story sidecar, the
+ * The tile collection data derived from the manifest: the keyword/story sidecar, the
  * embedding blob, the tag links, and the search index built over them.
  *
  * `embeddings` is a ref holding `{ data, dim, scale }`, not React state: it is
@@ -10,8 +10,8 @@
  *
  * Each fetch the manifest advertises can fail on its own (an interrupted
  * `tools/upload` sync can leave a manifest naming a missing `metadata.json`
- * or `embeddings.bin`). The corpus still renders, with degraded search, and
- * `corpusErrors` names the failed sources for the panel line in
+ * or `embeddings.bin`). The collection still renders, with degraded search, and
+ * `tileCollectionErrors` names the failed sources for the panel line in
  * `MapView.tsx`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,18 +20,18 @@ import { buildSearchIndex } from '../../../map/scoring.ts';
 import type { ManifestResponse } from '../../../map/manifest.ts';
 
 /** A fetch the manifest advertised that came back non-ok or threw, named for the HUD line in `MapView.tsx`. */
-export type CorpusErrorSource = 'metadata' | 'embeddings' | 'tagLinks';
+export type TileCollectionErrorSource = 'metadata' | 'embeddings' | 'tagLinks';
 
 /** @param minTokenLength config `search.minTokenLength`, which the story index must share with the query side */
-export function useCorpus(manifest: ManifestResponse, minTokenLength: number) {
+export function useTileCollection(manifest: ManifestResponse, minTokenLength: number) {
   const [metadata, setMetadata] = useState<(RoomMeta | null)[] | null>(null);
   const [tagLinks, setTagLinks] = useState<Record<string, string> | null>(null);
-  const [corpusErrors, setCorpusErrors] = useState<CorpusErrorSource[]>([]);
+  const [tileCollectionErrors, setTileCollectionErrors] = useState<TileCollectionErrorSource[]>([]);
 
-  const addError = (source: CorpusErrorSource) =>
-    setCorpusErrors((prev) => (prev.includes(source) ? prev : [...prev, source]));
+  const addError = (source: TileCollectionErrorSource) =>
+    setTileCollectionErrors((prev) => (prev.includes(source) ? prev : [...prev, source]));
 
-  // The embedding blob, fetched once if the corpus has one. Ranking is a few
+  // The embedding blob, fetched once if the collection has one. Ranking is a few
   // million int8 multiply-adds against it (rankByEmbedding), well under a
   // frame, so a search - and every re-rank off the same vector - stays on the
   // client.
@@ -61,7 +61,7 @@ export function useCorpus(manifest: ManifestResponse, minTokenLength: number) {
   }, [manifest]);
 
   // The keyword/story sidecar, fetched alongside the blob rather than inlined
-  // into the manifest: at a full corpus it is megabytes, and the manifest is
+  // into the manifest: at a full collection it is megabytes, and the manifest is
   // on the path to the first frame. Joined by filename into an array indexed
   // by room id, which is what search and the overlay will both want.
   useEffect(() => {
@@ -83,8 +83,8 @@ export function useCorpus(manifest: ManifestResponse, minTokenLength: number) {
     };
   }, [manifest]);
 
-  // The keyword -> external-link map: a corpus-specific file, fetched from
-  // its own url and absent from any corpus that has not been given one
+  // The keyword -> external-link map: a collection-specific file, fetched from
+  // its own url and absent from any collection that has not been given one
   // (docs/agents/search.md, "`tagLinks.json` is a flat keyword -> url map").
   useEffect(() => {
     if (!manifest.tagLinks) return;
@@ -114,5 +114,5 @@ export function useCorpus(manifest: ManifestResponse, minTokenLength: number) {
     [metadata, minTokenLength]
   );
 
-  return { metadata, embeddings, searchIndex, described, tagLinks, corpusErrors };
+  return { metadata, embeddings, searchIndex, described, tagLinks, tileCollectionErrors };
 }

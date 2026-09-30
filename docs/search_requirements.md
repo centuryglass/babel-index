@@ -38,7 +38,7 @@ coverage gap.
   meaning.
 - **SR-07** Clicking a keyword should search for that keyword exactly as
   written.
-- **SR-08** Search should consider every room in the corpus, never a subset.
+- **SR-08** Search should consider every room in the collection, never a subset.
 
 ## Ranking
 
@@ -54,13 +54,13 @@ coverage gap.
 - **SR-13** More matches should outrank fewer.
 - **SR-14** A room matching several signals weakly should be able to outrank a
   room matching one signal weakly.
-- **SR-15** The same query against the same corpus should always produce the
+- **SR-15** The same query against the same collection should always produce the
   same order.
 
 ## Strength and honesty
 
 - **SR-16** Search should report how strong each room's match is on a scale
-  that does not depend on what else is in the corpus.
+  that does not depend on what else is in the collection.
 - **SR-17** A room's reported strength should not drop because the user added
   words that have nothing to do with it.
 - **SR-18** Typing a room's tag verbatim should report that room as a maximally
@@ -119,7 +119,7 @@ coverage gap.
 
 ## Holding up
 
-- **SR-43** Search should stay responsive on the largest corpus it will ever
+- **SR-43** Search should stay responsive on the largest collection it will ever
   serve.
 - **SR-44** A long or pasted query should be refused or truncated, never
   allowed to freeze the page.

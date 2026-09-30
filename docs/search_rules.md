@@ -13,14 +13,14 @@ What search has to accomplish for a reader is stated separately, in
 ## Overview: one number
 
 A search asks every room four questions - does the query match your tags,
-your title, your story, your picture - in one pass over the corpus. Each
+your title, your story, your picture - in one pass over the collection. Each
 answer becomes a **pull** in `[0, 1]`: how strongly that kind of evidence
 draws the room toward the center. The four pulls combine into one number per
 room, its **strength** (`strength`), also in `[0, 1]`, `0` for no evidence.
 
 Strength does both jobs the map needs:
 
-- **Placement.** `rankHybrid` sorts the whole corpus by strength, so the
+- **Placement.** `rankHybrid` sorts the whole collection by strength, so the
   strongest matches are placed nearest the center.
 - **Density.** `ordering.ts` reads the same number to decide how densely
   matching rooms pack among the generic ones at each distance.
@@ -29,7 +29,7 @@ Because one number does both, a room's reported strength and its place on
 the map cannot disagree.
 
 Strength is absolute. Every pull reads the room's own evidence against fixed
-bounds, never against the rest of the corpus, so a query the corpus has no
+bounds, never against the rest of the collection, so a query the collection has no
 answer to leaves every room near `0` and clusters nothing. CLIP reads its raw
 cosine for this reason (see "Image-content (CLIP) matching").
 
@@ -248,7 +248,7 @@ signal has every raw cosine near or below `centre`, so its CLIP pulls are
 near zero. How well fixed anchors hold across queries is open issue
 [#397](https://github.com/centuryglass/babel-index/issues/397).
 
-**The anchors are measured against a corpus's cosine distributions, not
+**The anchors are measured against a collection's cosine distributions, not
 guessed.**
 *Enforcement:* `CLIP_STRENGTH` holds the defaults (`centre` 0.205, `high`
 0.279); config can override them as `search.density.clipCentre`
@@ -445,7 +445,7 @@ clipStrength      // clipCurveStrength(cosine), in [0, 1], before weights.clip
 strength          // the soft OR of the four pulls
 ```
 
-### The corpus-wide result
+### The collection-wide result
 
 ```
 RankHybridResult = {
@@ -461,5 +461,5 @@ RankHybridResult = {
 A missing `cosine` is `NaN` in `breakdown`. `ranks`/`ties` are computed apart
 from `order`, so re-sorting for a display column never touches placement.
 `useSearch.ts` stores the result as `SearchResult`, which adds the searched
-`term`, and whose arrays are all `null` for a corpus with neither embeddings
+`term`, and whose arrays are all `null` for a collection with neither embeddings
 nor metadata to rank with.

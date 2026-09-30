@@ -1,7 +1,7 @@
 /**
  * Where does each room sit on the infinite map?
  *
- * Corpus size and the generic-room ratio are both *runtime* parameters here,
+ * Collection size and the generic-room ratio are both *runtime* parameters here,
  * not build-time ones. Changing either re-derives the layout in O(slots) with
  * no data reload and no change to what the client has downloaded, so they can
  * be wired to sliders and tuned by feel.
@@ -82,12 +82,12 @@ export function cellHash(x: number, y: number, seed = 0): number {
 
 /**
  * The origin is reserved for the center room - the one with the search box
- * and the controls painted into it. It is never a corpus slot, so ranked
+ * and the controls painted into it. It is never a collection slot, so ranked
  * rooms begin in the ring around it.
  */
 export const isCenter = (x: number, y: number): boolean => x === 0 && y === 0;
 
-/** Is this cell allowed to hold a ranked corpus room? */
+/** Is this cell allowed to hold a ranked collection room? */
 export const isContentSlot = (
   x: number,
   y: number,
@@ -121,7 +121,7 @@ export const genericIndexAt = (
 /**
  * Strength below this is a hunch rather than a match, and clusters nothing.
  *
- * A query the corpus has no answer to still produces a faint ranking - some
+ * A query the collection has no answer to still produces a faint ranking - some
  * room has to come first - and without a floor the faintest gradient would
  * pull it toward the center, claiming a find in noise. The floor is what
  * makes "no match" and "no search" the same picture.
@@ -246,7 +246,7 @@ export interface CreateLayoutOptions {
   /**
    * cell height / cell width - required, no default. Makes the library round on
    * screen rather than round in the index. 1 would be a square cell, but the
-   * corpus is never square, so the caller always states the real ratio.
+   * collection is never square, so the caller always states the real ratio.
    */
   aspect: number;
   /**
@@ -518,7 +518,7 @@ export function shuffledOrder(n: number, seed = 1): number[] {
 /**
  * Score every room against a query vector: one cosine per room, indexed by id.
  * Embeddings are int8-quantized and stored contiguously; scoring the whole
- * corpus is a few million multiply-adds, well under a frame at this size.
+ * collection is a few million multiply-adds, well under a frame at this size.
  *
  * Returns scores, since the hybrid blend in `scoring.ts` needs the numbers to
  * normalise before weighting. `rankByEmbedding` is the CLIP-only ordering built

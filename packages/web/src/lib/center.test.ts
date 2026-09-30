@@ -250,7 +250,7 @@ test('assignTitles reserves override books and the history queue skips them', ()
   assert.equal(slots[2].text, 'h2');
 });
 
-test('pickTags is a deduped, stable, bounded selection of corpus keywords', () => {
+test('pickTags is a deduped, stable, bounded selection of collection keywords', () => {
   const metadata = [
     { keywords: [{ text: 'copper' }, { text: 'art nouveau' }] },
     null,
@@ -314,7 +314,7 @@ test('Home and End are the same walk, started outside the wall', () => {
 });
 
 test('an untitled book is stepped over, not landed on', () => {
-  // Two searches and no keyword corpus: the front of the wall is lettered and
+  // Two searches and no keywords in the collection: the front of the wall is lettered and
   // the rest is blank, which is the only way a blank book happens at all.
   const sparse = assignTitles({ history: ['one', 'two'], tags: [] });
   assert.equal(sparse[2].text, '');

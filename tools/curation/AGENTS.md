@@ -7,11 +7,11 @@ this file, same convention as the repo root.
 ## What this is
 
 Python/Qt tooling for curating a batch of generated tile images into the
-`metadata.json` sidecar this project's corpus format expects: keyword
+`metadata.json` sidecar this project's collection format expects: keyword
 extraction from A1111 prompt metadata, story generation/review (desktop Qt app
 and a mobile web fallback), alt text, sensitive-content tagging, and title
 generation. Nothing here is imported by `packages/` - it produces the input
-a corpus directory needs, it doesn't run alongside the app.
+a collection directory needs, it doesn't run alongside the app.
 
 ## Layout
 
@@ -78,7 +78,7 @@ a corpus directory needs, it doesn't run alongside the app.
 - **`onnxruntime`/CLIP-embedding concerns from the rest of this repo don't
   apply here** - this subtree never touches `packages/`'s optional
   `@huggingface/transformers` dependency; it's a fully separate curation step
-  that runs before a corpus exists, not part of serving one.
+  that runs before a collection exists, not part of serving one.
 - **The desktop GUI (`babel_index_review.gui`) has no automated tests.** It
   runs headlessly under `QT_QPA_PLATFORM=offscreen`, and `window.grab()`
   saves a screenshot, so a scratch script with `story_engine.llm.ask`

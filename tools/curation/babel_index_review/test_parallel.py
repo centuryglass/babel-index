@@ -4,7 +4,7 @@ Data-loss regression test for ``parallel.SharedTitleSet``.
 Per ``AGENTS.md``'s testing policy for this subtree, this is narrowly scoped
 to the one place a bug in parallelizing curation would silently corrupt
 data: two workers racing to claim the same title. Everything else in
-``parallel.py`` is exercised by hand against a real corpus, not covered here.
+``parallel.py`` is exercised by hand against a real collection, not covered here.
 
 Run directly: ``python -m babel_index_review.test_parallel`` (or via
 ``pytest``/``unittest``). Not wired into any CI workflow.

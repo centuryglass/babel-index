@@ -57,7 +57,7 @@ export async function waitFor(predicate, timeoutMs, message) {
 }
 
 /**
- * Boot the demo server against the sample corpus and open it in a real
+ * Boot the demo server against the sample collection and open it in a real
  * Chromium tab, `?debug` and all. Returns everything a file's `before` needs:
  * the live `page`/`browser`/`server` handles to close later, `origin` for
  * direct API calls, `flightMs` read off the manifest (see `landed()` for
@@ -95,7 +95,7 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
     '--port',
     String(port),
     '--images',
-    'assets/corpus-sample',
+    'assets/tile-collection-sample',
   ];
   if (favoritesDir) args.push('--favorites', join(favoritesDir, 'favorites.json'));
 
@@ -124,7 +124,7 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
     const { config, count } = await (await fetch(`${origin}/api/manifest`)).json();
     const flightMs = config.camera.flightMs;
     // Read off the manifest rather than pinned, so the catalog's "every room
-    // once" assertion survives someone adding an image to the sample corpus.
+    // once" assertion survives someone adding an image to the sample collection.
     const roomCount = count;
     assert.equal(typeof flightMs, 'number', 'the manifest must carry the resolved flight duration');
 

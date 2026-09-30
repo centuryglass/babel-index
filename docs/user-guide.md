@@ -90,7 +90,7 @@ browse, for anyone who'd rather read the library as a list than fly around it.
 tag/history chips, and a paged, ranked list of rooms](images/catalog.jpg)
 
 It is not the accessibility mode - the map itself is keyboard-navigable and
-screen-reader annotated. The catalog is a second reading of the same corpus,
+screen-reader annotated. The catalog is a second reading of the same collection,
 offered to everyone.
 
 ## Keyboard controls

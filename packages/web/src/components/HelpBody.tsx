@@ -6,7 +6,7 @@
  * live here once rather than as a second copy kept in step by hand.
  *
  * The content-blocking panel is not part of this component: it reflects a
- * reader's own stored choices and the corpus's tags, neither of which the
+ * reader's own stored choices and the collection's tags, neither of which the
  * server has, so it stays inline in `HelpDialog.tsx`.
  */
 export function HelpBody() {

@@ -27,8 +27,8 @@ def main() -> int:
         action="store_true",
         help=(
             "Add a 'Save to samples' button that copies the selected tile and "
-            "its metadata into assets/corpus-sample, for picking a representative "
-            "demo corpus by hand."
+            "its metadata into assets/tile-collection-sample, for picking a representative "
+            "demo collection by hand."
         ),
     )
     args = parser.parse_args()

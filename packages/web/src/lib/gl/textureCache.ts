@@ -76,7 +76,7 @@ export function createGLTextureCache(budget = DEFAULT_BUDGET): GLTextureCache {
         console.warn(
           `[webgl] a ${drawable.width}x${drawable.height} image exceeds this device's ` +
           `MAX_TEXTURE_SIZE (${glCtx.maxTextureSize}) - drawing the blank fallback instead ` +
-          `of uploading it. Corpus assets past this size need per-file art at a coarser ` +
+          `of uploading it. Collection assets past this size need per-file art at a coarser ` +
           `pyramid level on this device, not a sheet this large.`
         );
       }

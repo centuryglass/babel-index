@@ -4,7 +4,7 @@
  * distribution into a calibration number.
  *
  * Pure, no filesystem, no model: what `cosine-range.ts` measures, this states
- * how, so the arithmetic is testable without a corpus or a network connection to
+ * how, so the arithmetic is testable without a collection or a network connection to
  * download CLIP.
  *
  * ### What each distribution answers
@@ -15,14 +15,14 @@
  * lands in.
  *
  * `keywordMax` - one number per keyword, the top cosine it reached anywhere in
- * the corpus: what "as sure as it gets" looks like for a keyword that has some
- * purchase on the corpus.
+ * the collection: what "as sure as it gets" looks like for a keyword that has some
+ * purchase on the collection.
  *
  * A known-outcome list - `summarizeUniversal` - answers a third question. The
  * two above assume nobody knows which keyword truly describes which room, so
  * their bounds are percentile cuts of a pool that mixes real matches in with
- * unrelated pairs. A word true of nearly every room (`bookshelf`, for a corpus
- * of library walls) is a real positive match for close to the whole corpus, and
+ * unrelated pairs. A word true of nearly every room (`bookshelf`, for a collection
+ * of library walls) is a real positive match for close to the whole collection, and
  * a concept CLIP recognises that shares nothing with it (`swimming pool`) is a
  * known negative. Either list's own distribution measures what a genuine match
  * or a genuine miss looks like, rather than where a mixed pool thins out.
@@ -96,7 +96,7 @@ export function percentileOf(sorted: ArrayLike<number>, p: number): number {
 /**
  * Mean, population standard deviation, and a percentile table for one array of
  * samples. Population std (dividing by `n`, not `n - 1`): these are the whole
- * set of cosines for a keyword or a corpus, not a sample standing in for one.
+ * set of cosines for a keyword or a collection, not a sample standing in for one.
  *
  * Sorts a COPY. `values` is never mutated, so a caller can keep using the array
  * after summarizing it - `cosine-range.ts`'s per-keyword cosines are also its
@@ -126,7 +126,7 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
  * percentile of `overall` as the noise floor, a middling percentile of
  * `keywordMax` as a typical best match.
  *
- * A first read off the shape of the corpus, not what the app ships: the anchors
+ * A first read off the shape of the collection, not what the app ships: the anchors
  * in `CLIP_STRENGTH` are read off a known-outcome list instead. The pair's
  * names are not config keys. `search.density` has no `clipLow`, and its
  * `clipHigh` defaults to `CLIP_STRENGTH.high`, which `summarizeUniversal`'s
@@ -136,8 +136,8 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
  * many rooms (`book`) scores below such a cutoff on correct matches.
  *
  * `valid: false` means the two bands overlap at the chosen percentiles on this
- * corpus - a real possible outcome for a small or generic keyword list, or a
- * corpus CLIP finds hard to tell apart, and worth seeing rather than papering
+ * collection - a real possible outcome for a small or generic keyword list, or a
+ * collection CLIP finds hard to tell apart, and worth seeing rather than papering
  * over with an arbitrary widening.
  *
  * @param opts.lowPercentile percentile of `overall` for clipLow (default 90)
@@ -159,7 +159,7 @@ export function suggestClipBounds(
     notes.push(
       `p${highPercentile} of each keyword's best match (${clipHigh.toFixed(3)}) does not clear ` +
         `p${lowPercentile} of the overall distribution (${clipLow.toFixed(3)}) - the two bands ` +
-        'overlap on this corpus. Read the percentile tables in the report and pick bounds by hand ' +
+        'overlap on this collection. Read the percentile tables in the report and pick bounds by hand ' +
         'rather than trusting this pair.'
     );
 

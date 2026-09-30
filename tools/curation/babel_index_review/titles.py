@@ -11,7 +11,7 @@ the same conversation, until it produces something valid.
 "Collides" is near-match, not just exact: two titles collide if they're equal
 after casefolding and dropping "a"/"an"/"the", or if that normalized form is
 within NEAR_MATCH_MAX_DISTANCE edit-distance of one already claimed -- see
-TitleRegistry. A corpus that already has near-duplicate titles from before
+TitleRegistry. A collection that already has near-duplicate titles from before
 this rule existed is left alone; ``run`` only warns about them at startup, it
 never rewrites an existing title.
 

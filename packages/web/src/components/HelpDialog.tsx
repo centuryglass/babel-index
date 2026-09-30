@@ -15,7 +15,7 @@
  * heard of sensitive-content tags should not see a checklist the first
  * time they open "help". `<details>`/`<summary>` is natively focusable and
  * keyboard-operable, so the panel needs no open/closed state of its own.
- * It renders nothing when the corpus carries no tags to block.
+ * It renders nothing when the collection carries no tags to block.
  */
 import { useEffect, useRef } from 'react';
 import { useContentZoom } from '../hooks/useContentZoom.ts';

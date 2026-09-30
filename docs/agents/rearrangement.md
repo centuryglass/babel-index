@@ -47,8 +47,8 @@ you" routes here, and its conventions still apply.
   moves the screen-reader cursor without a keypress. Tests asserting the
   canvas `aria-label` must establish their own camera rather than assume
   the page is where it loaded.
-- **Visible cost is the viewport's, not the corpus's.** Every move outside
-  the region is an invisible swap, so a slide count that scales with corpus
+- **Visible cost is the viewport's, not the collection's.** Every move outside
+  the region is an invisible swap, so a slide count that scales with collection
   size is a bug.
 
 `illusion.test.ts` documents the staging and batching mechanics.

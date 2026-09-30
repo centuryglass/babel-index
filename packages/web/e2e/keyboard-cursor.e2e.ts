@@ -26,13 +26,13 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await closeLibrary(session, 'library-keyboard-cursor.png');
   });
 
-  test('the map is reachable, and the sample corpus is small enough to have a real edge', async () => {
+  test('the map is reachable, and the sample collection is small enough to have a real edge', async () => {
     const { page } = session;
-    // The sample corpus is small enough that its `boundaryRadius` is only a
+    // The sample collection is small enough that its `boundaryRadius` is only a
     // few cells even fully dense - a property of its size, not a design
     // guarantee - which is what makes the boundary-crossing test below
     // reachable in a handful of presses rather than needing a huge synthetic
-    // corpus.
+    // collection.
     const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
     await ratio.focus();
     await ratio.press('End');
@@ -78,7 +78,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // Ctrl+arrow's contract: whatever it lands on, if it finds anything at
     // all, is a real room - never the wallpaper a plain arrow could have just
     // as easily landed on. That is the one thing worth asserting without
-    // hard-coding a room id or a step count from the sample corpus, both of
+    // hard-coding a room id or a step count from the sample collection, both of
     // which would be pinning an art/layout fact this test does not own.
     await page.keyboard.press('Home');
     await page.waitForTimeout(session.flightMs + 200);
@@ -106,7 +106,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await page.waitForTimeout(session.flightMs + 200);
 
     // Walk outward until the crossing message appears, or give up - the exact
-    // step count depends on which direction the corpus's slots happen to
+    // step count depends on which direction the collection's slots happen to
     // extend, so this does not hard-code one.
     let crossedAt = -1;
     for (let i = 1; i <= 30; i++) {

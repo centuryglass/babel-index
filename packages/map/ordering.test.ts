@@ -12,7 +12,7 @@ import {
 } from './ordering.ts';
 import type { CreateLayoutOptions } from './ordering.ts';
 
-// The corpus is never square and `createLayout` requires `aspect`, so the
+// The collection is never square and `createLayout` requires `aspect`, so the
 // structural tests state a real cell shape. The value is arbitrary as long
 // as it is non-1; tests that specifically need square pass `aspect: 1`.
 const ASPECT = 720 / 1280;
@@ -47,7 +47,7 @@ test('layout places every room and orders by distance from center', () => {
   assert.equal(L.slots[0].d, best);
 });
 
-test('the origin is the center room, never a corpus slot', () => {
+test('the origin is the center room, never a collection slot', () => {
   const L = createLayout({ roomCount: 512, contentRatio: 0.9, seed: 3, aspect: ASPECT });
   assert.equal(isContentSlot(0, 0, { seed: 3, contentRatio: 0.9 }), false);
   assert.ok(!L.slots.some((s) => s.x === 0 && s.y === 0));
@@ -77,8 +77,8 @@ test('same seed reproduces the same layout; different seed does not', () => {
   assert.notDeepEqual(a.slots, c.slots);
 });
 
-test('corpus size and ratio are runtime-tweakable without reloading data', () => {
-  // Growing the corpus keeps existing slots in place and appends further out:
+test('collection size and ratio are runtime-tweakable without reloading data', () => {
+  // Growing the collection keeps existing slots in place and appends further out:
   // the point of tuning by feel is that the map does not reshuffle underneath.
   const small = createLayout({ roomCount: 100, contentRatio: 0.2, seed: 9, aspect: ASPECT });
   const large = createLayout({ roomCount: 400, contentRatio: 0.2, seed: 9, aspect: ASPECT });
@@ -90,7 +90,7 @@ test('corpus size and ratio are runtime-tweakable without reloading data', () =>
   assert.ok(dense.boundaryRadius < large.boundaryRadius);
 });
 
-test('cells outside the corpus are generic', () => {
+test('cells outside the collection are generic', () => {
   const L = createLayout({ roomCount: 50, contentRatio: 0.2, seed: 2, aspect: ASPECT });
   const order = shuffledOrder(50, 1);
   let generic = 0;
@@ -235,7 +235,7 @@ test('round on screen means not round in the index', () => {
   assert.ok(cellsH > cellsW * 1.5, `expected a taller spread in cells, got ${cellsW}x${cellsH}`);
 });
 
-test('growing the corpus still keeps existing slots, at any cell shape', () => {
+test('growing the collection still keeps existing slots, at any cell shape', () => {
   // The property that makes the sliders usable, re-checked per shape: the
   // aspect is fixed for a given tile, so the ordering must stay stable under it.
   for (const { name, aspect } of ASPECTS) {
@@ -383,9 +383,9 @@ test('a sparser map makes the same search more legible, not less [SR-23]', () =>
     assert.ok(Math.abs(radii[i] - radii[0]) < 1e-9, `cluster moved with the ratio: ${radii}`);
 });
 
-test('growing the corpus still keeps existing slots under a gradient', () => {
+test('growing the collection still keeps existing slots under a gradient', () => {
   // The slider property, re-checked with a profile in play: acceptance for a
-  // rank depends only on that rank and the cells before it, so a longer corpus
+  // rank depends only on that rank and the cells before it, so a longer collection
   // extends the walk rather than redoing it.
   const strength = Float32Array.from({ length: 400 }, (_, i) => Math.exp(-i / 40));
   const small = graded(strength.slice(0, 100), { roomCount: 100 });

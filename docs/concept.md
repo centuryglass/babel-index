@@ -128,7 +128,7 @@ The project started as pure React/JavaScript because that's what I'm most famili
 ### 8/28/26: Pack coarse-level resolution pyramid images into tile-sheets to reduce potential costs
 Cloudflare R2 hosting charges mostly by number of files served. Serving thousands of tiny tile images accumulates cost at thousands of times the rate of serving a single combined image. Breaking those image sheets apart client-side adds a small amount of increased client-side processing required, but this design ensures that a single user casually scrolling while zoomed out doesn't end up using a significant portion of my image hosting budget.
 
-### 8/28/26: Formalize search rules and calibrate against the real corpus.
+### 8/28/26: Formalize search rules and calibrate against the real collection.
 Search is poorly calibrated, and the interaction between image, story, and tag search rules is not stable or well-documented.
 
 To solve the first problem, we'll calibrate against my existing dataset, which has over a thousand images already. We'll test those image embeddings against text embeddings for each style tag used within the project, and against strings of nonsense characters that shouldn't strongly match any image. That should give us a strong picture of how text/image vector cosine comparisons usually scale across different comparisons, so we know what range is actually meaningful.
@@ -169,6 +169,6 @@ Tasks were previously tracked in docs/pending_task_list.md, a habit I picked up 
 The downside is that GitHub issues are slightly more inconvenient for agents, as they need to load them via individual MCP commands. To solve this, we'll set up a script that automatically pulls the full set of issues into a temporary set of cache files and injects the titles into context on session start.
 
 ### 9/22/26: Begin refactoring site code to allow arbitrary themed datasets
-Most of the art project aspects of this site are defined and loaded externally. Only a small handful of fixed resources are used by the project, and none of them are deeply entangled in the code. If we migrated all of them to the external corpus, the library theme would become completely optional. An alternate dataset could have tiles that are city blocks, or apartment windows, or really anything that works well as a set of tiles that change arrangement. The site could even serve multiple datasets under a single URL.
+Most of the art project aspects of this site are defined and loaded externally. Only a small handful of fixed resources are used by the project, and none of them are deeply entangled in the code. If we migrated all of them to the external collection, the library theme would become completely optional. An alternate dataset could have tiles that are city blocks, or apartment windows, or really anything that works well as a set of tiles that change arrangement. The site could even serve multiple datasets under a single URL.
 
-Only one corpus currently exists, and creating another would require a significant time commitment. This refactor will proceed slowly, with the bulk of the work deferred until I decide to create another corpus.
+Only one collection currently exists, and creating another would require a significant time commitment. This refactor will proceed slowly, with the bulk of the work deferred until I decide to create another collection.

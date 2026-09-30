@@ -46,7 +46,7 @@ export interface FlipTransform {
  * (`describeRoom`) and indexes the score breakdown.
  *
  * The last page is short, not padded. A page past the end is empty, not an
- * error, since a corpus can shrink under a stored page number.
+ * error, since a collection can shrink under a stored page number.
  *
  * @param order room ids, best first
  * @param page 0-based

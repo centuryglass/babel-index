@@ -97,7 +97,7 @@ test('the board holds every slot of both layouts', () => {
     }
 });
 
-test('the board satisfies the planner preconditions on a tiny corpus', () => {
+test('the board satisfies the planner preconditions on a tiny collection', () => {
   // 26 rooms span barely more than the viewport, so the quarter-board rule
   // decides the size here, not the slot extent - the bound that a "board = slot
   // extent" shortcut would miss.
@@ -141,8 +141,8 @@ test('the region covers more than the viewport, so the entry cell stays hidden',
   );
 });
 
-test('visible work is bounded by the viewport, not by the corpus', () => {
-  // The board grows with the corpus; the slides must not. A shift is the only
+test('visible work is bounded by the viewport, not by the collection', () => {
+  // The board grows with the collection; the slides must not. A shift is the only
   // visible move - see `illusion.ts`'s move set.
   let bounds;
   const counts = [50, 200, 800].map((n) => {
@@ -154,19 +154,19 @@ test('visible work is bounded by the viewport, not by the corpus', () => {
     return moves.filter((m) => m.type !== 'swap').length;
   });
 
-  // The claim is that this does not grow with the corpus, which is what the
+  // The claim is that this does not grow with the collection, which is what the
   // board size rests on. It is not flat either: a value with no copy off camera
-  // has to be rotated out of the region first, and a small corpus needs more of
+  // has to be rotated out of the region first, and a small collection needs more of
   // those, because more of its distinct rooms are on screen at once. So the
-  // count drifts mildly the other way, and the biggest corpus is never the
+  // count drifts mildly the other way, and the biggest collection is never the
   // costliest.
   assert.ok(
     Math.max(...counts) / Math.min(...counts) < 1.5,
-    `slide counts vary too much with corpus size: ${counts}`
+    `slide counts vary too much with collection size: ${counts}`
   );
   assert.ok(
     counts[counts.length - 1] <= Math.max(...counts),
-    `the largest corpus was the most expensive: ${counts}`
+    `the largest collection was the most expensive: ${counts}`
   );
 
   // The conveyor's own cost: one row shift per region row to feed the center
@@ -181,7 +181,7 @@ test('visible work is bounded by the viewport, not by the corpus', () => {
   );
 });
 
-test('a corpus smaller than the placed set cannot be animated, and says so', () => {
+test('a collection smaller than the placed set cannot be animated, and says so', () => {
   // The rooms-on-the-map-slider case in `board.ts`'s header: the new order wants
   // a room on camera that was never placed, so no board holds it.
   const total = 300;
@@ -190,7 +190,7 @@ test('a corpus smaller than the placed set cannot be animated, and says so', () 
   const after = arrangement(n, shuffledOrder(total, 2));
   assert.equal(buildRearrangement({ before, after, view: VIEW, aspect: ASPECT }), null);
 
-  // The same corpus at full size is fine, which is what makes this a fallback
+  // The same collection at full size is fine, which is what makes this a fallback
   // for one control rather than a limit on the feature.
   const full = (seed) => arrangement(total, shuffledOrder(total, seed));
   assert.ok(buildRearrangement({ before: full(1), after: full(2), view: VIEW, aspect: ASPECT }));

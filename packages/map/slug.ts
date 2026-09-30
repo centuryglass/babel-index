@@ -4,7 +4,7 @@
  * and the table that resolves one back to a room.
  *
  * A room's public name is its title, folded to ASCII - `catalog/unparsed-light`
- * says what a reader gets before they follow it. Titles are corpus data and can
+ * says what a reader gets before they follow it. Titles are collection data and can
  * be rewritten, so every room also answers to its filename stem
  * (`catalog/00121`), which `scan.ts` reads off the directory and nothing here
  * ever changes. The stem is the canonical slug for a room with no title, and a
@@ -12,7 +12,7 @@
  *
  * Room ids never appear in a path. They are positional
  * (docs/agents/favorites.md, "Favorites"), so an id in a shared url comes back
- * pointing at a different room once the corpus grows.
+ * pointing at a different room once the collection grows.
  *
  * No DOM, so it runs on both sides: `app.ts` resolves an incoming path with
  * this and `main.tsx` builds the copy-link url with it. One implementation
@@ -75,7 +75,7 @@ function stemSlug(file: string): string {
 export interface SlugCollision {
   /** The path they all asked for. */
   wanted: string;
-  /** Each room in the group, in the corpus's own filename order. */
+  /** Each room in the group, in the collection's own filename order. */
   rooms: { file: string; slug: string }[];
 }
 
@@ -85,7 +85,7 @@ export interface SlugTable {
   /** Every path that resolves: canonical slugs, plus filename stems as aliases. */
   lookup: Map<string, number>;
   /**
-   * Rooms that wanted one path between them. Empty for a corpus whose titles
+   * Rooms that wanted one path between them. Empty for a collection whose titles
    * are unique, which is the generator's job to keep true - this is the report
    * that says when it stopped being.
    */
@@ -94,7 +94,7 @@ export interface SlugTable {
 
 /**
  * Every room's canonical slug and the reverse lookup, in one pass over the
- * corpus.
+ * collection.
  *
  * @param metadata indexed by room id, as `joinMetadata` returns it; null
  *   before the client's sidecar fetch lands, which gives every room its stem.

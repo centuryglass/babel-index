@@ -113,8 +113,8 @@ test('a failed load is remembered rather than retried every frame', () => {
   assert.equal(images.count('/l0/3.jpg'), 1, 'a 404 must not be re-requested on every draw');
 });
 
-test('a level the corpus does not have resolves to one it does', () => {
-  // A flat directory of images is a valid corpus with only level 0. Asking for
+test('a level the collection does not have resolves to one it does', () => {
+  // A flat directory of images is a valid tile collection with only level 0. Asking for
   // level 2 must not fire a request that can only 404 - and must not sit there
   // waiting for a file that will never exist either.
   const { images, cache } = build({ only: [0] });
@@ -163,7 +163,7 @@ test('nothing at all is the only way to report nothing', () => {
   assert.equal(cache.get(5, 0), null);
 });
 
-test('a flat corpus resolves every level to level 0', () => {
+test('a flat tile collection resolves every level to level 0', () => {
   // The property that keeps "point it at a directory of images" true.
   const { images, cache } = build({ only: [0] });
   cache.get(5, 0);

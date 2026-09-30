@@ -1,14 +1,14 @@
 /**
  * Turning `(room, level)` into where to draw it from.
  *
- * The manifest says which levels the corpus actually has on disk, what
+ * The manifest says which levels the collection actually has on disk, what
  * directory each per-file level lives in, and - for a sheet-packed level
  * (`level.sheet`, see packages/map/manifest.ts) - the grid geometry many
  * rooms share one image under (`scan.ts` discovers all of this). The cache
  * asks for a room at a level and does not want to know about directories or
  * sheets; this is the one place all three meet.
  *
- * A level the corpus does not have resolves to null, not to a url that would
+ * A level the collection does not have resolves to null, not to a url that would
  * 404. A flat directory of images that never went through the pipeline
  * therefore resolves only level 0, and every lookup falls back to it.
  *
@@ -97,7 +97,7 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // third map, never intersected with the other two (see manifest.ts's doc).
   const favoriteLevels = new Map((shared.favoriteLevels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
   const favoriteSharedIds = new Set<number | string>([FAV_ON, FAV_OFF]);
-  // The badge's level-0 urls: fixed app art, not part of a scanned corpus, so
+  // The badge's level-0 urls: fixed app art, not part of a scanned collection, so
   // not listed in `manifest.shared.center`/`generic` - but they live in the
   // same `--shared-dir` and are served from its base like the center tile's
   // level 0. Only their per-level widths are discovered, in
@@ -177,7 +177,7 @@ export function createTileLocator(manifest: Manifest): LocateTile {
  * The bare-url view of the locator above, for callers (an `<img>` tag) that
  * cannot draw a source rect. A sheet-packed level has no single url that
  * means the whole tile, so it resolves to null here exactly like any other
- * level the corpus doesn't have - the caller's existing missing-level
+ * level the collection doesn't have - the caller's existing missing-level
  * fallback (typically to level 0) is what actually serves it.
  *
  * @param manifest as served by /api/manifest

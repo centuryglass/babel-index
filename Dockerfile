@@ -52,4 +52,4 @@ EXPOSE 5173
 # --port 8080` overrides it entirely, same as any other npm run demo flag
 # (see packages/server/index.ts).
 ENTRYPOINT ["node", "--import", "./build/register.mjs", "packages/server/index.ts"]
-CMD ["--images", "assets/corpus-sample"]
+CMD ["--images", "assets/tile-collection-sample"]

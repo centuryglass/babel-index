@@ -13,7 +13,7 @@ import {
   contentHash,
 } from './mips.ts';
 
-/** A JPEG of the given size, synthesised - nothing here reads the sample corpus. */
+/** A JPEG of the given size, synthesised - nothing here reads the sample collection. */
 async function makeImage(
   path: string,
   w: number,

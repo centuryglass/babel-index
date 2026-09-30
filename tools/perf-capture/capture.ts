@@ -87,7 +87,7 @@ async function main() {
       seed: { type: 'string', default: 'babel-perf' },
       duration: { type: 'string', default: '60000' },
       renderer: { type: 'string', default: 'webgl' },
-      images: { type: 'string', default: 'assets/corpus-sample' },
+      images: { type: 'string', default: 'assets/tile-collection-sample' },
       server: { type: 'string' },
       out: { type: 'string', default: join(HERE, 'out') },
       'sample-interval': { type: 'string', default: '1000' },

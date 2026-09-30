@@ -206,7 +206,7 @@ export function useRearrangement({
    *
    * Generic and center cells are skipped: a generic's face is resolved by
    * position at draw time (`docs/agents/map.md`), and both it and the center
-   * tile are pinned at corpus-load time (`main.tsx`), so neither needs
+   * tile are pinned at collection-load time (`main.tsx`), so neither needs
    * fetching here.
    *
    * Returns `null` when `buildRearrangement` declines (not animatable), so

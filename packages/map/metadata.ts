@@ -1,10 +1,10 @@
 /**
  * Room metadata: the stylistic keywords and the short story text that the
- * generator writes alongside each image. The file format is docs/corpus.md,
+ * generator writes alongside each image. The file format is docs/tile-collection.md,
  * "`metadata.json`".
  *
  * One implementation joined on both sides: the server (`scan.ts`,
- * `roomContent.ts`) and the browser (`useCorpus.ts`). No DOM and no runtime
+ * `roomContent.ts`) and the browser (`useTileCollection.ts`). No DOM and no runtime
  * imports, like the rest of this package.
  *
  * The join is per filename, so adding, removing or renaming images leaves
@@ -18,7 +18,7 @@
  * - `keywords`: every keyword is a `{text, type}` record. The count is not
  *   enforced, since nothing in the map depends on it.
  * - `title` and `alt` are expected but not required. Every room in the live
- *   corpus carries both, but a corpus built by hand or mid-curation may lack
+ *   collection carries both, but a collection built by hand or mid-curation may lack
  *   either, so absence normalises to null and every consumer falls back.
  * - `title` is the room's name wherever a reader is told which room they're
  *   looking at (`roomTitle`), and the catalog's alphabetical sort key
@@ -48,7 +48,7 @@ export interface RoomMeta {
 
 /**
  * What a reader calls this room: its title, or "Room {id}" for a room the
- * corpus has not retitled. This is the resolver for everywhere a name is
+ * collection has not retitled. This is the resolver for everywhere a name is
  * shown (catalog rows, the room overlay, the SSR pages); the cursor's
  * announcement and `describeRoom`'s rank message lead with the bare id
  * whether or not a title exists - the id is how the map refers to rooms.
@@ -95,7 +95,7 @@ export function normaliseEntry(raw: unknown): RoomMeta | null {
 }
 
 /**
- * Join a sidecar onto the corpus, by filename.
+ * Join a sidecar onto the collection, by filename.
  *
  * @param rooms the manifest's rooms
  * @param sidecar parsed `metadata.json`
@@ -107,7 +107,7 @@ export function joinMetadata(rooms: import('./manifest.ts').Room[], sidecar: unk
   const table = sidecar as Record<string, unknown>;
 
   for (const room of rooms) {
-    // hasOwn rather than a bare lookup, for a corpus containing a file called
+    // hasOwn rather than a bare lookup, for a collection containing a file called
     // `constructor` or `toString`. Style, not load-bearing: every
     // Object.prototype member normalises to null anyway, and no test pins it
     // - one could not fail.
@@ -120,7 +120,7 @@ export function joinMetadata(rooms: import('./manifest.ts').Room[], sidecar: unk
  * How many rooms a sidecar actually covers, and how many entries it holds.
  *
  * The pair is the point: `matched` far below `entries` means the sidecar is
- * describing files this corpus does not have, which from the map reads like
+ * describing files this collection does not have, which from the map reads like
  * having no metadata at all unless someone says so.
  */
 export function metadataCoverage(
@@ -175,9 +175,9 @@ export function countBlocked(metadata: (RoomMeta | null)[] | null, blocked: Read
 }
 
 /**
- * Every sensitive-content tag actually present in the corpus, sorted for a
+ * Every sensitive-content tag actually present in the collection, sorted for a
  * stable checklist. The block-tags panel offers exactly these - not a fixed
- * vocabulary - so a corpus with none of these tags renders no panel at all
+ * vocabulary - so a collection with none of these tags renders no panel at all
  * rather than a list of checkboxes with nothing behind them.
  */
 export function availableSensitiveTags(metadata: (RoomMeta | null)[] | null): string[] {

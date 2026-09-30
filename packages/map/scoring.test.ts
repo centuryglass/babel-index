@@ -264,7 +264,7 @@ test('an exact keyword match outranks the best possible CLIP score [SR-10]', () 
 });
 
 test('CLIP still orders everything the text signals are silent about [SR-11]', () => {
-  // Most of the corpus, for most queries. Rooms 1 and 2 have no keyword match,
+  // Most of the collection, for most queries. Rooms 1 and 2 have no keyword match,
   // so their relative order is CLIP's to decide.
   const embeddings = Int8Array.from([0, 0, 40, 0, 127, 0]);
   const { order } = rankHybrid({
@@ -303,7 +303,7 @@ test('a weak partial tag does not beat a room CLIP is confident about [SR-12]', 
 });
 
 test('an undescribed room still outranks a described one CLIP likes less', () => {
-  // Most of a real corpus has no metadata yet. Rooms without an entry must be
+  // Most of a real collection has no metadata yet. Rooms without an entry must be
   // ranked by whatever signal does apply, not parked below every described
   // room - otherwise adding keywords to one room demotes the whole rest.
   const { order } = rankHybrid({
@@ -329,7 +329,7 @@ test('keywords outrank story text', () => {
   assert.deepEqual(order, [1, 0]);
 });
 
-test('the whole corpus is sorted, not just the matches [SR-08]', () => {
+test('the whole collection is sorted, not just the matches [SR-08]', () => {
   // The property the map depends on: every room has a place in the new order,
   // so the library rearranges rather than splicing a few results to the front.
   const count = 6;
@@ -382,7 +382,7 @@ test('CLIP-only ranking works with no metadata at all [SR-21]', () => {
 });
 
 test('signals report what matched, not what was available [SR-01] [SR-21]', () => {
-  // A corpus full of keywords that this query missed must not be reported as a
+  // A collection full of keywords that this query missed must not be reported as a
   // keyword-driven ranking.
   const { signals } = rankHybrid({
     query: 'sailboat',
@@ -700,7 +700,7 @@ test('match strength stays in [0, 1], whatever the pulls [SR-16]', () => {
 
 test('a query nothing matches clusters nothing, and does not even decide the order [SR-19]', () => {
   // Every cosine sits below the no-opinion centre, so CLIP finds no evidence
-  // for any room. A reading relative to the corpus would still crown one of
+  // for any room. A reading relative to the collection would still crown one of
   // them; strength reads the raw cosine, so all three stay at 0 and keep id
   // order, as if there were no signal at all.
   const cosines = [-0.2, -0.15, -0.1];
@@ -828,7 +828,7 @@ test('a room is placed by the strength it reports, so strength never rises with 
 
 test('the strength bounds are configurable', () => {
   // They are the one part of the gradient that wants measuring against a real
-  // corpus, which is why they are config rather than a constant in the blend.
+  // collection, which is why they are config rather than a constant in the blend.
   const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, scale: 127, vector: CLIP_QUERY };
   assert.equal(
     rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).strength[0],
@@ -845,7 +845,7 @@ test('the strength bounds are configurable', () => {
 });
 
 test('no blob means no CLIP strength, rather than a strength of zero cosines', () => {
-  // A corpus with keywords and no embeddings must still cluster its keyword
+  // A collection with keywords and no embeddings must still cluster its keyword
   // hits; only the CLIP channel goes quiet.
   const { strength } = rankHybrid({
     query: 'oak',

@@ -368,9 +368,9 @@ export function RoomOverlay({
                 'a library wall'
               ) : (
                 // The visible id leads with the title (`roomTitle` falls
-                // back to "Room N" for a room the corpus has not
+                // back to "Room N" for a room the collection has not
                 // retitled). Highlighted like the catalog row's title -
-                // only the corpus's real title, never that fallback, which
+                // only the collection's real title, never that fallback, which
                 // scored no title match to mark.
                 <b>
                   <Highlight

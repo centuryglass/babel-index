@@ -1,11 +1,11 @@
 /**
- * Measure where CLIP's raw cosine range actually sits on a real corpus.
+ * Measure where CLIP's raw cosine range actually sits on a real tile collection.
  *
  * `CLIP_STRENGTH` (`packages/map/scoring.ts`) and `search.density.clipCentre/
- * clipHigh` want numbers read off this corpus's own behaviour, not
+ * clipHigh` want numbers read off this collection's own behaviour, not
  * guessed. This script embeds every line of a keyword list with the same text
  * tower `packages/server/app.ts` loads at search time and scores each vector
- * against every row of a corpus's `embeddings.bin` with the same
+ * against every row of a collection's `embeddings.bin` with the same
  * `embeddingScores()` the app ranks with. Reusing that path is the point: a
  * calibration measured through a different one measures something else.
  *
@@ -18,8 +18,8 @@
  *                        as written by tools/embed/embed.ts
  *   --keywords <file>    a text file, one keyword or phrase per line
  *   --universal <file>   keywords true of nearly every room (e.g. "bookshelf"
- *                        for a library corpus) - the high extreme
- *   --irrelevant <file>  keywords with nothing to do with the corpus (e.g.
+ *                        for a library collection) - the high extreme
+ *   --irrelevant <file>  keywords with nothing to do with the collection (e.g.
  *                        "race car", "swimming pool") - the low extreme
  *   --nonsense <file>    keysmash/nonsense queries - validation only
  * `docs/search_rules.md` "Image-content (CLIP) matching" names both extremes.
@@ -58,7 +58,7 @@ import {
 const BATCH = 32;
 const SHOW_EXTREMES = 10;
 
-/** A corpus's embedding blob, with the `embeddings.json` fields that describe it. */
+/** A collection's embedding blob, with the `embeddings.json` fields that describe it. */
 interface EmbeddingSet {
   embeddings: Int8Array;
   dim: number;
@@ -75,11 +75,11 @@ interface Report {
   keywords: number;
   /** Every keyword against every room: the noise band, and its centre. */
   overall: Summary;
-  /** Each keyword's best cosine anywhere in the corpus: the match band. */
+  /** Each keyword's best cosine anywhere in the collection: the match band. */
   keywordMax: Summary;
   /** Each keyword's own mean: how far apart keywords sit from each other. */
   keywordMean: Summary;
-  /** Each keyword's max - min: how much a keyword separates the corpus. */
+  /** Each keyword's max - min: how much a keyword separates the collection. */
   keywordRange: Summary;
   /** The coarse percentile pair - see `suggestClipBounds`. */
   suggestion: ClipBoundsSuggestion;
@@ -87,7 +87,7 @@ interface Report {
   universal: UniversalCalibration | null;
   /**
    * The low extreme: `summarizeUniversal` over the `--irrelevant` list, known
-   * concepts that share nothing with this corpus (a "swimming pool" query
+   * concepts that share nothing with this collection (a "swimming pool" query
    * against a library). One function serves both extremes because only the
    * list's meaning changes, not the arithmetic.
    */
@@ -199,7 +199,7 @@ async function embedBatch(tokenizer: any, textModel: any, strings: string[]): Pr
 }
 
 /**
- * Embed and score every string in `list` against the corpus, in `BATCH` chunks.
+ * Embed and score every string in `list` against the collection, in `BATCH` chunks.
  *
  * `overall` is the flat keyword x room pool - `count` cosines per keyword, in
  * list order - and `perKeyword` each keyword's own summary of the same numbers.
@@ -288,7 +288,7 @@ function printSummary(report: Report) {
   if (report.irrelevant) {
     const i = report.irrelevant;
     console.log('');
-    console.log('Irrelevant-concept calibration (known-to-have-nothing-to-do-with-this-corpus terms) - the low extreme:');
+    console.log('Irrelevant-concept calibration (known-to-have-nothing-to-do-with-this-collection terms) - the low extreme:');
     for (const k of i.byKeyword)
       console.log(`  ${k.keyword}: p${i.floorPercentile}=${k.floor.toFixed(3)}  p${i.ceilingPercentile}=${k.ceiling.toFixed(3)}`);
     console.log(`  floor=${i.floor.toFixed(3)}  ceiling=${i.ceiling.toFixed(3)}`);
@@ -302,7 +302,7 @@ function printSummary(report: Report) {
         `centre=${report.overall.percentiles.p50.toFixed(3)} (overall p50), ` +
         `high=${report.universal.ceiling.toFixed(3)} (universal ceiling), ` +
         `low=${report.irrelevant.ceiling.toFixed(3)} (irrelevant ceiling) - ` +
-        'expected below centre, since the corpus shares nothing with these keywords.'
+        'expected below centre, since the collection shares nothing with these keywords.'
     );
   }
 
@@ -322,7 +322,7 @@ function printSummary(report: Report) {
 
 async function main() {
   const argv = parseArgs(process.argv.slice(2));
-  const embeddingsDir = argv.embeddings ?? 'assets/corpus-sample';
+  const embeddingsDir = argv.embeddings ?? 'assets/tile-collection-sample';
   const keywordsFile = argv.keywords;
   if (!keywordsFile) throw new Error('--keywords <file> is required (one keyword or phrase per line)');
   const outFile = argv.out ?? 'cosine-range-report.json';

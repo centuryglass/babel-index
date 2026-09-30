@@ -11,7 +11,7 @@
  *   the results to `MapView`, `CatalogView` and the dialogs.
  * - The hooks own the behaviour, for example: `useMapCamera` the camera
  *   and gestures, `useMapRenderer`/`useMapRendererGL` the render loop,
- *   `useCorpus` the corpus sidecars, `useSearch` the ranking,
+ *   `useTileCollection` the collection sidecars, `useSearch` the ranking,
  *   `useRearrangement` the reshuffle animation, `useModeTransition` the
  *   switch between readings, `useCenterShelf` the shelf's books.
  * - Module-scope constants at the end are read once at page load, from the
@@ -75,7 +75,7 @@ import { useMapRendererGL } from './hooks/useMapRendererGL.ts';
 import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
-import { useCorpus } from './hooks/useCorpus.ts';
+import { useTileCollection } from './hooks/useTileCollection.ts';
 import { useRearrangement } from './hooks/useRearrangement.ts';
 import { useDistillMode } from './hooks/useDistillMode.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
@@ -94,7 +94,7 @@ function App() {
       .catch((e) => setError(String(e)));
   }, []);
 
-  if (error) return <div className="panel">Could not load the corpus: {error}</div>;
+  if (error) return <div className="panel">Could not load the collection: {error}</div>;
   if (!manifest) return <div className="panel">Opening the library…</div>;
   return <Library manifest={manifest} />;
 }
@@ -194,15 +194,15 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   const blockedTagSet = useMemo(() => new Set(blockedTags), [blockedTags]);
 
-  // The corpus itself: metadata sidecar, embedding blob, and the search
-  // index built over both - see useCorpus.ts.
-  const { metadata, embeddings, searchIndex, described, tagLinks, corpusErrors } = useCorpus(
+  // The tile collection itself: metadata sidecar, embedding blob, and the search
+  // index built over both - see useTileCollection.ts.
+  const { metadata, embeddings, searchIndex, described, tagLinks, tileCollectionErrors } = useTileCollection(
     manifest,
     config.search.minTokenLength,
   );
 
-  // availableTags: only the sensitive tags this corpus actually has, so a
-  // corpus with none renders no blocking panel at all. blockedCount: rooms
+  // availableTags: only the sensitive tags this collection actually has, so a
+  // collection with none renders no blocking panel at all. blockedCount: rooms
   // the current choice removes (panel text and debug HUD).
   const availableTags = useMemo(() => availableSensitiveTags(metadata), [metadata]);
   const blockedCount = useMemo(() => countBlocked(metadata, blockedTagSet), [metadata, blockedTagSet]);
@@ -242,7 +242,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // no favorite control renders anywhere.
   const favorites = useFavorites({ manifest, setStatus });
 
-  // How many generic tiles the corpus shipped, and the seed that scatters
+  // How many generic tiles the collection shipped, and the seed that scatters
   // them. Which face a generic cell shows depends on the cell alone, never
   // on order or search - which is why the rearrangement can treat every
   // generic cell as one interchangeable value.
@@ -365,7 +365,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // sheet - for the canvas cache. `urlFor` is the same lookup as a bare url
   // for the catalog and overlay `<img>`s (null when sheet-packed, which an
   // `<img src>` cannot address). Both read the manifest, the record of
-  // which levels the corpus actually has.
+  // which levels the collection actually has.
   const locateTile = useMemo(() => createTileLocator(manifest), [manifest]);
   const urlFor = useMemo(() => createUrlFor(manifest), [manifest]);
 
@@ -390,7 +390,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // of them, and preloading every one at full resolution paid for
     // thousands of cells' worth of art before a single frame draws
     // (docs/agents/map.md, "Shared art has its own pyramids"). Never hardcode
-    // the coarsest rung as `pyramid.fallbackLevel`: an older corpus with no
+    // the coarsest rung as `pyramid.fallbackLevel`: an older collection with no
     // shared pyramid generated has no tile there. Distill's alternates get the
     // same treatment off `manifest.shared.distillLevels` instead, since that
     // tree may not share the base tiles' rungs (`manifest.ts`'s `SharedAssets`
@@ -445,7 +445,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The center-tile loading indicator (loadingAnimation.ts), loaded once
   // from the shared assets; a ref for the same reason as `anim`. Null until
-  // the manifest loads, and forever on a corpus deployed without sheets -
+  // the manifest loads, and forever on a collection deployed without sheets -
   // read as "no indicator". `hasLoadingAnim` mirrors it for the dev panel's
   // preview checkbox.
   const loadingAnim = useRef<LoadingAnimation | null>(null);
@@ -814,7 +814,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // --- distill mode ------------------------------------------------------------
   //
-  // Hides every generic room and lets the corpus rooms already on the map
+  // Hides every generic room and lets the collection rooms already on the map
   // pack into the space, then reverses. `useDistillMode.ts` explains the
   // contentRatio flip behind it and what the fade adds.
   const setContentRatio = useCallback((ratio: number) => dispatch({ type: 'setContentRatio', ratio }), []);
@@ -1142,7 +1142,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         manifest={manifest}
         total={total}
         described={described}
-        corpusErrors={corpusErrors}
+        tileCollectionErrors={tileCollectionErrors}
         status={status}
         query={query}
         setQuery={setQuery}
@@ -1345,7 +1345,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
 /**
  * The most rows the ranked results list mounts at once - a DOM budget.
- * `gradedCount` is normally tens of rooms; this exists for the corpus where
+ * `gradedCount` is normally tens of rooms; this exists for the collection where
  * it is not.
  */
 const RESULTS_WINDOW = 50;

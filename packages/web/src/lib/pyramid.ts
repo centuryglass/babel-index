@@ -10,7 +10,7 @@
  * The problem being solved: the map draws full-resolution images at every zoom,
  * so a zoomed-out screen of ~7500 cells wants ~22 GB of decoded bitmap. Picking
  * the level from zoom keeps decoded bytes per screen roughly constant however
- * far out the camera goes, which is what makes corpus size stop mattering for
+ * far out the camera goes, which is what makes collection size stop mattering for
  * rendering cost.
  *
  * Three rules, in the order they win when they conflict:
@@ -219,12 +219,12 @@ export const SHEETS: SheetsConfig = {
   /**
    * Decoded sheet images held at once, across every sheet-packed level
    * combined (`tiles.ts`'s `sheetImages`, a budget in addition to the
-   * per-level room-pointer budgets in `LEVELS`). A corpus of N
+   * per-level room-pointer budgets in `LEVELS`). A tile collection of N
    * rooms has `ceil(N / roomsPerSheet)` sheets per sheet-packed level, so
    * once this is at least (sheet-packed levels) x (sheets per level), the
    * whole coarse end of the pyramid fits in memory at once and a full scroll
    * of the map costs zero further sheet requests, ever, however far the
-   * corpus grows past that point. 64 comfortably covers a 2048-room corpus
+   * collection grows past that point. 64 comfortably covers a 2048-room collection
    * (24 sheets total across levels 3-5); raise it for a much larger one.
    */
   cacheBudget: 64,

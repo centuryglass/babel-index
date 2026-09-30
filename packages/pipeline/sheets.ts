@@ -21,7 +21,7 @@
  * `hashes.json` sidecar instead: sheet index -> a hash of its member tiles'
  * content hashes, in order. A rebuild recomposites only the sheets whose
  * combined hash moved, so one touched room costs O(sheet size) rather than
- * O(corpus size). See `diffAgainstManifest` in tools/upload/lib.ts for the
+ * O(collection size). See `diffAgainstManifest` in tools/upload/lib.ts for the
  * re-upload unit that follows once a sheet is synced to R2.
  */
 import { createHash } from 'node:crypto';

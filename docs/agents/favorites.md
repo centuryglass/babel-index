@@ -44,7 +44,7 @@ you" routes here, and its conventions still apply.
     "show on the map", not inside `RoomDetails` as on the card and overlay.
     In the text column it would cost two story lines on every row.
 - **The on-map badge is the third favorite control, and it is fixed art,
-  not a scanned corpus asset.** `assets/fav_on.png`/`fav_off.png`
+  not a scanned collection asset.** `assets/fav_on.png`/`fav_off.png`
   (`tiles.ts`'s `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase`
   directly; `scan.ts` discovers only their scaled pyramid
   (`shared.favoriteLevels`). The renderers draw it on every non-center,

@@ -7,7 +7,7 @@
  *   - The canvas-lifetime effect (deps `[canvasRef, cache]` only) creates the
  *     GL context, the two renderers and every listener once per real canvas
  *     mount, or again after a lost context restores. `cache` is a dep because
- *     a new `TileCache` (a reloaded corpus) does need a fresh GL
+ *     a new `TileCache` (a reloaded collection) does need a fresh GL
  *     runtime bound to it; `layout`/`order`/`favorites` and the like change
  *     on almost every search or toggle and must not tear this down.
  *   - Everything that legitimately changes often is read through

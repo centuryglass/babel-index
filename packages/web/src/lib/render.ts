@@ -89,7 +89,7 @@ export interface DrawContext {
  * The cache id for whatever cell (gx, gy) holds: the center cell takes the
  * blank center tile, a generic cell one of the generic tiles chosen by
  * `layout.genericIndexAt`, a content cell its room. `genericId(-1)` is
- * `CENTER`, the fallback for a corpus with no generic tiles at all.
+ * `CENTER`, the fallback for a collection with no generic tiles at all.
  *
  * Built from `layout.rankOf`/`isCenter` because `layout.roomAt()` allocates a
  * `RoomAtResult` per call, and this runs once per cell in the visible pass

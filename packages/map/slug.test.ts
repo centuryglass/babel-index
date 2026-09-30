@@ -47,7 +47,7 @@ test('a titled room is addressed by its title, and its stem still resolves [SR-4
 
 test('an untitled room is addressed by its stem, with no id anywhere in the path', () => {
   // Ids are positional, so a path derived from one repoints at a different
-  // room as soon as the corpus grows - `roomTitle`'s "Room {id}" fallback must
+  // room as soon as the collection grows - `roomTitle`'s "Room {id}" fallback must
   // not reach a url.
   const rooms = [room(0, '00121.webp'), room(1, '00122.webp')];
   const { slugs } = buildSlugTable(rooms, [null, meta(null)]);

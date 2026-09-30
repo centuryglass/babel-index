@@ -82,7 +82,7 @@ export type CursorGranularity = 'cell' | 'region';
  * Cell height as a multiple of cell width, derived from `BASE_TILE` so a change
  * to the art's shape changes the shape of the world with it. A camera may carry
  * its own `aspect` to override this, which is how the tests exercise shapes the
- * corpus is not in.
+ * collection is not in.
  */
 export const CELL_ASPECT = BASE_TILE.h / BASE_TILE.w;
 

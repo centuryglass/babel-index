@@ -28,7 +28,7 @@ builds its prompt, so the full text is one click away.
  6. Choose ............ pick one draft (or re-pitch / redraft);
    |                    critique can continue on it afterwards
  7. Accept ............ mark Final
-   |                    [proposed: record into corpus memory, #414]
+   |                    [proposed: record into collection memory, #414]
 ```
 
 A tile's reading, pitches and drafts live in one workspace file that grows
@@ -47,7 +47,7 @@ comments and the maintainer's local `story_preferences.md`.
 - **The writer never reads past stories.** A pattern repeated many times in
   a model's context gets copied. A short ban instruction ("don't use the
   name Vane or Vance") works in most cases, so rules distilled from the
-  corpus may go into the writer's prompt (see "Lint rules").
+  collection may go into the writer's prompt (see "Lint rules").
 - **Each model call has one narrow job.** No single call has to read,
   invent, choose and write at once.
 - **Judging stays with the reviewer, and is cheap to give.** Pitch review,
@@ -315,18 +315,18 @@ one-time workspace import.
 
 ## Proposed additions
 
-### Corpus memory (#414)
+### Collection memory (#414)
 
-When a story is accepted, it is tagged into corpus memory:
+When a story is accepted, it is tagged into collection memory:
 - its tropes and payload, from an LLM call;
 - its seed, form and constraint, from the workspace;
-- opener and n-gram statistics across the corpus.
+- opener and n-gram statistics across the collection.
 
-Existing stories are backfilled once. The writer never reads corpus memory.
+Existing stories are backfilled once. The writer never reads collection memory.
 
 ### Lint rules (#414)
 
-- A prompt guides an LLM through analyzing corpus memory and turning it into
+- A prompt guides an LLM through analyzing collection memory and turning it into
   lint rules. A review GUI menu option runs the update.
 - Each rule is a plain-text description ("Don't use the name Vane or
   Vance"), with a deterministic check where one is possible. Rules with no
@@ -341,7 +341,7 @@ Existing stories are backfilled once. The writer never reads corpus memory.
 - Rules with no check are used only in the writer's prompt and in the LLM
   critique.
 - The old planned checks (em dashes, word budget, names reused from the
-  corpus, overused openers, banned n-grams) become ordinary rules.
+  collection, overused openers, banned n-grams) become ordinary rules.
 
 ### Automatic critique (#415)
 
