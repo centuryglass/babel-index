@@ -44,7 +44,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { embeddingScores } from '../../packages/map/ordering.ts';
-import { withClipCache } from '../../packages/server/clip-cache.ts';
+import { loadTextTower, embedStrings, type TextTower } from './text-tower.ts';
 import {
   summarize,
   suggestClipBounds,
@@ -148,57 +148,6 @@ async function loadKeywords(file: string): Promise<string[]> {
 }
 
 /**
- * The CLIP text tower, loaded once.
- *
- * A dynamic import because the package is optional (AGENTS.md,
- * "@huggingface/transformers is OPTIONAL"). `packages/server/app.ts`'s
- * `hasTextModel()` carries the platform detail, and its `textTower()` is the
- * lazy load this mirrors.
- *
- * Both members are typed `any`: never imported statically, so there is no type to
- * import either.
- */
-async function loadTextTower(model: string): Promise<{ tokenizer: any; textModel: any }> {
-  let transformers;
-  try {
-    transformers = withClipCache(await import('@huggingface/transformers'));
-  } catch (err: any) {
-    if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
-    throw Object.assign(new Error(
-      'This tool needs @huggingface/transformers, which is an optional dependency and is ' +
-        'not installed here (it pulls in onnxruntime-node, which does not publish for every ' +
-        'platform - see tools/embed/embed.ts). Run this on a machine where it installed.'
-    ), { expected: true });
-  }
-  const { AutoTokenizer, CLIPTextModelWithProjection } = transformers as any;
-  const [tokenizer, textModel] = await Promise.all([
-    AutoTokenizer.from_pretrained(model),
-    CLIPTextModelWithProjection.from_pretrained(model, { dtype: 'fp32' }),
-  ]);
-  return { tokenizer, textModel };
-}
-
-/**
- * L2-normalise one embedded string, the way `embedQuery` (packages/server/app.ts)
- * prepares a live query and `quantiseInto` (tools/embed/embed.ts) an image row.
- */
-function normalise(row: ArrayLike<number>): Float32Array {
-  let norm = 0;
-  for (let i = 0; i < row.length; i++) norm += row[i] * row[i];
-  norm = Math.sqrt(norm) || 1;
-  const out = Float32Array.from(row);
-  for (let i = 0; i < out.length; i++) out[i] /= norm;
-  return out;
-}
-
-/** Embed a batch of strings, one L2-normalised query vector per string. */
-async function embedBatch(tokenizer: any, textModel: any, strings: string[]): Promise<Float32Array[]> {
-  const inputs = tokenizer(strings, { padding: true, truncation: true });
-  const { text_embeds } = await textModel(inputs);
-  return text_embeds.tolist().map(normalise);
-}
-
-/**
  * Embed and score every string in `list` against the collection, in `BATCH` chunks.
  *
  * `overall` is the flat keyword x room pool - `count` cosines per keyword, in
@@ -207,8 +156,7 @@ async function embedBatch(tokenizer: any, textModel: any, strings: string[]): Pr
  * @param label tag on the per-chunk progress line
  */
 async function scoreList(
-  tokenizer: any,
-  textModel: any,
+  tower: TextTower,
   embeddings: Int8Array,
   dim: number,
   scale: number,
@@ -220,7 +168,7 @@ async function scoreList(
   const overall = new Float32Array(count * list.length);
   for (let start = 0; start < list.length; start += BATCH) {
     const chunk = list.slice(start, start + BATCH);
-    const vectors = await embedBatch(tokenizer, textModel, chunk);
+    const vectors = await embedStrings(tower, chunk);
     vectors.forEach((vector, i) => {
       const k = start + i;
       const cosines = embeddingScores(embeddings, dim, scale, vector);
@@ -343,10 +291,10 @@ async function main() {
       `, model ${model}`
   );
 
-  const { tokenizer, textModel } = await loadTextTower(model);
+  const tower = await loadTextTower(model);
 
   const { perKeyword, overall } = await scoreList(
-    tokenizer, textModel, embeddings, dim, scale, count, keywords, 'keywords'
+    tower, embeddings, dim, scale, count, keywords, 'keywords'
   );
 
   const keywordMax = Float64Array.from(perKeyword, (k) => k.max);
@@ -358,7 +306,7 @@ async function main() {
   let universal: UniversalCalibration | null = null;
   if (universalWords.length) {
     const { perKeyword: universalPerKeyword } = await scoreList(
-      tokenizer, textModel, embeddings, dim, scale, count, universalWords, 'universal'
+      tower, embeddings, dim, scale, count, universalWords, 'universal'
     );
     universal = summarizeUniversal(universalPerKeyword);
   }
@@ -366,7 +314,7 @@ async function main() {
   let irrelevant: UniversalCalibration | null = null;
   if (irrelevantWords.length) {
     const { perKeyword: irrelevantPerKeyword } = await scoreList(
-      tokenizer, textModel, embeddings, dim, scale, count, irrelevantWords, 'irrelevant'
+      tower, embeddings, dim, scale, count, irrelevantWords, 'irrelevant'
     );
     irrelevant = summarizeUniversal(irrelevantPerKeyword);
   }
@@ -374,7 +322,7 @@ async function main() {
   let nonsense: Summary | null = null;
   if (nonsenseWords.length) {
     const { overall: nonsenseOverall } = await scoreList(
-      tokenizer, textModel, embeddings, dim, scale, count, nonsenseWords, 'nonsense'
+      tower, embeddings, dim, scale, count, nonsenseWords, 'nonsense'
     );
     nonsense = summarize(nonsenseOverall);
   }

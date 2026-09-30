@@ -101,6 +101,7 @@ npm run check:comments -- --list                  # ... and print every failing 
 npm run check:comments -- --update-baseline       # ... lower the per-file allowance once findings are fixed
 npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
+npm run generate:search-fixture [-- --tile-collection <dir>]   # refresh packages/map/search-fixture/ and its report.json; run after any search weight or formula change
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest
 npm run generate:shelf-geometry     # Recalculate diegetic control bounds from tools/center-placement/shelf_geometry.svg
 ```
@@ -173,9 +174,12 @@ inpainting pipeline.
   `tools/embed` and `packages/server/app.ts` for the dynamic import pattern.
 - **`esbuild` is a runtime dependency**, since `packages/server/index.ts`
   bundles the client at startup.
-- **Fixtures are synthesised, not committed.**
+- **Image fixtures are synthesised, not committed.**
   `packages/server/image-fixtures.ts` builds PNG/JPEG/WebP headers byte by
-  byte. Don't make tests depend on `assets/tile-collection-sample/`.
+  byte. Don't make tests depend on `assets/tile-collection-sample/`, which is
+  the demo's collection and free to change. The one committed data fixture is
+  `packages/map/search-fixture/`: text and vectors from the real collection,
+  no images, because the distribution is what its tests assert.
 - **Formatting:** two-space indent, semicolons, single quotes, trailing
   commas in multi-line literals. Follow the file you're in.
 - **A bug found during unrelated work gets fixed or filed, never just
