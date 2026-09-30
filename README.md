@@ -172,7 +172,7 @@ Requires Node 20 or newer.
 
 ```sh
 npm install
-npm run demo        # http://localhost:5173, against assets/tile-collection-sample/
+npm start           # http://localhost:5173, against assets/tile-collection-sample/
 ```
 
 CLIP search needs `@huggingface/transformers`, an optional dependency whose
@@ -202,8 +202,8 @@ a direct visit to the port serves a page whose requests 404
 `ADMIN_PASSWORD_HASH` in the environment turns on a password-protected log
 viewer at `/admin/logs` ([`docs/api.md`](docs/api.md)).
 
-`npm run demo:watch` rebuilds on every edit and reloads the page; under
-plain `npm run demo`, a client edit needs a restart.
+`npm run start:watch` rebuilds on every edit and reloads the page; under
+plain `npm start`, a client edit needs a restart.
 
 ### Your own rooms
 
@@ -228,7 +228,7 @@ docker run -p 5173:5173 babel-index
 docker run -p 5173:5173 -v /path/to/rooms:/data:ro babel-index --images /data
 ```
 
-Flags go after the image name, as with `npm run demo`. Build with
+Flags go after the image name, as with `npm start`. Build with
 `--build-arg WITH_CLIP=false` for a smaller image that skips CLIP and ranks
 by keywords and story only.
 

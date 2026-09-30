@@ -84,9 +84,9 @@ the process without reading the source.
 ## Commands
 
 ```sh
-npm run demo                       # http://localhost:5173, against assets/tile-collection-sample/
-npm run demo -- --images <dir> [--center center.jpg] [--shared-dir assets] [--port 5173] [--config config.json] [--base-path /babel-index/]
-npm run demo -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
+npm start                          # http://localhost:5173, against assets/tile-collection-sample/
+npm start -- --images <dir> [--center center.jpg] [--shared-dir assets] [--port 5173] [--config config.json] [--base-path /babel-index/]
+npm start -- --favorites favorites.json [--trust-proxy 1]   # record global favorite counts
 npm test                           # node --test, ~1s, no browser and no network
 npm run test:e2e                   # browser smoke test; needs `npx playwright install chromium` once
 npm run test:parity                # Canvas2D-vs-WebGL render parity; deploy gate, not a merge gate
@@ -114,7 +114,7 @@ npm run generate:shelf-geometry     # Recalculate diegetic control bounds from t
   itself.
 - **No compiled output ever hits disk.** The demo server bundles the client
   with esbuild at startup (`packages/server/index.ts`), so editing a web
-  source means restarting `npm run demo`. `packages/web/style.css` (with the
+  source means restarting `npm start`. `packages/web/style.css` (with the
   `packages/web/css/` partials it imports) and `index.html` are re-read on
   every request and need only a browser refresh.
   The demo fails to start if its port is in use.

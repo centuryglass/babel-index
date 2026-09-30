@@ -2,9 +2,9 @@
 /**
  * The offline demo server.
  *
- *   npm run demo -- --images /path/to/rooms [--center center.png] [--port 5173]
- *                    [--config config.json] [--shared-dir assets]
- *                    [--base-path /babel-index/]
+ *   npm start -- --images /path/to/rooms [--center center.png] [--port 5173]
+ *                 [--config config.json] [--shared-dir assets]
+ *                 [--base-path /babel-index/]
  *
  * Point it at a directory of images and it serves a browsable library. No
  * database, no bucket, no upload step - the directory is the collection, so a
@@ -21,7 +21,7 @@
  *
  * Or point it at a collection already uploaded with tools/upload/upload-r2.ts:
  *
- *   npm run demo -- --remote https://assets.example.com --prefix tile-collection-sample
+ *   npm start -- --remote https://assets.example.com --prefix tile-collection-sample
  *
  * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the collection
  * and shared tiles both come from the remote host (see remote.ts), and the
@@ -87,7 +87,7 @@ if (remoteBase && !argv.prefix) {
   process.exit(1);
 }
 
-// Defaults to the sample collection committed to the repo, so `npm run demo` works
+// Defaults to the sample collection committed to the repo, so `npm start` works
 // with no arguments and no external files. Unused entirely in --remote mode.
 const imagesDir = remoteBase ? null : resolve(process.cwd(), (argv.images as string | undefined) ?? 'assets/tile-collection-sample');
 if (!remoteBase && !existsSync(imagesDir)) {
@@ -98,7 +98,7 @@ if (!remoteBase && !existsSync(imagesDir)) {
 // repo's assets by default, so the center render can be shared across collections
 // and changed without touching --images. See scan.ts.
 const sharedDir = remoteBase ? null : resolve(process.cwd(), (argv['shared-dir'] as string | undefined) ?? 'assets');
-// Optional debugging convenience, off by default. `npm run demo:watch` runs
+// Optional debugging convenience, off by default. `npm run start:watch` runs
 // this under `node --watch` (restarts the whole process on a server-side
 // edit) AND passes --watch through, which switches the esbuild call below
 // from a one-shot build to a watching one (rebuilds on a client-side edit

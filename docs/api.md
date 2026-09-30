@@ -172,5 +172,5 @@ The rest of what `app.ts` serves is pages and files, not a JSON contract:
 `/`, `/catalog`, `/catalog/:slug`, `/map/:slug`, `/help`, `/about`,
 `/robots.txt`, `/sitemap.xml`, `/babel-book`, `/bundle.js`, `/style.css`,
 `/favicon.ico`, the `/images` and `/shared` static mounts (local mode only),
-and `packages/web/public`'s files. In watch mode (`npm run demo:watch`) it
+and `packages/web/public`'s files. In watch mode (`npm run start:watch`) it
 also serves `/__live-reload.js` and the `/api/live-reload` event stream.
