@@ -234,7 +234,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     );
     await waitFor(async () => (await hud(page)).x === before.x + 1, 1000, 'the arrow press never finished arriving');
 
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -254,7 +254,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       await page.emulateMedia({ reducedMotion: null });
     }
 
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
   });
 
@@ -301,7 +301,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       'two rapid arrow presses must move two cells, not collapse into one'
     );
 
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
   });
 
@@ -318,7 +318,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // Only a browser reaches this: it needs the real damping, the real glide,
     // and the real settling between them.
     const canvas = page.locator('canvas');
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
     await canvas.focus();
 
@@ -367,7 +367,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       );
     }
 
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
   });
 
@@ -387,7 +387,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // and it was still climbing linearly.
     const canvas = page.locator('canvas');
     const recentre = async () => {
-      await page.getByRole('button', { name: 'center' }).click();
+      await page.getByRole('button', { name: 'center', exact: true }).click();
       await landed(page, session.flightMs);
     };
 
@@ -486,7 +486,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
 
     // Reduced motion gets the same correction without the frames it takes to
     // ease there - the glide applies it at once instead.
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     try {
@@ -508,7 +508,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       await page.emulateMedia({ reducedMotion: null });
     }
 
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
   });
 

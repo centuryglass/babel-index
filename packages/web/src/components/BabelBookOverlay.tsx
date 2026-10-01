@@ -8,6 +8,9 @@
  * (`BookOverlay`) - a spread of two pages when the dialog is wide enough, one
  * page when it is not - so `next`/`previous` step by two or by one to match
  * what is on screen.
+ *
+ * A page turn is announced through `announce` (the app's live region), since
+ * the buttons keep their names and focus when the page changes.
  */
 import { useMemo, useState } from 'react';
 import { BookOverlay } from './BookOverlay.tsx';
@@ -17,9 +20,11 @@ interface BabelBookOverlayProps {
   text?: string;
   linesPerPage?: number;
   onClose?: () => void;
+  /** writes the app's one live region; a page turn says which page is showing */
+  announce?: (status: string) => void;
 }
 
-export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBookOverlayProps) {
+export function BabelBookOverlay({ text, linesPerPage = 40, onClose, announce }: BabelBookOverlayProps) {
   const book = useMemo(() => text ?? generateRandomBookText(), [text]);
   const pages = useMemo(() => paginateBookText(book, linesPerPage), [book, linesPerPage]);
   // `page` is the index of the left (or only) page currently shown.
@@ -39,6 +44,12 @@ export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBook
       ? `pages ${left + 1}-${right + 1} / ${pages.length}`
       : `page ${left + 1} / ${pages.length}`;
 
+  const turnTo = (to: number) => {
+    setPage(to);
+    const r = isWide && to < last ? to + 1 : null;
+    announce?.(r !== null ? `pages ${to + 1} and ${r + 1} of ${pages.length}` : `page ${to + 1} of ${pages.length}`);
+  };
+
   return (
     <BookOverlay
       ariaLabel="a random book"
@@ -50,10 +61,10 @@ export function BabelBookOverlay({ text, linesPerPage = 40, onClose }: BabelBook
       head={<span className="card-id">{counter}</span>}
       footer={
         <div className="book-nav">
-          <button disabled={atFirst} onClick={() => setPage(Math.max(0, left - step))}>
+          <button disabled={atFirst} onClick={() => turnTo(Math.max(0, left - step))}>
             previous
           </button>
-          <button disabled={atLast} onClick={() => setPage(Math.min(last, left + step))}>
+          <button disabled={atLast} onClick={() => turnTo(Math.min(last, left + step))}>
             next
           </button>
         </div>

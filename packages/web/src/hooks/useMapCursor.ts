@@ -108,6 +108,14 @@ export function useMapCursor({
   // "edge of the library" on every single step through the far field.
   const wasBeyondBoundary = useRef(false);
 
+  // The last cell `announceCursorMove` named, its text, and whether that text
+  // carried a trailing no-break space. Every generic cell has the same name,
+  // so a move between two of them would write an identical string, React
+  // would leave the live region untouched, and the reader would hear nothing.
+  // A move to a different cell with the same text toggles the space so the
+  // DOM changes. The same cell re-announced stays identical, and stays silent.
+  const lastAnnounced = useRef<{ cell: Cell; text: string; padded: boolean } | null>(null);
+
   /**
    * Move the cursor to a cell and announce the arrival through `setStatus`,
    * the page's one polite live region. The canvas's `aria-label` changes too,
@@ -144,7 +152,13 @@ export function useMapCursor({
             ? `${base} - back within the library`
             : base;
 
-      setStatus(lead ? `${lead}. ${said}` : said);
+      const text = lead ? `${lead}. ${said}` : said;
+      const last = lastAnnounced.current;
+      const repeat = last?.text === text;
+      const moved = !last || last.cell.x !== cell.x || last.cell.y !== cell.y;
+      const padded = repeat && last ? (moved ? !last.padded : last.padded) : false;
+      lastAnnounced.current = { cell, text, padded };
+      setStatus(padded ? `${text}\u00a0` : text);
     },
     [cam, canvasRef, layout, order, metadata, setStatus, camera]
   );

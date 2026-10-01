@@ -663,7 +663,8 @@ export function CatalogView({
             className="catalog-search"
             maxLength={config.search.maxQueryLength}
           />
-          <button className="mode-toggle" onClick={onExit}>
+          {/* The arrow is visual; a reader would hear it named ("left arrow"). */}
+          <button className="mode-toggle" onClick={onExit} aria-label="back to the map">
             ← the map
           </button>
           <ZoomControls
