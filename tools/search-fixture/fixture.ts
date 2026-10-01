@@ -28,7 +28,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { joinMetadata, type RoomMeta } from '../../packages/map/metadata.ts';
 import type { Room } from '../../packages/map/manifest.ts';
-import { buildSearchIndex, rankHybrid } from '../../packages/map/scoring.ts';
+import { buildSearchIndex, rankHybrid, SEARCH_WEIGHTS, type SearchWeights } from '../../packages/map/scoring.ts';
 import type { RankHybridResult, SearchIndex } from '../../packages/map/searchResult.ts';
 import { DEFAULTS, type Config } from '../../packages/config/config.ts';
 import { percentileOf } from '../embed/cosine-stats.ts';
@@ -211,7 +211,6 @@ export function rankFixtureQuery(
   return rankHybrid({
     query: query.text,
     count: fixture.files.length,
-    weights: search.weights,
     minTokenLength: search.minTokenLength,
     embeddings: fixture.embeddings,
     dim: fixture.dim,
@@ -244,8 +243,8 @@ export interface QueryReport {
 export interface Report {
   model: string;
   rooms: number;
-  /** The config the numbers were computed under, so a re-tune shows in the diff. */
-  search: { weights: Config['search']['weights']; density: Config['search']['density'] };
+  /** The weights and config the numbers were computed under, so a re-tune shows in the diff. */
+  search: { weights: SearchWeights; density: Config['search']['density'] };
   queries: QueryReport[];
 }
 
@@ -290,7 +289,7 @@ export function buildReport(
   return {
     model: fixture.model,
     rooms: fixture.files.length,
-    search: { weights: search.weights, density: search.density },
+    search: { weights: SEARCH_WEIGHTS, density: search.density },
     queries,
   };
 }

@@ -30,9 +30,11 @@
  *     could see that.
  *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
  *     hard zoom range, in code so config cannot widen it.
- *   - `packages/map/scoring.ts`'s `STORY_LONG_RANGE`: what counts as a full
- *     story run, which `search.weights.storyLong` then weighs. Moving it means
- *     re-running the ordering tests in `scoring.test.ts`.
+ *   - `packages/map/scoring.ts`'s `SEARCH_WEIGHTS` and `STORY_LONG_RANGE`: how
+ *     strongly each signal pulls, and what counts as a full story run. The
+ *     ordering rules between signals hold because of these numbers, and only
+ *     the tests in `scoring.test.ts` can check them. A `search.weights` key
+ *     in an overlay is reported and ignored.
  *   - `packages/web/src/lib/center.ts`'s spine sizing (`SPINE_SIZE_SCALE`,
  *     `SPINE_HALO_SCALE`, `SPINE_HALO_FLOOR`) and opening fit
  *     (`OPENING_MARGIN`): the same kind of tuning as `center` below, not
@@ -61,7 +63,7 @@ import {
   ZOOM_STEP_FACTOR,
 } from '../web/src/lib/camera.ts';
 import { STRENGTH_FLOOR } from '../map/ordering.ts';
-import { CLIP_STRENGTH } from '../map/scoring.ts';
+import { CLIP_STRENGTH, SEARCH_WEIGHTS } from '../map/scoring.ts';
 
 export interface ZoomLimits {
   min: number;
@@ -123,16 +125,6 @@ interface FavoritesConfig {
   minInteractiveTileWidth: number;
 }
 
-interface SearchWeights {
-  tagExact: number;
-  tagPartial: number;
-  titleExact: number;
-  titlePartial: number;
-  story: number;
-  storyLong: number;
-  clip: number;
-}
-
 interface SearchDensity {
   peak: number;
   peakAt: number;
@@ -142,7 +134,6 @@ interface SearchDensity {
 }
 
 interface SearchDefaults {
-  weights: SearchWeights;
   minTokenLength: number;
   maxQueryLength: number;
   clipTextDtype: string;
@@ -477,33 +468,6 @@ export const DEFAULTS: Defaults = {
 
   search: {
     /**
-     * How strongly each kind of evidence pulls a room toward the center, each
-     * in [0, 1] (`docs/search_rules.md` "Signal weights"). An exact match
-     * pulls at its full weight, a partial match at its weight times the
-     * fraction of the keyword or title it covers, a matched story word at
-     * `story` and a full story run at `storyLong`, and CLIP at `clip` times
-     * its curve. `packages/map/scoring.ts`'s `matchStrength` combines them.
-     *
-     * The ordering requirements between signals (an exact match ahead of a
-     * CLIP-only room, a long story run ahead of CLIP) hold because of these
-     * numbers. `scoring.test.ts` checks each one on a built query, so a
-     * re-tune that breaks one fails a test instead of quietly changing the
-     * map.
-     *
-     * `search.density.peakAt` is set to `clip`; raising `clip` past it packs
-     * the top of CLIP's range at one density.
-     */
-    weights: {
-      tagExact: 1,
-      tagPartial: 0.6,
-      titleExact: 1,
-      titlePartial: 0.6,
-      story: 0.35,
-      storyLong: 0.95,
-      clip: 0.85,
-    },
-
-    /**
      * Query tokens shorter than this never match. Without a floor, `a` matches
      * most keywords in the collection by substring and the partial-match score stops
      * meaning anything.
@@ -553,11 +517,10 @@ export const DEFAULTS: Defaults = {
 
       /**
        * Strength at which the ramp reaches `peak`; every strength above it packs
-       * the same. It matches `search.weights.clip`, a CLIP-only room's highest
-       * strength, so a genuine image match packs solid. Raising `weights.clip`
-       * without raising this flattens the top of CLIP's range into `peak`.
+       * the same. It is `scoring.ts`'s `SEARCH_WEIGHTS.clip`, a CLIP-only room's
+       * highest strength, so a genuine image match packs solid.
        */
-      peakAt: 0.85,
+      peakAt: SEARCH_WEIGHTS.clip,
 
       /**
        * Strength at which the ramp leaves the baseline; anything at or under it
@@ -596,7 +559,6 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
   const camIn = asSection(src.camera, 'camera', notes);
   const mapIn = asSection(src.map, 'map', notes);
   const searchIn = asSection(src.search, 'search', notes);
-  const weightsIn = asSection(searchIn.weights, 'search.weights', notes);
   const densityIn = asSection(searchIn.density, 'search.density', notes);
 
   // Resolve "no narrowing" to the hard limits, then intersect. Both directions
@@ -630,6 +592,10 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
     'camera.overviewCellsPerAxis',
     notes
   );
+
+  if (searchIn.weights !== undefined) {
+    notes.push('search.weights is not a setting (the weights are SEARCH_WEIGHTS in packages/map/scoring.ts); ignored');
+  }
 
   return {
     camera: {
@@ -670,23 +636,6 @@ export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: {
       ),
     },
     search: {
-      weights: {
-        tagExact: unitInterval(weightsIn.tagExact, DEFAULTS.search.weights.tagExact, 'search.weights.tagExact', notes),
-        tagPartial: unitInterval(
-          weightsIn.tagPartial, DEFAULTS.search.weights.tagPartial, 'search.weights.tagPartial', notes
-        ),
-        titleExact: unitInterval(
-          weightsIn.titleExact, DEFAULTS.search.weights.titleExact, 'search.weights.titleExact', notes
-        ),
-        titlePartial: unitInterval(
-          weightsIn.titlePartial, DEFAULTS.search.weights.titlePartial, 'search.weights.titlePartial', notes
-        ),
-        story: unitInterval(weightsIn.story, DEFAULTS.search.weights.story, 'search.weights.story', notes),
-        storyLong: unitInterval(
-          weightsIn.storyLong, DEFAULTS.search.weights.storyLong, 'search.weights.storyLong', notes
-        ),
-        clip: unitInterval(weightsIn.clip, DEFAULTS.search.weights.clip, 'search.weights.clip', notes),
-      },
       minTokenLength: tokenLength(
         searchIn.minTokenLength, DEFAULTS.search.minTokenLength, 'search.minTokenLength', notes
       ),

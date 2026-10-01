@@ -56,10 +56,10 @@ makes it true.
 
 ### Signal weights
 
-**The seven weights are `config.search.weights`, each in `[0, 1]`: how
-strongly one piece of evidence pulls a room toward the center.**
+**The seven weights are `scoring.ts`'s `SEARCH_WEIGHTS`, each in `[0, 1]`:
+how strongly one piece of evidence pulls a room toward the center.**
 
-| `search.weights` key | Default | A pull of |
+| `SEARCH_WEIGHTS` key | Value | A pull of |
 | --- | --- | --- |
 | `tagExact` | 1 | each term that exactly equals a keyword |
 | `tagPartial` | 0.6 | `tagPartial` times the fraction of the keyword a term covers |
@@ -69,12 +69,12 @@ strongly one piece of evidence pulls a room toward the center.**
 | `storyLong` | 0.95 | `storyLong` times the story run curve (see "Story matching") |
 | `clip` | 0.85 | `clip` times CLIP's curve (see "Image-content (CLIP) matching") |
 
-`resolveConfig` rejects a weight outside `[0, 1]`: a pull past `1` has no
-meaning to the soft OR that combines them. A `config.json` can still set
-weights that break an ordering rule below, and nothing reports it (open issue
-[#229](https://github.com/centuryglass/babel-index/issues/229)).
+The weights are code, not config, because the ordering rules below hold only
+for weights the tests in `scoring.test.ts` have checked. `resolveConfig`
+reports a `search.weights` key in `config.json` and ignores it. A pull past
+`1` has no meaning to the soft OR that combines them.
 
-Two constants in `scoring.ts` are not config:
+Two more constants in `scoring.ts` shape the curves:
 
 - `STORY_LONG_RANGE` (`{ low: 16, high: 40 }`): the character band the story
   run curve ramps across.

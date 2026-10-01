@@ -235,7 +235,7 @@ by keywords and story only.
 ### Configuration
 
 Tunable values (zoom range, opening camera, slider defaults, search
-weights, and more) are defined, each with its reasoning, in
+density, and more) are defined, each with its reasoning, in
 [`packages/config/config.ts`](packages/config/config.ts). A `config.json`
 passed with `--config` overrides any subset. Invalid values fall back to
 defaults, and the server prints a note for each one at startup.

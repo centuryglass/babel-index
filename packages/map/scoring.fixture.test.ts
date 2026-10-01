@@ -115,7 +115,6 @@ test('image content alone clusters most of the collection for what every room sh
     const clipOnly = rankHybrid({
       query: query.text,
       count: fixture.files.length,
-      weights: SEARCH.weights,
       embeddings: fixture.embeddings,
       dim: fixture.dim,
       scale: fixture.scale,

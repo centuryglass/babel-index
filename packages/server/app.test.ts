@@ -136,7 +136,7 @@ test('/api/manifest carries the config, and never the operator notes', async () 
     // is not a degraded map, it is a crash.
     assert.ok(m.config.camera.overviewCellsPerAxis > 0);
     assert.ok(m.config.map.contentRatio > 0);
-    assert.ok(m.config.search.weights.clip >= 0);
+    assert.ok(m.config.search.maxQueryLength > 0);
     // `notes` is for whoever started the server; shipping it would invite the
     // client to start caring what the config could not honour.
     assert.equal(m.config.notes, undefined);

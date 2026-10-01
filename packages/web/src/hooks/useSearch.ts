@@ -139,7 +139,6 @@ export function useSearch({
       const { order, strength, breakdown, ranks, ties, signals } = rankHybrid({
         query: term,
         count: total,
-        weights: searchConfig.weights,
         minTokenLength: searchConfig.minTokenLength,
         embeddings: blob?.data,
         dim: blob?.dim,
