@@ -416,7 +416,7 @@ export function MapView({
         className={preparingRearrangement ? 'search-trigger search-icon-button preparing' : 'search-trigger search-icon-button'}
         onClick={onGoToSearch}
         onKeyDown={onControlKeyDown}
-        aria-label="search the library"
+        aria-label="return to the center to search the library"
       >
         <SearchGlyph className="search-icon-glyph" />
         <SearchOrbitArrow ref={searchArrowRef} className="search-icon-arrow" />
@@ -538,7 +538,7 @@ export function MapView({
           the center shelf, which exists only while the spines are legible.
         */}
         <div className="buttons">
-          <button className="mode-toggle" onClick={onEnterCatalog}>
+          <button className="mode-toggle" onClick={onEnterCatalog} aria-label="the catalog">
             the catalog →
           </button>
         </div>

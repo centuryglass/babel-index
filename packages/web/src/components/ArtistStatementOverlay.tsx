@@ -15,7 +15,14 @@ import { BookOverlay } from './BookOverlay.tsx';
 import { BabelBookOverlay } from './BabelBookOverlay.tsx';
 import { ArtistStatementPages } from './ArtistStatementPages.tsx';
 
-export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
+export function ArtistStatementOverlay({
+  onClose,
+  announce,
+}: {
+  onClose: () => void;
+  /** writes the app's one live region, for the Babel book's page turns */
+  announce: (status: string) => void;
+}) {
   const [bookOpen, setBookOpen] = useState(false);
 
   return (
@@ -35,7 +42,7 @@ export function ArtistStatementOverlay({ onClose }: { onClose: () => void }) {
         />
       </BookOverlay>
 
-      {bookOpen && <BabelBookOverlay onClose={() => setBookOpen(false)} />}
+      {bookOpen && <BabelBookOverlay onClose={() => setBookOpen(false)} announce={announce} />}
     </>
   );
 }

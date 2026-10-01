@@ -1306,7 +1306,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       )}
 
       {artistStatementOpen && (
-        <ArtistStatementOverlay onClose={() => dispatch({ type: 'closeArtistStatement' })} />
+        <ArtistStatementOverlay onClose={() => dispatch({ type: 'closeArtistStatement' })} announce={setStatus} />
       )}
 
       {card && cardDescription && (

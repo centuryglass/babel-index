@@ -158,7 +158,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // tile's controls instead of a room. Leaves the search query active for
       // the live-region and reduced-motion tests.
       await ratio.press('End');
-      await page.getByRole('button', { name: 'center' }).click();
+      await page.getByRole('button', { name: 'center', exact: true }).click();
       await landed(page, session.flightMs);
     }
   });
@@ -237,7 +237,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     const ratio = page.locator('.row', { hasText: 'non-generic' }).locator('input[type=range]');
     await ratio.focus();
     await ratio.press('End');
-    await page.getByRole('button', { name: 'center' }).click();
+    await page.getByRole('button', { name: 'center', exact: true }).click();
     await landed(page, session.flightMs);
 
     // And a single right-click can still land in the gap between a render and
