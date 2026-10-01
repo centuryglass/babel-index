@@ -75,8 +75,8 @@ Server and tooling code runs as TypeScript through `build/`'s Node loader
 hook, which transforms each `.ts`/`.tsx` module with esbuild as it is
 imported, on the Node 20 floor.
 
-The cost is that a client edit needs a restart under `npm run demo`.
-`npm run demo:watch` removes it: it restarts the process on a server edit,
+The cost is that a client edit needs a restart under `npm start`.
+`npm run start:watch` removes it: it restarts the process on a server edit,
 rebuilds the bundle on a client edit, and reloads the open page either way.
 
 ## Where the collection lives
@@ -85,7 +85,7 @@ The server reads the collection in one of two modes, chosen by flag:
 
 - **Local** (`--images <dir>`): `scan.ts` walks the directory and the server
   serves it under `/images`, with the shared art (center tile, generic
-  tiles) under `/shared`. `npm run demo` defaults to
+  tiles) under `/shared`. `npm start` defaults to
   `assets/tile-collection-sample/`, so a clone runs with no external services.
 - **Remote** (`--remote <url> --prefix <name>`): `remote.ts` fetches the
   manifest that `tools/upload/upload-r2.ts` wrote when it synced the collection

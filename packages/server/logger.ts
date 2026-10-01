@@ -3,7 +3,7 @@
  *
  * JSON lines when stdout is piped (systemd, CI - anything journald or a log
  * tool parses), pretty-printed when a human is watching a terminal
- * (`npm run demo`). The level and the structured fields are the point:
+ * (`npm start`). The level and the structured fields are the point:
  * unattributed console output gives nothing to grep for once something has
  * broken and the evidence still matters.
  *

@@ -15,7 +15,7 @@ npm run profile:chrome -- --server http://localhost:5173   # profile a server yo
 ```
 
 `--server` points this at a demo server you launched yourself, e.g. one
-serving a real dataset (`npm run demo -- --images /path/to/your/collection`).
+serving a real dataset (`npm start -- --images /path/to/your/collection`).
 With `--server` this tool spawns nothing and kills nothing; without it, it
 boots and tears down its own server against `--images` (default
 `assets/tile-collection-sample`).

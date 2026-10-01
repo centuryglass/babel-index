@@ -49,7 +49,7 @@ COPY tools/center-placement/lib ./tools/center-placement/lib
 # simply means a deploy of this image cannot be verified by revision.
 EXPOSE 5173
 # CMD (not baked into ENTRYPOINT) so `docker run babel-index --images /data
-# --port 8080` overrides it entirely, same as any other npm run demo flag
+# --port 8080` overrides it entirely, same as any flag passed to `npm start`
 # (see packages/server/index.ts).
 ENTRYPOINT ["node", "--import", "./build/register.mjs", "packages/server/index.ts"]
 CMD ["--images", "assets/tile-collection-sample"]

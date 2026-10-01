@@ -2,7 +2,7 @@
 
 A tile collection is a directory of room images plus two optional JSON
 sidecars: `metadata.json` for each room's text, and `tagLinks.json` for
-keyword links. `npm run demo -- --images <dir>` serves any such directory,
+keyword links. `npm start -- --images <dir>` serves any such directory,
 and [`assets/tile-collection-sample/`](../assets/tile-collection-sample) is a
 complete example.
 

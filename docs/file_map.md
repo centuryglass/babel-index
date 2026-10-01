@@ -55,7 +55,7 @@ Every tracked file in the repo, with a line or two on what it is for.
     collection manifest.
   * `remote.ts`: Reads a manifest from a remote host (R2) instead of a local
     directory, rebasing its urls.
-  * `port.ts`: `portInUse`, so a second `npm run demo` fails instead of
+  * `port.ts`: `portInUse`, so a second `npm start` fails instead of
     silently exiting.
   * `favorites.ts`: Global favorite counts - the `FavoriteStore` interface
     and its JSON-file implementation (`--favorites <path>`).
